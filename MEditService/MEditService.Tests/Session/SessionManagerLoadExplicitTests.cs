@@ -17,7 +17,7 @@ public sealed class SessionManagerLoadExplicitTests
     private static SessionManager MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory);
     }
 
@@ -92,7 +92,7 @@ public sealed class SessionManagerLoadExplicitTests
             .BuildScattered();
 
         var reflector = SharedSchemaReflector.Instance;
-        var innerFactory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var innerFactory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var factory = new ThrowingOnIndexRepositoryFactory(innerFactory, "Bad.esp");
         using var manager = new SessionManager(factory);
 

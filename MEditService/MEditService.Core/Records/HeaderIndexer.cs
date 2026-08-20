@@ -45,7 +45,7 @@ internal static class HeaderIndexer
         // RecordColumns and HeaderColumnExtract are always built in lockstep, one extractor per
         // column, by SchemaReflector.BuildHeaderSchema — no bounds check needed here.
         for (int i = 0; i < headerSchema.RecordColumns.Count; i++)
-            DuckDbRecordRepository.AppendTyped(row, extracts[i](pluginMod), headerSchema.RecordColumns[i].DuckDbType);
+            DuckDbRecordIndex.AppendTyped(row, extracts[i](pluginMod), headerSchema.RecordColumns[i].DuckDbType);
 
         row.EndRow();
     }

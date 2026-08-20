@@ -14,9 +14,9 @@ public class IndexAtomicityTests
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private static DuckDbRecordRepository OpenRepo()
+    private static DuckDbRecordIndex OpenRepo()
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         return repo;
     }
@@ -27,7 +27,7 @@ public class IndexAtomicityTests
         return Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
     }
 
-    private static long RowCount(DuckDbRecordRepository repo, string table)
+    private static long RowCount(DuckDbRecordIndex repo, string table)
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{table}\"";

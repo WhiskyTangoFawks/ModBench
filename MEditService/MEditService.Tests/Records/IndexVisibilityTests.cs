@@ -39,7 +39,7 @@ public sealed class IndexVisibilityTests
         try
         {
             var reflector = SharedSchemaReflector.Instance;
-            using var repository = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector))
+            using var repository = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector))
                 .Create(GameRelease.Fallout4);
             using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
 

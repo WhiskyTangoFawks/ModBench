@@ -14,7 +14,7 @@ public interface IRecordIndexer : IDisposable
     //
     // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
     // PluginOrigin value. Required (#275 — the contract step): a plugin is identified by
-    // (origin, plugin) together in every table this indexes — see DuckDbRecordRepository — and no
+    // (origin, plugin) together in every table this indexes — see DuckDbRecordIndex — and no
     // caller gets to skip specifying which one this physical file is.
     void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin);
 

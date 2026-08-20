@@ -24,7 +24,7 @@ public class PlacementIndexingTests
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private sealed record Built(
-        DuckDbRecordRepository Repo,
+        DuckDbRecordIndex Repo,
         string WorldspaceFk,
         string TopCellFk,
         string ExtCellFk,
@@ -91,7 +91,7 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
@@ -102,7 +102,7 @@ public class PlacementIndexingTests
             barrel.FormKey.ToString(), nullRef.FormKey.ToString(), raider.FormKey.ToString());
     }
 
-    private static List<Dictionary<string, object?>> Query(DuckDbRecordRepository repo, string sql, string param)
+    private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql, string param)
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = sql;
@@ -149,7 +149,7 @@ public class PlacementIndexingTests
             using var overlay = Mutagen.Bethesda.Plugins.Records.ModFactory.ImportGetter(
                 new ModPath(mod.ModKey, path), GameRelease.Fallout4);
 
-            using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+            using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
             repo.Index(overlay, 0, participates: true, origin: "Data");
             repo.UpdateWinners();
@@ -187,7 +187,7 @@ public class PlacementIndexingTests
         block.Items.Add(sub);
         wrld.SubCells.Add(block);
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");  // re-index same plugin
@@ -361,7 +361,7 @@ public class PlacementIndexingTests
         var barrel = new PlacedObject(mod) { EditorID = "barrelRef", Position = new P3Float(1f, 2f, 3f) };
         cell.Persistent.Add(barrel);
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
         repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);
@@ -377,7 +377,7 @@ public class PlacementIndexingTests
     // reads' outer WHERE filtered by plugin filename alone, so before this fix a query scoped to one
     // origin still returned both origins' rows merged together.
     private sealed record WorldspaceFixture(
-        DuckDbRecordRepository Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)
+        DuckDbRecordIndex Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)
         : IDisposable
     {
         public void Dispose() => Repo.Dispose();
@@ -403,7 +403,7 @@ public class PlacementIndexingTests
         intBlock.SubBlocks.Add(intSub);
         mod.Cells.Records.Add(intBlock);
 
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
         repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);

@@ -83,7 +83,7 @@ public sealed class CompareGoldenTests : IDisposable
             .Build();
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new SessionManager(new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager = new SessionManager(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         _manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }

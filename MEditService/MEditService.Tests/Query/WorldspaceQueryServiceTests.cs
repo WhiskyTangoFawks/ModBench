@@ -150,7 +150,7 @@ public class WorldspaceQueryServiceTests
     // Regression (#173): GetWorldspaces queried table "worldspace", but the schema's real table
     // name — like every other spatial type ("cell", "refr", "achr") — is the raw record
     // signature lowercased ("wrld"). The StubReader above ignores its table-name argument, so it
-    // can't catch this; this test runs against a real DuckDbRecordRepository (via the committed
+    // can't catch this; this test runs against a real DuckDbRecordIndex (via the committed
     // cut-down Fallout4.esm fixture) so a wrong table name surfaces as a real failure.
     [Fact]
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()

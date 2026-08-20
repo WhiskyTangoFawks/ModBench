@@ -81,7 +81,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     // #267 / ADR-0035: `participates` is the plugins.txt `*` prefix — the one row per plugin that
     // UpdateWinners()'s per-table sweep joins against so a disabled plugin's row can never win.
-    // Populated by DuckDbRecordRepository.Index (one row per indexed plugin), not hand-maintained.
+    // Populated by DuckDbRecordIndex.Index (one row per indexed plugin), not hand-maintained.
     // #271 / ADR-0036: `origin` (the mod folder that provided this physical file, or a reserved
     // PluginOrigin value) is part of this table's identity alongside `plugin` — two plugins sharing
     // a filename but differing in origin are distinct rows, not a collision.
@@ -201,7 +201,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     // #271 / ADR-0036: `origin` is part of every record table's identity alongside `plugin` — the
     // composite key is (form_key, origin, plugin). Placed right after `plugin` (not load-bearing for
-    // the explicit-column-list reads in DuckDbRecordRepository, which never SELECT *).
+    // the explicit-column-list reads in DuckDbRecordIndex, which never SELECT *).
     private static void CreateRecordTable(DuckDBConnection connection, RecordTableSchema schema)
     {
         var sb = new StringBuilder();

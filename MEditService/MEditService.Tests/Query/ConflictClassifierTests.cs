@@ -301,7 +301,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_TwoPlugins_JsonElementFields_EqualValues_ReturnsNoConflict()
     {
-        // JsonElement fields come from DuckDbRecordRepository (array/struct fields).
+        // JsonElement fields come from DuckDbRecordIndex (array/struct fields).
         // ValuesEqual must compare by raw text, not reference equality.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[1,2,3]");

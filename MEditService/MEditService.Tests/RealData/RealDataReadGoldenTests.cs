@@ -24,7 +24,7 @@ namespace MEditService.Tests.RealData;
 /// </summary>
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
-    private readonly DuckDbRecordRepository _repo = fixture.Repo;
+    private readonly DuckDbRecordIndex _repo = fixture.Repo;
     private const string Origin = "Data";
     private const int PerType = 3;
     // Larger than the record count of any type in the cut-down plugin (info, the largest, has 2,873).

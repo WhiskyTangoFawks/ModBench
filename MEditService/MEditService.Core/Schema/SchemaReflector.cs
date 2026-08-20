@@ -122,7 +122,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // #179: resolved once per category, game-neutral like everything else here — each game
         // assembly declares its own IHaveVirtualMachineAdapterGetter in its flat
         // Mutagen.Bethesda.{category} namespace (no shared cross-game interface exists), the same
-        // one Records/DuckDbRecordRepository.IndexVmad keys off for a given game's compiled type.
+        // one Records/DuckDbRecordIndex.IndexVmad keys off for a given game's compiled type.
         // Null (a hypothetical future game without the concept) means no table in that category
         // can ever carry VMAD.
         var vmadInterfaceType = assembly.GetType($"Mutagen.Bethesda.{category}.IHaveVirtualMachineAdapterGetter");
@@ -373,7 +373,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
     };
 
-    // #263: RecordType (used for enumeration in DuckDbRecordRepository.IndexRecordTable) and the
+    // #263: RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) and the
     // lifecycle delegates (AddNew/Remove/AddExisting, built from getterType just below) stay bound
     // to the discovery winner, deliberately, even though RecordColumns below is unioned across
     // every sibling. Two independent reasons:

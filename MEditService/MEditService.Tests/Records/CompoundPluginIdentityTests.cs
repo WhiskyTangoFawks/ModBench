@@ -11,7 +11,7 @@ using Noggog;
 namespace MEditService.Tests.Records;
 
 // #271 / ADR-0036: plugin identity is (origin, filename), not filename alone. These tests exercise
-// the DuckDbRecordRepository seam directly with two independently-built Fallout4Mods that share a
+// the DuckDbRecordIndex seam directly with two independently-built Fallout4Mods that share a
 // filename — the shape AC6 calls out explicitly ("even though nothing loads such a pair yet" via
 // GameSession/SessionManager, which still dedupe by filename; #34's concern, not #271's).
 public class CompoundPluginIdentityTests
@@ -19,9 +19,9 @@ public class CompoundPluginIdentityTests
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private static DuckDbRecordRepository OpenRepo()
+    private static DuckDbRecordIndex OpenRepo()
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         return repo;
     }
@@ -241,7 +241,7 @@ public class CompoundPluginIdentityTests
         Assert.Contains(refs, r => r.Origin == "ModB");
     }
 
-    private static long Count(DuckDbRecordRepository repo, string table, string column, string value)
+    private static long Count(DuckDbRecordIndex repo, string table, string column, string value)
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = $"SELECT COUNT(*) FROM \"{table}\" WHERE {column} = $1";

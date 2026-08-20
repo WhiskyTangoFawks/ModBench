@@ -17,7 +17,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-public sealed class DuckDbRecordRepository : IRecordRepository
+public sealed class DuckDbRecordIndex : IRecordRepository
 {
     private readonly ISchemaReflector _schemaReflector;
     private readonly ITableDdlBuilder _ddlBuilder;
@@ -41,7 +41,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public DuckDBConnection Connection { get; }
 
-    public DuckDbRecordRepository(
+    public DuckDbRecordIndex(
         ISchemaReflector schemaReflector,
         ITableDdlBuilder ddlBuilder,
         ILogger logger)

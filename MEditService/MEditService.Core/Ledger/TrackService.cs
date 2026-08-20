@@ -140,7 +140,7 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
 
     private static readonly ILogger<RecordTextCodec> NoOpLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance;
 
-    // Same resolution DuckDbRecordRepository.ResolveRecordType uses (schema table name by type
+    // Same resolution DuckDbRecordIndex.ResolveRecordType uses (schema table name by type
     // match, else the CLR type name lowercased) — duplicated rather than shared, deliberately: it's
     // ten lines with no other caller today, and promoting it costs touching an established indexing
     // path for one new consumer (Minimal-by-Default, root CLAUDE.md).

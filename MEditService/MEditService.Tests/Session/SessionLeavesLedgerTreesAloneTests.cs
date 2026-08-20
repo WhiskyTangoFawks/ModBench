@@ -44,7 +44,7 @@ public sealed class SessionLeavesLedgerTreesAloneTests
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");
 
             var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
             ISessionManager sessionManager = manager;
 

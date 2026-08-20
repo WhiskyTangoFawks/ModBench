@@ -25,7 +25,7 @@ public sealed class CutDownPluginFixture : IDisposable
     public static string PluginPath =>
         Path.Combine(AppContext.BaseDirectory, "TestData", PluginFileName);
 
-    public DuckDbRecordRepository Repo { get; }
+    public DuckDbRecordIndex Repo { get; }
 
     private readonly IModDisposeGetter _overlay;
 
@@ -37,7 +37,7 @@ public sealed class CutDownPluginFixture : IDisposable
         _overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(PluginFileName), PluginPath), GameRelease.Fallout4);
 
-        Repo = new DuckDbRecordRepository(reflector, ddl, NullLogger.Instance);
+        Repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         Repo.Initialize(GameRelease.Fallout4);
         Repo.Index(_overlay, 0, participates: true, origin: "Data");
         Repo.UpdateWinners();

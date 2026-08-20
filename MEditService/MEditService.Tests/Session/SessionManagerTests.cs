@@ -23,7 +23,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     private static SessionManager MakeManager(IModImporter? modImporter = null)
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory,
             modImporter: modImporter);
     }
@@ -32,7 +32,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_DelegatesToFactory()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
         using var manager = new SessionManager(spy);
 

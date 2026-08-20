@@ -46,7 +46,7 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
     }
 
     private DuckDBConnection Connection() =>
-        ((DuckDbRecordRepository)loaded.Services.GetRequiredService<ISessionManager>().Repository!).Connection;
+        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ISessionManager>().Repository!).Connection;
 
     [Fact]
     public void ALoadedSession_HasNoPendingChangeTables()

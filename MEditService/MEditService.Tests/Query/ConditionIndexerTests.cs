@@ -141,9 +141,9 @@ public sealed class ConditionIndexerTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
-    private DuckDbRecordRepository LoadedRepository()
+    private DuckDbRecordIndex LoadedRepository()
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName("CtdaTest.esp"),
@@ -160,7 +160,7 @@ public sealed class ConditionIndexerTests : IDisposable
     [Fact]
     public void GetConditions_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName("CtdaTest.esp"),

@@ -14,9 +14,9 @@ public class FormReferencesTests
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private static DuckDbRecordRepository OpenRepo()
+    private static DuckDbRecordIndex OpenRepo()
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         return repo;
     }

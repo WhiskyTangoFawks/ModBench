@@ -23,7 +23,7 @@ public class MultiSubclassIndexingTests
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private static List<Dictionary<string, object?>> Query(DuckDbRecordRepository repo, string sql)
+    private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql)
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = sql;
@@ -50,7 +50,7 @@ public class MultiSubclassIndexingTests
     /// dispatching extractor #263/#339 built, so this asserts the same defect at the surface that
     /// still answers for it — and, in passing, that reconstitution picks the right subclass.
     /// </summary>
-    private static Dictionary<string, object?> FieldByEditorId(DuckDbRecordRepository repo, string table, string field)
+    private static Dictionary<string, object?> FieldByEditorId(DuckDbRecordIndex repo, string table, string field)
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         foreach (var summary in repo.GetRecords(table, null, null, 100, 0).Items)
@@ -76,7 +76,7 @@ public class MultiSubclassIndexingTests
         mod.GameSettings.Add(new GameSettingString(mod.GetNextFormKey("sTest"), Fallout4Release.Fallout4) { EditorID = "sTest", Data = "hello" });
         mod.GameSettings.Add(new GameSettingBool(mod.GetNextFormKey("bTest"), Fallout4Release.Fallout4) { EditorID = "bTest", Data = true });
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
@@ -101,7 +101,7 @@ public class MultiSubclassIndexingTests
         mod.Globals.Add(new GlobalShort(mod.GetNextFormKey("TestGlobShort"), Fallout4Release.Fallout4) { EditorID = "TestGlobShort", Data = 3 });
         mod.Globals.Add(new GlobalBool(mod.GetNextFormKey("TestGlobBool"), Fallout4Release.Fallout4) { EditorID = "TestGlobBool", Data = true });
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
@@ -144,7 +144,7 @@ public class MultiSubclassIndexingTests
         unknown.Properties.Add(new ObjectModIntProperty<AObjectModification.NoneProperty> { Step = 5f });
         mod.ObjectModifications.Add(unknown);
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
@@ -195,7 +195,7 @@ public class MultiSubclassIndexingTests
             ? DmgtSplitColumns.StructShaped(schemas["dmgt"])
             : DmgtSplitColumns.ScalarShaped(schemas["dmgt"])).Name;
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
@@ -231,7 +231,7 @@ public class MultiSubclassIndexingTests
         var structColumnName = DmgtSplitColumns.StructShaped(schemas["dmgt"]).Name;
         var scalarColumnName = DmgtSplitColumns.ScalarShaped(schemas["dmgt"]).Name;
 
-        using var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();

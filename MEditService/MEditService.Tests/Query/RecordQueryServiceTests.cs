@@ -21,7 +21,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public RecordQueryServiceTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new SessionManager(factory);
         _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
@@ -56,7 +56,7 @@ public sealed class RecordQueryServiceTests : IDisposable
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
         using var manager = new SessionManager(
-            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
@@ -72,7 +72,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     // (Mutagen builds FormKeys from a plugin's own header, so reading never requires a master to
     // exist, and a FormLink into an absent one already resolves to nothing and already falls back
     // to the raw FormKey). This is the true end-to-end version of that claim: a whole session
-    // built via GameSession/SessionManager (not a hand-fed DuckDbRecordRepository), where the
+    // built via GameSession/SessionManager (not a hand-fed DuckDbRecordIndex), where the
     // referenced master is never part of the load order at all — no plugins.txt line, no file.
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
@@ -87,7 +87,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             })
             .Build();
         using var manager = new SessionManager(
-            new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
@@ -337,7 +337,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (data)
         {
             var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
@@ -432,7 +432,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (data)
         {
             var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
@@ -698,7 +698,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var manager = new SessionManager(factory);
         manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
         test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
@@ -871,7 +871,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (data)
         {
             var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
@@ -910,7 +910,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (data)
         {
             var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
@@ -939,7 +939,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         using (data)
         {
             var reflector = SharedSchemaReflector.Instance;
-            var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
@@ -955,7 +955,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     private static RecordQueryService MakeUnloadedService()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory);
         return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
@@ -965,7 +965,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     private (RecordQueryService Svc, SpyRecordReader Spy, IDisposable Mod) MakeSpySvc()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var inner = factory.Create(GameRelease.Fallout4);
         var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
             new Mutagen.Bethesda.Plugins.ModPath(

@@ -18,7 +18,7 @@ public sealed class SessionManagerProgressiveLoadTests
     private static (SessionManager Manager, GatedIndexRepositoryFactory Gate) MakeGatedManager(string gateBefore)
     {
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var gate = new GatedIndexRepositoryFactory(inner, gateBefore);
         var manager = new SessionManager(gate);
         return (manager, gate);
@@ -104,7 +104,7 @@ public sealed class SessionManagerProgressiveLoadTests
             .BuildScattered();
 
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp", poisonPlugin: "A.esp");
         using var manager = new SessionManager(gate);
 

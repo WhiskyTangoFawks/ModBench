@@ -22,7 +22,7 @@ public sealed class SessionManagerRereadPluginTests
     private static SessionManager MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory);
     }
 
@@ -119,7 +119,7 @@ public sealed class SessionManagerRereadPluginTests
         var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
 
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
         using var manager = new SessionManager(gate);
         ISessionManager sessionManager = manager;
@@ -184,7 +184,7 @@ public sealed class SessionManagerRereadPluginTests
         SessionManager? manager = null;
         Task? teardown = null;
         var factory = new UnindexHookFactory(
-            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)),
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)),
             () =>
             {
                 var started = new ManualResetEventSlim();

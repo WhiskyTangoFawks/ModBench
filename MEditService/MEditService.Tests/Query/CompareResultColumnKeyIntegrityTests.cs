@@ -142,7 +142,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
     // ---- minimal ISessionManager/IGameSession fakes ----
     //
     // The repository is hand-indexed twice directly, matching the established pattern from #272's
-    // other AC5 tests (DuckDbRecordRepositoryTests/PlacementIndexingTests). session.Plugins gets
+    // other AC5 tests (DuckDbRecordIndexTests/PlacementIndexingTests). session.Plugins gets
     // exactly one entry, which is all this test needs: it asserts the *shape* of the response's
     // column keys, not classification. Since #34 made pluginMasters/pluginParticipates
     // ColumnKey-keyed, that lone entry resolves masters/participation only for its own origin and
@@ -239,7 +239,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
         var reflector = SharedSchemaReflector.Instance;
         var ddl = new TableDdlBuilder(reflector);
-        using var repo = new DuckDbRecordRepository(reflector, ddl, NullLogger.Instance);
+        using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
         repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);

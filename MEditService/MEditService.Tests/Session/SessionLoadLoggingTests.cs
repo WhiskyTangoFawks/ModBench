@@ -32,7 +32,7 @@ public sealed class SessionLoadLoggingTests
     private static SessionManager MakeManager(ILogger<SessionManager> logger)
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory, logger);
     }
 
