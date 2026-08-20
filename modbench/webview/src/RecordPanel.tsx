@@ -1,15 +1,19 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
-import { buildColumns, parseElementIndex, collidingFilenames } from './recordUtils';
+import {
+  buildColumns, parseElementIndex, collidingFilenames,
+  getAtPath, setAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultElementValue,
+} from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { buildVmadRows } from './vmadTreeAdapter';
+import { AddPropertyDialog } from './VmadPropertyOps';
 import { buildConditionRows } from './conditionTreeAdapter';
 import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
-import { editField } from './nativeBridge';
+import { editField, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
 import type { RecordSessionClient } from './RecordSessionClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
@@ -87,6 +91,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // by the LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
   // navigation within the same panel session.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
+  // #426 Track 5: Add Property's own dialog state — which script/column VMAD_OPEN_ADD_PROPERTY
+  // named, or null when no dialog is open. AddPropertyDialog itself (VmadPropertyOps.tsx) collects
+  // name/type/value; this only remembers *where* to commit them once it confirms.
+  const [addPropertyDialog, setAddPropertyDialog] = useState<{ scriptName: string; plugin: ColumnKey } | null>(null);
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
   // than state. Cleared on drop (successful or rejected). Issue #206: carries sourcePlugin too —
   // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
@@ -119,6 +127,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (!override) return;
     editField(formKey, override.plugin, override.origin, fieldPath, value);
   }, [result, formKey]);
+
+  // #426: a string cell's double click, opened in a real editor tab. Commits through the exact
+  // same handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
+  // identical write path, not a second one (extendedFieldEditor.ts's own doc comment).
+  const handleOpenExtended = useCallback((plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => {
+    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
+    if (!override) return;
+    // Issue #218's own composite label — the same "EditorID [FormKey]" string the FormKey picker
+    // seeds with and the header displays, so the tab's directory names the record the same way
+    // every other identity-bearing surface here already does.
+    const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
+    const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
+    openExtendedFieldEditor(
+      { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
+      (v: string) => handleEditCell(plugin, fieldPath, v),
+    );
+  }, [result, formKey, handleEditCell]);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -155,42 +180,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
   const skipNextRefreshEffect = useRef(false);
-
-  // Listen for loadRecord messages from the extension (panel reuse) and for the session's own
-  // conflicts-computed signal. #410/ADR-0041: every other branch this handler used to carry was a
-  // native edit command broadcasting into this panel — those commands and their endpoints are gone.
-  useEffect(() => {
-    const handler = (event: MessageEvent) => {
-      const msg = event.data as ExtensionToWebview;
-      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
-        if (msg.formKey !== prevFormKeyRef.current) {
-          // formKey will change → [formKey] effect will fire; skip it.
-          skipNextRefreshEffect.current = true;
-        }
-        setFormKey(msg.formKey);
-        setResult(null);
-        setError(null);
-        setFocusedCell(null);
-        // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
-        // open must still re-load (the effect never fires, formKey didn't change) — the
-        // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
-        void refreshRef.current(msg.formKey);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.RECORD_EDITED) {
-        // #415: the edit landed as a working-tree change. Re-read rather than patch: the write
-        // path re-serialized the record through the codec, and this record's conflict picture
-        // across every other column may have moved with it.
-        if (msg.formKey === prevFormKeyRef.current) void refreshRef.current(msg.formKey);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED) {
-        // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
-        // data, not just clear its own banner over stale content — refresh() re-runs client.load()
-        // in full, so the grid and the banner update together in one state change. Session-wide,
-        // not record-specific, so no self-filter — every open panel reacts.
-        void refreshRef.current(prevFormKeyRef.current);
-      }
-    };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
 
   useEffect(() => {
     prevFormKeyRef.current = formKey;
@@ -232,6 +221,35 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     [result, isHeaderRecord, runOnTargets],
   );
 
+  // #142/#227 (#426 Track 4: restored): the four array-arity/order ops (Add/Remove/Move Up/Move
+  // Down) — one generic handler for every unsorted array in the tree (an ordinary reflected
+  // field, or a VMAD array-of-scalars property reusing this exact same machinery, #231), rather
+  // than a per-field special case. `rootField` locates the subtree's own root FieldDiff (whichever
+  // of diffs/vmadTree.diffs/conditionTree.diffs it came from); `path` addresses the array within
+  // that root's own per-column value (getAtPath/setAtPath, the same generic accessors every field
+  // commit already writes through). `elementMeta` is only needed for 'add' (defaultElementValue).
+  const handleArrayOp = useCallback((
+    plugin: ColumnKey, path: PathSegment[], rootField: string,
+    op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
+  ) => {
+    const rootDiff = [...(result?.diffs ?? []), ...vmadTree.diffs, ...conditionTree.diffs]
+      .find(d => (d.wirePath ?? d.fieldName) === rootField);
+    if (!rootDiff) return;
+    const rootValue = rootDiff.values[plugin];
+    // 'add' addresses the array itself; every other op addresses one of its elements, so the
+    // array is one hop shorter than the row's own path (the last hop is the element's own index).
+    const arrayPath = op === 'add' ? path : path.slice(0, -1);
+    const current = getAtPath(rootValue, arrayPath);
+    const currentArray = Array.isArray(current) ? current : [];
+    const lastSeg = path[path.length - 1];
+    const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
+    const nextArray = op === 'add' ? appendArrayElement(currentArray, defaultElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }))
+      : op === 'remove' ? removeArrayElement(currentArray, index)
+      : moveArrayElement(currentArray, index, op === 'moveUp' ? -1 : 1);
+    if (nextArray === currentArray) return; // boundary no-op — nothing to write
+    handleEditCell(plugin, rootField, setAtPath(rootValue, arrayPath, nextArray));
+  }, [result, vmadTree, conditionTree, handleEditCell]);
+
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
     const map: Record<string, FieldMetadata> = {};
     for (const o of result?.overrides ?? []) {
@@ -256,6 +274,86 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     }
     return map;
   }, [result, vmadTree, conditionTree, isHeaderRecord]);
+
+  // #426 Track 4: the message listener below is mount-once ([] deps), but handleArrayOp's and
+  // fieldMetaMap's own identities change on every edit/reload (they close over `result`) — a ref
+  // keeps the broadcast handler calling the *current* versions rather than the ones captured at
+  // mount, the same shape refreshRef already uses for the same reason. Declared here (after both
+  // are computed) purely because a ref's own initial value has to be able to read the thing it
+  // refs — and the message listener itself is declared after these two, not beside the others
+  // above, so every ref it closes over (refreshRef included) is already in scope by then, keeping
+  // one linear read order instead of forward-referencing.
+  const handleArrayOpRef = useRef(handleArrayOp);
+  useLayoutEffect(() => { handleArrayOpRef.current = handleArrayOp; }, [handleArrayOp]);
+  const fieldMetaMapRef = useRef(fieldMetaMap);
+  useLayoutEffect(() => { fieldMetaMapRef.current = fieldMetaMap; }, [fieldMetaMap]);
+  // #426 Track 5: VMAD_STRUCTURAL_OP's own commit reaches through handleEditCell directly (the
+  // op-envelope value is already in EDIT_FIELD's own wire shape — RecordFieldWriter.ApplyVmadField
+  // dispatches on it) — same ref-for-a-mount-once-listener shape as handleArrayOpRef above, for the
+  // same reason (handleEditCell closes over `result`/`formKey`, both of which change).
+  const handleEditCellRef = useRef(handleEditCell);
+  useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
+
+  // Listen for loadRecord messages from the extension (panel reuse), the session's own
+  // conflicts-computed signal, and the array-op right-click commands (#426 Track 4) — the one
+  // remaining broadcast-and-self-filter shape (the extension host has no live reference into this
+  // panel's own React state, which alone holds the record's current values).
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const msg = event.data as ExtensionToWebview;
+      if (msg.type === EXTENSION_TO_WEBVIEW.LOAD_RECORD) {
+        if (msg.formKey !== prevFormKeyRef.current) {
+          // formKey will change → [formKey] effect will fire; skip it.
+          skipNextRefreshEffect.current = true;
+        }
+        setFormKey(msg.formKey);
+        setResult(null);
+        setError(null);
+        setFocusedCell(null);
+        // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
+        // open must still re-load (the effect never fires, formKey didn't change) — the
+        // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
+        void refreshRef.current(msg.formKey);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.RECORD_EDITED) {
+        // #415: the edit landed as a working-tree change. Re-read rather than patch: the write
+        // path re-serialized the record through the codec, and this record's conflict picture
+        // across every other column may have moved with it.
+        if (msg.formKey === prevFormKeyRef.current) void refreshRef.current(msg.formKey);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED) {
+        // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
+        // data, not just clear its own banner over stale content — refresh() re-runs client.load()
+        // in full, so the grid and the banner update together in one state change. Session-wide,
+        // not record-specific, so no self-filter — every open panel reacts.
+        void refreshRef.current(prevFormKeyRef.current);
+      } else if (
+        msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE
+        || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN
+      ) {
+        // #426 Track 4: self-filter on formKey — a changeId-less broadcast (unlike the pending-cell
+        // commands #410 retired, there is no per-change id here), the same convention #227's
+        // original array-op broadcasts used. Only reachable while this exact record is open, so a
+        // stale/background panel showing a different record ignores it.
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        const plugin = columnKey(msg.plugin, msg.origin);
+        const path: PathSegment[] = msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD ? [] : [{ kind: 'index', index: msg.index }];
+        const op = msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD ? 'add'
+          : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE ? 'remove'
+          : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP ? 'moveUp' : 'moveDown';
+        handleArrayOpRef.current(plugin, path, msg.fieldName, op, fieldMetaMapRef.current[msg.fieldName]?.elementType);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
+        // #426 Track 5: same self-filter-and-commit shape as the array-op branch above, except the
+        // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
+        // no webview-side computation of a next value, unlike an array op.
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        handleEditCellRef.current(columnKey(msg.plugin, msg.origin), msg.fieldPath, msg.value);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        setAddPropertyDialog({ scriptName: msg.scriptName, plugin: columnKey(msg.plugin, msg.origin) });
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
 
   // #272 / ADR-0036: keyed by ColumnKey, not the bare plugin filename — pre-#272, two overrides
   // sharing a filename but differing in origin collided here, and the second silently discarded
@@ -327,15 +425,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   //
   // `meta` is this node's own resolved FieldMetadata (undefined only for a malformed diff tree —
   // DiffRow's own `context.overrideMeta`-driven null-return handles that at render time, exactly
-  // as it always has); `rootDiff` is the top of this subtree (its `values` are what
-  // currentRootValue reads the disk fallback from); `arrayEdit` is supplied by the *parent* call
-  // when this row is itself an unsorted array's element — never computed by a row for itself.
+  // as it always has); `rootDiff` is the top of this subtree (its `values` are what handleArrayOp
+  // reads the current array from). `isUnsortedArrayElement` is supplied by the *parent* call
+  // (buildArrayElementRows) when this row is itself an unsorted array's element — never computed
+  // by a row for itself, since only the parent knows which array it just descended into.
   function buildRows(
     diff: FieldDiff, meta: FieldMetadata | undefined, path: PathSegment[],
-    rootField: string, rootDiff: FieldDiff, rowKey: string,
+    rootField: string, rootDiff: FieldDiff, rowKey: string, isUnsortedArrayElement = false,
   ): React.ReactNode[] {
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
+    // #426 Track 4: this row is itself a mutable, unsorted array's own row (Add applies).
+    const isUnsortedArrayParent = meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
 
     const rows: React.ReactNode[] = [
       <DiffRow
@@ -347,6 +448,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={handleEditCell}
+        onOpenExtendedEditor={handleOpenExtended}
+        onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType) : undefined}
+        onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
+        onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
+        onArrayMoveDown={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         context={{ path, overrideMeta: meta, rootField }}
@@ -385,7 +491,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     const seg: PathSegment = elementMeta.isSortable
       ? { kind: 'sortKey', key: child.fieldName }
       : { kind: 'index', index: parseElementIndex(child.fieldName) };
-    return buildRows(child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey);
+    return buildRows(child, elementMeta, [...arrayPath, seg], rootField, rootDiff, childRowKey, !elementMeta.isSortable);
   }
 
   return (
@@ -463,6 +569,24 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           </tbody>
         </table>
       </div>
+      {/* #426 Track 5 / #229: Add Property's own webview modal — the one deliberate exception to
+          right-click-menu commands resolving everything themselves (three fields at once: name,
+          type, and a type-appropriate value). `addPropertyDialog` names which script/column
+          VMAD_OPEN_ADD_PROPERTY opened it for; confirming builds the same op-envelope fieldPath/
+          value shape every other VMAD structural op commits, through the identical handleEditCell
+          write path. */}
+      {addPropertyDialog && (
+        <AddPropertyDialog
+          onCancel={() => setAddPropertyDialog(null)}
+          onConfirm={({ name, type, value }) => {
+            handleEditCell(
+              addPropertyDialog.plugin, `VMAD\\${addPropertyDialog.scriptName}\\${name}`,
+              { op: 'add_property', name, type, value },
+            );
+            setAddPropertyDialog(null);
+          }}
+        />
+      )}
     </div>
   );
 }

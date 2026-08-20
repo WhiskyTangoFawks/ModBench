@@ -1,15 +1,21 @@
 import React from 'react';
 import { ScalarCell } from './ScalarCell';
 import { FormKeyCell } from './FormKeyCell';
+import { pickConditionFunction } from './nativeBridge';
+import { mono, fg } from './gridStyles';
 import type { FieldMetadata, FormKeyResolution, ParsedConditionParam } from './types';
 
 // Issue #231: the four `renderCell` dispatch targets for Condition's composite leaf types —
-// each picks its own widget from its own current value's shape, rather than a second per-plugin
-// metadata branch DiffRow would otherwise need.
+// `conditionFunction` opens a QuickPick over the function catalogue (never a text/dropdown
+// editor); `conditionRunOn`/`conditionComparison`/`conditionParam` each pick their own widget from
+// their own current value's shape, the same pattern #229's VmadObjectEditor established, rather
+// than a second per-plugin metadata branch DiffRow would otherwise need. All four gate their own
+// click-to-open on `editable && isFocused`, matching FormKeyCell's identical gate, and carry
+// `data-open-trigger` so F2 (DiskCell) reaches them the same way it reaches every other leaf.
 //
-// #410/ADR-0041: read-only. The function QuickPick and the inline editors behind these cells all
-// staged through endpoints that are gone; what a condition *says* is unchanged, and it is still
-// rendered in xEdit's own shape.
+// #426 Track 5: restores the editable half #410 retired — ported from before that (git history
+// b1992bf~1) with no behavioral change beyond retargeting at the #415 write path's `onCommit`
+// contract, the same as every other cell this ticket restores.
 
 function enumMeta(enumValues: string[]): FieldMetadata {
   return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues };
@@ -21,15 +27,38 @@ function formKeyMeta(validFormKeyTypes: string[] = []): FieldMetadata {
   return { name: '', type: 'formKey', isArray: false, validFormKeyTypes, enumValues: [] };
 }
 
+const functionButtonStyle: React.CSSProperties = {
+  background: 'var(--vscode-input-background, #3c3c3c)',
+  border: '1px solid var(--vscode-input-border, #555)',
+  color: fg,
+  cursor: 'pointer',
+  fontFamily: mono,
+  fontSize: '12px',
+  padding: '1px 4px',
+};
 
 interface CompositeCellProps {
   value: unknown;
+  // #415/#426: optional, defaulting to non-editable — matches every other leaf's contract
+  // (presence of somewhere to write is the editability signal).
+  editable?: boolean;
   isFocused?: boolean;
+  onCommit?: (v: unknown) => void;
 }
 
-export function ConditionFunctionCell({ value }: Readonly<CompositeCellProps>) {
+export function ConditionFunctionCell({ value, editable, isFocused = true, onCommit }: Readonly<CompositeCellProps>) {
   const fn = typeof value === 'string' ? value : '';
-  return <span>{fn || <span style={{ opacity: 0.35 }}>—</span>}</span>;
+  if (!editable || !onCommit) return <span>{fn || <span style={{ opacity: 0.35 }}>—</span>}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => { if (isFocused) void pickConditionFunction(fn).then(picked => { if (picked) onCommit(picked); }); }}
+      data-open-trigger
+      style={functionButtonStyle}
+    >
+      {fn || <span style={{ opacity: 0.5 }}>— click to pick</span>}
+    </button>
+  );
 }
 
 interface RunOnValue { target: string; reference: string | null }
@@ -42,15 +71,18 @@ interface RunOnValue { target: string; reference: string | null }
 // conditionTreeAdapter's `fieldResolutions["runOn"][plugin]` via DiffRow's existing generic
 // per-leaf resolution pass-through — same prop FormKeyCell already accepts for the generic field
 // path (FormKeyCell.tsx).
-export function ConditionRunOnCell({ value, meta, isFocused, onOpen, resolution }: Readonly<CompositeCellProps & { meta: FieldMetadata; onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
+export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { meta: FieldMetadata; onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   const v = (value ?? { target: 'Subject', reference: null }) as RunOnValue;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      <ScalarCell value={v.target} meta={enumMeta(meta.enumValues)} />
+      <ScalarCell
+        value={v.target} meta={enumMeta(meta.enumValues)} editable={editable} isFocused={isFocused}
+        onCommit={onCommit && (target => onCommit({ target, reference: target === 'Reference' ? v.reference : null }))}
+      />
       {v.target === 'Reference' && (
         <FormKeyCell
-          value={v.reference} meta={formKeyMeta()} isFocused={isFocused}
-          onOpen={onOpen} resolution={resolution}
+          value={v.reference} meta={formKeyMeta()} editable={editable} isFocused={isFocused}
+          onOpen={onOpen} onCommit={onCommit && (fk => onCommit({ target: v.target, reference: fk }))} resolution={resolution}
         />
       )}
     </span>
@@ -62,28 +94,28 @@ export function ConditionRunOnCell({ value, meta, isFocused, onOpen, resolution 
 // this infers which widget to show from the value's own JS type rather than a sibling UseGlobal
 // flag this row has no access to (each condition field commits independently, #231's own "wire
 // paths differ" friction — there is no single parent object here to read a sibling off of).
-export function ConditionComparisonCell({ value, isFocused, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
+export function ConditionComparisonCell({ value, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   if (typeof value === 'string') {
     return (
       <FormKeyCell
-        value={value} meta={formKeyMeta(['glob'])} isFocused={isFocused}
-        onOpen={onOpen} resolution={resolution}
+        value={value} meta={formKeyMeta(['glob'])} editable={editable} isFocused={isFocused}
+        onOpen={onOpen} onCommit={onCommit} resolution={resolution}
       />
     );
   }
   return (
-    <ScalarCell value={typeof value === 'number' ? value : 0} meta={scalarMeta('float')} />
+    <ScalarCell value={typeof value === 'number' ? value : 0} meta={scalarMeta('float')} editable={editable} isFocused={isFocused} onCommit={onCommit} />
   );
 }
 
-export function ConditionParamCell({ value, isFocused, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
+export function ConditionParamCell({ value, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   const p = value as ParsedConditionParam | null;
   if (!p) return <span style={{ opacity: 0.35 }}>—</span>;
   const typeCue = <span style={{ opacity: 0.6 }}>&nbsp;({p.typeName})</span>;
   if (p.category === 'Form') {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <FormKeyCell value={p.formKey} meta={formKeyMeta()} isFocused={isFocused} onOpen={onOpen} resolution={resolution} />
+        <FormKeyCell value={p.formKey} meta={formKeyMeta()} editable={editable} isFocused={isFocused} onOpen={onOpen} onCommit={onCommit} resolution={resolution} />
         {typeCue}
       </span>
     );
@@ -91,7 +123,7 @@ export function ConditionParamCell({ value, isFocused, onOpen, resolution }: Rea
   if (p.category === 'Text') {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-        <ScalarCell value={p.text ?? ''} meta={scalarMeta('string')} />
+        <ScalarCell value={p.text ?? ''} meta={scalarMeta('string')} editable={editable} isFocused={isFocused} onCommit={onCommit} />
         {typeCue}
       </span>
     );
@@ -103,10 +135,10 @@ export function ConditionParamCell({ value, isFocused, onOpen, resolution }: Rea
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center' }}>
       <ScalarCell
-        value={p.number ?? 0} meta={scalarMeta('int')} displayOverride={p.decodedValue ?? undefined}
+        value={p.number ?? 0} meta={scalarMeta('int')} editable={editable} isFocused={isFocused}
+        onCommit={onCommit} displayOverride={p.decodedValue ?? undefined}
       />
       {p.decodedValue == null && typeCue}
     </span>
   );
 }
-

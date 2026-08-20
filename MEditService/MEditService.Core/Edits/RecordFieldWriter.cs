@@ -78,10 +78,49 @@ internal static class RecordFieldWriter
         return FieldApplyOutcome.Applied;
     }
 
-    private static FieldApplyOutcome ApplyVmadField(IMajorRecord record, string fieldPath, JsonElement value) =>
-        record is IHaveVirtualMachineAdapter vmadRecord && VmadPath.TryParse(fieldPath, out var scriptName, out var propName)
+    // #426: a VMAD path carries either a plain scalar property value (the #415 shape, unchanged)
+    // or a structural op — add/remove script, set script flags, add/remove property, set type, set
+    // property flags. The two are distinguished by shape, not by path: `value` doubles as
+    // VmadCodec's own `op` parameter when it is a JSON object carrying an `"op"` string member,
+    // reusing the exact envelope VmadCodecTests already pins (`{"op": "add_script", ...}`) rather
+    // than inventing a second wire contract. A script-level path (`VMAD\<Script>`, no property
+    // segment) is only ever a structural op — there is no scalar "whole script" value to set — so
+    // it falls through to NotFound when `value` isn't an op envelope.
+    //
+    // The one accepted ambiguity: a Struct-typed property whose own member happens to be named
+    // "op" would misparse as an op envelope instead of a scalar struct write. Papyrus property
+    // names are author-chosen and "op" collides with nothing this codebase or Bethesda's own
+    // scripts use, so this is a documented, not a defended, edge case.
+    private static FieldApplyOutcome ApplyVmadField(IMajorRecord record, string fieldPath, JsonElement value)
+    {
+        if (record is not IHaveVirtualMachineAdapter vmadRecord) return FieldApplyOutcome.NotFound;
+
+        if (TryGetOpName(value, out var opName))
+        {
+            if (VmadPath.TryParse(fieldPath, out var opPropScript, out var opPropName))
+                return ToOutcome(VmadCodec.ApplyPropertyOp(vmadRecord, opPropScript, opPropName, opName, value));
+            if (VmadPath.TryParseScript(fieldPath, out var opScriptName))
+                return ToOutcome(VmadCodec.ApplyScriptOp(vmadRecord, opScriptName, opName, value));
+            return FieldApplyOutcome.NotFound;
+        }
+
+        return VmadPath.TryParse(fieldPath, out var scriptName, out var propName)
             ? ToOutcome(VmadCodec.ApplyFieldValue(vmadRecord, scriptName, propName, value))
             : FieldApplyOutcome.NotFound;
+    }
+
+    // Never throws on a malformed envelope: a non-object value, an absent "op", or a non-string
+    // "op" all simply fail to match, so a plain scalar write (a JSON number/string/bool/array, or
+    // an Object-typed property's own `{formKey, alias}`) can never be mistaken for one — those
+    // never carry an "op" member — and the caller falls back to the scalar path or NotFound.
+    private static bool TryGetOpName(JsonElement value, out string opName)
+    {
+        opName = "";
+        if (value.ValueKind != JsonValueKind.Object) return false;
+        if (!value.TryGetProperty("op", out var opEl) || opEl.ValueKind != JsonValueKind.String) return false;
+        opName = opEl.GetString()!;
+        return true;
+    }
 
     private static FieldApplyOutcome ToOutcome(VmadApplyResult result) => result switch
     {

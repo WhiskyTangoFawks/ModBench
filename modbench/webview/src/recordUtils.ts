@@ -70,6 +70,129 @@ export function parseElementIndex(fieldName: string): number {
   return Number.parseInt(fieldName.slice(1, -1), 10);
 }
 
+// Issue #168 (resurrected #426): the one definition of "does this plugin's own array actually
+// have an element at this index" — a row's index comes from the union-aligned tree across every
+// plugin's column (an ordinary array with differing per-plugin lengths, or VMAD/Condition's own
+// positional alignment), not from this one plugin's own array, so it can be at or past *this
+// specific* array's length even though the row itself exists (a sibling plugin has more elements
+// there). `length` rather than the array itself so arrayElementContext (which only ever has
+// `arrayLength`, no array) can share it too.
+export function hasElementAt(length: number, index: number): boolean {
+  return index >= 0 && index < length;
+}
+
+// Issue #227 (resurrected #426): the three pure array-arity/order mutations behind Move Up/Move
+// Down/Remove/Add — shared by the keyboard accelerator (DiskCell's onKeyDown, a pure in-webview
+// call) and the right-click menu's broadcast handler (RecordPanel, arriving asynchronously from
+// the extension host), so both write the array identically without needing to share one runtime
+// call path. Each returns a new array; callers commit the whole thing via onEditCell, the same
+// as any other field commit.
+//
+// Issue #168: `index` itself must be bounds-checked here, not just the swap target `j` (index ===
+// array.length, direction -1 → j = index - 1, which passes a j-only guard) — without it, the
+// destructuring swap extends the array by one slot and duplicates a value instead of the "return
+// the array unchanged" no-op every other boundary already gets.
+export function moveArrayElement(array: unknown[], index: number, direction: -1 | 1): unknown[] {
+  const j = index + direction;
+  if (!hasElementAt(array.length, index) || !hasElementAt(array.length, j)) return array;
+  const next = [...array];
+  [next[index], next[j]] = [next[j], next[index]];
+  return next;
+}
+
+// Issue #168: bounds-checked the same way moveArrayElement is — `Array.prototype.filter` already
+// leaves the *content* unchanged for an out-of-range index, but it still hands back a new array
+// reference, which defeats a caller's reference-equality no-op check.
+export function removeArrayElement(array: unknown[], index: number): unknown[] {
+  if (!hasElementAt(array.length, index)) return array;
+  return array.filter((_, i) => i !== index);
+}
+
+export function appendArrayElement(array: unknown[], value: unknown): unknown[] {
+  return [...array, value];
+}
+
+// ── Native right-click menu contexts (issue #227, resurrected #426) ──────────
+//
+// VS Code's own `contributes.menus["webview/context"]` gates on a `data-vscode-context` attribute
+// carrying JSON VS Code parses itself and hands to the invoked command — never a rendered
+// `<ul role="menu">`. `combineVscodeContexts` below lets one row carry more than one of these at
+// once (a VMAD array-of-scalars property is both an array parent/element and a VMAD structural-op
+// target, Track 5), so each builder returns the plain object rather than a JSON string itself.
+// The two interfaces themselves live in `src/medit/messages.ts` (imported below), not here —
+// extension.ts's own command handlers need the identical shape to type the `ctx` parameter VS
+// Code hands them, and that module is the one place both processes already share a contract.
+export type { ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext } from './messages';
+import type { ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext } from './messages';
+
+// Issue #227: DiffRow only attaches this on a mutable column's unsorted-array cell — its mere
+// presence is the gate, so no separate immutable/isSortable flag travels in the payload the way
+// ColumnHeaderContext's `immutable` once did (Track 5/#427, if that surface returns). `arrayLength`
+// only exists to derive canMoveUp/canMoveDown (package.json's `when`-clause gate for Move Up/Move
+// Down, mirroring `immutable`'s old role) — Remove has no boundary condition, so `index` alone
+// still gates it.
+//
+// Keyed by `fieldName` = the row's own wire identity (`context.rootField`), not its display label
+// — the two only coincide for an ordinary top-level array; a VMAD/Condition array's own wire path
+// is a separate string (Track 5's own "wire paths differ" friction).
+export function arrayElementContext(
+  formKey: string, plugin: string, origin: string, fieldName: string, index: number, arrayLength: number,
+): ArrayElementContext {
+  return {
+    webviewSection: 'arrayElement', formKey, plugin, origin, fieldName, index,
+    // Issue #168: `canMoveUp` must also check hasElementAt (this plugin's own real length), or
+    // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
+    // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
+    canMoveUp: index > 0 && hasElementAt(arrayLength, index), canMoveDown: index < arrayLength - 1,
+    preventDefaultContextMenuItems: true,
+  };
+}
+
+export function arrayParentContext(formKey: string, plugin: string, origin: string, fieldName: string): ArrayParentContext {
+  return { webviewSection: 'arrayParent', formKey, plugin, origin, fieldName, preventDefaultContextMenuItems: true };
+}
+
+// Issue #231 (resurrected #426 Track 5): same mechanism as arrayElementContext/arrayParentContext
+// above, carried by VMAD's own row kinds instead — see VmadScriptsContext/VmadScriptContext/
+// VmadPropertyContext's own doc comment (messages.ts) for why no extra identity travels beyond
+// script/property name.
+export function vmadScriptsContext(formKey: string, plugin: string, origin: string): VmadScriptsContext {
+  return { webviewSection: 'vmadScripts', formKey, plugin, origin, preventDefaultContextMenuItems: true };
+}
+
+export function vmadScriptContext(
+  formKey: string, plugin: string, origin: string, scriptName: string, currentFlags: string | null,
+): VmadScriptContext {
+  return { webviewSection: 'vmadScript', formKey, plugin, origin, scriptName, currentFlags, preventDefaultContextMenuItems: true };
+}
+
+export function vmadPropertyContext(
+  formKey: string, plugin: string, origin: string, scriptName: string, propName: string,
+): VmadPropertyContext {
+  return {
+    webviewSection: 'vmadProperty', formKey, plugin, origin, scriptName, propName, preventDefaultContextMenuItems: true,
+  };
+}
+
+// Issue #231 (review): combines every context object sharing one row into the single
+// `data-vscode-context` string that element actually carries — VS Code's own `webviewSection` key
+// supports a space-separated multi-token value via the `=~` regex `when`-clause operator, so this
+// becomes the union of every context's own token, and every command's `package.json` `when`
+// clause matches its own with `=~ /\btoken\b/`. Every other key merges in directly — they're
+// always equal across contexts sharing one row, so last-write-wins is harmless.
+export function combineVscodeContexts(...contexts: (object | undefined)[]): string | undefined {
+  const present = contexts.filter((c): c is Record<string, unknown> => c != null);
+  if (present.length === 0) return undefined;
+  const merged: Record<string, unknown> = {};
+  const sections: string[] = [];
+  for (const c of present) {
+    const { webviewSection, ...rest } = c;
+    if (typeof webviewSection === 'string') sections.push(webviewSection);
+    Object.assign(merged, rest);
+  }
+  return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
+}
+
 // Issue #168: shared by VMAD's and Condition's tree adapters (vmadTreeAdapter.ts/
 // conditionTreeAdapter.ts) — both align their own array elements positionally across plugins
 // (VmadConflictClassifier.IndexedChildren / ConditionConflictClassifier.BuildDiff), and both
@@ -169,6 +292,29 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
     else cur = seg.key;
   }
   return cur;
+}
+
+// #426 (resurrected from before #410): setAtPath's own write-side counterpart — the one generic
+// implementation an edit anywhere in a struct/array writes through (ADR-0041: the whole subtree
+// commits as one atomic ledger write). Never mutates its input: each hop copies its own level before
+// recursing, so a caller can compare the result against the original root by reference.
+export function setAtPath(root: unknown, path: readonly PathSegment[], value: unknown): unknown {
+  if (path.length === 0) return value;
+  const [seg, ...rest] = path;
+  if (seg.kind === 'member') {
+    const obj: Record<string, unknown> = { ...(root as Record<string, unknown> | undefined) };
+    obj[seg.name] = setAtPath(obj[seg.name], rest, value);
+    return obj;
+  }
+  if (seg.kind === 'index') {
+    const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
+    arr[seg.index] = setAtPath(arr[seg.index], rest, value);
+    return arr;
+  }
+  // sortKey: always the final segment (see the module doc comment) — replace the element whose
+  // current value matches the segment's own key.
+  const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
+  return arr.map(e => (e === seg.key ? value : e));
 }
 
 // mirrors VmadSection's defaultElementValue/defaultNode pair, but keyed off the compare grid's

@@ -9,6 +9,8 @@ import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
 import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
+import { vscode } from './vscode';
+import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 
 // #410 review: the read-path half of the deleted ArrayDiffRows.test.tsx. Array/struct *rendering*
 // — collapsed counts, expand-to-children, the dimmed em-dash for a null element, deep nesting, and
@@ -344,4 +346,143 @@ describe('RecordPanel — a struct member that is itself an array of structs (is
     expect(screen.getByText('Id')).toBeInTheDocument();
   });
 
+});
+
+// #426 Track 4 (resurrected #142/#227): Add/Remove/Move Up/Move Down on an unsorted array — the
+// keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) on the focused cell, writing the whole
+// array through the exact same write path (EDIT_FIELD) every other gesture uses.
+describe('RecordPanel — array editing (unsorted, #426)', () => {
+  const intArrayMeta: FieldMetadata = {
+    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  };
+
+  const intArrayCompareResult = {
+    conflictAll: 'NoConflict',
+    overrides: [
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: intArrayMeta, value: [1, 2, 3] }], conflictThis: 'Master',
+      },
+    ],
+    diffs: [{
+      fieldName: 'Values',
+      values: { 'MyMod.esp': [1, 2, 3] },
+      winnerColumn: 'MyMod.esp', winnerValue: [1, 2, 3],
+      cellStates: {},
+      children: [
+        { fieldName: '[0]', values: { 'MyMod.esp': 1 }, winnerColumn: 'MyMod.esp', winnerValue: 1, cellStates: {} },
+        { fieldName: '[1]', values: { 'MyMod.esp': 2 }, winnerColumn: 'MyMod.esp', winnerValue: 2, cellStates: {} },
+        { fieldName: '[2]', values: { 'MyMod.esp': 3 }, winnerColumn: 'MyMod.esp', winnerValue: 3, cellStates: {} },
+      ],
+    }],
+  };
+
+  function fakeEditableClient(): RecordSessionClient {
+    return {
+      load: vi.fn().mockImplementation(() => Promise.resolve({
+        ok: true,
+        result: intArrayCompareResult,
+        immutableSet: new Set(),
+        notInLoadOrderSet: new Set(),
+        trackedSet: new Set([columnKey('MyMod.esp', null)]),
+        conflictsComputed: true,
+      } as unknown as LoadResult)),
+      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
+    };
+  }
+
+  function renderEditablePanel() {
+    const client = fakeEditableClient();
+    return { client, ...render(<RecordPanel client={client} />) };
+  }
+
+  function lastEditFieldValue(): unknown {
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
+    return (call?.[0] as { value?: unknown } | undefined)?.value;
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    currentCompare = intArrayCompareResult;
+    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('Insert on the focused array-parent cell appends a default element (0)', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    const cell = screen.getAllByText('[3]')[0].closest('td')!;
+    fireEvent.click(cell); // focus
+    fireEvent.keyDown(cell, { key: 'Insert' });
+
+    expect(lastEditFieldValue()).toEqual([1, 2, 3, 0]);
+  });
+
+  it('Delete on a focused array-element cell removes it', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    await waitFor(() => screen.getByText('[1]'));
+    const cell = screen.getByText('2').closest('td')!;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'Delete' });
+
+    expect(lastEditFieldValue()).toEqual([1, 3]);
+  });
+
+  it('Ctrl+ArrowDown on a focused array-element cell swaps it with its next neighbour', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('[0]'));
+    const cell = screen.getByText('1').closest('td')!;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowDown', ctrlKey: true });
+
+    expect(lastEditFieldValue()).toEqual([2, 1, 3]);
+  });
+
+  it('Delete on the first element does not corrupt the array when Ctrl+ArrowUp would be a boundary no-op', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('[0]'));
+    const cell = screen.getByText('1').closest('td')!;
+    fireEvent.click(cell);
+    fireEvent.keyDown(cell, { key: 'ArrowUp', ctrlKey: true }); // boundary — must no-op
+
+    expect((vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
+  });
+
+  // #426 Track 4: the right-click menu's own trigger — a broadcast from the extension host (no
+  // live reference into this panel's React state), self-filtered on formKey, reaching the exact
+  // same handleArrayOp computation the keyboard accelerators already use.
+  it('an ARRAY_REMOVE broadcast for this open record writes the array via EDIT_FIELD', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+
+    window.postMessage(
+      { type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data', fieldName: 'Values', index: 1 },
+      '*',
+    );
+    await waitFor(() => expect(lastEditFieldValue()).toEqual([1, 3]));
+  });
+
+  it('an ARRAY_REMOVE broadcast for a different open record is ignored', async () => {
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+
+    window.postMessage(
+      { type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: '999999:Other.esp', plugin: 'MyMod.esp', origin: 'Data', fieldName: 'Values', index: 1 },
+      '*',
+    );
+    // Give the (synchronous) handler a turn; nothing should have posted.
+    await new Promise(r => setTimeout(r, 0));
+    expect((vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
+      .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
+  });
 });

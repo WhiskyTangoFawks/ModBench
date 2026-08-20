@@ -9,16 +9,28 @@ import { focusedCellStyle } from './gridStyles';
 // focused cell. That is deliberate, not a convenience: Ctrl+C (#224) needs `keydown` to land on a
 // real focused element.
 //
-// #410/ADR-0041: reduced to focus + copy. Drag-to-copy, the F2/second-click editor trigger, the
-// Ctrl+X/Ctrl+V mutating half of the clipboard contract, the array-op accelerators and the
-// data-vscode-context menu gating all retired with the write path they staged through — the
-// endpoints behind them are gone, so an affordance left here would lead nowhere. Ctrl+C survives
-// because copying a value out of a viewer is a read.
+// #410/ADR-0041 reduced this to focus + copy — drag-to-copy, the F2/second-click editor trigger,
+// the Ctrl+X/Ctrl+V mutating half of the clipboard contract, the array-op accelerators and the
+// data-vscode-context menu gating all retired with the write path they staged through. #426
+// restores the array-op accelerators and native context-menu gating (Track 4) — the rest stay
+// out of scope for this ticket.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
 
+// Issue #227 (#426: restored): the four array-arity/order ops behind Insert/Delete/Ctrl+↑/Ctrl+↓
+// — DiffRow builds whichever of these apply to this exact (row, column) cell (add only on a
+// mutable unsorted-array's own row; remove/moveUp/moveDown only on a mutable unsorted-array
+// element's row) and leaves the rest undefined, so an inapplicable key is inert by construction,
+// the same "no distinct affordance, just does nothing" rule every other immutable gesture follows.
+export interface ArrayOps {
+  add?: () => void;
+  remove?: () => void;
+  moveUp?: () => void;
+  moveDown?: () => void;
+}
+
 export function DiskCell({
-  style, isFocused, onFocusCell, onCopy, children,
+  style, isFocused, onFocusCell, onCopy, arrayOps, vscodeContext, children,
 }: Readonly<{
   style: React.CSSProperties;
   isFocused: boolean;
@@ -27,6 +39,14 @@ export function DiskCell({
   // model value (modelValue.ts) by the time it builds this prop, so this is a plain thunk, not a
   // value: the cell doesn't need to know *what* it copies, only *when*.
   onCopy: () => void;
+  // Issue #227: Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu
+  // offers — pure in-webview state (the array's own new value writes through the ordinary
+  // onEditCell path), no extension-host round trip needed for the keys themselves.
+  arrayOps?: ArrayOps;
+  // Issue #208/#227 (#426: restored): the already-combined `data-vscode-context` JSON string
+  // (recordUtils.ts's combineVscodeContexts) VS Code's own `contributes.menus["webview/context"]`
+  // gates on — undefined when this cell carries no structural-op menu at all.
+  vscodeContext?: string;
   children: React.ReactNode;
 }>) {
   const ref = useRef<HTMLTableCellElement>(null);
@@ -40,6 +60,7 @@ export function DiskCell({
       ref={ref}
       tabIndex={0}
       style={{ ...style, ...(isFocused ? focusedCellStyle : undefined) }}
+      data-vscode-context={vscodeContext}
       onClick={onFocusCell}
       onKeyDown={e => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
@@ -59,7 +80,12 @@ export function DiskCell({
             e.preventDefault();
             trigger.click();
           }
+          return;
         }
+        if (e.key === 'Insert' && arrayOps?.add) { e.preventDefault(); arrayOps.add(); return; }
+        if (e.key === 'Delete' && arrayOps?.remove) { e.preventDefault(); arrayOps.remove(); return; }
+        if (e.ctrlKey && e.key === 'ArrowUp' && arrayOps?.moveUp) { e.preventDefault(); arrayOps.moveUp(); return; }
+        if (e.ctrlKey && e.key === 'ArrowDown' && arrayOps?.moveDown) { e.preventDefault(); arrayOps.moveDown(); }
       }}
     >
       {children}

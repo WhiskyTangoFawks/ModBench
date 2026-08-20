@@ -287,6 +287,18 @@ describe('modbench command registration', () => {
     'modbench.openEditorBeside',
     'modbench.openCompare',
     'modbench.openHeader',
+    // #426 Track 4: the array-op right-click commands (record editor's field grid).
+    'modbench.array.add',
+    'modbench.array.remove',
+    'modbench.array.moveUp',
+    'modbench.array.moveDown',
+    // #426 Track 5: VMAD's structural-op right-click commands (record editor's field grid).
+    'modbench.vmad.addScript',
+    'modbench.vmad.removeScript',
+    'modbench.vmad.addProperty',
+    'modbench.vmad.removeProperty',
+    'modbench.vmad.setScriptFlags',
+    'modbench.vmad.setPropertyFlags',
     'modbench.closeMedit',
     'modbench.reloadSession',
     // #247: one Refresh for every Mod-Management source, replacing modbench.refreshTree,

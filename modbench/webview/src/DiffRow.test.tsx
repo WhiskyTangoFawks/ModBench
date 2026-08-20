@@ -15,8 +15,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // bridges above rather than exercising the real webview<->extension-host message round trip
 // (that's nativeBridge.test.ts's job).
 const copyToClipboard = vi.fn();
+const pickFormKey = vi.fn().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
   copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
+  // #426: FormKeyCell's own picker bridge — stubbed here so the wiring test below can assert
+  // DiffRow reaches it with the right editable/onCommit contract without a real extension host
+  // (FormKeyCell.test.tsx/nativeBridge.test.ts own the picker's own behavior).
+  pickFormKey: (...args: unknown[]) => pickFormKey(...args),
 }));
 
 import { DiffRow } from './DiffRow';
@@ -328,5 +333,124 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     fireEvent.keyDown(window, { key: 'Control', ctrlKey: true });
     fireEvent.mouseEnter(link);
     expect(link.style.textDecoration).toBe('underline');
+  });
+});
+
+// #426: the flags branch gets the same editable/onCommit wiring the scalar branch already has —
+// presence in editableColumns plus a supplied onEditCell is what makes a bitmask cell writable.
+describe('DiffRow — flags cell wiring (#426)', () => {
+  const flagMeta: FieldMetadata = {
+    name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+    enumValues: ['A', 'B'], enumBitValues: ['1', '2'], isBitmask: true,
+  };
+
+  function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    return renderRow({
+      fieldMetaMap: { Name: flagMeta },
+      diff: diff({ values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 } }),
+      ...overrides,
+    });
+  }
+
+  it('a flags cell in a non-editable column renders text, not checkboxes, even when clicked', () => {
+    flagsRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    fireEvent.click(screen.getAllByText('A')[1]);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('a flags cell in an editable, focused column opens its checkbox multi-select on click', () => {
+    const onEditCell = vi.fn();
+    flagsRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell,
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('A')[1]);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  it('toggling a checkbox calls onEditCell with the field path and the new bitmask', () => {
+    const onEditCell = vi.fn();
+    flagsRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell,
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('A')[1]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]); // check B (bit 2): 1 ^ 2 = 3
+    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '3');
+  });
+});
+
+// #426: the formKey branch gets the same editable/onCommit wiring, plus its own picker bridge.
+describe('DiffRow — formKey cell wiring (#426)', () => {
+  const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [] };
+
+  function fkRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    return renderRow({
+      fieldMetaMap: { Name: fkMeta },
+      diff: diff({ values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' } }),
+      ...overrides,
+    });
+  }
+
+  afterEach(() => { pickFormKey.mockClear(); });
+
+  it('a formKey cell in a non-editable column does not open the picker when clicked', () => {
+    fkRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
+    expect(pickFormKey).not.toHaveBeenCalled();
+  });
+
+  it('a formKey cell in an editable, focused column opens the picker with the field’s valid types', () => {
+    fkRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
+    expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
+  });
+
+  it('committing a picked FormKey calls onEditCell with the field path and the picked value', async () => {
+    const onEditCell = vi.fn();
+    pickFormKey.mockResolvedValueOnce('00001A:Fallout4.esm');
+    fkRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell,
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
+    await vi.waitFor(() => expect(onEditCell)
+      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '00001A:Fallout4.esm'));
+  });
+});
+
+// #426: a string cell's double click reports its own identity (plugin/fieldPath/value/readOnly)
+// up to RecordPanel, which alone knows the record's own label for the bridge call — DiffRow never
+// opens the tab itself.
+describe('DiffRow — extended editor wiring (#426)', () => {
+  it('an editable string cell reports readOnly: false with its current value', () => {
+    const onOpenExtendedEditor = vi.fn();
+    renderRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      onOpenExtendedEditor,
+    });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]);
+    expect(onOpenExtendedEditor).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', 'disk-value', false);
+  });
+
+  it('an immutable string cell (no onEditCell wired) still reaches the bridge, with readOnly: true', () => {
+    const onOpenExtendedEditor = vi.fn();
+    renderRow({ onOpenExtendedEditor });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[0]);
+    expect(onOpenExtendedEditor).toHaveBeenCalledWith(columnKey('Fallout4.esm', null), 'Name', 'disk-value', true);
+  });
+
+  it('no bridge call when onOpenExtendedEditor is not wired', () => {
+    renderRow();
+    // Would throw if DiffRow assumed the prop present rather than guarding it.
+    expect(() => fireEvent.doubleClick(screen.getAllByText('disk-value')[0])).not.toThrow();
   });
 });
