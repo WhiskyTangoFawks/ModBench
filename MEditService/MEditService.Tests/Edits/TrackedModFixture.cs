@@ -28,10 +28,13 @@ public sealed class TrackedModFixture : IDisposable
     public SessionManager Sessions { get; }
     public PluginKey Plugin { get; } = new(PluginName, ModFolderOrigin);
 
-    /// <summary>The NPC every editing test edits, and the two records that must stay untouched
-    /// beside it (one of them the NPC's own Race, so a FormLink target is always on hand).</summary>
+    /// <summary>The NPC every editing test edits, and the records that must stay untouched beside
+    /// it. <see cref="Keyword"/> is a valid target for the NPC's <c>keywords</c> field and
+    /// <see cref="Race"/> is a resolvable target of the *wrong* type for it, so the two FormLink
+    /// error axes (Dangling, Type-Mismatched) are both reachable without inventing data mid-test.</summary>
     public FormKey Npc { get; }
     public FormKey Race { get; }
+    public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
     private TrackedModFixture(bool track)
@@ -42,11 +45,12 @@ public sealed class TrackedModFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
+        var keyword = mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew("FixtureNpc");
         npc.Race.SetTo(race);
         var otherNpc = mod.Npcs.AddNew("UntouchedNpc");
         mod.WriteToBinary(pluginPath);
-        (Npc, Race, OtherNpc) = (npc.FormKey, race.FormKey, otherNpc.FormKey);
+        (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
         Sessions = new SessionManager(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));

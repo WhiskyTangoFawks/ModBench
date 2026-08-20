@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using MEditService.Core.Ledger;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -68,6 +69,9 @@ public sealed class RecordEditService(
         var record = ReadRecordFromLedger(ledgerPath, document, release);
         var schemas = schemaReflector.GetSchemas(release);
 
+        if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value) is { } linkError)
+            return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
+
         var outcome = RecordFieldWriter.TryApply(record, document.RecordType, fieldPath, value, schemas, release);
         if (outcome != FieldApplyOutcome.Applied)
             return RefuseFieldOutcome(outcome, fieldPath, document.RecordType);
@@ -85,6 +89,48 @@ public sealed class RecordEditService(
             "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {LedgerPath}",
             fieldPath, formKey, plugin.Name, plugin.Origin, relativePath);
         return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// AC3 / ADR-0020 (kept, relocated): Dangling and Type-Mismatched FormLinks are blocked at edit
+    /// time, before anything is written. Returns the diagnostic, or null when the value is clean.
+    ///
+    /// <para><b>Effective state is what this resolves against</b>, which is what AC3 requires: a
+    /// record the working tree deleted still exists at Head, and a check reading committed state
+    /// would let the user point a link at something that will not be there when this compiles.
+    /// Worth being precise about the mechanism, because it is not this call site's choice —
+    /// <see cref="IRecordReads.Resolve"/> answers from <c>form_lookup</c>, which carries no ref
+    /// dimension at all and tracks Effective at <i>both</i> refs by design (see
+    /// <see cref="IRecordIndex.At"/>). So the property is enforced by
+    /// <see cref="IRecordIndex.ApplyWorkingTreeChanges"/> keeping that table in step with the
+    /// documents it was extracted from, not by naming a ref here; asking at Head would give the same
+    /// answer, and the test that would catch a regression is the one that deletes a record's lookup
+    /// row.</para>
+    ///
+    /// <para>The whole field is validated, not only the part that changed — the same scope
+    /// <c>ReferenceValidator</c> had before #410, and the only coherent one for a complex field that
+    /// is written atomically. This walks the <i>incoming</i> value rather than the applied record so
+    /// that what is checked is exactly what the caller asked to create.</para>
+    ///
+    /// <para>Scope is the reflected columns, matching the pre-#410 validator exactly. VMAD Object
+    /// properties and condition Form parameters carry FormKeys too and are not checked here; they
+    /// were not checked before either, and widening that is its own change with its own evidence.</para>
+    /// </summary>
+    private static string? ValidateFormLinks(
+        IRecordIndex index,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas,
+        string recordType,
+        string fieldPath,
+        JsonElement value)
+    {
+        if (!schemas.TryGetValue(recordType, out var schema)) return null;
+        var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
+        if (col == null) return null;
+
+        // The same builder the read model renders check errors from, so "what the editor flags in a
+        // loaded plugin" and "what the editor refuses to create" are one definition of a broken link,
+        // not two that can drift.
+        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, index.Resolve);
     }
 
     // AC4: two refusals, because there are two different ways out and a message that named neither
