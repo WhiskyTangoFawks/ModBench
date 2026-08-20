@@ -11,8 +11,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-// Round-trips a record's conditions through the index (Fallout4ConditionCodec -> conditions /
-// condition_parameters rows -> GetConditions), covering the storage layout and hydration that the
+// Round-trips a record's conditions through the index (Index -> the record's own document ->
+// GetConditions's reconstitute-and-re-Extract, #420 — previously through the now-deleted
+// conditions/condition_parameters relational rows), covering the ingest/hydration wiring the
 // codec's own unit tests don't. A COBJ is the fixture because its Conditions field is the slice-1
 // target (ADR-0032).
 public sealed class ConditionIndexerTests : IDisposable
@@ -207,6 +208,19 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Empty(repo.GetConditions(_questFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
     }
 
+    // Invariant 7 (missing data reads as empty, never a throw): distinct from the case above, where
+    // a `records` row exists but carries no conditions. Here no row exists at all — the synthetic
+    // header FormKey is the real production example (D8: a ModHeader is never an IMajorRecordGetter,
+    // so it never had a document to begin with) — exercising ReadRecordBody's "no row" branch.
+    [Fact]
+    public void GetConditions_ReturnsEmpty_WhenRecordDoesNotExist()
+    {
+        using var repo = LoadedRepository();
+
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName("CtdaTest.esp"));
+        Assert.Empty(repo.GetConditions(headerFormKey, "CtdaTest.esp", origin: "Data"));
+    }
+
     // #154: a record with more than one condition-carrying field (Quest.DialogConditions and
     // Quest.UnusedConditions are both flat top-level Condition lists) must surface one owner per
     // field, each keyed by its own FieldPath, never merged or collided.
@@ -249,8 +263,8 @@ public sealed class ConditionIndexerTests : IDisposable
     }
 
     // --- form_references (#166): a condition's FormKey-bearing slots feed the same shared refs
-    // list VmadIndexer already feeds, so a record referenced only by a condition surfaces in
-    // Referenced-By. Mirrors VmadIndexerTests.VmadObjectProperty_RegistersFormReference. ---
+    // list CollectVmadRefs already feeds (#420), so a record referenced only by a condition
+    // surfaces in Referenced-By. Mirrors VmadIndexerTests.VmadObjectProperty_RegistersFormReference. ---
 
     [Fact]
     public void FormParameter_RegistersFormReference()

@@ -249,6 +249,20 @@ public sealed class GetVmadTests : IDisposable
         Assert.Null(repo.GetVmad(_plainNpcFormKey.ToString(), "VmadQuery.esp", origin: "Data"));
     }
 
+    // Invariant 7 (missing data reads as null, never a throw): distinct from the case above, where
+    // a `records` row exists but carries no VMAD. Here no row exists at all for this FormKey — the
+    // synthetic header FormKey is the real production example (D8: a ModHeader is never an
+    // IMajorRecordGetter, so it never had a document to begin with) — exercising ReadRecordBody's
+    // "no row" branch rather than its "row with a null VirtualMachineAdapter" branch.
+    [Fact]
+    public void GetVmad_ReturnsNull_WhenRecordDoesNotExist()
+    {
+        using var repo = LoadedRepository();
+
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName("VmadQuery.esp"));
+        Assert.Null(repo.GetVmad(headerFormKey, "VmadQuery.esp", origin: "Data"));
+    }
+
     [Fact]
     public void GetVmad_EmptyArrayProperty_ReturnsEmptyListItems()
     {

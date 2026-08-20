@@ -94,4 +94,38 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
             Assert.Contains(type, views);              // ... and the name is a view now
         }
     }
+
+    /// <summary>
+    /// #420: VMAD's three side tables are gone — <c>GetVmad</c> reconstitutes from the record's own
+    /// document instead. <c>form_references</c> is the positive control, same reasoning as the two
+    /// tests above: it is still fed (VMAD-borne refs move to ingest-time collection off the live
+    /// object, #420 AC4), so its presence proves the listing is real rather than empty.
+    /// </summary>
+    [Fact]
+    public void ALoadedSession_HasNoVmadTables()
+    {
+        var tables = TableNamesOf(Connection());
+
+        Assert.Contains("form_references", tables);
+
+        Assert.DoesNotContain("vmad_scripts", tables);
+        Assert.DoesNotContain("vmad_properties", tables);
+        Assert.DoesNotContain("vmad_property_list_items", tables);
+    }
+
+    /// <summary>
+    /// #420: conditions' two side tables are gone — <c>GetConditions</c> reconstitutes from the
+    /// record's own document via <c>IConditionCodec.Extract</c> instead. Same positive control as
+    /// <see cref="ALoadedSession_HasNoVmadTables"/>, for the same reason.
+    /// </summary>
+    [Fact]
+    public void ALoadedSession_HasNoConditionTables()
+    {
+        var tables = TableNamesOf(Connection());
+
+        Assert.Contains("form_references", tables);
+
+        Assert.DoesNotContain("conditions", tables);
+        Assert.DoesNotContain("condition_parameters", tables);
+    }
 }

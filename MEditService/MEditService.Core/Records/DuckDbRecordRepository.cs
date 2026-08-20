@@ -112,11 +112,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // #272 / ADR-0036: VMAD/conditions/form_lookup/header now all carry origin too, scoped the
         // same way as every other table above — closes the gap #271 left open. Header's own delete
         // step is in IndexHeader below; its write side already carried origin since #271.
-        DeleteVmadForPlugin(plugin, origin);
-        IndexVmad(pluginMod, plugin, origin, refs);
-
-        DeleteConditionsForPlugin(plugin, origin);
-        IndexConditions(pluginMod, plugin, origin, refs);
+        //
+        // #420: VMAD and conditions no longer have their own side tables to delete-then-append —
+        // both collect straight into the shared `refs` list below, walking the live object (already
+        // in hand here) rather than round-tripping through the document this same pass just wrote.
+        // GetVmad/GetConditions read the document instead, on demand (#413 D1's pattern).
+        CollectVmadRefs(pluginMod, plugin, refs);
+        CollectConditionRefs(pluginMod, plugin, refs);
 
         IndexPlacement(pluginMod, plugin, origin);
 
@@ -182,12 +184,12 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         // #413: one delete where this used to walk every reflected table — the record rows are all
         // in `records` now, and the only surviving per-type table is the header, deleted just below.
+        // #420: VMAD and conditions have no side tables of their own any more — deleting this
+        // plugin's `records` rows above already removes the one thing GetVmad/GetConditions read.
         DeleteExistingForOrigin("records", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
-        DeleteVmadForPlugin(plugin, origin);
-        DeleteConditionsForPlugin(plugin, origin);
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
         DeleteExistingForOrigin("plugins", plugin, origin);
@@ -503,66 +505,92 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
     // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
+    //
+    // #420: reconstitutes from the record's own document (#413 D1) instead of the deleted
+    // vmad_scripts/vmad_properties/vmad_property_list_items side tables, walking the same
+    // VmadCodec.Parse this repository's ingest-time CollectVmadRefs below also uses. No
+    // NotImplementedException guard here (unlike CollectVmadRefs): that failure mode is specific to
+    // Mutagen's *binary-overlay* accessors, which the reconstituted, JSON-materialized object graph
+    // never goes through — approved 2026-08-20; if some exotic accessor ever does throw here, it
+    // should surface loudly (ADR-0026) rather than being silently swallowed.
+    //
+    // Invariant 7 (missing data reads as null/empty, never a throw): ReadRecordBody returns null for
+    // a FormKey with no `records` row at all — an unindexed key, or a header, which has no document
+    // by D8 — and the type pattern below reads that as "no VMAD" the same as a record with none.
     public VmadData? GetVmad(string formKey, string plugin, string origin)
     {
-        var scripts = ReadVmadScriptRows(formKey, plugin, origin);
-        if (scripts.Count == 0) return null;
+        if (ReadRecordBody(formKey, plugin, origin) is not IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: { } vmad })
+            return null;
+        if (vmad.Scripts.Count == 0) return null;
 
-        var propRows = ReadVmadPropertyRows(formKey, plugin, origin);
-        var propsByScript = propRows
-            .GroupBy(r => r.ScriptName, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.PropertyIndex).ToList(), StringComparer.Ordinal);
-
-        var itemRows = ReadVmadListItemRows(formKey, plugin, origin);
-        var itemsByProp = itemRows
-            .GroupBy(r => (r.ScriptName, r.PropertyIndex))
-            .ToDictionary(g => g.Key, g => g.OrderBy(r => r.ListItemIndex).ToList());
-
-        var scriptData = scripts
-            .ConvertAll(s =>
+        var scripts = new List<VmadScriptData>();
+        foreach (var script in vmad.Scripts)
+        {
+            var props = new List<VmadNamedValue>();
+            foreach (var property in script.Properties)
             {
-                var props = propsByScript.TryGetValue(s.Name, out var rows)
-                    ? [.. rows.Select(r =>
-                    {
-                        var items = itemsByProp.GetValueOrDefault((r.ScriptName, r.PropertyIndex));
-                        return new VmadNamedValue(r.PropertyName, MapVmadProperty(r, items));
-                    })]
-                    : new List<VmadNamedValue>();
-                return new VmadScriptData(s.Name, s.Flags, props);
-            });
+                if (VmadCodec.Parse(property) is not { } parsed)
+                {
+                    _logger.LogWarning("Unknown VMAD property type {Type} on {FormKey}\\{Script}\\{Prop}",
+                        property.GetType().Name, formKey, script.Name, property.Name);
+                    continue;
+                }
 
-        return new VmadData(scriptData);
+                props.Add(new VmadNamedValue(property.Name, MapVmadProperty(parsed)));
+            }
+
+            scripts.Add(new VmadScriptData(script.Name, VmadCodec.FlagsString(script.Flags), props));
+        }
+
+        return new VmadData(scripts);
     }
 
     // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
     // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
+    //
+    // #420: reconstitutes from the record's own document via the registered IConditionCodec, whose
+    // Extract already returns exactly this method's return type — replacing the deleted
+    // conditions/condition_parameters side tables. Extract itself never populates DecodedValue (see
+    // ParsedConditionParam's doc comment), so it is recomputed here, same as the old row-based path
+    // did. Owners are re-sorted by FieldPath (ordinal) because Extract's own discovery order
+    // (reflection order for flat fields, then nested owners appended after) does not generally match
+    // the old SQL's `ORDER BY owner_field_path` — deliberate behaviour-preservation, not incidental
+    // (approved 2026-08-20).
+    //
+    // Invariant 7: ReadRecordBody returns null for an absent/header FormKey, read as "no conditions".
     public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin)
     {
-        var conditionRows = ReadConditionRows(formKey, plugin, origin);
-        if (conditionRows.Count == 0) return [];
+        if (_conditionCodec == null) return [];
+        if (ReadRecordBody(formKey, plugin, origin) is not IMajorRecordGetter record) return [];
 
-        var paramsByCondition = ReadConditionParamRows(formKey, plugin, origin)
-            .GroupBy(p => (p.FieldPath, p.ConditionIndex))
-            .ToDictionary(g => g.Key, g => g.OrderBy(p => p.ParamIndex)
-                .Select(p => new ParsedConditionParam(
-                    Enum.Parse<ConditionParamCategory>(p.Category), p.TypeName, p.Number, p.FormKey, p.Text,
-                    DecodeParamValue(p.Category, p.TypeName, p.Number)))
-                .ToList());
+        return [.. _conditionCodec.Extract(record)
+            .OrderBy(o => o.FieldPath, StringComparer.Ordinal)
+            .Select(o => o with
+            {
+                Conditions = [.. o.Conditions.Select(c => c with
+                {
+                    Parameters = [.. c.Parameters.Select(p => p with
+                    {
+                        DecodedValue = DecodeParamValue(p.Category.ToString(), p.TypeName, p.Number),
+                    })],
+                })],
+            })];
+    }
 
-        return [.. conditionRows
-            .GroupBy(c => c.FieldPath, StringComparer.Ordinal)
-            .Select(g => new ConditionOwner(g.Key, [.. g
-                .OrderBy(c => c.ConditionIndex)
-                .Select(c => new ParsedCondition(
-                    c.Function,
-                    Enum.Parse<ConditionOperator>(c.Operator),
-                    c.IsOr,
-                    c.RunOnTarget,
-                    c.RunOnReference,
-                    c.UseGlobal,
-                    c.ComparisonFloat,
-                    c.ComparisonGlobal,
-                    paramsByCondition.GetValueOrDefault((c.FieldPath, c.ConditionIndex)) ?? []))]))];
+    // #413 D1 / #420: the shared reconstitution step GetVmad/GetConditions both start from — the
+    // record's own document, deserialized back through the same RecordTextCodec ReadDetailFromDocument
+    // uses. Null for a FormKey with no `records` row: never indexed under this (plugin, origin), or a
+    // ModHeader (D8 — never an IMajorRecordGetter, so it never had a document at all).
+    private IMajorRecord? ReadRecordBody(string formKey, string plugin, string origin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
+        if (cmd.ExecuteScalar() is not string body) return null;
+
+        return _codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release).GetAwaiter().GetResult();
     }
 
     // #165: only a Number-category parameter is ever decodable (Form/Text are already
@@ -574,188 +602,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             ? _conditionCodec?.DecodeParamValue(typeName, n)
             : null;
 
-    private List<ConditionRow> ReadConditionRows(string formKey, string plugin, string origin)
+    // Types with an element type are the ones whose elements come from VmadParsedProperty.Items.
+    private static VmadPropertyValue MapVmadProperty(VmadParsedProperty parsed) =>
+        VmadCodec.ElementType(parsed.Type) is { } elementType
+            ? new VmadPropertyValue(parsed.Type, parsed.Flags, null, ListItems: MapVmadItems(elementType, parsed.Items))
+            : MapNonArrayVmadProperty(parsed);
+
+    private static VmadPropertyValue MapNonArrayVmadProperty(VmadParsedProperty parsed) => parsed.Type switch
     {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT owner_field_path, condition_index, function, operator, is_or,
-                   run_on_target, run_on_reference, use_global, comparison_float, comparison_global
-            FROM conditions
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            ORDER BY owner_field_path, condition_index
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<ConditionRow>();
-        while (reader.Read())
-        {
-            rows.Add(new ConditionRow(
-                reader.GetString(0),
-                reader.GetInt32(1),
-                reader.GetString(2),
-                reader.GetString(3),
-                reader.GetBoolean(4),
-                reader.GetString(5),
-                reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.GetBoolean(7),
-                reader.IsDBNull(8) ? null : reader.GetFloat(8),
-                reader.IsDBNull(9) ? null : reader.GetString(9)));
-        }
-
-        return rows;
-    }
-
-    private List<ConditionParamRow> ReadConditionParamRows(string formKey, string plugin, string origin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT owner_field_path, condition_index, param_index, category, type_name,
-                   number_value, formkey_value, text_value
-            FROM condition_parameters
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            ORDER BY owner_field_path, condition_index, param_index
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<ConditionParamRow>();
-        while (reader.Read())
-        {
-            rows.Add(new ConditionParamRow(
-                reader.GetString(0),
-                reader.GetInt32(1),
-                reader.GetInt32(2),
-                reader.GetString(3),
-                reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.IsDBNull(7) ? null : reader.GetString(7)));
-        }
-
-        return rows;
-    }
-
-    private readonly record struct ConditionRow(
-        string FieldPath, int ConditionIndex, string Function, string Operator, bool IsOr,
-        string RunOnTarget, string? RunOnReference, bool UseGlobal, float? ComparisonFloat, string? ComparisonGlobal);
-
-    private readonly record struct ConditionParamRow(
-        string FieldPath, int ConditionIndex, int ParamIndex, string Category, string TypeName,
-        int? Number, string? FormKey, string? Text);
-
-    private readonly record struct VmadScriptRow(string Name, string Flags);
-
-    private readonly record struct VmadPropertyRow(
-        string ScriptName, string PropertyName, int PropertyIndex, string Type, string Flags,
-        bool? Bool, int? Int, float? Float, string? String, string? FormKey, short? Alias, string? StructJson);
-
-    private readonly record struct VmadListItemRow(
-        string ScriptName, int PropertyIndex, int ListItemIndex, string Type,
-        bool? Bool, int? Int, float? Float, string? String, string? FormKey, short? Alias);
-
-    private List<VmadScriptRow> ReadVmadScriptRows(string formKey, string plugin, string origin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT script_name, flags FROM vmad_scripts
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            ORDER BY script_index
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<VmadScriptRow>();
-        while (reader.Read())
-            rows.Add(new VmadScriptRow(reader.GetString(0), reader.GetString(1)));
-        return rows;
-    }
-
-    private List<VmadPropertyRow> ReadVmadPropertyRows(string formKey, string plugin, string origin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT script_name, property_name, property_index, type, flags,
-                   bool_value, int_value, float_value, string_value, form_key_value, alias_value, struct_json
-            FROM vmad_properties
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            ORDER BY property_index
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<VmadPropertyRow>();
-        while (reader.Read())
-        {
-            rows.Add(new VmadPropertyRow(
-                reader.GetString(0), reader.GetString(1), reader.GetInt32(2), reader.GetString(3), reader.GetString(4),
-                reader.IsDBNull(5) ? null : reader.GetBoolean(5),
-                reader.IsDBNull(6) ? null : reader.GetInt32(6),
-                reader.IsDBNull(7) ? null : reader.GetFloat(7),
-                reader.IsDBNull(8) ? null : reader.GetString(8),
-                reader.IsDBNull(9) ? null : reader.GetString(9),
-                reader.IsDBNull(10) ? null : reader.GetInt16(10),
-                reader.IsDBNull(11) ? null : reader.GetString(11)));
-        }
-
-        return rows;
-    }
-
-    private List<VmadListItemRow> ReadVmadListItemRows(string formKey, string plugin, string origin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT script_name, property_index, list_item_index, type,
-                   bool_value, int_value, float_value, string_value, form_key_value, alias_value
-            FROM vmad_property_list_items
-            WHERE form_key = $1 AND plugin = $2 AND origin = $3
-            ORDER BY property_index, list_item_index
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<VmadListItemRow>();
-        while (reader.Read())
-        {
-            rows.Add(new VmadListItemRow(
-                reader.GetString(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetBoolean(4),
-                reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                reader.IsDBNull(6) ? null : reader.GetFloat(6),
-                reader.IsDBNull(7) ? null : reader.GetString(7),
-                reader.IsDBNull(8) ? null : reader.GetString(8),
-                reader.IsDBNull(9) ? null : reader.GetInt16(9)));
-        }
-
-        return rows;
-    }
-
-    // Types with an element type are the ones whose elements come from vmad_property_list_items rows.
-    private static VmadPropertyValue MapVmadProperty(VmadPropertyRow r, List<VmadListItemRow>? items) =>
-        VmadCodec.ElementType(r.Type) is not null
-            ? new VmadPropertyValue(r.Type, r.Flags, null, ListItems: MapVmadItems(items))
-            : MapNonArrayVmadProperty(r);
-
-    private static VmadPropertyValue MapNonArrayVmadProperty(VmadPropertyRow r) => r.Type switch
-    {
-        "Bool" => new VmadPropertyValue(r.Type, r.Flags, r.Bool),
-        "Int" => new VmadPropertyValue(r.Type, r.Flags, r.Int),
-        "Float" => new VmadPropertyValue(r.Type, r.Flags, r.Float),
-        "String" => new VmadPropertyValue(r.Type, r.Flags, r.String),
-        "Object" => new VmadPropertyValue(r.Type, r.Flags, r.FormKey, r.Alias),
-        "Struct" => new VmadPropertyValue(r.Type, r.Flags, null, Members: MapStructMembers(r.StructJson)),
-        "ArrayOfStruct" => new VmadPropertyValue(r.Type, r.Flags, null, StructList: MapStructList(r.StructJson)),
-        _ => new VmadPropertyValue(r.Type, r.Flags, null),
+        "Bool" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.BoolValue),
+        "Int" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.IntValue),
+        "Float" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.FloatValue),
+        "String" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.StringValue),
+        "Object" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.FormKeyValue, parsed.Value.AliasValue),
+        "Struct" => new VmadPropertyValue(parsed.Type, parsed.Flags, null, Members: MapStructMembers(parsed.StructJson)),
+        "ArrayOfStruct" => new VmadPropertyValue(parsed.Type, parsed.Flags, null, StructList: MapStructList(parsed.StructJson)),
+        _ => new VmadPropertyValue(parsed.Type, parsed.Flags, null),
     };
 
     private static List<VmadNamedValue>? MapStructMembers(string? structJson) =>
@@ -785,17 +647,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     };
 
     // Array elements carry no per-element flags (flags live at the property level only), hence "".
-    private static List<VmadPropertyValue> MapVmadItems(List<VmadListItemRow>? items) =>
+    // elementType is resolved once by the caller (VmadCodec.ElementType(parsed.Type)) since every
+    // item of one property shares its owning property's element type.
+    private static List<VmadPropertyValue> MapVmadItems(string elementType, IReadOnlyList<VmadValue>? items) =>
         items is null
             ? []
-            : [.. items.Select(i => VmadCodec.ElementType(i.Type) switch
+            : [.. items.Select(v => elementType switch
             {
-                "Bool" => new VmadPropertyValue("Bool", "", i.Bool),
-                "Int" => new VmadPropertyValue("Int", "", i.Int),
-                "Float" => new VmadPropertyValue("Float", "", i.Float),
-                "String" => new VmadPropertyValue("String", "", i.String),
-                "Object" => new VmadPropertyValue("Object", "", i.FormKey, i.Alias),
-                _ => new VmadPropertyValue(i.Type, "", null),
+                "Bool" => new VmadPropertyValue("Bool", "", v.BoolValue),
+                "Int" => new VmadPropertyValue("Int", "", v.IntValue),
+                "Float" => new VmadPropertyValue("Float", "", v.FloatValue),
+                "String" => new VmadPropertyValue("String", "", v.StringValue),
+                "Object" => new VmadPropertyValue("Object", "", v.FormKeyValue, v.AliasValue),
+                _ => new VmadPropertyValue(elementType, "", null),
             })];
 
     public int CountRecordsForPlugin(string tableName, string plugin, string origin)
@@ -1124,13 +988,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.ExecuteNonQuery();
     }
 
-    private void IndexVmad(IModGetter pluginMod, string plugin, string origin, List<FormRef> refs)
+    // #420: VMAD Object-property ref collection, re-routed off the deleted vmad_scripts/
+    // vmad_properties/vmad_property_list_items tables. Walks the *live* object here (already in
+    // hand during Index()) rather than the record's own reconstituted document, deliberately — the
+    // document this same Index() call just wrote would cost a second serialize/deserialize round
+    // trip per record for no benefit, since the live getter is right here. GetVmad (above) performs
+    // the read-side equivalent of this walk, on demand, from the document. Same per-record
+    // NotImplementedException guard IndexVmad (VmadIndexer, deleted) used to have: a live
+    // binary-overlay accessor for a not-yet-implemented property type can still throw here, unlike
+    // in GetVmad's reconstituted, JSON-materialized path.
+    private void CollectVmadRefs(IModGetter pluginMod, string plugin, List<FormRef> refs)
     {
-        using var scriptAppender = Connection.CreateAppender("vmad_scripts");
-        using var propAppender = Connection.CreateAppender("vmad_properties");
-        using var itemAppender = Connection.CreateAppender("vmad_property_list_items");
-        var indexer = new VmadIndexer(scriptAppender, propAppender, itemAppender, refs, _logger);
-
         var vmadCount = 0;
         foreach (var record in pluginMod.EnumerateMajorRecords<IHaveVirtualMachineAdapterGetter>(
                      throwIfUnknown: false))
@@ -1139,8 +1007,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             var recordType = ResolveRecordType(record);
             try
             {
-                indexer.IndexRecord(record.FormKey.ToString(), plugin, origin, recordType, vmad);
+                var formKey = record.FormKey.ToString();
+                foreach (var script in vmad.Scripts)
+                {
+                    foreach (var property in script.Properties)
+                    {
+                        if (VmadCodec.Parse(property) is not { } parsed) continue;
+                        var propPath = $@"VMAD\{script.Name}\{property.Name}";
+                        foreach (var r in parsed.Refs)
+                            refs.Add(new FormRef(formKey, r.FormKey, propPath + r.RelativePath, recordType, null));
+                    }
+                }
+
                 vmadCount++;
+                // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests
+                // pins them) — "indexed" still describes what happens to this record's VMAD, even
+                // though the destination is now the shared refs list rather than a side table.
                 _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
                     record.FormKey, recordType, plugin);
             }
@@ -1214,53 +1096,75 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
     }
 
-    private void DeleteVmadForPlugin(string plugin, string origin)
-    {
-        foreach (var table in (string[])["vmad_scripts", "vmad_properties", "vmad_property_list_items"])
-            DeleteExistingForOrigin(table, plugin, origin);
-    }
-
-    private void DeleteConditionsForPlugin(string plugin, string origin)
-    {
-        foreach (var table in (string[])["conditions", "condition_parameters"])
-            DeleteExistingForOrigin(table, plugin, origin);
-    }
-
     // Walks every major record through the per-game condition codec (ADR-0032). No aspect interface
     // groups condition-bearing records, so enumeration is unfiltered; the codec's reflect-for-
     // `Conditions` check is cheap and yields nothing for records without conditions.
     //
-    // refs: the same shared list IndexVmad appends to, both flushed to form_references in one pass
-    // after Index()'s per-type loop (#166 — ConditionIndexer now feeds it too, closing the gap where
-    // a record referenced only by a condition never appeared in form_references).
-    private void IndexConditions(IModGetter pluginMod, string plugin, string origin, List<FormRef> refs)
+    // #420: re-routed off the deleted conditions/condition_parameters tables, straight into the same
+    // shared refs list CollectVmadRefs appends to (#166), both flushed to form_references in one
+    // pass after Index()'s per-type loop. Runs on the live object for the same reason
+    // CollectVmadRefs does (record already in hand; no reason to round-trip through the document).
+    // No NotImplementedException guard here, matching the deleted ConditionIndexer's own caller
+    // (IndexConditions): IConditionCodec.Extract's own contract already lets a malformed-data
+    // InvalidOperationException propagate and fail the whole Index() call, unchanged by this ticket.
+    private void CollectConditionRefs(IModGetter pluginMod, string plugin, List<FormRef> refs)
     {
-        var codec = ConditionCodecRegistry.For(pluginMod.GameRelease.ToCategory());
-        if (codec == null)
+        if (_conditionCodec == null)
         {
-            _logger.LogWarning("No condition codec for {Game}; skipping condition index for {Plugin}",
+            _logger.LogWarning("No condition codec for {Game}; skipping condition refs for {Plugin}",
                 pluginMod.GameRelease, plugin);
             return;
         }
 
-        using var conditionAppender = Connection.CreateAppender("conditions");
-        using var paramAppender = Connection.CreateAppender("condition_parameters");
-        var indexer = new ConditionIndexer(conditionAppender, paramAppender, refs);
-
         var count = 0;
         foreach (var record in pluginMod.EnumerateMajorRecords())
         {
-            var owners = codec.Extract(record);
+            var owners = _conditionCodec.Extract(record);
             if (!owners.Any()) continue;
+
+            var formKey = record.FormKey.ToString();
             var recordType = ResolveRecordType(record);
-            indexer.IndexRecord(record.FormKey.ToString(), plugin, origin, recordType, owners);
+            foreach (var owner in owners)
+            {
+                for (var ci = 0; ci < owner.Conditions.Count; ci++)
+                    CollectConditionRefsForOne(formKey, recordType, owner.FieldPath, ci, owner.Conditions[ci], refs);
+            }
+
             count++;
+            // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests pins
+            // them) — see CollectVmadRefs's identical note.
             _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
                 record.FormKey, recordType, plugin);
         }
 
         _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", count, plugin);
     }
+
+    // Mirrors the deleted ConditionIndexer.CollectConditionRefs: a condition's three FormKey-bearing
+    // slots (a Form-category parameter, the Run-On reference, the Use-Global comparison target).
+    // FieldPath format matches Edits/ConditionPath.Build/BuildParameter exactly (see that type and
+    // the deleted ConditionIndexer's own comment for why this reproduces rather than imports it —
+    // Records/ doesn't reference Edits/).
+    private static void CollectConditionRefsForOne(
+        string formKey, string recordType, string fieldPath, int index, ParsedCondition c, List<FormRef> refs)
+    {
+        if (c.RunOnTarget == "Reference" && c.RunOnReference is { Length: > 0 } runOnRef)
+            refs.Add(new FormRef(formKey, runOnRef, ConditionSubFieldPath(fieldPath, index, "RunOn"), recordType, null));
+
+        if (c.UseGlobal && c.ComparisonGlobal is { Length: > 0 } comparisonGlobal)
+            refs.Add(new FormRef(formKey, comparisonGlobal, ConditionSubFieldPath(fieldPath, index, "Comparison"), recordType, null));
+
+        for (var pi = 0; pi < c.Parameters.Count; pi++)
+        {
+            var param = c.Parameters[pi];
+            if (param.Category == ConditionParamCategory.Form && param.FormKey is { Length: > 0 } paramFormKey)
+                refs.Add(new FormRef(
+                    formKey, paramFormKey, ConditionSubFieldPath(fieldPath, index, $@"Parameter\{pi}"), recordType, null));
+        }
+    }
+
+    private static string ConditionSubFieldPath(string fieldPath, int index, string subField) =>
+        $@"CTDA\{fieldPath}\{index}\{subField}";
 
     private string ResolveRecordType(IMajorRecordGetter record)
     {
