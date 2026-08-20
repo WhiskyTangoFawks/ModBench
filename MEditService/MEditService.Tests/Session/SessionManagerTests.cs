@@ -218,6 +218,121 @@ public class SessionManagerTests(TestPluginFixture fixture)
     // RecordEditService's both-refs collision-safe allocator, #427). Its backing state
     // (`_nextFormIds`, `SafeNextFormId`) had no other reader and is removed with it.
 
+    // --- #422: filter re-materialization ---
+    //
+    // _filter is a one-shot snapshot (SetFilter's CREATE OR REPLACE TABLE) of whatever matched the
+    // filter SQL at the moment it ran. Nothing else keeps it in step, so every mutation path that can
+    // change which records match has to re-run it — these pin the SessionManager-side call sites.
+
+    [Fact]
+    public async Task ReindexPlugin_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("reindex-filter-newly-matches")
+            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("NotMatchingYet").FormKey)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
+            Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+            var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
+            var onDisk = Fallout4Mod.CreateFromBinary(
+                new ModPath(ModKey.FromFileName("Plugin.esp"), pluginPath), Fallout4Release.Fallout4);
+            onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NowMatches";
+            onDisk.WriteToBinary(pluginPath);
+
+            await manager.ReindexPlugin("Plugin.esp");
+
+            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            Assert.Equal(1, result.Total);
+            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
+        }
+    }
+
+    [Fact]
+    public async Task ReindexPlugin_AfterBinaryChangeMakesARecordStopMatchingTheFilter_FilteredListingExcludesIt()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("reindex-filter-stops-matching")
+            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("StillMatches").FormKey)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
+            Assert.Equal(1, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+            var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
+            var onDisk = Fallout4Mod.CreateFromBinary(
+                new ModPath(ModKey.FromFileName("Plugin.esp"), pluginPath), Fallout4Release.Fallout4);
+            onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NoLongerMatches";
+            onDisk.WriteToBinary(pluginPath);
+
+            await manager.ReindexPlugin("Plugin.esp");
+
+            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            Assert.Equal(0, result.Total);
+        }
+    }
+
+    [Fact]
+    public async Task ReindexPlugins_AfterBinaryChangeMakesARecordNewlyMatchTheFilter_FilteredListingIncludesIt()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("reindex-plugins-filter-newly-matches")
+            .WithPlugin("Plugin.esp", mod => npcKey = mod.Npcs.AddNew("NotMatchingYet").FormKey)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
+            Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+            var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
+            var onDisk = Fallout4Mod.CreateFromBinary(
+                new ModPath(ModKey.FromFileName("Plugin.esp"), pluginPath), Fallout4Release.Fallout4);
+            onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NowMatches";
+            onDisk.WriteToBinary(pluginPath);
+
+            await manager.ReindexPlugins(["Plugin.esp"]);
+
+            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            Assert.Equal(1, result.Total);
+            Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
+        }
+    }
+
+    [Fact]
+    public void LoadUnlistedPlugin_WithRecordsMatchingAnActiveFilter_FilteredListingIncludesThem()
+    {
+        var data = new PluginFixtureBuilder("load-unlisted-filter")
+            .WithPlugin("Base.esp", mod => mod.Npcs.AddNew("BaseNpc"))
+            .WithPlugin("Unlisted.esp", mod => mod.Npcs.AddNew("MatchesFilter"), listed: false)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+            manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'MatchesFilter'");
+            Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+            manager.LoadUnlistedPlugin(Path.Combine(data.DataFolder, "Unlisted.esp"), "SomeMod");
+
+            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            Assert.Equal(1, result.Total);
+            Assert.Equal("MatchesFilter", result.Items[0].EditorId);
+        }
+    }
+
     // --- helpers ---
 
     private sealed class SpyRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory

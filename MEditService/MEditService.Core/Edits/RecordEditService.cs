@@ -86,6 +86,8 @@ public sealed class RecordEditService(
         _codec.SerializeAsync(record, ledgerPath, release).GetAwaiter().GetResult();
 
         index.ApplyWorkingTreeChanges(plugin, [(formKey, Encoding.UTF8.GetString(newBody))]);
+        // #422: the new value can flip filter membership either way.
+        sessions.ReapplyFilter();
 
         logger.LogInformation(
             "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {LedgerPath}",
@@ -178,6 +180,8 @@ public sealed class RecordEditService(
         _codec.SerializeAsync(record, ledgerPath, release).GetAwaiter().GetResult();
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
+        // #422: a brand-new row can newly match an active filter.
+        sessions.ReapplyFilter();
 
         logger.LogInformation(
             "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree ledger file at {LedgerPath}",
@@ -271,6 +275,11 @@ public sealed class RecordEditService(
 
             RenumberTheRecordItself(index, plugin, modFolder, formKey, targetFormKey, release);
             writtenRepos.Add($"{plugin.Name} ({plugin.Origin})");
+            // #422: the whole cascade's worth of referencer edits and the record's own re-creation
+            // under a new FormKey, re-applied once rather than per write — cheaper and no less
+            // correct, since SetFilter re-derives the full matching set regardless of how many rows
+            // moved since it was last run.
+            sessions.ReapplyFilter();
         }
         catch (Exception ex)
         {

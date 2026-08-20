@@ -79,6 +79,7 @@ public class WorldspaceQueryServiceTests
         public Task ReindexPlugins(IReadOnlyList<string> p) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
+        public void ReapplyFilter() => throw new NotSupportedException();
     }
 
     // #296: a minimal fake session whose Plugins list is real enough to exercise

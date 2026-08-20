@@ -188,4 +188,22 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.True(result.Applied, result.Message);
         Assert.Equal(requested, result.NewFormKey);
     }
+
+    // #422: _filter is a one-shot snapshot of whatever matched when SetFilter ran — a brand-new row
+    // was never evaluated against that SQL at all, so it stays hidden from a broad "every NPC" filter
+    // until the create path re-materializes it.
+    [Fact]
+    public void CreateRecord_MakesTheNewRecordAppearInAnActiveFilteredListing()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        mod.Sessions.SetFilter("SELECT form_key FROM npc_");
+        var before = mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+
+        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+
+        Assert.True(result.Applied, result.Message);
+        var after = mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        Assert.Equal(before + 1, after.Total);
+        Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
+    }
 }

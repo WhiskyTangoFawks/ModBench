@@ -105,6 +105,33 @@ public sealed class SessionManagerRereadPluginTests
         }
     }
 
+    // #422: _filter is a one-shot snapshot of whatever matched when SetFilter ran — a reread that
+    // rebinds the plugin to a different physical file changes record content underneath that
+    // snapshot, same as any other re-index, and must re-materialize it.
+    [Fact]
+    public void RereadPlugin_AfterRebindingToACopyWhoseRecordsNewlyMatchTheFilter_FilteredListingIncludesThem()
+    {
+        using var fx = new PluginFixtureBuilder("sm-reread-filter")
+            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
+            .BuildScattered();
+        var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "MatchesFilter");
+
+        var manager = MakeManager();
+        using (manager)
+        {
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
+
+            sessionManager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'MatchesFilter'");
+            Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+            sessionManager.RereadPlugin("A.esp", newPath, "ModB");
+
+            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            Assert.Equal(1, result.Total);
+        }
+    }
+
     [Fact]
     public async Task RereadPlugin_WhileALoadIsInFlight_IsRefusedWithoutDisturbingTheLoad()
     {

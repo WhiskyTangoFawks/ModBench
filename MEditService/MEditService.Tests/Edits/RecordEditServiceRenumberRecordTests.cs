@@ -48,6 +48,24 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(requested, result.NewFormKey);
     }
 
+    // #422: the renumbered record's editor_id is unchanged, but it lands under a brand-new FormKey
+    // that _filter's snapshot never evaluated — the old FormKey (which did match) is gone, so without
+    // re-materializing, the record vanishes from a filtered listing across the renumber entirely.
+    [Fact]
+    public void RenumberRecord_MakesTheRecordUnderItsNewFormKeyAppearInAnActiveFilteredListing()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        mod.Sessions.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'FixtureNpc'");
+        Assert.Equal(1, mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+
+        Assert.True(result.Applied, result.Message);
+        var after = mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        Assert.Equal(1, after.Total);
+        Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
+    }
+
     [Fact]
     public void RenumberRecord_Refuses_WhenTheRequestedTargetBelongsToADifferentPlugin()
     {

@@ -382,6 +382,8 @@ public sealed class SessionManager(
             // `plugins` join, so nothing already computed can change. That is the whole reason
             // ADR-0035 lets these arrive lazily while load-order plugins must load together.
             _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
+            // #422: this plugin's own records can newly (or no longer) match an active filter.
+            ReapplyFilter();
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -452,6 +454,8 @@ public sealed class SessionManager(
             repository.Index(mod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
             // AC7: the whole-set sweep, so winner status and conflict badges describe the new file.
             repository.UpdateWinners();
+            // #422: the reread changed record content, which can flip filter membership either way.
+            ReapplyFilter();
 
             return PluginResponse.FromMetadata(metadata);
         }
@@ -469,6 +473,8 @@ public sealed class SessionManager(
         {
             repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
             repository.UpdateWinners();
+            // #422: re-indexed content can flip filter membership either way.
+            ReapplyFilter();
         }
 
         return Task.CompletedTask;
@@ -492,7 +498,11 @@ public sealed class SessionManager(
                 foreach (var (metadata, repository, item) in loaded)
                     repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
                 if (loaded.Count > 0)
+                {
                     loaded[0].Repository.UpdateWinners();
+                    // #422: re-indexed content can flip filter membership either way.
+                    ReapplyFilter();
+                }
             }
         }
         finally
@@ -532,6 +542,19 @@ public sealed class SessionManager(
                 throw new InvalidOperationException(NoSessionMessage);
             _repository!.SetFilter(sql);
             _session.FilterSql = sql;
+        }
+    }
+
+    // #422: the one place `_filter` gets re-run against current index state. `_lock` is reentrant
+    // (see RereadPlugin's own comment), so every mutation path below calls this from inside the same
+    // lock scope it already holds around its Index/UpdateWinners calls, rather than dropping and
+    // retaking it.
+    public void ReapplyFilter()
+    {
+        lock (_lock)
+        {
+            if (_session?.FilterSql is { } sql && _repository is not null)
+                _repository.SetFilter(sql);
         }
     }
 

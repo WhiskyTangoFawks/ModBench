@@ -82,6 +82,9 @@ public sealed class LedgerFreshness(ISessionManager sessions, ILogger<LedgerFres
             // including a null, which is the record's file having been deleted. ApplyWorkingTreeChanges
             // decides for itself whether that is a change or a convergence back to committed.
             index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
+            // #422: a read-time self-heal is still a mutation — the row it just folded in can newly
+            // (or no longer) match an active filter, same as an explicit edit would.
+            sessions.ReapplyFilter();
             logger.LogDebug(
                 "Ledger text for {FormKey} in {Plugin} changed outside Modbench; refreshed at read time",
                 formKey, entry.Plugin.Name);

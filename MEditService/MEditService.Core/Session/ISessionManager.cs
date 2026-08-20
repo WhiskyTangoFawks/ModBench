@@ -124,4 +124,20 @@ public interface ISessionManager
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
     /// </summary>
     void ClearFilter();
+
+    /// <summary>
+    /// #422: re-materializes <c>_filter</c> from the session's own <c>FilterSql</c> — every mutation
+    /// path that can change which records match (a re-index, a working-tree edit, a create, a
+    /// renumber, a read-time ledger self-heal) must call this afterward, or the table
+    /// <see cref="SetFilter"/> built stays a snapshot of a matching set that no longer exists: a record
+    /// that newly matches stays hidden, one that stopped matching stays listed.
+    /// <para>
+    /// Deliberately a silent no-op with no session or no active filter, unlike <see cref="SetFilter"/>/
+    /// <see cref="ClearFilter"/>'s throw — every caller is a mutation (or a read-time self-heal) where
+    /// "no filter is active" is the ordinary case, not a caller mistake, and a throwing dependency here
+    /// would make every one of those call sites carry its own guard clause, or worse would turn
+    /// <c>Ledger.LedgerFreshness</c>'s "a read must never throw" posture into a lie.
+    /// </para>
+    /// </summary>
+    void ReapplyFilter();
 }

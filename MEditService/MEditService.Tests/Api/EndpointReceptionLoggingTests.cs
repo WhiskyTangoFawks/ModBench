@@ -155,6 +155,7 @@ public sealed class EndpointReceptionLoggingTests
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
+        public void ReapplyFilter() => throw new NotSupportedException();
     }
 
     private sealed class StubWorldspaceQueryService : IWorldspaceQueryService
