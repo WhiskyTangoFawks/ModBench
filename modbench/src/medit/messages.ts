@@ -9,6 +9,11 @@ export const EXTENSION_TO_WEBVIEW = {
   // value it sent: the write path re-serializes through the codec, and the record's conflict
   // picture across every other column can move with it.
   RECORD_EDITED: 'recordEdited',
+  // #426: the FormKey picker's reply — a direct reply to the one panel that asked (via
+  // `requestId`, matched by the webview-side pickFormKey bridge), never a broadcast: the
+  // QuickPick that produced it only ever existed for that one request. `formKey: null` means the
+  // user dismissed the picker (Escape/blur) — the caller leaves its field unchanged.
+  FORM_KEY_PICKED: 'formKeyPicked',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -27,16 +32,23 @@ export const WEBVIEW_TO_EXTENSION = {
   // surfacing). The value is already in the wire shape the field's schema expects; nothing here
   // interprets it.
   EDIT_FIELD: 'editField',
+  // #426: the FormKey picker moved off the webview (which cannot call
+  // vscode.window.createQuickPick itself — only the extension host can) onto a native QuickPick.
+  // `seed` is the current reference (empty string when there is none), shown in the QuickPick's
+  // value and used to pre-select the matching item; `validTypes` is the field's allowed record
+  // types, same filter the picker always applied (pre-#410 #210, resurrected unchanged).
+  OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
 
 // #410/ADR-0041: this bridge carried reads only while the record editor was a viewer. Most of what
-// #410 removed stays removed — the pending-cell and column-header command broadcasts, the array and
-// VMAD structural-op broadcasts, the FormKey/condition-function/script-name pickers, the
-// revert-group confirm, the clipboard read, the extended field editor — because those were the
-// *pending-change* surface, not editing as such. #415 rebuilds editing on text, and EDIT_FIELD is
-// the whole of it: one field, one value, one working-tree change.
+// #410 removed stays removed — the pending-cell and column-header command broadcasts, the
+// revert-group confirm, the clipboard read — because those were the *pending-change* surface, not
+// editing as such. #415 rebuilds editing on text (EDIT_FIELD); #426 restores the remaining editor
+// gestures on the same write path, starting with the FormKey picker (OPEN_FORM_KEY_PICKER /
+// FORM_KEY_PICKED) — a native-surface request/reply, not a pending-change concept, so it comes
+// back exactly as it stood before #410.
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }
   | { type: typeof WEBVIEW_TO_EXTENSION.LOG; level: LogLevel; message: string }
@@ -50,9 +62,11 @@ export type WebviewToExtension =
       origin: string;
       fieldPath: string;
       value: unknown;
-    };
+    }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
-  | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };

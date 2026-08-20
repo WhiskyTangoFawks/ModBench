@@ -469,10 +469,12 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, scriptsPath,
     referencedByTreeView, outputChannel,
   } = deps;
-  // #410/ADR-0041: every per-panel reply bundle (the FormKey picker, the condition-function
-  // picker, the revert-group confirm, the add-script input, the clipboard read, the extended
-  // field editor) retired with the write path it served, so this bundle is shared outright now —
-  // nothing left here needs a per-panel reply target.
+  // #410/ADR-0041 retired every per-panel reply bundle along with the pending-change write path
+  // they served (the condition-function picker, the revert-group confirm, the add-script input,
+  // the clipboard read, the extended field editor all stay retired). #426 restores the first one
+  // back — the FormKey picker — so this object is the *shared* remainder; `formKeyPicker` itself
+  // is rebuilt per panel at the onDidReceiveMessage call site below, since its reply must reach
+  // the one panel that asked, never a broadcast.
   const routerDeps: RouteRecordPanelMessageDeps = {
     channel: outputChannel,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
@@ -483,6 +485,8 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     repository: deps.repository,
     onRecordEdited: (formKey: string) =>
       broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey }),
+    // Placeholder — the onDidReceiveMessage wiring below overrides this per panel every call.
+    formKeyPicker: undefined,
   };
   return [
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
@@ -2107,8 +2111,6 @@ function wireActiveRecordTracking(
 interface OpenRecordPanelDeps {
   routerDeps: RouteRecordPanelMessageDeps;
   recordPanels: Set<vscode.WebviewPanel>;
-  // #210: threaded through so the FormKey picker's search (PluginRepository.searchRecords) is
-  // available per panel — see the onDidReceiveMessage wiring below for why it's rebuilt per
   // #282: kept current at both branches below (reuse-and-retarget, create) — the Referenced By
   // view's whole input, replacing the old showReferencedBy(node) command argument.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
@@ -2155,7 +2157,14 @@ function openRecordPanel(
   wireActiveRecordTracking(panel, formKey, activeRecordTracker);
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    void routeRecordPanelMessage(msg, routerDeps);
+    // Issue #210 (#426: restored): the FormKey picker's reply must reach the one panel that
+    // asked, never a broadcast (see messages.ts' FORM_KEY_PICKED doc comment) — routerDeps itself
+    // is shared across every panel (built once in registerRecordViewCommands), so this is the one
+    // per-panel field, rebuilt fresh on every message with the panel this closure already holds.
+    void routeRecordPanelMessage(msg, {
+      ...routerDeps,
+      formKeyPicker: { repository: routerDeps.repository, reply: (m: ExtensionToWebview) => { void panel.webview.postMessage(m); } },
+    });
   });
 
   const scriptUri = panel.webview.asWebviewUri(

@@ -1,15 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const executeCommand = vi.fn();
 const writeText = vi.fn();
+const createQuickPick = vi.fn();
 
 vi.mock('vscode', () => ({
   commands: { executeCommand: (...args: unknown[]) => executeCommand(...args) },
   env: { clipboard: { writeText: (v: string) => writeText(v) } },
+  window: { createQuickPick: (...args: unknown[]) => createQuickPick(...args) },
 }));
 
-import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './recordPanelMessageRouter';
-import { WEBVIEW_TO_EXTENSION } from './messages';
+import {
+  routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery,
+  type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
+} from './recordPanelMessageRouter';
+import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
+import type { RecordSummary } from './ApiClient';
+
+beforeEach(() => { createQuickPick.mockClear(); });
 
 function fakeChannel() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
@@ -18,14 +26,55 @@ const fakeReporter = { report: vi.fn() };
 
 // #415: the edit path's two deps default to "applied, nobody listening" so every pre-existing case
 // below keeps exercising exactly what it did; the edit tests override them explicitly.
-const fakeRepository = { editRecordField: vi.fn() };
+// #426: searchRecords is unused outside the OPEN_FORM_KEY_PICKER tests below (which build their
+// own FormKeyPickerDeps.repository), but the field is required now that this router's shared
+// `repository` field covers both editField and the FormKey picker's search.
+const fakeRepository = { editRecordField: vi.fn(), searchRecords: vi.fn() };
 const onRecordEdited = vi.fn();
 
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
   return {
     channel: fakeChannel(), reporter: fakeReporter,
     repository: fakeRepository, onRecordEdited,
+    // #426: undefined by default, matching every other per-panel bridge bundle — a message that
+    // arrives with no deps wired is a no-op, not a crash.
+    formKeyPicker: undefined,
     ...overrides,
+  };
+}
+
+function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSummary {
+  return { formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`, plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId };
+}
+
+// Issue #210 (#426: restored): a minimal fake of vscode.QuickPick — real VS Code has no test
+// harness here, so this stands in for the event-emitter-driven object pickFormKeyViaQuickPick
+// drives (value/items/activeItems/selectedItems as plain properties, onDidChangeValue/onDidAccept/
+// onDidHide as listener registries the test triggers directly, matching real QuickPick's "calling
+// .hide() also fires onDidHide" behavior).
+function makeFakeQuickPick() {
+  const changeValueListeners: Array<(v: string) => void> = [];
+  const acceptListeners: Array<() => void> = [];
+  const hideListeners: Array<() => void> = [];
+  const qp = {
+    value: '',
+    placeholder: undefined as string | undefined,
+    items: [] as unknown[],
+    activeItems: [] as unknown[],
+    selectedItems: [] as unknown[],
+    busy: false,
+    show: vi.fn(),
+    hide: vi.fn(() => { hideListeners.forEach(cb => cb()); }),
+    dispose: vi.fn(),
+    onDidChangeValue: (cb: (v: string) => void) => { changeValueListeners.push(cb); return { dispose: () => {} }; },
+    onDidAccept: (cb: () => void) => { acceptListeners.push(cb); return { dispose: () => {} }; },
+    onDidHide: (cb: () => void) => { hideListeners.push(cb); return { dispose: () => {} }; },
+  };
+  return {
+    qp,
+    typeValue(v: string) { qp.value = v; changeValueListeners.forEach(cb => cb(v)); },
+    accept() { acceptListeners.forEach(cb => cb()); },
+    hideWithoutAccept() { hideListeners.forEach(cb => cb()); },
   };
 }
 
@@ -36,6 +85,7 @@ describe('routeRecordPanelMessage', () => {
   beforeEach(() => {
     executeCommand.mockReset();
     writeText.mockReset();
+    createQuickPick.mockReset();
     fakeReporter.report.mockReset();
     fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
     onRecordEdited.mockReset();
@@ -156,5 +206,274 @@ describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
 
     expect(fakeReporter.report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
     expect(onRecordEdited).not.toHaveBeenCalled();
+  });
+});
+
+describe('normalizeFormKeyQuery (issue #218)', () => {
+  it('searches on the bracketed FormKey when a whole composite label is pasted', () => {
+    expect(normalizeFormKeyQuery('DogmeatRace [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
+  });
+
+  // The identity is the FormKey; the EditorID is decoration. A stale copy (the record was renamed
+  // since) or a hand-edited string must resolve to the reference it names, not the name it carries.
+  it('lets the FormKey win when the label and the bracketed FormKey disagree', () => {
+    expect(normalizeFormKeyQuery('WrongName [000019:Fallout4.esm]')).toBe('000019:Fallout4.esm');
+  });
+
+  // A VMAD object reference reads "SomeNPC [000123:Foo.esp] [2]" — the alias suffix is a second
+  // bracketed segment. Taking the first match is what makes a copy of that whole cell resolve.
+  it('takes the first bracketed segment, so a VMAD alias suffix does not win over the FormKey', () => {
+    expect(normalizeFormKeyQuery('SomeNPC [000123:Foo.esp] [2]')).toBe('000123:Foo.esp');
+  });
+
+  it('trims whitespace inside the brackets', () => {
+    expect(normalizeFormKeyQuery('DogmeatRace [ 000019:Fallout4.esm ]')).toBe('000019:Fallout4.esm');
+  });
+
+  // #210's behaviour, unchanged: a bare EditorID and a bare FormKey are both searched as typed.
+  it('passes an unbracketed query through untouched', () => {
+    expect(normalizeFormKeyQuery('Dogmeat')).toBe('Dogmeat');
+    expect(normalizeFormKeyQuery('000019:Fallout4.esm')).toBe('000019:Fallout4.esm');
+  });
+
+  // Falling back to the query as typed rather than to the empty string: an empty capture would
+  // blank the results list, which reads as "no matches" for something the user did type.
+  it('falls back to the query as typed when the brackets are empty', () => {
+    expect(normalizeFormKeyQuery('Foo []')).toBe('Foo []');
+    expect(normalizeFormKeyQuery('Foo [  ]')).toBe('Foo [  ]');
+  });
+
+  it('passes an unclosed bracket through as typed', () => {
+    expect(normalizeFormKeyQuery('Foo [000019')).toBe('Foo [000019');
+  });
+});
+
+// Issue #210 (#426: restored): the FormKey picker as a native QuickPick — the extension-host half
+// of the bridge pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here,
+// separately from routeRecordPanelMessage's dispatch.
+describe('pickFormKeyViaQuickPick (issue #210)', () => {
+  function fakeDeps(searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 })): { deps: FormKeyPickerDeps; searchRecords: typeof searchRecords; reply: ReturnType<typeof vi.fn> } {
+    const reply = vi.fn();
+    return { deps: { repository: { searchRecords }, reply }, searchRecords, reply };
+  }
+
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('seeds the QuickPick value and immediately searches on the seed', async () => {
+    const record = makeRecord(1, 'Seeded');
+    const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, record.formKey, ['npc_']);
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+
+    expect(qp.value).toBe(record.formKey);
+    expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
+    expect(qp.items).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
+    // "Pre-selected": the seeded record is the active item in the results list — QuickPick has
+    // no InputBox-style valueSelection to also highlight the input text itself.
+    expect(qp.activeItems).toEqual([{ label: `Seeded [${record.formKey}]`, formKey: record.formKey }]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  // Issue #218 AC 3: the seed is the composite the cell displays, not the bare FormKey, so that a
+  // *mutable* FormKey cell can hand over what it shows — the picker's input is native, so Ctrl+A/
+  // Ctrl+C there is the copy path on a column that has no read-only surface. The search half
+  // already tolerated this (normalizeFormKeyQuery), but pre-selection compared the raw seed
+  // against item.formKey and would have silently stopped matching.
+  it('pre-selects the seeded record when the seed is a whole "EditorID [FormKey]" composite', async () => {
+    const record = makeRecord(1, 'Seeded');
+    const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const composite = `Seeded [${record.formKey}]`;
+    const resultPromise = pickFormKeyViaQuickPick(deps, composite, ['npc_']);
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+
+    expect(qp.value).toBe(composite);
+    expect(searchRecords).toHaveBeenCalledWith(record.formKey, ['npc_']);
+    expect(qp.activeItems).toEqual([{ label: composite, formKey: record.formKey }]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  it('an empty seed does not search — items stay empty', async () => {
+    const { deps, searchRecords } = fakeDeps();
+    const { qp } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    await Promise.resolve();
+
+    expect(searchRecords).not.toHaveBeenCalled();
+    expect(qp.items).toEqual([]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  // Issue #218: pasting a whole "EditorID [FormKey]" label copied from a cell searches on the
+  // FormKey, not on the literal — the normalizer's one wiring point. The unbracketed case is
+  // covered by the debounce test below, which is #210's behaviour and must not regress.
+  it('normalizes a pasted composite label to its FormKey before searching', async () => {
+    vi.useFakeTimers();
+    const { deps, searchRecords } = fakeDeps();
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    searchRecords.mockClear();
+
+    typeValue('DogmeatRace [000019:Fallout4.esm]');
+    await vi.advanceTimersByTimeAsync(200);
+    expect(searchRecords).toHaveBeenCalledWith('000019:Fallout4.esm', []);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  it('debounces onDidChangeValue by 200ms, searching once with the settled value', async () => {
+    vi.useFakeTimers();
+    const record = makeRecord(2, 'Sword');
+    const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    searchRecords.mockClear(); // drop the (no-op, empty-seed) call above
+
+    typeValue('sw');
+    await vi.advanceTimersByTimeAsync(100);
+    typeValue('swor');
+    await vi.advanceTimersByTimeAsync(199);
+    expect(searchRecords).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(searchRecords).toHaveBeenCalledTimes(1);
+    expect(searchRecords).toHaveBeenCalledWith('swor', []);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  it('clears items immediately when the value is emptied, without waiting for the debounce', async () => {
+    vi.useFakeTimers();
+    const { deps } = fakeDeps();
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    typeValue('sw');
+    qp.items = [{ label: 'stale', formKey: 'x' }];
+    typeValue('');
+
+    expect(qp.items).toEqual([]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  it('drops a stale search response that resolves after a newer one', async () => {
+    let resolveFirst!: (v: { items: RecordSummary[]; total: number }) => void;
+    let resolveSecond!: (v: { items: RecordSummary[]; total: number }) => void;
+    const searchRecords = vi.fn()
+      .mockImplementationOnce(() => new Promise(r => { resolveFirst = r; }))
+      .mockImplementationOnce(() => new Promise(r => { resolveSecond = r; }));
+    const { deps } = fakeDeps(searchRecords);
+    const { qp, typeValue } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, 'first', []);
+    vi.useFakeTimers();
+    typeValue('second');
+    await vi.advanceTimersByTimeAsync(200);
+    vi.useRealTimers();
+
+    // Second (newer) search resolves first; first (stale) resolves after — its late arrival must
+    // not clobber the newer result.
+    const secondRecord = makeRecord(9, 'Second');
+    resolveSecond({ items: [secondRecord], total: 1 });
+    await vi.waitFor(() => expect(qp.items).toHaveLength(1));
+    resolveFirst({ items: [makeRecord(1, 'First')], total: 1 });
+    await Promise.resolve();
+
+    expect(qp.items).toEqual([{ label: `Second [${secondRecord.formKey}]`, formKey: secondRecord.formKey }]);
+
+    qp.hide();
+    await resultPromise;
+  });
+
+  it('resolves with the selected FormKey on accept, and hides/disposes the picker', async () => {
+    const { deps } = fakeDeps();
+    const { qp, accept } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
+    accept();
+
+    expect(await resultPromise).toBe('X');
+    expect(qp.hide).toHaveBeenCalled();
+    expect(qp.dispose).toHaveBeenCalled();
+  });
+
+  it('resolves null when hidden without accepting (Escape/blur) — no selection is treated as unchanged', async () => {
+    const { deps } = fakeDeps();
+    const { qp, hideWithoutAccept } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const resultPromise = pickFormKeyViaQuickPick(deps, '', []);
+    hideWithoutAccept();
+
+    expect(await resultPromise).toBeNull();
+    expect(qp.dispose).toHaveBeenCalled();
+  });
+});
+
+describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => {
+  it('with formKeyPicker deps undefined is a no-op', async () => {
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: [] },
+      makeDeps(),
+    )).resolves.toBeUndefined();
+    expect(createQuickPick).not.toHaveBeenCalled();
+  });
+
+  it('opens a QuickPick and replies with the picked FormKey, correlated by requestId', async () => {
+    const searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 });
+    const reply = vi.fn();
+    const { qp, accept } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r1', seed: '', validTypes: ['npc_'] },
+      makeDeps({ formKeyPicker: { repository: { searchRecords }, reply } }),
+    );
+    qp.selectedItems = [{ label: 'Picked [X]', formKey: 'X' }];
+    accept();
+    await dispatchPromise;
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r1', formKey: 'X' });
+  });
+
+  it('replies with formKey: null when the picker is dismissed without a selection', async () => {
+    const searchRecords = vi.fn().mockResolvedValue({ items: [], total: 0 });
+    const reply = vi.fn();
+    const { qp, hideWithoutAccept } = makeFakeQuickPick();
+    createQuickPick.mockReturnValue(qp);
+
+    const dispatchPromise = routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER, requestId: 'r2', seed: '', validTypes: [] },
+      makeDeps({ formKeyPicker: { repository: { searchRecords }, reply } }),
+    );
+    hideWithoutAccept();
+    await dispatchPromise;
+
+    expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r2', formKey: null });
   });
 });

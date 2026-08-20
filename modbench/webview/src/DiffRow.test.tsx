@@ -15,8 +15,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // bridges above rather than exercising the real webview<->extension-host message round trip
 // (that's nativeBridge.test.ts's job).
 const copyToClipboard = vi.fn();
+const pickFormKey = vi.fn().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
   copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
+  // #426: FormKeyCell's own picker bridge — stubbed here so the wiring test below can assert
+  // DiffRow reaches it with the right editable/onCommit contract without a real extension host
+  // (FormKeyCell.test.tsx/nativeBridge.test.ts own the picker's own behavior).
+  pickFormKey: (...args: unknown[]) => pickFormKey(...args),
 }));
 
 import { DiffRow } from './DiffRow';
@@ -374,5 +379,49 @@ describe('DiffRow — flags cell wiring (#426)', () => {
     fireEvent.click(screen.getAllByText('A')[1]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]); // check B (bit 2): 1 ^ 2 = 3
     expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '3');
+  });
+});
+
+// #426: the formKey branch gets the same editable/onCommit wiring, plus its own picker bridge.
+describe('DiffRow — formKey cell wiring (#426)', () => {
+  const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [] };
+
+  function fkRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    return renderRow({
+      fieldMetaMap: { Name: fkMeta },
+      diff: diff({ values: { 'Fallout4.esm': '000019:Fallout4.esm', 'MyMod.esp': '000019:Fallout4.esm' } }),
+      ...overrides,
+    });
+  }
+
+  afterEach(() => { pickFormKey.mockClear(); });
+
+  it('a formKey cell in a non-editable column does not open the picker when clicked', () => {
+    fkRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
+    expect(pickFormKey).not.toHaveBeenCalled();
+  });
+
+  it('a formKey cell in an editable, focused column opens the picker with the field’s valid types', () => {
+    fkRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
+    expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
+  });
+
+  it('committing a picked FormKey calls onEditCell with the field path and the picked value', async () => {
+    const onEditCell = vi.fn();
+    pickFormKey.mockResolvedValueOnce('00001A:Fallout4.esm');
+    fkRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell,
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
+    await vi.waitFor(() => expect(onEditCell)
+      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '00001A:Fallout4.esm'));
   });
 });

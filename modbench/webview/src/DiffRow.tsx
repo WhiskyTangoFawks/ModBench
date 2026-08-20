@@ -53,6 +53,10 @@ function renderCell(
       <FormKeyCell
         value={value} meta={meta} isFocused={isFocused}
         onOpen={onOpen} checkError={checkError} resolution={resolution}
+        // #426: same editability rule as the flags/scalar branches — presence of somewhere to
+        // write, ORed with the per-row readOnly veto.
+        editable={onCommit != null && !meta.readOnly}
+        onCommit={onCommit}
       />
     );
   }
