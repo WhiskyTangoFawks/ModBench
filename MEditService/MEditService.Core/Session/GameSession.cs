@@ -231,6 +231,22 @@ public sealed class GameSession : IGameSession
     }
 
     /// <summary>
+    /// #288 / ADR-0041: <see cref="AddPlugin"/>'s sibling for the New Plugin gesture, whose
+    /// destination is a mod folder (or MO2's overwrite/) that Mod Management resolved — never the
+    /// game's Data folder <see cref="AddPlugin"/> hardcodes. A created plugin is a genuine
+    /// load-order member from the moment the session opens it (participates, in load order,
+    /// mutable) even though <c>plugins.txt</c> itself has not been appended yet: that append is now
+    /// the caller's job (the extension's Mod Management writer, or a script/agent's own per
+    /// ADR-0024) — see <c>PluginEndpoints.CreatePlugin</c>'s <c>.WithDescription</c>. Nothing here
+    /// reads or writes <c>plugins.txt</c>.
+    /// </summary>
+    public PluginMetadata AddCreatedPlugin(string filePath, string origin)
+    {
+        var nextIndex = _plugins.Count == 0 ? 0 : _plugins.Max(p => p.LoadOrderIndex) + 1;
+        return Open(filePath, origin, nextIndex, isImmutable: false, participates: true);
+    }
+
+    /// <summary>
     /// Opens a plugin file the load order does not name — a copy shadowed by a higher-priority
     /// mod, or a file <c>plugins.txt</c> never lists — on demand, mid-session (#34 / ADR-0035).
     /// It is read-only (ADR-0036: editing a file the game does not load changes nothing anywhere)

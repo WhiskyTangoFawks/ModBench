@@ -71,7 +71,7 @@ public class WorldspaceQueryServiceTests
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
         public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string n) => throw new NotSupportedException();
+        public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();

@@ -159,6 +159,57 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
         Assert.Equal(constructorMetadata.IsMaster, addPluginMetadata.IsMaster);
     }
 
+    // #288: the create-plugin destination is a mod folder (or overwrite/), never the game's Data
+    // folder — AddCreatedPlugin is AddPlugin's sibling for an arbitrary caller-supplied origin,
+    // needed because ADR-0041 creation now lands in whatever mod folder the destination QuickPick
+    // resolved, not always PluginOrigin.DataDirectory.
+    [Fact]
+    public void AddCreatedPlugin_UsesCallerSuppliedOrigin()
+    {
+        using var session = new GameSession(
+            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var newPluginPath = Path.Combine(_fixture.DataFolder, "CreatedInMod.esp");
+        WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
+
+        var metadata = session.AddCreatedPlugin(newPluginPath, "SomeMod");
+
+        Assert.Equal("SomeMod", metadata.Origin);
+    }
+
+    [Fact]
+    public void AddCreatedPlugin_IsLoadOrderMemberAndParticipates()
+    {
+        using var session = new GameSession(
+            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var newPluginPath = Path.Combine(_fixture.DataFolder, "CreatedInMod2.esp");
+        WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
+
+        var metadata = session.AddCreatedPlugin(newPluginPath, "SomeMod");
+
+        Assert.True(metadata.InLoadOrder);
+        Assert.True(metadata.Participates);
+        Assert.False(metadata.IsImmutable);
+    }
+
+    [Fact]
+    public void AddCreatedPlugin_CalledTwice_SecondPluginHasNextLoadOrderIndex()
+    {
+        using var session = new GameSession(
+            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var firstPath = Path.Combine(_fixture.DataFolder, "CreatedFirst.esp");
+        var secondPath = Path.Combine(_fixture.DataFolder, "CreatedSecond.esp");
+        WriteEmptyPlugin(firstPath, GameRelease.Fallout4);
+        WriteEmptyPlugin(secondPath, GameRelease.Fallout4);
+
+        var first = session.AddCreatedPlugin(firstPath, "ModA");
+        var second = session.AddCreatedPlugin(secondPath, "ModB");
+
+        Assert.Equal(first.LoadOrderIndex + 1, second.LoadOrderIndex);
+    }
+
     private static void WriteEmptyPlugin(string path, GameRelease release)
     {
         var modKey = Mutagen.Bethesda.Plugins.ModKey.FromFileName(Path.GetFileName(path));

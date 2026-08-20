@@ -116,6 +116,11 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
 
     // --- CreatePlugin ---
+    //
+    // #288 / ADR-0041: the destination is now a caller-resolved (path, origin) — a mod folder or
+    // overwrite/, never implicitly the game's Data folder — and CreatePlugin never touches
+    // plugins.txt any more (that append moved to the caller: the extension's Mod Management
+    // writer, or a script/agent's own per ADR-0024).
 
     [Fact]
     public void CreatePlugin_UpdatesSessionState()
@@ -128,13 +133,40 @@ public class SessionManagerTests(TestPluginFixture fixture)
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
             var repositoryBefore = manager.Repository;
+            var modFolder = Path.Combine(data.DataFolder, "SomeMod");
 
-            manager.CreatePlugin("NewPlugin.esp");
+            var result = manager.CreatePlugin("NewPlugin.esp", modFolder, "SomeMod");
 
             Assert.Same(repositoryBefore, manager.Repository);
-            Assert.Contains(manager.Session!.Plugins, p => p.Name == "NewPlugin.esp");
+            Assert.Equal("SomeMod", result.Origin);
+            Assert.Contains(manager.Session!.Plugins, p => p.Name == "NewPlugin.esp" && p.Origin == "SomeMod");
             Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp", "Data"));
-            Assert.Contains("*NewPlugin.esp", File.ReadAllText(data.PluginsTxtPath));
+        }
+    }
+
+    // The rival this guards against is #288's own starting point: the pre-#288 CreatePlugin
+    // unconditionally appended "*<name>\n" to plugins.txt as part of the same call. Applied as a
+    // rival (a one-line File.AppendAllText re-added to CreatePlugin, same target this fixture's
+    // plugins.txt resolves to) and run standalone, this test fails — observed 2026-08-20, the
+    // appended line landing exactly where the assertion below now forbids it. plugins.txt is Mod
+    // Management's file (CONTEXT-MAP.md); appending the load-order line is now the caller's job,
+    // done only once the whole create (and any Track it triggers) has actually succeeded.
+    [Fact]
+    public void CreatePlugin_NeverWritesPluginsTxt()
+    {
+        var data = new PluginFixtureBuilder("cp-no-pluginstxt")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var before = File.ReadAllText(data.PluginsTxtPath);
+            var modFolder = Path.Combine(data.DataFolder, "SomeMod");
+
+            manager.CreatePlugin("NewPlugin.esp", modFolder, "SomeMod");
+
+            Assert.Equal(before, File.ReadAllText(data.PluginsTxtPath));
         }
     }
 
@@ -208,7 +240,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void CreatePlugin_NoSession_ThrowsInvalidOperationException()
     {
         using var manager = MakeManager(); // not loaded
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.CreatePlugin("New.esp"));
+        var ex = Assert.Throws<InvalidOperationException>(() => manager.CreatePlugin("New.esp", "/tmp/SomeMod", "SomeMod"));
         Assert.Contains("No session", ex.Message);
     }
 
@@ -222,8 +254,9 @@ public class SessionManagerTests(TestPluginFixture fixture)
         {
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            manager.CreatePlugin("Duplicate.esp"); // first call creates it
-            var ex = Assert.Throws<IOException>(() => manager.CreatePlugin("Duplicate.esp"));
+            var modFolder = Path.Combine(data.DataFolder, "SomeMod");
+            manager.CreatePlugin("Duplicate.esp", modFolder, "SomeMod"); // first call creates it
+            var ex = Assert.Throws<IOException>(() => manager.CreatePlugin("Duplicate.esp", modFolder, "SomeMod"));
             Assert.Contains("already exists", ex.Message);
         }
     }
@@ -234,7 +267,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void CreatePlugin_InvalidExtension_ThrowsArgumentException()
     {
         using var manager = MakeManager(); // no Load — extension check fires first
-        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("Mod.txt"));
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("Mod.txt", "/tmp/SomeMod", "SomeMod"));
         Assert.Contains("extension", ex.Message);
     }
 
@@ -250,7 +283,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void CreatePlugin_NullName_ThrowsArgumentException()
     {
         using var manager = MakeLoadedManager();
-        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin(null!));
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin(null!, "/tmp/SomeMod", "SomeMod"));
         Assert.Contains("empty", ex.Message);
     }
 
@@ -258,7 +291,23 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void CreatePlugin_WhitespaceName_ThrowsArgumentException()
     {
         using var manager = MakeLoadedManager();
-        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("   "));
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("   ", "/tmp/SomeMod", "SomeMod"));
+        Assert.Contains("empty", ex.Message);
+    }
+
+    [Fact]
+    public void CreatePlugin_WhitespacePath_ThrowsArgumentException()
+    {
+        using var manager = MakeLoadedManager();
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("New.esp", "   ", "SomeMod"));
+        Assert.Contains("empty", ex.Message);
+    }
+
+    [Fact]
+    public void CreatePlugin_WhitespaceOrigin_ThrowsArgumentException()
+    {
+        using var manager = MakeLoadedManager();
+        var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("New.esp", "/tmp/SomeMod", "   "));
         Assert.Contains("empty", ex.Message);
     }
 
@@ -271,7 +320,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-            var result = manager.CreatePlugin("NewMaster.esm");
+            var result = manager.CreatePlugin("NewMaster.esm", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod");
 
             Assert.Equal("NewMaster.esm", result.Name);
             Assert.True(result.IsMaster);
@@ -287,10 +336,27 @@ public class SessionManagerTests(TestPluginFixture fixture)
             using var manager = MakeManager();
             manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
 
-            var result = manager.CreatePlugin("NewLight.esl");
+            var result = manager.CreatePlugin("NewLight.esl", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod");
 
             Assert.Equal("NewLight.esl", result.Name);
             Assert.True(result.IsLight);
+        }
+    }
+
+    [Fact]
+    public void CreatePlugin_DestinationFolderDoesNotExistYet_CreatesIt()
+    {
+        var data = new PluginFixtureBuilder("cp-new-folder").WithPlugin("Base.esp").Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var modFolder = Path.Combine(data.DataFolder, "BrandNewMod");
+            Assert.False(Directory.Exists(modFolder));
+
+            manager.CreatePlugin("New.esp", modFolder, "BrandNewMod");
+
+            Assert.True(File.Exists(Path.Combine(modFolder, "New.esp")));
         }
     }
 

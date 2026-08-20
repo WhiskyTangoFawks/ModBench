@@ -46,9 +46,16 @@ public static class PluginEndpoints
         app.MapPost("/plugins/create", CreatePlugin)
             .WithName("CreatePlugin")
             .WithTags(Tag)
+            .WithDescription(
+                "Creates a new plugin at the given path/origin (#288 / ADR-0041), Tracking that " +
+                "destination under the Edits preset first if it is not already tracked. Does NOT " +
+                "add the plugin to any load order — the caller (the extension's Mod Management " +
+                "writer, or a script/agent consumer per ADR-0024) is responsible for that.")
             .Produces<PluginResponse>()
             .ProducesProblem(400)
-            .ProducesProblem(409);
+            .ProducesProblem(409)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
 
         app.MapPost("/plugins/load", LoadUnlistedPlugin)
             .WithName("LoadUnlistedPlugin")
@@ -330,16 +337,34 @@ public static class PluginEndpoints
         }
     }
 
-    internal static IResult CreatePlugin(CreatePluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    // #288 / ADR-0041: creates a plugin at a caller-resolved destination (Mod Management's
+    // destination QuickPick — overwrite/, an existing mod, or a freshly installed mod folder) and,
+    // when that destination is untracked, Tracks it as part of the same gesture under the Edits
+    // preset — silently, and always Edits: the one-keystroke "Enter accepts overwrite/" framing
+    // this gesture is built around rules out a second prompt here, and Edits is Track's own
+    // default. A user who wants a different preset deletes .git and re-Tracks by hand, same as
+    // changing a Track preset anywhere else.
+    //
+    // Deliberately does not touch plugins.txt — #288 moved that append to the caller (see
+    // .WithDescription above); this handler's job ends at "the plugin exists, is indexed, and is
+    // editable."
+    internal static async Task<IResult> CreatePlugin(
+        CreatePluginRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received CreatePlugin for {Name}", req.Name);
+        logger.LogInformation("Received CreatePlugin for {Name} at {Path} ({Origin})", req.Name, req.Path, req.Origin);
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.Problem("Plugin name is required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Destination path and origin are required.", statusCode: 400);
 
         try
         {
-            var plugin = sessionManager.CreatePlugin(req.Name);
+            var plugin = sessionManager.CreatePlugin(req.Name, req.Path, req.Origin);
+
+            if (!LedgerRepository.IsTracked(req.Path))
+                await trackService.TrackAsync(sessionManager.Session!, req.Origin, LedgerPreset.Edits);
+
             return Results.Ok(plugin);
         }
         catch (ArgumentException ex)
@@ -351,6 +376,24 @@ public static class PluginEndpoints
         {
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
+        }
+        catch (LedgerAlreadyTrackedException ex)
+        {
+            // Defensive, not the ordinary path: CreatePlugin only Tracks a destination it just
+            // checked was untracked, so reaching this means something else tracked the same folder
+            // in the window between that check and this call — still a state conflict, same status
+            // the Track endpoint itself uses for a redundant Track.
+            logger.LogWarning(ex, "Raced tracking {Origin} while creating {Name}", req.Origin, req.Name);
+            return Results.Problem(ex.Message, statusCode: 409);
+        }
+        catch (GitUnavailableException ex)
+        {
+            // Loud, not silent: the plugin file and session entry from the CreatePlugin call above
+            // already landed, but plugins.txt is never appended without a 2xx response (the caller's
+            // own gate), so no load order can ever name this half-created plugin. The orphaned
+            // session entry is accepted residue (#288 review), surfaced here rather than swallowed.
+            logger.LogError(ex, "git unavailable while creating {Name} in {Origin}", req.Name, req.Origin);
+            return Results.Problem(ex.Message, statusCode: 500);
         }
         catch (InvalidOperationException ex)
         {
@@ -608,7 +651,10 @@ public static class PluginEndpoints
     }
 }
 
-public record CreatePluginRequest(string Name);
+// #288: Path/Origin are the destination Mod Management's QuickPick resolved (an existing mod, a
+// freshly installed mod folder, or overwrite/) — matching LoadPluginRequest's own shape, since the
+// division of labour is the same: the caller resolves which physical folder, the backend acts on it.
+public record CreatePluginRequest(string Name, string Path, string Origin);
 
 public record LoadPluginRequest(string Path, string Origin);
 

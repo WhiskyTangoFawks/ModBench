@@ -1,12 +1,14 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
@@ -78,15 +80,28 @@ public sealed class EndpointReceptionLoggingTests
     // --- PluginEndpoints.CreatePlugin ---
 
     [Fact]
-    public void CreatePlugin_ValidRequest_LogsReceivedWithName()
+    public async Task CreatePlugin_ValidRequest_LogsReceivedWithName()
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        var req = new CreatePluginRequest("NewPlugin.esp");
+        // Already-tracked destination (a bare .git dir is enough for LedgerRepository.IsTracked):
+        // this test is only about the "received" log line, so it must not fall into the Track
+        // branch, which needs a real loaded session the stub doesn't provide.
+        var destination = Path.Combine(Path.GetTempPath(), $"medit-createplugin-log-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(Path.Combine(destination, ".git"));
+        try
+        {
+            var req = new CreatePluginRequest("NewPlugin.esp", destination, "SomeMod");
+            var trackService = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
 
-        PluginEndpoints.CreatePlugin(req, new StubSessionManager(), loggerFactory);
+            await PluginEndpoints.CreatePlugin(req, new StubSessionManager(), trackService, loggerFactory);
 
-        Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("NewPlugin.esp"));
+            Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("NewPlugin.esp"));
+        }
+        finally
+        {
+            Directory.Delete(destination, recursive: true);
+        }
     }
 
     // --- WorldspaceEndpoints.GetWorldspaces ---
@@ -131,8 +146,8 @@ public sealed class EndpointReceptionLoggingTests
         public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
             throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string name) =>
-            new(name, name, 0, false, false, [], 0, false, true, "Data", [], true);
+        public PluginResponse CreatePlugin(string name, string path, string origin) =>
+            new(name, name, 0, false, false, [], 0, false, true, origin, [], true);
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
