@@ -9,7 +9,7 @@ import { DiskCell } from './DiskCell';
 import { modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
-import type { Column, PathSegment } from './recordUtils';
+import { arrayElementContext, arrayParentContext, combineVscodeContexts, type Column, type PathSegment } from './recordUtils';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
 
@@ -220,6 +220,15 @@ interface DiffRowProps {
   // call. Absent when the panel has no write path wired (RecordPanel always supplies one, same
   // convention as onEditCell); DiffRow never opens the tab itself.
   onOpenExtendedEditor?: (plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => void;
+  // Issue #142/#227 (#426: restored): Add on this row — present only when this row is itself a
+  // mutable, unsorted array's own row (RecordPanel's buildRows decides that; DiffRow only wires
+  // whatever it's handed, per column, gated by editableColumns the same as onEditCell).
+  onArrayAdd?: (plugin: ColumnKey) => void;
+  // Remove/Move Up/Move Down — present only when this row is itself a mutable, unsorted array's
+  // element row.
+  onArrayRemove?: (plugin: ColumnKey) => void;
+  onArrayMoveUp?: (plugin: ColumnKey) => void;
+  onArrayMoveDown?: (plugin: ColumnKey) => void;
 }
 
 export function DiffRow({
@@ -227,6 +236,7 @@ export function DiffRow({
   collapsedColumns, onOpen,
   context, hasChildren, isExpanded, onToggle,
   rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, onOpenExtendedEditor,
+  onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown,
 }: Readonly<DiffRowProps>) {
   // Issue #231: prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
   // now always passes one (its recursive builder resolves every row's metadata itself, including
@@ -250,6 +260,12 @@ export function DiffRow({
   // and extends it uniformly to a struct nested more than one level deep, which the old model
   // could not express at all.
   const showActions = context.path.every(seg => seg.kind === 'member');
+  // Issue #142/#227 (#426: restored): this row is itself a mutable, unsorted array's own row (Add
+  // applies) or an unsorted array's element row (Remove/Move Up/Move Down apply) — sorted
+  // (wbArrayS) arrays offer neither, per the spec's own "absent, not disabled" rule for them.
+  const isUnsortedArrayParentRow = meta.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
+  const lastPathSegment = context.path[context.path.length - 1];
+  const isUnsortedArrayElementRow = lastPathSegment?.kind === 'index';
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // Issue #114: this row paints its own node's bottom-up conflict state, not a record-wide value
   // smeared onto every row. A struct/array row with children defers to its own children's tints
@@ -316,6 +332,30 @@ export function DiffRow({
           // disk value, no pending merge — a disk column's own display never merges pending (only
           // the separate Pending column does, out of scope here per #232).
           const copyText = modelValue(diff.values[key], meta, diff.resolutions?.[key]);
+          // Issue #142/#227 (#426: restored): array ops are offered only on a writable column —
+          // the same gate onEditCell/onCommit already use. `arrayLength` is deliberately not
+          // threaded down to this row (a nested-array-of-scalars follow-up), so canMoveDown reads
+          // permissive (true) rather than gating the menu item's presence on this plugin's own
+          // real length the way canMoveUp already does via `index > 0`; the underlying op still
+          // safely no-ops at the true boundary (moveArrayElement's own bounds check).
+          const arrayEditable = !!onEditCell && editableColumns.has(key) && (isUnsortedArrayParentRow || isUnsortedArrayElementRow);
+          const arrayOps = arrayEditable ? {
+            add: isUnsortedArrayParentRow ? () => onArrayAdd?.(key) : undefined,
+            remove: isUnsortedArrayElementRow ? () => onArrayRemove?.(key) : undefined,
+            moveUp: isUnsortedArrayElementRow ? () => onArrayMoveUp?.(key) : undefined,
+            moveDown: isUnsortedArrayElementRow ? () => onArrayMoveDown?.(key) : undefined,
+          } : undefined;
+          const vscodeContext = arrayEditable ? combineVscodeContexts(
+            isUnsortedArrayParentRow
+              ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField)
+              : undefined,
+            isUnsortedArrayElementRow && lastPathSegment?.kind === 'index'
+              ? arrayElementContext(
+                  col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField,
+                  lastPathSegment.index, Number.MAX_SAFE_INTEGER,
+                )
+              : undefined,
+          ) : undefined;
           if (hasChildren) {
             const len = meta.type === 'array' && Array.isArray(diff.values[key])
               ? (diff.values[key] as unknown[]).length
@@ -331,6 +371,8 @@ export function DiffRow({
                 isFocused={isFocused}
                 onFocusCell={() => onFocusCell(rowKey, key)}
                 onCopy={() => copyToClipboard(copyText)}
+                arrayOps={arrayOps}
+                vscodeContext={vscodeContext}
               >
                 {!isExpanded && (
                   <span style={{ opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
@@ -342,6 +384,8 @@ export function DiffRow({
           }
           return (
             <DiskCell
+              arrayOps={arrayOps}
+              vscodeContext={vscodeContext}
               key={`disk:${key}`}
               style={cellStyle}
               isFocused={isFocused}

@@ -58,7 +58,7 @@ describe('the record editor webview writes through exactly one path (#415)', () 
   // stage into, no per-plugin Save button, and no whole-record column-header copy action of its
   // own): PENDING_CHANGED, OPEN_REVERT_GROUP_CONFIRM, PENDING_CELL_, COLUMN_HEADER_.
   it('no retired pending-change message came back with the write path', () => {
-    const RETIRED_MESSAGE = /PENDING_CHANGED|OPEN_REVERT_GROUP_CONFIRM|PENDING_CELL_|ARRAY_ADD|ARRAY_REMOVE|ARRAY_MOVE_|VMAD_ADD_|VMAD_REMOVE_|VMAD_SET_|VMAD_OPEN_ADD_PROPERTY|COLUMN_HEADER_/;
+    const RETIRED_MESSAGE = /PENDING_CHANGED|OPEN_REVERT_GROUP_CONFIRM|PENDING_CELL_|VMAD_ADD_|VMAD_REMOVE_|VMAD_SET_|VMAD_OPEN_ADD_PROPERTY|COLUMN_HEADER_/;
     const offenders = sources.filter((f) => RETIRED_MESSAGE.test(read(f)));
     expect(offenders).toEqual([]);
   });

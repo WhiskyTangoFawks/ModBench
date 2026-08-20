@@ -6,8 +6,16 @@ import {
   collidingFilenames,
   parseElementIndex,
   getAtPath,
+  setAtPath,
   reduceConflictAll,
   aggregateConflictAll,
+  hasElementAt,
+  moveArrayElement,
+  removeArrayElement,
+  appendArrayElement,
+  arrayElementContext,
+  arrayParentContext,
+  combineVscodeContexts,
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride } from './types';
@@ -210,5 +218,171 @@ describe('aggregateConflictAll', () => {
 
   it('a child with no conflictAll of its own contributes nothing (safe default)', () => {
     expect(aggregateConflictAll({}, [{ conflictAll: undefined }])).toBe('NoConflict');
+  });
+});
+
+// #426 Track 4 (resurrected from before #410, git history b1992bf~1): the pure array-arity/order
+// mutations behind Move Up/Move Down/Remove/Add.
+describe('hasElementAt', () => {
+  it('is true within bounds, false at or past length, false for a negative index', () => {
+    expect(hasElementAt(3, 0)).toBe(true);
+    expect(hasElementAt(3, 2)).toBe(true);
+    expect(hasElementAt(3, 3)).toBe(false);
+    expect(hasElementAt(3, -1)).toBe(false);
+  });
+});
+
+describe('moveArrayElement', () => {
+  it('swaps the element at index with its neighbour one position up', () => {
+    expect(moveArrayElement(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('swaps the element at index with its neighbour one position down', () => {
+    expect(moveArrayElement(['a', 'b', 'c'], 0, 1)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('returns the array unchanged when the move would go out of bounds', () => {
+    expect(moveArrayElement(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
+    expect(moveArrayElement(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
+  });
+
+  // Issue #168: `index` itself, not just the swap target, must be bounds-checked — a row's index
+  // comes from the union-aligned tree across every plugin's column and can equal or exceed *this
+  // specific plugin's* own array length even though the swap target alone looks in range.
+  it('returns the array unchanged when index itself is out of bounds, even if the swap target is in range', () => {
+    const arr = ['a', 'b'];
+    expect(moveArrayElement(arr, 2, -1)).toBe(arr);
+    expect(moveArrayElement(arr, 5, -1)).toBe(arr);
+    expect(moveArrayElement(arr, -1, 1)).toBe(arr);
+  });
+});
+
+describe('removeArrayElement', () => {
+  it('drops the element at the given index, leaving the others in order', () => {
+    expect(removeArrayElement(['a', 'b', 'c'], 1)).toEqual(['a', 'c']);
+  });
+
+  it('returns the same array reference, unchanged, when the index is out of bounds', () => {
+    const arr = ['a', 'b'];
+    expect(removeArrayElement(arr, 2)).toBe(arr);
+    expect(removeArrayElement(arr, -1)).toBe(arr);
+  });
+});
+
+describe('appendArrayElement', () => {
+  it('appends the given value to the end of the array', () => {
+    expect(appendArrayElement(['a', 'b'], 'c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('does not mutate the source array', () => {
+    const source = ['a', 'b'];
+    appendArrayElement(source, 'c');
+    expect(source).toEqual(['a', 'b']);
+  });
+});
+
+describe('arrayElementContext', () => {
+  it('produces the data-vscode-context object for a middle element (can move either way)', () => {
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 1, 3)).toEqual({
+      webviewSection: 'arrayElement',
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      origin: 'ModA',
+      fieldName: 'Items',
+      index: 1,
+      canMoveUp: true,
+      canMoveDown: true,
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('canMoveUp is false for the first element', () => {
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 0, 3).canMoveUp).toBe(false);
+  });
+
+  it('canMoveDown is false for the last element', () => {
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 2, 3).canMoveDown).toBe(false);
+  });
+
+  it('canMoveUp is false when index is at or past this plugin\'s own array length', () => {
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 1, 1).canMoveUp).toBe(false);
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 2, 1).canMoveUp).toBe(false);
+  });
+});
+
+describe('arrayParentContext', () => {
+  it('produces the data-vscode-context object for an array-parent cell', () => {
+    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items')).toEqual({
+      webviewSection: 'arrayParent',
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      origin: 'ModA',
+      fieldName: 'Items',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+});
+
+// Issue #231 (review): a row can be more than one structural-op target at once (a VMAD
+// array-of-scalars property is both an array parent/element and a VMAD property) — combining
+// contexts rather than picking one is what makes both menus reachable from the same cell. Only
+// arrayParent is exercised here today; VMAD's own context builders return with Track 5.
+describe('combineVscodeContexts', () => {
+  it('returns undefined when every context is absent', () => {
+    expect(combineVscodeContexts(undefined, undefined)).toBeUndefined();
+  });
+
+  it('passes a single context through, still as a JSON string (an unchanged call site contract)', () => {
+    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'));
+    expect(JSON.parse(result!)).toEqual({
+      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', fieldName: 'Items',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('skips an absent context among present ones', () => {
+    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'), undefined);
+    expect(JSON.parse(result!).webviewSection).toBe('arrayParent');
+  });
+});
+
+describe('setAtPath', () => {
+  it('replaces the root itself for an empty path', () => {
+    expect(setAtPath({ X: 1 }, [], { X: 99 })).toEqual({ X: 99 });
+  });
+
+  it('sets a struct member, preserving siblings', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'X' }];
+    expect(setAtPath({ X: 1, Y: 2 }, path, 99)).toEqual({ X: 99, Y: 2 });
+  });
+
+  it('sets a positional array element, preserving siblings', () => {
+    const path: PathSegment[] = [{ kind: 'index', index: 1 }];
+    expect(setAtPath(['a', 'b', 'c'], path, 'B')).toEqual(['a', 'B', 'c']);
+  });
+
+  it('sets a sorted-array element by matching its old value', () => {
+    const path: PathSegment[] = [{ kind: 'sortKey', key: 'KwdB' }];
+    expect(setAtPath(['KwdA', 'KwdB'], path, 'KwdZ')).toEqual(['KwdA', 'KwdZ']);
+  });
+
+  it('sets through a member → index → member chain, preserving every sibling along the way', () => {
+    const path: PathSegment[] = [
+      { kind: 'member', name: 'Outer' },
+      { kind: 'index', index: 1 },
+      { kind: 'member', name: 'Inner' },
+    ];
+    const root = { Extra: 'kept', Outer: [{ Inner: 'a', Also: 'kept0' }, { Inner: 'b', Also: 'kept1' }] };
+    expect(setAtPath(root, path, 'B')).toEqual({
+      Extra: 'kept',
+      Outer: [{ Inner: 'a', Also: 'kept0' }, { Inner: 'B', Also: 'kept1' }],
+    });
+  });
+
+  it('does not mutate the source root', () => {
+    const root = { Outer: [{ Inner: 'a' }] };
+    const path: PathSegment[] = [{ kind: 'member', name: 'Outer' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Inner' }];
+    setAtPath(root, path, 'z');
+    expect(root).toEqual({ Outer: [{ Inner: 'a' }] });
   });
 });

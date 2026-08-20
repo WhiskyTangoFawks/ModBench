@@ -152,6 +152,26 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.array.add",
+        "title": "Add",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.array.remove",
+        "title": "Remove",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.array.moveUp",
+        "title": "Move Up",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.array.moveDown",
+        "title": "Move Down",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.reloadSession",
         "title": "Reload Session",
         "category": "Modbench"
@@ -434,6 +454,22 @@
         },
         {
           "command": "modbench.openHeader",
+          "when": "false"
+        },
+        {
+          "command": "modbench.array.add",
+          "when": "false"
+        },
+        {
+          "command": "modbench.array.remove",
+          "when": "false"
+        },
+        {
+          "command": "modbench.array.moveUp",
+          "when": "false"
+        },
+        {
+          "command": "modbench.array.moveDown",
           "when": "false"
         },
         {
@@ -785,6 +821,28 @@
           "command": "modbench.pluginListTree.rebase",
           "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
           "group": "pluginActions@6"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "modbench.array.add",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayParent\\b/",
+          "group": "modbench@1"
+        },
+        {
+          "command": "modbench.array.remove",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/",
+          "group": "modbench@2"
+        },
+        {
+          "command": "modbench.array.moveUp",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveUp",
+          "group": "modbench@3"
+        },
+        {
+          "command": "modbench.array.moveDown",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\barrayElement\\b/ && canMoveDown",
+          "group": "modbench@4"
         }
       ]
     },

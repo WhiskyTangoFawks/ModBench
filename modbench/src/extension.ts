@@ -21,7 +21,7 @@ import { startExternalChangePolling, runRebase, type OpenMergeEditor } from './m
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './medit/messages';
+import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext } from './medit/messages';
 import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
@@ -460,6 +460,43 @@ interface EditorCommandDeps {
 function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   return [
     ...registerRecordViewCommands(deps),
+    ...registerArrayOpCommands(deps.recordPanels),
+  ];
+}
+
+// Issue #142/#227 (#426 Track 4: restored): the array-op right-click commands — the extension
+// host has no live reference into any open panel's own React state (which alone holds the
+// record's current values), so each command only resolves *which* row/column was clicked (from
+// the `data-vscode-context` VS Code parses and hands it as `ctx`) and broadcasts; every open
+// panel self-filters on `formKey` and, if it matches, restages the array through the exact same
+// computation (recordUtils.ts's moveArrayElement/removeArrayElement/appendArrayElement, then
+// EDIT_FIELD) the keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use.
+function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+  return [
+    vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
+      });
+    }),
   ];
 }
 

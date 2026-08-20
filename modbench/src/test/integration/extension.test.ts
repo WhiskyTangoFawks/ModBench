@@ -287,6 +287,11 @@ describe('modbench command registration', () => {
     'modbench.openEditorBeside',
     'modbench.openCompare',
     'modbench.openHeader',
+    // #426 Track 4: the array-op right-click commands (record editor's field grid).
+    'modbench.array.add',
+    'modbench.array.remove',
+    'modbench.array.moveUp',
+    'modbench.array.moveDown',
     'modbench.closeMedit',
     'modbench.reloadSession',
     // #247: one Refresh for every Mod-Management source, replacing modbench.refreshTree,

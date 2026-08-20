@@ -28,6 +28,18 @@ export const EXTENSION_TO_WEBVIEW = {
   // opened. Carries no value: closing commits nothing beyond whatever EXTENDED_EDITOR_COMMITTED
   // messages already arrived before it.
   EXTENDED_EDITOR_CLOSED: 'extendedEditorClosed',
+  // Issue #142/#227 (#426 Track 4: restored): the array-op right-click commands broadcast to every
+  // open record panel and let each self-filter on `formKey` — the extension host has no live
+  // reference into the webview's own React state (which alone holds the record's current values),
+  // so the actual mutation (moveArrayElement/removeArrayElement/appendArrayElement, then restaging
+  // through the ordinary EDIT_FIELD write path) happens webview-side, the same computation the
+  // keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use. `fieldName`
+  // is the row's own wire identity (context.rootField), matching arrayParentContext/
+  // arrayElementContext's own convention.
+  ARRAY_ADD: 'arrayAdd',
+  ARRAY_REMOVE: 'arrayRemove',
+  ARRAY_MOVE_UP: 'arrayMoveUp',
+  ARRAY_MOVE_DOWN: 'arrayMoveDown',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -99,10 +111,41 @@ export type WebviewToExtension =
       column?: 'pending';
     };
 
+// Issue #227 (#426 Track 4: restored): the shape of a `data-vscode-context` payload VS Code
+// parses and hands to the invoked command — never travels through `postMessage` itself, so these
+// live beside (not inside) WebviewToExtension/ExtensionToWebview, the two commands below only
+// need them for typing `ctx`. `recordUtils.ts`'s `arrayElementContext`/`arrayParentContext` build
+// these; `combineVscodeContexts` there turns one (or several, once Track 5's VMAD contexts join
+// them) into the actual attribute string.
+export interface ArrayElementContext {
+  webviewSection: 'arrayElement';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  fieldName: string;
+  index: number;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  preventDefaultContextMenuItems: true;
+}
+
+export interface ArrayParentContext {
+  webviewSection: 'arrayParent';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  fieldName: string;
+  preventDefaultContextMenuItems: true;
+}
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; origin: string; fieldName: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; fieldName: string; index: number };

@@ -423,6 +423,13 @@ describe('package.json command titles and categories (#280)', () => {
   // Exhaustive both ways, same "nothing missing, nothing extra" shape as EXPECTED_COMMANDS.
   const PALETTE_GATED = [
     'modbench.openHeader',
+    // #426 Track 4: each needs the clicked cell's own row/column identity from its
+    // data-vscode-context — no ambient fallback worth a QuickPick-over-QuickPick, same posture as
+    // the tree-row-gated commands below.
+    'modbench.array.add',
+    'modbench.array.remove',
+    'modbench.array.moveUp',
+    'modbench.array.moveDown',
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
     'modbench.downloads.openFile',
@@ -454,7 +461,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(22);
+    expect(PALETTE_GATED).toHaveLength(26);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
