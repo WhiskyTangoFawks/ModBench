@@ -42,7 +42,26 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// Winner state is stale until the next <see cref="UpdateWinners"/> sweep.</summary>
     void SetPluginParticipation(PluginKey key, bool participates);
 
-    // ApplyWorkingTreeChanges: #415's, additive — not built here.
+    /// <summary>
+    /// #415: folds a plugin's working-tree ledger changes into the read model, which is what makes
+    /// <see cref="RecordRef.Effective"/> and <see cref="RecordRef.Head"/> diverge. Each delta is a
+    /// record's ledger file as it now stands: <paramref name="deltas"/>' <c>Body</c> is the file's
+    /// exact bytes, and a <see langword="null"/> <c>Body</c> is that record's <i>deletion</i> from
+    /// the working tree — the record keeps answering at Head, and stops existing at Effective.
+    ///
+    /// <para>A body that is byte-equal to the committed one is not a change at all but a
+    /// <i>convergence</i>: the record goes clean again, exactly as if it had never been edited. That
+    /// is what makes reverting a ledger file through git (or editing a value back by hand) restore
+    /// the committed state rather than leave a permanently "dirty" record holding identical bytes —
+    /// byte compare is the detection, per #413's contract, never a <c>content_hash</c> mismatch on
+    /// its own.</para>
+    ///
+    /// <para>Idempotent, and safe to call with deltas for records this plugin does not hold: an
+    /// unknown FormKey is skipped, not thrown on (the seam's missing-data rule). Creating a record
+    /// that exists at neither ref is not expressible here — it is a lifecycle gesture with its own
+    /// ticket.</para>
+    /// </summary>
+    void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
 
     /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one

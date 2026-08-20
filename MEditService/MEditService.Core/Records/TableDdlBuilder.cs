@@ -15,6 +15,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     public void CreateTables(DuckDBConnection connection, GameRelease release)
     {
         CreateRecordsTable(connection);
+        CreateCommittedRecordsTableAndHeadView(connection);
         CreatePluginsTable(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
@@ -76,6 +77,58 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_records_plugin ON records(plugin, origin)
+            """);
+    }
+
+    // #415: the committed half of the ref dimension. `records` holds exactly one row per record copy
+    // and that row *is* Effective — so every read written before this ticket, and every generated
+    // json_extract view, keeps answering Effective unchanged, with no ref predicate anywhere. What a
+    // second ref needs is only the *difference*, which is what this table holds: the committed
+    // snapshot of a record whose working-tree state has diverged, and nothing at all for the clean
+    // majority.
+    //
+    // Deliberately a mirror of `records` column-for-column rather than a narrower (form_key, body)
+    // pair: `records_head` below is a plain UNION ALL of this table with the still-clean rows, so
+    // Head is a relation of exactly the same shape as `records` and every read can be pointed at
+    // either by name alone. A narrower table would force each Head read to reconstruct the missing
+    // identity columns by joining back to the Effective row — which does not exist at all for a
+    // record the working tree deleted, the very case Head has to keep answering.
+    //
+    // Rows are written by DuckDbRecordIndex.ApplyWorkingTreeChanges (on the clean→dirty transition)
+    // and removed by it again on convergence back to the committed bytes.
+    private static void CreateCommittedRecordsTableAndHeadView(DuckDBConnection connection)
+    {
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS records_committed (
+                form_key       VARCHAR NOT NULL,
+                plugin         VARCHAR NOT NULL,
+                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type    VARCHAR NOT NULL,
+                editor_id      VARCHAR,
+                load_order_idx INTEGER NOT NULL,
+                is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
+                "ref"          VARCHAR NOT NULL DEFAULT '{LedgerRef.Committed}',
+                body           VARCHAR NOT NULL,
+                content_hash   VARCHAR NOT NULL
+            )
+            """);
+
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON records_committed(form_key)
+            """);
+
+        // The Head relation: every diverged record's committed snapshot, plus every record that
+        // never diverged (still carrying LedgerRef.Committed in `records` itself). The two halves
+        // are disjoint by construction — ApplyWorkingTreeChanges writes the snapshot and flips the
+        // Effective row's `ref` in the same transaction — so UNION ALL is exact, not an
+        // approximation that DISTINCT would have to clean up after.
+        Execute(connection, $"""
+            CREATE OR REPLACE VIEW records_head AS
+            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash
+            FROM records_committed
+            UNION ALL
+            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash
+            FROM records WHERE "ref" = '{LedgerRef.Committed}'
             """);
     }
 

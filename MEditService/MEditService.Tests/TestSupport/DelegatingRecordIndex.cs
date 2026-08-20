@@ -24,6 +24,8 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void UpdateWinners() => Inner.UpdateWinners();
     public virtual void SetPluginParticipation(PluginKey key, bool participates) =>
         Inner.SetPluginParticipation(key, participates);
+    public virtual void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas) =>
+        Inner.ApplyWorkingTreeChanges(key, deltas);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
