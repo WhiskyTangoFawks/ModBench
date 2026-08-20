@@ -1,0 +1,683 @@
+{
+  "ReferencedBy": {
+    "003648:Fallout4.esm": {
+      "Count": 1248,
+      "Sample": [
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_branches[0].quest",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[0].quest",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[100].quest",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[101].quest",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[102].quest",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        }
+      ]
+    },
+    "004E1E:Fallout4.esm": {
+      "Count": 38,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "start_scene",
+          "FormKey": "0180F8:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "info"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[0].start_scene",
+          "FormKey": "02B892:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[1].start_scene",
+          "FormKey": "02B892:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "start_scene",
+          "FormKey": "02B89C:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "info"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "start_scene",
+          "FormKey": "02B8A0:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "info"
+        }
+      ]
+    },
+    "00583D:Fallout4.esm": {
+      "Count": 36,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "start_scene",
+          "FormKey": "005834:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "info"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "start_scene",
+          "FormKey": "017BB2:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "info"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[0].start_scene",
+          "FormKey": "01DA26:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[1].start_scene",
+          "FormKey": "01DA26:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[2].start_scene",
+          "FormKey": "01DA26:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        }
+      ]
+    },
+    "0179EF:Fallout4.esm": {
+      "Count": 144,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "quest",
+          "FormKey": "0179D9:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "quest",
+          "FormKey": "0179DA:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "quest",
+          "FormKey": "0179DB:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "quest",
+          "FormKey": "0179DC:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": "DialogueGenericPlayer",
+          "FieldPath": "dialog_branches[0].quest",
+          "FormKey": "0179EF:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        }
+      ]
+    },
+    "0179F3:Fallout4.esm": {
+      "Count": 564,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "quest",
+          "FormKey": "0179F1:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "CTDA\\Stages[2].LogEntries[0].Conditions\\0\\Parameter\\0",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_branches[0].quest",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[0].quest",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[100].quest",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        }
+      ]
+    },
+    "017B27:Fallout4.esm": {
+      "Count": 14,
+      "Sample": [
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "scenes[30].template",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "start_scene",
+          "FormKey": "0057E4:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "info"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[0].start_scene",
+          "FormKey": "01F679:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[1].start_scene",
+          "FormKey": "01F679:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "responses[2].start_scene",
+          "FormKey": "01F679:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        }
+      ]
+    },
+    "01DADA:Fallout4.esm": {
+      "Count": 2,
+      "Sample": [
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[31].branch",
+          "FormKey": "003648:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueDiamondCitySharedQuestion",
+          "FieldPath": "branch",
+          "FormKey": "01DAD7:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        }
+      ]
+    },
+    "0267FA:Fallout4.esm": {
+      "Count": 2,
+      "Sample": [
+        {
+          "EditorId": "DialogueGenericPlayer",
+          "FieldPath": "dialog_topics[10].branch",
+          "FormKey": "0179EF:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "branch",
+          "FormKey": "02650D:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        }
+      ]
+    },
+    "0782AA:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": "MinutemenHoldingCell",
+          "FieldPath": "combined_mesh_references[1].reference",
+          "FormKey": "0782A8:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "cell"
+        }
+      ]
+    },
+    "0CA9D0:Fallout4.esm": {
+      "Count": 4,
+      "Sample": [
+        {
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[189].branch",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[254].branch",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "MQPlayerQuestionSharedConcord",
+          "FieldPath": "branch",
+          "FormKey": "0CA9C8:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "branch",
+          "FormKey": "247E8E:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "dial"
+        }
+      ]
+    },
+    "1A6C6F:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "linked_references[1].reference",
+          "FormKey": "1A6C7B:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "achr"
+        }
+      ]
+    },
+    "1A6C71:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "linked_references[1].reference",
+          "FormKey": "1A6C6F:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "achr"
+        }
+      ]
+    },
+    "1A6C7B:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "linked_references[2].reference",
+          "FormKey": "1A6C71:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "achr"
+        }
+      ]
+    },
+    "24A068:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\ShipmentScript\\pShipment",
+          "FormKey": "24A068:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "misc"
+        }
+      ]
+    },
+    "24A069:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\ShipmentScript\\pShipment",
+          "FormKey": "24A069:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "misc"
+        }
+      ]
+    },
+    "24A06B:Fallout4.esm": {
+      "Count": 1,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\ShipmentScript\\pShipment",
+          "FormKey": "24A06B:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "misc"
+        }
+      ]
+    },
+    "24A341:Fallout4.esm": {
+      "Count": 3,
+      "Sample": [
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript\\VRWorkshop_TutorialShown_VRAttackMarker",
+          "FormKey": "24A313:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "acti"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript\\VRWorkshop_TutorialShown_VRAttackMarker",
+          "FormKey": "24A314:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "acti"
+        },
+        {
+          "EditorId": null,
+          "FieldPath": "VMAD\\CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript\\VRWorkshop_TutorialShown_VRAttackMarker",
+          "FormKey": "24A315:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "acti"
+        }
+      ]
+    }
+  },
+  "Resolved": {
+    "000800:mEditTestSubset.esm": {
+      "EditorId": "Commonwealth",
+      "RecordType": "wrld"
+    },
+    "003648:Fallout4.esm": {
+      "EditorId": "DialogueDiamondCity",
+      "RecordType": "qust"
+    },
+    "0048EB:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "dial"
+    },
+    "004E1E:Fallout4.esm": {
+      "EditorId": "ArturoGreetScene",
+      "RecordType": "scen"
+    },
+    "0057DD:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "dial"
+    },
+    "0057DE:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "info"
+    },
+    "0057DF:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "info"
+    },
+    "0057E0:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "info"
+    },
+    "00581D:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "dial"
+    },
+    "00583D:Fallout4.esm": {
+      "EditorId": "MyrnaGreetScene",
+      "RecordType": "scen"
+    },
+    "00DB41:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "cell"
+    },
+    "00DB42:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "cell"
+    },
+    "00DB43:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "cell"
+    },
+    "0179EF:Fallout4.esm": {
+      "EditorId": "DialogueGenericPlayer",
+      "RecordType": "qust"
+    },
+    "0179F3:Fallout4.esm": {
+      "EditorId": "DialogueConcordArea",
+      "RecordType": "qust"
+    },
+    "017B27:Fallout4.esm": {
+      "EditorId": "NatGreetScene",
+      "RecordType": "scen"
+    },
+    "01DADA:Fallout4.esm": {
+      "EditorId": "DialogueDiamondCitySharedBranch",
+      "RecordType": "dlbr"
+    },
+    "0267FA:Fallout4.esm": {
+      "EditorId": "DialogueGenericPlayerSharedQuestion",
+      "RecordType": "dlbr"
+    },
+    "0782AA:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "refr"
+    },
+    "0782B7:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "refr"
+    },
+    "0782B8:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "refr"
+    },
+    "0A96BF:Fallout4.esm": {
+      "EditorId": "FeralGhoulGlowingRace",
+      "RecordType": "race"
+    },
+    "0CA9D0:Fallout4.esm": {
+      "EditorId": "DialogueConcordAreaSharedBranch",
+      "RecordType": "dlbr"
+    },
+    "187AF9:Fallout4.esm": {
+      "EditorId": "RaiderDogRace",
+      "RecordType": "race"
+    },
+    "1A6C6F:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "achr"
+    },
+    "1A6C71:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "achr"
+    },
+    "1A6C7B:Fallout4.esm": {
+      "EditorId": null,
+      "RecordType": "achr"
+    },
+    "1A6D64:Fallout4.esm": {
+      "EditorId": "TurretWorkshopRace",
+      "RecordType": "race"
+    },
+    "2499C4:Fallout4.esm": {
+      "EditorId": "EncRadRoachAmbushLegendary",
+      "RecordType": "npc_"
+    },
+    "2499C8:Fallout4.esm": {
+      "EditorId": "LvlMutantHoundLegendary",
+      "RecordType": "npc_"
+    },
+    "249D44:Fallout4.esm": {
+      "EditorId": "CIS_CompanionInSceneFaction",
+      "RecordType": "fact"
+    },
+    "249E8F:Fallout4.esm": {
+      "EditorId": "TunnelingRaceNoDirtFromFurniture",
+      "RecordType": "fact"
+    },
+    "24A068:Fallout4.esm": {
+      "EditorId": "shipment_Wood_250",
+      "RecordType": "misc"
+    },
+    "24A069:Fallout4.esm": {
+      "EditorId": "shipment_Rubber_large",
+      "RecordType": "misc"
+    },
+    "24A06B:Fallout4.esm": {
+      "EditorId": "shipment_Ceramic_large",
+      "RecordType": "misc"
+    },
+    "24A157:Fallout4.esm": {
+      "EditorId": "CC_PetDogFaction",
+      "RecordType": "fact"
+    },
+    "24A313:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
+      "RecordType": "acti"
+    },
+    "24A314:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
+      "RecordType": "acti"
+    },
+    "24A315:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
+      "RecordType": "acti"
+    },
+    "24A340:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
+      "RecordType": "glob"
+    },
+    "24A341:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
+      "RecordType": "glob"
+    },
+    "24A342:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
+      "RecordType": "glob"
+    },
+    "24A37F:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_LvlSynthCourser",
+      "RecordType": "npc_"
+    },
+    "24A3AF:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
+      "RecordType": "weap"
+    },
+    "24A3B0:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
+      "RecordType": "weap"
+    },
+    "24A3B1:Fallout4.esm": {
+      "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
+      "RecordType": "weap"
+    },
+    "24A3FE:Fallout4.esm": {
+      "EditorId": "cc_Armor_Power_X01_Helm",
+      "RecordType": "armo"
+    },
+    "24A3FF:Fallout4.esm": {
+      "EditorId": "cc_Armor_Power_X01_LegLeft",
+      "RecordType": "armo"
+    },
+    "24A400:Fallout4.esm": {
+      "EditorId": "cc_Armor_Power_X01_LegRight",
+      "RecordType": "armo"
+    },
+    "24A403:Fallout4.esm": {
+      "EditorId": "dn_HasPiggyBank",
+      "RecordType": "kywd"
+    },
+    "24A405:Fallout4.esm": {
+      "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
+      "RecordType": "kywd"
+    },
+    "24A406:Fallout4.esm": {
+      "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
+      "RecordType": "kywd"
+    }
+  }
+}

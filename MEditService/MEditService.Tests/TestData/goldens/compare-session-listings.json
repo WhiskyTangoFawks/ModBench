@@ -1,0 +1,178 @@
+{
+  "AllNpcs": [
+    {
+      "EditorId": "ConflictedNPC",
+      "FormKey": "000800:Base.esm",
+      "IsWinner": false,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "Base.esm"
+    },
+    {
+      "EditorId": "ConflictedNPC",
+      "FormKey": "000800:Base.esm",
+      "IsWinner": false,
+      "LoadOrderIndex": 1,
+      "Origin": "Data",
+      "Plugin": "Mid.esp"
+    },
+    {
+      "EditorId": "ConflictedNPC",
+      "FormKey": "000800:Base.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 2,
+      "Origin": "Data",
+      "Plugin": "Top.esp"
+    },
+    {
+      "EditorId": "InjectedNPC",
+      "FormKey": "000800:Mid.esp",
+      "IsWinner": true,
+      "LoadOrderIndex": 1,
+      "Origin": "Data",
+      "Plugin": "Mid.esp"
+    },
+    {
+      "EditorId": "SoleNPC",
+      "FormKey": "000802:Base.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "Base.esm"
+    }
+  ],
+  "PerPluginTypes": {
+    "Base.esm": [
+      {
+        "Count": 2,
+        "DisplayName": "Non-Player Character",
+        "Type": "npc_"
+      },
+      {
+        "Count": 1,
+        "DisplayName": "Weapon",
+        "Type": "weap"
+      }
+    ],
+    "Mid.esp": [
+      {
+        "Count": 2,
+        "DisplayName": "Non-Player Character",
+        "Type": "npc_"
+      },
+      {
+        "Count": 1,
+        "DisplayName": "Weapon",
+        "Type": "weap"
+      }
+    ],
+    "Top.esp": [
+      {
+        "Count": 1,
+        "DisplayName": "Non-Player Character",
+        "Type": "npc_"
+      }
+    ]
+  },
+  "Plugins": [
+    {
+      "HasMatchingRecords": true,
+      "InLoadOrder": true,
+      "IsImmutable": false,
+      "IsLight": false,
+      "IsMaster": true,
+      "LoadOrderIndex": 0,
+      "MasterIssues": [],
+      "Masters": [],
+      "Name": "Base.esm",
+      "Origin": "Data",
+      "Participates": true,
+      "RecordCount": 3
+    },
+    {
+      "HasMatchingRecords": true,
+      "InLoadOrder": true,
+      "IsImmutable": false,
+      "IsLight": false,
+      "IsMaster": false,
+      "LoadOrderIndex": 1,
+      "MasterIssues": [],
+      "Masters": [
+        "Base.esm"
+      ],
+      "Name": "Mid.esp",
+      "Origin": "Data",
+      "Participates": true,
+      "RecordCount": 3
+    },
+    {
+      "HasMatchingRecords": true,
+      "InLoadOrder": true,
+      "IsImmutable": false,
+      "IsLight": false,
+      "IsMaster": false,
+      "LoadOrderIndex": 2,
+      "MasterIssues": [],
+      "Masters": [
+        "Base.esm"
+      ],
+      "Name": "Top.esp",
+      "Origin": "Data",
+      "Participates": true,
+      "RecordCount": 1
+    }
+  ],
+  "RecordTypes": 132,
+  "References": [
+    {
+      "EditorId": "ConflictedNPC",
+      "FieldPath": "race",
+      "FormKey": "000800:Base.esm",
+      "Origin": "Data",
+      "Plugin": "Base.esm",
+      "RecordType": "npc_"
+    },
+    {
+      "EditorId": "ConflictedNPC",
+      "FieldPath": "race",
+      "FormKey": "000800:Base.esm",
+      "Origin": "Data",
+      "Plugin": "Mid.esp",
+      "RecordType": "npc_"
+    }
+  ],
+  "WinningRecords": {
+    "000800:Base.esm": {
+      "EditorId": "ConflictedNPC",
+      "IsWinner": true,
+      "LoadOrderIndex": 2,
+      "Origin": "Data",
+      "Plugin": "Top.esp",
+      "RecordType": "npc_"
+    },
+    "000800:Mid.esp": {
+      "EditorId": "InjectedNPC",
+      "IsWinner": true,
+      "LoadOrderIndex": 1,
+      "Origin": "Data",
+      "Plugin": "Mid.esp",
+      "RecordType": "npc_"
+    },
+    "000801:Base.esm": {
+      "EditorId": "UnchangedWeapon",
+      "IsWinner": true,
+      "LoadOrderIndex": 1,
+      "Origin": "Data",
+      "Plugin": "Mid.esp",
+      "RecordType": "weap"
+    },
+    "000802:Base.esm": {
+      "EditorId": "SoleNPC",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "Base.esm",
+      "RecordType": "npc_"
+    }
+  }
+}

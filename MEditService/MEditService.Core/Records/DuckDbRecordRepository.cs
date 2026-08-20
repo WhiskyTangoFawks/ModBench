@@ -1,11 +1,15 @@
 using System.Data;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -28,6 +32,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // silently wrong" fallback ConditionCodecRegistry.For already establishes elsewhere.
     private IConditionCodec? _conditionCodec;
 
+    // ADR-0041 / #413: the per-record ledger codec, which is now the ingest path for every record —
+    // each document body is exactly the bytes the record's ledger file holds. Constructed here
+    // rather than injected: it is stateless apart from its own reflection caches (which are static),
+    // and every existing construction site of this repository would otherwise have to learn about a
+    // dependency it has no say in.
+    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
+
     public DuckDBConnection Connection { get; }
 
     public DuckDbRecordRepository(
@@ -42,11 +53,17 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         Connection.Open();
     }
 
+    // Retained for the reconstitution path (#413 D1): reading a record back out of its document
+    // needs the release it was written under, and this repository is one game for its whole
+    // lifetime — the same reasoning that already resolves _conditionCodec once, here.
+    private GameRelease _release;
+
     public void Initialize(GameRelease release)
     {
         _ddlBuilder.CreateTables(Connection, release);
         _schemas = _schemaReflector.GetSchemas(release);
         _conditionCodec = ConditionCodecRegistry.For(release.ToCategory());
+        _release = release;
     }
 
     // --- Indexing (absorbed from RecordIndexer) ---
@@ -72,13 +89,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // non-participating plugin's rows never win regardless of load_order_idx.
         UpsertPluginParticipation(plugin, origin, loadOrderIndex, participates);
 
+        // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
+        // delete does — a re-index replaces its own rows rather than accumulating a second copy.
+        // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
+        // so it has no codec document at all, and stays a purely extracted index table (D8).
+        DeleteExistingForOrigin("records", plugin, origin);
+        using var documentAppender = Connection.CreateAppender("records");
+
         foreach (var (tableName, schema) in schemas)
         {
             // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
             // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately,
             // and header rows never enter form_lookup for the same reason.
             if (tableName == "header") continue;
-            IndexRecordTable(tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows);
+            IndexRecordTable(
+                tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
+                documentAppender, pluginMod.GameRelease);
         }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
@@ -154,12 +180,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
         using var tx = Connection.BeginTransaction();
 
-        foreach (var tableName in RequireSchemas().Keys)
-        {
-            if (tableName == "header") continue; // indexed separately, deleted by name just below
-            DeleteExistingForOrigin(tableName, plugin, origin);
-        }
-
+        // #413: one delete where this used to walk every reflected table — the record rows are all
+        // in `records` now, and the only surviving per-type table is the header, deleted just below.
+        DeleteExistingForOrigin("records", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -172,10 +195,51 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         tx.Commit();
     }
 
+    // ADR-0041 / #413: one document per major record, written from the same enumeration that fills
+    // the record's own row — never a second pass over the plugin. The appender is opened once per
+    // Index() call and threaded through the per-type loop below, because `records` is one table
+    // spanning every type where the wide tables were one appender each.
+    //
+    // Blocking on the codec's async path is deliberate rather than an oversight: serialization runs
+    // entirely over a MemoryStream with no IO (RecordTextCodec.SerializeToBytesAsync), so there is
+    // nothing to await on. The async signature comes from Mutagen's generated serializers, and
+    // making Index() async to match would push a false IO-bound shape up through IRecordIndexer into
+    // SessionManager's indexing loop for no benefit.
+    private void AppendDocument(
+        DuckDBAppender documentAppender, IMajorRecordGetter record, string recordType,
+        string plugin, string origin, int loadOrderIndex, GameRelease gameRelease)
+    {
+        // D8: a container is serialized from a stripped deep copy, everything else from the getter
+        // ingest already holds. Children are their own documents; a parent carrying them would store
+        // the same data twice and hold a body no ledger file can match.
+        var toSerialize = ContainerStripFields.StrippedForSerialization(record);
+        var body = _codec.SerializeToBytesAsync(toSerialize, gameRelease).GetAwaiter().GetResult();
+
+        var row = documentAppender.CreateRow();
+        row.AppendValue(record.FormKey.ToString());
+        row.AppendValue(plugin);
+        row.AppendValue(origin);
+        row.AppendValue(recordType);
+        if (record.EditorID is { } editorId)
+            row.AppendValue(editorId);
+        else
+            row.AppendNullValue();
+        row.AppendValue((int?)loadOrderIndex);
+        row.AppendValue((bool?)false);
+        row.AppendValue(LedgerRef.Committed);
+        row.AppendValue(Encoding.UTF8.GetString(body));
+        // Hashed from the codec's own bytes rather than from the string just above: identical for
+        // the valid UTF-8 the codec emits, but this keeps the hash defined by what the ledger file
+        // would contain, not by a round trip through .NET's string encoder.
+        row.AppendValue(GitBlobHash.Of(body));
+        row.EndRow();
+    }
+
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
         string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
-        List<(string FormKey, string RecordType, string? EditorId)> lookupRows)
+        List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
+        DuckDBAppender documentAppender, GameRelease gameRelease)
     {
         List<IMajorRecordGetter> records;
         try
@@ -192,28 +256,14 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
 
-        DeleteExistingForOrigin(tableName, plugin, origin);
-
-        using var appender = Connection.CreateAppender(tableName);
+        // ADR-0041 / #413: no per-type table to delete from or append to any more. This loop's whole
+        // output is now one document per record plus the extracted index rows derived from it — the
+        // per-type enumeration survives only because it is how a record's type is known.
         foreach (var record in records)
         {
             try
             {
-                var row = appender.CreateRow();
-                row.AppendValue(record.FormKey.ToString());
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                row.AppendValue((int?)loadOrderIndex);
-                row.AppendValue((bool?)false);
-                if (record.EditorID is { } edId)
-                    row.AppendValue(edId);
-                else
-                    row.AppendNullValue();
-
-                foreach (var col in schema.RecordColumns)
-                    AppendTyped(row, col.Extract(record), col.DuckDbType);
-
-                row.EndRow();
+                AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease);
                 CollectFormRefs(refs, record, tableName, schema);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
@@ -256,27 +306,43 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public void UpdateWinners()
     {
-        var schemas = RequireSchemas();
-        foreach (var tableName in schemas.Keys)
-        {
-            // #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing a filename
-            // but differing in origin are distinct participants, each judged on its own load_order_idx
-            // and participation, not folded into one MAX() bucket by filename alone.
-            Execute($"""
-                UPDATE "{tableName}"
-                SET is_winner = (
-                    load_order_idx = (
-                        SELECT MAX(t2.load_order_idx) FROM "{tableName}" t2
-                        JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                        WHERE t2.form_key = "{tableName}".form_key
-                    )
-                    AND EXISTS (
-                        SELECT 1 FROM plugins p1
-                        WHERE p1.plugin = "{tableName}".plugin AND p1.origin = "{tableName}".origin AND p1.participates
-                    )
+        // ADR-0041 / #413: one sweep over `records` where this used to run the same UPDATE once per
+        // reflected table. #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing
+        // a filename but differing in origin are distinct participants, each judged on its own
+        // load_order_idx and participation, not folded into one MAX() bucket by filename alone.
+        Execute("""
+            UPDATE records
+            SET is_winner = (
+                load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM records t2
+                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
+                    WHERE t2.form_key = records.form_key
                 )
-                """);
-        }
+                AND EXISTS (
+                    SELECT 1 FROM plugins p1
+                    WHERE p1.plugin = records.plugin AND p1.origin = records.origin AND p1.participates
+                )
+            )
+            """);
+
+        // #413: the header keeps its own sweep. It used to be swept incidentally, as one of the
+        // reflected schema tables the loop above walked; it is now the only surviving per-type table
+        // (D8) and would otherwise never have a winner at all — which reads as "no header exists"
+        // through every winnerOnly lookup, Open Header included.
+        Execute($"""
+            UPDATE "{HeaderIndexer.TableName}"
+            SET is_winner = (
+                load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM "{HeaderIndexer.TableName}" t2
+                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
+                    WHERE t2.form_key = "{HeaderIndexer.TableName}".form_key
+                )
+                AND EXISTS (
+                    SELECT 1 FROM plugins p1
+                    WHERE p1.plugin = "{HeaderIndexer.TableName}".plugin AND p1.origin = "{HeaderIndexer.TableName}".origin AND p1.participates
+                )
+            )
+            """);
 
         // form_lookup isn't a reflected schema table, so it needs its own winner sweep — same
         // shape as every other table's, so ResolveFormKey's EditorID reflects the winning override
@@ -303,9 +369,9 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin);
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin, recordTypes: [tableName]);
 
-        var countSql = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
+        var countSql = $"SELECT COUNT(*) FROM records{where}";
         using var countCmd = Connection.CreateCommand();
         countCmd.CommandText = countSql;
         AddParams(countCmd, paramValues);
@@ -313,7 +379,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var dataSql = $"""
             SELECT form_key, plugin, load_order_idx, is_winner, editor_id, origin
-            FROM "{tableName}"{where}
+            FROM records{where}
             ORDER BY editor_id
             LIMIT {limit} OFFSET {offset}
             """;
@@ -347,12 +413,29 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             values.Add(origin);
         }
 
+        // D8: the header is the one row this read model cannot serve from a document. A ModHeader is
+        // not an IMajorRecordGetter, so it has no codec text and never entered `records` — it stays
+        // an extracted index table with real per-field columns, read positionally as every record
+        // table once was.
+        var isHeader = IsHeaderTable(tableName);
+        if (!isHeader)
+        {
+            conditions.Add($"record_type = ${values.Count + 1}");
+            values.Add(NormalizeRecordType(tableName));
+        }
+
         var where = " WHERE " + string.Join(" AND ", conditions);
-        var sql = $"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-            FROM "{tableName}"{where}
-            LIMIT 1
-            """;
+        var sql = isHeader
+            ? $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+                FROM "{HeaderIndexer.TableName}"{where}
+                LIMIT 1
+                """
+            : $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
+                FROM records{where}
+                LIMIT 1
+                """;
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
@@ -360,40 +443,59 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
         var cache = new Dictionary<string, RecordLookupEntry?>();
-        return ReadDetail(reader, schema, fk =>
+        RecordLookupEntry? Resolve(string fk)
         {
             if (cache.TryGetValue(fk, out var t)) return t;
             var resolved = ResolveFormKey(fk);
             cache[fk] = resolved;
             return resolved;
-        });
+        }
+
+        return isHeader
+            ? ReadDetailFromColumns(reader, schema, Resolve)
+            : ReadDetailFromDocument(reader, schema, Resolve);
     }
 
     public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
     {
         var schema = RequireSchemas()[tableName];
-        var sql = $"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-            FROM "{tableName}"
-            WHERE form_key = $1
-            ORDER BY load_order_idx
-            """;
+        // D8: the header has no document — see GetRecord.
+        var isHeader = IsHeaderTable(tableName);
+        var sql = isHeader
+            ? $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+                FROM "{HeaderIndexer.TableName}"
+                WHERE form_key = $1
+                ORDER BY load_order_idx
+                """
+            : """
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
+                FROM records
+                WHERE form_key = $1 AND record_type = $2
+                ORDER BY load_order_idx
+                """;
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = sql;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        if (!isHeader)
+            cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
         using var reader = cmd.ExecuteReader();
 
         var list = new List<RecordDetail>();
         var cache = new Dictionary<string, RecordLookupEntry?>();
+        RecordLookupEntry? Resolve(string fk)
+        {
+            if (cache.TryGetValue(fk, out var t)) return t;
+            var resolved = ResolveFormKey(fk);
+            cache[fk] = resolved;
+            return resolved;
+        }
+
         while (reader.Read())
         {
-            list.Add(ReadDetail(reader, schema, fk =>
-            {
-                if (cache.TryGetValue(fk, out var t)) return t;
-                var resolved = ResolveFormKey(fk);
-                cache[fk] = resolved;
-                return resolved;
-            }));
+            list.Add(isHeader
+                ? ReadDetailFromColumns(reader, schema, Resolve)
+                : ReadDetailFromDocument(reader, schema, Resolve));
         }
 
         return list;
@@ -698,24 +800,32 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public int CountRecordsForPlugin(string tableName, string plugin, string origin)
     {
-        var (where, paramValues) = BuildWhere(plugin, null, _filterActive, origin);
+        var (where, paramValues) = BuildWhere(plugin, null, _filterActive, origin, recordTypes: [tableName]);
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM \"{tableName}\"{where}";
+        cmd.CommandText = $"SELECT COUNT(*) FROM records{where}";
         AddParams(cmd, paramValues);
         return (int)(long)cmd.ExecuteScalar()!;
     }
 
+    // #413: one indexed lookup where this used to scan every per-type table in turn until one
+    // matched — the record's type is a column now, so there is nothing to search for.
+    //
+    // The header keeps its own second lookup for the same reason it keeps its own read path (D8):
+    // it has no document, so it is absent from `records` entirely. The old per-table scan covered it
+    // only because "header" happened to be one of the schema keys it walked; that coverage is
+    // deliberate behaviour (Open Header resolves a plugin's synthetic 000000:<plugin> FormKey
+    // through here), so it is expressed explicitly rather than lost with the scan.
     public string? FindRecordType(string formKey)
     {
-        var schemas = RequireSchemas();
-        foreach (var tableName in schemas.Keys)
-        {
-            using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"SELECT 1 FROM \"{tableName}\" WHERE form_key = $1 LIMIT 1";
-            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-            if (cmd.ExecuteScalar() != null) return tableName;
-        }
-        return null;
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "SELECT record_type FROM records WHERE form_key = $1 LIMIT 1";
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        if (cmd.ExecuteScalar() is string recordType) return recordType;
+
+        using var headerCmd = Connection.CreateCommand();
+        headerCmd.CommandText = $"SELECT 1 FROM \"{HeaderIndexer.TableName}\" WHERE form_key = $1 LIMIT 1";
+        headerCmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        return headerCmd.ExecuteScalar() != null ? HeaderIndexer.TableName : null;
     }
 
     public RecordLookupEntry? ResolveFormKey(string formKey)
@@ -736,14 +846,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin)
     {
-        var tables = RequireSchemas().Keys.Where(t => t != HeaderIndexer.TableName).ToList();
-        if (tables.Count == 0) return [];
-
-        var union = string.Join("\nUNION ALL\n",
-            tables.Select(t => $"SELECT form_key FROM \"{t}\" WHERE plugin = $1 AND origin = $2"));
-
+        // #413: fourth union shape collapsed. The header exclusion the union expressed by omitting a
+        // table is now implicit — a ModHeader is not a major record, so it has no document at all.
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT DISTINCT form_key FROM ({union})";
+        cmd.CommandText = "SELECT DISTINCT form_key FROM records WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         using var reader = cmd.ExecuteReader();
@@ -765,19 +871,19 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         if (tableNames.Count == 0)
             return new PagedResult<RecordSummary>([], 0);
 
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin);
+        // #413: a single predicate where this UNION ALL'd one subquery per record type — the second
+        // of ADR-0041's five union-over-all-tables shapes to collapse.
+        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin, tableNames);
         const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id, origin";
-        var union = string.Join("\nUNION ALL\n",
-            tableNames.Select(t => $"SELECT {cols} FROM \"{t}\"{where}"));
 
         using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = $"SELECT COUNT(*) FROM ({union})";
+        countCmd.CommandText = $"SELECT COUNT(*) FROM records{where}";
         AddParams(countCmd, paramValues);
         var total = (long)countCmd.ExecuteScalar()!;
 
         using var dataCmd = Connection.CreateCommand();
         dataCmd.CommandText = $"""
-            SELECT {cols} FROM ({union})
+            SELECT {cols} FROM records{where}
             ORDER BY editor_id
             LIMIT {limit} OFFSET {offset}
             """;
@@ -797,7 +903,25 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
             reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5));
 
-    private static RecordDetail ReadDetail(DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
+    /// <summary>
+    /// Rebuilds a record's typed detail from its stored document (#413 D1).
+    ///
+    /// <para>The record is reconstituted through <see cref="RecordTextCodec"/> and then read by the
+    /// <b>same <see cref="ColumnSpec.Extract"/> delegates</b> that the wide tables were filled with.
+    /// That is what makes the values identical by construction rather than by a second
+    /// implementation agreeing with the first — and it is why the published relational schema can be
+    /// the SQL door's contract without also being the C# surface's (invariant 8): the document body
+    /// is Mutagen's serializer shape, which has no per-column correspondence to the reflected schema
+    /// at all (defaults omitted, translated strings as objects, flags as name arrays, and the
+    /// #263/#339 widened and split columns with no JSON path whatsoever).</para>
+    ///
+    /// <para>Each extracted value then passes through the same two normalizations the wide path
+    /// applied on the way in and out, so a field's JSON is byte-for-byte what it was: coerced to the
+    /// column's declared DuckDB type (<see cref="CoerceToColumnType"/>, mirroring
+    /// <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
+    /// </summary>
+    private RecordDetail ReadDetailFromDocument(
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
     {
         var formKey = reader.GetString(0);
         var plugin = reader.GetString(1);
@@ -805,27 +929,57 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         var loadOrderIndex = reader.GetInt32(3);
         var isWinner = reader.GetBoolean(4);
         var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
+        var body = reader.GetString(6);
+
+        var record = _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
+            .GetAwaiter().GetResult();
 
         var fields = new List<FieldValue>();
-        for (int i = 0; i < schema.RecordColumns.Count; i++)
+        foreach (var col in schema.RecordColumns)
         {
-            var col = schema.RecordColumns[i];
-            var isDbNull = reader.IsDBNull(6 + i);
-            object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
+            var raw = CoerceToColumnType(col.Extract(record), col.DuckDbType);
+
+            // An array/struct column's extractor produces JSON text; the wide path stored that text
+            // in a VARCHAR and re-parsed it on read, so it is re-parsed here too rather than handed
+            // out as a string.
+            var isJsonText = col.IsArray || col.SubFields != null;
+            object? value = raw switch
             {
-                (true, _) => null,
-                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(6 + i)),
-                _ => reader.GetValue(6 + i),
+                null => null,
+                string text when isJsonText => JsonSerializer.Deserialize<JsonElement>(text),
+                _ => raw,
             };
+
             // Bitmask flag values can exceed 2^53 (e.g. FO4 Race.Flag bits 53/54). Surface them as
             // decimal strings so they survive JSON round-tripping without IEEE 754 precision loss.
             if (value != null && col.IsBitmask)
                 value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+
             var meta = col.ToFieldMetadata();
             fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
         }
 
         return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName, Origin: origin);
+    }
+
+    // The read-side mirror of AppendTyped: a column declared INTEGER read back an int no matter
+    // whether its extractor produced a byte, ushort or uint, because the wide table's column type
+    // did the narrowing. Reconstitution has no column to do it, so the same conversion is applied
+    // here — without it a field's JSON would silently change numeric shape for every sub-int type.
+    private static object? CoerceToColumnType(object? value, string duckDbType)
+    {
+        if (value == null) return null;
+        return duckDbType switch
+        {
+            "BOOLEAN" => Convert.ToBoolean(value, CultureInfo.InvariantCulture),
+            "INTEGER" => Convert.ToInt32(value, CultureInfo.InvariantCulture),
+            "BIGINT" => Convert.ToInt64(value, CultureInfo.InvariantCulture),
+            "FLOAT" => Convert.ToSingle(value, CultureInfo.InvariantCulture),
+            "DOUBLE" => Convert.ToDouble(value, CultureInfo.InvariantCulture),
+            "VARCHAR" => value.ToString(),
+            _ => value,
+        };
     }
 
     internal static string ColumnList(RecordTableSchema schema) =>
@@ -837,10 +991,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // field. Defaults to "no
     // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
     // before this parameter existed.
-    private static (string where, List<string> paramValues) BuildWhere(string? plugin, string? search, bool filterActive = false, string? origin = null)
+    // recordTypes (#413): the single-table read model's replacement for "which table am I querying" —
+    // an empty/null list means every type, one entry is what a per-type listing used to get from the
+    // table name, and several is what SearchRecords used to get from a UNION ALL across tables.
+    private static (string where, List<string> paramValues) BuildWhere(
+        string? plugin, string? search, bool filterActive = false, string? origin = null,
+        IReadOnlyList<string>? recordTypes = null)
     {
         var conditions = new List<string>();
         var values = new List<string>();
+
+        if (recordTypes is { Count: > 0 })
+        {
+            var placeholders = recordTypes.Select((_, i) => $"${values.Count + i + 1}");
+            conditions.Add($"record_type IN ({string.Join(", ", placeholders)})");
+            values.AddRange(recordTypes.Select(NormalizeRecordType));
+        }
 
         if (plugin != null)
         {
@@ -880,6 +1046,54 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
         return (where, values);
+    }
+
+    // Record types used to be table names, and DuckDB resolves those case-insensitively — so callers
+    // have always been free to say "NPC_" or "npc_" and several do. As a column value the comparison
+    // is case-*sensitive*, which would silently return nothing for the same call that used to work.
+    // Schema keys are produced by RecordType.Type.ToLowerInvariant(), so lowercasing the caller's
+    // value is an exact normalization, not a guess. Applied at every point a caller-supplied type is
+    // bound as a parameter.
+    private static string NormalizeRecordType(string recordType) => recordType.ToLowerInvariant();
+
+    private static bool IsHeaderTable(string tableName) =>
+        string.Equals(tableName, HeaderIndexer.TableName, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The positional column reader every record table once used, kept for the one table that still
+    /// has real per-field columns: the header (D8). Its schema is hand-assembled rather than
+    /// reflected from a major record, so <see cref="ColumnSpec.Extract"/> is structurally unusable
+    /// for it (a ModHeader is not an IMajorRecordGetter) and there is no document to reconstitute
+    /// from — the values are read straight out of the columns HeaderIndexer wrote.
+    /// </summary>
+    private static RecordDetail ReadDetailFromColumns(
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var formKey = reader.GetString(0);
+        var plugin = reader.GetString(1);
+        var origin = reader.GetString(2);
+        var loadOrderIndex = reader.GetInt32(3);
+        var isWinner = reader.GetBoolean(4);
+        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
+
+        var fields = new List<FieldValue>();
+        for (int i = 0; i < schema.RecordColumns.Count; i++)
+        {
+            var col = schema.RecordColumns[i];
+            var isDbNull = reader.IsDBNull(6 + i);
+            object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
+            {
+                (true, _) => null,
+                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(6 + i)),
+                _ => reader.GetValue(6 + i),
+            };
+            if (value != null && col.IsBitmask)
+                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+            var meta = col.ToFieldMetadata();
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
+        }
+
+        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName, Origin: origin);
     }
 
     private static void AddParams(DuckDBCommand cmd, IEnumerable<string> values)
@@ -1140,7 +1354,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = """
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             FROM cell_location cl
-            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+            LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
             ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             """;
@@ -1176,7 +1390,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = $"""
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
-            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+            LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
             ORDER BY c.editor_id
             LIMIT {limit} OFFSET {offset}
@@ -1201,19 +1415,25 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin)
     {
         var schemas = RequireSchemas();
-        var placedTables = PlacedTableNames.Where(schemas.ContainsKey).ToList();
-        if (placedTables.Count == 0)
+        var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
+        if (placedTypes.Count == 0)
             return new CellReferences([], []);
 
-        var union = string.Join("\nUNION ALL\n",
-            placedTables.Select(t => $"SELECT '{t}' AS rt, form_key, plugin, origin, editor_id, \"base\" FROM \"{t}\""));
+        // ADR-0041 / #413: one single-table query where this used to UNION a wide table per placed
+        // type — the record_type column is what the union was standing in for. The placed ref's base
+        // form comes out of the document rather than a `base` column; json_extract_string unquotes
+        // the stored FormLink text, and a placed ref with no base at all reads NULL exactly as the
+        // wide column did (RealDataReadGoldenTests.SpatialReads_MatchGolden pins both shapes).
+        var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
+            SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
+                   json_extract_string(r.body, '$.Base')
             FROM placement p
-            JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
+            JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
             WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
+              AND r.record_type IN ({typeList})
             ORDER BY r.editor_id
             """;
         AddParams(cmd, [cellFormKey, plugin, origin]);
@@ -1263,15 +1483,16 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
     {
-        var tables = tableNames.ToList();
-        if (tables.Count == 0 || !_filterActive)
+        var types = tableNames.ToList();
+        if (types.Count == 0 || !_filterActive)
             return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        var union = string.Join("\nUNION ALL\n",
-            tables.Select(t => $"SELECT plugin FROM \"{t}\" WHERE form_key IN (SELECT form_key FROM _filter)"));
+        // #413: third union shape collapsed — see SearchRecords.
+        var (where, paramValues) = BuildWhere(null, null, filterActive: true, origin: null, recordTypes: types);
 
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT DISTINCT plugin FROM ({union})";
+        cmd.CommandText = $"SELECT DISTINCT plugin FROM records{where}";
+        AddParams(cmd, paramValues);
         using var reader = cmd.ExecuteReader();
 
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

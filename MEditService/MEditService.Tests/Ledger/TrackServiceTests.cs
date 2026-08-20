@@ -52,7 +52,7 @@ public sealed class TrackServiceTests
             Assert.True(File.Exists(ledgerFile2), $"expected {ledgerFile2}");
 
             var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-            var roundTripped = await codec.DeserializeAsync(ledgerFile1, typeof(Npc), GameRelease.Fallout4);
+            var roundTripped = await codec.DeserializeAsync(ledgerFile1, GameRelease.Fallout4);
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
             var gitDir = Path.Combine(modFolder, ".git");

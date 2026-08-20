@@ -1,0 +1,703 @@
+{
+  "achr/1A6C6F:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Inherited",
+        "Name": "MasterAmbushActorScript",
+        "Properties": [
+          {
+            "Name": "LinkKeyword",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "05D5E6:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "achr/1A6C71:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Inherited",
+        "Name": "MasterAmbushActorScript",
+        "Properties": [
+          {
+            "Name": "LinkKeyword",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "05D5E6:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "achr/1A6C7B:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Inherited",
+        "Name": "MasterAmbushActorScript",
+        "Properties": [
+          {
+            "Name": "LinkKeyword",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "05D5E6:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "acti/24A313:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "DefaultBlockActivationOnLoad",
+        "Properties": []
+      },
+      {
+        "Flags": "Local",
+        "Name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
+        "Properties": [
+          {
+            "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A341:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshop_TutorialMessage_AttackMarker",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A375:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshopShared_NPCHologramFXAbility",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A3E5:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshop_EnemyType",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0F8617:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "acti/24A314:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "DefaultBlockActivationOnLoad",
+        "Properties": []
+      },
+      {
+        "Flags": "Local",
+        "Name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
+        "Properties": [
+          {
+            "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A341:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshop_TutorialMessage_AttackMarker",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A375:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshopShared_NPCHologramFXAbility",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A3E5:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshop_EnemyType",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0342C9:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "acti/24A315:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "DefaultBlockActivationOnLoad",
+        "Properties": []
+      },
+      {
+        "Flags": "Local",
+        "Name": "CreationClub:VRWorkshops:VRWorkshopAttackMarkerScript",
+        "Properties": [
+          {
+            "Name": "VRWorkshop_TutorialShown_VRAttackMarker",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A341:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshop_TutorialMessage_AttackMarker",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A375:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshopShared_NPCHologramFXAbility",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A3E5:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "VRWorkshop_EnemyType",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "075337:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "misc/24A068:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "ShipmentScript",
+        "Properties": [
+          {
+            "Name": "ScrapMisc",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0731A3:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "pShipment",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A068:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "pWorkbench_General",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "091FD4:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "nAmount",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Int",
+              "Value": 100
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "misc/24A069:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "ShipmentScript",
+        "Properties": [
+          {
+            "Name": "ScrapMisc",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "106D98:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "pShipment",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A069:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "pWorkbench_General",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "091FD4:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "nAmount",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Int",
+              "Value": 25
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "misc/24A06B:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "ShipmentScript",
+        "Properties": [
+          {
+            "Name": "ScrapMisc",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0AEC5E:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "pShipment",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "24A06B:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "pWorkbench_General",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "091FD4:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "nAmount",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Int",
+              "Value": 25
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "npc_/2499C4:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "RadroachLegendaryScript",
+        "Properties": [
+          {
+            "Name": "SpawnDelay",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Float",
+              "Value": 0.5
+            }
+          },
+          {
+            "Name": "DeathExplosion",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "087BA5:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "EncRadRoach",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0475DF:Fallout4.esm"
+            }
+          }
+        ]
+      },
+      {
+        "Flags": "Local",
+        "Name": "MasterAmbushActorScript",
+        "Properties": [
+          {
+            "Name": "Aggression",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0002BC:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "ambushOnTrigger",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Bool",
+              "Value": true
+            }
+          },
+          {
+            "Name": "Suspicious",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "0002EC:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "npc_/2499C8:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "FEVHoundEventScript",
+        "Properties": [
+          {
+            "Name": "FEVHoundAttack",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "121299:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "npc_/24A37F:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "SynthCourserTeleportScript",
+        "Properties": [
+          {
+            "Name": "LvlSynthTeleport",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "050DC9:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "chanceToTeleport",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Float",
+              "Value": 1
+            }
+          },
+          {
+            "Name": "LL_ChanceNone_SynthCourserTeleport",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "18B1CA:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "qust/003648:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "DialogueDiamondCityScript",
+        "Properties": [
+          {
+            "Name": "ThirdBase",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "022B41:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "StartBase",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "022B3E:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "FirstBase",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "022B3F:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "HomeBase",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "022B42:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "SecondBase",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "022B40:Fallout4.esm"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "qust/0179F3:Fallout4.esm": {
+    "Scripts": [
+      {
+        "Flags": "Local",
+        "Name": "DIalogueConcordScript",
+        "Properties": [
+          {
+            "Name": "IntroState",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Int",
+              "Value": 0
+            }
+          },
+          {
+            "Name": "MinutemenCentralQuest",
+            "Value": {
+              "Alias": -1,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Object",
+              "Value": "067FF9:Fallout4.esm"
+            }
+          },
+          {
+            "Name": "IntroPlayerOpinion",
+            "Value": {
+              "Alias": null,
+              "Flags": "Edited",
+              "ListItems": null,
+              "Members": null,
+              "StructList": null,
+              "Type": "Int",
+              "Value": 0
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -48,7 +48,7 @@ public class ContainerShallowVendoringTests
             // serialized into one directory silently merge their children on read).
             Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
 
-            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, typeof(Cell), GameRelease.Fallout4);
+            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
 
             // Clean round-trip: the library's readers Clear() a list whose folder is absent, by
             // design (ADR-0040 amendment) — children come back empty/null, not missing-and-broken.
@@ -88,8 +88,10 @@ public class ContainerShallowVendoringTests
 
             // Round-trips without throwing — a broken shallow strip (e.g. a list left non-empty
             // that the writer still tries to spill into a sibling folder) would fail here, not just
-            // look wrong.
-            await codec.DeserializeAsync(filePath, concreteType, GameRelease.Fallout4);
+            // look wrong — and comes back as its own concrete type, which the text now names for
+            // itself (MutagenObjectType) instead of the caller asserting it on the text's behalf.
+            var roundTripped = await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
+            Assert.IsType(concreteType, roundTripped);
         }
         finally
         {

@@ -1,0 +1,1070 @@
+{
+  "Counts": {
+    "achr": 3,
+    "acti": 4,
+    "armo": 4,
+    "cell": 7,
+    "dial": 860,
+    "dlbr": 13,
+    "fact": 4,
+    "glob": 4,
+    "info": 2873,
+    "kywd": 4,
+    "misc": 4,
+    "npc_": 4,
+    "qust": 4,
+    "race": 4,
+    "refr": 73,
+    "scen": 59,
+    "weap": 4,
+    "wrld": 1
+  },
+  "Listings": {
+    "achr": {
+      "Sample": [
+        {
+          "EditorId": null,
+          "FormKey": "1A6C6F:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "1A6C71:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "1A6C7B:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 3
+    },
+    "acti": {
+      "Sample": [
+        {
+          "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
+          "FormKey": "24A313:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
+          "FormKey": "24A314:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
+          "FormKey": "24A315:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_WorkshopBell01",
+          "FormKey": "24A316:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "armo": {
+      "Sample": [
+        {
+          "EditorId": "cc_Armor_Power_X01_Helm",
+          "FormKey": "24A3FE:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "cc_Armor_Power_X01_LegLeft",
+          "FormKey": "24A3FF:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "cc_Armor_Power_X01_LegRight",
+          "FormKey": "24A400:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "cc_Armor_Power_X01_Torso",
+          "FormKey": "24A401:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "cell": {
+      "Sample": [
+        {
+          "EditorId": null,
+          "FormKey": "00DB41:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "00DB42:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "00DB43:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "018AA2:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "CroupManor01",
+          "FormKey": "03C0F0:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "MinutemenHoldingCell",
+          "FormKey": "0782A8:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
+          "FormKey": "092A18:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 7
+    },
+    "dial": {
+      "Sample": [
+        {
+          "EditorId": null,
+          "FormKey": "0048EB:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0057DD:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "00581D:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179D9:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179DA:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179DB:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179DC:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179F1:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "017BF8:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "018184:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 860
+    },
+    "dlbr": {
+      "Sample": [
+        {
+          "EditorId": "DialogueDiamondCitySharedBranch",
+          "FormKey": "01DADA:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "DialogueGenericPlayerSharedQuestion",
+          "FormKey": "0267FA:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "DialogueConcordAreaSharedBranch",
+          "FormKey": "0CA9D0:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "WorkbenchPlayerGrunt",
+          "FormKey": "182094:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "WorkbenchPlayerHumWhistle",
+          "FormKey": "1820C1:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PlayerActivateComment",
+          "FormKey": "19DDCC:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PlayerLockpickSuccessDialogue",
+          "FormKey": "211C48:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PlayerHackSuccessDialogue",
+          "FormKey": "211C4F:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PlayerHackFailDialogue",
+          "FormKey": "211C50:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PlayerJetDialogue",
+          "FormKey": "2490A2:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 13
+    },
+    "fact": {
+      "Sample": [
+        {
+          "EditorId": "CIS_CompanionInSceneFaction",
+          "FormKey": "249D44:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "TunnelingRaceNoDirtFromFurniture",
+          "FormKey": "249E8F:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "CC_PetDogFaction",
+          "FormKey": "24A157:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_AlienFaction",
+          "FormKey": "24A3E8:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "glob": {
+      "Sample": [
+        {
+          "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
+          "FormKey": "24A340:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
+          "FormKey": "24A341:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
+          "FormKey": "24A342:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_IsInstalled",
+          "FormKey": "24A3C7:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "info": {
+      "Sample": [
+        {
+          "EditorId": null,
+          "FormKey": "0057DE:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0057DF:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0057E0:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0057E4:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0057E5:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "MyrnaGreetSharedResponse1",
+          "FormKey": "005824:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "PlayerMyrnaSharedResponse1",
+          "FormKey": "005825:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "005834:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179DD:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0179DE:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 2873
+    },
+    "kywd": {
+      "Sample": [
+        {
+          "EditorId": "dn_HasPiggyBank",
+          "FormKey": "24A403:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
+          "FormKey": "24A405:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
+          "FormKey": "24A406:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "BypassDestroyedExplosionTest",
+          "FormKey": "24A4C2:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "misc": {
+      "Sample": [
+        {
+          "EditorId": "shipment_Wood_250",
+          "FormKey": "24A068:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "shipment_Rubber_large",
+          "FormKey": "24A069:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "shipment_Ceramic_large",
+          "FormKey": "24A06B:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "shipment_Copper_large",
+          "FormKey": "24A06C:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "npc_": {
+      "Sample": [
+        {
+          "EditorId": "EncRadRoachAmbushLegendary",
+          "FormKey": "2499C4:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "LvlMutantHoundLegendary",
+          "FormKey": "2499C8:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_LvlSynthCourser",
+          "FormKey": "24A37F:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_WorkshopNPC",
+          "FormKey": "24A381:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "qust": {
+      "Sample": [
+        {
+          "EditorId": "DialogueDiamondCity",
+          "FormKey": "003648:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "DialogueGenericPlayer",
+          "FormKey": "0179EF:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "DialogueConcordArea",
+          "FormKey": "0179F3:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "DialogueVault114Aftermath",
+          "FormKey": "018A5E:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "race": {
+      "Sample": [
+        {
+          "EditorId": "FeralGhoulGlowingRace",
+          "FormKey": "0A96BF:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "RaiderDogRace",
+          "FormKey": "187AF9:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "TurretWorkshopRace",
+          "FormKey": "1A6D64:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "SynthGen2RaceValentine",
+          "FormKey": "2261A4:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "refr": {
+      "Sample": [
+        {
+          "EditorId": null,
+          "FormKey": "0782AA:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0782B7:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0782B8:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "092A34:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "092A35:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "092A36:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "092A37:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "092A38:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0A06E6:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": null,
+          "FormKey": "0B0FC0:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 73
+    },
+    "scen": {
+      "Sample": [
+        {
+          "EditorId": "ArturoGreetScene",
+          "FormKey": "004E1E:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "MyrnaGreetScene",
+          "FormKey": "00583D:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "NatGreetScene",
+          "FormKey": "017B27:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "TakahashiGreetScene",
+          "FormKey": "017C71:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "JohnGreetScene",
+          "FormKey": "0180EC:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "MoeGreetScene",
+          "FormKey": "018D0D:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "CrockerGreetScene",
+          "FormKey": "018D0E:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "SolomonGreetScene",
+          "FormKey": "018D0F:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "006SurvivorSceneIntro",
+          "FormKey": "01A4D6:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "008MuseumMurphyTalk1",
+          "FormKey": "01A4DC:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 59
+    },
+    "weap": {
+      "Sample": [
+        {
+          "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
+          "FormKey": "24A3AF:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
+          "FormKey": "24A3B0:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
+          "FormKey": "24A3B1:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        },
+        {
+          "EditorId": "VRWorkshopShared_10mm_NonPlayable",
+          "FormKey": "24A3B2:Fallout4.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 4
+    },
+    "wrld": {
+      "Sample": [
+        {
+          "EditorId": "Commonwealth",
+          "FormKey": "000800:mEditTestSubset.esm",
+          "IsWinner": true,
+          "LoadOrderIndex": 0,
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm"
+        }
+      ],
+      "Total": 1
+    }
+  },
+  "NativeFormKeyCount": 1,
+  "SearchAllTypesTotal": 3929,
+  "SearchByEditorId": [
+    {
+      "EditorId": "TurretWorkshopRace",
+      "FormKey": "1A6D64:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
+      "FormKey": "24A313:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
+      "FormKey": "24A314:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
+      "FormKey": "24A315:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_WorkshopBell01",
+      "FormKey": "24A316:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
+      "FormKey": "24A340:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
+      "FormKey": "24A341:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
+      "FormKey": "24A342:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_LvlSynthCourser",
+      "FormKey": "24A37F:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_WorkshopNPC",
+      "FormKey": "24A381:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
+      "FormKey": "24A3AF:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
+      "FormKey": "24A3B0:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
+      "FormKey": "24A3B1:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_10mm_NonPlayable",
+      "FormKey": "24A3B2:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_IsInstalled",
+      "FormKey": "24A3C7:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "VRWorkshopShared_AlienFaction",
+      "FormKey": "24A3E8:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
+      "FormKey": "24A405:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    },
+    {
+      "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
+      "FormKey": "24A406:Fallout4.esm",
+      "IsWinner": true,
+      "LoadOrderIndex": 0,
+      "Origin": "Data",
+      "Plugin": "mEditTestSubset.esm"
+    }
+  ]
+}

@@ -49,7 +49,7 @@ public class RecordTypeDispatchTests
             // The public seam takes IMajorRecordGetter, not INpcGetter — proves the caller never
             // has to name the concrete type to serialize, only to deserialize back into one.
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Npc)await codec.DeserializeAsync(filePath, typeof(Npc), GameRelease.Fallout4);
+            var roundTripped = (Npc)await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -75,7 +75,7 @@ public class RecordTypeDispatchTests
             var filePath = Path.Combine(dir.FullName, "cell.json");
 
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, typeof(Cell), GameRelease.Fallout4);
+            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -93,31 +93,41 @@ public class RecordTypeDispatchTests
         }
     }
 
-    // The negative case Q asked for named explicitly: a type with no generated
-    // <Type>_Serialization class must fail loud and actionable, not with a bare
-    // NullReferenceException from a failed reflection lookup. IMajorRecordGetter itself is a real
-    // Mutagen interface with no concrete "IMajorRecordGetter_Serialization" generated class — a
-    // clean, always-true negative that needs no fixture and no seed-shape assumption.
+    // The negative case Q asked for named explicitly: an unresolvable type must fail loud and
+    // actionable, not with a bare NullReferenceException from a failed reflection lookup or the
+    // generated dispatch's own anonymous NotImplementedException.
+    //
+    // This used to be asserted by handing DeserializeAsync a Type with no generated serializer. That
+    // route is gone: the text names its own concrete type now (MutagenObjectType), so no caller
+    // supplies one and there is nothing to get wrong at the call site. The equivalent failure is a
+    // *document* naming a type the dispatch has no case for — corrupt text, a hand-edited ledger
+    // file, or text written by a future schema — which is the real-world shape of this failure and
+    // was previously untested.
     [Fact]
-    public async Task SerializeAsync_UnsupportedRecordType_ThrowsNamedException()
+    public async Task DeserializeAsync_ForTextNamingAnUnknownType_ThrowsNamedException()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var npc = MakeNpc();
         var dir = Directory.CreateTempSubdirectory("medit-dispatch-unsupported-");
         try
         {
             var filePath = Path.Combine(dir.FullName, "unsupported.json");
-            await codec.SerializeAsync(npc, filePath, GameRelease.Fallout4);
+            await codec.SerializeAsync(MakeNpc(), filePath, GameRelease.Fallout4);
 
-            // The deserialize-by-type overload is where an unresolvable type is easiest to name
-            // directly: IMajorRecordGetter is a real Mutagen interface with no generated
-            // "IMajorRecordGetter_Serialization" class — a clean, always-true negative that needs
-            // no fixture and no assumption about the generator's seed shape.
+            // Rewrite only the discriminator, leaving a structurally valid Npc document behind it —
+            // so what fails is the type resolution and nothing else.
+            var text = await File.ReadAllTextAsync(filePath);
+            Assert.Contains("\"MutagenObjectType\": \"Npc\"", text, StringComparison.Ordinal);
+            await File.WriteAllTextAsync(filePath,
+                text.Replace("\"MutagenObjectType\": \"Npc\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
+
             var ex = await Assert.ThrowsAsync<RecordTypeSerializationUnsupportedException>(
-                () => codec.DeserializeAsync(filePath, typeof(IMajorRecordGetter), GameRelease.Fallout4));
+                () => codec.DeserializeAsync(filePath, GameRelease.Fallout4));
 
-            Assert.Contains(nameof(IMajorRecordGetter), ex.Message, StringComparison.Ordinal);
-            Assert.Contains("_Serialization", ex.Message, StringComparison.Ordinal);
+            // The message says what went wrong, not merely that something did. The offending name
+            // is deliberately not asserted: the kernel discards it on the route this case takes
+            // (an unresolvable name yields a null Type, not a named one), so requiring it here
+            // would pin an upstream detail rather than this codec's own contract.
+            Assert.Contains("MutagenObjectType", ex.Message, StringComparison.Ordinal);
         }
         finally
         {

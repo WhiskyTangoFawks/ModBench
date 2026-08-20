@@ -351,10 +351,26 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return (AddNewToGroup, remove, AddExistingToGroup);
     }
 
+    // #413: the three GRUP-timestamp properties join this list for the same reason
+    // MajorRecordFlagsRaw and FormVersion are already on it — they are not record data. A timestamp
+    // here belongs to the GRUP that contains the record, not to the record, and the per-record
+    // serializer accordingly never emits one. Once documents are the record store (ADR-0041), a
+    // reflected column the document model cannot carry would be a column that always reads its CLR
+    // default: the schema would be claiming a field it cannot serve. Dropping them makes the
+    // reflected schema agree with what the serializer actually emits, which is the invariant that
+    // matters; the alternative (keeping them and special-casing view generation) would have put
+    // per-type field knowledge into the view rule, which D2 forbids.
+    //
+    // CAVEAT for whoever hits this next: the skip is BY PROPERTY NAME ACROSS EVERY RECORD TYPE. If a
+    // future game has a record type with a genuine, serializer-emitted field called Timestamp (or
+    // TemporaryTimestamp / PersistentTimestamp), this list would wrongly drop it. The rule to
+    // re-verify is parity with serializer emission — does <Type>_Serialization write this property?
+    // — not "extend the list because a new name looks similar".
     private static readonly HashSet<string> BaseSkip = new(StringComparer.OrdinalIgnoreCase)
     {
         "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
-        "MajorRecordFlagsRaw", "SubgraphRevision"
+        "MajorRecordFlagsRaw", "SubgraphRevision",
+        "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
     };
 
     // #263: RecordType (used for enumeration in DuckDbRecordRepository.IndexRecordTable) and the
@@ -462,7 +478,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 SubFields: info.SubFieldMetas,
                 AllowsNull: info.AllowsNull,
                 IsBitmask: info.IsBitmask,
-                EnumBitValues: info.EnumBitValues));
+                EnumBitValues: info.EnumBitValues,
+                IsFlagsEnum: info.IsFlagsEnum,
+                ViewDefaultLiteral: info.ViewDefaultLiteral));
         }
 
         return columns;
@@ -636,6 +654,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             DuckDbType = "VARCHAR",
             ApiType = "string",
             Extract = WidenedExtract,
+            // #413: the marker generated views key off, set at the one rung that creates this shape
+            // rather than re-derived later from a heuristic over the resulting column.
+            IsWidened = true,
+            ViewDefaultLiteral = null,
+            IsFlagsEnum = false,
             Apply = null, // editing a widened value is out of scope (#263) — read-only falls out of
                           // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
             IsArray = false,
@@ -879,7 +902,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        string[]? EnumBitValues = null);
+        string[]? EnumBitValues = null,
+        bool IsFlagsEnum = false,
+        string? ViewDefaultLiteral = null);
 
     // ── SubFieldSpec (sub-record / array element reflection) ─────────────────
 
@@ -1118,7 +1143,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         Func<JsonElement, object?>? Convert,
         bool AllowsNull = false,
         bool IsBitmask = false,
-        string[]? EnumBitValues = null);
+        string[]? EnumBitValues = null,
+        bool IsFlagsEnum = false,
+        string? ViewDefaultLiteral = null);
 
     // Classifies the leaf kinds shared by both dispatch paths: primitive, translated-string,
     // enum, form-link. Returns null for list/loqui-struct — the callers handle those.
@@ -1126,7 +1153,17 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
         if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
-            return new(apiType, duckDb, Empty, Empty, SubGetter(prop), conv);
+        {
+            // #413: a value-type primitive is omitted from the document exactly when it equals its
+            // CLR default, so a view has to put that default back or the column reads NULL where the
+            // wide table held 0/false. A string has no such default — null is the honest answer, and
+            // the wide column stored NULL for it too.
+            string? defaultLiteral;
+            if (core == typeof(string)) defaultLiteral = null;
+            else if (core == typeof(bool)) defaultLiteral = "false";
+            else defaultLiteral = "0";
+            return new(apiType, duckDb, Empty, Empty, SubGetter(prop), conv, ViewDefaultLiteral: defaultLiteral);
+        }
 
         if (IsTranslatedString(core))
         {
@@ -1157,14 +1194,32 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var g = SubGetter(prop);
         var (names, bits) = GetEnumMeta(core);
+
+        // #413: whether the serializer writes this enum as an array of member names, which is a
+        // question about the CLR type's [Flags] attribute and nothing else. IsBitmask below answers
+        // a different, narrower question (does it have power-of-two members) and gets it wrong for
+        // this purpose — a [Flags] enum with no such members still serializes as an array.
+        var isFlags = core.GetCustomAttribute<FlagsAttribute>() != null;
+
+        // The default a view falls back to when the serializer omitted the field. A flags enum's
+        // rendering is a joined name list, so its default is the empty string — the same thing an
+        // empty array renders as, which is what makes absent and "no flags set" indistinguishable
+        // by design. A plain enum falls back to whichever member is zero, when one is defined.
+        string? defaultLiteral;
+        if (isFlags) defaultLiteral = "''";
+        else if (Enum.IsDefined(core, Enum.ToObject(core, 0))) defaultLiteral = $"'{Enum.GetName(core, Enum.ToObject(core, 0))}'";
+        else defaultLiteral = null;
+
         return bits != null
             ? new("enum", "BIGINT", Empty, names,
                 obj => g(obj) is { } v ? (object?)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture) : null,
                 v => Enum.ToObject(core, ReadBitmaskLong(v)),
-                IsBitmask: true, EnumBitValues: bits)
+                IsBitmask: true, EnumBitValues: bits,
+                IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral)
             : new("enum", "VARCHAR", Empty, names,
             obj => g(obj)?.ToString(),
-            v => Enum.Parse(core, v.GetString()!, ignoreCase: true));
+            v => Enum.Parse(core, v.GetString()!, ignoreCase: true),
+            IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral);
     }
 
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
@@ -1314,7 +1369,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, bool nullable, LeafSpec leaf) =>
         new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
             leaf.Convert is { } c ? MakeColumnApplier(prop.Name, nullable, c) : null,
-            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues);
+            AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues,
+            IsFlagsEnum: leaf.IsFlagsEnum,
+            // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
+            // being coalesced to a default it never had.
+            ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
 
     // ── IReadOnlyList<T> ──────────────────────────────────────────────────────
 

@@ -48,6 +48,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <!-- #413: not a new dependency — Mutagen.Bethesda.Serialization already resolves this exact
+         version transitively, and SerializationMetaData takes an IFileSystem from it. Referenced
+         explicitly because RecordTextCodec now names those types in production code (it suppresses
+         the child-record folder creation a container write would otherwise do), and a type used
+         directly should not depend on another package continuing to drag it in. -->
+    <PackageReference Include="System.IO.Abstractions" Version="22.0.16" />
     <PackageReference Include="Roslynator.Analyzers" Version="4.15.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

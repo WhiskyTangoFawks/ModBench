@@ -1,0 +1,180 @@
+{
+  "qust/0179EF:Fallout4.esm": [
+    {
+      "Conditions": [
+        {
+          "ComparisonFloat": 1,
+          "ComparisonGlobal": null,
+          "Function": "GetIsID",
+          "Operator": 0,
+          "Or": false,
+          "Parameters": [
+            {
+              "Category": 1,
+              "DecodedValue": null,
+              "FormKey": "000007:Fallout4.esm",
+              "Number": null,
+              "Text": null,
+              "TypeName": "ReferencableObject"
+            }
+          ],
+          "RunOnReference": null,
+          "RunOnTarget": "Subject",
+          "UseGlobal": false
+        }
+      ],
+      "FieldPath": "DialogConditions"
+    }
+  ],
+  "qust/0179F3:Fallout4.esm": [
+    {
+      "Conditions": [
+        {
+          "ComparisonFloat": 0,
+          "ComparisonGlobal": null,
+          "Function": "GetStageDone",
+          "Operator": 0,
+          "Or": false,
+          "Parameters": [
+            {
+              "Category": 1,
+              "DecodedValue": null,
+              "FormKey": "0179F3:Fallout4.esm",
+              "Number": null,
+              "Text": null,
+              "TypeName": "Quest"
+            },
+            {
+              "Category": 0,
+              "DecodedValue": null,
+              "FormKey": null,
+              "Number": 10,
+              "Text": null,
+              "TypeName": "QuestStage"
+            }
+          ],
+          "RunOnReference": null,
+          "RunOnTarget": "Subject",
+          "UseGlobal": false
+        },
+        {
+          "ComparisonFloat": 130,
+          "ComparisonGlobal": null,
+          "Function": "GetStage",
+          "Operator": 4,
+          "Or": false,
+          "Parameters": [
+            {
+              "Category": 1,
+              "DecodedValue": null,
+              "FormKey": "01CC2A:Fallout4.esm",
+              "Number": null,
+              "Text": null,
+              "TypeName": "Quest"
+            }
+          ],
+          "RunOnReference": null,
+          "RunOnTarget": "Subject",
+          "UseGlobal": false
+        }
+      ],
+      "FieldPath": "Stages[2].LogEntries[0].Conditions"
+    },
+    {
+      "Conditions": [
+        {
+          "ComparisonFloat": 1,
+          "ComparisonGlobal": null,
+          "Function": "GetStageDone",
+          "Operator": 0,
+          "Or": true,
+          "Parameters": [
+            {
+              "Category": 1,
+              "DecodedValue": null,
+              "FormKey": "0229E5:Fallout4.esm",
+              "Number": null,
+              "Text": null,
+              "TypeName": "Quest"
+            },
+            {
+              "Category": 0,
+              "DecodedValue": null,
+              "FormKey": null,
+              "Number": 20,
+              "Text": null,
+              "TypeName": "QuestStage"
+            }
+          ],
+          "RunOnReference": null,
+          "RunOnTarget": "Subject",
+          "UseGlobal": false
+        },
+        {
+          "ComparisonFloat": 1,
+          "ComparisonGlobal": null,
+          "Function": "GetStageDone",
+          "Operator": 0,
+          "Or": true,
+          "Parameters": [
+            {
+              "Category": 1,
+              "DecodedValue": null,
+              "FormKey": "0B1752:Fallout4.esm",
+              "Number": null,
+              "Text": null,
+              "TypeName": "Quest"
+            },
+            {
+              "Category": 0,
+              "DecodedValue": null,
+              "FormKey": null,
+              "Number": 10,
+              "Text": null,
+              "TypeName": "QuestStage"
+            }
+          ],
+          "RunOnReference": null,
+          "RunOnTarget": "Subject",
+          "UseGlobal": false
+        }
+      ],
+      "FieldPath": "Stages[6].LogEntries[1].Conditions"
+    }
+  ],
+  "scen/017B27:Fallout4.esm": [
+    {
+      "Conditions": [
+        {
+          "ComparisonFloat": 0,
+          "ComparisonGlobal": null,
+          "Function": "GetStageDone",
+          "Operator": 0,
+          "Or": false,
+          "Parameters": [
+            {
+              "Category": 1,
+              "DecodedValue": null,
+              "FormKey": "0229E5:Fallout4.esm",
+              "Number": null,
+              "Text": null,
+              "TypeName": "Quest"
+            },
+            {
+              "Category": 0,
+              "DecodedValue": null,
+              "FormKey": null,
+              "Number": 30,
+              "Text": null,
+              "TypeName": "QuestStage"
+            }
+          ],
+          "RunOnReference": null,
+          "RunOnTarget": "Subject",
+          "UseGlobal": false
+        }
+      ],
+      "FieldPath": "Actions[2].StartScenes[0].Conditions"
+    }
+  ]
+}
