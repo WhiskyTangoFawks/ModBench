@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
@@ -32,12 +33,26 @@ public record PluginResponse(
     // offer a chevron. Defaults true: every call site but RecordQueryService.GetPlugins() returns
     // a single plugin outside any filtered listing, where "has matches" isn't a question being
     // asked.
-    bool HasMatchingRecords = true)
+    bool HasMatchingRecords = true,
+    // IsTracked (#415 / ADR-0041): whether this plugin's mod folder holds a `.git` — the single
+    // fact "editing requires tracking; viewing never does" turns on, and the reason the record
+    // editor can render a column as visibly read-only instead of only refusing on attempt. False
+    // for a plugin with no mod folder at all (a Data-directory master), which is a different state
+    // with a different way out — the record editor tells the two apart by pairing this with
+    // IsImmutable, exactly as the backend's own two refusals do.
+    //
+    // Derived on every read, never cached: tracking *is* the presence of that directory, and it can
+    // appear or vanish outside Modbench between one response and the next.
+    bool IsTracked = false)
 {
     public static PluginResponse FromMetadata(
         PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true) =>
         new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
-            masterIssues ?? [], m.InLoadOrder, hasMatchingRecords);
+            masterIssues ?? [], m.InLoadOrder, hasMatchingRecords,
+            // Computed here rather than passed in by each of the several call sites: a default would
+            // be a *wrong* value (an editable plugin reported as read-only), not a missing one, and
+            // the metadata already carries both facts the rule needs.
+            Ledger.ModFolders.IsEditable(m.Origin, m.Path));
 }
 
 // Origin (#296 / ADR-0036): the mod folder that provided this row's physical file, or a reserved
@@ -226,3 +241,23 @@ public record ExplicitPlugin(string Name, string Path, string Origin, bool? Part
 public record ReferenceResult(string FormKey, string Plugin, string FieldPath, string RecordType, string? EditorId, string Origin);
 
 public record HealthResponse(string Status);
+
+// #415 / ADR-0041: one field edit on one plugin's copy of a record — the wire form of the single
+// write path. Plugin and Origin travel as the compound identity ADR-0036 requires rather than a bare
+// filename: a caller with only a filename is asking an ambiguous question the moment two mods ship a
+// plugin of the same name.
+//
+// Value is a raw JsonElement, deliberately. A field's value is whatever its schema says it is — a
+// number, a string, an enum name, or the entire JSON array/object of a complex field written
+// atomically (CONTEXT.md's "Complex field") — so typing it here would mean re-declaring the
+// reflected schema on the wire.
+public record RecordFieldEditRequest(
+    string Plugin,
+    string Origin,
+    string FieldPath,
+    JsonElement Value);
+
+/// <summary>The success shape for an applied edit. Refusals never come back through this record —
+/// they are ProblemDetails carrying a <c>refusal</c> extension, so an HTTP client's ordinary
+/// success check is also the correct check (ADR-0026).</summary>
+public record RecordFieldEditResponse(bool Applied, string FormKey, string FieldPath);

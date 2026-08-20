@@ -27,6 +27,10 @@ export interface PluginInfo {
   // immutable *because* this is false — PluginHeader needs both to word its tooltip and decide
   // whether to dim (see recordUtils.ts's readOnlyReason).
   inLoadOrder: boolean;
+  // #415 / ADR-0041: whether this plugin's mod folder is tracked. Editing requires tracking;
+  // viewing never does — so this is what lets the panel render a column as visibly read-only with
+  // the way out named, instead of only discovering it on a refused attempt.
+  isTracked: boolean;
 }
 
 // Issue #122: the composite view for a single record. `load` fires compare + changes + plugins
@@ -46,6 +50,12 @@ export type LoadResult =
       // columnKey() keying) — null exactly when immutableSet is (the /plugins fetch itself
       // failed), never independently.
       notInLoadOrderSet: Set<ColumnKey> | null;
+      // #415: the columns whose plugin's mod is tracked. Null exactly when immutableSet is (the
+      // /plugins fetch failed) — but note the *safe* direction is the opposite one here: a
+      // mutability set degrades to "unrestricted", while this degrades to "nothing is editable",
+      // because wrongly offering an edit that cannot land is worse than wrongly withholding one
+      // the user can get back with a click (ADR-0026). RecordPanel reads it fail-closed.
+      trackedSet: Set<ColumnKey> | null;
       // #308 / ADR-0035: whether the winner sweep has run — GET /session/status's own field,
       // read here rather than left for the extension host to relay (the webview already talks to
       // the backend directly for every other fact this composite view needs). Required, not
@@ -62,9 +72,12 @@ export type LoadResult =
 // Issue #122: the webview-side typed backend client. Owns every backend call the record panel
 // makes — mirrors the host-side ApiClient (openapi-fetch over the generated `paths` types), so
 // there are no hand-built URL strings or stringly-typed request shapes. #410/ADR-0041: reads only.
-// Every write method it used to carry retired with the endpoints behind them; the text-first edit
-// path (#415) will not come back through this client at all — working-tree JSON is edited as
-// files, and Save & Compile is a command. #210: searchRecords moved
+// Every write method it used to carry retired with the endpoints behind them. #415 kept it that
+// way, but not for the reason predicted here before the fact: the edit path is a real HTTP endpoint
+// (POST /records/{formKey}/field), not files edited out of band. Writes stay off this client
+// because a refusal has to become a native notification, and only the extension host can show one —
+// so an edit travels webview -> host -> backend, and this client keeps carrying reads only.
+// #210: searchRecords moved
 // off this client — the FormKey picker it backed is a native QuickPick now, and its search runs
 // in the extension host via PluginRepository.searchRecords instead of round-tripping through
 // this webview.
@@ -106,6 +119,11 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
         // older/stale shape) defaults every column to in-load-order, the overwhelmingly common
         // case, rather than every plugin silently reading as shadowed.
         notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin))) : null,
+        // #415: `=== true`, not a truthiness test — a response missing the field (an older or
+        // stale backend) must read as "not tracked" for every column, which withholds editing
+        // rather than offering one that cannot land. Same fail-closed reasoning as
+        // conflictsComputed below, opposite direction to immutableSet above.
+        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin))) : null,
         // #308: fails closed — `=== true`, not `?? true`, so a failed/absent status fetch reads
         // as "not computed" (see LoadResult's own doc comment on this field).
         conflictsComputed: status.response.ok && status.data?.conflictsComputed === true,

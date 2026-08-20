@@ -16,6 +16,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     {
         CreateRecordsTable(connection);
         CreatePluginsTable(connection);
+        // After `plugins`, not beside `records`: the Head view derives is_winner, and derives it
+        // through the same participation join UpdateWinners uses, so `plugins` has to exist first.
+        CreateCommittedRecordsTableAndHeadView(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
@@ -76,6 +79,81 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_records_plugin ON records(plugin, origin)
+            """);
+    }
+
+    // #415: the committed half of the ref dimension. `records` holds exactly one row per record copy
+    // and that row *is* Effective — so every read written before this ticket, and every generated
+    // json_extract view, keeps answering Effective unchanged, with no ref predicate anywhere. What a
+    // second ref needs is only the *difference*, which is what this table holds: the committed
+    // snapshot of a record whose working-tree state has diverged, and nothing at all for the clean
+    // majority.
+    //
+    // Deliberately a mirror of `records` column-for-column rather than a narrower (form_key, body)
+    // pair: `records_head` below is a plain UNION ALL of this table with the still-clean rows, so
+    // Head is a relation of exactly the same shape as `records` and every read can be pointed at
+    // either by name alone. A narrower table would force each Head read to reconstruct the missing
+    // identity columns by joining back to the Effective row — which does not exist at all for a
+    // record the working tree deleted, the very case Head has to keep answering.
+    //
+    // Rows are written by DuckDbRecordIndex.ApplyWorkingTreeChanges (on the clean→dirty transition)
+    // and removed by it again on convergence back to the committed bytes.
+    private static void CreateCommittedRecordsTableAndHeadView(DuckDBConnection connection)
+    {
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS records_committed (
+                form_key       VARCHAR NOT NULL,
+                plugin         VARCHAR NOT NULL,
+                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type    VARCHAR NOT NULL,
+                editor_id      VARCHAR,
+                load_order_idx INTEGER NOT NULL,
+                is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
+                "ref"          VARCHAR NOT NULL DEFAULT '{LedgerRef.Committed}',
+                body           VARCHAR NOT NULL,
+                content_hash   VARCHAR NOT NULL
+            )
+            """);
+
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON records_committed(form_key)
+            """);
+
+        // The Head relation: every diverged record's committed snapshot, plus every record that
+        // never diverged (still carrying LedgerRef.Committed in `records` itself). The two halves
+        // are disjoint by construction — ApplyWorkingTreeChanges writes the snapshot and flips the
+        // Effective row's `ref` in the same transaction — so UNION ALL is exact, not an
+        // approximation that DISTINCT would have to clean up after.
+        //
+        // is_winner is *derived here*, not carried through from either half, and that is load-bearing
+        // rather than tidiness. A record the working tree deleted stops existing at Effective, which
+        // promotes the next plugin down — and the promoted row is a clean row, physically shared with
+        // this view. Reading its stored flag would leak an Effective-only promotion into the committed
+        // answer and report two winners for one FormKey at Head. Deriving instead makes each ref's
+        // winner a fact about the stack *at that ref*, which is what "IsWinner correct at the
+        // requested ref" means; the correlated shape mirrors DuckDbRecordIndex.UpdateWinners' own
+        // sweep, participation join included, so the two cannot disagree about what winning is.
+        Execute(connection, $"""
+            CREATE OR REPLACE VIEW records_head AS
+            WITH head AS (
+                SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
+                FROM records_committed
+                UNION ALL
+                SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
+                FROM records WHERE "ref" = '{LedgerRef.Committed}'
+            )
+            SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, h.load_order_idx,
+                   (
+                     EXISTS (
+                       SELECT 1 FROM plugins p1
+                       WHERE p1.plugin = h.plugin AND p1.origin = h.origin AND p1.participates)
+                     AND h.load_order_idx = (
+                       SELECT MAX(h2.load_order_idx) FROM head h2
+                       JOIN plugins p2 ON p2.plugin = h2.plugin AND p2.origin = h2.origin AND p2.participates
+                       WHERE h2.form_key = h.form_key)
+                   ) AS is_winner,
+                   h."ref", h.body, h.content_hash
+            FROM head h
             """);
     }
 

@@ -45,6 +45,20 @@ export function DiskCell({
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
           e.preventDefault();
           onCopy();
+          return;
+        }
+        // #415 / ADR-0034: F2 is one of xEdit's three "open the editor" triggers, and the only one
+        // that is a key rather than a click. Dispatched at the cell's own editable element rather
+        // than lifted into a callback, so the cell content stays the single owner of what opening
+        // means: a cell with nothing editable in it (a read-only column, a struct row) renders no
+        // `data-open-trigger` at all, so F2 is inert there by construction rather than by a second
+        // copy of the editability rule living here.
+        if (e.key === 'F2') {
+          const trigger = e.currentTarget.querySelector<HTMLElement>('[data-open-trigger]');
+          if (trigger) {
+            e.preventDefault();
+            trigger.click();
+          }
         }
       }}
     >

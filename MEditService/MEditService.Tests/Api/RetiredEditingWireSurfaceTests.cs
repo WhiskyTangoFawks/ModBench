@@ -65,6 +65,10 @@ public sealed class RetiredEditingWireSurfaceTests
 
         // Positive control, same object: the record read is still served from this very route.
         Assert.Contains("get", operations);
+        // #415: still true, and still worth pinning — but it no longer means "editing has no wire
+        // surface at all". The text-first write path is POST /records/{formKey}/field, a route of its
+        // own (EditFieldApiTests). What stays retired is the pending-change surface that hung off
+        // *this* route: PATCH /records/{formKey} and its kin.
         Assert.Equal([], operations.Where(verb => verb is "patch" or "post" or "put" or "delete").ToArray());
     }
 

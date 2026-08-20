@@ -11,6 +11,16 @@ public interface ISessionManager
     IRecordReads? Repository { get; }
 
     /// <summary>
+    /// The same object <see cref="Repository"/> exposes, under the wider seam — for the one caller
+    /// that <i>writes</i> to the read model rather than reading it (#415's edit path, folding a
+    /// working-tree change in through <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>). A separate
+    /// property rather than a widening of <see cref="Repository"/>, so every read-side consumer keeps
+    /// being handed a surface with no ingest or mutation verbs on it at all — which is the whole
+    /// point of that narrowing.
+    /// </summary>
+    IRecordIndex? Index { get; }
+
+    /// <summary>
     /// Where the load is and what it has established so far (#274 / ADR-0035). A session is readable
     /// while it is still loading, so a caller needs a way to ask what is safe to conclude from what
     /// it reads — above all, whether the winner sweep has run. Never null: no session is a state

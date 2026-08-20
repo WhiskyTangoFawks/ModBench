@@ -79,6 +79,65 @@ public static class LedgerRepository
     }
 
     /// <summary>
+    /// The git object names of <paramref name="relativePaths"/> <b>as <c>HEAD</c> has them</b> —
+    /// <c>git ls-tree</c>, one process for the whole batch. Null when the folder isn't tracked (a
+    /// typed answer, never a throw: a repo can be destroyed between one read and the next). A path
+    /// absent from the result simply isn't in the commit.
+    ///
+    /// <para><b>This is not working-tree status.</b> It asks what the last commit holds; #417 owns
+    /// the question of what the working tree holds against the index (<c>WorkingTreeStatus</c>),
+    /// along with <c>CommitPristineToMain</c> and the rebase verbs. The distinction is load-bearing,
+    /// not naming hygiene: the two answers diverge after exactly the events this verb exists for — an
+    /// external commit, rebase or amend moves <c>HEAD</c> without touching a single file.</para>
+    ///
+    /// <para>The values are directly comparable to <c>records.content_hash</c> with no conversion:
+    /// both are git blob object names (<see cref="GitBlobHash"/>), which is the entire reason that
+    /// column stores git's own hash rather than one of our own choosing.</para>
+    /// </summary>
+    internal static IReadOnlyDictionary<string, string>? CommittedLedgerHashes(
+        string modFolder, IReadOnlyList<string> relativePaths)
+    {
+        if (!IsTracked(modFolder) || relativePaths.Count == 0) return null;
+
+        var gitDir = Path.Combine(modFolder, ".git");
+        string[] args = ["ls-tree", "-z", "HEAD", "--", .. relativePaths.Select(ToGitPath)];
+        // TryRun, not Run: an unborn HEAD (a repo whose branch has no commit yet) is a real state,
+        // and "nothing is committed" is an answer here, not a failure to report.
+        if (!GitCli.TryRun(gitDir, modFolder, out var stdout, args)) return null;
+
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        // -z so paths carrying spaces or non-ASCII survive verbatim; git otherwise quotes and escapes
+        // them, and every ledger path segment comes from a plugin filename.
+        foreach (var entry in stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            // "<mode> SP <type> SP <object> TAB <file>"
+            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
+            if (tab < 0) continue;
+            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length < 3 || fields[1] != "blob") continue;
+            hashes[entry[(tab + 1)..]] = fields[2];
+        }
+        return hashes;
+    }
+
+    /// <summary>One ledger file's text as <c>HEAD</c> has it — the content behind a hash
+    /// <see cref="CommittedLedgerHashes"/> reported. Null when the folder isn't tracked or the path
+    /// isn't in the commit (a record created since, or one never committed).</summary>
+    internal static string? ReadCommittedLedgerText(string modFolder, string relativePath)
+    {
+        if (!IsTracked(modFolder)) return null;
+
+        var gitDir = Path.Combine(modFolder, ".git");
+        return GitCli.TryRun(gitDir, modFolder, out var stdout, "show", $"HEAD:{ToGitPath(relativePath)}")
+            ? stdout
+            : null;
+    }
+
+    // git speaks forward slashes on every platform, Windows included, while LedgerRecordPath builds
+    // its paths with Path.Combine.
+    private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
+
+    /// <summary>
     /// Commits whatever is currently staged, with <paramref name="trailers"/> rendered as commit
     /// trailers — the one place trailer *formatting* lives, so #417's <c>CommitPristineToMain</c>
     /// (plumbing update baselines onto <c>main</c> without touching the working tree, comment 1 on

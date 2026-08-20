@@ -68,6 +68,10 @@ function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}
     // from the load order does (see the dedicated describe block below).
     notInLoadOrderSet: new Set(),
     collapsedColumns: new Set(),
+    // #415: empty by default, so every pre-existing case here keeps asserting against read-only
+    // cells exactly as it did — editability is opt-in per fixture, never something a test inherits
+    // without saying so.
+    editableColumns: new Set(),
     onOpen: vi.fn(),
     context: { path: [], rootField: effectiveDiff.fieldName },
     // Issue #222: rowKey matches diff().fieldName below — the same identity RecordPanel derives

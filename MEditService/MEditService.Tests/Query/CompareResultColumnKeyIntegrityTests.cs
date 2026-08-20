@@ -166,6 +166,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
     {
         public IGameSession? Session => session;
         public IRecordReads? Repository => repository;
+        // #415: this double exists for read-model shape assertions only — nothing here writes.
+        public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();

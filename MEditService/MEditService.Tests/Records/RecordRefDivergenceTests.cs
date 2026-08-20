@@ -10,14 +10,19 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// AC4: <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) answers identically to the
-/// default <see cref="RecordRef.Effective"/> surface. #421 ships them mapping onto the same
-/// <c>records.ref</c> constant (<c>LedgerRef.Committed</c> — ADR-0041), so this is a real regression
-/// guard even though today's <c>At</c> is <c>=&gt; this</c>: the fixture below is built so a broken
-/// <c>At(Head)</c> that dropped the active filter, or that recomputed winner status differently,
-/// would fail this test — see the rival recorded on #421's landing report.
+/// #415: <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) is a genuinely different
+/// relation now, not the same instance — so the two properties #421 pinned here as <i>identity</i>
+/// become the more dangerous question of whether they <i>survived</i> the split. This file is the
+/// sanctioned rewrite of <c>RecordRefIdentityTests</c>, which #421 built to fail the moment this
+/// ticket landed.
+///
+/// <para>The first two cases use records with <b>no</b> working-tree change, where the two relations
+/// hold the same row by construction and identical answers are still the correct ones — a broken
+/// <c>At(Head)</c> that dropped the active filter or recomputed winner status differently fails here
+/// exactly as it would have before. The divergence itself is <see cref="WorkingTreeChangeTests"/>'s
+/// subject; the last case here pins only that it stays scoped to the record actually edited.</para>
 /// </summary>
-public sealed class RecordRefIdentityTests : IDisposable
+public sealed class RecordRefDivergenceTests : IDisposable
 {
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
@@ -26,7 +31,7 @@ public sealed class RecordRefIdentityTests : IDisposable
     private readonly FormKey _keptNpcFormKey;
     private readonly FormKey _droppedNpcFormKey;
 
-    public RecordRefIdentityTests()
+    public RecordRefDivergenceTests()
     {
         FormKey keptFk = default, droppedFk = default;
         _fixture = new PluginFixtureBuilder("recordref-identity")
@@ -108,5 +113,34 @@ public sealed class RecordRefIdentityTests : IDisposable
         Assert.True(effectiveDropped!.IsWinner);
         Assert.Equal(effectiveDropped.IsWinner, headDropped!.IsWinner);
         Assert.Equal(effectiveDropped.Plugin, headDropped.Plugin);
+    }
+
+    [Fact]
+    public void AWorkingTreeChange_DivergesOnlyTheEditedRecord_LeavingEveryOtherRefAnswerAlone()
+    {
+        using var repo = LoadedRepository();
+        var edited = _keptNpcFormKey.ToString();
+        var untouched = _droppedNpcFormKey.ToString();
+        var basePlugin = new PluginKey("Base.esm", "Data");
+
+        var before = repo.GetDocument(edited, basePlugin)!;
+        repo.ApplyWorkingTreeChanges(
+            basePlugin, [(edited, before.Body!.Replace("KeepMe", "RenamedInWorkingTree", StringComparison.Ordinal))]);
+
+        // The edited record's own Base.esm entry diverges...
+        var stack = repo.GetOverrideStack(edited)!;
+        var baseEntry = stack.Entries.Single(e => e.Plugin.Name == "Base.esm");
+        Assert.True(baseEntry.HasWorkingTreeChange);
+        Assert.NotEqual(baseEntry.Effective.Body, baseEntry.Head.Body);
+
+        // ...while Winner.esp's entry for that same FormKey, which nothing edited, does not.
+        var winnerEntry = stack.Entries.Single(e => e.Plugin.Name == "Winner.esp");
+        Assert.False(winnerEntry.HasWorkingTreeChange);
+        Assert.Equal(winnerEntry.Effective.Body, winnerEntry.Head.Body);
+
+        // ...and neither does an entirely different record in the same plugin.
+        Assert.Equal(
+            repo.GetDocument(untouched, basePlugin)!.Body,
+            repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
     }
 }
