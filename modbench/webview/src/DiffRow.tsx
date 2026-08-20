@@ -72,7 +72,17 @@ function renderCell(
     );
   }
   if (meta.type === 'enum' && meta.isBitmask) {
-    return <FlagCell value={value} meta={meta} />;
+    return (
+      <FlagCell
+        value={value}
+        meta={meta}
+        isFocused={isFocused}
+        // Same rule as ScalarCell's editable computation just below: presence of somewhere to
+        // write is the editability signal, ORed with the per-row readOnly veto.
+        editable={onCommit != null && !meta.readOnly}
+        onCommit={onCommit}
+      />
+    );
   }
   // Issue #231: VMAD/Condition's synthesized composite leaf types — each picks its own widget
   // from its own value's shape, dispatched here alongside 'formKey'.

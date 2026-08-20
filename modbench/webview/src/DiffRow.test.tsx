@@ -330,3 +330,49 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
     expect(link.style.textDecoration).toBe('underline');
   });
 });
+
+// #426: the flags branch gets the same editable/onCommit wiring the scalar branch already has —
+// presence in editableColumns plus a supplied onEditCell is what makes a bitmask cell writable.
+describe('DiffRow — flags cell wiring (#426)', () => {
+  const flagMeta: FieldMetadata = {
+    name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+    enumValues: ['A', 'B'], enumBitValues: ['1', '2'], isBitmask: true,
+  };
+
+  function flagsRow(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}) {
+    return renderRow({
+      fieldMetaMap: { Name: flagMeta },
+      diff: diff({ values: { 'Fallout4.esm': 1, 'MyMod.esp': 1 } }),
+      ...overrides,
+    });
+  }
+
+  it('a flags cell in a non-editable column renders text, not checkboxes, even when clicked', () => {
+    flagsRow({ focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) } });
+    fireEvent.click(screen.getAllByText('A')[1]);
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('a flags cell in an editable, focused column opens its checkbox multi-select on click', () => {
+    const onEditCell = vi.fn();
+    flagsRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell,
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('A')[1]);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  it('toggling a checkbox calls onEditCell with the field path and the new bitmask', () => {
+    const onEditCell = vi.fn();
+    flagsRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell,
+      focusedCell: { rowKey: 'Name', plugin: columnKey('MyMod.esp', null) },
+    });
+    fireEvent.click(screen.getAllByText('A')[1]);
+    fireEvent.click(screen.getAllByRole('checkbox')[1]); // check B (bit 2): 1 ^ 2 = 3
+    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '3');
+  });
+});
