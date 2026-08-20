@@ -86,6 +86,8 @@ public sealed class RecordEditService(
         _codec.SerializeAsync(record, ledgerPath, release).GetAwaiter().GetResult();
 
         index.ApplyWorkingTreeChanges(plugin, [(formKey, Encoding.UTF8.GetString(newBody))]);
+        // #422: the new value can flip filter membership either way.
+        sessions.ReapplyFilter();
 
         logger.LogInformation(
             "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {LedgerPath}",
@@ -178,6 +180,8 @@ public sealed class RecordEditService(
         _codec.SerializeAsync(record, ledgerPath, release).GetAwaiter().GetResult();
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
+        // #422: a brand-new row can newly match an active filter.
+        sessions.ReapplyFilter();
 
         logger.LogInformation(
             "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree ledger file at {LedgerPath}",
@@ -292,6 +296,16 @@ public sealed class RecordEditService(
                 $"Renumbering {formKey} to {targetFormKey} failed after writing to: {string.Join(", ", writtenRepos)}. " +
                 "Those repos now hold working-tree dirt from this partial renumber — review and revert " +
                 $"in the Source Control panel as needed. Underlying error: {ex.Message}", ex);
+        }
+        finally
+        {
+            // #422: on both outcomes, not just success — a mid-cascade failure still leaves whatever
+            // referencer rewrites already landed (writtenRepos) durably on disk before the throw above,
+            // and _filter must not stay stale for those just because the record's own rewrite is what
+            // failed. Re-applied once rather than per write — cheaper and no less correct, since
+            // SetFilter re-derives the full matching set regardless of how many rows moved since it was
+            // last run.
+            sessions.ReapplyFilter();
         }
 
         logger.LogInformation(

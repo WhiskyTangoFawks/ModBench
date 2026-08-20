@@ -93,6 +93,26 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.Equal("RenamedByHand", Reads().GetRecord(_mod.Npc.ToString())!.EditorId);
     }
 
+    // #422: the self-heal above folds an externally-changed ledger file into the read model as a
+    // side effect of a *read* — still a mutation as far as _filter's one-shot snapshot is concerned,
+    // so a record that only now matches an active filter must not stay hidden just because nothing
+    // went through the explicit edit path.
+    [Fact]
+    public void AHandEditToALedgerFileOutsideModbench_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
+    {
+        _mod.Sessions.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
+        Assert.Equal(0, _mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+
+        var text = File.ReadAllText(_mod.NpcLedgerFile);
+        File.WriteAllText(_mod.NpcLedgerFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+
+        Reads().GetRecord(_mod.Npc.ToString()); // triggers LedgerFreshness.Validate's self-heal
+
+        var result = _mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        Assert.Equal(1, result.Total);
+        Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
+    }
+
     [Fact]
     public void CommittingAWorkingTreeChangeOutsideModbench_RebaselinesHeadOntoTheNewCommit()
     {
