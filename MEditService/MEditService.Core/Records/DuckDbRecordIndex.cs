@@ -465,6 +465,53 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         ScalarString("SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!) != null;
 
+    /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
+    public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
+    {
+        if (baselines.Count == 0) return;
+
+        using var tx = Connection.BeginTransaction();
+        foreach (var (formKey, body) in baselines)
+            SetOneCommittedBaseline(key, formKey, body);
+        tx.Commit();
+    }
+
+    private void SetOneCommittedBaseline(PluginKey key, string formKey, string body)
+    {
+        var effectiveBody = ScalarString(
+            "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        if (effectiveBody == null) return;
+
+        if (string.Equals(effectiveBody, body, StringComparison.Ordinal))
+        {
+            // The working tree agrees with the new commit, so the record is clean and there is no
+            // snapshot to keep — the ordinary "the user committed their edit in a terminal" case.
+            ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+                formKey, key.Name, key.Origin!);
+            ExecuteFor($"""
+                UPDATE records SET "ref" = '{LedgerRef.Committed}'
+                WHERE form_key = $1 AND plugin = $2 AND origin = $3
+                """, formKey, key.Name, key.Origin!);
+            return;
+        }
+
+        // Still dirty, but against a different baseline than before. The snapshot may not exist yet
+        // (the record was clean and HEAD moved past it), so it is seeded from the Effective row first
+        // and then overwritten with the committed bytes — only the body moved, so every identity
+        // column is the same either way.
+        SnapshotCommittedIfFirstDivergence(key, formKey);
+        ExecuteFor("""
+            UPDATE records_committed
+            SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
+            """, formKey, key.Name, key.Origin!, body, GitBlobHash.Of(Encoding.UTF8.GetBytes(body)));
+        ExecuteFor($"""
+            UPDATE records SET "ref" = '{LedgerRef.WorkingTree}'
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
+            """, formKey, key.Name, key.Origin!);
+    }
+
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
     // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
     // never the previous working-tree ones.

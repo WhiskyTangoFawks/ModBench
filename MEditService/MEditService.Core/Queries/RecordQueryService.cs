@@ -1,3 +1,4 @@
+using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
@@ -11,12 +12,20 @@ public sealed class RecordQueryService(
     ISessionManager session,
     ISchemaReflector schemaReflector,
     IConflictClassifier conflictClassifier,
-    ILogger<RecordQueryService>? logger = null) : IRecordQueryService
+    ILogger<RecordQueryService>? logger = null,
+    LedgerFreshness? freshness = null) : IRecordQueryService
 {
     private readonly ISessionManager _session = session;
     private readonly ISchemaReflector _schemaReflector = schemaReflector;
     private readonly IConflictClassifier _conflictClassifier = conflictClassifier;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
+
+    // #415 / #413 D3: the two point reads below are the record editor's and compare grid's own
+    // answers, so they are where ledger text is re-checked against what the index stored. Optional
+    // only so the many read-shape tests that construct this service directly keep compiling; the
+    // default is the real validator, never a no-op, so production wiring cannot silently lose it.
+    private readonly LedgerFreshness _freshness =
+        freshness ?? new LedgerFreshness(session, NullLogger<LedgerFreshness>.Instance);
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
@@ -80,12 +89,14 @@ public sealed class RecordQueryService(
 
     public RecordDetail? GetRecord(string formKey)
     {
+        _freshness.Validate(formKey);
         var document = RequireRepository().GetDocument(formKey);
         return document == null ? null : ToRecordDetail(document);
     }
 
     public CompareResult? GetCompare(string formKey)
     {
+        _freshness.Validate(formKey);
         var repository = RequireRepository();
         // ADR-0031: one memoizing cache per response — a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.

@@ -64,6 +64,21 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
 
     /// <summary>
+    /// #415: re-establishes what "committed" <i>means</i> for these records — <c>HEAD</c> has moved
+    /// under the working tree (a commit, rebase, amend or checkout the user made outside Modbench,
+    /// which is ordinary git fluency and tolerated by construction, ADR-0041).
+    ///
+    /// <para>The sibling of <see cref="ApplyWorkingTreeChanges"/>, and needed because that method
+    /// cannot express this: it moves the Effective side against a fixed baseline, while this moves
+    /// the baseline itself. A record whose Effective bytes equal its new baseline is clean again by
+    /// the same byte compare everything else here uses — which is what makes an external commit read
+    /// as "committed" rather than as dirt against a baseline no ref holds any more.</para>
+    ///
+    /// <para>Records the plugin does not hold are skipped, not thrown on.</para>
+    /// </summary>
+    void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines);
+
+    /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one
     /// door SQL crosses this seam through, since it is itself a published contract for user filter
     /// SQL (ADR-0041). Throws <see cref="ArgumentException"/> if the SQL doesn't return a

@@ -44,7 +44,7 @@ public sealed class RecordEditService(
     /// </summary>
     public RecordEditResult EditField(PluginKey plugin, string formKey, string fieldPath, JsonElement value)
     {
-        if (ResolveWritableModFolder(plugin) is not { } modFolder)
+        if (ModFolders.TrackedOf(sessions.Session, plugin) is not { } modFolder)
             return RefuseUntracked(plugin);
 
         var index = sessions.Index;
@@ -87,38 +87,10 @@ public sealed class RecordEditService(
         return RecordEditResult.Success();
     }
 
-    /// <summary>
-    /// The mod folder this plugin's ledger lives in, or null when the plugin cannot be edited at
-    /// all. Tracked *is* the presence of <c>.git</c> (ADR-0041) — no registry, and the answer is
-    /// re-asked on every edit rather than cached, because the folder can be destroyed or created
-    /// outside Modbench between one edit and the next.
-    /// </summary>
-    private string? ResolveWritableModFolder(PluginKey plugin)
-    {
-        if (ModFolderOf(plugin) is not { } modFolder) return null;
-        return LedgerRepository.IsTracked(modFolder) ? modFolder : null;
-    }
-
-    private string? ModFolderOf(PluginKey plugin)
-    {
-        // A plugin resolved from the game's Data directory has no mod folder in the sense Track
-        // means: its containing folder is the game's own, which is never a repo. That is a different
-        // refusal with a different way out, so it is distinguished here rather than folded into
-        // "not tracked" — see RefuseUntracked.
-        if (string.Equals(plugin.Origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase))
-            return null;
-
-        var metadata = sessions.Session?.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-            && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
-
-        return metadata?.Path is { } path ? Path.GetDirectoryName(path) : null;
-    }
-
     // AC4: two refusals, because there are two different ways out and a message that named neither
     // would be the "silent dead UI" this ticket exists to avoid.
     private RecordEditResult RefuseUntracked(PluginKey plugin) =>
-        ModFolderOf(plugin) is null
+        ModFolders.Of(sessions.Session, plugin) is null
             ? RecordEditResult.Refused(
                 RecordEditRefusal.PluginHasNoModFolder,
                 $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +
