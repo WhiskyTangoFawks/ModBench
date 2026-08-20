@@ -498,6 +498,11 @@ public static class PluginEndpoints
     private static RebaseResponse ToRebaseResponse(RebaseResult result) =>
         new(result.Outcome.ToString(), result.RefusalReason, result.ConflictedPaths);
 
+    // Deliberately not PluginOriginResolver.Resolve — that resolver filters to load-order members
+    // only (by design, so a bare filename stays a safe write target), but #417's origin-scoped
+    // gestures must still resolve a shadowed copy: a plugin loaded under this origin but shadowed
+    // by a higher-priority mod of the same filename is exactly a mod whose external-change
+    // question, absorb, keep, or rebase still needs answering.
     private static string? ResolveModFolder(ISessionManager sessionManager, string origin, ILogger logger)
     {
         var plugin = sessionManager.Session?.Plugins.FirstOrDefault(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
@@ -509,6 +514,9 @@ public static class PluginEndpoints
         return Path.GetDirectoryName(plugin.Path);
     }
 
+    // Same reason ResolveModFolder above doesn't reuse PluginOriginResolver.Resolve: this must
+    // still find a plugin shadowed out of the load order, since that copy is exactly what
+    // absorb/keep target when it's the one whose origin the pending question named.
     private static (string? ModFolder, string? PluginPath, IGameSession? Session) ResolvePluginPath(
         ISessionManager sessionManager, string pluginName, string origin, ILogger logger)
     {

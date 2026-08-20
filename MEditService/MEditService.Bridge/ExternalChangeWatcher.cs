@@ -44,12 +44,24 @@ public sealed class ExternalChangeWatcher : IDisposable
 
             var fsWatcher = new FileSystemWatcher(directory, Path.GetFileName(pluginPath))
             {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size,
+                // FileName is required for Renamed to fire at all (confirmed empirically, not
+                // assumed): a temp-file-then-rename commit — exactly how PluginWriter.Commit()
+                // writes every binary, Save & Compile included — raises neither Changed nor
+                // Created without it; .NET's Linux FileSystemWatcher (inotify-backed) gates the
+                // Renamed event on this bit. Without it, the live watcher could not see Save &
+                // Compile's own writes at all, by any event, which would have made self-echo
+                // suppression untestable through this class (and the production watcher blind to
+                // its own writes) rather than merely untested.
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
             };
             var debounceTimer = new Timer(_debounce.TotalMilliseconds) { AutoReset = false };
             debounceTimer.Elapsed += (_, _) => Settle(modFolder, pluginName, pluginPath);
             fsWatcher.Changed += (_, _) => Restart(debounceTimer);
             fsWatcher.Created += (_, _) => Restart(debounceTimer);
+            // A rename *into* the watched filename (PluginWriter.Commit()'s File.Move(tmpPath,
+            // finalPath), the shape every production binary write actually takes) surfaces here,
+            // never as Changed/Created — see the NotifyFilter comment above.
+            fsWatcher.Renamed += (_, _) => Restart(debounceTimer);
             fsWatcher.EnableRaisingEvents = true;
 
             _entries[key] = new WatchEntry(fsWatcher, debounceTimer);

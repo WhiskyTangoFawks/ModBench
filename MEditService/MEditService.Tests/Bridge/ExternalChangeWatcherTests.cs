@@ -1,5 +1,9 @@
+using System.Text.Json;
 using MEditService.Bridge;
+using MEditService.Core.Edits;
 using MEditService.Core.Ledger;
+using MEditService.Tests.Edits;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Bridge;
 
@@ -132,6 +136,45 @@ public sealed class ExternalChangeWatcherTests
         finally
         {
             Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// #417 review fix 2: the end-to-end case the ruling actually asked for — a live watcher, and a
+    /// REAL <see cref="PluginCompileService.Compile"/> (production's own rename-based commit,
+    /// <see cref="PluginWriter.SaveFromModAsync"/>/<c>PreparedPluginSave.Commit</c>), not a hand-written
+    /// byte-identical write standing in for one. Distinct from <see cref="Watch_DoesNotQueueASelfEcho"/>
+    /// above (which proves the classifier-level compare, using a fabricated echo) and from
+    /// <see cref="ExternalChangeClassifierTests.Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote"/>
+    /// (which proves the same real-compile case but calls the classifier directly, bypassing the
+    /// watcher's own event plumbing entirely).
+    /// </summary>
+    [Fact]
+    public void Watch_DoesNotQueueTheBinary_ARealCompileJustWrote()
+    {
+        var mod = TrackedModFixture.Tracked();
+        try
+        {
+            var pluginPath = Path.Combine(mod.ModFolder, TrackedModFixture.PluginName);
+            using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.Watch(mod.ModFolder, TrackedModFixture.PluginName, pluginPath);
+
+            var editService = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            editService.EditField(mod.Plugin, mod.Npc.ToString(), "height_max", JsonDocument.Parse("0.75").RootElement);
+            var compileService = new PluginCompileService(mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
+            Assert.True(result.Succeeded, result.RefusalReason);
+
+            // Bounded, foreground wait past the debounce window — long enough that a real
+            // suppression failure would show up as a queued item by the time this reads, short
+            // enough to stay a fast test.
+            Thread.Sleep(500);
+
+            Assert.Empty(watcher.Pending());
+        }
+        finally
+        {
+            mod.Dispose();
         }
     }
 
