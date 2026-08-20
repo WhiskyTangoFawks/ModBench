@@ -1,5 +1,6 @@
 using System.Globalization;
 using DuckDB.NET.Data;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,13 +12,23 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Query;
 
 // Value/shape reconstruction (bool/object/array/struct properties) is covered behaviorally
-// through repo.GetVmad(...) in GetVmadTests. These tests cover what is unique here:
+// through GetVmad(repo, ...) in GetVmadTests. These tests cover what is unique here:
 // flag-string mapping, reindex idempotency, and form-reference registration for a
 // top-level Object property.
+//
+// #421: GetVmad is rejected from IRecordReads/IRecordIndex outright, same as GetVmadTests — see
+// its own note. The local GetVmad helper below re-points this suite's calls at the relocated
+// RecordDocumentCodecs logic.
 public sealed class VmadIndexerTests : IDisposable
 {
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+
+    private static VmadData? GetVmad(IRecordReads repo, string formKey, string plugin, string origin)
+    {
+        var document = repo.GetDocument(formKey, new PluginKey(plugin, origin));
+        return document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
+    }
 
     private readonly FormKey _npc1FormKey;
     private readonly FormKey _npc2FormKey;
@@ -106,7 +117,7 @@ public sealed class VmadIndexerTests : IDisposable
     public void GetVmad_MapsPropertyFlags_EditedAndZero()
     {
         using var repo = LoadedRepository();
-        var props = repo.GetVmad(_npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!
+        var props = GetVmad(repo, _npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!
             .Scripts.First(s => s.Name == "DefaultScript").Properties;
 
         Assert.Equal("Edited", props.First(p => p.Name == "IsActive").Value.Flags);
@@ -117,7 +128,7 @@ public sealed class VmadIndexerTests : IDisposable
     public void GetVmad_MapsScriptFlags_InheritedAndRemoved()
     {
         using var repo = LoadedRepository();
-        var scripts = repo.GetVmad(_npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!.Scripts;
+        var scripts = GetVmad(repo, _npc1FormKey.ToString(), "VmadTest.esp", origin: "Data")!.Scripts;
 
         Assert.Equal("Inherited and Removed",
             scripts.First(s => s.Name == "InheritedScript").Flags);

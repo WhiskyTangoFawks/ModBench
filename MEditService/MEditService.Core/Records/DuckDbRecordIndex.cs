@@ -524,12 +524,14 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
 
     public RecordDocument? GetDocument(string formKey)
     {
+        RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
         var tableName = FindRecordType(formKey);
         return tableName == null ? null : ReadDocument(tableName, formKey, plugin: null, origin: null, winnerOnly: true);
     }
 
     public RecordDocument? GetDocument(string formKey, PluginKey plugin)
     {
+        RequireSchemas();
         var tableName = FindRecordType(formKey);
         return tableName == null ? null : ReadDocument(tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
     }
@@ -582,6 +584,7 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
 
     public RecordOverrides? GetOverrideStack(string formKey)
     {
+        RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
         var tableName = FindRecordType(formKey);
         if (tableName == null) return null;
         var schema = RequireSchemas()[tableName];

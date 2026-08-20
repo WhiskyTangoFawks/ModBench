@@ -1,3 +1,4 @@
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,10 +9,20 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
+// #421: GetVmad is rejected from IRecordReads/IRecordIndex outright — VMAD reconstitution moved to
+// Queries/RecordDocumentCodecs, operating on RecordDocument.Body. This suite's own reader-level
+// coverage is preserved by calling that relocated logic through the local GetVmad helper below
+// (same fixtures, same assertions) rather than the deleted repository method directly.
 public sealed class GetVmadTests : IDisposable
 {
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+
+    private static VmadData? GetVmad(IRecordReads repo, string formKey, string plugin, string origin)
+    {
+        var document = repo.GetDocument(formKey, new PluginKey(plugin, origin));
+        return document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
+    }
 
     private readonly FormKey _npcFormKey;
     private readonly FormKey _targetFormKey;
@@ -122,7 +133,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
+        var vmad = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         Assert.NotNull(vmad);
         var script = Assert.Single(vmad!.Scripts);
@@ -141,7 +152,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
+        var vmad = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         var prop = vmad!.Scripts[0].Properties.First(p => p.Name == "TargetActor").Value;
         Assert.Equal("Object", prop.Type);
@@ -154,7 +165,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
+        var vmad = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         var prop = vmad!.Scripts[0].Properties.First(p => p.Name == "Scores").Value;
         Assert.Equal("ArrayOfInt", prop.Type);
@@ -167,7 +178,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var vmad = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
+        var vmad = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data");
 
         var config = vmad!.Scripts[0].Properties.First(p => p.Name == "Config").Value;
         Assert.Equal("Struct", config.Type);
@@ -184,7 +195,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        var config = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties
+        var config = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties
             .First(p => p.Name == "Config").Value;
 
         var inner = config.Members!.First(m => m.Name == "Inner").Value;
@@ -200,7 +211,7 @@ public sealed class GetVmadTests : IDisposable
     public void GetVmad_MapsFloatAndStringScalars()
     {
         using var repo = LoadedRepository();
-        var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties;
+        var props = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties;
 
         var weight = props.First(p => p.Name == "Weight").Value;
         Assert.Equal("Float", weight.Type);
@@ -215,7 +226,7 @@ public sealed class GetVmadTests : IDisposable
     public void GetVmad_MapsAllScalarArrayElementTypes()
     {
         using var repo = LoadedRepository();
-        var props = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties;
+        var props = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties;
 
         Assert.Equal([true, false], props.First(p => p.Name == "Bits").Value.ListItems!.Select(i => i.Value));
         Assert.Equal([1.5f, 2.5f], props.First(p => p.Name == "Mults").Value.ListItems!.Select(i => i.Value));
@@ -231,7 +242,7 @@ public sealed class GetVmadTests : IDisposable
     public void GetVmad_ReconstructsArrayOfStruct_FromStructJson()
     {
         using var repo = LoadedRepository();
-        var items = repo.GetVmad(_npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties
+        var items = GetVmad(repo, _npcFormKey.ToString(), "VmadQuery.esp", origin: "Data")!.Scripts[0].Properties
             .First(p => p.Name == "Items").Value;
 
         Assert.Equal("ArrayOfStruct", items.Type);
@@ -246,7 +257,7 @@ public sealed class GetVmadTests : IDisposable
     {
         using var repo = LoadedRepository();
 
-        Assert.Null(repo.GetVmad(_plainNpcFormKey.ToString(), "VmadQuery.esp", origin: "Data"));
+        Assert.Null(GetVmad(repo, _plainNpcFormKey.ToString(), "VmadQuery.esp", origin: "Data"));
     }
 
     // Invariant 7 (missing data reads as null, never a throw): distinct from the case above, where
@@ -260,7 +271,7 @@ public sealed class GetVmadTests : IDisposable
         using var repo = LoadedRepository();
 
         var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName("VmadQuery.esp"));
-        Assert.Null(repo.GetVmad(headerFormKey, "VmadQuery.esp", origin: "Data"));
+        Assert.Null(GetVmad(repo, headerFormKey, "VmadQuery.esp", origin: "Data"));
     }
 
     [Fact]
@@ -293,7 +304,7 @@ public sealed class GetVmadTests : IDisposable
 
         using (repo)
         {
-            var vmad = repo.GetVmad(emptyListFk.ToString(), "VmadEmptyList.esp", origin: "Data");
+            var vmad = GetVmad(repo, emptyListFk.ToString(), "VmadEmptyList.esp", origin: "Data");
             Assert.NotNull(vmad);
             var emptyProp = vmad!.Scripts[0].Properties.First(p => p.Name == "Empty").Value;
             Assert.Equal("ArrayOfInt", emptyProp.Type);
