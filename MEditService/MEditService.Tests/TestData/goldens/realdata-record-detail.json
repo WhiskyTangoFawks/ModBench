@@ -1239,7 +1239,6 @@
         "name": null,
         "navigation_meshes": [],
         "ownership": null,
-        "persistent_timestamp": 0,
         "persistent_unknown_group_data": 0,
         "physics_references": [
           "1C5967:Fallout4.esm",
@@ -1258,9 +1257,7 @@
           "0E4755:Fallout4.esm"
         ],
         "sky_and_weather_from_region": null,
-        "temporary_timestamp": 0,
         "temporary_unknown_group_data": 1,
-        "timestamp": 0,
         "unknown_group_data": 0,
         "version2": 11,
         "water": null,
@@ -1950,7 +1947,6 @@
         "name": null,
         "navigation_meshes": [],
         "ownership": null,
-        "persistent_timestamp": 0,
         "persistent_unknown_group_data": 0,
         "physics_references": [
           "1C466B:Fallout4.esm",
@@ -1968,9 +1964,7 @@
           "137F31:Fallout4.esm"
         ],
         "sky_and_weather_from_region": null,
-        "temporary_timestamp": 0,
         "temporary_unknown_group_data": 1,
-        "timestamp": 0,
         "unknown_group_data": 0,
         "version2": 11,
         "water": null,
@@ -2615,7 +2609,6 @@
         "name": null,
         "navigation_meshes": [],
         "ownership": null,
-        "persistent_timestamp": 0,
         "persistent_unknown_group_data": 0,
         "physics_references": [
           "1C4F64:Fallout4.esm"
@@ -2632,9 +2625,7 @@
           "137F31:Fallout4.esm"
         ],
         "sky_and_weather_from_region": null,
-        "temporary_timestamp": 0,
         "temporary_unknown_group_data": 0,
-        "timestamp": 0,
         "unknown_group_data": 0,
         "version2": 11,
         "water": null,
@@ -2665,7 +2656,6 @@
         "quest": "003648:Fallout4.esm",
         "responses": [],
         "subtype": "RechargeExit",
-        "timestamp": 0,
         "topic_flags": "0",
         "unknown": 0,
         "version2": 7
@@ -2691,7 +2681,6 @@
         "quest": "003648:Fallout4.esm",
         "responses": [],
         "subtype": "Hello",
-        "timestamp": 0,
         "topic_flags": "0",
         "unknown": 0,
         "version2": 1
@@ -2717,7 +2706,6 @@
         "quest": "003648:Fallout4.esm",
         "responses": [],
         "subtype": "SharedInfo",
-        "timestamp": 0,
         "topic_flags": "0",
         "unknown": 0,
         "version2": 9
@@ -4339,7 +4327,6 @@
           "043C79:Fallout4.esm",
           "0D35FA:Fallout4.esm"
         ],
-        "timestamp": 0,
         "unknown": 0,
         "version2": 1
       },
@@ -4377,7 +4364,6 @@
         "stages": [],
         "swf_file": null,
         "text_display_globals": [],
-        "timestamp": 0,
         "unknown": 0,
         "version2": 5
       },
@@ -4461,7 +4447,6 @@
         ],
         "swf_file": null,
         "text_display_globals": [],
-        "timestamp": 0,
         "unknown": 0,
         "version2": 11
       },

@@ -351,10 +351,26 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return (AddNewToGroup, remove, AddExistingToGroup);
     }
 
+    // #413: the three GRUP-timestamp properties join this list for the same reason
+    // MajorRecordFlagsRaw and FormVersion are already on it — they are not record data. A timestamp
+    // here belongs to the GRUP that contains the record, not to the record, and the per-record
+    // serializer accordingly never emits one. Once documents are the record store (ADR-0041), a
+    // reflected column the document model cannot carry would be a column that always reads its CLR
+    // default: the schema would be claiming a field it cannot serve. Dropping them makes the
+    // reflected schema agree with what the serializer actually emits, which is the invariant that
+    // matters; the alternative (keeping them and special-casing view generation) would have put
+    // per-type field knowledge into the view rule, which D2 forbids.
+    //
+    // CAVEAT for whoever hits this next: the skip is BY PROPERTY NAME ACROSS EVERY RECORD TYPE. If a
+    // future game has a record type with a genuine, serializer-emitted field called Timestamp (or
+    // TemporaryTimestamp / PersistentTimestamp), this list would wrongly drop it. The rule to
+    // re-verify is parity with serializer emission — does <Type>_Serialization write this property?
+    // — not "extend the list because a new name looks similar".
     private static readonly HashSet<string> BaseSkip = new(StringComparer.OrdinalIgnoreCase)
     {
         "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
-        "MajorRecordFlagsRaw", "SubgraphRevision"
+        "MajorRecordFlagsRaw", "SubgraphRevision",
+        "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
     };
 
     // #263: RecordType (used for enumeration in DuckDbRecordRepository.IndexRecordTable) and the
