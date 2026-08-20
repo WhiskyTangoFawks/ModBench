@@ -887,6 +887,7 @@ export interface components {
             isWinner?: boolean;
             editorId?: string | null;
             origin?: string | null;
+            workingTreeState?: components["schemas"]["WorkingTreeState"];
         };
         RecordSummaryPagedResult: {
             items?: components["schemas"]["RecordSummary"][] | null;
@@ -998,6 +999,11 @@ export interface components {
             } | null;
             properties?: components["schemas"]["VmadPropertyDiff"][] | null;
         };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        WorkingTreeState: 0 | 1 | 2;
         WorldspaceBlockDto: {
             /** Format: int32 */
             x?: number;

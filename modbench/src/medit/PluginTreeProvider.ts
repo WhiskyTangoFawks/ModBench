@@ -4,6 +4,7 @@ import type {
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
+import { recordResourceUri } from './recordResourceUri';
 
 const PAGE_SIZE = 50;
 
@@ -62,6 +63,10 @@ export class RecordNode extends vscode.TreeItem {
       title: 'Open Record',
       arguments: [{ formKey: record.formKey, label }],
     };
+    // #428: RecordDecorationProvider's own keying identity — record.plugin (this row's own copy's
+    // owning plugin, which an override stack row can differ from the RecordTypeNode's plugin) paired
+    // with origin, the same (plugin, origin, formKey) triple every record-scoped command already uses.
+    this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
   }
 }
 
@@ -249,6 +254,60 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.loadMoreFailures.clear();
     this.interiorLoadMoreFailures.clear();
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  // #428 Q1 (orchestrator gate ruling): a field edit is this product's hottest path, so it gets a
+  // scoped fix rather than refresh()'s wholesale cache-clear-and-refetch — a page cache entry a
+  // field edit's own record already lives in is patched in place, never invalidated, so nothing
+  // this method (or markWorkingTreeState below, which shares this scan) ever triggers a
+  // repository call. Restricted to cache entries under this (plugin, origin) — the same prefix
+  // fetchRecords' own cacheKey uses — never a full-cache scan.
+  private findCachedRecordLocation(
+    plugin: string, origin: string | undefined, formKey: string,
+  ): { key: string; index: number } | undefined {
+    const prefix = `${this.originKey(plugin, origin)}::`;
+    for (const [key, page] of this.pageCache) {
+      if (!key.startsWith(prefix)) continue;
+      const index = page.items.findIndex(r => r.formKey === formKey);
+      if (index !== -1) return { key, index };
+    }
+    return undefined;
+  }
+
+  /** The record's own cached working-tree state — what {@link RecordDecorationProvider}'s lookup
+   *  callback reads. Undefined when nothing has cached this record yet (never rendered, or a
+   *  since-cleared cache), which the provider reads the same as 'None': nothing to badge. */
+  workingTreeStateOf(plugin: string, origin: string | undefined, formKey: string): RecordSummary['workingTreeState'] | undefined {
+    const loc = this.findCachedRecordLocation(plugin, origin, formKey);
+    return loc && this.pageCache.get(loc.key)!.items[loc.index].workingTreeState;
+  }
+
+  /** #428 Q1: patches exactly one cached record's working-tree state — called from the edit-field
+   *  wiring (`onRecordEdited`) instead of `refresh()`. Returns whether a cached row existed to
+   *  patch, so the caller knows whether there is anything for a decoration refresh to reflect (a
+   *  record nothing has rendered yet needs neither). Fires `onDidChangeTreeData(undefined)` only
+   *  on an actual change — cheap here specifically because the cache is never cleared, so any
+   *  redraw it causes reads back the same (now-correct) data with no repository call.
+   *
+   *  Never downgrades Added to Modified (#428 review finding 1): a create never seeds a committed
+   *  counterpart no matter how many field edits follow it (`CreateWorkingTreeRecord`'s own doc
+   *  comment — nothing in `records_committed` for a FormKey that never existed at Head), so the
+   *  backend's own discrimination would still answer Added on the next real fetch. Overwriting it
+   *  here would actively misrepresent a committed counterpart existing, not just go briefly stale
+   *  — worse than the staleness this method otherwise accepts. */
+  markWorkingTreeState(
+    plugin: string, origin: string | undefined, formKey: string, state: RecordSummary['workingTreeState'],
+  ): boolean {
+    const loc = this.findCachedRecordLocation(plugin, origin, formKey);
+    if (!loc) return false;
+    const page = this.pageCache.get(loc.key)!;
+    const current = page.items[loc.index].workingTreeState;
+    if (current === state || current === 'Added') return true;
+    const items = [...page.items];
+    items[loc.index] = { ...items[loc.index], workingTreeState: state };
+    this.pageCache.set(loc.key, { ...page, items });
+    this._onDidChangeTreeData.fire(undefined);
+    return true;
   }
 
   getTreeItem(element: PluginTreeNode): vscode.TreeItem {

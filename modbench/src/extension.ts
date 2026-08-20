@@ -28,6 +28,8 @@ import {
   type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext,
 } from './medit/messages';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
+import { RecordDecorationProvider } from './medit/RecordDecorationProvider';
+import { recordResourceUri } from './medit/recordResourceUri';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
@@ -586,6 +588,26 @@ function registerVmadOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.
   ];
 }
 
+// #428: builds the onRecordEdited callback — pulled out of registerRecordViewCommands purely to
+// stay under the lint budget, same reasoning as registerFilterCommands below. Scoped, not
+// refresh() (Q1, orchestrator gate ruling): patches the one cached record PluginTreeProvider
+// already holds and refreshes only that record's own decoration, so a committed cell edit never
+// pays a page-cache invalidation + repository refetch. Hardcodes 'Modified': the edit response
+// carries no resulting WorkingTreeState, so the one case this can't see is an edit that converges
+// back to the committed bytes (#413's own revert-by-typing convergence) — that row shows a stale M
+// until an unrelated refresh corrects it, no worse than every other fact this cache already
+// tolerates going stale between refreshes (Q2's own no-watcher posture).
+function makeOnRecordEdited(
+  treeProvider: PluginTreeProvider, recordDecorationProvider: RecordDecorationProvider, recordPanels: Set<vscode.WebviewPanel>,
+): (formKey: string, plugin: string, origin: string) => void {
+  return (formKey, plugin, origin) => {
+    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
+    if (treeProvider.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
+      recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
+    }
+  };
+}
+
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
@@ -598,6 +620,10 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
   // back — the FormKey picker — so this object is the *shared* remainder; `formKeyPicker` itself
   // is rebuilt per panel at the onDidReceiveMessage call site below, since its reply must reach
   // the one panel that asked, never a broadcast.
+  // #428: one provider per extension activation (not per panel/command) — its lookup reads
+  // treeProvider's own cache live, so it never needs its own copy of the same state.
+  const recordDecorationProvider = new RecordDecorationProvider(
+    (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey));
   const routerDeps: RouteRecordPanelMessageDeps = {
     channel: outputChannel,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
@@ -606,14 +632,14 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     // this record to re-read. Broadcast rather than replying to the one panel that asked: the same
     // record can be open in more than one panel (openEditorBeside), and all of them are now stale.
     repository: deps.repository,
-    onRecordEdited: (formKey: string) =>
-      broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey }),
+    onRecordEdited: makeOnRecordEdited(treeProvider, recordDecorationProvider, recordPanels),
     // Placeholders — the onDidReceiveMessage wiring below overrides all three per panel every call.
     formKeyPicker: undefined,
     conditionFunctionPicker: undefined,
     extendedFieldEditor: undefined,
   };
   return [
+    vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
     registerReloadSessionCommand(controller, outputChannel),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {

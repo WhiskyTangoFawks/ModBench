@@ -35,6 +35,7 @@ import {
   ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
 import type { PluginTreeNode } from '../PluginTreeProvider';
+import { recordResourceUri } from '../recordResourceUri';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,13 +55,14 @@ function makePlugin(i: number): PluginMetadata {
   };
 }
 
-function makeRecord(i: number): RecordSummary {
+function makeRecord(i: number, workingTreeState: RecordSummary['workingTreeState'] = 'None'): RecordSummary {
   return {
     formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`,
     plugin: 'Fallout4.esm',
     loadOrderIndex: 0,
     isWinner: true,
     editorId: `Record${i}`,
+    workingTreeState,
   };
 }
 
@@ -411,6 +413,73 @@ describe('RecordNode', () => {
   it('contextValue is record', () => {
     const node = new RecordNode(makeRecord(0));
     expect(node.contextValue).toBe('record');
+  });
+
+  // #428: resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
+  // (plugin, origin, formKey) identity ADR-0036 already requires everywhere a record row is
+  // addressed, via the synthetic medit-record: scheme (recordResourceUri.ts).
+  it('carries a medit-record: resourceUri identifying (plugin, origin, formKey)', () => {
+    const record = makeRecord(0);
+    const node = new RecordNode(record, 'ModA');
+
+    expect(node.resourceUri).toEqual(recordResourceUri(record.plugin, 'ModA', record.formKey));
+  });
+});
+
+// ── #428 Q1: a field edit flips a cached row's badge without a refetch ────────
+// The orchestrator's own gate ruling: "one test that an EDIT_FIELD on a clean record flips its
+// row to Modified without a full refresh (spy on the fetch path — a rival that calls
+// refreshTree() wholesale would fail the no-refetch assertion)."
+
+describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
+  it('flips a cached clean record to Modified without calling getRecords again', async () => {
+    const record = makeRecord(0, 'None');
+    const repo = makeRepository({ records: { items: [record], total: 1 } });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Fallout4.esm', 'ModA') as RecordTypeNode[];
+    await provider.getChildren(typeNode); // populates the page cache
+    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+
+    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
+
+    expect(changed).toBe(true);
+    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Modified');
+    // The rival this guards: a fix that re-fetches (or clears the cache and lets the next redraw
+    // re-fetch) instead of patching in place would show a second call here.
+    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+
+    const [rec] = await provider.getChildren(typeNode);
+    expect((rec as RecordNode).record.workingTreeState).toBe('Modified');
+    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it('workingTreeStateOf is undefined for a record nothing has cached yet', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', '000001:Fallout4.esm')).toBeUndefined();
+  });
+
+  it('markWorkingTreeState returns false, and touches nothing, for an uncached record', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+    expect(provider.markWorkingTreeState('Fallout4.esm', 'ModA', '000001:Fallout4.esm', 'Modified')).toBe(false);
+  });
+
+  // #428 review finding 1: a create never seeds records_committed no matter how many field edits
+  // follow it (the backend's own discrimination would still answer Added on the next real fetch),
+  // so a field edit on an Added row must never downgrade it to Modified — that would actively
+  // misrepresent a committed counterpart existing, not just go briefly stale. The rival: the
+  // original unconditional overwrite (`items[idx] = { ...items[idx], workingTreeState: state }`
+  // with no current-state check) fails this.
+  it('preserves Added across a field edit — create, then edit, still badges A', async () => {
+    const record = makeRecord(0, 'Added');
+    const repo = makeRepository({ records: { items: [record], total: 1 } });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Fallout4.esm', 'ModA') as RecordTypeNode[];
+    await provider.getChildren(typeNode);
+
+    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
+
+    expect(changed).toBe(true);
+    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Added');
   });
 });
 

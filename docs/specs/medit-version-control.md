@@ -1,9 +1,9 @@
 # Version control — Surface Specification (Track, branch, compile)
 
 **Status: implemented — Track (#414), the text-first edit path (#415), Save & Compile
-(#416), external-change handling (#417), the editor gesture inventory (#426), and the
-lifecycle gestures (#427) shipped; the split-out dirty badges (#428) and closeout truing
-(#418) remain.**
+(#416), external-change handling (#417), the editor gesture inventory (#426), the
+lifecycle gestures (#427), and record-row Modified/Added badges (#428) shipped; closeout
+truing (#418) remains.**
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -38,8 +38,24 @@ lands as a working-tree ledger file (absent at Head; rediscovered at session loa
 uncompiled), delete confirms modally and removes the ledger file (still served at Head),
 renumber is a delete+create pair with a cross-repo reference cascade — referencing repos
 write first, the target last, any untracked referencer refuses up front, and a typed
-refusal covers overrides, collisions, and FormKey-space exhaustion. Dirty-badge
-decorations are the remaining split-out follow-up. This is the Track/Compile surface spec the
+refusal covers overrides, collisions, and FormKey-space exhaustion. Record-row dirty
+badges are live (#428): `RecordSummary.WorkingTreeState` (`Search()`'s own `"ref"` plus a
+`records_committed` presence check — None/Modified/Added) reaches the Plugins tree, whose
+`RecordNode`s carry a synthetic `medit-record:/<plugin>/<origin>/<formKey>` resourceUri
+(path-only, no authority — identity only, never state — deliberately not the real ledger
+path, which would double against `vscode.git`'s own decoration on the same tracked file)
+for a `FileDecorationProvider` to badge M/A with git's own
+`gitDecoration.modifiedResourceForeground`/`addedResourceForeground` colours. A field edit
+patches the one cached record (never downgrading a still-uncommitted create's Added to
+Modified) and fires the decoration event for just that URI rather than a tree-wide
+refresh. Committing or reverting through the native Source Control panel pushes no live
+signal to these badges — the extension retains no `Repository` handle from
+`openRepository` to react to, so a badge updates only at the next Modbench-driven read,
+the same no-watcher posture the record editor and compare grid already carry. Deleted is
+out of scope (follow-up filed separately): `Search()` is Effective-only, so a
+working-tree-deleted record has no row to badge at all — the same way VS Code's own
+Explorer drops a deleted file's row rather than badging it; the native Source Control
+panel already shows that D for free. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
 implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,
@@ -198,9 +214,12 @@ using git.
   working-tree changes overlaid (#413 contract); reverting a file through the panel
   restores the committed value at the next read.
 - Record rows carrying working-tree changes are badged with git's own single-letter
-  vocabulary (`M`/`A`/`D`) via `FileDecorationProvider` — the same idiom, the same
-  letters, as every git-decorated surface in VS Code. Derivation is the Index's
-  byte-compare (`content_hash`); presentation details are slice-level (#415).
+  vocabulary via `FileDecorationProvider` — the same idiom, the same letters, as every
+  git-decorated surface in VS Code (#428). `M` (edited existing record) and `A` (created,
+  no committed counterpart) ship; `D` does not — `Search()` (what the Plugins tree lists)
+  is Effective-only, so a working-tree-deleted record has no row to badge at all, the same
+  way Explorer drops a deleted file's row rather than badging it. The native Source Control
+  panel already shows that D for free.
 
 ### Save & Compile
 

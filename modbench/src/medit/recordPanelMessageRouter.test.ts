@@ -59,7 +59,10 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
 }
 
 function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSummary {
-  return { formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`, plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId };
+  return {
+    formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`, plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId,
+    workingTreeState: 'None',
+  };
 }
 
 // Issue #210 (#426: restored): a minimal fake of vscode.QuickPick — real VS Code has no test
@@ -181,7 +184,7 @@ describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
   it('tells the panel to re-read once the edit has landed', async () => {
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp');
+    expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
     expect(fakeReporter.report).not.toHaveBeenCalled();
   });
 
