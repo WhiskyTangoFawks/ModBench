@@ -11,7 +11,10 @@ namespace MEditService.Tests.RealData;
 ///
 /// Assertions are existence/count based on purpose: the curated slice is regenerable, so pinning
 /// exact FormKeys would make it brittle. Per-field correctness lives in the synthetic
-/// <c>PlacementIndexingTests</c> / <c>GetVmadTests</c>.
+/// <c>PlacementIndexingTests</c> / <c>GetVmadTests</c>. <c>Index_RealScripts_ReconstitutesVmadFromDocument</c>
+/// is the deliberate exception (2026-08-20 review): a bare "returns without throwing" replacement
+/// for the deleted vmad_scripts count would have been vacuous, so it pins one known real record
+/// instead — same regeneration risk RealDataReadGoldenTests' goldens already accept.
 /// </summary>
 public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
@@ -38,11 +41,20 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
             "Expected the cut-down plugin to contain placed references (REFR/ACHR).");
     }
 
+    // #420: vmad_scripts is gone — VMAD reconstitutes from the record's own document now, so this
+    // goes through GetVmad instead of a table count. Deliberately still concrete rather than a bare
+    // "GetVmad doesn't throw" check: FormKey 2499C4:Fallout4.esm is a real NPC in the curated slice
+    // known to carry two scripts, one named RadroachLegendaryScript (pinned in the realdata-vmad.json
+    // golden too) — a weakened "returns non-null somewhere" assertion would pass even if GetVmad
+    // silently dropped every script but one.
     [Fact]
-    public void Index_RealScripts_PopulatesVmadTables()
+    public void Index_RealScripts_ReconstitutesVmadFromDocument()
     {
-        Assert.True(Count("vmad_scripts") > 0,
-            "Expected the cut-down plugin to contain at least one VMAD-scripted record.");
+        var vmad = _fixture.Repo.GetVmad("2499C4:Fallout4.esm", CutDownPluginFixture.PluginFileName, "Data");
+
+        Assert.NotNull(vmad);
+        Assert.Equal(2, vmad.Scripts.Count);
+        Assert.Contains(vmad.Scripts, s => s.Name == "RadroachLegendaryScript");
     }
 
     [Fact]

@@ -123,6 +123,9 @@ public sealed class VmadIndexerTests : IDisposable
             scripts.First(s => s.Name == "InheritedScript").Flags);
     }
 
+    // #420: vmad_scripts is gone — VMAD lives in the record's own document (`records.body`) now, so
+    // reindex non-duplication is a `records` row count instead of a vmad_scripts row count. Same
+    // intent as before (reindexing this VMAD-bearing record doesn't leave a stale second copy).
     [Fact]
     public void Reindex_DoesNotDuplicateRows()
     {
@@ -133,9 +136,9 @@ public sealed class VmadIndexerTests : IDisposable
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
         repo.Index(mod, 0, participates: true, origin: "Data");
 
-        var count = CountRows(repo.Connection, "vmad_scripts",
-            "form_key = $1 AND script_name = 'DefaultScript'",
-            _npc1FormKey.ToString());
+        var count = CountRows(repo.Connection, "records",
+            "form_key = $1 AND plugin = $2 AND origin = $3",
+            _npc1FormKey.ToString(), "VmadTest.esp", "Data");
         Assert.Equal(1, count);
     }
 

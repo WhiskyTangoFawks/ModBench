@@ -43,12 +43,19 @@ public class IndexAtomicityTests
 
         using var repo = OpenRepo();
 
-        // Force a deterministic failure during the VMAD phase, which runs after the main
-        // record-table appends have already flushed. Without an enclosing transaction the
+        // Force a deterministic failure during the form_lookup flush phase, which runs after the
+        // main record-table appends have already committed. Without an enclosing transaction the
         // npc_ rows would survive the throw as a partial snapshot.
+        //
+        // #420: VMAD/conditions no longer have side tables to drop for this purpose — both now
+        // collect straight into the shared refs list, an in-memory step with nothing to fail against
+        // until form_lookup/form_references' own flush later in Index(). form_lookup is
+        // unconditionally appended for any indexed record (unlike form_references, which is skipped
+        // entirely when refs is empty — as it is for this bare-NPC fixture), so it stays a reliable,
+        // fixture-agnostic failure point.
         using (var drop = repo.Connection.CreateCommand())
         {
-            drop.CommandText = "DROP TABLE vmad_properties";
+            drop.CommandText = "DROP TABLE form_lookup";
             drop.ExecuteNonQuery();
         }
 

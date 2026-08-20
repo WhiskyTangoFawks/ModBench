@@ -19,8 +19,6 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
-        CreateVmadTables(connection);
-        CreateConditionTables(connection);
         CreatePlacementTables(connection);
 
         // ADR-0041 / #413: the reflector no longer emits per-type DDL. Every record type is a
@@ -151,125 +149,6 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_form_lookup_form_key
                 ON form_lookup(form_key)
-            """);
-    }
-
-    internal static void CreateVmadTables(DuckDBConnection connection)
-    {
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS vmad_scripts (
-                form_key     VARCHAR NOT NULL,
-                plugin       VARCHAR NOT NULL,
-                origin       VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                script_name  VARCHAR NOT NULL,
-                script_index INTEGER NOT NULL,
-                flags        VARCHAR NOT NULL,
-                record_type  VARCHAR NOT NULL
-            )
-            """);
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_vmad_scripts_fk
-                ON vmad_scripts(form_key, plugin, origin)
-            """);
-
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS vmad_properties (
-                form_key       VARCHAR NOT NULL,
-                plugin         VARCHAR NOT NULL,
-                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                script_name    VARCHAR NOT NULL,
-                property_name  VARCHAR NOT NULL,
-                property_index INTEGER NOT NULL,
-                record_type    VARCHAR NOT NULL,
-                type           VARCHAR NOT NULL,
-                flags          VARCHAR NOT NULL,
-                bool_value     BOOLEAN,
-                int_value      INTEGER,
-                float_value    FLOAT,
-                string_value   VARCHAR,
-                form_key_value VARCHAR,
-                alias_value    SMALLINT,
-                struct_json    VARCHAR
-            )
-            """);
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_vmad_props_fk
-                ON vmad_properties(form_key, plugin, origin)
-            """);
-
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS vmad_property_list_items (
-                form_key        VARCHAR NOT NULL,
-                plugin          VARCHAR NOT NULL,
-                origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                script_name     VARCHAR NOT NULL,
-                property_name   VARCHAR NOT NULL,
-                property_index  INTEGER NOT NULL,
-                list_item_index INTEGER NOT NULL,
-                record_type     VARCHAR NOT NULL,
-                type            VARCHAR NOT NULL,
-                bool_value      BOOLEAN,
-                int_value       INTEGER,
-                float_value     FLOAT,
-                string_value    VARCHAR,
-                form_key_value  VARCHAR,
-                alias_value     SMALLINT
-            )
-            """);
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_vmad_items_fk
-                ON vmad_property_list_items(form_key, plugin, origin)
-            """);
-    }
-
-    // Conditions (CTDA) index — one `conditions` row per condition, its used parameters spread
-    // across `condition_parameters`. Keyed by (form_key, plugin, owner_field_path) so a record can
-    // carry conditions on more than one field. Mirrors the VMAD table split so a later editing slice
-    // has per-condition / per-parameter addressing without a migration. [ADR-0032]
-    internal static void CreateConditionTables(DuckDBConnection connection)
-    {
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS conditions (
-                form_key         VARCHAR NOT NULL,
-                plugin           VARCHAR NOT NULL,
-                origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                owner_field_path VARCHAR NOT NULL,
-                condition_index  INTEGER NOT NULL,
-                record_type      VARCHAR NOT NULL,
-                function         VARCHAR NOT NULL,
-                operator         VARCHAR NOT NULL,
-                is_or            BOOLEAN NOT NULL,
-                run_on_target    VARCHAR NOT NULL,
-                run_on_reference VARCHAR,
-                use_global       BOOLEAN NOT NULL,
-                comparison_float FLOAT,
-                comparison_global VARCHAR
-            )
-            """);
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_conditions_fk
-                ON conditions(form_key, plugin, origin)
-            """);
-
-        Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS condition_parameters (
-                form_key         VARCHAR NOT NULL,
-                plugin           VARCHAR NOT NULL,
-                origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                owner_field_path VARCHAR NOT NULL,
-                condition_index  INTEGER NOT NULL,
-                param_index      INTEGER NOT NULL,
-                record_type      VARCHAR NOT NULL,
-                category         VARCHAR NOT NULL,
-                type_name        VARCHAR NOT NULL,
-                number_value     INTEGER,
-                formkey_value    VARCHAR,
-                text_value       VARCHAR
-            )
-            """);
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_condition_params_fk
-                ON condition_parameters(form_key, plugin, origin)
             """);
     }
 
