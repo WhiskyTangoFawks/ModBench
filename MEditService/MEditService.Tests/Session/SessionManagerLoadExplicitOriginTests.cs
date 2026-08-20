@@ -1,5 +1,5 @@
-using DuckDB.NET.Data;
 using MEditService.Core.Edits;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
@@ -50,13 +50,9 @@ public sealed class SessionManagerLoadExplicitOriginTests
         ISessionManager sessionManager = manager;
         sessionManager.LoadExplicit(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var repository = (IRecordRepository)manager.Repository!;
-        using var cmd = repository.Connection.CreateCommand();
-        cmd.CommandText = "SELECT DISTINCT origin FROM npc_ WHERE plugin = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = "A.esp" });
-        using var reader = cmd.ExecuteReader();
+        var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esp"), Limit: 10, Offset: 0));
 
-        Assert.True(reader.Read());
-        Assert.Equal("SomeMod", reader.GetString(0));
+        var row = Assert.Single(result.Items);
+        Assert.Equal("SomeMod", row.Origin);
     }
 }

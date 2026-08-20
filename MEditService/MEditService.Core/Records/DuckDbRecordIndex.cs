@@ -17,12 +17,11 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-// #421: implements both the old (IRecordRepository/IRecordReader/IRecordIndexer) and new
-// (IRecordIndex/IRecordReads) seams during the migration — the orchestrator's corrected
-// sequencing keeps the tree compiling at every step rather than demolishing the old interfaces
-// before every consumer is repointed. The old members are removed, and this implements only
-// IRecordIndex, in the final demolition slice.
-public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
+// #421: the record index — the single DuckDB implementation of IRecordIndex/IRecordReads.
+// IRecordRepository/IRecordReader/IRecordIndexer (the pre-#421 seam this class also implemented
+// during the migration) are demolished; several former interface members below survive as private
+// helpers because a PluginKey-keyed public method still delegates to them.
+public sealed class DuckDbRecordIndex : IRecordIndex
 {
     private readonly ISchemaReflector _schemaReflector;
     private readonly ITableDdlBuilder _ddlBuilder;
@@ -73,11 +72,16 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
 
     // --- Indexing (absorbed from RecordIndexer) ---
 
+    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
+        Index(plugin, loadOrderIndex, participates, key.Origin!);
+
     // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
     // PluginOrigin value. Required (#275) — threaded into every per-plugin delete/upsert/append
     // below so a plugin is identified by (origin, plugin) together, not filename alone: two
     // plugins sharing a filename but differing in origin no longer collide.
-    public void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
+    //
+    // #421: private — Index(PluginKey) above is the public seam member and delegates here.
+    private void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
     {
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
@@ -177,12 +181,16 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         tx.Commit();
     }
 
+    public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
+
     // The inverse of Index, table for table — same transaction discipline, and deliberately built
     // from the same per-plugin delete helpers Index itself calls before each append, so a new
     // indexed table cannot be added to one side without the other noticing (they are the same
     // calls). "plugins" is dropped last: it is the row UpdateWinners joins against, and while it
     // exists this (origin, plugin) is still a known member of the read model.
-    public void Unindex(string plugin, string origin)
+    //
+    // #421: private — Unindex(PluginKey) above is the public seam member and delegates here.
+    private void Unindex(string plugin, string origin)
     {
         _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
         using var tx = Connection.BeginTransaction();
@@ -301,7 +309,12 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    public void SetPluginParticipation(string plugin, bool participates, string origin)
+    public void SetPluginParticipation(PluginKey key, bool participates) =>
+        SetPluginParticipation(key.Name, participates, key.Origin!);
+
+    // #421: private — SetPluginParticipation(PluginKey, bool) above is the public seam member and
+    // delegates here.
+    private void SetPluginParticipation(string plugin, bool participates, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = "UPDATE plugins SET participates = $3 WHERE plugin = $1 AND origin = $2";
@@ -372,150 +385,7 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
             """);
     }
 
-    // --- Queries (absorbed from RecordQueryService, with DuckDBParameter throughout) ---
-
-    public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null)
-    {
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin, recordTypes: [tableName]);
-
-        var countSql = $"SELECT COUNT(*) FROM records{where}";
-        using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = countSql;
-        AddParams(countCmd, paramValues);
-        var total = (long)countCmd.ExecuteScalar()!;
-
-        var dataSql = $"""
-            SELECT form_key, plugin, load_order_idx, is_winner, editor_id, origin
-            FROM records{where}
-            ORDER BY editor_id
-            LIMIT {limit} OFFSET {offset}
-            """;
-        using var dataCmd = Connection.CreateCommand();
-        dataCmd.CommandText = dataSql;
-        AddParams(dataCmd, paramValues);
-
-        var items = new List<RecordSummary>();
-        using var reader = dataCmd.ExecuteReader();
-        while (reader.Read())
-            items.Add(ReadSummary(reader));
-
-        return new PagedResult<RecordSummary>(items, (int)total);
-    }
-
-    public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
-    {
-        var schema = RequireSchemas()[tableName];
-        var conditions = new List<string> { "form_key = $1" };
-        var values = new List<string> { formKey };
-
-        if (winnerOnly) conditions.Add("is_winner = true");
-        if (plugin != null)
-        {
-            conditions.Add($"plugin = ${values.Count + 1}");
-            values.Add(plugin);
-        }
-        if (origin != null)
-        {
-            conditions.Add($"origin = ${values.Count + 1}");
-            values.Add(origin);
-        }
-
-        // D8: the header is the one row this read model cannot serve from a document. A ModHeader is
-        // not an IMajorRecordGetter, so it has no codec text and never entered `records` — it stays
-        // an extracted index table with real per-field columns, read positionally as every record
-        // table once was.
-        var isHeader = IsHeaderTable(tableName);
-        if (!isHeader)
-        {
-            conditions.Add($"record_type = ${values.Count + 1}");
-            values.Add(NormalizeRecordType(tableName));
-        }
-
-        var where = " WHERE " + string.Join(" AND ", conditions);
-        var sql = isHeader
-            ? $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-                FROM "{HeaderIndexer.TableName}"{where}
-                LIMIT 1
-                """
-            : $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
-                FROM records{where}
-                LIMIT 1
-                """;
-
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
-        AddParams(cmd, values);
-        using var reader = cmd.ExecuteReader();
-        if (!reader.Read()) return null;
-        var cache = new Dictionary<string, RecordLookupEntry?>();
-        RecordLookupEntry? Resolve(string fk)
-        {
-            if (cache.TryGetValue(fk, out var t)) return t;
-            var resolved = ResolveFormKey(fk);
-            cache[fk] = resolved;
-            return resolved;
-        }
-
-        return isHeader
-            ? ReadDetailFromColumns(reader, schema, Resolve)
-            : ReadDetailFromDocument(reader, schema, Resolve);
-    }
-
-    public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey)
-    {
-        var schema = RequireSchemas()[tableName];
-        // D8: the header has no document — see GetRecord.
-        var isHeader = IsHeaderTable(tableName);
-        var sql = isHeader
-            ? $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-                FROM "{HeaderIndexer.TableName}"
-                WHERE form_key = $1
-                ORDER BY load_order_idx
-                """
-            : """
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
-                FROM records
-                WHERE form_key = $1 AND record_type = $2
-                ORDER BY load_order_idx
-                """;
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        if (!isHeader)
-            cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
-        using var reader = cmd.ExecuteReader();
-
-        var list = new List<RecordDetail>();
-        var cache = new Dictionary<string, RecordLookupEntry?>();
-        RecordLookupEntry? Resolve(string fk)
-        {
-            if (cache.TryGetValue(fk, out var t)) return t;
-            var resolved = ResolveFormKey(fk);
-            cache[fk] = resolved;
-            return resolved;
-        }
-
-        while (reader.Read())
-        {
-            list.Add(isHeader
-                ? ReadDetailFromColumns(reader, schema, Resolve)
-                : ReadDetailFromDocument(reader, schema, Resolve));
-        }
-
-        return list;
-    }
-
-    // #421: IRecordReads / IRecordIndex — the new seam, implemented alongside the old
-    // IRecordRepository/IRecordReader/IRecordIndexer surface above during the migration. Identity-
-    // bearing wrappers such as Index/Unindex/SetPluginParticipation/GetNativeFormKeys and the
-    // spatial reads simply unpack a PluginKey and delegate to the plugin-and-origin implementation
-    // already above; GetDocument/GetOverrideStack/Search/GetRecordTypeCounts/GetEffectiveMasters/At
-    // are genuinely new. VMAD/condition reconstitution is deliberately NOT added here —
-    // GetVmad/GetConditions are rejected from this seam; the capability relocates to Queries/ in a
-    // later slice.
+    // --- Queries ---
 
     public IRecordReads At(RecordRef recordRef) => this;
     // #421: Head answers identically to Effective — both map onto the single LedgerRef.Committed
@@ -659,12 +529,15 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return new PagedResult<RecordSummary>(items, (int)total);
     }
 
+    // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
+    // Search/counts/plugin-highlight, never a point read) — routed through the same BuildWhere every
+    // other filterable query here uses, rather than a bespoke WHERE that would silently miss it.
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin)
     {
+        var (where, paramValues) = BuildWhere(plugin.Name, null, _filterActive, plugin.Origin, recordTypes: null);
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "SELECT record_type, COUNT(*) FROM records WHERE plugin = $1 AND origin = $2 GROUP BY record_type";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+        cmd.CommandText = $"SELECT record_type, COUNT(*) FROM records{where} GROUP BY record_type";
+        AddParams(cmd, paramValues);
         using var reader = cmd.ExecuteReader();
 
         var counts = new List<RecordTypeCount>();
@@ -676,8 +549,6 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
     public RecordLookupEntry? Resolve(string formKey) => ResolveFormKey(formKey);
 
     public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => GetReferences(targetFormKey);
-
-    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => GetNativeFormKeys(plugin.Name, plugin.Origin!);
 
     /// <summary>
     /// See <see cref="IRecordReads.GetEffectiveMasters"/> — derived, not declared. Union of (a) the
@@ -746,31 +617,10 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return colon > 0 ? formKey[(colon + 1)..] : null;
     }
 
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
-        GetWorldspaceCells(plugin.Name, worldspaceFormKey, plugin.Origin!);
-
-    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
-        GetInteriorCells(plugin.Name, limit, offset, plugin.Origin!);
-
-    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
-        GetCellReferences(plugin.Name, cellFormKey, plugin.Origin!);
-
-    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
-        GetPlacement(formKey, plugin.Name, plugin.Origin!);
-
-    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
-        Index(plugin, loadOrderIndex, participates, key.Origin!);
-
-    public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
-
-    public void SetPluginParticipation(PluginKey key, bool participates) =>
-        SetPluginParticipation(key.Name, participates, key.Origin!);
-
-    /// <summary>Reads a record's document row into a <see cref="RecordDocument"/> — the
-    /// <see cref="RecordDocument.Body"/>-carrying twin of <see cref="ReadDetailFromDocument"/>,
-    /// sharing its extraction via <see cref="ExtractFields"/> so the two agree by construction.
-    /// Kept as a separate reader (rather than building a <c>RecordDetail</c> and wrapping it) so
-    /// the old path stays byte-for-byte unchanged while it still exists.</summary>
+    /// <summary>Reads a record's document row into a <see cref="RecordDocument"/>, reconstituted
+    /// through <see cref="RecordTextCodec"/> and extracted via <see cref="ExtractFields"/> — see
+    /// that method's own doc comment for why the values are identical to the pre-#413 wide-table
+    /// path by construction.</summary>
     private RecordDocument ReadDocumentFromBody(
         DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
     {
@@ -791,8 +641,8 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
             body, ExtractFields(schema, record, resolveFormKey));
     }
 
-    /// <summary>The header's own reader (D8: no document) — the <see cref="RecordDocument"/> twin
-    /// of <see cref="ReadDetailFromColumns"/>. <see cref="RecordDocument.Body"/> is null.</summary>
+    /// <summary>The header's own reader (D8: no document) — reads straight off the header table's
+    /// real per-field columns. <see cref="RecordDocument.Body"/> is null.</summary>
     private static RecordDocument ReadDocumentFromColumns(
         DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
     {
@@ -823,9 +673,26 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return new RecordDocument(formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName, null, fields);
     }
 
-    // The ColumnSpec.Extract walk shared by ReadDetailFromDocument (old path) and
-    // ReadDocumentFromBody (new path) — factored so the two agree by construction rather than by a
-    // second implementation happening to match the first.
+    /// <summary>
+    /// The ColumnSpec.Extract walk every reconstitution path shares (#413 D1) — extracts a record's
+    /// typed fields from its live Mutagen object, the shape both <see cref="ReadDocumentFromBody"/>
+    /// and (via <c>RecordQueryService.ToRecordDetail</c>-adjacent callers) the rest of the read
+    /// model build on.
+    ///
+    /// <para>The record is reconstituted through <see cref="RecordTextCodec"/> and then read by the
+    /// <b>same <see cref="ColumnSpec.Extract"/> delegates</b> that the wide tables were filled with,
+    /// pre-#413. That is what makes the values identical by construction rather than by a second
+    /// implementation agreeing with the first — and it is why the published relational schema can be
+    /// the SQL door's contract without also being the C# surface's (invariant 8): the document body
+    /// is Mutagen's serializer shape, which has no per-column correspondence to the reflected schema
+    /// at all (defaults omitted, translated strings as objects, flags as name arrays, and the
+    /// #263/#339 widened and split columns with no JSON path whatsoever).</para>
+    ///
+    /// <para>Each extracted value then passes through the same two normalizations the wide path
+    /// applied on the way in and out, so a field's JSON is byte-for-byte what it was: coerced to the
+    /// column's declared DuckDB type (<see cref="CoerceToColumnType"/>, mirroring
+    /// <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
+    /// </summary>
     private static List<FieldValue> ExtractFields(
         RecordTableSchema schema, IMajorRecord record, Func<string, RecordLookupEntry?> resolveFormKey)
     {
@@ -853,173 +720,9 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
 
     // end #421 new-seam block
 
-    // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
-    // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
-    //
-    // #420: reconstitutes from the record's own document (#413 D1) instead of the deleted
-    // vmad_scripts/vmad_properties/vmad_property_list_items side tables, walking the same
-    // VmadCodec.Parse this repository's ingest-time CollectVmadRefs below also uses. No
-    // NotImplementedException guard here (unlike CollectVmadRefs): that failure mode is specific to
-    // Mutagen's *binary-overlay* accessors, which the reconstituted, JSON-materialized object graph
-    // never goes through — approved 2026-08-20; if some exotic accessor ever does throw here, it
-    // should surface loudly (ADR-0026) rather than being silently swallowed.
-    //
-    // Invariant 7 (missing data reads as null/empty, never a throw): ReadRecordBody returns null for
-    // a FormKey with no `records` row at all — an unindexed key, or a header, which has no document
-    // by D8 — and the type pattern below reads that as "no VMAD" the same as a record with none.
-    public VmadData? GetVmad(string formKey, string plugin, string origin)
-    {
-        if (ReadRecordBody(formKey, plugin, origin) is not IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: { } vmad })
-            return null;
-        if (vmad.Scripts.Count == 0) return null;
-
-        var scripts = new List<VmadScriptData>();
-        foreach (var script in vmad.Scripts)
-        {
-            var props = new List<VmadNamedValue>();
-            foreach (var property in script.Properties)
-            {
-                if (VmadCodec.Parse(property) is not { } parsed)
-                {
-                    _logger.LogWarning("Unknown VMAD property type {Type} on {FormKey}\\{Script}\\{Prop}",
-                        property.GetType().Name, formKey, script.Name, property.Name);
-                    continue;
-                }
-
-                props.Add(new VmadNamedValue(property.Name, MapVmadProperty(parsed)));
-            }
-
-            scripts.Add(new VmadScriptData(script.Name, VmadCodec.FlagsString(script.Flags), props));
-        }
-
-        return new VmadData(scripts);
-    }
-
-    // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
-    // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
-    //
-    // #420: reconstitutes from the record's own document via the registered IConditionCodec, whose
-    // Extract already returns exactly this method's return type — replacing the deleted
-    // conditions/condition_parameters side tables. Extract itself never populates DecodedValue (see
-    // ParsedConditionParam's doc comment), so it is recomputed here, same as the old row-based path
-    // did. Owners are re-sorted by FieldPath (ordinal) because Extract's own discovery order
-    // (reflection order for flat fields, then nested owners appended after) does not generally match
-    // the old SQL's `ORDER BY owner_field_path` — deliberate behaviour-preservation, not incidental
-    // (approved 2026-08-20).
-    //
-    // Invariant 7: ReadRecordBody returns null for an absent/header FormKey, read as "no conditions".
-    public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin)
-    {
-        if (_conditionCodec == null) return [];
-        if (ReadRecordBody(formKey, plugin, origin) is not IMajorRecordGetter record) return [];
-
-        return [.. _conditionCodec.Extract(record)
-            .OrderBy(o => o.FieldPath, StringComparer.Ordinal)
-            .Select(o => o with
-            {
-                Conditions = [.. o.Conditions.Select(c => c with
-                {
-                    Parameters = [.. c.Parameters.Select(p => p with
-                    {
-                        DecodedValue = DecodeParamValue(p.Category.ToString(), p.TypeName, p.Number),
-                    })],
-                })],
-            })];
-    }
-
-    // #413 D1 / #420: the shared reconstitution step GetVmad/GetConditions both start from — the
-    // record's own document, deserialized back through the same RecordTextCodec ReadDetailFromDocument
-    // uses. Null for a FormKey with no `records` row: never indexed under this (plugin, origin), or a
-    // ModHeader (D8 — never an IMajorRecordGetter, so it never had a document at all).
-    private IMajorRecord? ReadRecordBody(string formKey, string plugin, string origin)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "SELECT body FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3 LIMIT 1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        if (cmd.ExecuteScalar() is not string body) return null;
-
-        return _codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release).GetAwaiter().GetResult();
-    }
-
-    // #165: only a Number-category parameter is ever decodable (Form/Text are already
-    // human-legible); a Form/Text row's stored number_value is null regardless of category, so this
-    // also guards the null-Number case a Number row itself can never actually hit (Number.Value is
-    // always non-null once category checks out — AppendParameter always writes one for that row).
-    private string? DecodeParamValue(string category, string typeName, int? number) =>
-        category == nameof(ConditionParamCategory.Number) && number is { } n
-            ? _conditionCodec?.DecodeParamValue(typeName, n)
-            : null;
-
-    // Types with an element type are the ones whose elements come from VmadParsedProperty.Items.
-    private static VmadPropertyValue MapVmadProperty(VmadParsedProperty parsed) =>
-        VmadCodec.ElementType(parsed.Type) is { } elementType
-            ? new VmadPropertyValue(parsed.Type, parsed.Flags, null, ListItems: MapVmadItems(elementType, parsed.Items))
-            : MapNonArrayVmadProperty(parsed);
-
-    private static VmadPropertyValue MapNonArrayVmadProperty(VmadParsedProperty parsed) => parsed.Type switch
-    {
-        "Bool" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.BoolValue),
-        "Int" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.IntValue),
-        "Float" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.FloatValue),
-        "String" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.StringValue),
-        "Object" => new VmadPropertyValue(parsed.Type, parsed.Flags, parsed.Value.FormKeyValue, parsed.Value.AliasValue),
-        "Struct" => new VmadPropertyValue(parsed.Type, parsed.Flags, null, Members: MapStructMembers(parsed.StructJson)),
-        "ArrayOfStruct" => new VmadPropertyValue(parsed.Type, parsed.Flags, null, StructList: MapStructList(parsed.StructJson)),
-        _ => new VmadPropertyValue(parsed.Type, parsed.Flags, null),
-    };
-
-    private static List<VmadNamedValue>? MapStructMembers(string? structJson) =>
-        structJson is null
-            ? null
-            : [.. VmadCodec.StructMembers(structJson).Select(n => new VmadNamedValue(n.Name, MapNode(n)))];
-
-    private static List<IReadOnlyList<VmadNamedValue>>? MapStructList(string? structJson)
-    {
-        return structJson is null
-            ? null
-            : ([.. VmadJson.DeserializeStructList(structJson).Select(inst => (IReadOnlyList<VmadNamedValue>)MapNodes(inst.Members))]);
-    }
-
-    private static List<VmadNamedValue> MapNodes(VmadPropertyNode[] nodes) =>
-        [.. nodes.Select(n => new VmadNamedValue(n.Name, MapNode(n)))];
-
-    private static VmadPropertyValue MapNode(VmadPropertyNode n) => n.Type switch
-    {
-        "Bool" => new VmadPropertyValue(n.Type, n.Flags, n.BoolValue),
-        "Int" => new VmadPropertyValue(n.Type, n.Flags, n.IntValue),
-        "Float" => new VmadPropertyValue(n.Type, n.Flags, n.FloatValue),
-        "String" => new VmadPropertyValue(n.Type, n.Flags, n.StringValue),
-        "Object" => new VmadPropertyValue(n.Type, n.Flags, n.FormKeyValue, n.AliasValue),
-        "Struct" => new VmadPropertyValue(n.Type, n.Flags, null, Members: MapNodes(n.Members ?? [])),
-        _ => new VmadPropertyValue(n.Type, n.Flags, null),
-    };
-
-    // Array elements carry no per-element flags (flags live at the property level only), hence "".
-    // elementType is resolved once by the caller (VmadCodec.ElementType(parsed.Type)) since every
-    // item of one property shares its owning property's element type.
-    private static List<VmadPropertyValue> MapVmadItems(string elementType, IReadOnlyList<VmadValue>? items) =>
-        items is null
-            ? []
-            : [.. items.Select(v => elementType switch
-            {
-                "Bool" => new VmadPropertyValue("Bool", "", v.BoolValue),
-                "Int" => new VmadPropertyValue("Int", "", v.IntValue),
-                "Float" => new VmadPropertyValue("Float", "", v.FloatValue),
-                "String" => new VmadPropertyValue("String", "", v.StringValue),
-                "Object" => new VmadPropertyValue("Object", "", v.FormKeyValue, v.AliasValue),
-                _ => new VmadPropertyValue(elementType, "", null),
-            })];
-
-    public int CountRecordsForPlugin(string tableName, string plugin, string origin)
-    {
-        var (where, paramValues) = BuildWhere(plugin, null, _filterActive, origin, recordTypes: [tableName]);
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT COUNT(*) FROM records{where}";
-        AddParams(cmd, paramValues);
-        return (int)(long)cmd.ExecuteScalar()!;
-    }
+    // #421: GetVmad/GetConditions and their reconstitution helpers (ReadRecordBody,
+    // DecodeParamValue, the VMAD Map* tree) moved to Queries/RecordDocumentCodecs, which operates
+    // on RecordDocument.Body instead of re-querying `records` — see that file.
 
     // #413: one indexed lookup where this used to scan every per-type table in turn until one
     // matched — the record's type is a column now, so there is nothing to search for.
@@ -1029,7 +732,10 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
     // only because "header" happened to be one of the schema keys it walked; that coverage is
     // deliberate behaviour (Open Header resolves a plugin's synthetic 000000:<plugin> FormKey
     // through here), so it is expressed explicitly rather than lost with the scan.
-    public string? FindRecordType(string formKey)
+    //
+    // #421: private now — table-name dispatch is explicitly rejected from the seam; GetDocument and
+    // GetOverrideStack resolve a FormKey's type themselves rather than being told it.
+    private string? FindRecordType(string formKey)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = "SELECT record_type FROM records WHERE form_key = $1 LIMIT 1";
@@ -1042,7 +748,9 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return headerCmd.ExecuteScalar() != null ? HeaderIndexer.TableName : null;
     }
 
-    public RecordLookupEntry? ResolveFormKey(string formKey)
+    // #421: private — Resolve(formKey) is the public seam member; kept under its old name since
+    // ReadDocument/GetOverrideStack's own local Resolve closures already call it by this name.
+    private RecordLookupEntry? ResolveFormKey(string formKey)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = "SELECT record_type, editor_id FROM form_lookup WHERE form_key = $1 AND is_winner LIMIT 1";
@@ -1058,7 +766,10 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
             : new RecordLookupEntry(reader.GetString(0), NullableEditorId());
     }
 
-    public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin)
+    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => GetNativeFormKeys(plugin.Name, plugin.Origin!);
+
+    // #421: private — GetNativeFormKeys(PluginKey) above is the public seam member and delegates here.
+    private List<string> GetNativeFormKeys(string plugin, string origin)
     {
         // #413: fourth union shape collapsed. The header exclusion the union expressed by omitting a
         // table is now implicit — a ModHeader is not a major record, so it has no document at all.
@@ -1080,82 +791,11 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return result;
     }
 
-    public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null)
-    {
-        if (tableNames.Count == 0)
-            return new PagedResult<RecordSummary>([], 0);
-
-        // #413: a single predicate where this UNION ALL'd one subquery per record type — the second
-        // of ADR-0041's five union-over-all-tables shapes to collapse.
-        var (where, paramValues) = BuildWhere(plugin, search, _filterActive, origin, tableNames);
-        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id, origin";
-
-        using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = $"SELECT COUNT(*) FROM records{where}";
-        AddParams(countCmd, paramValues);
-        var total = (long)countCmd.ExecuteScalar()!;
-
-        using var dataCmd = Connection.CreateCommand();
-        dataCmd.CommandText = $"""
-            SELECT {cols} FROM records{where}
-            ORDER BY editor_id
-            LIMIT {limit} OFFSET {offset}
-            """;
-        AddParams(dataCmd, paramValues);
-
-        var items = new List<RecordSummary>();
-        using var reader = dataCmd.ExecuteReader();
-        while (reader.Read())
-            items.Add(ReadSummary(reader));
-
-        return new PagedResult<RecordSummary>(items, (int)total);
-    }
-
     // --- Helpers ---
 
     private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
             reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5));
-
-    /// <summary>
-    /// Rebuilds a record's typed detail from its stored document (#413 D1).
-    ///
-    /// <para>The record is reconstituted through <see cref="RecordTextCodec"/> and then read by the
-    /// <b>same <see cref="ColumnSpec.Extract"/> delegates</b> that the wide tables were filled with.
-    /// That is what makes the values identical by construction rather than by a second
-    /// implementation agreeing with the first — and it is why the published relational schema can be
-    /// the SQL door's contract without also being the C# surface's (invariant 8): the document body
-    /// is Mutagen's serializer shape, which has no per-column correspondence to the reflected schema
-    /// at all (defaults omitted, translated strings as objects, flags as name arrays, and the
-    /// #263/#339 widened and split columns with no JSON path whatsoever).</para>
-    ///
-    /// <para>Each extracted value then passes through the same two normalizations the wide path
-    /// applied on the way in and out, so a field's JSON is byte-for-byte what it was: coerced to the
-    /// column's declared DuckDB type (<see cref="CoerceToColumnType"/>, mirroring
-    /// <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
-    /// </summary>
-    private RecordDetail ReadDetailFromDocument(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
-    {
-        var formKey = reader.GetString(0);
-        var plugin = reader.GetString(1);
-        var origin = reader.GetString(2);
-        var loadOrderIndex = reader.GetInt32(3);
-        var isWinner = reader.GetBoolean(4);
-        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
-        var body = reader.GetString(6);
-
-        var record = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
-            .GetAwaiter().GetResult();
-
-        // #421: the extraction walk itself (array/struct JSON re-parse, bitmask-to-decimal-string)
-        // is factored into ExtractFields, shared with ReadDocumentFromBody, so the two agree by
-        // construction.
-        var fields = ExtractFields(schema, record, resolveFormKey);
-
-        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName, Origin: origin);
-    }
 
     // The read-side mirror of AppendTyped: a column declared INTEGER read back an int no matter
     // whether its extractor produced a byte, ushort or uint, because the wide table's column type
@@ -1253,42 +893,6 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
     private static bool IsHeaderTable(string tableName) =>
         string.Equals(tableName, HeaderIndexer.TableName, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// The positional column reader every record table once used, kept for the one table that still
-    /// has real per-field columns: the header (D8). Its schema is hand-assembled rather than
-    /// reflected from a major record, so <see cref="ColumnSpec.Extract"/> is structurally unusable
-    /// for it (a ModHeader is not an IMajorRecordGetter) and there is no document to reconstitute
-    /// from — the values are read straight out of the columns HeaderIndexer wrote.
-    /// </summary>
-    private static RecordDetail ReadDetailFromColumns(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
-    {
-        var formKey = reader.GetString(0);
-        var plugin = reader.GetString(1);
-        var origin = reader.GetString(2);
-        var loadOrderIndex = reader.GetInt32(3);
-        var isWinner = reader.GetBoolean(4);
-        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
-
-        var fields = new List<FieldValue>();
-        for (int i = 0; i < schema.RecordColumns.Count; i++)
-        {
-            var col = schema.RecordColumns[i];
-            var isDbNull = reader.IsDBNull(6 + i);
-            object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
-            {
-                (true, _) => null,
-                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(6 + i)),
-                _ => reader.GetValue(6 + i),
-            };
-            if (value != null && col.IsBitmask)
-                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
-            var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
-        }
-
-        return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName, Origin: origin);
-    }
 
     private static void AddParams(DuckDBCommand cmd, IEnumerable<string> values)
     {
@@ -1548,7 +1152,8 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
-    public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey)
+    // #421: private — GetReferencedBy(string) above is the public seam member and delegates here.
+    private List<ReferenceResult> GetReferences(string targetFormKey)
     {
         // #410/ADR-0041: committed references only. The pending overlay this query used to carry
         // (subtracting references an uncommitted edit had superseded, then unioning that edit's own
@@ -1582,7 +1187,11 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
 
     // ── Phase 16: worldspace tree reads ────────────────────────────────────────
 
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin)
+    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
+        GetWorldspaceCells(plugin.Name, worldspaceFormKey, plugin.Origin!);
+
+    // #421: private — GetWorldspaceCells(PluginKey, string) above is the public seam member.
+    private List<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """
@@ -1612,7 +1221,11 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return rows;
     }
 
-    public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin)
+    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
+        GetInteriorCells(plugin.Name, limit, offset, plugin.Origin!);
+
+    // #421: private — GetInteriorCells(PluginKey, int, int) above is the public seam member.
+    private PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin)
     {
         using var countCmd = Connection.CreateCommand();
         countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1 AND origin = $2";
@@ -1646,7 +1259,11 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return new PagedResult<CellSummary>(items, (int)total);
     }
 
-    public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin)
+    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
+        GetCellReferences(plugin.Name, cellFormKey, plugin.Origin!);
+
+    // #421: private — GetCellReferences(PluginKey, string) above is the public seam member.
+    private CellReferences GetCellReferences(string plugin, string cellFormKey, string origin)
     {
         var schemas = RequireSchemas();
         var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
@@ -1688,8 +1305,12 @@ public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
         return new CellReferences(persistent, temporary);
     }
 
-    // origin (#272 / ADR-0036, required since #275): same reasoning as GetVmad's/Index's.
-    public PlacementRow? GetPlacement(string formKey, string plugin, string origin)
+    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
+        GetPlacement(formKey, plugin.Name, plugin.Origin!);
+
+    // origin (#272 / ADR-0036, required since #275): same reasoning as Index's.
+    // #421: private — GetPlacement(string, PluginKey) above is the public seam member.
+    private PlacementRow? GetPlacement(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = """

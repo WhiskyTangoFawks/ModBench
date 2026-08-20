@@ -1,5 +1,8 @@
 using System.Globalization;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
 
@@ -50,7 +53,8 @@ public sealed class CutDownPluginIndexTests(CutDownPluginFixture fixture) : ICla
     [Fact]
     public void Index_RealScripts_ReconstitutesVmadFromDocument()
     {
-        var vmad = _fixture.Repo.GetVmad("2499C4:Fallout4.esm", CutDownPluginFixture.PluginFileName, "Data");
+        var document = _fixture.Repo.GetDocument("2499C4:Fallout4.esm", new PluginKey(CutDownPluginFixture.PluginFileName, "Data"));
+        var vmad = document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
 
         Assert.NotNull(vmad);
         Assert.Equal(2, vmad.Scripts.Count);

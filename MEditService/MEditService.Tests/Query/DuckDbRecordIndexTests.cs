@@ -328,22 +328,24 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Equal(0, count);
     }
 
-    // --- FindRecordType ---
+    // --- Type resolution (#421: FindRecordType is rejected from the seam outright — GetDocument
+    // resolves a FormKey's type internally now, so this suite's coverage of that resolution moves
+    // to observing GetDocument's own RecordType instead of a dedicated lookup) ---
 
     [Fact]
-    public void FindRecordType_KnownFormKey_ReturnsTableName()
+    public void GetDocument_KnownFormKey_ResolvesRecordType()
     {
         using var repo = LoadedRepository();
-        var tableName = repo.FindRecordType(_fixture.Npc1FormKey.ToString());
-        Assert.Equal("npc_", tableName);
+        var document = repo.GetDocument(_fixture.Npc1FormKey.ToString());
+        Assert.Equal("npc_", document?.RecordType);
     }
 
     [Fact]
-    public void FindRecordType_UnknownFormKey_ReturnsNull()
+    public void GetDocument_UnknownFormKey_ReturnsNull()
     {
         using var repo = LoadedRepository();
-        var tableName = repo.FindRecordType("FFFFFF:Unknown.esp");
-        Assert.Null(tableName);
+        var document = repo.GetDocument("FFFFFF:Unknown.esp");
+        Assert.Null(document);
     }
 
     // --- ResolveFormKey (ADR-0031) ---
@@ -515,11 +517,11 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     // --- SQL injection (parameterized query contract) ---
 
     [Fact]
-    public void FindRecordType_SqlInjectionAttempt_ReturnsNull()
+    public void GetDocument_SqlInjectionAttempt_ReturnsNull()
     {
         // Without parameterization "' OR '1'='1" would match every row.
         using var repo = LoadedRepository();
-        var result = repo.FindRecordType("' OR '1'='1");
+        var result = repo.GetDocument("' OR '1'='1");
         Assert.Null(result);
     }
 
