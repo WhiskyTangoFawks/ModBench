@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
 
@@ -238,7 +239,13 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 public record SessionFilterRequest(string Sql);
 public record SessionFilterResponse(string? Sql);
 
-public record SessionLoadResponse(string Status, IReadOnlyList<PluginLoadFailure> Failures);
+// CrashRepairOffers (#381): every tracked plugin this same load found stale/missing against
+// Modbench's own record — an interrupted compile's journal marker, or a binary that could not be
+// read at all — surfaced the same structured-failures way Failures already is (ADR-0026), never a
+// second endpoint or poller: the only way either condition can newly appear is a compile this
+// process itself drives, or a process restart, both of which this load call already observes.
+public record SessionLoadResponse(
+    string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
 public record SessionLoadExplicitRequest(
     IReadOnlyList<ExplicitPlugin> Plugins, string GameDirectory, string GameRelease = "Fallout4");
 // Origin (#269 / ADR-0036): Mod Management resolves this — the mod folder that provided the

@@ -395,7 +395,9 @@ describe('SessionController.loadExplicitSession', () => {
 
     // #307: a tagged outcome, not a bare array — three outcomes (loaded / failed / abandoned)
     // need three answers, and a second sentinel would be one every call site has to remember.
-    expect(result).toEqual({ outcome: 'loaded', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }] });
+    expect(result).toEqual({
+      outcome: 'loaded', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }], crashRepairOffers: [],
+    });
   });
 
   it('resolves with an empty array when nothing failed to load', async () => {
@@ -410,7 +412,31 @@ describe('SessionController.loadExplicitSession', () => {
 
     // #307: still distinguishable from a failed load — now by the outcome tag rather than by
     // `[]` versus `undefined`.
-    expect(result).toEqual({ outcome: 'loaded', failures: [] });
+    expect(result).toEqual({ outcome: 'loaded', failures: [], crashRepairOffers: [] });
+  });
+
+  // #381: crashRepairOffers rides the same response failures already does — the caller (extension.ts)
+  // reads them off the return value to run the repair-offer dialog, never a second fetch.
+  it('resolves with the crash-repair offers the load-explicit response carried, string reason trusted over the generated numeric type', async () => {
+    const client = {
+      ...makeClient(),
+      POST: vi.fn().mockResolvedValue({
+        response: { ok: true },
+        data: {
+          status: 'loaded', failures: [],
+          crashRepairOffers: [{ plugin: 'Foo.esp', origin: 'A', reason: 'InterruptedCompile' }],
+        },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new SessionController(deps);
+
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
+
+    expect(result).toEqual({
+      outcome: 'loaded', failures: [],
+      crashRepairOffers: [{ plugin: 'Foo.esp', origin: 'A', reason: 'InterruptedCompile' }],
+    });
   });
 
   it('warns when the active profile has zero enabled plugins (never silently empty)', async () => {
