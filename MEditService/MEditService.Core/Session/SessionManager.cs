@@ -58,6 +58,7 @@ public sealed class SessionManager(
 
     public IGameSession? Session { get { lock (_lock) return _session; } }
     public IRecordReads? Repository { get { lock (_lock) return _repository; } }
+    public IRecordIndex? Index { get { lock (_lock) return _repository; } }
 
     /// <summary>
     /// What the session can honestly say about itself right now (#274 / ADR-0035) — the read behind

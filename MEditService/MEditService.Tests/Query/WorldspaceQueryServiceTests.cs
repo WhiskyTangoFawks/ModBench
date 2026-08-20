@@ -62,6 +62,8 @@ public class WorldspaceQueryServiceTests
     {
         public IGameSession? Session => session;
         public IRecordReads? Repository => repo;
+        // #415: read-side double — the worldspace queries never write to the index.
+        public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();

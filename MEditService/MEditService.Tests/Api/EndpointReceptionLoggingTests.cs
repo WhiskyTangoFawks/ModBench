@@ -123,6 +123,7 @@ public sealed class EndpointReceptionLoggingTests
         public bool LoadCalled { get; private set; }
         public IGameSession? Session => null;
         public IRecordReads? Repository => null;
+        public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => LoadCalled = true;
