@@ -33,6 +33,12 @@ public enum RecordEditRefusal
     /// <summary>The new value would create a Dangling or Type-Mismatched FormLink (CONTEXT.md).
     /// Always a data error, and blocked at edit time rather than reported afterwards.</summary>
     InvalidFormLink,
+
+    /// <summary>#417 exit path 3: the plugin's binary changed outside Modbench and the one dialog
+    /// (Absorb Upstream Update / Keep as My Edit) has not been answered yet. Refused rather than
+    /// silently served, per-plugin, until answered — the way out is answering the pending question,
+    /// not a command.</summary>
+    ExternalChangePending,
 }
 
 /// <summary>

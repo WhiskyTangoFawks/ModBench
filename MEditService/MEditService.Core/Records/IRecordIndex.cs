@@ -60,6 +60,17 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// unknown FormKey is skipped, not thrown on (the seam's missing-data rule). Creating a record
     /// that exists at neither ref is not expressible here — it is a lifecycle gesture with its own
     /// ticket.</para>
+    ///
+    /// <para><b>No #417 external-change deferral check lives here, deliberately.</b> This method has
+    /// two legitimate callers: <c>Edits.RecordEditService</c> (an actual write gesture) and
+    /// <c>Ledger.LedgerFreshness</c>'s read-time self-heal, which must keep folding in whatever the
+    /// ledger file already says even while a plugin's external-change question is unanswered — exit
+    /// path 3's contract is "reads continue serving last-known state" while deferred, and a guard
+    /// here would block reads, which are not editing. The deferral refusal is enforced at
+    /// <c>RecordEditService</c>'s own entry points instead (see its doc comment); every new write
+    /// gesture must enter through <c>RecordEditService</c>, never call this method directly, to
+    /// inherit that refusal — this namespace must not learn Ledger's vocabulary (deferral, tracked,
+    /// external change) either way.</para>
     /// </summary>
     void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
 

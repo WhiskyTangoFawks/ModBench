@@ -11,8 +11,12 @@ namespace MEditService.Core.Ledger;
 /// Nothing is cached. Tracked *is* the presence of <c>.git</c> (ADR-0041), and a mod folder can be
 /// created, destroyed or replaced outside Modbench between any two calls — MO2's Replace install
 /// shell-deletes the whole folder — so the answer is re-derived every time it is asked.
+///
+/// Public (not internal) since #417: the load-time hash check runs from <c>MEditService.Api</c>'s
+/// session-load handlers, which cannot see Core's internals — the same "promote once a second real
+/// consumer exists" rule <c>LedgerRecordType</c> followed.
 /// </summary>
-internal static class ModFolders
+public static class ModFolders
 {
     /// <summary>
     /// The folder holding <paramref name="plugin"/>'s physical file, or null when the plugin has no
@@ -20,7 +24,7 @@ internal static class ModFolders
     /// Track does not apply and the blessed path is a patch plugin instead. Also null when the
     /// session does not know this plugin.
     /// </summary>
-    internal static string? Of(IGameSession? session, PluginKey plugin)
+    public static string? Of(IGameSession? session, PluginKey plugin)
     {
         var metadata = session?.Plugins.FirstOrDefault(p =>
             p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
@@ -31,7 +35,7 @@ internal static class ModFolders
 
     /// <summary>The same rule stated over the two facts it actually needs, for callers that already
     /// hold a plugin's own metadata and have no reason to look it up again by name.</summary>
-    internal static string? Of(string origin, string pluginPath)
+    public static string? Of(string origin, string pluginPath)
     {
         if (string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase))
             return null;
@@ -42,11 +46,11 @@ internal static class ModFolders
     /// <summary>Whether this plugin's records can be edited at all: it has a mod folder, and that
     /// folder is tracked. The single fact the editing surfaces gate on — "editing requires
     /// tracking; viewing never does" (ADR-0041).</summary>
-    internal static bool IsEditable(string origin, string pluginPath) =>
+    public static bool IsEditable(string origin, string pluginPath) =>
         Of(origin, pluginPath) is { } modFolder && LedgerRepository.IsTracked(modFolder);
 
     /// <summary>The mod folder only when it is actually tracked — the single condition under which a
     /// plugin has ledger text to read or write at all.</summary>
-    internal static string? TrackedOf(IGameSession? session, PluginKey plugin) =>
+    public static string? TrackedOf(IGameSession? session, PluginKey plugin) =>
         Of(session, plugin) is { } modFolder && LedgerRepository.IsTracked(modFolder) ? modFolder : null;
 }

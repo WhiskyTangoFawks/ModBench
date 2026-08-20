@@ -48,6 +48,23 @@ public sealed class RecordEditService(
         if (ModFolders.TrackedOf(sessions.Session, plugin) is not { } modFolder)
             return RefuseUntracked(plugin);
 
+        // #417 exit path 3: a same-plugin external-change question left unanswered refuses every
+        // gesture on the single write path — checked before anything else, so neither of the write
+        // path's two doors fires: the ledger file is never touched, and index.ApplyWorkingTreeChanges
+        // (below) is never reached to tell the DB about a write that didn't happen.
+        //
+        // INVARIANT for future write gestures (#426/#427 and beyond): external-change deferral is
+        // enforced HERE, at RecordEditService's own entry points — not inside
+        // IRecordIndex.ApplyWorkingTreeChanges (see that method's own doc comment for why: it also
+        // serves LedgerFreshness's read-time self-heal, which must keep running while deferred).
+        // Every new write gesture MUST enter through RecordEditService (this method, or a sibling
+        // added to this same class) to inherit this refusal. A caller that reaches
+        // index.ApplyWorkingTreeChanges some other way bypasses the deferral refusal entirely — that
+        // is not a hypothetical, it is exactly what RecordEditServiceExternalChangeDeferralTests'
+        // rival proved when this check was removed.
+        if (ExternalChangeDeferral.Pending(modFolder, plugin.Name) is { } pendingQuestion)
+            return RecordEditResult.Refused(RecordEditRefusal.ExternalChangePending, pendingQuestion);
+
         var index = sessions.Index;
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");

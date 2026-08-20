@@ -1,0 +1,92 @@
+using System.Text.Json;
+using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace MEditService.Tests.Edits;
+
+/// <summary>
+/// #417 B6 / exit path 3: an unanswered external-change question refuses every gesture on the single
+/// write path (ADR-0041/#415) — checked once, ahead of both doors that path has: the ledger file
+/// write, and <c>index.ApplyWorkingTreeChanges</c> telling the DB. #426/#427 add more edit gestures
+/// through <see cref="RecordEditService"/> later and must inherit this refusal without adding their
+/// own check.
+/// </summary>
+public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
+{
+    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+
+    public void Dispose() => _mod.Dispose();
+
+    private RecordEditService Service() =>
+        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+
+    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    [Fact]
+    public void EditField_Refuses_WhileAnExternalChangeQuestionIsPendingForThePlugin()
+    {
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName,
+            "Fixture.esp (in FixtureMod) changed outside Modbench.");
+
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Contains("changed outside Modbench", result.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>The write path's <b>first</b> door: refusing must happen before the ledger file is
+    /// touched at all — the same "no half-applied state" invariant every other refusal in this class
+    /// already holds.</summary>
+    [Fact]
+    public void EditField_Refuses_BeforeTouchingTheLedgerFile()
+    {
+        var before = File.ReadAllText(_mod.NpcLedgerFile);
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+
+        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+
+        Assert.Equal(before, File.ReadAllText(_mod.NpcLedgerFile));
+        Assert.Empty(_mod.GitStatus());
+    }
+
+    /// <summary>The write path's <b>second</b> door: refusing must happen before
+    /// <c>index.ApplyWorkingTreeChanges</c> is ever reached, so the DB-backed read model
+    /// (<see cref="RecordRef.Effective"/>) never advances past the last accepted state either — not
+    /// just the file on disk.</summary>
+    [Fact]
+    public void EditField_Refuses_BeforeTheIndexEverLearnsOfTheAttemptedChange()
+    {
+        var before = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+            .Fields.Single(f => f.Metadata.Name == "height_max").Value;
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+
+        Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+
+        var after = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+            .Fields.Single(f => f.Metadata.Name == "height_max").Value;
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void EditField_SucceedsAgain_OnceTheDeferralIsCleared()
+    {
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Clear(_mod.ModFolder, TrackedModFixture.PluginName);
+
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+
+        Assert.True(result.Applied, result.Message);
+    }
+
+    [Fact]
+    public void EditField_OnADifferentPlugin_IsUnaffectedByAnotherPluginsDeferral()
+    {
+        ExternalChangeDeferral.Set(_mod.ModFolder, "SomeOtherPlugin.esp", "pending");
+
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
+
+        Assert.True(result.Applied, result.Message);
+    }
+}
