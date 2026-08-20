@@ -15,7 +15,11 @@ export interface RouteRecordPanelMessageDeps {
   repository: Pick<PluginRepository, 'editRecordField' | 'searchRecords' | 'getConditionFunctions'>;
   // #415: how the panel learns to re-read once an edit has landed. A plain callback rather than a
   // webview handle, so this router never has to know which panel asked.
-  onRecordEdited: (formKey: string) => void;
+  // #428: plugin/origin ride along too — EDIT_FIELD already carries both (the edit's own
+  // identity), and the tree-decoration wiring needs them to patch the one cached record the edit
+  // touched (PluginTreeProvider.markWorkingTreeState) without re-deriving them from formKey alone
+  // (a FormKey names a record, not which plugin's copy of it this edit landed on).
+  onRecordEdited: (formKey: string, plugin: string, origin: string) => void;
   // #200: the leveled 'Modbench' channel (#198) the webview has no direct route to — the
   // webview composes the full message text (it has the plugin/field/record identity), this is
   // a pure level→method forward, no VS Code types beyond the injected Pick.
@@ -310,7 +314,7 @@ async function editField(
   try {
     const outcome = await deps.repository.editRecordField(m.formKey, m.plugin, m.origin, m.fieldPath, m.value);
     if (outcome.applied) {
-      deps.onRecordEdited(m.formKey);
+      deps.onRecordEdited(m.formKey, m.plugin, m.origin);
       return;
     }
     deps.reporter.report('warning', outcome.message);

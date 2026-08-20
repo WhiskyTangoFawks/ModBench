@@ -116,12 +116,21 @@ export interface RebaseResult {
   conflictedPaths: string[];
 }
 
+// #428: the Plugins tree's own working-tree fact for a listed record — 'None' for the
+// overwhelming majority. Mirrors the backend's WorkingTreeState enum name exactly (no
+// re-wording on the wire boundary). Deliberately not a boolean pair (an "Added implies dirty"
+// invariant every consumer would have to remember) and leaves room for a future 'Deleted'
+// value without a wire reshape (#428 orchestrator ruling; Deleted itself is out of this
+// ticket's scope — see RecordDecorationProvider's own doc comment for why).
+export type WorkingTreeState = 'None' | 'Modified' | 'Added';
+
 export interface RecordSummary {
   formKey: string;
   plugin: string;
   loadOrderIndex: number;
   isWinner: boolean;
   editorId: string | null;
+  workingTreeState: WorkingTreeState;
 }
 
 export interface PluginRecordTypeCount {

@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  PendingExternalChange,
+  PendingExternalChange, WorkingTreeState,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -71,6 +71,13 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
   };
 }
 
+// #428: the generated WorkingTreeState is numeric (0|1|2) for the same reason toTrackPhase's own
+// comment already gives — Swashbuckle isn't JsonStringEnumConverter-aware — but Program.cs
+// registers that converter globally, so the real wire value is the string. Trust the string.
+function toWorkingTreeState(state: unknown): WorkingTreeState {
+  return typeof state === 'string' ? (state as WorkingTreeState) : 'None';
+}
+
 function toRecordSummary(r: GeneratedRecordSummary): RecordSummary {
   return {
     formKey: r.formKey ?? '',
@@ -78,6 +85,7 @@ function toRecordSummary(r: GeneratedRecordSummary): RecordSummary {
     loadOrderIndex: r.loadOrderIndex ?? 0,
     isWinner: r.isWinner ?? false,
     editorId: r.editorId ?? null,
+    workingTreeState: toWorkingTreeState(r.workingTreeState),
   };
 }
 

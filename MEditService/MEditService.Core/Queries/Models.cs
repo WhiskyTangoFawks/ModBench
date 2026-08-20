@@ -55,6 +55,20 @@ public record PluginResponse(
             Ledger.ModFolders.IsEditable(m.Origin, m.Path));
 }
 
+// #428: the Plugins-tree listing's own working-tree fact — a tri-state rather than a pair of
+// booleans, because the three states (clean / edited-existing / newly created) are mutually
+// exclusive by construction (Added implies HasWorkingTreeChange, so a boolean pair would need a
+// "check Added before Modified" reading order every consumer would have to remember) and because a
+// value addition here (a future Deleted) is a wire addition, not a reshape. Deliberately distinct
+// from OverrideStackEntry.HasWorkingTreeChange (Records/RecordDocument.cs) — that seam answers "does
+// this one plugin's copy differ from its Head", scoped to a single record already resolved; this one
+// answers the same question for every row a listing returns, plus which kind of divergence it is.
+// Deleted is not a value here (#428 orchestrator ruling): a working-tree-deleted record has no row
+// in Search() at all (EffectiveRelation never held it), so there is nothing for this field to
+// describe for that case — surfacing it needs GetRecordTypeCounts/Search to union in Head-only rows,
+// which is out of this ticket's scope, filed separately.
+public enum WorkingTreeState { None, Modified, Added }
+
 // Origin (#296 / ADR-0036): the mod folder that provided this row's physical file, or a reserved
 // PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin (#272). Without
 // it, two same-filename plugins listed together (GetRecords/SearchRecords never filtered origin,
@@ -65,7 +79,11 @@ public record RecordSummary(
     int LoadOrderIndex,
     bool IsWinner,
     string? EditorId,
-    string Origin);
+    string Origin,
+    // #428: WorkingTreeState.None for every pre-existing call site (test fixtures, GetOverrideStack's
+    // own unrelated read paths) — Search() is the only real producer of a non-None value; see
+    // DuckDbRecordIndex.Search.
+    WorkingTreeState WorkingTreeState = WorkingTreeState.None);
 
 public record PagedResult<T>(IReadOnlyList<T> Items, int Total);
 

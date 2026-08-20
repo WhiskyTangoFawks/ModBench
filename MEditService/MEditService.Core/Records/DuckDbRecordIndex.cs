@@ -969,7 +969,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         var (where, paramValues) = BuildWhere(
             query.Plugin?.Name, query.Search, _filterActive, query.Plugin?.Origin, query.RecordTypes);
-        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id, origin";
+        // #428: "ref" plus a records_committed existence check is exactly the pair
+        // RecordSummaryWorkingTreeStateTests pins — Modified is ref='working-tree' with a committed
+        // snapshot on record; Added is the same ref with no snapshot at all (CreateWorkingTreeRecord's
+        // own doc comment: a create writes nothing into records_committed). The `r` alias is needed
+        // only for the correlated EXISTS below; `where`'s own unqualified column references still
+        // resolve against it unambiguously, since it is the sole table this query's FROM names.
+        const string cols = """
+            form_key, plugin, load_order_idx, is_winner, editor_id, origin, r."ref",
+            EXISTS (
+                SELECT 1 FROM records_committed rc
+                WHERE rc.form_key = r.form_key AND rc.plugin = r.plugin AND rc.origin = r.origin
+            ) AS has_committed_snapshot
+            """;
 
         using var countCmd = Connection.CreateCommand();
         countCmd.CommandText = $"SELECT COUNT(*) FROM {records}{where}";
@@ -978,7 +990,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var dataCmd = Connection.CreateCommand();
         dataCmd.CommandText = $"""
-            SELECT {cols} FROM {records}{where}
+            SELECT {cols} FROM {records} r{where}
             ORDER BY editor_id
             LIMIT {query.Limit} OFFSET {query.Offset}
             """;
@@ -1265,7 +1277,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
         new(reader.GetString(0), reader.GetString(1), reader.GetInt32(2),
-            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5));
+            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
+            ReadWorkingTreeState(reader));
+
+    // #428: column 6 is "ref" (LedgerRef.Committed/WorkingTree), column 7 is the correlated
+    // records_committed EXISTS Search's SELECT list adds. None for the overwhelming majority (ref is
+    // committed); Added/Modified only ever come from a row this ticket's own dirty-listing tests
+    // produce. Kept out of ReadSummary's constructor call so the ref/snapshot→enum decision stays in
+    // C#, not duplicated as SQL string literals ('modified'/'added') the reader would otherwise parse.
+    private static WorkingTreeState ReadWorkingTreeState(DuckDBDataReader reader)
+    {
+        if (reader.GetString(6) != LedgerRef.WorkingTree) return WorkingTreeState.None;
+        return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
+    }
 
     // The read-side mirror of AppendTyped: a column declared INTEGER read back an int no matter
     // whether its extractor produced a byte, ushort or uint, because the wide table's column type

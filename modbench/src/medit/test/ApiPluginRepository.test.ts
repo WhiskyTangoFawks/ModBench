@@ -41,6 +41,7 @@ function makeRecord(i: number): RecordSummary {
     loadOrderIndex: 0,
     isWinner: true,
     editorId: `Record${i}`,
+    workingTreeState: 'None',
   };
 }
 
@@ -203,6 +204,30 @@ describe('ApiPluginRepository.getRecords', () => {
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getRecords('Plugin.esp', 'WEAP', 0, 50)).rejects.toThrow(/500/);
+  });
+
+  // #428: the generated schema mislabels WorkingTreeState as numeric (Swashbuckle isn't
+  // JsonStringEnumConverter-aware — the same known mismatch toTrackPhase already works around),
+  // but Program.cs registers that converter globally, so the real wire value is the string. Trust
+  // the string, matching toTrackPhase's own posture, not the generated type.
+  it('maps a real (string-valued) workingTreeState through, and defaults a missing one to None', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            { formKey: 'Fallout4.esm:000001', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: 'A', workingTreeState: 'Modified' },
+            { formKey: 'Fallout4.esm:000002', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: 'B', workingTreeState: 'Added' },
+            { formKey: 'Fallout4.esm:000003', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: 'C' },
+          ],
+          total: 3,
+        },
+        response: { ok: true },
+      }),
+    } as any;
+
+    const result = await new ApiPluginRepository(client).getRecords('Fallout4.esm', 'WEAP', 0, 50);
+
+    expect(result.items.map((r) => r.workingTreeState)).toEqual(['Modified', 'Added', 'None']);
   });
 });
 
