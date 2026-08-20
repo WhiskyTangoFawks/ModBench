@@ -70,6 +70,22 @@ export interface TrackStatus {
   recordsTotal: number;
 }
 
+/** #416: Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
+ *  successful (HTTP 200) answer (`succeeded: false, refusalReason: string`), never an HTTP error —
+ *  the pinned contract's "refusal is a typed result, not an exception" carried through the wire. */
+export interface CompileResult {
+  succeeded: boolean;
+  refusalReason: string | null;
+  diagnostics: CompileDiagnostic[];
+  masters: string[];
+}
+
+export interface CompileDiagnostic {
+  formKey: string;
+  ledgerRelativePath: string;
+  message: string;
+}
+
 export interface RecordSummary {
   formKey: string;
   plugin: string;

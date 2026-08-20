@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type ApiClient, type MasterIssue } from './medit/ApiClient';
+import { createApiClient, type ApiClient, type MasterIssue, type CompileResult } from './medit/ApiClient';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
@@ -14,7 +14,8 @@ import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
 } from './medit/ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
-import { ApiPluginRepository } from './medit/PluginRepository';
+import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
+import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
@@ -362,6 +363,11 @@ export function activate(context: vscode.ExtensionContext) {
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
 
+  // #416: Save & Compile's diagnostics — one collection for every tracked mod's ledger files, kept
+  // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
+  const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
+  context.subscriptions.push(compileDiagnostics);
+
   backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port);
@@ -402,6 +408,8 @@ export function activate(context: vscode.ExtensionContext) {
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
+    registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
+    registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
@@ -1015,6 +1023,139 @@ function registerTrackCommand(
       await onTracked();
     });
   });
+}
+
+/** #416: Save & Compile — reachable from a tracked plugin row's context menu (`node` given), the
+ *  record editor's title-bar icon (compiles the *active* record's owning plugin — #416 review: this
+ *  used to fall straight through to an unfiltered QuickPick, risking compiling the wrong plugin in a
+ *  multi-mod session), and the command palette (QuickPick fallback only when neither a tree row nor
+ *  an active record is in hand — see `resolveCompileTarget` in `./medit/compileTarget` for the exact
+ *  order). */
+function registerSaveAndCompileCommand(
+  controller: SessionController,
+  repository: PluginRepository,
+  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+  outputChannel: vscode.LogOutputChannel,
+  diagnostics: vscode.DiagnosticCollection,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
+    const target = await resolveCompileTarget(
+      node?.kind === 'plugin' ? node.plugin.name : undefined,
+      activeRecordTracker.current(),
+      {
+        resolveOrigin: (name) => controller.resolveOrigin(name),
+        getRecordOwner: (formKey) => repository.getRecordOwner(formKey),
+        onError: (message) => reportCompileTargetError(outputChannel, 'saveAndCompile', message),
+        pickPlugin: async () => {
+          const plugins = await repository.getPlugins();
+          const choice = await vscode.window.showQuickPick(
+            plugins.map((p) => ({ label: p.name, description: p.origin })),
+            { placeHolder: 'Save & Compile which plugin?' },
+          );
+          if (!choice) return undefined;
+          if (!choice.description) {
+            reportCompileTargetError(outputChannel, 'saveAndCompile', `"${choice.label}" has no mod folder to compile into.`);
+            return undefined;
+          }
+          return { name: choice.label, origin: choice.description };
+        },
+      },
+    );
+    if (!target) return;
+
+    await compileAndReport(controller, diagnostics, target, undefined);
+  });
+}
+
+/** #416 S13: compiling at `main` (no checkout — the edit branch and its dirt are untouched) writes
+ *  the binary as `main` has it, behind one confirmation that names the ref literally, never
+ *  "pristine" (no stored mode, ADR-0041 amendment) — a Modified workflow's pristine restore and an
+ *  Authored workflow's release rebuild are the same gesture, and neither is this command's business
+ *  to tell apart. Tree-row only (unlike Save & Compile itself): naming a ref to compile at from the
+ *  palette with no plugin in hand isn't a gesture worth a QuickPick, so `pickPlugin` here is a no-op
+ *  (`resolveCompileTarget`'s third tier never fires without a tree row). */
+function registerCompileAtRefCommand(
+  controller: SessionController, outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
+    if (node?.kind !== 'plugin') return;
+    const target = await resolveCompileTarget(node.plugin.name, undefined, {
+      resolveOrigin: (name) => controller.resolveOrigin(name),
+      getRecordOwner: () => Promise.resolve(undefined),
+      onError: (message) => reportCompileTargetError(outputChannel, 'compileAtMain', message),
+      pickPlugin: () => Promise.resolve(undefined),
+    });
+    if (!target) return;
+
+    const confirmed = await vscode.window.showWarningMessage(
+      `Compile "${target.name}" at ref "main"?`,
+      {
+        modal: true,
+        detail: `This overwrites the binary with what "main" holds, without touching your edit branch. ` +
+          `Your working-tree changes stay exactly where they are.`,
+      },
+      'Compile at main',
+    );
+    if (confirmed !== 'Compile at main') return;
+
+    await compileAndReport(controller, diagnostics, target, 'main');
+  });
+}
+
+function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, command: string, message: string): void {
+  outputChannel.error(`[extension] ${command}: ${message}`);
+  void vscode.window.showErrorMessage(`Modbench: ${message}`);
+}
+
+/** The shared tail both compile commands share once they have a target: call through
+ *  `SessionController.compile`, publish diagnostics, and report the one of two outcomes
+ *  (`CompileResult.succeeded`) the user got. `SessionController.compile` already surfaces a
+ *  transport/HTTP failure itself (`null`), so this has nothing to report in that case. */
+async function compileAndReport(
+  controller: SessionController, diagnostics: vscode.DiagnosticCollection,
+  target: CompileTarget, atRef: string | undefined,
+): Promise<void> {
+  const result = await controller.compile(target.name, target.origin, atRef);
+  if (!result) return;
+
+  publishCompileDiagnostics(diagnostics, target.origin, result);
+
+  const refSuffix = atRef ? ` at "${atRef}"` : '';
+  if (!result.succeeded) {
+    void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
+    return;
+  }
+  void vscode.window.showInformationMessage(
+    result.diagnostics.length > 0
+      ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
+      : `Modbench: Compiled "${target.name}"${refSuffix}.`,
+  );
+}
+
+/** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
+ *  ledger files held from its last compile — never additive, or a fixed diagnostic would survive
+ *  forever once its record stopped reappearing in a later compile's own report. Grouped by ledger
+ *  file (one `Uri` can carry several diagnostics) since `CompileDiagnostic` names its record's
+ *  field, not a line/column this text format doesn't define. */
+function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, origin: string, result: CompileResult): void {
+  const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!instanceRoot) return;
+  const modFolder = path.join(instanceRoot, 'mods', origin);
+
+  // Clear every URI this collection previously held for this mod folder before republishing —
+  // DiagnosticCollection has no "clear just this prefix" primitive, so the set is tracked here.
+  for (const [uri] of collection) {
+    if (uri.fsPath.startsWith(modFolder + path.sep)) collection.delete(uri);
+  }
+
+  const byUri = new Map<string, vscode.Diagnostic[]>();
+  for (const d of result.diagnostics) {
+    const fsPath = path.join(modFolder, d.ledgerRelativePath);
+    const list = byUri.get(fsPath) ?? [];
+    list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
+    byUri.set(fsPath, list);
+  }
+  for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
 /** #279 / ADR-0035 § Live mutation: drift is the comparison between the origin a plugin's records

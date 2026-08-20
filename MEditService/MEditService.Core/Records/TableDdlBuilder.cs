@@ -23,6 +23,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
         CreatePlacementTables(connection);
+        CreateContainerChildTable(connection);
 
         // ADR-0041 / #413: the reflector no longer emits per-type DDL. Every record type is a
         // json_extract VIEW over `records`, taking the name its wide table used to have — which is
@@ -274,6 +275,29 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         Execute(connection, """
             CREATE INDEX IF NOT EXISTS idx_cell_location_region
                 ON cell_location(parent_worldspace, grid_x, grid_y)
+            """);
+    }
+
+    // #416 S1b: the five ContainerStripFields relationships placement/cell_location don't already
+    // carry (Cell.NavigationMeshes/Landscape, Quest.DialogBranches/DialogTopics,
+    // DialogTopic.Responses) — additive to the tables above, never a replacement for what they
+    // already cover.
+    internal static void CreateContainerChildTable(DuckDBConnection connection)
+    {
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS container_child (
+                child_form_key      VARCHAR NOT NULL,
+                plugin               VARCHAR NOT NULL,
+                origin               VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                parent_form_key      VARCHAR NOT NULL,
+                parent_record_type   VARCHAR NOT NULL,
+                slot_name            VARCHAR NOT NULL,
+                slot_index           INTEGER NOT NULL
+            )
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_container_child_parent
+                ON container_child(parent_form_key, plugin)
             """);
     }
 

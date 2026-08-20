@@ -1,5 +1,7 @@
+using MEditService.Core.Edits;
 using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Session;
 
 namespace MEditService.Api.Endpoints;
@@ -93,6 +95,19 @@ public static class PluginEndpoints
             .WithName("GetTrackStatus")
             .WithTags(Tag)
             .Produces<TrackProgress>();
+
+        // #416: Save & Compile's own door — a plugin and, optionally, a git ref (CompileSource.AtRef,
+        // e.g. "main"). No "confirmed" flag: the compile-at-main modal is extension-side UX (#416
+        // review comment 2 on the go-ahead) — a backend gate on a confirmation boolean would be UX
+        // leaking through the wire. Refusal is a typed, successful response (CompileResult.Succeeded
+        // == false), never an HTTP error status — 200 either way, matching the pinned contract's own
+        // "refusal is a typed result, not an exception".
+        app.MapPost("/plugins/{plugin}/compile", Compile)
+            .WithName("CompilePlugin")
+            .WithTags(Tag)
+            .Produces<CompileResult>()
+            .ProducesProblem(400)
+            .ProducesProblem(500);
 
         return app;
     }
@@ -291,6 +306,36 @@ public static class PluginEndpoints
             return Results.Problem(ex.Message, statusCode: 500);
         }
     }
+
+    // #416: Save & Compile. plugin/origin name the target the same way every other plugin-scoped
+    // door here does; req.Ref, when given, is CompileSource.AtRef rather than the default
+    // CompileSource.WorkingTree — the extension supplies "main" for the compile-at-main gesture,
+    // behind its own confirmation, never a flag on this request.
+    internal static IResult Compile(string plugin, CompileRequest req, PluginCompileService compileService, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var decoded = Uri.UnescapeDataString(plugin);
+        logger.LogInformation("Received Compile for {Plugin} ({Origin}) at {Ref}", decoded, req.Origin, req.Ref ?? "(working tree)");
+
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+
+        // The write path touches a file inside a live git working tree Modbench does not own
+        // exclusively (root CLAUDE.md) — same posture as RecordEndpoints.EditField's own catch, this
+        // door's write-side equivalent, rather than a bodyless 500 a client can't tell apart from the
+        // backend having died.
+        try
+        {
+            CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
+            var result = compileService.Compile(new PluginKey(decoded, req.Origin), source);
+            return Results.Ok(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not compile {Plugin}", decoded);
+            return Results.Problem($"Could not compile {decoded}: {ex.Message}", statusCode: 500);
+        }
+    }
 }
 
 public record CreatePluginRequest(string Name);
@@ -309,3 +354,7 @@ public record RereadPluginRequest(string Plugin, string Path, string Origin);
 public record TrackRequest(string Origin, string Preset);
 
 public record TrackResponse(string Origin);
+
+// #416: Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
+// means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
+public record CompileRequest(string Origin, string? Ref);

@@ -70,4 +70,27 @@ public interface IRecordReads
     /// <summary>A placed ref's structural parentage (cell, persistent/temporary, position). Null
     /// when not placed.</summary>
     PlacementRow? GetPlacement(string formKey, PluginKey plugin);
+
+    /// <summary>
+    /// One cell's own structural parentage — worldspace/block/sub/grid, or interior — the raw row
+    /// <see cref="GetWorldspaceCells"/>/<see cref="GetInteriorCells"/> group into a UI-shaped tree.
+    /// Null when <paramref name="cellFormKey"/> isn't a cell this plugin indexed. #416 S1b: the
+    /// per-cell read compile's container assembler needs — ref-invariant the same way
+    /// <see cref="GetPlacement"/> is, for the same reason (no gesture in this arc moves a cell).
+    /// </summary>
+    CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey);
+
+    /// <summary>
+    /// <paramref name="parentFormKey"/>'s children among the five <see cref="Ledger.ContainerStripFields"/>
+    /// relationships <see cref="GetPlacement"/>/<see cref="GetWorldspaceCells"/> don't already carry
+    /// (#416 S1b) — <c>Cell.NavigationMeshes</c>/<c>Landscape</c>, <c>Quest.DialogBranches</c>/
+    /// <c>DialogTopics</c>, <c>DialogTopic.Responses</c> — in original slot order. Empty when
+    /// <paramref name="parentFormKey"/> has none (including when it isn't one of those container
+    /// types at all).
+    ///
+    /// <para><b>Ref-invariant by construction, not by omission</b> — see <see cref="ContainerChildRow"/>'s
+    /// own doc comment for the invariant this leans on and what a future container-mutating gesture
+    /// would have to change about it.</para>
+    /// </summary>
+    IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey);
 }

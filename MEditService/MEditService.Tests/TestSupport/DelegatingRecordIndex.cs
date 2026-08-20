@@ -49,4 +49,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
         Inner.GetCellReferences(plugin, cellFormKey);
     public PlacementRow? GetPlacement(string formKey, PluginKey plugin) => Inner.GetPlacement(formKey, plugin);
+    public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) => Inner.GetCellLocation(plugin, cellFormKey);
+    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
+        Inner.GetContainerChildren(plugin, parentFormKey);
 }

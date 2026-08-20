@@ -1,4 +1,4 @@
-import type { ApiClient, SessionStatus, TrackStatus } from './ApiClient';
+import type { ApiClient, CompileResult, SessionStatus, TrackStatus } from './ApiClient';
 import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './sessionFailures';
@@ -369,4 +369,53 @@ export class SessionController {
     this.deps.refreshTree();
     return true;
   }
+
+  /** #416: Save & Compile. `atRef` is the compile-at-`main` gesture's own target (never a
+   *  "confirmed" flag — the confirmation itself is extension-side UX, S13); undefined is the
+   *  normal working-tree compile. Returns null (not a thrown error) on a transport/HTTP failure —
+   *  distinct from `CompileResult.succeeded === false`, which is a *typed refusal* the caller
+   *  should show as-is, not a surprise. Never refreshes the tree itself: a compiled binary changes
+   *  nothing `GET /plugins` reports (masters, load order), only bytes on disk the session doesn't
+   *  re-read until asked. */
+  async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | null> {
+    try {
+      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/compile', {
+        params: { path: { plugin } },
+        body: { origin, ref: atRef ?? null },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] compile(${plugin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not compile "${plugin}" — ${text}`);
+        return null;
+      }
+      return data ? toCompileResult(data) : null;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] compile(${plugin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not compile "${plugin}" — ${message}`);
+      return null;
+    }
+  }
+}
+
+// The generated wire type widens every field to optional (Swashbuckle doesn't round-trip C#'s
+// non-nullable annotations) — mapped explicitly, same convention PluginRepository.toPluginMetadata
+// already established, rather than trusted with a cast.
+function toCompileResult(data: {
+  succeeded?: boolean;
+  refusalReason?: string | null;
+  diagnostics?: { formKey?: string | null; ledgerRelativePath?: string | null; message?: string | null }[] | null;
+  masters?: string[] | null;
+}): CompileResult {
+  return {
+    succeeded: data.succeeded ?? false,
+    refusalReason: data.refusalReason ?? null,
+    diagnostics: (data.diagnostics ?? []).map((d) => ({
+      formKey: d.formKey ?? '',
+      ledgerRelativePath: d.ledgerRelativePath ?? '',
+      message: d.message ?? '',
+    })),
+    masters: data.masters ?? [],
+  };
 }
