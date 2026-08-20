@@ -1,8 +1,9 @@
 # Version control — Surface Specification (Track, branch, compile)
 
 **Status: implemented — Track (#414), the text-first edit path (#415), Save & Compile
-(#416), and external-change handling (#417) shipped; the split-out gesture inventory,
-lifecycle gestures, and dirty badges (#426/#427/#428) and closeout truing (#418) remain.**
+(#416), external-change handling (#417), and the editor gesture inventory (#426) shipped;
+the split-out lifecycle gestures and dirty badges (#427/#428) and closeout truing (#418)
+remain.**
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -27,8 +28,11 @@ Edit / defer-read-only (deferral refuses edits per-plugin until answered), Absor
 new baselines to `main` by plumbing and offers the rebase
 (`modbench.pluginListTree.rebase` re-runs it; conflicts resolve in the merge editor and
 the result compiles), and collisions with uncommitted dirt refuse naming the records.
-The remaining editor gestures, lifecycle gestures, and dirty-badge decorations are
-split-out follow-ups. This is the Track/Compile surface spec the
+The full editor gesture inventory is live on the same write path (#426): FormKey and
+condition-function pickers (native QuickPick), flag multi-select, the extended-field
+editor (#230 redirect), VMAD structural ops via the op-envelope through `EditField`, and
+array add/remove/move (withheld on sorted arrays). Lifecycle gestures and dirty-badge
+decorations are split-out follow-ups. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
 implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,
