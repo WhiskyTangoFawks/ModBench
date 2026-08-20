@@ -100,16 +100,28 @@ public sealed class PluginCompileService(
             .Select(p => p.Name)
             .ToList();
 
-        writer.SaveFromModAsync(mod, metadata.Path, loadOrder).GetAwaiter().GetResult();
-
-        // #416 S7/S8: the ref advances only after the binary write above has landed — never before,
-        // never on a refused compile. An AtRef compile parks too (go-ahead note 1): without this,
-        // #417's self-echo suppression breaks the moment a pristine restore runs — the binary changes
-        // to the ref's bytes while the parked trailer still names the old working-tree hash, so
-        // Modbench's own write would read as an external change.
-        var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(metadata.Path)));
+        // #416 S9 (review): every compile runs through the journal, batch of one — the marker names
+        // this plugin before the binary write below begins, and is cleared only once the whole batch
+        // (here, the one plugin) has landed. Everything above this point is pure computation/refusal
+        // with nothing on disk for a crash to leave ambiguous; from here on, a crash mid-flight is
+        // exactly what the marker is for. compileOne is not wrapped in a try/catch: an exception from
+        // the write propagates out of RunBatch (and out of this method) with the marker left exactly
+        // as CompileJournal.WriteMarker last wrote it — the same observable state a real crash leaves,
+        // which is what PendingRecovery reads back for #381/#417.
         var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
-        LedgerRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
+        CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
+        {
+            writer.SaveFromModAsync(mod, metadata.Path, loadOrder).GetAwaiter().GetResult();
+
+            // #416 S7/S8: the ref advances only after the binary write above has landed — never
+            // before, never on a refused compile. An AtRef compile parks too (go-ahead note 1):
+            // without this, #417's self-echo suppression breaks the moment a pristine restore runs —
+            // the binary changes to the ref's bytes while the parked trailer still names the old
+            // working-tree hash, so Modbench's own write would read as an external change.
+            var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(metadata.Path)));
+            LedgerRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
+            return true;
+        });
 
         var masters = index.GetEffectiveMasters(plugin);
         logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} ledger records",
