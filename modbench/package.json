@@ -466,6 +466,21 @@
         "command": "modbench.pluginListTree.rebase",
         "title": "Rebase onto Updated Baseline",
         "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.create",
+        "title": "Add",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.delete",
+        "title": "Remove",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.renumber",
+        "title": "Change FormID…",
+        "category": "Modbench"
       }
     ],
     "menus": {
@@ -608,6 +623,18 @@
         },
         {
           "command": "modbench.pluginListTree.rebase",
+          "when": "false"
+        },
+        {
+          "command": "modbench.record.create",
+          "when": "false"
+        },
+        {
+          "command": "modbench.record.delete",
+          "when": "false"
+        },
+        {
+          "command": "modbench.record.renumber",
           "when": "false"
         }
       ],
@@ -875,6 +902,21 @@
           "command": "modbench.pluginListTree.rebase",
           "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
           "group": "pluginActions@6"
+        },
+        {
+          "command": "modbench.record.create",
+          "when": "view == modbench.pluginListTree && viewItem == recordType",
+          "group": "recordTypeActions@1"
+        },
+        {
+          "command": "modbench.record.delete",
+          "when": "view == modbench.pluginListTree && viewItem == record",
+          "group": "recordActions@1"
+        },
+        {
+          "command": "modbench.record.renumber",
+          "when": "view == modbench.pluginListTree && viewItem == record",
+          "group": "recordActions@2"
         }
       ],
       "webview/context": [

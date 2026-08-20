@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
@@ -240,12 +241,14 @@ public sealed class SessionManager(
             var mod = session.GetMod(plugin.Name, plugin.Origin)!;
 
             _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
+            PluginKey key;
             try
             {
                 // #271 / ADR-0036: threads the origin GameSession already resolved (#269) into the
                 // index, so the DuckDB row is identified by (origin, plugin) together, not filename
                 // alone.
-                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates, new PluginKey(plugin.Name, plugin.Origin));
+                key = new PluginKey(plugin.Name, plugin.Origin);
+                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates, key);
             }
             catch (Exception ex)
             {
@@ -256,6 +259,24 @@ public sealed class SessionManager(
                 _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable this session", plugin.Name);
                 session.RecordIndexFailure(plugin.Name, ex.Message);
                 continue;
+            }
+
+            // #427 Epic B′: rediscover any working-tree-only create this plugin's ledger tree already
+            // holds — Index() above only knows the binary, so a record created in a prior, uncompiled
+            // session would otherwise vanish from the read model here. A separate try/catch from
+            // Index() above: the plugin's binary content indexed fine, so a sweep failure (the ledger
+            // folder locked, vanished, or otherwise unreadable — never-assume-exclusive-ownership)
+            // degrades to "this session doesn't see that pending create yet", not to dropping the
+            // whole plugin the way a real indexing failure does.
+            try
+            {
+                if (ModFolders.Of(plugin.Origin, plugin.Path) is { } modFolder && LedgerRepository.IsTracked(modFolder))
+                    WorkingTreeCreateRediscovery.Sweep(repository, modFolder, key);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                _logger.LogWarning(ex,
+                    "Could not rediscover working-tree-only creates for {Plugin}; serving the indexed state", plugin.Name);
             }
 
             lock (_lock)

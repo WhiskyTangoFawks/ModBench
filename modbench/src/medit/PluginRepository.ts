@@ -147,6 +147,11 @@ export interface PluginRepository {
   // multi-mod session. undefined for an unknown FormKey (404) — never thrown, since "the actively
   // open record just isn't resolvable" is the caller's own fallback path, not a failure to report.
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
+  // #427: the Renumber gesture's FormID input box's suggested default — the same both-refs
+  // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
+  // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
+  // other read here.
+  peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
   // Issue #211: the condition-function picker's catalog — every function name Mutagen resolves
   // for the loaded session's game, backing the extension-host QuickPick. Degrades to [] on a
   // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
@@ -287,6 +292,14 @@ export class ApiPluginRepository implements PluginRepository {
     if (response.status === 404) return undefined;
     this.ensureOk(`getRecordOwner(${formKey})`, response, error);
     return data?.plugin && data.origin ? { plugin: data.plugin, origin: data.origin } : undefined;
+  }
+
+  async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/records/next-form-key', {
+      params: { path: { plugin }, query: { origin } },
+    });
+    this.ensureOk(`peekNextFreeFormKey(${plugin})`, response, error);
+    return data?.formKey ?? '';
   }
 
   async getConditionFunctions(): Promise<string[]> {

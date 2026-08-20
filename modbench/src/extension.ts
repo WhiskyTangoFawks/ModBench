@@ -9,7 +9,9 @@ import { createApiClient, type ApiClient, type MasterIssue, type CompileResult }
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
-import { LoadMoreNode, PluginTreeNode, PluginTreeProvider, headerFormKeyFor } from './medit/PluginTreeProvider';
+import {
+  LoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, headerFormKeyFor,
+} from './medit/PluginTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
 } from './medit/ReferencedByTreeProvider';
@@ -409,10 +411,7 @@ export function activate(context: vscode.ExtensionContext) {
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
-    registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
-    registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
-    registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
-    registerRebaseCommand(controller, repository, outputChannel),
+    ...registerPluginRowCommands(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     // #417: started once at activation, not per session — see the function's own doc comment.
     { dispose: startExternalChangeDialogPolling(repository, controller, outputChannel, log) },
     ...registerEditorCommands({
@@ -1110,6 +1109,26 @@ function registerRevealInExplorerCommand(
   });
 }
 
+/** Every plugin-row command (Track, Save & Compile, compile-at-ref, Rebase, the #427 lifecycle
+ *  gestures) grouped so `activate()` stays under its own size budget — same reasoning as
+ *  `registerEditorCommands`'s own grouping, one level up (plugin-tree rows rather than the record
+ *  editor's own commands). */
+function registerPluginRowCommands(
+  controller: SessionController,
+  repository: ApiPluginRepository,
+  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
+  outputChannel: vscode.LogOutputChannel,
+  compileDiagnostics: vscode.DiagnosticCollection,
+): vscode.Disposable[] {
+  return [
+    registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
+    registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
+    registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
+    registerRebaseCommand(controller, repository, outputChannel),
+    ...registerRecordLifecycleCommands(controller, repository, outputChannel),
+  ];
+}
+
 /** #414/ADR-0041: the Track gesture. Resolves the clicked row's plugin name to the mod folder the
  *  session actually loaded it from, asks which `.gitignore` preset to generate (Edits is the
  *  default — Everything is the opt-in authoring choice), then delegates the HTTP call to
@@ -1155,6 +1174,88 @@ function registerTrackCommand(
       await onTracked();
     });
   });
+}
+
+/** #427: the three lifecycle gestures — create, delete, renumber — as Plugins-tree row commands on
+ *  the record browser (ADR-0034: xEdit hosts Add/Remove/Change FormID in its own tree's context
+ *  menu, not the grid — this is the tree, not the record editor's field grid). Titled to match
+ *  xEdit's own captions exactly ("Add" / "Remove" / "Change FormID…", `xeMainForm.dfm`'s
+ *  `mniNavAdd`/`mniNavRemove`/`mniNavChangeFormID`).
+ *
+ *  Each resolves the clicked row's origin the same way `registerTrackCommand` does (a node's own
+ *  `origin` when the row already carries it, else `controller.resolveOrigin` — undefined means an
+ *  ordinary load-order plugin, per ADR-0036) — there is no ambient fallback worth a QuickPick, which
+ *  is why all three are palette-gated (`packageJson.test.ts`'s `PALETTE_GATED`). */
+function registerRecordLifecycleCommands(
+  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable[] {
+  const resolveOriginOrReport = async (node: { origin?: string; pluginName: string }): Promise<string | undefined> => {
+    const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
+    if (!origin) {
+      outputChannel.error(`[extension] record lifecycle command could not resolve an origin for "${node.pluginName}"`);
+      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${node.pluginName}" belongs to.`);
+    }
+    return origin;
+  };
+
+  return [
+    // xEdit's own "Add": zero friction, no prompt — a blank record appears immediately, named
+    // after the fact by editing its EditorID field like any other, matching xEdit's own gesture
+    // (EditTips: no modal confirmation on edit beyond the one-time EditWarn).
+    vscode.commands.registerCommand('modbench.record.create', async (node?: RecordTypeNode) => {
+      if (node?.kind !== 'recordType') return;
+      const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.plugin });
+      if (!origin) return;
+
+      const formKey = await controller.createRecord(node.plugin, origin, node.recordType);
+      if (formKey) void vscode.window.showInformationMessage(`Modbench: Added ${formKey}.`);
+    }),
+
+    // xEdit's own "Remove": MessageDlg('Are you sure you want to permanently remove <Name>?',
+    // mtConfirmation, [mbYes, mbNo]) — the native modal equivalent, naming the same record identity
+    // xEdit's own confirmation does, so the user confirms the right thing.
+    vscode.commands.registerCommand('modbench.record.delete', async (node?: RecordNode) => {
+      if (node?.kind !== 'record') return;
+      const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.record.plugin });
+      if (!origin) return;
+
+      const label = node.record.editorId ? `${node.record.editorId} [${node.record.formKey}]` : node.record.formKey;
+      const choice = await vscode.window.showWarningMessage(
+        `Are you sure you want to permanently remove ${label}?`, { modal: true }, 'Remove',
+      );
+      if (choice !== 'Remove') return;
+
+      await controller.deleteRecord(node.record.formKey, node.record.plugin, origin);
+    }),
+
+    // xEdit's own "Change FormID": InputQuery('New FormID', ...) — a native InputBox, prefilled with
+    // the both-refs next-free suggestion (xEdit's own "New FormID generated" flow) so accepting the
+    // default is a single Enter; typing over it is xEdit's typed-FormID path, validated server-side.
+    vscode.commands.registerCommand('modbench.record.renumber', async (node?: RecordNode) => {
+      if (node?.kind !== 'record') return;
+      const origin = await resolveOriginOrReport({ origin: node.origin, pluginName: node.record.plugin });
+      if (!origin) return;
+
+      let suggested: string | undefined;
+      try {
+        suggested = await repository.peekNextFreeFormKey(node.record.plugin, origin);
+      } catch (e) {
+        // Background/recoverable (ADR-0026): the input box still works with no prefill, so this is
+        // a log line, not a toast — the command is not blocked on it.
+        outputChannel.warn(`[extension] record.renumber could not fetch a suggested FormKey: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      const input = await vscode.window.showInputBox({
+        prompt: `New FormID for ${node.record.formKey}`,
+        value: suggested,
+        valueSelection: undefined,
+      });
+      if (input === undefined) return; // cancelled
+
+      const newFormKey = await controller.renumberRecord(node.record.formKey, node.record.plugin, origin, input || undefined);
+      if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Renumbered to ${newFormKey}.`);
+    }),
+  ];
 }
 
 /** #417: polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and

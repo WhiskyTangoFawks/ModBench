@@ -164,6 +164,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a new record as a working-tree change (#427).
+         * @description Mints a new record and writes it as a new ledger file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled. Not the retired pending-change-era create this same route once served; that mechanism (staged rows, no ledger text) was removed with ADR-0041/#410.
+         */
+        post: operations["CreateRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/plugins/{plugin}/records/next-form-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PeekNextFreeFormKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/external-changes/status": {
         parameters: {
             query?: never;
@@ -366,6 +402,46 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["EditRecordField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/records/{formKey}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete a record as a working-tree change (#415/#427).
+         * @description Deletes the record's ledger file — a git-native, null-Body working-tree change (#415's mechanism): gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other dangling link.
+         */
+        post: operations["DeleteRecord"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/records/{formKey}/renumber": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renumber a native record's FormKey as a delete+create pair (#427).
+         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old ledger file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it. Not the retired pending-change-era renumber this same route once served; that mechanism (staged rows, no ledger text, no reference cascade) was removed with ADR-0041/#410.
+         */
+        post: operations["RenumberRecord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -669,6 +745,9 @@ export interface components {
         };
         /** @enum {string} */
         MasterIssueKind: "DirectlyMissing" | "Unloadable";
+        NextFreeFormKeyResponse: {
+            formKey?: string | null;
+        };
         ParsedCondition: {
             function?: string | null;
             operator?: components["schemas"]["ConditionOperator"];
@@ -749,6 +828,25 @@ export interface components {
             refusalReason?: string | null;
             conflictedPaths?: string[] | null;
         };
+        RecordCreateRequest: {
+            origin?: string | null;
+            recordType?: string | null;
+            editorId?: string | null;
+            formKey?: string | null;
+        };
+        RecordCreateResponse: {
+            applied?: boolean;
+            formKey?: string | null;
+            recordType?: string | null;
+        };
+        RecordDeleteRequest: {
+            plugin?: string | null;
+            origin?: string | null;
+        };
+        RecordDeleteResponse: {
+            applied?: boolean;
+            formKey?: string | null;
+        };
         RecordDetail: {
             formKey?: string | null;
             plugin?: string | null;
@@ -770,6 +868,16 @@ export interface components {
             applied?: boolean;
             formKey?: string | null;
             fieldPath?: string | null;
+        };
+        RecordRenumberRequest: {
+            plugin?: string | null;
+            origin?: string | null;
+            newFormKey?: string | null;
+        };
+        RecordRenumberResponse: {
+            applied?: boolean;
+            oldFormKey?: string | null;
+            newFormKey?: string | null;
         };
         RecordSummary: {
             formKey?: string | null;
@@ -1318,6 +1426,119 @@ export interface operations {
             };
         };
     };
+    CreateRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordCreateResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    PeekNextFreeFormKey: {
+        parameters: {
+            query: {
+                origin: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextFreeFormKeyResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     GetExternalChangeStatus: {
         parameters: {
             query?: never;
@@ -1775,6 +1996,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordFieldEditResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    DeleteRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordDeleteResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    RenumberRecord: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordRenumberRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecordRenumberResponse"];
                 };
             };
             /** @description Bad Request */

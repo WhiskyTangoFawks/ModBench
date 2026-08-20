@@ -12,6 +12,12 @@ namespace MEditService.Tests.Api;
 /// through the identical query path. An absence assertion alone passes just as happily against an
 /// empty document, a typo'd JSON pointer or a host that failed to map any endpoint; pairing it
 /// with a survivor that must be found through the same lookup makes those failure modes visible.
+///
+/// <para>The list pins the retired staged pending-change <b>meaning</b>'s surface, not a permanent
+/// ban on the URL strings themselves: a same-shaped successor route carrying genuinely new
+/// semantics is legitimate and expected to reuse the natural shape rather than adopt a warped name
+/// to dodge this guard (#427 — see the two removals below) — the remaining entries are routes whose
+/// underlying concepts are actually dead, not merely unclaimed.</para>
 /// </summary>
 public sealed class RetiredEditingWireSurfaceTests
 {
@@ -43,8 +49,12 @@ public sealed class RetiredEditingWireSurfaceTests
         [
             "/records/delete",
             "/records/{formKey}/copy-to/{targetPlugin}",
-            "/records/{formKey}/renumber",
-            "/plugins/{plugin}/records",
+            // "/records/{formKey}/renumber" removed: reintroduced by #427 on working-tree-ledger
+            // semantics (renumber = delete+create pair with a cross-plugin reference cascade), not
+            // the retired staged pending-change renumber this list used to guard.
+            // "/plugins/{plugin}/records" removed: reintroduced by #427 on working-tree-ledger
+            // semantics (create = a new ledger file, answering at Effective only), not the retired
+            // staged pending-change create this list used to guard.
             "/plugins/{plugin}/cells/{cellFormKey}/placed",
             "/changes",
             "/changes/{changeId}",

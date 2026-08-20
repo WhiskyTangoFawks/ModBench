@@ -76,6 +76,55 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
+        // #427: delete-record — the ledger file goes away and #415's null-Body mechanism takes it
+        // from there. Same door, same refusals, same doctrine as EditField above.
+        app.MapPost("/records/{formKey}/delete", (
+            string formKey, RecordDeleteRequest request, RecordEditService edits) =>
+            DeleteRecord(formKey, request, edits, logger))
+        .WithName("DeleteRecord")
+        .WithSummary("Delete a record as a working-tree change (#415/#427).")
+        .WithDescription(
+            "Deletes the record's ledger file — a git-native, null-Body working-tree change (#415's " +
+            "mechanism): gone at Effective, still served at Head until the deletion is committed and " +
+            "compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes " +
+            "dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other " +
+            "dangling link.")
+        .WithTags("Records")
+        .Produces<RecordDeleteResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500)
+        .ProducesProblem(503);
+
+        // #427: renumber — a delete+create pair plus the cross-plugin reference cascade (Q5). Same
+        // route shape a retired pending-change-era endpoint once had (RetiredEditingWireSurfaceTests
+        // used to pin it absent); the summary/description below carry the "same string, new meaning"
+        // distinction onto the surface itself, not just a test comment.
+        app.MapPost("/records/{formKey}/renumber", (
+            string formKey, RecordRenumberRequest request, RecordEditService edits) =>
+            RenumberRecord(formKey, request, edits, logger))
+        .WithName("RenumberRecord")
+        .WithSummary("Renumber a native record's FormKey as a delete+create pair (#427).")
+        .WithDescription(
+            "Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs " +
+            "collision-safe, or an explicit target) as a working-tree delete of the old ledger file " +
+            "plus a create of the new one, cascading the FormKey change into every tracked plugin that " +
+            "references it. Not the retired pending-change-era renumber this same route once served; " +
+            "that mechanism (staged rows, no ledger text, no reference cascade) was removed with " +
+            "ADR-0041/#410.")
+        .WithTags("Records")
+        .Produces<RecordRenumberResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        // A partial-cascade failure (Q5(b)) surfaces here too — same shape as every other write
+        // path's I/O failure, just with a richer message naming which repos already have dirt.
+        .ProducesProblem(500)
+        .ProducesProblem(503);
+
         return app;
     }
 
@@ -123,6 +172,62 @@ public static class RecordEndpoints
         }
     }
 
+    internal static IResult DeleteRecord(string formKey, RecordDeleteRequest request, RecordEditService edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        logger.LogInformation("Received DeleteRecord for {FormKey} in {Plugin} ({Origin})", decoded, request.Plugin, request.Origin);
+
+        if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
+            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+
+        try
+        {
+            var result = edits.DeleteRecord(new PluginKey(request.Plugin, request.Origin), decoded);
+            return result.Applied ? Results.Ok(new RecordDeleteResponse(true, decoded)) : Refusal(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not delete the ledger file for {FormKey}", decoded);
+            return Results.Problem($"Could not delete the ledger file for {decoded}: {ex.Message}", statusCode: 500);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No usable session while deleting {FormKey}", decoded);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
+    internal static IResult RenumberRecord(string formKey, RecordRenumberRequest request, RecordEditService edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        logger.LogInformation(
+            "Received RenumberRecord for {FormKey} in {Plugin} ({Origin}) to {NewFormKey}",
+            decoded, request.Plugin, request.Origin, request.NewFormKey ?? "(auto)");
+
+        if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
+            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+
+        try
+        {
+            var result = edits.RenumberRecord(new PluginKey(request.Plugin, request.Origin), decoded, request.NewFormKey);
+            return result.Applied
+                ? Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!))
+                : Refusal(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Q5(b): a partial-cascade failure lands here too, with the richer message
+            // RecordEditService.RenumberRecord already built naming which repos have dirt.
+            logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
+            return Results.Problem(ex.Message, statusCode: 500);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No usable session while renumbering {FormKey}", decoded);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
     /// <summary>
     /// A refused edit as ProblemDetails, carrying the <see cref="RecordEditRefusal"/> as a
     /// <c>refusal</c> extension beside the human-readable detail — AC5's "typed refusal mirroring the
@@ -130,7 +235,11 @@ public static class RecordEndpoints
     /// behaves sanely without knowing our vocabulary; the extension says exactly which one, so an
     /// agent never has to match on prose (ADR-0026).
     /// </summary>
-    private static IResult Refusal(RecordEditResult result) => Results.Problem(
+    // Internal, not private: PluginEndpoints.CreateRecord (#427) shares this exact mapping — the
+    // route lives under /plugins/{plugin}/records (the FormKey doesn't exist to key a /records/{formKey}
+    // route on), but a refused create is the same RecordEditResult shape as every other write-path
+    // refusal here, and a second copy of this switch is how the two would drift.
+    internal static IResult Refusal(RecordEditResult result) => Results.Problem(
         detail: result.Message,
         statusCode: result.Refusal switch
         {

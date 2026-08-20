@@ -466,10 +466,16 @@ describe('package.json command titles and categories (#280)', () => {
     // #417: needs the clicked row's plugin name to resolve which mod folder (origin) to rebase —
     // same posture as Track/compileAtMain, no ambient fallback worth a QuickPick.
     'modbench.pluginListTree.rebase',
+    // #427: each needs the clicked row's own identity (recordType node's plugin/recordType, or a
+    // record row's own FormKey/plugin) — no ambient fallback worth a QuickPick-over-QuickPick,
+    // same posture as the tree-row-gated commands above.
+    'modbench.record.create',
+    'modbench.record.delete',
+    'modbench.record.renumber',
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(32);
+    expect(PALETTE_GATED).toHaveLength(35);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));

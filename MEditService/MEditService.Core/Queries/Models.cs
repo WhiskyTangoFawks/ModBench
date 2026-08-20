@@ -261,3 +261,26 @@ public record RecordFieldEditRequest(
 /// they are ProblemDetails carrying a <c>refusal</c> extension, so an HTTP client's ordinary
 /// success check is also the correct check (ADR-0026).</summary>
 public record RecordFieldEditResponse(bool Applied, string FormKey, string FieldPath);
+
+// #427: the three lifecycle gestures' wire shapes, on the same door (Plugin/Origin as the compound
+// identity, refusals as ProblemDetails carrying the same `refusal` extension) EditField already
+// established.
+
+/// <summary><see cref="FormKey"/> null means auto-allocate the next free local FormID (both-refs
+/// collision-safe); non-null is xEdit's typed-FormID path.</summary>
+public record RecordCreateRequest(string Origin, string RecordType, string? EditorId, string? FormKey);
+
+public record RecordCreateResponse(bool Applied, string FormKey, string RecordType);
+
+public record RecordDeleteRequest(string Plugin, string Origin);
+
+public record RecordDeleteResponse(bool Applied, string FormKey);
+
+/// <summary><see cref="NewFormKey"/> null means auto-allocate; non-null is xEdit's typed-FormID
+/// renumber path.</summary>
+public record RecordRenumberRequest(string Plugin, string Origin, string? NewFormKey);
+
+public record RecordRenumberResponse(bool Applied, string OldFormKey, string NewFormKey);
+
+/// <summary>The Renumber gesture's FormID input box's suggested default (<c>RecordEditService.PeekNextFreeFormKey</c>).</summary>
+public record NextFreeFormKeyResponse(string FormKey);

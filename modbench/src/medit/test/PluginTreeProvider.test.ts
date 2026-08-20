@@ -93,6 +93,8 @@ function makeRepository(overrides: Partial<{
     getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     // #416 review: the tree provider never compiles either — same "whole surface, unused here" note.
     getRecordOwner: vi.fn(),
+    // #427: the tree provider never renumbers either — same "whole surface, unused here" note.
+    peekNextFreeFormKey: vi.fn(),
   };
 }
 

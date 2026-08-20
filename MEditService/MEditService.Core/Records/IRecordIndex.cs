@@ -58,8 +58,10 @@ public interface IRecordIndex : IRecordReads, IDisposable
     ///
     /// <para>Idempotent, and safe to call with deltas for records this plugin does not hold: an
     /// unknown FormKey is skipped, not thrown on (the seam's missing-data rule). Creating a record
-    /// that exists at neither ref is not expressible here — it is a lifecycle gesture with its own
-    /// ticket.</para>
+    /// that exists at neither ref is not expressible here — that is <see cref="CreateWorkingTreeRecord"/>,
+    /// its own method rather than a widened delta shape, because this method's whole contract (byte-compare
+    /// convergence against a fixed baseline, snapshot-on-first-divergence) presupposes a baseline that a
+    /// create does not have.</para>
     ///
     /// <para><b>No #417 external-change deferral check lives here, deliberately.</b> This method has
     /// two legitimate callers: <c>Edits.RecordEditService</c> (an actual write gesture) and
@@ -68,11 +70,46 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// path 3's contract is "reads continue serving last-known state" while deferred, and a guard
     /// here would block reads, which are not editing. The deferral refusal is enforced at
     /// <c>RecordEditService</c>'s own entry points instead (see its doc comment); every new write
-    /// gesture must enter through <c>RecordEditService</c>, never call this method directly, to
-    /// inherit that refusal — this namespace must not learn Ledger's vocabulary (deferral, tracked,
-    /// external change) either way.</para>
+    /// gesture must enter through <c>RecordEditService</c>, never call this method (or
+    /// <see cref="CreateWorkingTreeRecord"/>) directly, to inherit that refusal — this namespace must
+    /// not learn Ledger's vocabulary (deferral, tracked, external change) either way. Both methods
+    /// carry this same signpost so a caller reading either one learns the rule.</para>
     /// </summary>
     void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
+
+    /// <summary>
+    /// #427: materializes a record that exists at <b>neither</b> ref — the one case
+    /// <see cref="ApplyWorkingTreeChanges"/> deliberately refuses to express. Inserts one row directly
+    /// with <c>ref = working-tree</c> and no <c>records_committed</c> counterpart, which is what makes
+    /// it answer at <see cref="RecordRef.Effective"/> and stay absent at <see cref="RecordRef.Head"/>
+    /// for free, given how <c>records_head</c> is already defined (union of diverged snapshots with
+    /// still-clean committed rows) — nothing about that view needed to change for creation to fall out
+    /// of it. Also derives <c>form_lookup</c>/<c>form_references</c> for the new record and re-sweeps
+    /// winners (a create is always structural — a row that did not exist now does), the same way
+    /// <see cref="ApplyWorkingTreeChanges"/> does for an ordinary structural delta.
+    ///
+    /// <para>Throws <see cref="ArgumentException"/> if <paramref name="key"/> already holds
+    /// <paramref name="formKey"/> at either ref — the caller (FormKey allocation, collision checking)
+    /// owns picking a FormKey nothing already answers to; this method only refuses to silently
+    /// overwrite one that does.</para>
+    ///
+    /// <para><b>No #417 external-change deferral check lives here, deliberately</b> — the same
+    /// signpost <see cref="ApplyWorkingTreeChanges"/> carries, and for the identical reason: this
+    /// method has two legitimate callers, not one. <c>Edits.RecordEditService.CreateRecord</c> is the
+    /// actual write gesture, and every new write gesture must enter through
+    /// <c>Edits.RecordEditService</c> to inherit the deferral/untracked refusals — never call this
+    /// method directly for a gesture. The second is
+    /// <c>Ledger.WorkingTreeCreateRediscovery</c>'s session-load sweep, which is recovery, not
+    /// editing: a record a prior, uncompiled session created has no binary row for ordinary
+    /// <see cref="Index"/> ingest to seed, so without this second caller it would silently vanish from
+    /// the read model on every restart while compile (which assembles from ledger files on disk) still
+    /// emits it — the same "reads must keep serving what the ledger actually says" posture that makes
+    /// <c>LedgerFreshness</c> <see cref="ApplyWorkingTreeChanges"/>'s own second caller. Neither
+    /// second caller is a user-facing edit, so gesture-only guards (deferral, untracked signposting)
+    /// are intentionally not applicable to it — enforcing them here would be blocking a read/recovery
+    /// path with a check that means something only for the write path.</para>
+    /// </summary>
+    void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body);
 
     /// <summary>
     /// #415: re-establishes what "committed" <i>means</i> for these records — <c>HEAD</c> has moved
