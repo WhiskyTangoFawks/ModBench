@@ -386,11 +386,15 @@ without saying what is not yet known would make that worse, not better.
   ([ADR-0026](../adr/0026-error-surfacing-policy.md); same degrade-and-warn convention as other
   secondary reads). The failure is non-fatal to session activation.
 - Conflict-status filtering, EditorID search, and record-type narrowing are all expressed as
-  user-written SQL against the per-type DuckDB tables — **no structured toggle UI**. A built-in
-  `pending-changes.sql` preset (`SELECT DISTINCT form_key FROM pending_changes`) is copied into
-  `modbench.scriptsPath` on first use. That preset is how staged edits are browsed by plugin
-  and record; the [Pending Changes tree](medit-pending-changes-tree.md) is organized by
-  ChangeGroup and deliberately does not duplicate it (ADR-0029).
+  user-written SQL — **no structured toggle UI**. Since #413 (ADR-0041) the per-type names are
+  generated `json_extract` **views** over the one `records` documents table, so existing
+  per-type filter SQL keeps working by name. View columns are **scalar leaves only** with types
+  preserved via casts: primitives, plain enums, FormLinks, translated strings (their `Value`),
+  and `[Flags]` enums as comma-joined member names (filter with `LIKE '%FlagName%'`; `''` when
+  unset). Arrays, structs, and the #263/#339 widened/split columns have **no view column at
+  all** — a record's nested structure lives in its JSON document (`records.document`,
+  reachable with `json_extract` directly for power users). The filter runs once into a
+  materialised set when applied, so its cost is per-apply, not per-listing.
 - **Not yet built.** ADR-0035 proposes narrowing to a single plugin for authoring as `Apply
   Filter to Selected`, adopted from xEdit's `mniNavFilterApplySelected` — the ordinary record
   filter invoked against the tree selection, not a mode, introducing no new term. No such
