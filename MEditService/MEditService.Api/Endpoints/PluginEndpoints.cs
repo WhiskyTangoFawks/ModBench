@@ -111,6 +111,44 @@ public static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(500);
 
+        // #427: create-record — the plugin hosts the new group, so it owns the route the way Compile
+        // does; the FormKey doesn't exist yet, which is exactly why this isn't under /records/{formKey}.
+        // Same route shape a retired pending-change-era endpoint once had (RetiredEditingWireSurfaceTests
+        // used to pin it absent); the summary/description below carry the "same string, new meaning"
+        // distinction onto the surface itself, not just a test comment.
+        app.MapPost("/plugins/{plugin}/records", CreateRecord)
+            .WithName("CreateRecord")
+            .WithSummary("Create a new record as a working-tree change (#427).")
+            .WithDescription(
+                "Mints a new record and writes it as a new ledger file in the plugin's working tree — " +
+                "a git-native create, answering at Effective only until committed and compiled. Not the " +
+                "retired pending-change-era create this same route once served; that mechanism (staged " +
+                "rows, no ledger text) was removed with ADR-0041/#410.")
+            .WithTags(Tag)
+            .Produces<RecordCreateResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(409)
+            .ProducesProblem(422)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
+        // #427: a read-only peek at what CreateRecord/RenumberRecord would auto-allocate — feeds the
+        // Renumber gesture's FormID input box a suggested default (xEdit's own "New FormID
+        // generated" flow), never a write, no tracked gate (pure arithmetic over indexed state).
+        app.MapGet("/plugins/{plugin}/records/next-form-key", (
+            string plugin, string origin, RecordEditService edits, ILoggerFactory loggerFactory) =>
+        {
+            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+            var decoded = Uri.UnescapeDataString(plugin);
+            logger.LogInformation("Received PeekNextFreeFormKey for {Plugin} ({Origin})", decoded, origin);
+            var formKey = edits.PeekNextFreeFormKey(new PluginKey(decoded, origin));
+            return formKey is null ? Results.Problem("No session is loaded.", statusCode: 503) : Results.Ok(new NextFreeFormKeyResponse(formKey));
+        })
+            .WithName("PeekNextFreeFormKey")
+            .WithTags(Tag)
+            .Produces<NextFreeFormKeyResponse>()
+            .ProducesProblem(503);
+
         // #417: polled the same way GET /plugins/track/status is — always 200, an empty list when
         // nothing is pending, no session dependency of its own (the watcher's queue lives on the
         // singleton ExternalChangeWatcher, same idiom as TrackService.Progress).
@@ -384,6 +422,39 @@ public static class PluginEndpoints
         {
             logger.LogError(ex, "Could not compile {Plugin}", decoded);
             return Results.Problem($"Could not compile {decoded}: {ex.Message}", statusCode: 500);
+        }
+    }
+
+    // #427: create-record. FormKey null means auto-allocate (both-refs collision-safe); non-null is
+    // xEdit's typed-FormID path, validated server-side either way (RecordEditRefusal.FormKeyCollision).
+    internal static IResult CreateRecord(string plugin, RecordCreateRequest req, RecordEditService edits, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var decoded = Uri.UnescapeDataString(plugin);
+        logger.LogInformation(
+            "Received CreateRecord for {RecordType} in {Plugin} ({Origin})", req.RecordType, decoded, req.Origin);
+
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(req.RecordType))
+            return Results.Problem("A record type is required.", statusCode: 400);
+
+        try
+        {
+            var result = edits.CreateRecord(new PluginKey(decoded, req.Origin), req.RecordType, req.EditorId, req.FormKey);
+            return result.Applied
+                ? Results.Ok(new RecordCreateResponse(true, result.NewFormKey!, req.RecordType))
+                : RecordEndpoints.Refusal(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not write the ledger file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
+            return Results.Problem($"Could not write the ledger file for the new record: {ex.Message}", statusCode: 500);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No usable session while creating a record in {Plugin}", decoded);
+            return Results.Problem(ex.Message, statusCode: 503);
         }
     }
 

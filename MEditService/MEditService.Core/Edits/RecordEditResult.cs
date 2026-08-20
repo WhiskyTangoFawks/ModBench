@@ -39,15 +39,43 @@ public enum RecordEditRefusal
     /// silently served, per-plugin, until answered — the way out is answering the pending question,
     /// not a command.</summary>
     ExternalChangePending,
+
+    /// <summary>#427 create: no schema table of that name (or it names the header, which is not a
+    /// major record and cannot be created this way).</summary>
+    RecordTypeNotFound,
+
+    /// <summary>#427 create/renumber: the target FormKey is already held by a record at either ref —
+    /// checked server-side even for an allocator-suggested value, since a caller can also supply its
+    /// own (xEdit's typed-FormID path).</summary>
+    FormKeyCollision,
+
+    /// <summary>#427 renumber: at least one plugin holding a reference to the record being renumbered
+    /// is not tracked, so the cascade that would rewrite its FormLink cannot land as a working-tree
+    /// change there. Refused before anything is written, naming every untracked referencer.</summary>
+    UntrackedReferencer,
+
+    /// <summary>#427: one FormKey, not native to the plugin being edited, in either of two shapes —
+    /// renumber's *source* is an override (its FormKey's ModKey is not the plugin being edited, so
+    /// renumbering it would mean renumbering the record it overrides, across every plugin in the
+    /// stack — a different and bigger operation than this gesture does), or create/renumber's
+    /// caller-typed *target* FormKey belongs to a different plugin's ModKey (xEdit's own typed-FormID
+    /// path never offers a foreign one either). The way out for the first is naming the originating
+    /// plugin; for the second, typing a FormKey native to this plugin, or leaving it blank to
+    /// auto-allocate.</summary>
+    NotNativeRecord,
 }
 
 /// <summary>
 /// One edit's outcome. <see cref="Message"/> is user-facing prose for the refusal — it names the way
 /// out, since a refusal the user cannot act on is just dead UI (AC4's "no silent dead UI").
+/// <see cref="NewFormKey"/> is null for every gesture except a successful create or renumber (#427),
+/// which are the only two that mint a FormKey the caller did not already have.
 /// </summary>
-public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, string Message)
+public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null)
 {
     public static RecordEditResult Success() => new(true, RecordEditRefusal.None, "");
+
+    public static RecordEditResult Success(string newFormKey) => new(true, RecordEditRefusal.None, "", newFormKey);
 
     public static RecordEditResult Refused(RecordEditRefusal refusal, string message) =>
         new(false, refusal, message);

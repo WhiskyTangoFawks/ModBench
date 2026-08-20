@@ -377,6 +377,12 @@ describe('modbench command registration', () => {
     // #417: Modbench: Rebase onto Updated Baseline — the offered rebase's re-runnable form. Gated
     // to the clicked row and hidden from the palette, same posture as Track/compileAtMain.
     'modbench.pluginListTree.rebase',
+    // #427: the three lifecycle gestures — Add (recordType row), Remove/Change FormID… (record
+    // row). Gated to the clicked row and hidden from the palette, same posture as Track/rebase —
+    // each needs the clicked row's own identity, with no ambient fallback.
+    'modbench.record.create',
+    'modbench.record.delete',
+    'modbench.record.renumber',
     // #368: the aggregate SCM provider's resource-click command — opens the record's
     // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
     // `command`, not a menu contribution, but still registered (and palette-visible) like every

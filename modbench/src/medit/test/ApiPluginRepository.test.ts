@@ -427,6 +427,28 @@ describe('ApiPluginRepository.getConditionFunctions', () => {
   });
 });
 
+// #427: the Renumber gesture's FormID input box's suggested default.
+describe('ApiPluginRepository.peekNextFreeFormKey', () => {
+  it('calls GET /plugins/{plugin}/records/next-form-key with the plugin/origin and returns the suggested FormKey', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: { formKey: '000801:MyPatch.esp' }, response: { ok: true } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const formKey = await repo.peekNextFreeFormKey('MyPatch.esp', 'ModA');
+
+    expect(formKey).toBe('000801:MyPatch.esp');
+    expect(client.GET).toHaveBeenCalledWith('/plugins/{plugin}/records/next-form-key', {
+      params: { path: { plugin: 'MyPatch.esp' }, query: { origin: 'ModA' } },
+    });
+  });
+
+  it('throws on a non-OK response rather than degrading to an empty suggestion', async () => {
+    await expect(new ApiPluginRepository(nonOkClient()).peekNextFreeFormKey('MyPatch.esp', 'ModA'))
+      .rejects.toThrow(/500/);
+  });
+});
+
 describe('ApiPluginRepository.getWorldspaces', () => {
   it('maps worldspace summaries on an OK response', async () => {
     const client = {

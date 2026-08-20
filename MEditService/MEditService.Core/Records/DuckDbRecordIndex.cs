@@ -443,9 +443,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // Only a delta that added or removed a row can move winner status: a field edit leaves the
         // stack exactly as it was. Re-swept for the whole session rather than for the touched
         // FormKeys because UpdateWinners is the one definition of winning in this class, and a
-        // second, scoped copy of that SQL is precisely how the two would come to disagree. Structural
-        // changes have no user gesture in this ticket (create/delete are a lifecycle ticket of their
-        // own), so this is not on a hot path yet — worth scoping when it is.
+        // second, scoped copy of that SQL is precisely how the two would come to disagree.
+        //
+        // #427 measured this once create/delete/renumber gave structural changes an actual user
+        // gesture (each is single-FormKey, but every one now pays this cost on every call, unlike a
+        // field edit): a throwaway fixture of 48,000 records across 60 participating plugins —
+        // larger than the overwhelming majority of real load orders — put one whole-session
+        // UpdateWinners() call at 18ms. That is not a hot path by any interactive-latency bar, so
+        // this stays whole-session rather than FormKey-scoped; re-measure if a real session's shape
+        // ever makes this number look different.
         if (structural) UpdateWinners();
         tx.Commit();
     }
@@ -511,6 +517,65 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private bool RowExistsAtEffective(PluginKey key, string formKey) =>
         ScalarString("SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!) != null;
+
+    private bool RowExistsAtHead(PluginKey key, string formKey) =>
+        ScalarString($"SELECT form_key FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!) != null;
+
+    /// <summary>See <see cref="IRecordIndex.CreateWorkingTreeRecord"/>.</summary>
+    public void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body)
+    {
+        if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey))
+        {
+            throw new ArgumentException(
+                $"{key.Name} ({key.Origin}) already holds {formKey} at some ref — CreateWorkingTreeRecord " +
+                "is only for a FormKey neither ref answers to.", nameof(formKey));
+        }
+
+        using var tx = Connection.BeginTransaction();
+        InsertNewWorkingTreeRow(key, formKey, recordType, body);
+        RederiveIndexRowsForRecord(key, formKey, body);
+        // A create is always structural — a row that did not exist at Effective now does — so this
+        // always resweeps, the same trigger ApplyOneWorkingTreeChange's own structural deltas use.
+        UpdateWinners();
+        tx.Commit();
+    }
+
+    // No existing Effective row to restore from and no committed snapshot to seed — a create writes
+    // a row from scratch, straight to `ref = working-tree`, with nothing in records_committed. That
+    // omission is exactly what makes records_head (records_committed UNION clean committed rows)
+    // answer nothing for this FormKey without the view itself needing to know about creation at all.
+    private void InsertNewWorkingTreeRow(PluginKey key, string formKey, string recordType, string body)
+    {
+        var loadOrderIdx = ScalarInt32(
+            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
+            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            INSERT INTO records (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{LedgerRef.WorkingTree}', $5, $7)
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
+        cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
+        cmd.Parameters.Add(new DuckDBParameter { Value = body });
+        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
+        cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
+        cmd.ExecuteNonQuery();
+
+        // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord below reads this row
+        // back out of `records`, which is why the insert above must land first.
+    }
+
+    private int? ScalarInt32(string sql, params string[] values)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = sql;
+        AddParams(cmd, values);
+        return cmd.ExecuteScalar() is int i ? i : null;
+    }
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
     public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)

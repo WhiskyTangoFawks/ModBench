@@ -372,6 +372,90 @@ export class SessionController {
     return true;
   }
 
+  /** #427: create-record — mints a new record as a working-tree ledger file (ADR-0041), answering
+   *  at Effective only until committed and compiled. `formKey` is xEdit's typed-FormID path; left
+   *  undefined, the backend auto-allocates the next free local FormID (both-refs collision-safe).
+   *
+   *  Returns the new FormKey on success, `undefined` on failure (already surfaced) — the caller
+   *  (the tree-row command) has nothing further to do with it beyond the refresh below, but a test
+   *  or a future "reveal the new record" gesture can use it. */
+  async createRecord(
+    plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
+  ): Promise<string | undefined> {
+    try {
+      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/records', {
+        params: { path: { plugin } },
+        body: { origin, recordType, editorId: editorId ?? null, formKey: formKey ?? null },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] createRecord(${plugin}, ${recordType}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not create a new ${recordType} record in "${plugin}" — ${text}`);
+        return undefined;
+      }
+      this.deps.refreshTree();
+      return data?.formKey ?? undefined;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] createRecord(${plugin}, ${recordType}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not create a new ${recordType} record in "${plugin}" — ${message}`);
+      return undefined;
+    }
+  }
+
+  /** #427: delete-record — the ledger file goes away and #415's null-Body mechanism takes it from
+   *  there (gone at Effective, still served at Head until compiled). The confirmation ("are you
+   *  sure") is extension-side UX, the same division `compile`'s compile-at-main modal already
+   *  established — this method never asks, only acts. Returns whether it happened. */
+  async deleteRecord(formKey: string, plugin: string, origin: string): Promise<boolean> {
+    try {
+      const { error, response } = await this.deps.client.POST('/records/{formKey}/delete', {
+        params: { path: { formKey } },
+        body: { plugin, origin },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] deleteRecord(${formKey}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not delete ${formKey} — ${text}`);
+        return false;
+      }
+      this.deps.refreshTree();
+      return true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] deleteRecord(${formKey}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not delete ${formKey} — ${message}`);
+      return false;
+    }
+  }
+
+  /** #427: renumber — a delete+create pair plus the cross-plugin reference cascade (native records
+   *  only; an override is refused server-side, naming the originating plugin). `newFormKey` is
+   *  xEdit's typed-FormID path; left undefined, the backend auto-allocates. Returns the new FormKey
+   *  on success, `undefined` on failure (already surfaced, including the untracked-referencer and
+   *  partial-cascade-failure cases — both typed/messaged server-side, per #427's pinned contract). */
+  async renumberRecord(formKey: string, plugin: string, origin: string, newFormKey?: string): Promise<string | undefined> {
+    try {
+      const { data, error, response } = await this.deps.client.POST('/records/{formKey}/renumber', {
+        params: { path: { formKey } },
+        body: { plugin, origin, newFormKey: newFormKey ?? null },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] renumberRecord(${formKey}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not renumber ${formKey} — ${text}`);
+        return undefined;
+      }
+      this.deps.refreshTree();
+      return data?.newFormKey ?? undefined;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] renumberRecord(${formKey}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not renumber ${formKey} — ${message}`);
+      return undefined;
+    }
+  }
+
   /** #416: Save & Compile. `atRef` is the compile-at-`main` gesture's own target (never a
    *  "confirmed" flag — the confirmation itself is extension-side UX, S13); undefined is the
    *  normal working-tree compile. Returns null (not a thrown error) on a transport/HTTP failure —

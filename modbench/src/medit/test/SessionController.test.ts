@@ -40,11 +40,15 @@ function makeClient({
   createPluginOk = true,
   copyRecordOk = true,
   createRecordOk = true,
+  deleteRecordOk = true,
+  renumberRecordOk = true,
 }: {
   plugins?: PluginMetadata[];
   createPluginOk?: boolean;
   copyRecordOk?: boolean;
   createRecordOk?: boolean;
+  deleteRecordOk?: boolean;
+  renumberRecordOk?: boolean;
 } = {}) {
   return {
     GET: vi.fn().mockResolvedValue({ data: plugins, response: { ok: true } }),
@@ -59,11 +63,28 @@ function makeClient({
       if (path === '/records/{formKey}/copy-to/{targetPlugin}') {
         return Promise.resolve(copyRecordOk ? { response: { ok: true, status: 200 } } : drainedError(400, 'Copy failed'));
       }
+      // #427: create/delete/renumber — the wire shapes RecordEndpoints/PluginEndpoints actually
+      // serve (RecordCreateResponse/RecordDeleteResponse/RecordRenumberResponse), not the retired
+      // pending-change-era shapes (e.g. `groupId`) these paths carried before ADR-0041/#410.
       if (path === '/plugins/{plugin}/records') {
         return Promise.resolve(
           createRecordOk
-            ? { response: { ok: true, status: 200 }, data: { formKey: '000801:MyPatch.esp', groupId: 'g1' } }
-            : drainedError(422, 'Copy failed'),
+            ? { response: { ok: true, status: 200 }, data: { applied: true, formKey: '000801:MyPatch.esp', recordType: 'npc_' } }
+            : drainedError(422, 'Unprocessable Content'),
+        );
+      }
+      if (path === '/records/{formKey}/delete') {
+        return Promise.resolve(
+          deleteRecordOk
+            ? { response: { ok: true, status: 200 }, data: { applied: true, formKey: '000801:MyPatch.esp' } }
+            : drainedError(404, 'Not Found'),
+        );
+      }
+      if (path === '/records/{formKey}/renumber') {
+        return Promise.resolve(
+          renumberRecordOk
+            ? { response: { ok: true, status: 200 }, data: { applied: true, oldFormKey: '000801:MyPatch.esp', newFormKey: '000802:MyPatch.esp' } }
+            : drainedError(422, 'Unprocessable Content'),
         );
       }
       return Promise.resolve({ response: { ok: true } });
@@ -784,6 +805,163 @@ describe('SessionController.track', () => {
     const ok = await controller.track('ModA', 'Edits');
 
     expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+// ── create/delete/renumber record (#427) ────────────────────────────────────
+
+describe('SessionController.createRecord', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the plugin/origin/recordType/editorId, refreshes the tree, and returns the new FormKey', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const formKey = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_', 'NewNpc');
+
+    expect(formKey).toBe('000801:MyPatch.esp');
+    expect(deps.client.POST).toHaveBeenCalledWith('/plugins/{plugin}/records', {
+      params: { path: { plugin: 'MyPatch.esp' } },
+      body: { origin: 'ModA', recordType: 'npc_', editorId: 'NewNpc', formKey: null },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('passes an explicit requested FormKey through, xEdit\'s typed-FormID path', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    await controller.createRecord('MyPatch.esp', 'ModA', 'npc_', undefined, '000900:MyPatch.esp');
+
+    expect(deps.client.POST).toHaveBeenCalledWith('/plugins/{plugin}/records', {
+      params: { path: { plugin: 'MyPatch.esp' } },
+      body: { origin: 'ModA', recordType: 'npc_', editorId: null, formKey: '000900:MyPatch.esp' },
+    });
+  });
+
+  // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
+  // notification, not a log line — and nothing is refreshed, because nothing changed.
+  it('surfaces a refusal and reports that it did not happen', async () => {
+    const client = makeClient({ createRecordOk: false });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const formKey = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_');
+
+    expect(formKey).toBeUndefined();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('MyPatch.esp'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const formKey = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_');
+
+    expect(formKey).toBeUndefined();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+describe('SessionController.deleteRecord', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the FormKey/plugin/origin and refreshes the tree', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const ok = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+    expect(ok).toBe(true);
+    expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/delete', {
+      params: { path: { formKey: '000801:MyPatch.esp' } },
+      body: { plugin: 'MyPatch.esp', origin: 'ModA' },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('surfaces a refusal and reports that it did not happen', async () => {
+    const client = makeClient({ deleteRecordOk: false });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:MyPatch.esp'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+describe('SessionController.renumberRecord', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the FormKey/plugin/origin, refreshes the tree, and returns the new FormKey', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const newFormKey = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+    expect(newFormKey).toBe('000802:MyPatch.esp');
+    expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/renumber', {
+      params: { path: { formKey: '000801:MyPatch.esp' } },
+      body: { plugin: 'MyPatch.esp', origin: 'ModA', newFormKey: null },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('passes an explicit requested target FormKey through, xEdit\'s typed-FormID path', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA', '000900:MyPatch.esp');
+
+    expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/renumber', {
+      params: { path: { formKey: '000801:MyPatch.esp' } },
+      body: { plugin: 'MyPatch.esp', origin: 'ModA', newFormKey: '000900:MyPatch.esp' },
+    });
+  });
+
+  // Covers both the untracked-referencer refusal and a partial-cascade I/O failure (#427 Q5) —
+  // both are already-messaged, non-2xx responses by the time they reach this method, so they are
+  // one code path here regardless of which one produced the response.
+  it('surfaces a refusal and reports that it did not happen', async () => {
+    const client = makeClient({ renumberRecordOk: false });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const newFormKey = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+    expect(newFormKey).toBeUndefined();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:MyPatch.esp'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const newFormKey = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
+
+    expect(newFormKey).toBeUndefined();
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
   });
 });
