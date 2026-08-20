@@ -137,6 +137,12 @@ export interface PluginRepository {
   // webview-side RecordSessionClient.searchRecords this replaces). Capped at 20 results, matching
   // the old picker's page size.
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
+  // #416 review: which plugin (+ origin) a FormKey's *winning* override belongs to — the record
+  // editor's Save & Compile icon resolves its active record's owning plugin through this, rather
+  // than falling through to an unfiltered QuickPick that can compile the wrong plugin in a
+  // multi-mod session. undefined for an unknown FormKey (404) — never thrown, since "the actively
+  // open record just isn't resolvable" is the caller's own fallback path, not a failure to report.
+  getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   // Issue #211: the condition-function picker's catalog — every function name Mutagen resolves
   // for the loaded session's game, backing the extension-host QuickPick. Degrades to [] on a
   // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
@@ -256,6 +262,13 @@ export class ApiPluginRepository implements PluginRepository {
       items: (data?.items ?? []).map(toRecordSummary),
       total: data?.total ?? 0,
     };
+  }
+
+  async getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined> {
+    const { data, error, response } = await this.client.GET('/records/{formKey}', { params: { path: { formKey } } });
+    if (response.status === 404) return undefined;
+    this.ensureOk(`getRecordOwner(${formKey})`, response, error);
+    return data?.plugin && data.origin ? { plugin: data.plugin, origin: data.origin } : undefined;
   }
 
   async getConditionFunctions(): Promise<string[]> {

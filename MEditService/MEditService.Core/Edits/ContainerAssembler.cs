@@ -265,8 +265,7 @@ internal static class ContainerAssembler
     {
         if (!clearedSlots.Add((parent, slotName))) return;
 
-        var property = parent.GetType().GetProperty(slotName)
-            ?? throw new InvalidOperationException($"{parent.GetType().Name} has no property '{slotName}'.");
+        var property = RequireProperty(parent, slotName);
         var current = property.GetValue(parent);
         var clear = current?.GetType().GetMethod("Clear", Type.EmptyTypes);
         if (clear != null)
@@ -280,8 +279,7 @@ internal static class ContainerAssembler
     /// <see cref="Ledger.ContainerStripFields.StripInPlace"/>'s own dual-mode shape inverted.</summary>
     private static void AttachChild(object parent, string slotName, IMajorRecord child)
     {
-        var property = parent.GetType().GetProperty(slotName)
-            ?? throw new InvalidOperationException($"{parent.GetType().Name} has no property '{slotName}'.");
+        var property = RequireProperty(parent, slotName);
         var current = property.GetValue(parent);
         if (current == null)
         {
@@ -301,17 +299,23 @@ internal static class ContainerAssembler
     }
 
     private static object GetProperty(object owner, string name) =>
-        (owner.GetType().GetProperty(name) ?? throw new InvalidOperationException($"{owner.GetType().Name} has no property '{name}'."))
-            .GetValue(owner)
+        RequireProperty(owner, name).GetValue(owner)
         ?? throw new InvalidOperationException($"{owner.GetType().Name}.{name} is null.");
 
     private static void SetProperty(object owner, string name, object? value) =>
-        (owner.GetType().GetProperty(name) ?? throw new InvalidOperationException($"{owner.GetType().Name} has no property '{name}'."))
-            .SetValue(owner, value);
+        RequireProperty(owner, name).SetValue(owner, value);
 
     private static Type PropertyType(object owner, string name) =>
-        (owner.GetType().GetProperty(name) ?? throw new InvalidOperationException($"{owner.GetType().Name} has no property '{name}'."))
-            .PropertyType;
+        RequireProperty(owner, name).PropertyType;
+
+    // #416 review: the single place "does this reflected object have the property this call site
+    // needs" is asked and answered — every other member here that used to repeat its own
+    // GetProperty(name) ?? throw goes through this instead, so a stale ContainerStripFields entry
+    // (or a game module missing a property the walker assumes) fails with the same named, actionable
+    // message no matter which of the five call sites hit it first.
+    private static PropertyInfo RequireProperty(object owner, string name) =>
+        owner.GetType().GetProperty(name)
+        ?? throw new InvalidOperationException($"{owner.GetType().Name} has no property '{name}'.");
 
     // The list property's element type — ExtendedList<T> and kin all expose it as their sole
     // interface generic argument's target.

@@ -89,6 +89,8 @@ function makeRepository(overrides: Partial<{
     // whole PluginRepository surface.
     editRecordField: vi.fn(),
     getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    // #416 review: the tree provider never compiles either — same "whole surface, unused here" note.
+    getRecordOwner: vi.fn(),
   };
 }
 

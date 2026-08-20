@@ -14,6 +14,7 @@ import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
 } from './medit/ReferencedByTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
+import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
 import { trackProgressMessage } from './medit/trackProgress';
@@ -407,7 +408,7 @@ export function activate(context: vscode.ExtensionContext) {
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
-    registerSaveAndCompileCommand(controller, repository, outputChannel, compileDiagnostics),
+    registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
@@ -1025,36 +1026,44 @@ function registerTrackCommand(
 }
 
 /** #416: Save & Compile — reachable from a tracked plugin row's context menu (`node` given), the
- *  record editor's title-bar icon, and the command palette (neither of the latter two can supply a
- *  tree row, so both fall through to the same QuickPick every no-argument invocation uses). Refusal
- *  is a typed, successful `CompileResult` (never an HTTP error — SessionController.compile already
- *  reserves `null` for the transport/HTTP failure case, surfaced there), so this command's own job
- *  is purely: resolve the target, publish diagnostics, and tell the user which of the two outcomes
- *  it got. */
+ *  record editor's title-bar icon (compiles the *active* record's owning plugin — #416 review: this
+ *  used to fall straight through to an unfiltered QuickPick, risking compiling the wrong plugin in a
+ *  multi-mod session), and the command palette (QuickPick fallback only when neither a tree row nor
+ *  an active record is in hand — see `resolveCompileTarget` in `./medit/compileTarget` for the exact
+ *  order). */
 function registerSaveAndCompileCommand(
   controller: SessionController,
   repository: PluginRepository,
+  activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
   outputChannel: vscode.LogOutputChannel,
   diagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
-    const target = await resolveCompileTarget(node, controller, repository, outputChannel);
+    const target = await resolveCompileTarget(
+      node?.kind === 'plugin' ? node.plugin.name : undefined,
+      activeRecordTracker.current(),
+      {
+        resolveOrigin: (name) => controller.resolveOrigin(name),
+        getRecordOwner: (formKey) => repository.getRecordOwner(formKey),
+        onError: (message) => reportCompileTargetError(outputChannel, 'saveAndCompile', message),
+        pickPlugin: async () => {
+          const plugins = await repository.getPlugins();
+          const choice = await vscode.window.showQuickPick(
+            plugins.map((p) => ({ label: p.name, description: p.origin })),
+            { placeHolder: 'Save & Compile which plugin?' },
+          );
+          if (!choice) return undefined;
+          if (!choice.description) {
+            reportCompileTargetError(outputChannel, 'saveAndCompile', `"${choice.label}" has no mod folder to compile into.`);
+            return undefined;
+          }
+          return { name: choice.label, origin: choice.description };
+        },
+      },
+    );
     if (!target) return;
 
-    const result = await controller.compile(target.name, target.origin);
-    if (!result) return; // SessionController already surfaced the transport/HTTP failure
-
-    publishCompileDiagnostics(diagnostics, target.origin, result);
-
-    if (!result.succeeded) {
-      void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}" — ${result.refusalReason}`);
-      return;
-    }
-    void vscode.window.showInformationMessage(
-      result.diagnostics.length > 0
-        ? `Modbench: Compiled "${target.name}" — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
-        : `Modbench: Compiled "${target.name}".`,
-    );
+    await compileAndReport(controller, diagnostics, target, undefined);
   });
 }
 
@@ -1063,22 +1072,23 @@ function registerSaveAndCompileCommand(
  *  "pristine" (no stored mode, ADR-0041 amendment) — a Modified workflow's pristine restore and an
  *  Authored workflow's release rebuild are the same gesture, and neither is this command's business
  *  to tell apart. Tree-row only (unlike Save & Compile itself): naming a ref to compile at from the
- *  palette with no plugin in hand isn't a gesture worth the QuickPick-over-QuickPick this would take. */
+ *  palette with no plugin in hand isn't a gesture worth a QuickPick, so `pickPlugin` here is a no-op
+ *  (`resolveCompileTarget`'s third tier never fires without a tree row). */
 function registerCompileAtRefCommand(
   controller: SessionController, outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
-    const name = node.plugin.name;
-    const origin = await controller.resolveOrigin(name);
-    if (!origin) {
-      outputChannel.error(`[extension] compileAtMain could not resolve an origin for "${name}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${name}" belongs to.`);
-      return;
-    }
+    const target = await resolveCompileTarget(node.plugin.name, undefined, {
+      resolveOrigin: (name) => controller.resolveOrigin(name),
+      getRecordOwner: () => Promise.resolve(undefined),
+      onError: (message) => reportCompileTargetError(outputChannel, 'compileAtMain', message),
+      pickPlugin: () => Promise.resolve(undefined),
+    });
+    if (!target) return;
 
     const confirmed = await vscode.window.showWarningMessage(
-      `Compile "${name}" at ref "main"?`,
+      `Compile "${target.name}" at ref "main"?`,
       {
         modal: true,
         detail: `This overwrites the binary with what "main" holds, without touching your edit branch. ` +
@@ -1088,53 +1098,38 @@ function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    const result = await controller.compile(name, origin, 'main');
-    if (!result) return;
-
-    publishCompileDiagnostics(diagnostics, origin, result);
-
-    if (!result.succeeded) {
-      void vscode.window.showErrorMessage(`Modbench: Could not compile "${name}" at "main" — ${result.refusalReason}`);
-      return;
-    }
-    void vscode.window.showInformationMessage(`Modbench: Compiled "${name}" from "main".`);
+    await compileAndReport(controller, diagnostics, target, 'main');
   });
 }
 
-/** A tree-row invocation names its plugin directly; the record editor's title-bar icon and the
- *  palette both invoke with no argument (neither VS Code surface passes one), so both resolve the
- *  same way — a QuickPick over every loaded plugin. Not filtered to tracked-only: `GetPlugins`
- *  carries no tracked flag today, and an untracked pick still gets a clear, named refusal from
- *  compile itself rather than silently vanishing from the list. */
-async function resolveCompileTarget(
-  node: PluginListNode | undefined, controller: SessionController, repository: PluginRepository,
-  outputChannel: vscode.LogOutputChannel,
-): Promise<{ name: string; origin: string } | undefined> {
-  if (node?.kind === 'plugin') {
-    const name = node.plugin.name;
-    // PluginEntry (Mod Management's own vocabulary) carries no origin — resolved the same way
-    // registerTrackCommand's own tree-row case does, never read off the row.
-    const origin = await controller.resolveOrigin(name);
-    if (!origin) {
-      outputChannel.error(`[extension] saveAndCompile could not resolve an origin for "${name}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${name}" belongs to.`);
-      return undefined;
-    }
-    return { name, origin };
-  }
+function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, command: string, message: string): void {
+  outputChannel.error(`[extension] ${command}: ${message}`);
+  void vscode.window.showErrorMessage(`Modbench: ${message}`);
+}
 
-  const plugins = await repository.getPlugins();
-  const choice = await vscode.window.showQuickPick(
-    plugins.map((p) => ({ label: p.name, description: p.origin })),
-    { placeHolder: 'Save & Compile which plugin?' },
-  );
-  if (!choice) return undefined;
-  if (!choice.description) {
-    outputChannel.error(`[extension] saveAndCompile: "${choice.label}" has no origin to compile against`);
-    void vscode.window.showErrorMessage(`Modbench: "${choice.label}" has no mod folder to compile into.`);
-    return undefined;
+/** The shared tail both compile commands share once they have a target: call through
+ *  `SessionController.compile`, publish diagnostics, and report the one of two outcomes
+ *  (`CompileResult.succeeded`) the user got. `SessionController.compile` already surfaces a
+ *  transport/HTTP failure itself (`null`), so this has nothing to report in that case. */
+async function compileAndReport(
+  controller: SessionController, diagnostics: vscode.DiagnosticCollection,
+  target: CompileTarget, atRef: string | undefined,
+): Promise<void> {
+  const result = await controller.compile(target.name, target.origin, atRef);
+  if (!result) return;
+
+  publishCompileDiagnostics(diagnostics, target.origin, result);
+
+  const refSuffix = atRef ? ` at "${atRef}"` : '';
+  if (!result.succeeded) {
+    void vscode.window.showErrorMessage(`Modbench: Could not compile "${target.name}"${refSuffix} — ${result.refusalReason}`);
+    return;
   }
-  return { name: choice.label, origin: choice.description };
+  void vscode.window.showInformationMessage(
+    result.diagnostics.length > 0
+      ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
+      : `Modbench: Compiled "${target.name}"${refSuffix}.`,
+  );
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
