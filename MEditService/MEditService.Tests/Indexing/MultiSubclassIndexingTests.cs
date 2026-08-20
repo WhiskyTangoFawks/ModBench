@@ -39,6 +39,31 @@ public class MultiSubclassIndexingTests
         return rows;
     }
 
+
+    /// <summary>
+    /// #413: these round trips moved off SQL and onto the typed read, because that is where the
+    /// capability now lives. The #263 widened column (gmst/glob `data`) and the #339 split/merged
+    /// columns are deliberately absent from the generated views — a widened column's document holds
+    /// a number for one sibling and a string for another, so no single cast could serve them all,
+    /// and D2's rule is no column rather than a broken one. The typed path has no such problem: it
+    /// reconstitutes the record to its own concrete type (the document names it) and runs the very
+    /// dispatching extractor #263/#339 built, so this asserts the same defect at the surface that
+    /// still answers for it — and, in passing, that reconstitution picks the right subclass.
+    /// </summary>
+    private static Dictionary<string, object?> FieldByEditorId(DuckDbRecordRepository repo, string table, string field)
+    {
+        var result = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var summary in repo.GetRecords(table, null, null, 100, 0).Items)
+        {
+            var detail = repo.GetRecord(table, summary.FormKey, summary.Plugin, summary.Origin, winnerOnly: false);
+            Assert.NotNull(detail);
+            var value = detail.Fields.FirstOrDefault(f => f.Metadata.Name == field);
+            Assert.NotNull(value);
+            result[summary.EditorId!] = value.Value;
+        }
+        return result;
+    }
+
     [Fact]
     public void Index_Gmst_AllSubclasses_DataColumnRoundTripsForEveryType()
     {
@@ -56,9 +81,8 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var rows = Query(repo, "SELECT editor_id, data FROM gmst ORDER BY editor_id");
-        Assert.Equal(4, rows.Count);
-        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r["data"]?.ToString());
+        var byEdid = FieldByEditorId(repo, "gmst", "data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        Assert.Equal(4, byEdid.Count);
         Assert.Equal("42", byEdid["iTest"]);
         Assert.Equal("3.5", byEdid["fTest"]);
         Assert.Equal("hello", byEdid["sTest"]);
@@ -82,9 +106,8 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var rows = Query(repo, "SELECT editor_id, data FROM \"glob\" ORDER BY editor_id");
-        Assert.Equal(4, rows.Count);
-        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r["data"]?.ToString());
+        var byEdid = FieldByEditorId(repo, "glob", "data").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        Assert.Equal(4, byEdid.Count);
         Assert.Equal("7", byEdid["TestGlobInt"]);
         Assert.Equal("1.25", byEdid["TestGlobFloat"]);
         Assert.Equal("3", byEdid["TestGlobShort"]);
@@ -126,9 +149,8 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var rows = Query(repo, "SELECT editor_id, properties FROM omod ORDER BY editor_id");
-        Assert.Equal(5, rows.Count);
-        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => (string?)r["properties"]);
+        var byEdid = FieldByEditorId(repo, "omod", "properties").ToDictionary(kv => kv.Key, kv => kv.Value?.ToString());
+        Assert.Equal(5, byEdid.Count);
         Assert.Contains("BodyPart", byEdid["ArmorMod"]);
         Assert.Contains("ForcedInventory", byEdid["NpcMod"]);
         Assert.Contains("AmmoCapacity", byEdid["WeaponMod"]);
@@ -178,9 +200,8 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var rows = Query(repo, $"SELECT editor_id, \"{winnerColumnName}\" AS winner_value FROM dmgt ORDER BY editor_id");
-        Assert.Equal(2, rows.Count); // rows are never dropped, whichever subclass loses the schema race
-        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r["winner_value"]);
+        var byEdid = FieldByEditorId(repo, "dmgt", winnerColumnName);
+        Assert.Equal(2, byEdid.Count); // rows are never dropped, whichever subclass loses the schema race
         Assert.NotNull(byEdid[winnerEdid]); // winner's own data is still readable, now via its shape column
     }
 
@@ -215,16 +236,17 @@ public class MultiSubclassIndexingTests
         repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
         repo.UpdateWinners();
 
-        var rows = Query(repo,
-            $"SELECT editor_id, \"{structColumnName}\" AS struct_value, \"{scalarColumnName}\" AS scalar_value " +
-            "FROM dmgt ORDER BY editor_id");
-        Assert.Equal(2, rows.Count);
-        var byEdid = rows.ToDictionary(r => (string)r["editor_id"]!, r => r);
+        var structValues = FieldByEditorId(repo, "dmgt", structColumnName);
+        var scalarValues = FieldByEditorId(repo, "dmgt", scalarColumnName);
+        Assert.Equal(2, structValues.Count);
 
-        Assert.NotNull(byEdid["PlainDmgt339"]["struct_value"]);
-        Assert.Null(byEdid["PlainDmgt339"]["scalar_value"]);
+        // Each sibling reads through its own shape column and nowhere else — the dispatch guard
+        // #339 built, now exercised against a record reconstituted from its document rather than
+        // against a wide row.
+        Assert.NotNull(structValues["PlainDmgt339"]);
+        Assert.Null(scalarValues["PlainDmgt339"]);
 
-        Assert.NotNull(byEdid["IndexedDmgt339"]["scalar_value"]);
-        Assert.Null(byEdid["IndexedDmgt339"]["struct_value"]);
+        Assert.NotNull(scalarValues["IndexedDmgt339"]);
+        Assert.Null(structValues["IndexedDmgt339"]);
     }
 }

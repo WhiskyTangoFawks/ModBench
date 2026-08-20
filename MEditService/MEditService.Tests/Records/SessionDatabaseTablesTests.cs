@@ -24,21 +24,34 @@ namespace MEditService.Tests.Records;
 public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
-    private static IReadOnlyList<string> TableNamesOf(DuckDBConnection connection)
+    private static IReadOnlyList<string> TableNamesOf(DuckDBConnection connection) =>
+        NamesOf(connection, "SELECT table_name FROM information_schema.tables");
+
+    // #413: information_schema.tables lists views alongside base tables, so "npc_ is present" says
+    // nothing about whether it is still a real table. These two ask the question that now matters.
+    private static IReadOnlyList<string> BaseTableNamesOf(DuckDBConnection connection) =>
+        NamesOf(connection, "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'");
+
+    private static IReadOnlyList<string> ViewNamesOf(DuckDBConnection connection) =>
+        NamesOf(connection, "SELECT table_name FROM information_schema.tables WHERE table_type = 'VIEW'");
+
+    private static IReadOnlyList<string> NamesOf(DuckDBConnection connection, string sql)
     {
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT table_name FROM information_schema.tables";
+        cmd.CommandText = sql;
         var names = new List<string>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read()) names.Add(reader.GetString(0));
         return names;
     }
 
+    private DuckDBConnection Connection() =>
+        ((DuckDbRecordRepository)loaded.Services.GetRequiredService<ISessionManager>().Repository!).Connection;
+
     [Fact]
     public void ALoadedSession_HasNoPendingChangeTables()
     {
-        var session = loaded.Services.GetRequiredService<ISessionManager>();
-        var tables = TableNamesOf(((DuckDbRecordRepository)session.Repository!).Connection);
+        var tables = TableNamesOf(Connection());
 
         // Positive control, same listing: the index tables this ticket preserves are really here,
         // which is what makes the assertions below mean "deleted" rather than "not looking".
@@ -48,5 +61,37 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
 
         Assert.DoesNotContain("pending_changes", tables);
         Assert.DoesNotContain("pending_form_references", tables);
+    }
+
+    /// <summary>
+    /// #413 / AC1: the reflected per-type wide tables are gone, and each type's name now belongs to
+    /// a generated view over <c>records</c> — which is what keeps user filter SQL working across the
+    /// swap.
+    ///
+    /// Stated as a pair, because "npc_ is not a base table" alone would be satisfied by npc_ not
+    /// existing at all: the same name must be absent from the base tables AND present in the views,
+    /// both read through the identical catalog query. The surviving index tables are the second
+    /// control — they prove the base-table listing is populated and being read correctly, so the
+    /// absence is a real deletion rather than an empty result.
+    /// </summary>
+    [Fact]
+    public void ALoadedSession_HasNoPerTypeWideTables_OnlyViewsOverRecords()
+    {
+        var connection = Connection();
+        var baseTables = BaseTableNamesOf(connection);
+        var views = ViewNamesOf(connection);
+
+        // Control 1: the base-table listing is real and populated.
+        Assert.Contains("records", baseTables);
+        Assert.Contains("form_lookup", baseTables);
+        Assert.Contains("placement", baseTables);
+        // The header is the one surviving per-type table (D8) — a ModHeader has no document.
+        Assert.Contains("header", baseTables);
+
+        foreach (var type in (string[])["npc_", "weap", "armo", "cell", "glob"])
+        {
+            Assert.DoesNotContain(type, baseTables);   // the wide table is gone
+            Assert.Contains(type, views);              // ... and the name is a view now
+        }
     }
 }

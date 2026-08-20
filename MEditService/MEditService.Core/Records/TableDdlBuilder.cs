@@ -22,8 +22,17 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreateVmadTables(connection);
         CreateConditionTables(connection);
         CreatePlacementTables(connection);
-        foreach (var schema in _reflector.GetSchemas(release).Values)
-            CreateRecordTable(connection, schema);
+
+        // ADR-0041 / #413: the reflector no longer emits per-type DDL. Every record type is a
+        // json_extract VIEW over `records`, taking the name its wide table used to have — which is
+        // what keeps user filter SQL reading the same through the swap. The header is the one
+        // exception and the only surviving per-type table: a ModHeader is not a major record, so it
+        // has no document to project a view over (D8).
+        var schemas = _reflector.GetSchemas(release);
+        if (schemas.TryGetValue(HeaderIndexer.TableName, out var headerSchema))
+            CreateRecordTable(connection, headerSchema);
+
+        RecordViewBuilder.CreateViews(connection, schemas);
     }
 
     // ADR-0041 / #413: the documents table — one row per major record, holding that record's codec

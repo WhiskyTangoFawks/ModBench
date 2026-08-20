@@ -180,12 +180,8 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
         using var tx = Connection.BeginTransaction();
 
-        foreach (var tableName in RequireSchemas().Keys)
-        {
-            if (tableName == "header") continue; // indexed separately, deleted by name just below
-            DeleteExistingForOrigin(tableName, plugin, origin);
-        }
-
+        // #413: one delete where this used to walk every reflected table — the record rows are all
+        // in `records` now, and the only surviving per-type table is the header, deleted just below.
         DeleteExistingForOrigin("records", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
@@ -260,28 +256,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
         _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
 
-        DeleteExistingForOrigin(tableName, plugin, origin);
-
-        using var appender = Connection.CreateAppender(tableName);
+        // ADR-0041 / #413: no per-type table to delete from or append to any more. This loop's whole
+        // output is now one document per record plus the extracted index rows derived from it — the
+        // per-type enumeration survives only because it is how a record's type is known.
         foreach (var record in records)
         {
             try
             {
-                var row = appender.CreateRow();
-                row.AppendValue(record.FormKey.ToString());
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                row.AppendValue((int?)loadOrderIndex);
-                row.AppendValue((bool?)false);
-                if (record.EditorID is { } edId)
-                    row.AppendValue(edId);
-                else
-                    row.AppendNullValue();
-
-                foreach (var col in schema.RecordColumns)
-                    AppendTyped(row, col.Extract(record), col.DuckDbType);
-
-                row.EndRow();
                 AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease);
                 CollectFormRefs(refs, record, tableName, schema);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
@@ -325,30 +306,10 @@ public sealed class DuckDbRecordRepository : IRecordRepository
 
     public void UpdateWinners()
     {
-        var schemas = RequireSchemas();
-        foreach (var tableName in schemas.Keys)
-        {
-            // #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing a filename
-            // but differing in origin are distinct participants, each judged on its own load_order_idx
-            // and participation, not folded into one MAX() bucket by filename alone.
-            Execute($"""
-                UPDATE "{tableName}"
-                SET is_winner = (
-                    load_order_idx = (
-                        SELECT MAX(t2.load_order_idx) FROM "{tableName}" t2
-                        JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                        WHERE t2.form_key = "{tableName}".form_key
-                    )
-                    AND EXISTS (
-                        SELECT 1 FROM plugins p1
-                        WHERE p1.plugin = "{tableName}".plugin AND p1.origin = "{tableName}".origin AND p1.participates
-                    )
-                )
-                """);
-        }
-
-        // ADR-0041 / #413: `records` gets the same sweep, for the same reason form_lookup does — it
-        // is not a reflected schema table, and the winner flag is one of its identity columns.
+        // ADR-0041 / #413: one sweep over `records` where this used to run the same UPDATE once per
+        // reflected table. #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing
+        // a filename but differing in origin are distinct participants, each judged on its own
+        // load_order_idx and participation, not folded into one MAX() bucket by filename alone.
         Execute("""
             UPDATE records
             SET is_winner = (
@@ -360,6 +321,25 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 AND EXISTS (
                     SELECT 1 FROM plugins p1
                     WHERE p1.plugin = records.plugin AND p1.origin = records.origin AND p1.participates
+                )
+            )
+            """);
+
+        // #413: the header keeps its own sweep. It used to be swept incidentally, as one of the
+        // reflected schema tables the loop above walked; it is now the only surviving per-type table
+        // (D8) and would otherwise never have a winner at all — which reads as "no header exists"
+        // through every winnerOnly lookup, Open Header included.
+        Execute($"""
+            UPDATE "{HeaderIndexer.TableName}"
+            SET is_winner = (
+                load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM "{HeaderIndexer.TableName}" t2
+                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
+                    WHERE t2.form_key = "{HeaderIndexer.TableName}".form_key
+                )
+                AND EXISTS (
+                    SELECT 1 FROM plugins p1
+                    WHERE p1.plugin = "{HeaderIndexer.TableName}".plugin AND p1.origin = "{HeaderIndexer.TableName}".origin AND p1.participates
                 )
             )
             """);
