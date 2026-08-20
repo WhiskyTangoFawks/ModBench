@@ -1,6 +1,6 @@
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.Core.Edits;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
@@ -44,17 +44,14 @@ public sealed class SessionManagerRereadPluginTests
         return path;
     }
 
+    // #421: reads through the seam (Search) rather than raw SQL against .Connection — the interface
+    // no longer exposes one (invariant 8). RecordSummary already carries all three fields this once
+    // read positionally off the npc_ table.
     private static (string Origin, string EditorId, bool IsWinner) ReadIndexedNpc(SessionManager manager, string plugin)
     {
-        var repository = (IRecordRepository)manager.Repository!;
-        using var cmd = repository.Connection.CreateCommand();
-        cmd.CommandText = "SELECT origin, editor_id, is_winner FROM npc_ WHERE plugin = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read(), $"expected exactly one indexed npc_ row for {plugin}");
-        var row = (reader.GetString(0), reader.GetString(1), reader.GetBoolean(2));
-        Assert.False(reader.Read(), $"expected exactly one indexed npc_ row for {plugin}, found more");
-        return row;
+        var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey(plugin), Limit: 10, Offset: 0));
+        var row = Assert.Single(result.Items);
+        return (row.Origin, row.EditorId!, row.IsWinner);
     }
 
     [Fact]

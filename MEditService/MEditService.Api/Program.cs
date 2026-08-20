@@ -61,7 +61,13 @@ try
     builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
     builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
-    builder.Services.AddSingleton<IRecordRepositoryFactory, DuckDbRecordIndexFactory>();
+    // #421: DuckDbRecordIndexFactory implements both the old IRecordRepositoryFactory and the new
+    // IRecordIndexFactory (SessionManager's own dependency) during the migration — registered once
+    // as a concrete singleton, then both interfaces resolve to that same instance rather than each
+    // constructing its own.
+    builder.Services.AddSingleton<DuckDbRecordIndexFactory>();
+    builder.Services.AddSingleton<IRecordRepositoryFactory>(sp => sp.GetRequiredService<DuckDbRecordIndexFactory>());
+    builder.Services.AddSingleton<IRecordIndexFactory>(sp => sp.GetRequiredService<DuckDbRecordIndexFactory>());
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
