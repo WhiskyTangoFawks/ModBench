@@ -1,11 +1,15 @@
 using System.Data;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
+using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -27,6 +31,13 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     // re-resolving per call. Null for a game with no condition codec — same "fails to nothing, not
     // silently wrong" fallback ConditionCodecRegistry.For already establishes elsewhere.
     private IConditionCodec? _conditionCodec;
+
+    // ADR-0041 / #413: the per-record ledger codec, which is now the ingest path for every record —
+    // each document body is exactly the bytes the record's ledger file holds. Constructed here
+    // rather than injected: it is stateless apart from its own reflection caches (which are static),
+    // and every existing construction site of this repository would otherwise have to learn about a
+    // dependency it has no say in.
+    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
     public DuckDBConnection Connection { get; }
 
@@ -72,13 +83,22 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         // non-participating plugin's rows never win regardless of load_order_idx.
         UpsertPluginParticipation(plugin, origin, loadOrderIndex, participates);
 
+        // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
+        // delete does — a re-index replaces its own rows rather than accumulating a second copy.
+        // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
+        // so it has no codec document at all, and stays a purely extracted index table (D8).
+        DeleteExistingForOrigin("records", plugin, origin);
+        using var documentAppender = Connection.CreateAppender("records");
+
         foreach (var (tableName, schema) in schemas)
         {
             // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
             // IndexRecordTable's EnumerateMajorRecords call assumes one, so it's indexed separately,
             // and header rows never enter form_lookup for the same reason.
             if (tableName == "header") continue;
-            IndexRecordTable(tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows);
+            IndexRecordTable(
+                tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
+                documentAppender, pluginMod.GameRelease);
         }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
@@ -160,6 +180,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
             DeleteExistingForOrigin(tableName, plugin, origin);
         }
 
+        DeleteExistingForOrigin("records", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -172,10 +193,47 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         tx.Commit();
     }
 
+    // ADR-0041 / #413: one document per major record, written from the same enumeration that fills
+    // the record's own row — never a second pass over the plugin. The appender is opened once per
+    // Index() call and threaded through the per-type loop below, because `records` is one table
+    // spanning every type where the wide tables were one appender each.
+    //
+    // Blocking on the codec's async path is deliberate rather than an oversight: serialization runs
+    // entirely over a MemoryStream with no IO (RecordTextCodec.SerializeToBytesAsync), so there is
+    // nothing to await on. The async signature comes from Mutagen's generated serializers, and
+    // making Index() async to match would push a false IO-bound shape up through IRecordIndexer into
+    // SessionManager's indexing loop for no benefit.
+    private void AppendDocument(
+        DuckDBAppender documentAppender, IMajorRecordGetter record, string recordType,
+        string plugin, string origin, int loadOrderIndex, GameRelease gameRelease)
+    {
+        var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
+
+        var row = documentAppender.CreateRow();
+        row.AppendValue(record.FormKey.ToString());
+        row.AppendValue(plugin);
+        row.AppendValue(origin);
+        row.AppendValue(recordType);
+        if (record.EditorID is { } editorId)
+            row.AppendValue(editorId);
+        else
+            row.AppendNullValue();
+        row.AppendValue((int?)loadOrderIndex);
+        row.AppendValue((bool?)false);
+        row.AppendValue(LedgerRef.Committed);
+        row.AppendValue(Encoding.UTF8.GetString(body));
+        // Hashed from the codec's own bytes rather than from the string just above: identical for
+        // the valid UTF-8 the codec emits, but this keeps the hash defined by what the ledger file
+        // would contain, not by a round trip through .NET's string encoder.
+        row.AppendValue(GitBlobHash.Of(body));
+        row.EndRow();
+    }
+
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
         string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
-        List<(string FormKey, string RecordType, string? EditorId)> lookupRows)
+        List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
+        DuckDBAppender documentAppender, GameRelease gameRelease)
     {
         List<IMajorRecordGetter> records;
         try
@@ -214,6 +272,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                     AppendTyped(row, col.Extract(record), col.DuckDbType);
 
                 row.EndRow();
+                AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease);
                 CollectFormRefs(refs, record, tableName, schema);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
@@ -277,6 +336,23 @@ public sealed class DuckDbRecordRepository : IRecordRepository
                 )
                 """);
         }
+
+        // ADR-0041 / #413: `records` gets the same sweep, for the same reason form_lookup does — it
+        // is not a reflected schema table, and the winner flag is one of its identity columns.
+        Execute("""
+            UPDATE records
+            SET is_winner = (
+                load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM records t2
+                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
+                    WHERE t2.form_key = records.form_key
+                )
+                AND EXISTS (
+                    SELECT 1 FROM plugins p1
+                    WHERE p1.plugin = records.plugin AND p1.origin = records.origin AND p1.participates
+                )
+            )
+            """);
 
         // form_lookup isn't a reflected schema table, so it needs its own winner sweep — same
         // shape as every other table's, so ResolveFormKey's EditorID reflects the winning override

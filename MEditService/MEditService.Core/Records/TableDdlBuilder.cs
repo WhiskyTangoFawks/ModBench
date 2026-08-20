@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
+using MEditService.Core.Ledger;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
@@ -13,6 +14,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     public void CreateTables(DuckDBConnection connection, GameRelease release)
     {
+        CreateRecordsTable(connection);
         CreatePluginsTable(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
@@ -22,6 +24,52 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreatePlacementTables(connection);
         foreach (var schema in _reflector.GetSchemas(release).Values)
             CreateRecordTable(connection, schema);
+    }
+
+    // ADR-0041 / #413: the documents table — one row per major record, holding that record's codec
+    // JSON as its body beside the identity columns the read model is rebuilt on. Replaces the
+    // reflected per-type wide tables; the extracted index tables below are populated from these
+    // documents at ingest, and the reflector emits json_extract views over this table instead of
+    // per-type DDL.
+    //
+    // `body` is VARCHAR, never DuckDB's JSON type: the JSON type normalizes what it stores, and
+    // "the same bytes as the ledger file" is the entire load-bearing claim here — it is what makes
+    // `content_hash` a real git object name (GitBlobHash) rather than a hash of some re-rendered
+    // equivalent, and what lets a byte compare stand in for dirty/ITM detection later.
+    //
+    // `ref` (ADR-0041's ref dimension, replacing ADR-0025's committed/staged view split) carries
+    // exactly one value in this ticket — see LedgerRef, which explains why it is here now rather
+    // than added once #415 gives it a second. Quoted everywhere it appears: REF is a DuckDB keyword.
+    //
+    // Identity stays (form_key, origin, plugin) per ADR-0036 — no primary key declared, matching
+    // every other table here, because indexing writes through appenders and re-index is
+    // delete-then-append rather than upsert.
+    private static void CreateRecordsTable(DuckDBConnection connection)
+    {
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS records (
+                form_key       VARCHAR NOT NULL,
+                plugin         VARCHAR NOT NULL,
+                origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                record_type    VARCHAR NOT NULL,
+                editor_id      VARCHAR,
+                load_order_idx INTEGER NOT NULL,
+                is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
+                "ref"          VARCHAR NOT NULL DEFAULT '{LedgerRef.Committed}',
+                body           VARCHAR NOT NULL,
+                content_hash   VARCHAR NOT NULL
+            )
+            """);
+
+        // form_key drives every single-record read (detail, override stack, compare) and the winner
+        // sweep's correlated subquery; (plugin, origin) drives the per-plugin delete every re-index
+        // starts with, and the per-plugin listings/counts.
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_records_form_key ON records(form_key)
+            """);
+        Execute(connection, """
+            CREATE INDEX IF NOT EXISTS idx_records_plugin ON records(plugin, origin)
+            """);
     }
 
     // #267 / ADR-0035: `participates` is the plugins.txt `*` prefix — the one row per plugin that
