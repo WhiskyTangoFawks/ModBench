@@ -54,7 +54,8 @@ public sealed class SessionLeavesLedgerTreesAloneTests
                 GameRelease.Fallout4);
 
             // Positive control: the load really happened and really indexed the present plugin.
-            Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "StillHere.esp", "ModA"));
+            Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("StillHere.esp", "ModA"))
+                .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
             Assert.True(Directory.Exists(orphanTree), "the orphaned ledger tree must survive the load");
             Assert.Equal("{\"formKey\":\"000800:Removed.esp\"}", File.ReadAllText(orphanFile));

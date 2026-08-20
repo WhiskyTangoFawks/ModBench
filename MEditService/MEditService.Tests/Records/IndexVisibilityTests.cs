@@ -52,15 +52,12 @@ public sealed class IndexVisibilityTests
             {
                 while (!indexing.IsCancellationRequested)
                 {
-                    observed.Add(repository.CountRecordsForPlugin("npc_", "Big.esp", PluginOrigin.DataDirectory));
+                    observed.Add(repository.GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
+                        .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
                 }
             })).ToArray();
 
-            // #421: origin: named explicitly — PluginKey's implicit string conversion makes a bare
-            // positional 4th argument here resolve to Index(..., PluginKey) instead of the intended
-            // Index(..., string origin) shim, silently reading "Data" as the plugin name rather than
-            // the origin.
-            repository.Index(loaded, 0, participates: true, origin: PluginOrigin.DataDirectory);
+            repository.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
             await indexing.CancelAsync();
             await Task.WhenAll(readers);
 
@@ -77,7 +74,8 @@ public sealed class IndexVisibilityTests
             Assert.All(observed, count => Assert.True(
                 count is 0 or NpcCount,
                 $"a read observed {count} of {NpcCount} records — a partially-indexed plugin was visible"));
-            Assert.Equal(NpcCount, repository.CountRecordsForPlugin("npc_", "Big.esp", PluginOrigin.DataDirectory));
+            Assert.Equal(NpcCount, repository.GetRecordTypeCounts(new PluginKey("Big.esp", PluginOrigin.DataDirectory))
+                .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         }
         finally
         {

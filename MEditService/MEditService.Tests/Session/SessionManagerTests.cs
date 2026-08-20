@@ -61,7 +61,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using var manager = MakeManager();
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
-        var count = manager.Repository!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data");
+        var count = manager.Repository!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
@@ -89,7 +90,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         Assert.Null(manager.Session);
         Assert.Null(manager.Repository);
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data"));
+            oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
     }
 
     [Fact]
@@ -142,7 +143,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
             Assert.Same(repositoryBefore, manager.Repository);
             Assert.Equal("SomeMod", result.Origin);
             Assert.Contains(manager.Session!.Plugins, p => p.Name == "NewPlugin.esp" && p.Origin == "SomeMod");
-            Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "Base.esp", "Data"));
+            Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("Base.esp", "Data"))
+                .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         }
     }
 
@@ -553,7 +555,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data"));
+            oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
     }
 
 
@@ -567,7 +569,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.ThrowsAny<Exception>(() =>
-            oldRepo!.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data"));
+            oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
     }
 
     // --- ReindexPlugins ---

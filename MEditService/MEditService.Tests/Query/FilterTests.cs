@@ -23,7 +23,7 @@ public class FilterTests(TestPluginFixture fixture)
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, origin: "Data");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -35,12 +35,12 @@ public class FilterTests(TestPluginFixture fixture)
     {
         // A filter projecting extra columns beyond form_key is accepted and still filters.
         using var repo = LoadedRepository();
-        var all = repo.GetRecords("NPC_", null, null, 100, 0);
+        var all = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key, 'x' AS plugin");
 
-        var filtered = repo.GetRecords("NPC_", null, null, 100, 0);
+        var filtered = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -67,14 +67,14 @@ public class FilterTests(TestPluginFixture fixture)
     public void GetRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
     {
         using var repo = LoadedRepository();
-        var all = repo.GetRecords("NPC_", null, null, 100, 0);
+        var all = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         // filter to first record only
         var firstFormKey = all.Items[0].FormKey;
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var filtered = repo.GetRecords("NPC_", null, null, 100, 0);
+        var filtered = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -83,13 +83,13 @@ public class FilterTests(TestPluginFixture fixture)
     public void GetRecords_AfterClearFilter_ReturnsAllRecords()
     {
         using var repo = LoadedRepository();
-        var all = repo.GetRecords("NPC_", null, null, 100, 0);
+        var all = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
         repo.SetFilter(null);
 
-        var restored = repo.GetRecords("NPC_", null, null, 100, 0);
+        var restored = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, restored.Total);
     }
 
@@ -99,13 +99,13 @@ public class FilterTests(TestPluginFixture fixture)
     public void SearchRecords_WithActiveFilter_ReturnsOnlyMatchingRecords()
     {
         using var repo = LoadedRepository();
-        var all = repo.SearchRecords(["NPC_"], null, null, 100, 0);
+        var all = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, all.Total);
 
         var firstFormKey = all.Items[0].FormKey;
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var filtered = repo.SearchRecords(["NPC_"], null, null, 100, 0);
+        var filtered = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         Assert.Equal(1, filtered.Total);
         Assert.Equal(firstFormKey, filtered.Items[0].FormKey);
     }
@@ -116,12 +116,13 @@ public class FilterTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_WithActiveFilter_CountsOnlyMatching()
     {
         using var repo = LoadedRepository();
-        var all = repo.GetRecords("NPC_", null, null, 100, 0);
+        var all = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");
 
-        var count = repo.CountRecordsForPlugin("NPC_", TestPluginFixture.PluginName, "Data");
+        var count = repo.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+            .FirstOrDefault(c => string.Equals(c.Type, "NPC_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         Assert.Equal(1, count);
     }
 
@@ -131,7 +132,7 @@ public class FilterTests(TestPluginFixture fixture)
     public void GetPluginsWithMatchingRecords_WithActiveFilter_ReturnsPluginWithMatches()
     {
         using var repo = LoadedRepository();
-        var all = repo.GetRecords("NPC_", null, null, 100, 0);
+        var all = repo.Search(new RecordQuery(RecordTypes: ["NPC_"], Limit: 100, Offset: 0));
         var firstFormKey = all.Items[0].FormKey;
 
         repo.SetFilter($"SELECT '{firstFormKey}' AS form_key");

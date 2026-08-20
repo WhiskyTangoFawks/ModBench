@@ -76,7 +76,7 @@ public sealed class GetEffectiveMastersTests : IDisposable
             var name = PluginOrder[i];
             var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
             var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-            repo.Index(mod, i, participates: true, origin: "Data");
+            repo.Index(mod, i, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
             if (name == "Patch.esp")
                 declared = [.. mod.MasterReferences.Select(m => m.Master.FileName.ToString())];
         }

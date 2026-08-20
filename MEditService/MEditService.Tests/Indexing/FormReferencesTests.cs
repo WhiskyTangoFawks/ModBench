@@ -45,7 +45,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "References.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "References.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -71,7 +72,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "NoRefs.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "NoRefs.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -98,8 +100,8 @@ public class FormReferencesTests
 
         using var repo = OpenRepo();
         var mod = LoadMod(fixture.DataFolder, "Reindex.esp");
-        repo.Index(mod, 0, participates: true, origin: "Data");
-        repo.Index(mod, 0, participates: true, origin: "Data");  // re-index same plugin
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));  // re-index same plugin
         repo.UpdateWinners();
 
         // The race row + any other FormLinks on the NPC — should be exactly the same as after first index
@@ -130,7 +132,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "ArrayFk.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "ArrayFk.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -166,7 +169,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "ArrayStruct.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "ArrayStruct.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -213,7 +217,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "VmadStructRef.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "VmadStructRef.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -267,7 +272,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "VmadNestedStructRef.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "VmadNestedStructRef.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -318,7 +324,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "VmadStructObjList.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "VmadStructObjList.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
@@ -378,7 +385,8 @@ public class FormReferencesTests
             .Build();
 
         using var repo = OpenRepo();
-        repo.Index(LoadMod(fixture.DataFolder, "VmadStructStructList.esp"), 0, participates: true, origin: "Data");
+        var mod = LoadMod(fixture.DataFolder, "VmadStructStructList.esp");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         using var cmd = repo.Connection.CreateCommand();
