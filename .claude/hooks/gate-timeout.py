@@ -14,7 +14,9 @@ if tool_input.get("run_in_background"):
     sys.exit(0)
 command = tool_input.get("command", "")
 timeout = tool_input.get("timeout") or 0
-if re.search(r"\bdotnet\s+(test|build)\b|\bnpm\s+run\s+(test|build)", command) and timeout < 300000:
+# Quoted content is data (issue bodies, commit messages), not a command to run.
+bare = re.sub(r"\"[^\"]*\"|'[^']*'", "", command)
+if re.search(r"\bdotnet\s+(test|build)\b|\bnpm\s+run\s+(test|build)", bare) and timeout < 300000:
     print(
         "Blocked: this command runs a test/build gate and needs an explicit Bash "
         "timeout >= 300000 ms — the 120 s default silently backgrounds longer runs. "
