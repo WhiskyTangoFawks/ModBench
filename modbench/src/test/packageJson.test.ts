@@ -444,10 +444,14 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.pluginListTree.rereadPlugin',
     // #414: needs the clicked row's plugin name to resolve which mod folder to track.
     'modbench.pluginListTree.track',
+    // #416: needs the clicked row's plugin name — compiling "at main" from the palette with no
+    // plugin in hand isn't a gesture worth a QuickPick-over-QuickPick (unlike modbench.saveAndCompile
+    // itself, which falls back to one and stays palette-visible).
+    'modbench.pluginListTree.compileAtMain',
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(20);
+    expect(PALETTE_GATED).toHaveLength(21);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
@@ -502,6 +506,11 @@ describe('package.json per-plugin Re-read on a drifted row (#279)', () => {
       // whether the name's *current* MO2 resolution has drifted since — never offered on an
       // implicit master, which is immutable base-game content with no mod folder to track.
       ['modbench.pluginListTree.track', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
+      // Save & Compile (#416): compile refuses an untracked/no-mod-folder target on its own (a
+      // typed CompileResult), so the row gate stays the same broad plugin/pluginDrifted shape
+      // Track uses rather than pre-filtering tracked-ness the tree doesn't carry.
+      ['modbench.saveAndCompile', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
+      ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
     ]);
   });
 });

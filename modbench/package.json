@@ -400,6 +400,17 @@
         "command": "modbench.pluginListTree.track",
         "title": "Track…",
         "category": "Modbench"
+      },
+      {
+        "command": "modbench.saveAndCompile",
+        "title": "Save & Compile",
+        "icon": "$(check)",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.compileAtMain",
+        "title": "Save & Compile from main…",
+        "category": "Modbench"
       }
     ],
     "menus": {
@@ -494,6 +505,10 @@
         },
         {
           "command": "modbench.pluginListTree.track",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.compileAtMain",
           "when": "false"
         }
       ],
@@ -598,6 +613,11 @@
         {
           "command": "modbench.clearFilter",
           "when": "modbench.filterActive",
+          "group": "navigation"
+        },
+        {
+          "command": "modbench.saveAndCompile",
+          "when": "activeWebviewPanelId == 'modbench'",
           "group": "navigation"
         }
       ],
@@ -741,6 +761,16 @@
           "command": "modbench.pluginListTree.track",
           "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
           "group": "pluginActions@3"
+        },
+        {
+          "command": "modbench.saveAndCompile",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "group": "pluginActions@4"
+        },
+        {
+          "command": "modbench.pluginListTree.compileAtMain",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "group": "pluginActions@5"
         }
       ]
     },

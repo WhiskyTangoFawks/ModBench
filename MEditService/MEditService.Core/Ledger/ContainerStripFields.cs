@@ -11,21 +11,27 @@ namespace MEditService.Core.Ledger;
 /// silently cross-contaminate on read. Children are their own ledger entries; the parent's own file
 /// carries only the parent's fields.
 ///
-/// <b>Hand-maintained table, not generic reflection — investigated and rejected, not overlooked
-/// (#370 Q5 probe).</b> The plausible generic rule — "a property is child-major if its type is (or
-/// is a collection of) something implementing <see cref="IMajorRecordGetter"/>" — correctly finds
-/// Cell's four fields (Persistent/Temporary/NavigationMeshes are
+/// <b>Hand-maintained table, not generic reflection — investigated (#370 Q5), and re-verified by
+/// mechanical enumeration (#416, after <c>Quest.Scenes</c> proved the original investigation
+/// incomplete: it was checked by inspection, not swept).</b> The rule is "a property is child-major
+/// if its type is (or is a collection of) another major record type with no top-level group of its
+/// own" — it correctly finds Cell's four fields (Persistent/Temporary/NavigationMeshes are
 /// <c>ExtendedList&lt;IPlaced&gt;</c>/<c>ExtendedList&lt;NavigationMesh&gt;</c>, Landscape is a bare
-/// <c>Landscape</c> — all major-record-shaped) and Quest's/DialogTopic's fields the same way. It
-/// does <b>not</b> find <c>Worldspace.SubCells</c>: reflection confirms its type is
+/// <c>Landscape</c>) and Quest's/DialogTopic's fields the same way. It does <b>not</b> find
+/// <c>Worldspace.SubCells</c>: reflection confirms its type is
 /// <c>ExtendedList&lt;WorldspaceBlock&gt;</c>, and <c>WorldspaceBlock</c> is an intermediate
 /// grouping container with no FormKey of its own — it does not implement
-/// <see cref="IMajorRecordGetter"/>, so the generic rule silently misses it without a second level
-/// of recursion through non-major container types the rule has no principled way to bound (walk one
-/// level further for everything, or only for known container shapes — which is the hand list again).
-/// Given a real gap rather than a hypothetical one, and that ADR-0040 already hands this ticket the
-/// definitive per-type list, the hand-maintained table is what ships — documented here as a decision,
-/// not a placeholder.
+/// <see cref="IMajorRecordGetter"/> at all, so the rule correctly excludes it (Worldspace's own
+/// nesting is placement/cell_location's job, never this table's).
+///
+/// <para><see cref="MEditService.Tests.Ledger.ContainerStripFieldsCompletenessTests"/> runs this
+/// rule by enumeration over every schema-registered major record type — verified exhaustive as of
+/// #416's landing, not merely inspected — and is the standing defence against the next gap (a future
+/// Mutagen bump or game module adding a child-major field nobody hand-adds here). Given a real,
+/// previously-undetected gap once already (Quest.Scenes), the hand-maintained table is still what
+/// ships, now backed by that sweep rather than by the original investigation's own say-so; a ledger
+/// record this table still misses refuses at compile time (<c>ContainerAssembler</c>'s completeness
+/// guard) rather than corrupting silently, which is the second, independent line of defence.</para>
 /// </summary>
 internal static class ContainerStripFields
 {
@@ -33,9 +39,31 @@ internal static class ContainerStripFields
     {
         ["Cell"] = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"],
         ["Worldspace"] = ["TopCell", "SubCells"],
-        ["Quest"] = ["DialogBranches", "DialogTopics"],
+        // "Scenes" (#416): Quest.Scenes is exactly the same child-major shape as DialogBranches/
+        // DialogTopics — Scene is IMajorRecordGetter, has no top-level group, and EnumerateMajorRecords
+        // already flattens it into its own top-level "scen" row — but it was missing from this table
+        // since #370/#387 originally built it. Measured consequence (checked directly against real
+        // Track output, both before and after this line landed): NOT document duplication — the
+        // codec's own child-record-group deserialization already produces an empty list regardless of
+        // what a Quest's own JSON prose says, so nothing here can read a stale inline copy back, and
+        // Track's write never inlined one either (DiscardChildRecordStreams suppresses it same as any
+        // other child-major field). The actual defect was pure omission: a Scene had no *recorded
+        // parent slot anywhere* — the same "index gap" shape as the other four relationships this
+        // ticket also closes, not the sixth, different "duplication" shape an earlier draft of this
+        // comment claimed from inference rather than measurement. Found once compile's completeness
+        // guard tried to attach a Scene to its Quest and had nowhere to put it (the real #369 fixture:
+        // 59 Scene records). Corroborated independently by Fallout4ConditionCodecTests' own "Scene is
+        // itself IMajorRecordGetter (a 'child record'...)" comment, written for an unrelated feature
+        // well before this ticket.
+        ["Quest"] = ["DialogBranches", "DialogTopics", "Scenes"],
         ["DialogTopic"] = ["Responses"],
     };
+
+    /// <summary>The exact field-name list <paramref name="recordType"/> strips, or null if it isn't
+    /// one of the known container shapes — the read-only accessor <see cref="MEditService.Tests.Ledger.ContainerStripFieldsCompletenessTests"/>
+    /// diffs its own swept set against, so the table itself never needs a second public surface.</summary>
+    internal static IReadOnlyList<string>? EnumerateStripFieldsFor(Type recordType) =>
+        ByTypeName.TryGetValue(NormalizedTypeName(recordType), out var fields) ? fields : null;
 
     /// <summary>
     /// Clears (list fields) or nulls (single reference fields, e.g. <c>Landscape</c>/<c>TopCell</c>)
@@ -76,18 +104,19 @@ internal static class ContainerStripFields
         return copy;
     }
 
-    // A binary overlay's runtime type is "<ConcreteName>BinaryOverlay" — the same Mutagen naming
-    // convention RecordTextCodec's own dispatch relies on. Normalizing here means the container
-    // table above stays keyed by the concrete type name alone and reads the same whether it is
-    // handed an overlay getter (ingest) or an already-deep-parsed setter (Track).
     private const string OverlaySuffix = "BinaryOverlay";
 
-    private static bool IsContainer(Type recordType)
+    private static bool IsContainer(Type recordType) => ByTypeName.ContainsKey(NormalizedTypeName(recordType));
+
+    /// <summary>A binary overlay's runtime type is <c>"&lt;ConcreteName&gt;BinaryOverlay"</c> — the
+    /// same Mutagen naming convention <c>RecordTextCodec</c>'s own dispatch relies on. Normalizing
+    /// this once means every caller here (and <see cref="MEditService.Core.Records.DuckDbRecordIndex"/>'s
+    /// container_child skip-list, #416 S1b) keys off the same name whether handed an overlay getter
+    /// (ingest) or an already-deep-parsed setter (Track).</summary>
+    internal static string NormalizedTypeName(Type recordType)
     {
         var name = recordType.Name;
-        if (name.EndsWith(OverlaySuffix, StringComparison.Ordinal))
-            name = name[..^OverlaySuffix.Length];
-        return ByTypeName.ContainsKey(name);
+        return name.EndsWith(OverlaySuffix, StringComparison.Ordinal) ? name[..^OverlaySuffix.Length] : name;
     }
 
     private static readonly ConcurrentDictionary<Type, MethodInfo> DeepCopyMethods = new();
@@ -142,6 +171,47 @@ internal static class ContainerStripFields
                 clear.Invoke(current, null);
             else
                 property.SetValue(record, null);
+        }
+    }
+
+    /// <summary>
+    /// The children <paramref name="record"/> loses when <see cref="StripInPlace"/>/
+    /// <see cref="StrippedForSerialization"/> clears its container fields — read non-destructively
+    /// off a getter, so ingest can capture parentage (#416 S1b's <c>container_child</c> side table)
+    /// in the same pass that strips the parent for its own document, with no second walk and no risk
+    /// of the strip list and the parentage coverage drifting apart: both are driven by this same
+    /// <see cref="ByTypeName"/> table. Yields nothing for a non-container type.
+    ///
+    /// <para><paramref name="SlotIndex"/>[sic, see below] is the child's position within its own
+    /// field (always 0 for a single-reference field like <c>Landscape</c>) — preserved so a compile
+    /// can reproduce a stripped list's original order rather than an ingest-arbitrary one.</para>
+    /// </summary>
+    internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
+        IMajorRecordGetter record)
+    {
+        if (!ByTypeName.TryGetValue(NormalizedTypeName(record.GetType()), out var fields)) yield break;
+
+        foreach (var fieldName in fields)
+        {
+            var property = record.GetType().GetProperty(fieldName)
+                ?? throw new InvalidOperationException(
+                    $"{record.GetType().Name} has no property '{fieldName}' to read children from — ContainerStripFields' table is stale.");
+
+            switch (property.GetValue(record))
+            {
+                case IMajorRecordGetter single:
+                    yield return (fieldName, 0, single);
+                    break;
+                case System.Collections.IEnumerable list and not string:
+                    var i = 0;
+                    foreach (var item in list)
+                    {
+                        if (item is IMajorRecordGetter child)
+                            yield return (fieldName, i, child);
+                        i++;
+                    }
+                    break;
+            }
         }
     }
 }

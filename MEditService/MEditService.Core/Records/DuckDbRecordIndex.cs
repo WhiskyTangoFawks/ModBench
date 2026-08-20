@@ -88,6 +88,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         var refs = new List<FormRef>();
         var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
+        var containerChildRows = new List<ContainerChildRow>();
 
         // One transaction for the whole reindex so a throw partway leaves the prior committed
         // read model intact rather than a partial snapshot. DuckDB appenders enroll in the active
@@ -113,7 +114,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             if (tableName == "header") continue;
             IndexRecordTable(
                 tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
-                documentAppender, pluginMod.GameRelease);
+                containerChildRows, documentAppender, pluginMod.GameRelease);
         }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
@@ -165,6 +166,26 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
         }
 
+        // #416 S1b: same pattern as form_lookup just above — one delete-then-append per re-index,
+        // populated from the same per-type pass rather than a second walk over the plugin.
+        DeleteExistingForOrigin("container_child", plugin, origin);
+        if (containerChildRows.Count > 0)
+        {
+            using var containerChildAppender = Connection.CreateAppender("container_child");
+            foreach (var row in containerChildRows)
+            {
+                var r = containerChildAppender.CreateRow();
+                r.AppendValue(row.ChildFormKey);
+                r.AppendValue(plugin);
+                r.AppendValue(origin);
+                r.AppendValue(row.ParentFormKey);
+                r.AppendValue(row.ParentRecordType);
+                r.AppendValue(row.SlotName);
+                r.AppendValue(row.SlotIndex);
+                r.EndRow();
+            }
+        }
+
         tx.Commit();
     }
 
@@ -192,6 +213,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteFormReferencesForPlugin(plugin, origin);
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
+        DeleteExistingForOrigin("container_child", plugin, origin);
         DeleteExistingForOrigin("plugins", plugin, origin);
 
         tx.Commit();
@@ -207,10 +229,34 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // nothing to await on. The async signature comes from Mutagen's generated serializers, and
     // making Index() async to match would push a false IO-bound shape up through IRecordIndex into
     // SessionManager's indexing loop for no benefit.
+    // #416 S1b: Cell.Persistent/Temporary and Worldspace.TopCell/SubCells are already fully covered
+    // by IndexPlacement (placement/cell_location) — this skip-list keeps container_child additive to
+    // those tables rather than a second, competing copy of the same relationship. Keyed by
+    // ContainerStripFields.NormalizedTypeName so it can never drift from what EnumerateChildren
+    // itself walks (both read the same ByTypeName table).
+    private static readonly HashSet<(string ParentType, string Slot)> CoveredByPlacementTables =
+    [
+        ("Cell", "Persistent"), ("Cell", "Temporary"),
+        ("Worldspace", "TopCell"), ("Worldspace", "SubCells"),
+    ];
+
     private void AppendDocument(
         DuckDBAppender documentAppender, IMajorRecordGetter record, string recordType,
-        string plugin, string origin, int loadOrderIndex, GameRelease gameRelease)
+        string plugin, string origin, int loadOrderIndex, GameRelease gameRelease,
+        List<ContainerChildRow> containerChildRows)
     {
+        // #416 S1b: read the *unstripped* record's children before stripping it below — the same
+        // fields ContainerStripFields is about to clear are exactly the ones container_child needs a
+        // parent slot recorded for. One source of truth (ByTypeName, via EnumerateChildren) drives
+        // both what gets stripped and what gets remembered, so they cannot drift apart.
+        var parentType = ContainerStripFields.NormalizedTypeName(record.GetType());
+        foreach (var (slotName, slotIndex, child) in ContainerStripFields.EnumerateChildren(record))
+        {
+            if (CoveredByPlacementTables.Contains((parentType, slotName))) continue;
+            containerChildRows.Add(new ContainerChildRow(
+                child.FormKey.ToString(), record.FormKey.ToString(), recordType, slotName, slotIndex));
+        }
+
         // D8: a container is serialized from a stripped deep copy, everything else from the getter
         // ingest already holds. Children are their own documents; a parent carrying them would store
         // the same data twice and hold a body no ledger file can match.
@@ -241,6 +287,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
         string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
+        List<ContainerChildRow> containerChildRows,
         DuckDBAppender documentAppender, GameRelease gameRelease)
     {
         List<IMajorRecordGetter> records;
@@ -265,7 +312,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             try
             {
-                AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease);
+                AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease, containerChildRows);
                 CollectFormRefs(refs, record, tableName, schema);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
                 _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
@@ -710,6 +757,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             owner.GetCellReferences(records, plugin.Name, cellFormKey, plugin.Origin!);
         public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
             owner.GetPlacement(formKey, plugin.Name, plugin.Origin!);
+        public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) =>
+            owner.GetCellLocation(cellFormKey, plugin.Name, plugin.Origin!);
+        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
+            owner.GetContainerChildren(plugin.Name, plugin.Origin!, parentFormKey);
     }
 
     public RecordDocument? GetDocument(string formKey) => GetWinningDocument(EffectiveRelation, formKey);
@@ -1732,6 +1783,57 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 NullableFloat(2),
                 NullableFloat(3),
                 NullableFloat(4));
+    }
+
+    public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) =>
+        GetCellLocation(cellFormKey, plugin.Name, plugin.Origin!);
+
+    // #416 S1b: mirrors GetPlacement's shape exactly — same ref-invariance, same reasoning.
+    private CellLocationRow? GetCellLocation(string cellFormKey, string plugin, string origin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT parent_worldspace, block_x, block_y, sub_x, sub_y, grid_x, grid_y, is_interior
+            FROM cell_location
+            WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3
+            """;
+        AddParams(cmd, [cellFormKey, plugin, origin]);
+        using var reader = cmd.ExecuteReader();
+
+        int? NullableInt(int i) => reader.IsDBNull(i) ? null : reader.GetInt32(i);
+        if (!reader.Read()) return null;
+
+        var parentWorldspace = reader.IsDBNull(0) ? null : reader.GetString(0);
+        return new CellLocationRow(
+            cellFormKey, parentWorldspace,
+            NullableInt(1), NullableInt(2), NullableInt(3), NullableInt(4), NullableInt(5), NullableInt(6),
+            reader.GetBoolean(7));
+    }
+
+    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
+        GetContainerChildren(plugin.Name, plugin.Origin!, parentFormKey);
+
+    // Ref-invariant (see ContainerChildRow's own doc comment) — same reasoning as GetPlacement, so
+    // this ignores which relation the caller is positioned on, exactly as GetPlacement does.
+    private List<ContainerChildRow> GetContainerChildren(string plugin, string origin, string parentFormKey)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT child_form_key, parent_record_type, slot_name, slot_index
+            FROM container_child
+            WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3
+            ORDER BY slot_name, slot_index
+            """;
+        AddParams(cmd, [parentFormKey, plugin, origin]);
+        using var reader = cmd.ExecuteReader();
+
+        var result = new List<ContainerChildRow>();
+        while (reader.Read())
+        {
+            result.Add(new ContainerChildRow(
+                reader.GetString(0), parentFormKey, reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
+        }
+        return result;
     }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>

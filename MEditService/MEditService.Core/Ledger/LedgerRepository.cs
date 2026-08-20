@@ -133,6 +133,91 @@ public static class LedgerRepository
             : null;
     }
 
+    /// <summary>
+    /// Every ledger record's text under <c>&lt;pluginName&gt;.ledger/**</c> as <paramref name="gitRef"/>
+    /// has it — no checkout, so a compile at <c>main</c> (#416 S8/<see cref="Edits.CompileSource.AtRef"/>)
+    /// never touches the edit branch's own working tree or index, exactly like
+    /// <see cref="ReadCommittedLedgerText"/>'s no-checkout read but for a whole plugin's tree at any
+    /// ref rather than one path at <c>HEAD</c>. Empty (not null) when the folder isn't tracked, the
+    /// ref doesn't resolve, or the plugin has no ledger tree at that ref — an "AtRef" compile target
+    /// with nothing to compile is a real, empty answer here, not a failure to report; the caller
+    /// decides what an empty ledger means for a plugin that is supposed to be tracked.
+    /// </summary>
+    internal static IReadOnlyList<(string RelativePath, byte[] Bytes)> EnumerateLedgerAtRef(
+        string modFolder, string pluginName, string gitRef)
+    {
+        if (!IsTracked(modFolder)) return [];
+
+        var gitDir = Path.Combine(modFolder, ".git");
+        var ledgerPrefix = ToGitPath($"{pluginName}{LedgerRecordPath.LedgerSuffix}");
+        if (!GitCli.TryRun(gitDir, modFolder, out var lsTreeOutput, "ls-tree", "-r", "-z", gitRef, "--", $"{ledgerPrefix}/"))
+            return [];
+
+        var results = new List<(string RelativePath, byte[] Bytes)>();
+        foreach (var entry in lsTreeOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var tab = entry.IndexOf('\t', StringComparison.Ordinal);
+            if (tab < 0) continue;
+            var fields = entry[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (fields.Length < 3 || fields[1] != "blob") continue;
+            var relativePath = entry[(tab + 1)..];
+
+            if (!GitCli.TryRun(gitDir, modFolder, out var text, "show", $"{gitRef}:{relativePath}")) continue;
+            results.Add((relativePath, System.Text.Encoding.UTF8.GetBytes(text)));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Re-parks <c>refs/medit/last-compile/&lt;plugin&gt;</c> at a floating snapshot of the tree
+    /// <paramref name="source"/> just compiled from — no HEAD, branch, or index movement (the
+    /// <c>git stash create</c> idiom, ADR-0041's 2026-08-19 amendment), message carrying a
+    /// <c>Binary-SHA256</c> trailer for the binary the caller just finished writing. Track already
+    /// initializes this ref to the pristine baseline (#414); every compile after that re-points it
+    /// here, and only after the caller confirms the binary write landed — this method never runs
+    /// before that, by construction of who calls it (<c>Edits.PluginCompileService</c>).
+    ///
+    /// <para>The snapshotted tree depends on <paramref name="atRef"/> (deliberately the same two
+    /// primitives the compile source itself boils down to, rather than a dependency on
+    /// <c>Edits.CompileSource</c> — the repo layer stays the lower one of the two, never the other
+    /// way around): null (the normal, working-tree compile) snapshots the actual working directory as
+    /// compile read it (<c>git stash create</c>'s own snapshot, degrading to <c>HEAD</c>'s tree when
+    /// the working tree is byte-identical to the index — <c>git stash create</c> answers empty then,
+    /// and there is nothing dirtier to snapshot); a ref name (compile at that ref, no checkout)
+    /// snapshots that ref's own tree directly — no working directory was involved in that compile at
+    /// all, so there is nothing to stash. Both land through the same <c>git commit-tree</c> call,
+    /// which is what keeps the two cases one code path instead of two.</para>
+    /// </summary>
+    internal static void ParkCompileSnapshot(
+        string modFolder, string plugin, string? atRef, string binarySha256)
+    {
+        var gitDir = Path.Combine(modFolder, ".git");
+        var headSha = GitCli.Run(gitDir, modFolder, "rev-parse", "HEAD").Trim();
+
+        var tree = atRef == null
+            ? WorkingTreeSnapshotTree(gitDir, modFolder, headSha)
+            : GitCli.Run(gitDir, modFolder, "rev-parse", $"{atRef}^{{tree}}").Trim();
+
+        // commit-tree is plumbing: it takes a literal message, not --trailer (that's porcelain's own
+        // commit command) — the trailer is git's own "Key: Value" line at the message tail, blank-
+        // line-separated, written by hand here for the one caller that needs a trailer on a commit
+        // object nothing else in this class builds through `git commit`.
+        var message = $"Save & Compile: {plugin}\n\nBinary-SHA256: {binarySha256}";
+        var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m", message).Trim();
+        GitCli.Run(gitDir, modFolder, "update-ref", $"refs/medit/last-compile/{plugin}", snapshotSha);
+    }
+
+    // git stash create answers empty (not an error) when the working tree has nothing to stash —
+    // byte-identical to the index, which itself matches HEAD absent any porcelain staging this repo
+    // never does. There is nothing dirtier to snapshot than HEAD's own tree in that case.
+    private static string WorkingTreeSnapshotTree(string gitDir, string workTree, string headSha)
+    {
+        if (!GitCli.TryRun(gitDir, workTree, out var stashSha, "stash", "create") || string.IsNullOrWhiteSpace(stashSha))
+            return GitCli.Run(gitDir, workTree, "rev-parse", $"{headSha}^{{tree}}").Trim();
+
+        return GitCli.Run(gitDir, workTree, "rev-parse", $"{stashSha.Trim()}^{{tree}}").Trim();
+    }
+
     // git speaks forward slashes on every platform, Windows included, while LedgerRecordPath builds
     // its paths with Path.Combine.
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');

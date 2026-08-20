@@ -56,6 +56,8 @@ public class WorldspaceQueryServiceTests
             return cellRefs ?? new([], []);
         }
         public PlacementRow? GetPlacement(string formKey, PluginKey plugin) => null;
+        public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) => null;
+        public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) => [];
     }
 
     private sealed class StubSession(IRecordReads repo, IGameSession? session = null) : ISessionManager

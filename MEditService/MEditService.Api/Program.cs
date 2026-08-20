@@ -73,6 +73,8 @@ try
     // #415: the single write path, plus the read-time freshness validation the read model consumes.
     builder.Services.AddSingleton<LedgerFreshness>();
     builder.Services.AddSingleton<RecordEditService>();
+    // #416: the write path's other half — ledger text -> binary.
+    builder.Services.AddSingleton<PluginCompileService>();
 
     var app = builder.Build();
 

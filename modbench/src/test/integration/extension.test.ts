@@ -355,6 +355,13 @@ describe('modbench command registration', () => {
     // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin`/`pluginDrifted` in
     // package.json and hidden from the palette — it needs the clicked row's plugin name.
     'modbench.pluginListTree.track',
+    // #416: Save & Compile — reachable from the record editor's editor/title icon, the tree row's
+    // context menu, and the palette (falls back to a QuickPick when invoked with no plugin in hand).
+    'modbench.saveAndCompile',
+    // #416: compile-at-main behind its own confirmation. Gated to the clicked row and hidden from
+    // the palette, same posture as Track — naming a ref to compile at with no plugin in hand isn't
+    // a gesture the palette can support.
+    'modbench.pluginListTree.compileAtMain',
     // #368: the aggregate SCM provider's resource-click command — opens the record's
     // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
     // `command`, not a menu contribution, but still registered (and palette-visible) like every

@@ -33,15 +33,29 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     /// leaving it to Mutagen's undefined default. Optional, because PluginWriter has no session
     /// concept of its own.
     /// </summary>
-    public static async Task<PreparedPluginSave> PrepareAsync(
+    public static Task<PreparedPluginSave> PrepareAsync(
         string pluginPath,
         GameRelease gameRelease,
         IReadOnlyList<string>? loadOrder = null)
     {
-        var backupPath = CreateBackup(pluginPath);
-
         var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
         var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease);
+        return PrepareFromModAsync(mod, pluginPath, loadOrder);
+    }
+
+    /// <summary>
+    /// <see cref="PrepareAsync"/>'s other half (#416): writes an already-assembled <paramref name="mod"/>
+    /// rather than importing one from <paramref name="pluginPath"/> first — Save &amp; Compile's own
+    /// entry point, since compile's mod is built fresh from ledger text
+    /// (<see cref="ContainerAssembler"/>), never read off the binary it is about to replace.
+    /// <paramref name="pluginPath"/> is still where the backup comes from and where the result lands.
+    /// </summary>
+    public static async Task<PreparedPluginSave> PrepareFromModAsync(
+        IMod mod,
+        string pluginPath,
+        IReadOnlyList<string>? loadOrder = null)
+    {
+        var backupPath = CreateBackup(pluginPath);
 
         var dir = Path.GetDirectoryName(pluginPath)!;
         var tmpDir = Path.Combine(dir, ".medit_tmp_" + Path.GetRandomFileName());
@@ -73,6 +87,19 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         IReadOnlyList<string>? loadOrder = null)
     {
         using var prep = await PrepareAsync(pluginPath, gameRelease, loadOrder);
+        prep.Commit();
+        PruneOldBackups(pluginPath);
+        return prep.BackupPath;
+    }
+
+    /// <summary><see cref="SaveAsync"/>'s <see cref="PrepareFromModAsync"/> counterpart — Save &amp;
+    /// Compile's own entry point (#416).</summary>
+    public async Task<string> SaveFromModAsync(
+        IMod mod,
+        string pluginPath,
+        IReadOnlyList<string>? loadOrder = null)
+    {
+        using var prep = await PrepareFromModAsync(mod, pluginPath, loadOrder);
         prep.Commit();
         PruneOldBackups(pluginPath);
         return prep.BackupPath;
