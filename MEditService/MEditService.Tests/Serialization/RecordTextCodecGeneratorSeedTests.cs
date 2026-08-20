@@ -14,7 +14,7 @@ public class RecordTextCodecGeneratorSeedTests
     // design (there is no smaller seed shape — see RecordTextCodecGeneratorSeed's doc comment).
     //
     // Scoped to this ticket's own code (MEditService.Core.Serialization), not the whole assembly:
-    // an unscoped version also flags DuckDbRecordIndex.Index/IRecordIndexer.Index/
+    // an unscoped version also flags DuckDbRecordIndex.Index/IRecordIndex.Index/
     // PlacementWalker.Walk, which legitimately take a mod for indexing and have nothing to do with
     // this ledger codec. That check holds today and goes red if this namespace's own public surface
     // ever grows a whole-mod-accepting method — including a constructor, not just a method: checked

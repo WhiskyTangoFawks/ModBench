@@ -218,7 +218,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // Blocking on the codec's async path is deliberate rather than an oversight: serialization runs
     // entirely over a MemoryStream with no IO (RecordTextCodec.SerializeToBytesAsync), so there is
     // nothing to await on. The async signature comes from Mutagen's generated serializers, and
-    // making Index() async to match would push a false IO-bound shape up through IRecordIndexer into
+    // making Index() async to match would push a false IO-bound shape up through IRecordIndex into
     // SessionManager's indexing loop for no benefit.
     private void AppendDocument(
         DuckDBAppender documentAppender, IMajorRecordGetter record, string recordType,
