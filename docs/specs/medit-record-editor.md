@@ -1,18 +1,13 @@
 # mEdit Record editor panel — Surface Specification
 
-> **⚠ Retired mid-arc by [ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md).**
-> Everything below describing *editing* — pending changes, staging, the Pending column, per-cell
-> editors, the copy/remove/array/VMAD record actions and the Pending Changes tree — was deleted by
-> [#410](https://github.com/WhiskyTangoFawks/ModBench/issues/410). The editor is a **viewer** until
-> the text-first edit path returns. The current model is
-> [Version control — Track, branch, compile](medit-version-control.md); #418 folds this document
-> back into a true statement of what ships. Read-path statements (the grid, conflict colouring,
-> references, filters, navigation) are unaffected.
-
-**Status: Implemented, but the interaction model below is newly specified and only partly built.**
-The grid, conflict colouring, type-appropriate editors, pending changes, drag-to-copy and the
-column-header menu all ship and work. What does not yet fully match this document is the
-**gesture model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)
+**Status: Implemented.** Editing is git-native (ADR-0041): a field edit writes the record's
+working-tree ledger text directly — there is no pending/staged intermediate state, no Pending
+column, and no ChangeGroup. The grid, conflict colouring, and type-appropriate editors below all
+ship and work on that write path. Review, commit, and revert happen in VS Code's native Source
+Control panel, one repo per tracked mod — see
+[Version control — Track, branch, compile](medit-version-control.md) for that surface; this
+document covers the grid and its gestures only.
+The **gesture model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)
 replaced ADR-0033 after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had
 specified single-click-to-edit, which xEdit does not do. In the field grid, a single click focuses
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
@@ -40,21 +35,21 @@ tree and inherit its focus model in full (#231 — see *VMAD and Conditions are 
 one tree* below for the handful of still-open, explicitly scoped gaps). Known gaps beyond that:
 FormKey resolution (#141).
 
-Editing context — operates on **records**, **FormKeys**, **plugins**, and **ChangeGroups**;
+Editing context — operates on **records**, **FormKeys**, and **plugins**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
 here ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
 
 One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared session lifecycle,
 status bar, command palette, and architecture seams. Siblings:
 [Plugins tree](plugins.md) (what opens this panel),
-[Pending Changes tree](medit-pending-changes-tree.md) (where staged edits are grouped),
-[Referenced By tree](medit-referenced-by.md).
+[Referenced By tree](medit-referenced-by.md),
+[Version control](medit-version-control.md) (where edits are reviewed and committed).
 
 ## Problem Statement
 
 Conflicts between plugins are the crux of patching. For a given record and field a mod author
 needs to know which plugin wins, which lost an override, whether an apparent conflict is a real
-disagreement or an identical duplicate — and then make a targeted edit that stages cleanly and
+disagreement or an identical duplicate — and then make a targeted edit that lands cleanly and
 writes back to the right physical file. Answering that by opening plugins one at a time and
 diffing by eye does not scale past a couple of overrides, and the values themselves resist
 reading: enums and flags are integers, FormKeys are opaque, structs and arrays nest.
@@ -72,9 +67,9 @@ per-cell conflict color coding from the two-axis model
 ([ADR-0016](../adr/0016-two-axis-conflict-model.md)). Values render as what they mean (flag
 names, EditorID links) rather than as what they are stored as.
 
-Editing is in-place and stages a **pending change** rather than writing; a Pending column
-appears beside any plugin with staged edits, and every save/revert acts on a whole ChangeGroup
-([ADR-0028](../adr/0028-change-groups-are-derived-dependency-closures.md)).
+Editing is in-place and writes the record's working-tree ledger text directly (ADR-0041) — there
+is no intermediate staged state. Save & Compile and review/commit are separate gestures, specified
+in [medit-version-control.md](medit-version-control.md).
 
 ## User Stories
 
@@ -101,38 +96,20 @@ appears beside any plugin with staged edits, and every save/revert acts on a who
    toggle, dropdown, flag multi-select, FormKey picker), so that editing is type-appropriate, I
    can't enter a nonsensical value, there is no mode to enter first, and only one cell is ever an
    input so the grid stays readable.
-8. As a user, I want my edits shown as pending changes (highlighted, revertable via right-click)
-   rather than written immediately, so that I can review a batch before committing and back out
-   an edit I regret.
-9. As a user, I want a pending column to appear for a plugin with staged changes, so that I can
-   compare my in-progress edit against every existing version.
-10. As a user, I want to collapse a plugin column to just its header chip, with the state
+8. As a user, I want to collapse a plugin column to just its header chip, with the state
     remembered, so that I can focus the grid on the plugins I care about.
-11. As a user, I want a column-header menu to copy a plugin's whole record into my editable
-    plugin as pending changes, copy it as a new record, or stage removal of that plugin's
-    override, so that common override operations are one action.
-12. As a user, I want to drag a value — scalar or whole compound field alike — from one plugin's
-    column into another to copy it as a pending change, so that reconciling a conflict is direct
-    manipulation.
-13. As a user, I want to click any cell — including one in a read-only plugin — and press `Ctrl+C`
+9. As a user, I want to click any cell — including one in a read-only plugin — and press `Ctrl+C`
     to put its value on the clipboard, so that I can lift a value out of the grid to use in a
     script, a patch, or another tool without retyping it. Copy takes the cell's value, not
     whatever text I could select, so it works the same on a flag list, a dropdown and a reference
     as it does on a string.
-13. As a user, I want to save or revert a pending value from here — acting on that change's
-    whole ChangeGroup, never on part of one — or copy a specific plugin's version of the whole
-    record into another plugin, so that I control exactly what gets written and where without
-    leaving the record I am working on.
-14. As a user, I want to right-click a pending value to reveal that change in the Pending Changes
-    tree, so that I can get from "what did I change here" to "what else does this drag along"
-    without hunting — while it stays directly editable, on the same terms as any other cell.
-15. As a user, I want to rename a mutable record's FormID, with validation that the new id is
+10. As a user, I want to rename a mutable record's FormID, with validation that the new id is
     free and that immutable references don't block it, so that renumbering is safe and the
     errors are explained rather than silent.
-16. As a user, I want to inspect and edit a record's Papyrus (VMAD) script data — scripts,
+11. As a user, I want to inspect and edit a record's Papyrus (VMAD) script data — scripts,
     their properties, and nested array/struct/structList values — so that I can reconcile
     script conflicts in the same grid as the rest of the record.
-17. As a user, I want null/missing fields shown as empty cells (never "null"/"undefined") and
+12. As a user, I want null/missing fields shown as empty cells (never "null"/"undefined") and
     read-only cells in immutable columns to render no input on click, so that the grid reads
     cleanly and never invites an edit that can't happen.
 
@@ -177,34 +154,15 @@ better idea.
   list structure ops (**Add** / **Remove** / **Clear** / **Move Up** / **Move Down**), which are
   also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
-  ▲▼✕ controls**, per the no-second-route rule below. On a pending cell:
-  **Reveal in Pending Changes Tree** / **Save Group** / **Revert Group**,
-  **Copy as Override Into…** / **Copy as New Record Into…** / **Remove** on a column header
-  (Remove only when mutable — ADR-0033: no standalone control once an action is
-  right-click-reachable, same rule #207 applied to the inline revert button). An action reachable
-  through right-click is never also reachable a second way (no standalone revert icon once Revert
-  Group exists). Both the pending-cell menu (#208) and the column-header menu (#209) are VS Code's
-  own native context menu (`contributes.menus["webview/context"]`, gated on a
-  `data-vscode-context` attribute the cell/header carries —
-  [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s native-first precedent
-  applied inside the webview) rather than a rendered overlay. Column-header actions that need a
-  target plugin (all but Remove) open a `showQuickPick` listing the mutable plugins minus the
-  right-clicked column, with a "New Plugin…" entry — the same QuickPick `modbench.copyAsOverrideInto`
-  already opens from the plugins tree, extended to accept the column header's record identity
-  too, rather than a second picker implementation; filterable and keyboard-first, but no longer
-  positioned at the click like the retired in-webview list. #335/ADR-0038: Add Master… (and its
-  own, deliberately-not-mutable-filtered QuickPick) is gone — masters is lifecycle-derived now,
-  never a direct user edit; the header record's masters field still shows on this same column
-  header, read-only. #336: the value shown is **Effective masters** — the plugin's committed
-  masters unioned with the origins of everything currently staged for it — so copying a record in
-  from a not-yet-mastered plugin updates the displayed list immediately, with no pending change on
-  the masters field, and reverting that copy drops the implied master again. Membership is what
-  this guarantees. #337: every save writes exactly the content-derived master set, ordered by
-  current plugin load order — there is no staged-masters special case left in the writer. The
-  displayed order can still differ from the written order in one case: a pending edit implying a
-  brand-new master shows it appended at the end of the list, while the save slots it wherever load
-  order puts it. Membership always agrees; only position can differ, and only before that master
-  is committed.
+  ▲▼✕ controls**, per the no-second-route rule below. The column-header menu is VS Code's own
+  native context menu (`contributes.menus["webview/context"]`, gated on a `data-vscode-context`
+  attribute the header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
+  native-first precedent applied inside the webview) rather than a rendered overlay. #335/ADR-0038:
+  Add Master… (and its own, deliberately-not-mutable-filtered QuickPick) is gone — masters is
+  lifecycle-derived now, never a direct user edit; the header record's masters field shows on this
+  column header, read-only, derived from content at compile (Effective masters — the plugin's
+  committed masters unioned with the origins of every currently uncommitted working-tree change,
+  ADR-0038).
 - **Ctrl+click** — acknowledged for now as a fourth, navigation-only gesture (follows a FormKey
   reference to its record). Whether it survives once a right-click "Go to Record" exists is still
   undecided — see Further Notes.
@@ -293,14 +251,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 - **Header**: record identity (`{RecordType} / {EditorID}`, or FormKey) and the FormKey
   (`{FormID}:{OriginPlugin}`). On a mutable record the FormID is a 6-hex-char input with a
   **Renumber** button (enabled only when the value changed); on an immutable one it is plain
-  text. Renumber stages a ChangeGroup. An in-use FormID surfaces an inline error; an
-  immutable-reference block surfaces a notification naming the blocking plugins. A record
-  that already carries a pending delete or renumber refuses a new renumber with a 409 naming
-  the pending change — the mirror of delete's own pending-lifecycle guard (#134, #391).
+  text. Renumber writes a delete+create pair as an ordinary working-tree change (#427). An
+  in-use FormID surfaces an inline error; an immutable-reference block surfaces a notification
+  naming the blocking plugins.
 - **Compare grid** (the primary view): one **row per field** (fields with no value in any
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
-  load order (left = master, right = winning override), plus a **Pending** column for any plugin
-  with staged changes. Column headers show the plugin name as a chip, filename only — origin (the
+  load order (left = master, right = winning override) — every column renders Effective state,
+  committed text with any uncommitted working-tree change overlaid (#413). Column headers show
+  the plugin name as a chip, filename only — origin (the
   mod folder that provided this copy, or a reserved value) lives in the chip's tooltip always, and
   renders inline in the label only when a second loaded copy shares this filename (ADR-0036;
   #304). An immutable chip carries a `(read-only)` note beneath it, worded by *why*: a vanilla/
@@ -314,22 +272,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   tooltip states the fact and names both surfaces that decide it (the Mods view, the Plugins view)
   rather than one gesture that would only fix one cause. Never "move it earlier in the load
   order" — that names the wrong axis for a shadowed copy (CONTEXT-MAP.md, CONTEXT.md). Left-click
-  collapses/expands a column (state persisted in session); right-click opens VS Code's
-  own native menu offering **Copy as Override Into…** (copies the *right-clicked column's own
-  version* of the record — not necessarily the winner — into a picked target plugin, preserving
-  `EditOrchestrator.CopyRecordTo`'s FormKey-reference validation and placement copy; the same
-  `modbench.copyAsOverrideInto` command the plugins tree uses — #281: the tree row names its own
-  copy as the source the same way, so the gesture means "copy *this* version" on every surface) /
-  **Copy as New Record Into…** (same values, a fresh FormKey in the target — one backend call,
-  `CreateRecord`'s template-source pair; #281. The destination list **includes the source
-  record's own plugin**: a new record gets its own FormKey, so template and copy coexist, and
-  copying a record in your own patch as a template for a variant is the ordinary way to author
-  one. Copy as Override's list still excludes it — a plugin cannot override itself — which is
-  the same split xEdit makes, gating its source-file exclusion on `not (AsNew or AsWrapper)`;
-  #347) / **Remove** (the same `modbench.deleteRecord`
-  command and modal confirm as the tree's record rows — one operation, one name, per xEdit's
-  `mniNavRemove`/`mniViewHeaderRemove`; #281), absent rather than merely disabled for an immutable
-  column. The grid's scroll region is bound to the
+  collapses/expands a column (state persisted in session). The grid's scroll region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
   many plugin columns) stays reachable at the bottom of the visible viewport regardless of
   vertical scroll position, instead of only appearing at the bottom of a possibly very tall table
@@ -389,9 +332,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   (`VmadObjectCell`, composing this same `FormKeyCell`). The link affordance appears on `Ctrl`-hover only when the
   reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
-  scalar leaf, collapsed or expanded alike (#204). Pending-change cells show the new value on a
-  yellow background and are directly editable on the same terms as disk cells (see Pending
-  column for how they're reverted).
+  scalar leaf, collapsed or expanded alike (#204).
 - **A `string` cell's double click opens the extended editor** (#230; ADR-0034 divergence #2) —
   xEdit's own answer for this gesture is `TfrmViewElements`, a separate modeless window; a
   modeless Delphi form has no analogue worth reproducing in a webview (reproducing one would be
@@ -414,10 +355,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     filename is what its title shows: `⟨Field⟩ [⟨Plugin⟩].txt` inside a directory named for the
     record (`⟨EditorID⟩ [⟨FormKey⟩]`, the same composite the header uses), so both which field and
     which record a tab belongs to are legible without opening it.
-  - **Commit trigger**: on save. Each `Ctrl+S` re-stages the tab's full current content through the
-    same `onEdit`/pending-change path any other cell's commit uses — never on keystroke (would
-    restage on every character typed) and never only on close (a user who saves twice while still
-    editing expects both saves staged, the same as re-editing any other cell twice).
+  - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content through the
+    same `onEdit` path any other cell's commit uses — never on keystroke (would write on every
+    character typed) and never only on close (a user who saves twice while still editing expects
+    both saves written, the same as re-editing any other cell twice).
   - **Trigger gesture**: kept as **double-click**, not moved to the right-click menu, for two
     independent reasons that agree: xEdit already trains its users on exactly this gesture
     (`EditTips`: *"Double click on text fields in the right pane to open multiline editor"*), and
@@ -434,16 +375,12 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     `F2` is unaffected and stays immediate for every type including `string`: it dispatches its
     open via a real `element.click()` call (`DiskCell`), which the DOM spec gives `detail: 0`, and
     the debounce only ever applies to a real mouse click (`detail >= 1`).
-  - **Scope**: the field grid's disk *and* pending columns alike (`ScalarCell`/`DiffRow`) —
-    `extendedFieldEditor.ts`'s temp-file path carries a disk/pending discriminant (`column:
-    'pending'`, mirroring `FocusedCell`'s own, #242), so a pending cell's extended editor opens its
-    own independent tab rather than aliasing its disk companion's. A plain `string`-typed disk or
-    pending row reaches the extended editor regardless of whether it's an ordinary field or a VMAD
-    property (#231 folds both onto the same `ScalarCell`). A composite leaf's own inner string
-    widget (a condition parameter's Text category, `conditionParam`) doesn't yet — its outer
-    `FieldMetadata.type` isn't `'string'`, which is what this gesture keys on (#231's own noted
-    gap). A `string` cell that doesn't reach it keeps opening its inline editor on double click,
-    unchanged.
+  - **Scope**: every plugin column (`ScalarCell`/`DiffRow`). A plain `string`-typed row reaches the
+    extended editor regardless of whether it's an ordinary field or a VMAD property (#231 folds
+    both onto the same `ScalarCell`). A composite leaf's own inner string widget (a condition
+    parameter's Text category, `conditionParam`) doesn't yet — its outer `FieldMetadata.type` isn't
+    `'string'`, which is what this gesture keys on (#231's own noted gap). A `string` cell that
+    doesn't reach it keeps opening its inline editor on double click, unchanged.
 - **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
   with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
   appending a default-valued element (#142). They live in the **right-click menu**, with
@@ -455,84 +392,28 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
   the array's expand state, matching xEdit — the retired "+" button's expanded-only visibility was
   that button's own rendering choice, not a functional rule. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
-  sort key, so the entries are absent, not merely disabled. All three ops restage the **whole
-  array** as a single field edit (same path as an element-value edit; ADR-0017), and only on
-  non-immutable columns. There is no free drag-reorder and no auto-sort. A VMAD array-of-scalars
+  sort key, so the entries are absent, not merely disabled. All three ops write the **whole
+  array** as a single field edit (same path as an element-value edit — a complex field is always
+  edited atomically, CONTEXT.md), and only on non-immutable columns. There is no free drag-reorder
+  and no auto-sort. A VMAD array-of-scalars
   property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
   Conditions are ordinary rows in the one tree* below.
-- **Editing stages pending changes** rather than writing immediately. Copying a whole record
-  into another plugin is a **column-header** action, not a panel-level one — **Copy as
-  Override** on a column's header opens a picker of the other mutable plugins and copies *that
-  column's* version of the record (not necessarily the overall winner) into the one picked.
-  There is no single "active editable plugin" for a panel-level control to assume. A single
-  field's value can instead be **dragged between plugin columns** to copy just that field as a
-  pending change into the target (which must be editable; the source need not be) — or **copied
+- **Editing writes working-tree ledger text directly** (ADR-0041) — there is no staged
+  intermediate state. A single field's value can be **dragged between plugin columns** to copy
+  just that field into the target (which must be editable; the source need not be) — or **copied
   and pasted** when the target isn't conveniently reachable by drag, or lives outside mEdit
   entirely: click the source cell, `Ctrl+C`, click the target, `Ctrl+V`. **Copy works on every
-  cell of every type in both column kinds**, and paste on every cell of a mutable column, because
+  cell of every type**, and paste on every cell of a mutable column, because
   the clipboard carries the cell's model value rather than selected text — there is no widget for
   it to be incompatible with. This is what `Ctrl+C`/`Ctrl+X`/`Ctrl+V` do in xEdit
   (`Element.EditValue`), and adopting it removes the previous model's two availability holes:
   `bool`/`enum`/`flags` having no copy path on a mutable column, and the resulting inversion where
-  a read-only column could hand over its value and an editable one could not.
-
-### Pending column
-
-Per [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md) (#139). The per-plugin
-Save button that once lived here called `POST /plugins/{plugin}/save`, a route the backend does
-not implement and will not, so it was deleted (#136); the actions below replace it.
-
-Every action is scoped to a **ChangeGroup**, never to part of one and never to a record or a
-plugin:
-
-- **Plain click** on a pending value focuses it, exactly like a disk cell — it renders through the
-  same shared value-cell container, not a separate one (#232). A second click, `F2`, or a double
-  click opens its editor; `Ctrl+C`/`Ctrl+X`/`Ctrl+V` act on it the same way a disk cell's clipboard
-  commands do, and dragging it out (or dropping onto it) works the same way too — the same shared
-  container, wired the same way, for every one of those gestures. There is no lock on the
-  corresponding disk cell in response to editing; both stay editable simultaneously for now
-  (revisit later if that proves confusing in practice). VMAD and Condition pending cells go through
-  this exact same code now, not a bespoke copy (#231). The pending column's own focus is tracked
-  independently of its disk-column companion (`FocusedCell` carries a `column: 'pending'`
-  discriminant, since the two share the same plugin name) — focusing or editing one never affects
-  the other. A `string` pending cell's double click reaches the extended editor exactly like its
-  disk companion's (see "By cell" gesture matrix and the extended-editor section's own `Scope`
-  note): `extendedFieldEditor.ts`'s own tab identity carries the same `column: 'pending'`
-  discriminant `FocusedCell` does (#242), so the two cells' tabs never alias.
-- **Right-click** on a pending value opens VS Code's own native context menu (#208 —
-  `contributes.menus["webview/context"]`, gated by a `data-vscode-context` attribute the cell
-  carries; the cell must not call `preventDefault()` on the contextmenu event, or VS Code's
-  webview preload suppresses its own menu) offering **Reveal in Pending Changes Tree** (selects
-  its node in the [Pending Changes tree](medit-pending-changes-tree.md), expanding the parent
-  group for a multi-member change; a change already saved or reverted resolves to nothing and is
-  logged, not thrown), **Save Group** (writes every plugin in the component and consumes its
-  pending rows; the grid reloads to reflect what reached disk), and **Revert Group** — the
-  group's only three actions, all in one menu, and the only way to trigger any of them
-  ([ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md): no standalone revert
-  icon on the cell now that Revert Group lives in the menu). VS Code's built-in Cut/Copy/Paste
-  entries are suppressed on this menu (`preventDefaultContextMenuItems`), which costs nothing: a
-  pending value's model value is reached with `Ctrl+C` on the focused cell — the same clipboard
-  contract every other cell follows — not from a menu. Reveal resolves entirely in the extension host (no webview
-  round trip); Save Group and Revert Group's work (the HTTP calls, the confirmation below, the
-  partial-save/stale-reindex banner) only exists in the webview, so the command broadcasts to
-  every open record panel and each one silently ignores a change id it doesn't hold — a change id
-  is never shared across two different records, so at most one panel ever acts. Revert's
-  confirmation keys on member count, not on which control fired it: a group of one — the common
-  case — is exactly "revert this field" and fires straight away; an entangled change confirms
-  first, via a **native modal warning** (#212 — `vscode.window.showWarningMessage(..., { modal:
-  true })`, reached through the same webview↔extension-host bridge shape as the FormKey/
-  condition-function QuickPicks: the webview posts the already-composed detail text — one line
-  per linked edit, `recordType / formKey · fieldPath` — and awaits the extension host's reply,
-  since showWarningMessage is extension-host-only), rather than firing the 409 the backend would
-  return for a partial group revert (ADR-0028). The member count is read from `GET /changes` for
-  the change's component; the panel never surfaces a raw 409.
-- A **partial save** is surfaced, never silent (ADR-0026): the banner names which plugins wrote,
-  partially wrote, and could not write, and states the unwritten changes stay queued. A save that
-  reached disk but whose post-commit reindex failed reads instead as a completed-save warning to
-  reload (#127) — honest to the severity, not "save failed".
-- There is **no per-plugin or per-record Save** on the panel. Bulk saving is multi-select in the
-  Pending Changes tree, or Save All.
+  a read-only column could hand over its value and an editable one could not. Reviewing, committing
+  and reverting a write happens in VS Code's native Source Control panel, not on this panel — see
+  [medit-version-control.md](medit-version-control.md).
+- There is **no per-plugin or per-record Save** on the panel — writing the binary is the separate
+  Save & Compile gesture ([medit-version-control.md](medit-version-control.md)).
 
 ### Progressive load ([#308](https://github.com/WhiskyTangoFawks/ModBench/issues/308), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
@@ -632,9 +513,9 @@ fields already carry (`FieldDiff`/`FieldMetadata`); RecordPanel merges the adapt
 into its own `diffs`/`fieldMetaMap` before handing the whole thing to the same recursive builder
 described under *The panel* below. Nothing downstream of that merge point knows or cares which of
 the three sources — reflection, VMAD, Conditions — a row came from: conflict coloring, expand/
-collapse, focus, `F2`, the clipboard, drag in both column kinds, and the pending column all come
+collapse, focus, `F2`, the clipboard, and drag all come
 from `DiffRow`/`RecordPanel` unchanged, not re-derived per surface. This is a rendering merge, not
-a behaviour change: existing VMAD and Condition editing, staging, and conflict behaviour are
+a behaviour change: existing VMAD and Condition editing and conflict behaviour are
 preserved end to end (verified by porting their prior test suites onto the unified tree), with the
 handful of deliberate, called-out differences below.
 
@@ -650,14 +531,14 @@ nothing.
 shape rather than a second shape:
 
 - **Wire paths differ from display labels.** An ordinary field's `fieldName` and the path it
-  stages under are the same string; a VMAD property's isn't (`"Health"` displays, but stages at
-  `VMAD\ScriptName\Health`), and neither is a condition field's (`"Function"` displays, but stages
+  writes under are the same string; a VMAD property's isn't (`"Health"` displays, but writes at
+  `VMAD\ScriptName\Health`), and neither is a condition field's (`"Function"` displays, but writes
   at `CTDA\Conditions\0\Function`). `FieldDiff.wirePath`, when present, is what a row and its whole
-  subtree actually restage under — `RecordPanel`'s row-builder starts a **fresh** restage root the
-  moment it meets a child carrying one (rather than folding into whatever its parent restages),
+  subtree actually write under — `RecordPanel`'s row-builder starts a **fresh** write root the
+  moment it meets a child carrying one (rather than folding into whatever its parent writes),
   which is what lets a VMAD property or a condition field commit independently of the script/
   condition list containing it, exactly as it always has.
-- **A staged value's own shape can differ from the shared model's**, needed only for VMAD's
+- **A written value's own shape can differ from the shared model's**, needed only for VMAD's
   Struct/ArrayOfStruct properties: their wire format is the backend's own raw node tree
   (`VmadStructEntry[]`/`VmadStructInstance[]` — `{name, type, boolValue, …, members}`), unchanged
   by this work (no backend/API change anywhere in it). `FieldDiff.commitOverride`, present only on
@@ -704,15 +585,15 @@ as array elements the same way (Remove/Move reuse the generic array machinery un
 `readOnly` — it was never editable under the pre-#231 model either.
 
 **Conditions' shape**: one **`type: 'array'`** row per condition-owning field (not a struct
-container the way VMAD's script list is) — a condition list's add/remove/move already restaged
+container the way VMAD's script list is) — a condition list's add/remove/move already wrote
 the whole list at one field path before this work, the identical shape an ordinary unsorted array
-restages in, so it reuses the **same** array-op machinery Conditions' AC asks for
+writes in, so it reuses the **same** array-op machinery Conditions' AC asks for
 ("consistent with array operations") with **zero new commands**. Conditions align across plugins
 positionally by canonical index (the glossary's Unsorted array rule, ADR-0019, the same alignment
 `VmadConflictClassifier` already gives VMAD arrays) — a plugin missing one condition leaves a hole
 at that position rather than compacting the row list, so a condition's row stays aligned with its
 own siblings across every plugin column; the array's own `commitOverride` strips those holes back
-out immediately before any add/remove/move stages, since the wire list has no concept of "absent
+out immediately before any add/remove/move writes, since the wire list has no concept of "absent
 here" the way a hole does. Each condition is a **struct** row, and its collapsed label is the one
 deliberate exception to every other struct row's generic `{…}`: it shows xEdit's own one-line
 prose summary (`wbConditionToStr`, `references/TES5Edit/Core/wbDefinitionsCommon.pas` —
@@ -755,7 +636,7 @@ the webview first); Add Property is still the one deliberate webview-rendered di
 (`ModalShell`/`AddPropertyDialog`, #229's own exception — three fields at once, a multi-step
 QuickPick chain would be worse UX) — the command only tells the webview which script/plugin to
 open it for. Condition add/remove/reorder need no new commands at all (above). Each
-condition-owning field is still keyed and staged independently by its own field path
+condition-owning field is still keyed and written independently by its own field path
 (`ConditionOwner.FieldPath`/`ConditionGroupDiff.FieldPath`, `Fallout4ConditionCodec.Extract`
 reflecting over every top-level property shaped like a condition list — #154), and a
 condition-owning field still renders **only** as a condition row, never also as a raw generic
@@ -766,11 +647,11 @@ design dead end): **Set Type** has no right-click entry yet (still reachable onl
 re-adding); a **structList instance's own Add** has no right-click entry yet — its `elementType`
 has no `defaultValue` override the way a condition's does, and the raw node format
 `defaultElementValue`'s own generic struct default would produce doesn't match it, so Add is
-withheld outright there rather than staging a wrong-shaped instance (Remove/Move are unaffected —
+withheld outright there rather than writing a wrong-shaped instance (Remove/Move are unaffected —
 neither needs a default, and both go through `commitOverride`'s own whole-array passthrough
-correctly); a **not-yet-saved** `add_script`/`add_property` structural op has no synthetic-row
-visibility in the grid until it lands as real data (it's still fully valid, saveable, and
-revertable from the Pending Changes tree in the meantime); and the extended editor (double-click,
+correctly); a **not-yet-compiled** `add_script`/`add_property` structural op has no synthetic-row
+visibility in the grid until it lands as real data (it's still fully valid to write and revert
+through the native Source Control panel in the meantime); and the extended editor (double-click,
 #230) reaches every plain `string`-typed row (including VMAD's own plain String properties) but not yet a
 composite-typed leaf's own inner string widget (a condition parameter's Text category) — its
 outer `FieldMetadata.type` isn't `'string'`, which is what that gesture keys on.
@@ -792,8 +673,8 @@ small, deliberate simplification folding a special case into the one rule every 
 already follows, rather than preserving it as a second default only conditions had. Read-only for
 now, on both ends: the frontend renders a nested group's rows display-only (no
 function/parameter/operator inputs, no add/move/remove controls), and `PluginWriter.IsReadOnly`
-rejects a nested (indexed) condition path at stage time as a second, independent gate. Staging an
-edit at a nested path stays rejected until scalar editing lands (#182), add/remove/reorder inside
+rejects a nested (indexed) condition path at edit time as a second, independent gate. Editing at a
+nested path stays rejected until scalar editing lands (#182), add/remove/reorder inside
 a nested list until #183, and two levels of nesting (a Perk effect's own conditions, a Quest
 alias's/stage's own conditions) until #184.
 
@@ -807,8 +688,8 @@ label and affordance follow the real resolution, not a raw FormKey — and each 
 
 ### Field type rendering rules
 
-These apply everywhere a field value is rendered — the one compare grid, pending cells, and any
-future surface, VMAD/Condition rows included (#231) since they render through this exact code now:
+These apply everywhere a field value is rendered — the one compare grid and any future surface,
+VMAD/Condition rows included (#231) since they render through this exact code now:
 
 1. **Never display raw integers for enums or flags** — always resolve to name(s).
 2. **FormKeys render as links**, labelled `EditorID [FormKey]` when the reference resolves and the
@@ -843,8 +724,10 @@ future surface, VMAD/Condition rows included (#231) since they render through th
    (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — a VMAD array-of-scalars property
    reuses this exact machinery (#231); VMAD's own struct/structList element ops are described
    under *VMAD and Conditions are ordinary rows in the one tree* above.
-4. **Pending values** always show the new value (not the old), on a yellow background; revert is
-   menu-only (right-click **Revert Group**, see Pending column), not a cell-level control.
+4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
+   change already overlaid (#413); there is no separate pending/dirty visual treatment on this
+   panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
+   here ([medit-version-control.md](medit-version-control.md)).
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
 6. **Read-only cells** in immutable plugin columns are never editable and render no input on
    click.
@@ -879,10 +762,9 @@ channel at the carried level (#200).
   #231 — the same `handleEdit`/`handleVmadStructOp` call sites, not a separate log site per
   surface), a successful drag-copy between plugin columns, and array/VMAD-structural-op add /
   remove / move-up / move-down. These are high-frequency and fine-grained.
-- **INFO** — discrete persist/discard operations: Save Group and Revert Group on a pending cell,
-  and the column-header Copy as New Record and Remove.
+- **INFO** — discrete lifecycle operations: Remove.
 - **WARN** — the system correctly refusing something: dropping a dragged value onto an immutable
-  target column, which stages nothing.
+  target column, which writes nothing.
 
 Lines carry **identity only** — plugin, field path, and record FormKey — never the field's old or
 new value, so a large array or struct edit can't flood the panel.
@@ -891,9 +773,8 @@ new value, so a large array or struct edit can't flood the panel.
 
 - **Good tests assert external behavior, not implementation details** — given a compare
   response, assert what the grid renders (rows/columns, per-cell color from `cellStates`,
-  enum/flag names resolved, FormKey links, pending highlighting); given a staging interaction,
-  assert the pending state and the save/revert payloads. No assertions about private component
-  internals.
+  enum/flag names resolved, FormKey links); given an edit interaction, assert the resulting
+  `onEdit` write payload. No assertions about private component internals.
 - **Seam**: the webview React components through their props, with the injected typed client —
   Vitest, `npm run test:unit`, no backend and no VS Code. Colocated tests per component, the
   established sibling-component pattern.
@@ -911,26 +792,22 @@ new value, so a large array or struct edit can't flood the panel.
 - **Editing Papyrus source** — VMAD's own rows edit script *data* (properties, their values
   and types, script and property flags). Compiling or editing `.psc` source is a different job
   and is not this surface's.
-- **Per-plugin and per-record save** — a ChangeGroup may span plugins, so those scopes could
-  only be honoured by splitting a group. Save and revert act on a group, a multi-selection of
-  groups, or everything (ADR-0029).
+- **Save and revert on this panel** — writing the binary is the separate Save & Compile gesture;
+  reviewing and reverting a working-tree change happens in the native Source Control panel — both
+  [medit-version-control.md](medit-version-control.md).
 - **Referenced By** — a separate tree, [medit-referenced-by.md](medit-referenced-by.md).
-- **Grouping semantics** — settled in ADR-0028 and computed backend-side; this surface renders
-  grouping, it does not derive it.
 - **Array arity/order editing of *sorted* (`wbArrayS`) arrays** — deliberately absent: order is
   derived from the sort key, so add/remove/reorder controls do not render on them. Unsorted
-  (`wbArray`) arrays gained field-grid arity/order controls in #142 (arity changes restage the
-  whole array under ADR-0017's `old_value`/`new_value` model).
+  (`wbArray`) arrays gained field-grid arity/order controls in #142 (arity changes write the
+  whole array as one field edit).
 
 ## Further Notes
 
-- The rationale for removing edit mode (xEdit's `toEditOnClick` parity, and the fact that
-  immutability plus staging already prevent accidental writes) is recorded in #111. The
-  rationale for group-scoped save/revert is
-  [ADR-0029](../adr/0029-pending-changes-tree-is-a-grouping-view.md).
+- The rationale for removing edit mode (xEdit's `toEditOnClick` parity, and the fact that column
+  immutability already prevents accidental writes) is recorded in #111.
 - #111 also established that editability is per **column**, replacing a mode: before it, the
   cells were never told which columns were immutable, so a read-only column rendered inputs
-  whose stage the backend then rejected with a 409.
+  the backend then rejected with a 409.
 - **Open question: does `Ctrl+click`-to-follow survive alongside a right-click "Go to Record"?**
   [ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md) acknowledges `Ctrl+click`
   as a fourth gesture for now without resolving this. The tension: it's undiscoverable (no visible

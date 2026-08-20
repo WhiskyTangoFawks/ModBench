@@ -1,5 +1,13 @@
 # Python scripts are HTTP clients of the backend, not a backend-spawned subprocess
 
+*This ADR's central decision — scripts are HTTP clients of the backend, never a spawned
+subprocess — still governs (CONTEXT.md cites it as current). [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+retired the pending-change mechanism the body below describes `edit()` as landing in;
+`edit()` now writes through the same working-tree edit path a manual edit uses
+(`POST /records/{formKey}/field`), and reads go through the generated `json_extract`
+views (ADR-0025 is superseded), not a `pending_changes` overlay. The transport
+decision and its rationale are otherwise unaffected.*
+
 The Phase 15 scripting engine runs Python scripts as **HTTP clients of the existing backend**. A small `medit` Python package wraps the same endpoints the VS Code extension uses; scripts are just a second client of the same API. The backend does not spawn Python and does not own a script-execution endpoint.
 
 This supersedes the earlier Phase 15 design (and an [ADR-0014](0014-python-for-scripting.md) consequence) in which the backend spawned a Python subprocess and exchanged JSON-RPC over stdin/stdout via `POST /script/run`.

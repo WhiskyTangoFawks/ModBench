@@ -1,15 +1,9 @@
 # mEdit — Context Overview
 
-> **⚠ Retired mid-arc by [ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md).**
-> Everything below describing *editing* — pending changes, staging, the Pending column, per-cell
-> editors, the copy/remove/array/VMAD record actions and the Pending Changes tree — was deleted by
-> [#410](https://github.com/WhiskyTangoFawks/ModBench/issues/410). The editor is a **viewer** until
-> the text-first edit path returns. The current model is
-> [Version control — Track, branch, compile](medit-version-control.md); #418 folds this document
-> back into a true statement of what ships. Read-path statements (the grid, conflict colouring,
-> references, filters, navigation) are unaffected.
-
-**Status: Implemented.**
+**Status: Implemented.** Editing is git-native (ADR-0041) — see
+[Version control — Track, branch, compile](medit-version-control.md) for tracking, review &
+commit, Save & Compile, and external-change handling. This document covers what is shared
+across mEdit's surfaces, unaffected by that model.
 
 This is the **overview** for the mEdit view, not a surface spec. It covers what is shared
 across mEdit's surfaces — the session lifecycle, the status bar, the command palette, and the
@@ -51,10 +45,9 @@ session over the active loadout:
 | Surface | What it is | Spec |
 | --- | --- | --- |
 | **Plugins tree** | Sidebar tree; the entry point for all navigation — records by type, a spatial worldspace/cell tree, and the SQL record filter, once a session is running | [plugins.md](plugins.md) |
-| **Pending Changes tree** | Sidebar tree below it, visible while there is staged work; staged work grouped into the units that must be saved or reverted together | [medit-pending-changes-tree.md](medit-pending-changes-tree.md) |
-| **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that stages pending changes | [medit-record-editor.md](medit-record-editor.md) |
+| **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that writes working-tree ledger text | [medit-record-editor.md](medit-record-editor.md) |
 | **Referenced By tree** | Panel-container tree that follows the active record editor; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
-| **Aggregate SCM provider** | Native Source Control panel; working-tree group of changed records across every tracked plugin, read-only, click-to-diff (ADR-0040 stage 1) | [scm.md](scm.md) |
+| **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
 | **Status bar item** | Backend/session state | This document |
 
 **Launch mEdit** (from the Loadout header) spawns the backend and builds the session from every
@@ -62,9 +55,9 @@ line of the active profile's `plugins.txt` — disabled entries included, carryi
 participation (#270 / ADR-0035) — plus vanilla masters (`load-explicit`); **Close mEdit** tears
 the session down. The Plugins tree's rows gain chevrons once the session is ready — no other
 surface swap happens: the Loadout views (Mods, Plugins, Downloads) are always visible regardless
-of session state, and Pending Changes / Referenced By govern their own visibility (staged work,
-always-present-and-following, respectively) rather than a mode. Editing writes records straight
-to their physical plugin files and never requires a deploy.
+of session state, and Referenced By is always-present-and-following rather than gated on a mode.
+Editing writes records to the working-tree ledger text of tracked plugins (ADR-0041); writing the
+physical plugin file is a separate Save & Compile gesture, and neither requires a deploy.
 
 ## User Stories
 
@@ -97,15 +90,14 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   `modbench.viewMode`, [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273)): every
   Loadout and mEdit view is contributed unconditionally, and each surface that needs to hide
   does so on its own signal rather than a shared mode — the Plugins tree's rows gain chevrons
-  once a session exists (ADR-0035), Pending Changes is visible exactly while there is staged
-  work, and Referenced By is always present, following the active record editor
-  ([medit-referenced-by.md](medit-referenced-by.md)). **Launch mEdit** spawns the backend and
-  loads the active modlist as the session; **Close mEdit** tears it down. Both are reached from
-  the **mEdit row of the [Loadout header](loadout-header.md)** (#247) — one row carrying
-  whichever direction applies — and neither appears on any tree's title bar: starting and
-  stopping a session is workspace-scope, and with every view always on screen there is no single
-  tree it could sensibly belong to.
-- The mEdit view is composed of the six surfaces listed above. There is no toolbar or
+  once a session exists (ADR-0035), and Referenced By is always present, following the active
+  record editor ([medit-referenced-by.md](medit-referenced-by.md)). **Launch mEdit** spawns the
+  backend and loads the active modlist as the session; **Close mEdit** tears it down. Both are
+  reached from the **mEdit row of the [Loadout header](loadout-header.md)** (#247) — one row
+  carrying whichever direction applies — and neither appears on any tree's title bar: starting
+  and stopping a session is workspace-scope, and with every view always on screen there is no
+  single tree it could sensibly belong to.
+- The mEdit view is composed of the four surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
 - **One spec per surface** (see [README.md](README.md)). A surface is a top-level UI unit the
@@ -126,11 +118,11 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   mEdit (enter editing; spawn backend; load the session), Close mEdit (return to Loadout; tear
   down), Reload Session (re-runs the session load — re-resolves the game directory, rebuilds
   the explicit plugin set, reloads it into the backend, the same path Launch mEdit and the
-  crash-restart handler take; confirms modally only when there's staged work to lose;
-  deliberately *not* the same command as Refresh, and in the Loadout header's overflow rather
-  than its navigation group — #247, #295), Open Editor (internal; also bound to tree click),
-  New Plugin…, Copy as Override Into…, and Run Script… (planned; context = the active record if
-  a panel is open, else global).
+  crash-restart handler take; confirms modally only when there are uncommitted working-tree
+  changes to lose; deliberately *not* the same command as Refresh, and in the Loadout header's
+  overflow rather than its navigation group — #247, #295), Open Editor (internal; also bound to
+  tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
+  active record if a panel is open, else global).
 - A new end-to-end command is four touch points, or it is half-wired: backend endpoint →
   `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) → `package.json`
   commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in the integration test.
@@ -138,16 +130,13 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 ### Architecture / seams
 
 - **The backend is the seam for record data and mutations**: the frontend talks to it only
-  through the generated API client; the compare grid, conflict states, references, grouping,
-  and all mutations are behaviors of endpoints owned by `MEditService/`. The frontend holds
-  rendering and staging logic, not record semantics.
+  through the generated API client; the compare grid, conflict states, references, and all
+  mutations are behaviors of endpoints owned by `MEditService/`. The frontend holds rendering
+  logic, not record semantics.
 - **Conflict classification** (the two-axis ConflictAll/ConflictThis model,
   [ADR-0016](../adr/0016-two-axis-conflict-model.md)) is computed backend-side and consumed by
   the grid as `cellStates` — the frontend maps states to color, it does not derive them. Its
   visual encoding is specified in [medit-record-editor.md](medit-record-editor.md).
-- **ChangeGroups** are derived backend-side as connected components of the pending-change
-  dependency graph ([ADR-0028](../adr/0028-change-groups-are-derived-dependency-closures.md));
-  the frontend renders grouping and never computes it.
 - All backend HTTP calls go through the generated `openapi-fetch` client (`ApiClient`) — never
   raw `fetch()` (`modbench/CLAUDE.md`).
 - Errors surface on [ADR-0026](../adr/0026-error-surfacing-policy.md)'s severity tiers via an
@@ -159,13 +148,13 @@ Per-surface testing decisions live in the surface specs. Shared:
 
 - **Good tests assert external behavior, not implementation details.** Observe a tree through
   `getChildren`/`getTreeItem` and a webview through its props; never assert private internals.
-- **Record semantics, conflict classification, and grouping are the backend's responsibility**
-  and are tested there (`MEditService/CLAUDE.md`), never re-asserted from the frontend. Frontend
-  tests consume representative responses as fixtures.
+- **Record semantics and conflict classification are the backend's responsibility** and are
+  tested there (`MEditService/CLAUDE.md`), never re-asserted from the frontend. Frontend tests
+  consume representative responses as fixtures.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the Plugins tree
-  builds from a session, navigation opens a record panel, the record filter prunes the tree, the
-  Pending Changes tree reflects staged work, and command registration holds — add any new
-  command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
+  builds from a session, navigation opens a record panel, the record filter prunes the tree, and
+  command registration holds — add any new command id(s) to `EXPECTED_COMMANDS` (per
+  `modbench/CLAUDE.md`).
 
 ## Out of Scope
 

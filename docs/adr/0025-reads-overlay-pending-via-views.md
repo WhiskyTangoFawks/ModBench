@@ -1,4 +1,16 @@
+---
+status: superseded by ADR-0041
+---
+
 # Reads overlay pending changes via generated logical views
+
+> **Superseded by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19):** the `pending_changes` table and the overlay views built on it are
+> gone — a session's DuckDB index has no pending-change concept at all
+> (`SessionDatabaseTablesTests.ALoadedSession_HasNoPendingChangeTables`). Filter SQL
+> now runs against generated `json_extract` views over the one `records` documents
+> table, materialised once per apply — see `docs/specs/plugins.md` § Record filter
+> (SQL) and ADR-0041's filter-probe verdict (#366, #411). Kept for history below.
 
 SQL reads — the ADR-0018 record filter, Phase 15 scripts, and internal read paths — query **current state** (committed + staged), not just committed on-disk data. This is provided by generated per-record-type DuckDB **logical views** that overlay `pending_changes` onto the committed base tables. (Phase B.2.)
 

@@ -132,9 +132,8 @@ there is no separate load-session step.
     browsing records from bytes my loadout no longer points at.
 16. As a user, I want to be told which origin the session loaded and which one the name resolves
     to now, so that I can judge whether I care before doing anything about it.
-17. As a user, I want to re-read exactly that one plugin, on request, and to be told first what
-    it costs my staged edits — and I want nothing to be re-read on my behalf, ever, so that a
-    mod-level change can never silently reload a file underneath work in progress.
+17. As a user, I want to re-read exactly that one plugin, on request, and never on my behalf, so
+    that a mod-level change can never silently reload a file underneath work in progress.
 
 ### Record navigation (Editing, once a backend session is running)
 
@@ -159,19 +158,14 @@ there is no separate load-session step.
 21. As a user, I want to save filters as `.sql` files, apply one from a picker or from an
     inline Code Lens on the file, and see which filter is active, so that my useful queries are
     reusable and obvious.
-22. As a user, I want a built-in "pending changes" filter preset, so that I can immediately
-    narrow the tree to records I've touched — this, not the Pending Changes tree, is how I
-    browse my staged edits in context.
-23. As a user, I want to create a new plugin, add a record to a plugin, copy a record as an
-    override or as a new record into another plugin, and remove records (with a confirmation
-    that lists everything selected), so that the common authoring operations are all in the
-    tree.
+23. As a user, I want to create a new plugin, add a record to a plugin, and remove records (with
+    a confirmation that lists everything selected), so that the common authoring operations are
+    all in the tree.
 24. As a user, I want to open a plugin's header as a first-class record by clicking the plugin
     node — viewing its author, masters, and flags in a single-column panel, and (on editable
-    plugins) editing them through pending changes: set the author, toggle ESL/ESM (rejected at
-    stage time when the plugin isn't ESL-eligible), and add a master chosen from the loaded
-    plugins (validated so I can't make the plugin unloadable) — so that maintaining a plugin's
-    header is staged and reviewable like any other edit.
+    plugins) editing them through the normal edit path: set the author, toggle ESL/ESM (rejected
+    at edit time when the plugin isn't ESL-eligible) — so that maintaining a plugin's header is
+    an ordinary working-tree edit, reviewable in the Source Control panel like any other.
 25. As a user, I want to create and manage placed references (REFR/ACHR) inside a cell's
     persistent or temporary group, so that I can edit world placement spatially.
 26. As a user, I want a plugin whose master can't be resolved flagged and still fully browsable —
@@ -338,30 +332,24 @@ without saying what is not yet known would make that worse, not better.
   tooltip `PluginsTreeComposite` appends, never a third `contextValue`, per Row model above). An
   **Open Header** action (context menu; also available inline) opens the
   plugin's **header record** — author, masters, flags — as a single-column record panel. A
-  plugin's context menu also exposes New Plugin…, Copy as Override Into…, and — on editable
-  plugins only — Add New Record…, Convert to ESL/ESM, and Run Script…. Each is a confirmation or
-  picker as appropriate; destructive ones confirm.
+  plugin's context menu also exposes New Plugin…, Track… (untracked plugins), and — on editable
+  plugins only — Save & Compile, Add New Record…, Convert to ESL/ESM, and Run Script…. Each is a
+  confirmation or picker as appropriate; destructive ones confirm.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache
   keys, `contextValue`, commands, API `type`). Children are paginated record nodes with a
   "Load more…" node at the end of a page.
 - **Record nodes** (`contextValue: "record"`, or `"recordImmutable"` for a row whose plugin is
-  read-only for editing — an immutable plugin or a shadowed copy — which keeps the copy family
-  but hides Remove, matching the column header's `!immutable` gate; #281): labeled
-  `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no EditorID). Single-click (or Open
-  Record) opens the editor; the context menu adds Copy as Override Into…, Copy as New Record
-  Into…, Remove (a confirmation listing every selected record, deleting the whole selection as
-  one batch; the Delete key also triggers it), and Run Script… (context = this record). #281:
-  the row carries its own copy identity (plugin + origin), and the copy commands act on *that*
-  version — never silently the winner — the same #202 rule the column header follows; the three
-  entries are the same command ids, in the same xEdit order, on the record row, the placed row
-  and the record editor's column header (enforced by `packageJson.test.ts`). Removing a record
-  that is itself a **pending create** reverts that create's whole ChangeGroup (component-revert,
-  ADR-0028) instead of staging a `delete` on top of it — a record with no on-disk existence has
-  nothing to delete. A mixed batch reverts the pending-create targets and stages a `delete` for
-  the committed ones; the response reports the two outcomes distinctly (`revertedFormKeys` vs.
-  `stagedGroup`) rather than collapsing them (#143).
+  read-only for editing — an immutable plugin or a shadowed copy, which hides Remove/Change
+  FormID…; #427): labeled `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no EditorID).
+  Single-click (or Open Record) opens the editor; the context menu adds Remove (a confirmation
+  listing every selected record, deleting the whole selection as one batch; the Delete key also
+  triggers it) and Change FormID… (renumber), with xEdit's own captions, per
+  [medit-version-control.md](medit-version-control.md) — Add lives on the record-type row above
+  a plugin's records. Removing a record deletes its ledger file as an ordinary working-tree
+  change (#427); an uncommitted create has no special-cased handling — its ledger file is simply
+  removed the same way, since it was never committed to begin with.
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
   the record browser for everything a row expands into (`"recordType"`, `"record"` /
@@ -411,9 +399,8 @@ without saying what is not yet known would make that worse, not better.
   are grouping-only (no record, no click); clicking a CELL or REFR node opens the editor.
 - Context menus: a **placed group** offers Create Placed… (quick pick REFR/ACHR + optional
   template FormKey); a **placed reference** (`contextValue: "refr"` / `"refrImmutable"`) offers
-  the same record trio as a record row — Copy as Override Into…, Copy as New Record Into…,
-  Remove — with the same handlers and immutable gating (#281; a copied-as-new placed record
-  lands under the template's own cell and Persistent/Temporary group). CELL nodes have no menu.
+  the same lifecycle actions as a record row — Remove, Change FormID… — with the same handlers
+  and immutable gating. CELL nodes have no menu.
 
 ### Missing-master badge (order-aware) and session-derived master/load-failure decoration
 
@@ -484,8 +471,8 @@ response, so there is exactly one notification and one persistent, per-row expla
 Reorder, enable and disable are SQL-only and apply live. **Mod-level changes are not**: installing,
 uninstalling or reprioritising a mod can change which physical file a plugin name resolves to, which
 invalidates that plugin's records. Those changes **flag the affected rows and stop there**. Nothing
-is re-read automatically — silently re-reading a file underneath staged edits is the one operation
-this design refuses.
+is re-read automatically — silently re-reading a file underneath uncommitted working-tree changes
+is the one operation this design refuses.
 
 **What drift is.** A plugin has drifted when the origin its name resolves to *now* differs from the
 origin its records were read from. Uninstalling the only provider of a loaded plugin is drift too:
@@ -516,12 +503,13 @@ both origins ("loaded from ModA, would now resolve to ModB", or "…to nothing")
 more fundamental about the plugin (a load failure, a master issue) keeps the icon and description,
 and drift still states itself in the tooltip.
 
-Deliberately **not** a `FileDecorationProvider`, unlike the pending-change decorations below. A
-`TreeItem` has exactly one `resourceUri`, #331 already claims plugin rows' for its
-`medit-pending-plugin:` scheme, and VS Code renders one badge per row across all providers — so a
-drift provider would have to answer for the other context's URI scheme and then contend for the
-badge on any row carrying both. That is a platform limitation, which is the one carve-out
-Native-first allows.
+Deliberately **not** a `FileDecorationProvider` — drift renders through `PluginsTreeComposite`'s
+own icon/description/tooltip path instead. An implicit-master row's own `resourceUri` is already
+claimed by `ImplicitMasterDecorationProvider` (the real `Data/<name>` path, #276); a drift
+provider would have to share that scheme or lose the implicit-master decoration on any row
+carrying both, since a `TreeItem` has exactly one `resourceUri` and VS Code renders one badge per
+row across all providers. Record-row working-tree decoration (#428) is scoped to record nodes,
+not plugin rows, so it is not a factor here.
 
 **Reveal in Explorer diverges on a drifted row, deliberately.** That command re-resolves the plugin
 name to a path *live* on every invocation, so on a drifted row it reveals the file the name resolves
@@ -534,76 +522,22 @@ command's semantics, which is a separate decision from this one.
 **Re-read.** Per plugin and explicit only — no batching, no "re-read all drifted". It re-indexes
 that one plugin from the new origin (`POST /plugins/reread` → unindex the old `(plugin, origin)`,
 open and index the new copy in the same load-order slot, re-sweep winners so conflict badges
-describe the new file). **Staged edits against the replaced copy are discarded**, and the modal
-confirm says so — naming the plugin and the number of edits — before anything happens. They cannot
-be carried over: `pending_changes` is keyed on `(form_key, origin, plugin)` and reads overlay by
-origin, so an edit left behind would be invisible yet still live on the next save, which resolves
-its write target by filename. The confirm is skipped only when there is nothing staged to lose; if
-the count cannot be read, it confirms anyway and does not name a number. A re-read arriving while a
-session load is in flight is refused with 409 — nothing is touched, and it works on retry.
+describe the new file). **No confirmation** (ADR-0041/#410): the confirm this gesture once needed
+warned that a re-read would discard staged edits against the replaced copy, a fact that stopped
+being true once editing moved to working-tree ledger text — a tracked mod's ledger lives in its
+own git repository, independent of the DuckDB read-model a re-read rebuilds, so a re-read destroys
+no uncommitted work; it is git's own concern to report, not this command's. A re-read arriving
+while a session load is in flight is refused with 409 — nothing is touched, and it works on retry.
 
-### Pending-change decoration ([#331](https://github.com/WhiskyTangoFawks/ModBench/issues/331))
+### Record-row working-tree decoration (#428)
 
-Any row (plugin or record) that carries a staged pending change is decorated with the same
-git-style vocabulary VS Code users already read from the Explorer's own SCM decorations: a badge
-plus a theme color, via `vscode.FileDecorationProvider` (`medit/PendingChangeDecorationProvider.ts`)
-— never a bespoke badge mechanism.
-
-- **Record row** (`RecordNode`, and every other formKey-addressable node in the spatial hierarchy
-  — `WorldspaceNode`, `CellNode`, `PlacedNode`): a staged field edit, delete or renumber renders
-  the **'modified'** treatment (badge `M`, `gitDecoration.modifiedResourceForeground`). A staged
-  **creation** (today: a record staged via the create change type; #288 will add staged plugin
-  creation as a consumer of this same language) renders the **'added'** treatment instead (badge
-  `A`, `gitDecoration.addedResourceForeground`) — distinct from 'modified', matching git's own
-  treatment of a new file. Every node type that can carry a pending change gets this — an
-  undecorated row must never be mistakable for "no pending changes" once decoration exists at all.
-- **Plugin row**: 'modified' whenever *any* contained record carries a staged change, uniformly —
-  even when the only staged content is a creation. 'added' is reserved for the thing that is
-  itself new (matching git: a folder holding a new file still reads as modified, not added); once
-  #288 makes a *plugin* the pending-created thing, plugin-level 'added' becomes correct there.
-- **Implicit/forced-master plugin rows are out of scope.** `ImplicitMasterNode`
-  (`modmanager/PluginListProvider.ts`) already sets its own `resourceUri` — a real
-  `Data/<name>` filesystem path consumed exclusively by `ImplicitMasterDecorationProvider` to gray
-  a forced-loaded master's label (#276) — and a `TreeItem.resourceUri` is single-valued, so
-  assigning a second one for pending-change purposes would silently break that unrelated
-  decoration. `PluginsTreeComposite` enforces this structurally (never overwrites a resourceUri a
-  row provider already set), not by naming "implicit master" — the records a vanilla/DLC/CC master
-  contains still decorate individually, through their own `RecordNode` scheme; only the plugin
-  row's own badge is affected.
-- A shadowed copy's row (ADR-0036: two loaded copies sharing a filename) never decorates, even
-  when the winning copy of the same file has a staged change on the same FormKey — only the
-  winning copy is ever staged against (the backend always resolves the current winning origin
-  server-side), so a shadowed row's identity URI carries its `origin` specifically so the
-  derivation can refuse to decorate it.
-- Event-driven, not polled: refreshed from the same points that already tell the extension host
-  "pending state changed" — the webview's `PENDING_CHANGED` message and every `SessionController`
-  mutation (stage, copy, create, delete, save, revert). No new endpoint; the provider performs its
-  own `GET /changes` read rather than sharing the Pending Changes tree's (that one only fetches
-  while its own view is visible).
-- **A failed `refresh()` retains the last-known decorations rather than clearing to empty, where
-  `this.changes` is a trustworthy baseline from the current session**
-  ([#334](https://github.com/WhiskyTangoFawks/ModBench/issues/334)) — a non-OK response or a
-  thrown request leaves `this.changes` exactly as it was. This holds at the post-mutation call
-  sites (the webview's `PENDING_CHANGED` message, every `SessionController` stage/copy/create/
-  delete/save/revert), which only ever fetch what they themselves just changed — the worst case of
-  retaining there is briefly showing pre-mutation state, against the worst case of clearing being
-  the user's staged work looking gone exactly when the backend is unhealthy
-  ([ADR-0026](../adr/0026-error-surfacing-policy.md), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md):
-  an absent badge must never be mistakable for "no pending changes"). Retaining state there is what
-  places those call sites at ADR-0026's background/recoverable tier (inline UI + log, no toast)
-  instead of the silent-wrong-state tier a clear-to-empty would demand.
-  **Session entry does not hold** (`makeEnterEditing`, extension.ts): `this.changes` may still
-  carry a *previous* session's entries (the #331 stale-decoration guard exists precisely because
-  of this), so retaining on a failed entry fetch would leak them into the new session as live
-  decorations — the exact silent-wrong-state failure #334 exists to prevent, reintroduced at a
-  different call site. That call site passes `refresh(false)`, which clears instead of retaining
-  on failure. `refresh()`'s `retainOnFailure` parameter defaults to `true` (safe for every other
-  call site) and is opted out of only there.
-  The failure is logged through the flat `log` shim — today that resolves to info level
-  (`extension.ts` wires it to `outputChannel.info`); true warn-level emission is tracked with this
-  module class's wider flat-shim releveling (`modbench/CLAUDE.md` § Logging), not done here.
-  `clear()` (the deliberate no-session reset, called from `exitToLoadout()`) is unaffected — with
-  no session, empty is a known fact, not a degraded fetch.
+A record row carrying an uncommitted working-tree change is badged with git's own single-letter
+vocabulary (`M`/`A`, `gitDecoration.modifiedResourceForeground`/`addedResourceForeground`) via
+`RecordDecorationProvider`, a `vscode.FileDecorationProvider` keyed on each `RecordNode`'s
+synthetic `medit-record:` resourceUri. Deleted is out of scope (`Search()`, what this tree lists,
+is Effective-only, so a working-tree-deleted record has no row to badge) — the native Source
+Control panel shows that `D` for free. Full contract:
+[medit-version-control.md](medit-version-control.md).
 
 ### Selection & drag
 
@@ -650,8 +584,8 @@ overflow, then native **Collapse All** last.
   already had.
 - **No Refresh of its own** (#247). Re-reading `plugins.txt` is part of the single
   workspace-scope Refresh on the [Loadout header](loadout-header.md), which re-reads every
-  Mod-Management source together; re-reading a *session* (which can disturb staged work) is the
-  header's separate, explicitly-named Reload Session command.
+  Mod-Management source together; re-reading a *session* (which can disturb uncommitted
+  working-tree changes) is the header's separate, explicitly-named Reload Session command.
 
 ### Row context menu
 
@@ -701,8 +635,9 @@ overflow, then native **Collapse All** last.
   fetch/read fails"), warning surfaced via the injected reporter per
   [ADR-0026](../adr/0026-error-surfacing-policy.md).
 - **Empty `plugins.txt`** (no lines) — realistically near-unreachable (vanilla masters always
-  populate it) but handled for completeness: a single informational node, "No plugins," mirroring
-  the Pending Changes tree's empty state (`medit-pending-changes-tree.md`).
+  populate it) but handled for completeness: a single informational node, "No plugins," the same
+  fetch-failure-is-an-error-node/empty-is-a-known-fact convention every tree in this product
+  follows.
 - Per `modbench/CLAUDE.md`: this holds for **load-more (pagination) fetches** on the
   record-browsing side too — a failed "Load more…" surfaces an error node for that parent while
   keeping the already-loaded pages and the retry affordance, and the error clears on a
@@ -819,12 +754,12 @@ overflow, then native **Collapse All** last.
   user-written SQL against the per-type tables, not a fixed toggle set (ADR-0018).
 - **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record
   down into a master), and merge-into-another-plugin — are deferred and will be delivered as
-  Python scripts over the header/renumber/copy/delete staging primitives, not bespoke commands.
+  Python scripts over the header/renumber/delete edit primitives, not bespoke commands.
   They compose from those primitives and are inherently multi-step. Masters sort/clean/remove are
   not on this deferred list: per
   [ADR-0038](../adr/0038-masters-are-lifecycle-derived-never-user-declared.md), a plugin's masters
   are wholly derived from its content, never directly user-editable — so those never exist as a
-  separate operation (staged, scripted, or otherwise) to defer in the first place. Near-term
+  separate operation (scripted or otherwise) to defer in the first place. Near-term
   header editing (author, ESL/ESM flag) is a first-class feature — see User Story 24.
 - **What the record editor does with a record once opened** —
   [medit-record-editor.md](medit-record-editor.md).

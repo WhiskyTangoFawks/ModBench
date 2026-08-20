@@ -426,11 +426,10 @@ describe('RecordPanel', () => {
   });
 
   // Issue #136: the panel's Save button called POST /plugins/{plugin}/save — a route the
-  // backend does not implement and will not, because ADR-0029 scopes save to a ChangeGroup,
-  // never to a plugin. A control that claims to save but 404s is a false affordance
-  // (ADR-0026), so it is deleted rather than de-gated. Saving lives in the Pending Changes
-  // tree; the Pending column's group-scoped Save/Revert is its own ticket.
-  it('offers no per-plugin Save — the editor is a viewer (#410)', async () => {
+  // backend does not implement and will not. Writing the binary is the separate Save & Compile
+  // gesture, scoped to a whole plugin from the tree/palette, never a per-plugin control on this
+  // panel (ADR-0041, medit-version-control.md).
+  it('offers no per-plugin Save — writing the binary is Save & Compile, not this panel', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('MyMod.esp'));
     expect(screen.queryByText('Save')).not.toBeInTheDocument();

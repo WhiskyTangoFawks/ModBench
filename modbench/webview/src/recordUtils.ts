@@ -270,8 +270,9 @@ export function aggregateConflictAll(
 
 // ── Generic path-based node access (issue #231) ───────────────────────────────
 //
-// A row's own value can sit at any depth inside the field/wire-path it restages as one atomic
-// unit (ADR-0017: an edit anywhere in a struct/array restages the whole thing). `PathSegment[]`
+// A row's own value can sit at any depth inside the field/wire-path it writes as one atomic
+// unit (a complex field is always written as one atomic unit, CONTEXT.md — an edit anywhere in a
+// struct/array writes the whole thing). `PathSegment[]`
 // (defined in types.ts — FieldDiff.commitOverride needs it too, and types.ts is the lower-level
 // module of the two) is the chain from that root down to a given row — a struct hop addressed by
 // member name, an unsorted-array hop by position, a sorted (pure FormLink) array hop by the

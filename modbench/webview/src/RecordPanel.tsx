@@ -24,10 +24,11 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
-// Issue #231: a synthesized row can restage independently of its own parent rather than
+// Issue #231: a synthesized row can write independently of its own parent rather than
 // extending it — a VMAD property under its script container, or a Condition field under its
-// condition element, each stage their own atomic PendingChange rather than folding into the
-// whole subtree their parent restages (ADR-0017's usual rule). `FieldDiff.wirePath` is the
+// condition element, each write their own field path rather than folding into the
+// whole subtree their parent writes (a complex field is always written as one atomic unit,
+// CONTEXT.md). `FieldDiff.wirePath` is the
 // signal: when a child carries one, it starts a fresh subtree right there (its own path resets to
 // `[]`, rootField becomes its own wirePath, rootDiff becomes itself) instead of inheriting the
 // parent's. An ordinary reflected field's children never carry `wirePath` (only the VMAD/

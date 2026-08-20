@@ -1,9 +1,9 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: implemented — Track (#414), the text-first edit path (#415), Save & Compile
+**Status: Implemented.** Track (#414), the text-first edit path (#415), Save & Compile
 (#416), external-change handling (#417), the editor gesture inventory (#426), the
-lifecycle gestures (#427), and record-row Modified/Added badges (#428) shipped; closeout
-truing (#418) remains.**
+lifecycle gestures (#427), record-row Modified/Added badges (#428), and the closeout
+truing (#418) have all shipped.
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -57,13 +57,8 @@ working-tree-deleted record has no row to badge at all — the same way VS Code'
 Explorer drops a deleted file's row rather than badging it; the native Source Control
 panel already shows that D for free. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
-and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
-implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,
-folds in what shipped, and deletes the two specs this document replaces:
-[scm.md](scm.md) (aggregate SCM provider) and
-[medit-pending-changes-tree.md](medit-pending-changes-tree.md) (Pending Changes tree).
-Until then, discrepancies between this document and running code are expected and resolve
-in this document's favor only once the relevant slice lands.
+and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417) — it replaces the
+retired aggregate-SCM and Pending Changes tree specs, both deleted by #418's closeout.
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **tracked mods**
 (glossary: Tracked mod, Track, Ledger, Edit branch, Baseline, Save & Compile, Working-tree
@@ -187,8 +182,8 @@ using git.
   loaded session, re-registered on every activation (`extensionDependencies:
   ["vscode.git"]`; git on PATH is a product requirement — VS Code itself prompts to
   install it). One native repo group per tracked mod. Modbench contributes **no** SCM
-  provider, resource groups, decorations, or diff commands of its own here — the
-  aggregate provider (scm.md) retires with no shim.
+  provider, resource groups, decorations, or diff commands of its own here — the retired
+  aggregate SCM provider (formerly `scm.md`) has no shim.
 - Everything the panel offers is git's own: staging, commit, discard, branch switching,
   history. Commit is ungated (ADR-0041) — no closure checks, no prompts, no vocabulary of
   ours on the panel.
@@ -299,15 +294,32 @@ never both fire for one event.
 ## Testing Decisions
 
 - Backend seams test against **real git repositories through the real CLI** (the house
-  pattern scm.md established); fixtures verify the full Track product — ledger, baseline,
-  trailers, `.gitignore`, branch, parked ref — and compile round-trips re-parse clean
-  (round-trip gate #369, permanent).
+  pattern the retired aggregate SCM provider established); fixtures verify the full Track
+  product — ledger, baseline, trailers, `.gitignore`, branch, parked ref — and compile
+  round-trips re-parse clean (round-trip gate #369, permanent —
+  `BinaryRoundTripGateTests`/`CompileRoundTripGateTests`,
+  `MEditService.Tests/RealData/`, run in the ordinary `dotnet test`).
 - The dialog's paths are fixture-driven per #417's acceptance criteria, including the
   upstream fixture arriving the only way it can while `.git` survives (Merge install /
   manual overwrite).
 - Integration suite: every command above in `EXPECTED_COMMANDS`; activation with several
   tracked mods (including the mega fixture) measured for the steady-state
   `openRepository` cost (#414).
+
+### ADR-0041 gates — standing state (#418)
+
+- **Filter probe verdict** — settled on
+  [#366](https://github.com/WhiskyTangoFawks/ModBench/issues/366): #411's real-corpus
+  probe found the generated `json_extract` views comfortably fast once the filter is
+  materialised once per apply rather than evaluated per query, so no field is promoted to
+  a real extracted column. See #366's probe comment and its follow-up correction for the
+  full measurement.
+- **Round-trip gate** — `BinaryRoundTripGateTests` and `CompileRoundTripGateTests`
+  (`MEditService.Tests/RealData/`), permanent per #369, exercised on every `dotnet test`.
+- **Mutagen pin** — `Mutagen.Bethesda.Fallout4` is pinned at an exact version (not a
+  floating range) in `MEditService.Core.csproj`; the pin comment there records the
+  `ObjectTemplate`/`refr.Base` regression the pinned version avoids and names #385 as the
+  upstream-fix tracking issue that gates moving off it.
 
 ## Out of Scope
 
@@ -330,6 +342,3 @@ never both fire for one event.
 - ADR-0002 stands amended for tracked mods only: text is the working source, the binary
   remains the interchange truth with external tools — which is exactly why the dialog
   exists.
-- The Pending Changes tree and aggregate SCM provider specs remain accurate descriptions
-  of shipped behavior until #410 removes the machinery; #418 deletes both specs and
-  flips this one to Implemented.

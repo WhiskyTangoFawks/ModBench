@@ -87,12 +87,13 @@ remains a safety net for flaky watch events, never the primary path: every one o
 sources is watcher-driven.
 
 **Reload Session** is not Refresh: it concerns the Editing session, costs seconds, and can
-disturb staged work, so it is separately named and lives in overflow. It re-runs the session
-load — re-resolves the game directory, rebuilds the explicit plugin set from the current
-modlist, and reloads it into the backend — the same `makeEnterEditing` path Launch mEdit and
-the crash-restart handler take ([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)).
-Staged work makes it confirm modally first (`showWarningMessage(…, { modal: true })`); with
-nothing staged it reloads directly. A failed reload tears the session down the same way a
+disturb uncommitted working-tree changes, so it is separately named and lives in overflow. It
+re-runs the session load — re-resolves the game directory, rebuilds the explicit plugin set
+from the current modlist, and reloads it into the backend — the same `makeEnterEditing` path
+Launch mEdit and the crash-restart handler take
+([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)). Uncommitted working-tree
+changes make it confirm modally first (`showWarningMessage(…, { modal: true })`); with
+nothing uncommitted it reloads directly. A failed reload tears the session down the same way a
 failed launch does (`exitToLoadout`) rather than leave the Plugins tree decorated for a session
 the backend has already discarded.
 
@@ -122,7 +123,6 @@ script-extender loader exits immediately and its exit code says nothing about th
 | Plugins (load order) | Refresh | Filter only |
 | Downloads | — | Filter gained at slot 1, show-hidden toggle moved to slot 2, Sort by… stays in overflow |
 | Plugins (Editing) | Refresh, Close mEdit | Name filter, record filter, New Plugin, **Collapse All gained** |
-| Pending Changes | Revert All demoted to overflow | Save All, plus a numeric badge |
 
 ## Implementation Decisions
 

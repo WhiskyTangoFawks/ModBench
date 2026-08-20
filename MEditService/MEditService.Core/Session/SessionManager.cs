@@ -22,7 +22,6 @@ public sealed class SessionManager(
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
     private GameSession? _session;
     private IRecordIndex? _repository;
-    private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
     // #274: the load's own progress. Guarded by _lock like _session/_repository — written by the
     // loading thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
@@ -198,7 +197,6 @@ public sealed class SessionManager(
 
         lock (_lock)
         {
-            _nextFormIds.Clear();
             _indexed.Clear();
             _conflictsComputed = false;
             _session = session;
@@ -285,9 +283,6 @@ public sealed class SessionManager(
                 // queryable, so listing it any earlier would be the partial-visibility lie in a
                 // different form.
                 _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
-                // ReserveFormKey reads this dictionary, and it is now reachable mid-load like
-                // every other published read.
-                if (!plugin.IsImmutable) _nextFormIds[plugin.Name] = SafeNextFormId(mod);
             }
         }
 
@@ -336,7 +331,6 @@ public sealed class SessionManager(
             File.AppendAllText(_pluginsTxtPath!, $"*{name}\n");
 
             var metadata = _session.AddPlugin(filePath);
-            _nextFormIds[name] = SafeNextFormId(ModFactory.Activator(modKey, _gameRelease));
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -443,10 +437,6 @@ public sealed class SessionManager(
             // AC7: the whole-set sweep, so winner status and conflict badges describe the new file.
             repository.UpdateWinners();
 
-            // The reservation counter belongs to the file, not the name — the new copy has its own
-            // NextFormID, and keeping the old one would hand out FormKeys it has already used.
-            if (!metadata.IsImmutable) _nextFormIds[metadata.Name] = SafeNextFormId(mod);
-
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -512,29 +502,6 @@ public sealed class SessionManager(
             var meta = _session.Plugins.FirstOrDefault(p =>
                 p.InLoadOrder && string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' not found in session.");
             return (meta, _repository!, _gameRelease);
-        }
-    }
-
-    // FormID 0 is reserved: Issue #1's plugin-header record lives at the synthetic FormKey
-    // `000000:<plugin>` (see HeaderIndexer). A plugin that has never had a record added (freshly
-    // created, or written by PluginFixtureBuilder with no explicit NextFormID) reports a raw
-    // NextFormID of 0, which would otherwise collide with its own header row on first reservation —
-    // floor it at the game's recommended starting FormID instead.
-    private static uint SafeNextFormId(IModGetter mod) => Math.Max(mod.NextFormID, mod.GetDefaultInitialNextFormID());
-
-    public string ReserveFormKey(string plugin)
-    {
-        lock (_lock)
-        {
-            if (_session == null)
-                throw new InvalidOperationException(NoSessionMessage);
-            if (!_nextFormIds.TryGetValue(plugin, out var nextId))
-                throw new ArgumentException($"Plugin '{plugin}' has no reservation counter (not loaded or immutable).", nameof(plugin));
-            if (nextId > 0xFFFFFF)
-                throw new InvalidOperationException($"Plugin '{plugin}' has exhausted its FormKey space (NextFormID 0x{nextId:X} exceeds 0xFFFFFF).");
-            var formKey = Mutagen.Bethesda.Plugins.FormKey.Factory($"{nextId:X6}:{plugin}");
-            _nextFormIds[plugin] = nextId + 1;
-            return formKey.ToString();
         }
     }
 
