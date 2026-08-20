@@ -1,4 +1,6 @@
-import type { ApiClient, CompileResult, SessionStatus, TrackStatus } from './ApiClient';
+import type {
+  ApiClient, CompileResult, SessionStatus, TrackStatus, ExternalChangeActionResult, RebaseResult,
+} from './ApiClient';
 import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { reportSkippedPlugins } from './sessionFailures';
@@ -397,6 +399,94 @@ export class SessionController {
       return null;
     }
   }
+
+  /** #417: Absorb Upstream Update. Returns null on a transport/HTTP failure, distinct from
+   *  `ExternalChangeActionResult.succeeded === false` (a typed refusal, shown as-is — Absorb only
+   *  refuses on an IO fault, per the pinned contract). Refreshes the tree: a new baseline can move
+   *  provenance the tree reads (trailers), the same reason `track` does. */
+  async absorbUpstreamUpdate(plugin: string, origin: string): Promise<ExternalChangeActionResult | null> {
+    try {
+      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/external-change/absorb', {
+        params: { path: { plugin } },
+        body: { origin },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] absorbUpstreamUpdate(${plugin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not absorb the upstream update for "${plugin}" — ${text}`);
+        return null;
+      }
+      const result = data ? toExternalChangeActionResult(data) : null;
+      if (result?.succeeded) this.deps.refreshTree();
+      return result;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] absorbUpstreamUpdate(${plugin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not absorb the upstream update for "${plugin}" — ${message}`);
+      return null;
+    }
+  }
+
+  /** #417: Keep as My Edit. A same-record collision with existing working-tree dirt is a typed
+   *  refusal (`succeeded === false`, `refusalReason` naming the records), never an HTTP error. */
+  async keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | null> {
+    try {
+      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/external-change/keep', {
+        params: { path: { plugin } },
+        body: { origin },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] keepAsMyEdit(${plugin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not keep "${plugin}" as your own edit — ${text}`);
+        return null;
+      }
+      const result = data ? toExternalChangeActionResult(data) : null;
+      if (result?.succeeded) this.deps.refreshTree();
+      return result;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] keepAsMyEdit(${plugin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not keep "${plugin}" as your own edit — ${message}`);
+      return null;
+    }
+  }
+
+  /** #417: the offered rebase — origin-scoped (the repo, not any one plugin, is the unit of
+   *  baselines and rebase). Refresh happens either way: `Clean` moved the branch, `Refused` is
+   *  worth nothing to refresh, `Conflicted` leaves the repo mid-rebase, which the panel should
+   *  reflect regardless. */
+  async rebaseOntoMain(origin: string): Promise<RebaseResult | null> {
+    return this.postRebase('/plugins/rebase', origin, 'rebaseOntoMain');
+  }
+
+  /** #417: resumes a rebase left mid-flight by {@link rebaseOntoMain}'s own `Conflicted` outcome,
+   *  after the user has hand-resolved the conflicted ledger file(s) in the native merge editor. */
+  async continueRebase(origin: string): Promise<RebaseResult | null> {
+    return this.postRebase('/plugins/rebase/continue', origin, 'continueRebase');
+  }
+
+  private async postRebase(
+    path: '/plugins/rebase' | '/plugins/rebase/continue', origin: string, opName: string,
+  ): Promise<RebaseResult | null> {
+    try {
+      const { data, error, response } = await this.deps.client.POST(path, { body: { origin } });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] ${opName}(${origin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not rebase "${origin}" — ${text}`);
+        return null;
+      }
+      const result = data ? toRebaseResult(data) : null;
+      this.deps.refreshTree();
+      return result;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] ${opName}(${origin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not rebase "${origin}" — ${message}`);
+      return null;
+    }
+  }
 }
 
 // The generated wire type widens every field to optional (Swashbuckle doesn't round-trip C#'s
@@ -417,5 +507,25 @@ function toCompileResult(data: {
       message: d.message ?? '',
     })),
     masters: data.masters ?? [],
+  };
+}
+
+function toExternalChangeActionResult(data: { succeeded?: boolean; refusalReason?: string | null }): ExternalChangeActionResult {
+  return { succeeded: data.succeeded ?? false, refusalReason: data.refusalReason ?? null };
+}
+
+function toRebaseResult(data: {
+  outcome?: string | null;
+  refusalReason?: string | null;
+  conflictedPaths?: string[] | null;
+}): RebaseResult {
+  // #417 review note: the generated Outcome type is a numeric union, same Swashbuckle/
+  // JsonStringEnumConverter mismatch toTrackPhase already works around in PluginRepository.ts —
+  // the wire bytes are the real string values ("Clean"/"Refused"/"Conflicted").
+  const outcome = typeof data.outcome === 'string' ? (data.outcome as RebaseResult['outcome']) : 'Refused';
+  return {
+    outcome,
+    refusalReason: data.refusalReason ?? null,
+    conflictedPaths: data.conflictedPaths ?? [],
   };
 }

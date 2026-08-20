@@ -288,9 +288,23 @@ public static class LedgerRepository
     /// via <c>Modbench: Rebase onto Updated Baseline</c>. Refuses over any working-tree dirt (git's
     /// own refusal posture, ADR-0041 amendment: "refuse, and the user fixes it") before ever touching
     /// the branch — commit, stash or discard is the user's own gesture, never automated here.
+    ///
+    /// <para><b>Resumption-aware</b>: the one command re-running this after a conflict must also be
+    /// how the user continues it (there is no separate "continue" gesture surfaced to them — the
+    /// native merge editor they resolved conflicts in doesn't know this rebase exists, since it was
+    /// never driven through <c>vscode.git</c>'s own porcelain). If git already has a rebase in
+    /// progress here (<c>.git/rebase-merge</c> or <c>.git/rebase-apply</c>), the resolved-but-staged
+    /// files are not dirt to refuse over — they're the answer — so this delegates straight to
+    /// <see cref="ContinueRebase"/> instead of the dirt guard and a fresh <c>rebase</c> invocation,
+    /// which would either wrongly refuse (dirt guard) or fail outright (git refuses a second
+    /// concurrent rebase).</para>
     /// </summary>
     public static RebaseResult RebaseEditBranch(string modFolder)
     {
+        var gitDir = Path.Combine(modFolder, ".git");
+        if (RebaseInProgress(gitDir))
+            return ContinueRebase(modFolder);
+
         var dirty = WorkingTreeStatus(modFolder);
         if (dirty.Count > 0)
         {
@@ -299,7 +313,6 @@ public static class LedgerRepository
                 "Commit, stash, or discard them first, then try again.");
         }
 
-        var gitDir = Path.Combine(modFolder, ".git");
         // -c core.editor=true: a clean, non-conflicted rebase never needs a message editor, but this
         // keeps the call non-interactive regardless — nothing here has a terminal to hand one to.
         if (GitCli.TryRun(gitDir, modFolder, out _, "-c", "core.editor=true", "rebase", "refs/heads/main"))
@@ -307,6 +320,9 @@ public static class LedgerRepository
 
         return RebaseResult.Conflicted(ConflictedPaths(gitDir, modFolder));
     }
+
+    private static bool RebaseInProgress(string gitDir) =>
+        Directory.Exists(Path.Combine(gitDir, "rebase-merge")) || Directory.Exists(Path.Combine(gitDir, "rebase-apply"));
 
     /// <summary>
     /// Continues a rebase left mid-flight by <see cref="RebaseEditBranch"/>'s own conflict outcome,

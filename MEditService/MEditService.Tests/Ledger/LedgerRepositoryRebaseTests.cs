@@ -134,4 +134,32 @@ public sealed class LedgerRepositoryRebaseTests : IDisposable
         var compileResult = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }
+
+    /// <summary>
+    /// The frontend has exactly one re-runnable command ("Modbench: Rebase onto Updated Baseline")
+    /// for both starting a rebase and resuming one left conflicted — there is no separate "continue"
+    /// gesture the native merge editor offers, since this rebase was never driven through
+    /// <c>vscode.git</c>'s own porcelain. Calling <see cref="LedgerRepository.RebaseEditBranch"/>
+    /// again after hand-resolving must resume, not refuse over the resolved-but-staged file.
+    /// </summary>
+    [Fact]
+    public void RebaseEditBranch_CalledAgainAfterAConflictIsResolved_ResumesRatherThanRefusing()
+    {
+        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.3"));
+        CommitOnEditBranch("my own edit");
+        AbsorbUpstreamHeightMaxChange(0.7f);
+
+        var conflictResult = LedgerRepository.RebaseEditBranch(_mod.ModFolder);
+        Assert.Equal(RebaseOutcome.Conflicted, conflictResult.Outcome);
+
+        var relative = TrackedModFixture.RelativeLedgerPath(_mod.Npc, "npc_").Replace('\\', '/');
+        var theirs = RunGit("show", $":3:{relative}");
+        File.WriteAllText(Path.Combine(_mod.ModFolder, relative), theirs);
+
+        // The same verb, called again — not ContinueRebase directly.
+        var secondResult = LedgerRepository.RebaseEditBranch(_mod.ModFolder);
+
+        Assert.Equal(RebaseOutcome.Clean, secondResult.Outcome);
+        Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
+    }
 }

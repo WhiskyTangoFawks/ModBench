@@ -86,6 +86,36 @@ export interface CompileDiagnostic {
   message: string;
 }
 
+/** #417: one queued external-change question — `GET /plugins/external-changes/status`, polled the
+ *  same way `TrackStatus`/`SessionStatus` are. `metaChanged` is the dialog's default-button tell
+ *  (trailers inform the default, never act — ADR-0041 amendment); `oldVersion`/`newVersion` are the
+ *  evidence the pinned UX contract says must be shown when the tell fired, not hidden. */
+export interface PendingExternalChange {
+  plugin: string;
+  origin: string;
+  metaChanged: boolean;
+  oldVersion: string | null;
+  newVersion: string | null;
+}
+
+/** #417: Absorb Upstream Update / Keep as My Edit's shared result shape — a refusal (e.g. Keep's
+ *  same-record collision) is a typed, successful (HTTP 200) answer, the same posture
+ *  {@link CompileResult} already established. */
+export interface ExternalChangeActionResult {
+  succeeded: boolean;
+  refusalReason: string | null;
+}
+
+/** #417: the offered rebase's three outcomes. `conflictedPaths` is the extension's cue to open
+ *  each path in VS Code's native merge editor. */
+export type RebaseOutcome = 'Clean' | 'Refused' | 'Conflicted';
+
+export interface RebaseResult {
+  outcome: RebaseOutcome;
+  refusalReason: string | null;
+  conflictedPaths: string[];
+}
+
 export interface RecordSummary {
   formKey: string;
   plugin: string;

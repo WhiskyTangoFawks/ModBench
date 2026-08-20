@@ -58,6 +58,35 @@ public sealed class ExternalChangeWatcherTests
         }
     }
 
+    /// <summary>
+    /// #417 exit path 3, wired end to end: detection alone (before any dialog answer, before any
+    /// Esc) is what refuses editing — <c>ExternalChangeDeferral.Pending</c> must already be set the
+    /// instant a question is queued, not only once the user explicitly dismisses the dialog.
+    /// </summary>
+    [Fact]
+    public void Watch_SetsTheExternalChangeDeferralMarker_AssoonAsAQuestionIsQueued()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
+            using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.Watch(modFolder, "Test.esp", pluginPath);
+            Assert.Null(ExternalChangeDeferral.Pending(modFolder, "Test.esp"));
+
+            File.WriteAllBytes(pluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => watcher.Pending().Count > 0, TimeSpan.FromSeconds(3));
+
+            var question = ExternalChangeDeferral.Pending(modFolder, "Test.esp");
+            Assert.NotNull(question);
+            Assert.Contains("Test.esp", question, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
     /// <summary>The debounce property itself: a write that just landed must not be classified before
     /// the debounce window elapses — a naive "classify on every Changed event" implementation would
     /// already have a pending question by the time this assertion runs.</summary>
