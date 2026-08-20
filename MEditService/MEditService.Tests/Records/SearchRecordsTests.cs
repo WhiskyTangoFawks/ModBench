@@ -21,32 +21,24 @@ public class SearchRecordsTests(TestPluginFixture fixture)
         return manager;
     }
 
-    [Fact]
-    public void SearchRecords_SingleTable_MatchesGetRecords()
-    {
-        using var manager = MakeLoadedManager();
-        var reader = manager.Repository!;
-
-        var expected = reader.GetRecords("npc_", null, null, 100, 0);
-        var actual = reader.SearchRecords(["npc_"], null, null, 100, 0);
-
-        Assert.Equal(expected.Total, actual.Total);
-        Assert.Equal(expected.Items.Count, actual.Items.Count);
-    }
+    // #421: the old GetRecords(single type)/SearchRecords(type list) comparison test is gone —
+    // both collapsed into one Search(RecordQuery) method, so asserting they "match" would compare
+    // one code path against itself. RecordQuery's RecordTypes list is exercised below, both single-
+    // and multi-element.
 
     // Issue #210: the picker's search has no `type` filter when a field allows more than one
     // record type (e.g. any object reference), so it goes through the multi-table union path
-    // rather than single-table GetRecords — the FormKey-shaped match needs to resolve there too.
+    // rather than a single-type query — the FormKey-shaped match needs to resolve there too.
     [Fact]
-    public void SearchRecords_AcrossTables_ByFormKey_ResolvesRecord()
+    public void Search_AcrossMultipleRecordTypes_ByFormKey_ResolvesRecord()
     {
         using var manager = MakeLoadedManager();
         var reader = manager.Repository!;
 
-        var byEditorId = reader.GetRecords("npc_", null, "TestNPC01", 10, 0);
+        var byEditorId = reader.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 10, Offset: 0));
         var formKey = byEditorId.Items[0].FormKey;
 
-        var result = reader.SearchRecords(["npc_", "weap"], null, formKey, 10, 0);
+        var result = reader.Search(new RecordQuery(RecordTypes: ["npc_", "weap"], Search: formKey, Limit: 10, Offset: 0));
 
         Assert.Equal(1, result.Total);
         Assert.Equal(formKey, result.Items[0].FormKey);

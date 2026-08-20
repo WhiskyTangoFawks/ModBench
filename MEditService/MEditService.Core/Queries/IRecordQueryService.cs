@@ -14,22 +14,10 @@ public interface IRecordQueryService
     // #34 and is still correct wherever a filename names one loaded copy.
     PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null);
     RecordDetail? GetRecord(string formKey);
-    // origin (#296 / ADR-0036, required): same reasoning as GetVmad's — caller-supplied, since
-    // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside its
-    // neighboring GetVmad/GetConditions/GetPlacement calls.
-    RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin);
 
-
-    string? GetRecordType(string formKey);
-    // origin (#296 / ADR-0036, required): caller-supplied, same reasoning as GetRecordForPlugin's —
-    // EditOrchestrator (the only caller) already resolves it via ResolveOrigin right alongside the
-    // neighboring GetPendingNativeFormKeyChanges call.
-    IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin);
     CompareResult? GetCompare(string formKey);
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
-    VmadData? GetVmad(string formKey, string plugin, string origin);
-    IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin);
 
     // The condition function picker's catalog (#152): every function name the loaded session's
     // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableFunctions.
@@ -41,6 +29,9 @@ public interface IRecordQueryService
     // differently-shaped RunOnType enum never silently offers a name it can't parse or write.
     IReadOnlyList<string> GetConditionRunOnTargets();
 
-    PlacementRow? GetPlacement(string formKey, string plugin, string origin);
-
+    // #421: GetRecordForPlugin/GetRecordType/GetNativeFormKeys/GetVmad/GetConditions/GetPlacement
+    // are gone — all six were endpoint-orphaned pass-throughs to the repository (#413's D7
+    // evidence), dying in the reshape's absorption of the read-model half of this service into
+    // IRecordIndex. VMAD/condition reconstitution survives GetCompare's own needs internally
+    // (RecordDocumentCodecs); nothing else called any of the six.
 }

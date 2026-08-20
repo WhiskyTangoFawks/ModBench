@@ -143,17 +143,17 @@ public sealed class SessionManagerRereadPluginTests
     /// is replacing — i.e. from *inside* the mutation, which is the only place a test can get a
     /// thread in edgeways while <see cref="SessionManager.RereadPlugin"/> holds the session lock.
     /// Nothing on the load path calls Unindex, so the hook cannot fire early.</summary>
-    private sealed class UnindexHookFactory(IRecordRepositoryFactory inner, Action onUnindex) : IRecordRepositoryFactory
+    private sealed class UnindexHookFactory(IRecordIndexFactory inner, Action onUnindex) : IRecordIndexFactory
     {
-        public IRecordRepository Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
+        public IRecordIndex Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
 
-        private sealed class HookedRepository(IRecordRepository inner, Action onUnindex) : DelegatingRecordRepository(inner)
+        private sealed class HookedRepository(IRecordIndex inner, Action onUnindex) : DelegatingRecordIndex(inner)
         {
             private bool _fired;
-            public override void Unindex(string plugin, string origin)
+            public override void Unindex(PluginKey key)
             {
                 if (!_fired) { _fired = true; onUnindex(); }
-                base.Unindex(plugin, origin);
+                base.Unindex(key);
             }
         }
     }

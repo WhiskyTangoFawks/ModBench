@@ -55,10 +55,10 @@ public sealed class SessionManagerLoadExplicitTests
         using var manager = MakeManager();
         manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var winner = manager.Repository!.GetRecord("npc_", shared.ToString(), null, null, winnerOnly: true);
+        var winner = manager.Repository!.GetDocument(shared.ToString());
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
-        Assert.Equal("Override.esp", winner.Plugin);
+        Assert.Equal("Override.esp", winner.Plugin.Name);
     }
 
     [Fact]
@@ -108,23 +108,23 @@ public sealed class SessionManagerLoadExplicitTests
         Assert.DoesNotContain(manager.Status.IndexedPlugins, p => p.Name == "Bad.esp");
     }
 
-    private sealed class ThrowingOnIndexRepositoryFactory(IRecordRepositoryFactory inner, string poisonPlugin)
-        : IRecordRepositoryFactory
+    private sealed class ThrowingOnIndexRepositoryFactory(IRecordIndexFactory inner, string poisonPlugin)
+        : IRecordIndexFactory
     {
-        public IRecordRepository Create(GameRelease gameRelease) =>
+        public IRecordIndex Create(GameRelease gameRelease) =>
             new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
     }
 
-    // Only Index is interesting here; DelegatingRecordRepository forwards the rest of the (wide)
+    // Only Index is interesting here; DelegatingRecordIndex forwards the rest of the (wide)
     // interface, which this class used to restate member for member.
-    private sealed class ThrowingOnIndexRepository(IRecordRepository inner, string poisonPlugin)
-        : DelegatingRecordRepository(inner)
+    private sealed class ThrowingOnIndexRepository(IRecordIndex inner, string poisonPlugin)
+        : DelegatingRecordIndex(inner)
     {
-        public override void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
+        public override void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key)
         {
-            if (pluginMod.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
+            if (plugin.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
-            base.Index(pluginMod, loadOrderIndex, participates, origin);
+            base.Index(plugin, loadOrderIndex, participates, key);
         }
     }
 }

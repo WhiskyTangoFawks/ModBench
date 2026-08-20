@@ -14,8 +14,8 @@ namespace MEditService.Tests;
 /// </summary>
 /// <param name="poisonPlugin">Optional: a plugin whose indexing throws, so a test can assert that a
 /// per-plugin failure is observable at a point where the load is still running.</param>
-internal sealed class GatedIndexRepositoryFactory(IRecordRepositoryFactory inner, string gateBefore, string? poisonPlugin = null)
-    : IRecordRepositoryFactory, IDisposable
+internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, string gateBefore, string? poisonPlugin = null)
+    : IRecordIndexFactory, IDisposable
 {
     private readonly SemaphoreSlim _released = new(0, 1);
     private readonly SemaphoreSlim _arrived = new(0, 1);
@@ -24,7 +24,7 @@ internal sealed class GatedIndexRepositoryFactory(IRecordRepositoryFactory inner
     /// a load can assert on the abandoned one as well as the survivor.</summary>
     public List<GatedIndexRepository> Created { get; } = [];
 
-    public IRecordRepository Create(GameRelease gameRelease)
+    public IRecordIndex Create(GameRelease gameRelease)
     {
         // Only the first load is gated: a test that supersedes one load with another wants the
         // second to run unobstructed to completion, and a second park would just be scaffolding to
@@ -54,18 +54,18 @@ internal sealed class GatedIndexRepositoryFactory(IRecordRepositoryFactory inner
 }
 
 internal sealed class GatedIndexRepository(
-    IRecordRepository inner, string? gateBefore, string? poisonPlugin, SemaphoreSlim arrived, SemaphoreSlim released)
-    : DelegatingRecordRepository(inner)
+    IRecordIndex inner, string? gateBefore, string? poisonPlugin, SemaphoreSlim arrived, SemaphoreSlim released)
+    : DelegatingRecordIndex(inner)
 {
     /// <summary>Names of the plugins whose indexing actually completed, in order.</summary>
     public List<string> Indexed { get; } = [];
     public bool WinnersComputed { get; private set; }
     public bool Disposed { get; private set; }
 
-    public override void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
+    public override void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key)
     {
-        var plugin = pluginMod.ModKey.FileName.ToString();
-        if (gateBefore != null && plugin.Equals(gateBefore, StringComparison.OrdinalIgnoreCase))
+        var pluginName = plugin.ModKey.FileName.ToString();
+        if (gateBefore != null && pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase))
         {
             arrived.Release();
             // Bounded so a regression that stops releasing the gate fails the test rather than
@@ -74,11 +74,11 @@ internal sealed class GatedIndexRepository(
                 throw new TimeoutException($"gate on {gateBefore} was never released");
         }
 
-        if (plugin.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException($"injected index failure for {plugin}");
+        if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"injected index failure for {pluginName}");
 
-        base.Index(pluginMod, loadOrderIndex, participates, origin);
-        Indexed.Add(plugin);
+        base.Index(plugin, loadOrderIndex, participates, key);
+        Indexed.Add(pluginName);
     }
 
     public override void UpdateWinners()

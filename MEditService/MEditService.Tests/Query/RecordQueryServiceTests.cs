@@ -785,60 +785,12 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Empty(result.Items);
     }
 
-    // --- GET /records/{formKey}/plugin/{plugin} ---
-
-    [Fact]
-    public void GetRecordForPlugin_KnownFormKey_ReturnsRecord()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-
-        var detail = _svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
-
-        Assert.NotNull(detail);
-        Assert.Equal(fk, detail.FormKey);
-        Assert.Equal(TestPluginFixture.PluginName, detail.Plugin);
-    }
-
-    [Fact]
-    public void GetRecordForPlugin_UnknownFormKey_ReturnsNull()
-    {
-        var detail = _svc.GetRecordForPlugin("FFFFFF:Unknown.esp", TestPluginFixture.PluginName, "Data");
-
-        Assert.Null(detail);
-    }
-
-    [Fact]
-    public void GetRecordForPlugin_UnknownPlugin_ReturnsNull()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-
-        var detail = _svc.GetRecordForPlugin(fk, "NonExistent.esp", "Data");
-
-        Assert.Null(detail);
-    }
-
-    // --- GET /records/{formKey}/type ---
-
-    [Fact]
-    public void GetRecordType_KnownFormKey_ReturnsType()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-
-        var type = _svc.GetRecordType(fk);
-
-        Assert.Equal("npc_", type);
-    }
-
-    [Fact]
-    public void GetRecordType_UnknownFormKey_ReturnsNull()
-    {
-        var type = _svc.GetRecordType("FFFFFF:Unknown.esp");
-
-        Assert.Null(type);
-    }
+    // #421: GetRecordForPlugin and GetRecordType are gone — endpoint-orphaned pass-throughs, dead
+    // with the absorption (see IRecordQueryService's own note). GetRecordForPlugin's reader-level
+    // capability survives as IRecordReads.GetDocument(formKey, PluginKey), covered in
+    // DuckDbRecordIndexTests; GetRecordType's FindRecordType is rejected from the seam outright
+    // (explicitly, not relocated) — its resolution behaviour is exercised indirectly by every
+    // GetDocument/GetOverrideStack test that resolves a FormKey without a stated type.
 
     // --- No-session guard clauses ---
 
@@ -960,91 +912,13 @@ public sealed class RecordQueryServiceTests : IDisposable
         return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
 
-    // --- GetRecord / GetRecordForPlugin use FindRecordType, not table scan ---
-
-    private (RecordQueryService Svc, SpyRecordReader Spy, IDisposable Mod) MakeSpySvc()
-    {
-        var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var inner = factory.Create(GameRelease.Fallout4);
-        var mod = Mutagen.Bethesda.Fallout4.Fallout4Mod.CreateFromBinaryOverlay(
-            new Mutagen.Bethesda.Plugins.ModPath(
-                Mutagen.Bethesda.Plugins.ModKey.FromFileName(TestPluginFixture.PluginName),
-                Path.Combine(_manager.Session!.DataFolderPath, TestPluginFixture.PluginName)),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-        inner.Index(mod, 0, participates: true, origin: "Data");
-        inner.UpdateWinners();
-        var spy = new SpyRecordReader(inner);
-        var stubSession = new StubSessionManager(spy, GameRelease.Fallout4);
-        var svc = new RecordQueryService(stubSession, reflector, new ConflictClassifier());
-        return (svc, spy, new CompositeDisposable(mod, inner));
-    }
-
-    private sealed class CompositeDisposable(params IDisposable[] items) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var item in items) item.Dispose();
-        }
-    }
-
-    [Fact]
-    public void GetRecord_UsesFindRecordTypeNotTableScan()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-        var (svc, spy, mod) = MakeSpySvc();
-        using (mod)
-        {
-            spy.Reset();
-            var detail = svc.GetRecord(fk);
-            Assert.NotNull(detail);
-            Assert.Equal(1, spy.FindRecordTypeCalls);
-            Assert.Equal(1, spy.GetRecordCalls);
-        }
-    }
-
-    [Fact]
-    public void GetRecordForPlugin_UsesFindRecordTypeNotTableScan()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-        var (svc, spy, mod) = MakeSpySvc();
-        using (mod)
-        {
-            spy.Reset();
-            var detail = svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
-            Assert.NotNull(detail);
-            Assert.Equal(1, spy.FindRecordTypeCalls);
-            Assert.Equal(1, spy.GetRecordCalls);
-        }
-    }
-
-    [Fact]
-    public void GetRecord_PassesWinnerOnlyTrue()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-        var (svc, spy, mod) = MakeSpySvc();
-        using (mod)
-        {
-            svc.GetRecord(fk);
-            Assert.True(spy.LastWinnerOnly);
-        }
-    }
-
-    [Fact]
-    public void GetRecordForPlugin_PassesWinnerOnlyFalse()
-    {
-        var all = _svc.GetRecords(type: "npc_", plugin: null, search: "TestNPC01", limit: 1, offset: 0);
-        var fk = all.Items[0].FormKey;
-        var (svc, spy, mod) = MakeSpySvc();
-        using (mod)
-        {
-            svc.GetRecordForPlugin(fk, TestPluginFixture.PluginName, "Data");
-            Assert.False(spy.LastWinnerOnly);
-        }
-    }
+    // #421: the SpyRecordReader-based "uses FindRecordType, not a table scan" / "passes
+    // winnerOnly" tests that used to live here are gone with the mechanism they asserted on —
+    // GetRecord/GetRecordForPlugin used to be two calls (FindRecordType, then GetRecord with a
+    // winnerOnly flag) a decorator could count; IRecordReads.GetDocument(formKey) /
+    // GetDocument(formKey, PluginKey) collapse both into one call apiece, so there is no longer a
+    // table-scan path or a runtime winnerOnly flag to assert on — which overload is called *is* the
+    // winner/specific-plugin choice, checked by DuckDbRecordIndexTests' own GetDocument coverage.
 
     // --- GetPlugins: HasMatchingRecords, never row pruning (#278 / ADR-0035 amending ADR-0018) ---
 
@@ -1093,98 +967,4 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.True(plugin.HasMatchingRecords);
     }
 
-    private sealed class SpyRecordReader(IRecordReader inner) : IRecordReader
-    {
-        public int FindRecordTypeCalls { get; private set; }
-        public int GetRecordCalls { get; private set; }
-        public bool? LastWinnerOnly { get; private set; }
-
-        public void Reset() { FindRecordTypeCalls = 0; GetRecordCalls = 0; LastWinnerOnly = null; }
-
-        public string? FindRecordType(string formKey)
-        {
-            FindRecordTypeCalls++;
-            return inner.FindRecordType(formKey);
-        }
-
-        public RecordLookupEntry? ResolveFormKey(string formKey) => inner.ResolveFormKey(formKey);
-
-        public RecordDetail? GetRecord(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
-        {
-            GetRecordCalls++;
-            LastWinnerOnly = winnerOnly;
-            return inner.GetRecord(tableName, formKey, plugin, origin, winnerOnly);
-        }
-
-        public PagedResult<RecordSummary> GetRecords(string tableName, string? plugin, string? search, int limit, int offset, string? origin = null) =>
-            inner.GetRecords(tableName, plugin, search, limit, offset, origin);
-
-        public IReadOnlyList<RecordDetail> GetAllOverrides(string tableName, string formKey) =>
-            inner.GetAllOverrides(tableName, formKey);
-
-        public VmadData? GetVmad(string formKey, string plugin, string origin) =>
-            inner.GetVmad(formKey, plugin, origin);
-
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) =>
-            inner.GetConditions(formKey, plugin, origin);
-
-        public int CountRecordsForPlugin(string tableName, string plugin, string origin) =>
-            inner.CountRecordsForPlugin(tableName, plugin, origin);
-
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) =>
-            inner.GetNativeFormKeys(plugin, origin);
-
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> tableNames, string? plugin, string? search, int limit, int offset, string? origin = null) =>
-            inner.SearchRecords(tableNames, plugin, search, limit, offset, origin);
-
-        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
-            inner.GetPluginsWithMatchingRecords(tableNames);
-
-        public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
-            inner.GetReferences(targetFormKey);
-
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin) =>
-            inner.GetWorldspaceCells(plugin, worldspaceFormKey, origin);
-        public PagedResult<CellSummary> GetInteriorCells(string plugin, int limit, int offset, string origin) =>
-            inner.GetInteriorCells(plugin, limit, offset, origin);
-        public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin) =>
-            inner.GetCellReferences(plugin, cellFormKey, origin);
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) =>
-            inner.GetPlacement(formKey, plugin, origin);
-    }
-
-    private sealed class StubSessionManager(IRecordReader repository, GameRelease release) : ISessionManager
-    {
-        public IGameSession? Session { get; } = new StubGameSession(release);
-        public IRecordReader? Repository => repository;
-        // #274: these stubs never load, so they are always in the no-session state.
-        public SessionStatus Status => SessionStatus.None;
-
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) => throw new NotSupportedException();
-        public void Unload() => throw new NotSupportedException();
-        public PluginResponse CreatePlugin(string name) => throw new NotSupportedException();
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
-        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public string ReserveFormKey(string plugin) => throw new NotSupportedException();
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
-        public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
-        public void SetFilter(string sql) => throw new NotSupportedException();
-        public void ClearFilter() => throw new NotSupportedException();
-    }
-
-    private sealed class StubGameSession(GameRelease release) : IGameSession
-    {
-        public string DataFolderPath => "";
-        public GameRelease GameRelease => release;
-        public IReadOnlyList<PluginMetadata> Plugins => [];
-        public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
-        public string? FilterSql { get; set; }
-        public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
-        public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
-        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
-        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
-        public void Dispose() { }
-    }
 }

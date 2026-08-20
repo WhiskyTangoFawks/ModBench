@@ -122,7 +122,7 @@ public sealed class EndpointReceptionLoggingTests
     {
         public bool LoadCalled { get; private set; }
         public IGameSession? Session => null;
-        public IRecordReader? Repository => null;
+        public IRecordReads? Repository => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => LoadCalled = true;
@@ -156,16 +156,10 @@ public sealed class EndpointReceptionLoggingTests
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
-        public RecordDetail? GetRecordForPlugin(string formKey, string plugin, string origin) => throw new NotSupportedException();
-        public string? GetRecordType(string formKey) => throw new NotSupportedException();
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
-        public VmadData? GetVmad(string formKey, string plugin, string origin) => throw new NotSupportedException();
-        public IReadOnlyList<ConditionOwner> GetConditions(string formKey, string plugin, string origin) => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();
         public IReadOnlyList<string> GetConditionRunOnTargets() => throw new NotSupportedException();
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => throw new NotSupportedException();
     }
 }

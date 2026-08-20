@@ -162,10 +162,10 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public void Dispose() { }
     }
 
-    private sealed class FakeSessionManager(IGameSession session, IRecordReader repository) : ISessionManager
+    private sealed class FakeSessionManager(IGameSession session, IRecordReads repository) : ISessionManager
     {
         public IGameSession? Session => session;
-        public IRecordReader? Repository => repository;
+        public IRecordReads? Repository => repository;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();
