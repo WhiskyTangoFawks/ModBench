@@ -12,9 +12,7 @@ One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared ses
 status bar, command palette, and architecture seams. Siblings:
 [Plugins tree](plugins.md) (a record node's own context menu, no longer this tree's
 entry point — see below), [Record editor panel](medit-record-editor.md) (the active record this
-tree follows, and what a referrer opens into), [Pending Changes tree](medit-pending-changes-tree.md)
-(the structural model this tree mirrors — `TreeDataProvider`, typed node classes, the
-`ErrorNode`/empty-state convention).
+tree follows, and what a referrer opens into).
 
 ## Problem Statement
 
@@ -74,8 +72,8 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   nesting/grouping within a container to say so structurally; referred to here by its short name
   for readability), contributed to its own Panel-location `viewsContainers` entry
   (`modbenchReferencedBy`) rather than stacked under the `modbench` activity-bar container with
-  Plugins/Pending Changes — a per-record relationship query is not the always-relevant session
-  state those two are, and Panel placement is VS Code's own answer to "a tab beside the thing it
+  the Plugins tree — a per-record relationship query is not the always-relevant session state
+  that tree is, and Panel placement is VS Code's own answer to "a tab beside the thing it
   describes." **Carries no gate at all** — always present, exactly like Mods/Plugins/Downloads
   (#273 retired `modbench.viewMode` and, with it, the old `'editing'`-only gate; there was never a
   separate visibility context key before that — the old `modbench.referencedByShown`, set by the
@@ -108,13 +106,13 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   each holding plugin and field path — no `command`, informational only.
 - **The view title carries the referrer count** — `Referenced By (N)`, matching xEdit's own
   caption format — driven by a constructor callback on `ReferencedByTreeProvider`
-  (`onCountChanged`, the same shape `PendingChangesTreeProvider`'s `onPendingState` already uses),
-  fired every time its root query resolves. `N` is the number of *groups*, not the raw reference
+  (`onCountChanged`), fired every time its root query resolves. `N` is the number of *groups*,
+  not the raw reference
   row count. The title omits the count (bare `"Referenced By"`) whenever it isn't a known
   quantity — no active record, or a failed fetch — rather than ever showing a `(0)` that isn't
   actually a confirmed zero-referrer result.
 - **Multi-selection and copy** (#282, this surface's first tree-level clipboard command). The
-  view is created with `canSelectMany: true`, same as the Plugins and Pending Changes trees.
+  view is created with `canSelectMany: true`, same as the Plugins tree.
   `modbench.referencedByTree.copy` is reachable by a `Ctrl+C` keybinding (`focusedView ==
   modbench.referencedByTree`) *and* a `view/item/context` entry — both invoking the one command,
   the same shape `modbench.deleteRecord` already uses elsewhere in this tree family.
@@ -136,8 +134,9 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   with the same catch-log-surface treatment `COPY_TO_CLIPBOARD` already uses
   ([ADR-0026](../adr/0026-error-surfacing-policy.md)).
 - Empty state: "No references found." A **failed fetch** yields an error node
-  (`ErrorNode`, "Failed to load references."), never the empty state — same convention as the
-  Pending Changes tree (ADR-0026).
+  (`ErrorNode`, "Failed to load references."), never the empty state — the same
+  fetch-failure-is-not-empty convention every tree in this product follows
+  ([ADR-0026](../adr/0026-error-surfacing-policy.md)).
 - Reference data comes from the backend (`GET /records/{formKey}/references`) through the
   generated `ApiClient`, never raw `fetch()`; this surface renders it and does not derive it.
 
@@ -172,8 +171,7 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   contract genuinely is "given these nodes, produce this text," and real nodes obtained from the
   provider are used as that function's input rather than hand-built ones.
 - **Seam**: the tree provider's public surface against a stubbed `ApiClient` — Vitest,
-  `npm run test:unit`, no backend and no VS Code. Same seam as the Pending Changes tree's own
-  test.
+  `npm run test:unit`, no backend and no VS Code.
 - **`ActiveRecordTracker`** is tested on its own public surface (`setFormKey`/`setActivePanel`/
   `removePanel`/`current`/`onDidChangeActiveRecord`) with opaque panel-identity tokens — no
   `vscode.WebviewPanel` and no VS Code harness, since the class never reads
@@ -203,9 +201,9 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   batch `GET /records/{formKeys}/references`-style endpoint; today's endpoint is single-FormKey,
   so an N-record selection would be N round trips. The grouping model already supports the result
   shape (collapse-by-FormKey over a larger input) — only the backend call is missing.
-- **Reference validation at stage time** — that is a backend concern
-  ([ADR-0020](../adr/0020-reference-validation-at-stage-time.md)), surfaced by whichever
-  command staged the change, not here.
+- **Reference validation at edit time** — that is a backend concern (ADR-0020's rule,
+  relocated from stage time — ADR-0041), surfaced by whichever command made the edit, not
+  here.
 - **Forward references** (what this record points at) — that is the compare grid's FormKey
   cells, [medit-record-editor.md](medit-record-editor.md).
 

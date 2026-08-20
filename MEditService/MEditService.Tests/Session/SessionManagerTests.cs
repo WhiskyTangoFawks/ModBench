@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Session;
@@ -174,157 +173,18 @@ public class SessionManagerTests(TestPluginFixture fixture)
         Assert.Null(manager.Session!.FilterSql);
     }
 
-    // --- ReserveFormKey ---
-
-    [Fact]
-    public void ReserveFormKey_LoadedPlugin_ReturnsValidFormKeyAndIncrements()
-    {
-        using var manager = MakeLoadedManager();
-
-        var fk1 = manager.ReserveFormKey(TestPluginFixture.PluginName);
-        var fk2 = manager.ReserveFormKey(TestPluginFixture.PluginName);
-
-        Assert.True(FormKey.TryFactory(fk1, out var parsed1));
-        Assert.Equal(TestPluginFixture.PluginName, parsed1.ModKey.FileName.ToString());
-        Assert.NotEqual(fk1, fk2);
-    }
-
-    [Fact]
-    public void ReserveFormKey_NoSession_ThrowsInvalidOperationException()
-    {
-        using var manager = MakeManager();
-        Assert.Throws<InvalidOperationException>(() => manager.ReserveFormKey("TestPlugin.esp"));
-    }
-
-    [Fact]
-    public void ReserveFormKey_UnknownPlugin_ThrowsArgumentException()
-    {
-        using var manager = MakeLoadedManager();
-
-        Assert.Throws<ArgumentException>(() => manager.ReserveFormKey("NotLoaded.esp"));
-    }
-
-    [Fact]
-    public void ReserveFormKey_ConcurrentCalls_ReturnDistinctFormKeys()
-    {
-        using var manager = MakeLoadedManager();
-        var results = new System.Collections.Concurrent.ConcurrentBag<string>();
-
-        Parallel.For(0, 50, _ => results.Add(manager.ReserveFormKey(TestPluginFixture.PluginName)));
-
-        Assert.Equal(50, results.Distinct().Count());
-    }
-
-    [Fact]
-    public void ReserveFormKey_ExhaustedSpace_ThrowsInvalidOperationException()
-    {
-        var data = new PluginFixtureBuilder("fk-exhausted")
-            .WithPlugin("Full.esp", mod => mod.ModHeader.Stats.NextFormID = 0x1000000u,
-                writeParams: new BinaryWriteParameters { NextFormID = NextFormIDOption.NoCheck })
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            Assert.Throws<InvalidOperationException>(() => manager.ReserveFormKey("Full.esp"));
-        }
-    }
-
-    [Fact]
-    public void ReserveFormKey_AtMaxValidFormId_Succeeds()
-    {
-        var data = new PluginFixtureBuilder("fk-max")
-            .WithPlugin("Max.esp", mod => mod.ModHeader.Stats.NextFormID = 0xFFFFFFu,
-                writeParams: new BinaryWriteParameters { NextFormID = NextFormIDOption.NoCheck })
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            var fk = manager.ReserveFormKey("Max.esp");
-
-            Assert.True(FormKey.TryFactory(fk, out var parsed));
-            Assert.Equal(0xFFFFFFu, parsed.ID);
-        }
-    }
-
-    [Fact]
-    public void ReserveFormKey_FreshlyCreatedEmptyPlugin_NeverReturnsFormIdZero()
-    {
-        // FormID 0 is reserved: Issue #1's plugin-header record lives at the synthetic FormKey
-        // `000000:<plugin>`. A freshly-activated Mutagen mod (ModFactory.Activator, used by
-        // CreatePlugin) reports NextFormID == 0 before any record has ever been added, so a naive
-        // reservation would collide with that plugin's own header row.
-        var data = new PluginFixtureBuilder("fk-fresh-zero").WithPlugin("Base.esp").Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            manager.CreatePlugin("BrandNew.esp");
-
-            var fk = manager.ReserveFormKey("BrandNew.esp");
-
-            Assert.True(FormKey.TryFactory(fk, out var parsed));
-            Assert.NotEqual(0u, parsed.ID);
-        }
-    }
-
-    [Fact]
-    public void ReserveFormKey_LoadedEmptyPluginWithZeroNextFormId_NeverReturnsFormIdZero()
-    {
-        // A plugin with no records ever added and never explicitly given a NextFormID (as
-        // PluginFixtureBuilder.WithPlugin("Empty.esp") produces) round-trips through
-        // WriteToBinary + Load with a literal NextFormID of 0 in its on-disk header. Issue #1's
-        // header record occupies FormID 0 for every plugin, so Load must floor the reservation
-        // counter at the game's recommended minimum rather than trusting a raw 0 from disk.
-        var data = new PluginFixtureBuilder("fk-loaded-zero").WithPlugin("Empty.esp").Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-
-            var fk = manager.ReserveFormKey("Empty.esp");
-
-            Assert.True(FormKey.TryFactory(fk, out var parsed));
-            Assert.NotEqual(0u, parsed.ID);
-        }
-    }
-
-    [Fact]
-    public void ReserveFormKey_SequentialCalls_ReturnConsecutiveIds()
-    {
-        using var manager = MakeLoadedManager();
-
-        var fk1 = manager.ReserveFormKey(TestPluginFixture.PluginName);
-        var fk2 = manager.ReserveFormKey(TestPluginFixture.PluginName);
-
-        Assert.True(FormKey.TryFactory(fk1, out var parsed1));
-        Assert.True(FormKey.TryFactory(fk2, out var parsed2));
-        Assert.Equal(parsed1.ID + 1, parsed2.ID);
-    }
-
-
-
-    [Fact]
-    public void CreatePlugin_SeedsNextFormIds_PluginIsImmediatelyReservable()
-    {
-        var data = new PluginFixtureBuilder("cp-seed-fk")
-            .WithPlugin("Base.esp")
-            .Build();
-        using (data)
-        {
-            using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            manager.CreatePlugin("Fresh.esp");
-
-            var fk = manager.ReserveFormKey("Fresh.esp");
-
-            Assert.True(FormKey.TryFactory(fk, out var parsed));
-            Assert.Equal("Fresh.esp", parsed.ModKey.FileName.ToString());
-        }
-    }
+    // #418 closeout: the ReserveFormKey test block (ReserveFormKey_LoadedPlugin_
+    // ReturnsValidFormKeyAndIncrements, ReserveFormKey_NoSession_ThrowsInvalidOperationException,
+    // ReserveFormKey_UnknownPlugin_ThrowsArgumentException, ReserveFormKey_ConcurrentCalls_
+    // ReturnDistinctFormKeys, ReserveFormKey_ExhaustedSpace_ThrowsInvalidOperationException,
+    // ReserveFormKey_AtMaxValidFormId_Succeeds, ReserveFormKey_FreshlyCreatedEmptyPlugin_
+    // NeverReturnsFormIdZero, ReserveFormKey_LoadedEmptyPluginWithZeroNextFormId_
+    // NeverReturnsFormIdZero, ReserveFormKey_SequentialCalls_ReturnConsecutiveIds — 9 tests) and
+    // CreatePlugin_SeedsNextFormIds_PluginIsImmediatelyReservable (a 10th, CreatePlugin's own
+    // test, observable only through ReserveFormKey) are removed together with ReserveFormKey
+    // itself: unwired dead code (no endpoint, no caller outside these tests, superseded by
+    // RecordEditService's both-refs collision-safe allocator, #427). Its backing state
+    // (`_nextFormIds`, `SafeNextFormId`) had no other reader and is removed with it.
 
     // --- helpers ---
 

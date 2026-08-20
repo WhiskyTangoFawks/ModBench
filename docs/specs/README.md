@@ -9,10 +9,9 @@ One living spec per Modbench UI surface. A **surface** is a top-level UI unit th
 | [plugins.md](plugins.md) | Plugins — the one Plugins tree: enable/reorder `plugins.txt` (Mod Management), plus record navigation and the SQL record filter whenever a session is running (Editing) | Implemented |
 | [downloads.md](downloads.md) | Downloads — Nexus integration, download queue | Specced — MVP ready to build |
 | [medit.md](medit.md) | **mEdit — context overview** (session lifecycle, status bar, command palette, seams). Not a surface | Implemented |
-| [medit-record-editor.md](medit-record-editor.md) | mEdit Record editor panel — compare grid, in-place editing, Pending column | Implemented; edit-mode removal + Pending column actions specced |
+| [medit-record-editor.md](medit-record-editor.md) | mEdit Record editor panel — compare grid, in-place editing | Implemented |
 | [medit-referenced-by.md](medit-referenced-by.md) | mEdit Referenced By tree — what points at this record | Implemented |
-| [medit-pending-changes-tree.md](medit-pending-changes-tree.md) | mEdit Pending Changes tree — what must be saved or reverted together | Specced — needs re-slicing (ADR-0029) |
-| [scm.md](scm.md) | Aggregate SCM provider — native Source Control panel, working-tree changes across tracked plugins | Implemented (stage 1 of 3, ADR-0040) |
+| [medit-version-control.md](medit-version-control.md) | Version control — Track, branch, compile — native Source Control panel review, Save & Compile, external-change handling | Implemented |
 
 A view spanning several surfaces gets one **context overview** plus one spec per surface —
 [medit.md](medit.md) is the worked example. The overview holds only what is genuinely shared

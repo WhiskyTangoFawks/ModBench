@@ -1,5 +1,12 @@
 # Direct-to-File Editing (bypassing pending changes)
 
+*Historical: written against the pending-change/staging model, retired by ADR-0041. Under the
+current git-native model a field edit already writes the working-tree ledger text directly, on
+edit — writing the plugin **file** is the separate Save & Compile gesture, still not automatic
+on every edit. The "buffer until save" framing below is dated; the underlying request (should an
+edit skip review before it's real) is unaffected: review now happens as ordinary git dirt in the
+native Source Control panel, not a pending-change buffer.*
+
 Modbench does not offer a mode where record edits skip the pending-change buffer and go
 straight to the plugin file.
 

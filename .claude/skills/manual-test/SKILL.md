@@ -52,5 +52,5 @@ context key to reveal them.
 Force activation once per session by running any Modbench command from the Command Palette,
 e.g. **Modbench: Refresh Mod List**. The activity bar icon then appears (Loadout view). From
 there, use **Modbench: Launch mEdit** to spawn/attach the backend — the Plugins tree's rows
-gain chevrons once the session is ready, and Pending Changes appears once there is staged work.
-Nothing switches views; every loadout view stays exactly where it was.
+gain chevrons once the session is ready. Nothing switches views; every loadout view stays
+exactly where it was.

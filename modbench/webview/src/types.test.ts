@@ -108,7 +108,7 @@ describe('columnKey', () => {
   });
 
   // #272 review: the generated wire schema types `origin` as `string | null` on every DTO that
-  // carries it (CompareOverride/PendingChange/PluginResponse in generated/api.ts) even though the
+  // carries it (CompareOverride/PluginResponse in generated/api.ts) even though the
   // backend can't actually produce a null there (see columnKey()'s own doc comment) — a `null`
   // makes it through RecordSessionClient's unchecked `as` cast into these hand types regardless of
   // what they claim, so `columnKey` must tolerate it exactly like the elided Data origin rather

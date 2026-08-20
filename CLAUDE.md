@@ -69,9 +69,9 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specifying from
   memory of xEdit instead of from xEdit is what cost #201/#204/#218 — click focuses a cell
   there, it does not edit. Does not apply to Mod Management, which follows MO2. Also does
-  not apply to pending-change UX (staging, revert, dirty indicators) — xEdit has no
-  pending-change model; the references there are the product's own change-group model
-  (ADR-0017/0028) and VS Code/git native idioms (decorations, dirty markers).
+  not apply to pending-change UX (staging, revert, dirty indicators) — xEdit has no such
+  model; the references there are the product's own git-native working-tree model
+  (ADR-0041) and VS Code/git native idioms (decorations, dirty markers).
 - Native-first, webviews included: before designing any interaction, ask "which VS
   Code surface already does this?" and copy its answer — menus, pickers, confirms,
   prompts, trees and clipboard all have one. A webview is justified by what it

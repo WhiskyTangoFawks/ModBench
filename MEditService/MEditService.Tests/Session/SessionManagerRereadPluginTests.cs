@@ -216,34 +216,10 @@ public sealed class SessionManagerRereadPluginTests
     // Carrying the replaced copy's counter over would hand out FormKeys the new copy has already
     // used — silent data corruption at the next Create Record. The negation on that line survived
     // mutation, i.e. nothing observed it; this is what observes it.
-    [Fact]
-    public void RereadPlugin_ReservesTheNextFormIdOfTheCopyItReadFromDisk()
-    {
-        using var fx = new PluginFixtureBuilder("sm-reread-formid")
-            .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromModA"), origin: "ModA")
-            .BuildScattered();
-        // Two more records than the loaded copy, so the two files' NextFormIDs cannot coincide and
-        // the reserved key names which file the counter came from.
-        var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB", extraRecords: 2);
-
-        var manager = MakeManager();
-        using (manager)
-        {
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-            var beforeReread = sessionManager.ReserveFormKey("A.esp");
-
-            sessionManager.RereadPlugin("A.esp", newPath, "ModB");
-
-            var afterReread = sessionManager.ReserveFormKey("A.esp");
-            // Not merely "different": specifically the new copy's own next id, which is three
-            // FormIDs further on than the one-record copy the session loaded. A counter left
-            // untouched would answer one past `beforeReread` instead.
-            Assert.NotEqual(beforeReread, afterReread);
-            var used = FormKey.Factory(beforeReread).ID;
-            Assert.Equal(used + 2, FormKey.Factory(afterReread).ID);
-        }
-    }
+    // #418 closeout: RereadPlugin_ReservesTheNextFormIdOfTheCopyItReadFromDisk removed — its
+    // subject was ReserveFormKey's per-file reservation counter reset on reread; ReserveFormKey
+    // itself was deleted as unwired dead code (no endpoint, no caller outside its own tests,
+    // superseded by RecordEditService's both-refs collision-safe allocator, #427).
 
     // #279 review (Suite axis): the endpoint's own blank check filters before SessionManager is
     // ever called, so these two guards had no coverage at all. Tested here directly, matching the

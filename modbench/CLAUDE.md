@@ -15,10 +15,10 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
   2. **Four navigation icons maximum.** Not taste: VS Code collapses navigation icons into `…` when a view is narrow, so a fifth is already unreliable. A two-command context-key toggle counts as one — only ever one of the pair is visible.
   3. **An icon is earned** by in-workflow frequency (used more than once per session) or by being a state readout (sort direction, show-hidden, filter-active). Configure-once and occasional actions go to `…`.
   4. **Destructive actions never get an icon** — overflow plus a modal confirm (`showWarningMessage(…, { modal: true })`).
-  5. **Fixed slot order**, so an icon means the same thing in every view: name filter, then the view's state affordance (presentation toggle, or a second narrowing axis like the record filter), then domain actions, then overflow, then Collapse All (native, always last). Assign `navigation@1`… in that order **skipping what a view doesn't have** — Pending Changes has no filter, so Save All is its `@1`; the header is not a list, so Refresh is its `@1` and Launch… its `@2`. What the rule fixes is the *order*, not the number.
+  5. **Fixed slot order**, so an icon means the same thing in every view: name filter, then the view's state affordance (presentation toggle, or a second narrowing axis like the record filter), then domain actions, then overflow, then Collapse All (native, always last). Assign `navigation@1`… in that order **skipping what a view doesn't have** — the header is not a list, so Refresh is its `@1` and Launch… its `@2`. What the rule fixes is the *order*, not the number.
   6. **Icon vocabulary:** `$(search)` = narrow by name, `$(filter)` = narrow by condition, `$(refresh)` = re-read from disk and is **one command id** (`modbench.refresh`) covering every Mod-Management source at once.
-  7. **`showCollapseAll` on every hierarchical tree, never on a flat list.** Currently: Mods, the editing Plugins tree, Pending Changes and — since [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) made its rows expand into records — the Plugins (load order) tree: yes; Downloads, the header — no.
-  8. **Session reload is not Refresh.** It costs seconds and can disturb staged work, so it stays a separate, explicitly-named command in overflow.
+  7. **`showCollapseAll` on every hierarchical tree, never on a flat list.** Currently: Mods, and — since [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) made its rows expand into records — the one Plugins tree: yes; Downloads, the header — no.
+  8. **Session reload is not Refresh.** It costs seconds, so it stays a separate, explicitly-named command in overflow.
 
   Filtering is **one widget** (`registerNameFilter`, `src/nameFilter.ts`) used by every list view — Mods, the merged Plugins tree, Downloads. Adding a fourth list view means reusing it, not writing a second one: pass the view and its id, and its two command ids and filter-active context key follow by construction. The rules govern the *surface*, not command ids: several ids still carry a `modList.` prefix from where they used to live, and renaming them would be churn with no user-visible effect.
 
@@ -53,7 +53,7 @@ Placement:
   `PluginsTreeComposite` appends, not a contextValue (#276, `docs/specs/plugins.md`).
 - New commands: prompt in `extension.ts`, delegate to `SessionController` (explicit args, no VS Code types).
 - New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
-- New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-pending-changes-tree.md`, `medit-referenced-by.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — #273/ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
+- New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-referenced-by.md`, `medit-version-control.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — #273/ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
 
 ## Type mapping: PluginMetadata
 

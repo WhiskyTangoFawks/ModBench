@@ -1,4 +1,15 @@
+---
+status: superseded by ADR-0041
+---
+
 # FormLink references are validated at stage time, not at apply time
+
+> **Superseded by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
+> (2026-08-19):** the pending-change/stage-time model this decision was framed in is
+> retired. The rule this ADR argued for survives, relocated: `EditField` validates a
+> FormLink at **edit** time, before anything is written to the working-tree ledger —
+> the same enforcement point, the same reasons, just no longer named "stage." See
+> `MEditService/CLAUDE.md`. Kept for history below.
 
 `StageEdit` rejects any submitted FormLink value that is null on a non-nullable field, doesn't resolve to a record in the current session, or resolves to the wrong record type. Validation happens before the change is staged, returning a structured 422 (`InvalidReferences`) listing each bad field, the submitted value, the reason, and the expected types. Invalid references are never written to pending state.
 

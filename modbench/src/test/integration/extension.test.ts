@@ -383,10 +383,6 @@ describe('modbench command registration', () => {
     'modbench.record.create',
     'modbench.record.delete',
     'modbench.record.renumber',
-    // #368: the aggregate SCM provider's resource-click command — opens the record's
-    // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
-    // `command`, not a menu contribution, but still registered (and palette-visible) like every
-    // other click-triggered command here (modbench.openEditor, ...).
   ];
 
   it('registers all expected commands on activation', async () => {
