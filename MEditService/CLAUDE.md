@@ -40,6 +40,63 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     is how a GLOB is read back as `GlobalFloat` rather than the schema's discovery winner.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
+- **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
+  ADR-0041). `Edits/RecordEditService.EditField` reads the record's ledger file, applies the field,
+  writes the file back atomically, and tells the index what landed. It reads the **file**, not the
+  indexed body: ingest serializes from a plugin's binary overlay while the ledger holds a deep
+  parse, and the two are not always structurally identical (#369's measured 1-in-3,940 hole, on
+  `GitBlobHash`), so editing the file's own bytes is what stops an edit rewriting a record's
+  untouched fields into the overlay's shape. `POST /records/{formKey}/field` is the same service's
+  HTTP door — scripts and agents (ADR-0024) share the one path, they do not get a second.
+  - **Refusals are typed and happen before any write** (`RecordEditRefusal`), so a refused edit
+    leaves the working tree untouched. Two of them are the untracked signposting: `PluginNotTracked`
+    (a mod folder with no `.git` — one Track away) and `PluginHasNoModFolder` (a Data-directory
+    master, where Track does not apply and the answer is a patch plugin). They are distinct because
+    each names a different way out; naming the wrong one is worse than naming none. Over HTTP they
+    travel as a ProblemDetails `refusal` extension beside the detail, so an agent branches on a
+    discriminator rather than on prose.
+  - **FormLinks validate at edit time**, against effective state (ADR-0020 kept, relocated from
+    stage time). The check is `CheckErrorBuilder` over the incoming value — the same builder the
+    read model renders check errors from — so "what the editor flags" and "what it refuses to
+    create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; note
+    that a top-level FormLink *column* has no write delegate at all in the reflected schema
+    (`SchemaReflector`: "read-only as a column, `ApplyFormLinkJson` as a sub-field"), so the
+    writable form of a FormLink today is an array or a struct sub-field.
+  - **Reads validate ledger freshness** (`Ledger/LedgerFreshness`, #413 D3 deferred here). Point
+    reads re-check the ledger text before answering, catching `git restore`, checkout, rebase,
+    terminal commits and hand edits — no watcher, because Modbench owns the `.git` folder and git
+    never announces itself. **Both refs are re-derived**: after an external commit "committed"
+    itself has moved, so a pass that refreshed only the working-tree side would leave Head serving
+    bytes no ref holds. Cost is bounded by dirt, not by load order — git is consulted only for
+    records the index already believes are dirty, so an unedited session runs no git processes on
+    the read path.
+- **The ref dimension has two values** (#415). `records` still holds exactly **one row per record
+  copy**, and that row *is* `RecordRef.Effective`; the `ref` column says which state those bytes
+  are, never which of several rows to pick. That is why every read and every generated
+  `json_extract` view keeps answering Effective with no ref predicate anywhere, and why the SQL door
+  (user filters, `medit.query`) sees what the editor sees — `WHERE "ref" = 'working-tree'` is how it
+  asks for just the dirt. The committed bytes of a *diverged* record live in the
+  `records_committed` difference table; `records_head` unions it with the rows that never diverged,
+  giving Head a relation of the same shape, which is why `At(ref)` is a relation name rather than a
+  second read implementation.
+  - `is_winner` is **derived inside `records_head`**, never carried through. A record the working
+    tree deleted promotes the next plugin down at Effective, and the promoted row is a clean row
+    physically shared with that view — reading its stored flag reported two winners for one FormKey
+    at Head.
+  - `IRecordIndex.ApplyWorkingTreeChanges` moves Effective against a fixed baseline (null body =
+    deletion; bytes equal to committed = convergence back to clean, by byte compare, never by a
+    `content_hash` mismatch alone). `SetCommittedBaseline` moves the baseline itself. Neither can
+    express the other. Both re-derive the record's extracted rows (`form_lookup`,
+    `form_references`) through the same collectors ingest uses.
+  - Reads that answer from the **extracted** tables (`Resolve`, `GetReferencedBy`, `GetPlacement`)
+    and the header table answer identically at both refs, deliberately: those carry no ref
+    dimension and track Effective, which is the answer their consumers want.
+- **`LedgerRepository.CommittedLedgerHashes`/`ReadCommittedLedgerText` ask what `HEAD` holds** — not
+  what the working tree holds against the index, which is #417's `WorkingTreeStatus` (as are
+  `CommitPristineToMain` and the rebase verbs). The two diverge after exactly the events these
+  exist for: an external commit, rebase or amend moves `HEAD` without touching a file. Hash values
+  are directly comparable to `records.content_hash` with no conversion — both are git blob object
+  names, which is why that column stores git's own hash.
 - **The record-index seam is `IRecordReads`/`IRecordIndex`** (#421), replacing `IRecordRepository`/
   `IRecordReader`/`IRecordIndexer` and absorbing the query service's read-model pass-throughs
   (`GetRecordForPlugin`/`GetRecordType`/`GetNativeFormKeys`/`GetPlacement`/`GetVmad`/`GetConditions` —
@@ -53,7 +110,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   independent state. No `Connection` property and no SQL crosses this seam except `SetFilter`
   (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
 - Every write backs up the target plugin first (timestamped `.bak`) — cross-session undo depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
-- FormLinks validate at stage time, not apply time — existence+type checked before entering pending-change state. [ADR-0020](../docs/adr/0020-reference-validation-at-stage-time.md)
+- FormLinks validate at **edit** time, not apply time — existence+type checked before anything is written. The pending-change state that ADR-0020 named is retired (ADR-0041); the rule moved with it, see the edit-path invariant above. [ADR-0020](../docs/adr/0020-reference-validation-at-stage-time.md)
 - Partial-success endpoints return a structured failures collection (named record, e.g. `SessionLoadResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
 - **A session is readable while it is still loading** (#274 / ADR-0035). `SessionManager` publishes the session and repository *before* the indexing loop, and `GameSession.OpenAll()` opens one plugin at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
   - **Anything derived from the whole plugin set must gate on `ISessionManager.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load session reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `SessionState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready session with stale winners.
@@ -69,9 +126,9 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
-| `Edits/` | Staging and persisting user edits | `PendingChangeService`, `PluginWriter`, `SaveResult` |
+| `Edits/` | The single write path: one field edit becomes a working-tree change | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter` |
 | `Serialization/` | Per-record text ledger codec (ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
-| `Ledger/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, and the Track gesture that populates it (ADR-0041, #414) | `LedgerRepository`, `TrackService`, `GitCli`, `PristineFile`, `ContainerStripFields` |
+| `Ledger/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, and read-time freshness over its text (ADR-0041, #414, #415) | `LedgerRepository`, `TrackService`, `LedgerFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerStripFields` |
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
 
