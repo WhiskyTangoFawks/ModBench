@@ -31,16 +31,22 @@ interface RenderCellExtras {
   // (`diff.collapsedSummary`) for a struct row's collapsed label — set only for a Condition row;
   // undefined for every other struct row, which fall back to the generic "{…}" below.
   summaryLabel?: string;
+  // #415: where an edited value goes. Absent means this cell has nowhere to write — an immutable
+  // or untracked column, or a caller outside the field grid — and the leaf renders read-only.
+  onCommit?: (v: unknown) => void;
 }
 
-// #410/ADR-0041: every leaf renders read-only — `editable` is gone, not defaulted, so no call
-// site can quietly ask for an editor that has nowhere to write.
+// #415/ADR-0041: leaves render read-only unless the caller supplies `onCommit` — the presence of
+// somewhere to write *is* the editability signal, so a call site that has no write path cannot
+// accidentally ask for an editor (which is what #410's removal of `editable` was protecting, kept
+// here in a form that also allows the one gesture back). Only the scalar leaf honours it today;
+// every other cell type stays read-only until the gesture-inventory ticket restores its own editor.
 function renderCell(
   value: unknown,
   meta: FieldMetadata,
   isFocused: boolean,
   onOpen: (fk: string) => void,
-  { checkError, resolution, summaryLabel }: RenderCellExtras = {},
+  { checkError, resolution, summaryLabel, onCommit }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -85,7 +91,17 @@ function renderCell(
   if (meta.type === 'conditionParam') {
     return <ConditionParamCell value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution} />;
   }
-  return <ScalarCell value={value} meta={meta} />;
+  return (
+    <ScalarCell
+      value={value}
+      meta={meta}
+      isFocused={isFocused}
+      // `meta.readOnly` (#231) is a per-row veto a synthesized row can set regardless of what the
+      // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
+      editable={onCommit != null && !meta.readOnly}
+      onCommit={onCommit}
+    />
+  );
 }
 
 // Issue #231: replaces the old fixed four-member union (`top-level | array-element | struct-child
@@ -168,13 +184,20 @@ interface DiffRowProps {
   rowKey: string;
   focusedCell: FocusedCell | null;
   onFocusCell: (rowKey: string, plugin: ColumnKey, column?: 'pending') => void;
+  // #415: the columns whose cells can be written — mutable plugin, in the load order, and its mod
+  // tracked. RecordPanel computes it once for the whole grid so a single definition of "writable"
+  // reaches every row; a column absent from this set renders read-only everywhere it appears.
+  editableColumns: Set<ColumnKey>;
+  // #415: commits an edited value for one column's cell on this row. Absent when this row cannot be
+  // written at all (a synthesized read-only row, or a panel with no write path wired).
+  onEditCell?: (plugin: ColumnKey, fieldPath: string, value: unknown) => void;
 }
 
 export function DiffRow({
   diff, columns, overrideMap, fieldMetaMap, notInLoadOrderSet,
   collapsedColumns, onOpen,
   context, hasChildren, isExpanded, onToggle,
-  rowKey, focusedCell, onFocusCell,
+  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
 }: Readonly<DiffRowProps>) {
   // Issue #231: prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
   // now always passes one (its recursive builder resolves every row's metadata itself, including
@@ -299,6 +322,12 @@ export function DiffRow({
               {renderCell(diff.values[key], meta, isFocused, onOpen, {
                 checkError, resolution: diff.resolutions?.[key],
                 summaryLabel: diff.collapsedSummary?.[key],
+                // #415: undefined for a column the panel says cannot be written, which is what
+                // makes the cell read-only — see renderCell's own note. RecordPanel owns the one
+                // definition of "writable"; this only reads its answer.
+                onCommit: onEditCell && editableColumns.has(key)
+                  ? (v: unknown) => onEditCell(key, pendingLookupField, v)
+                  : undefined,
               })}
             </DiskCell>
           );

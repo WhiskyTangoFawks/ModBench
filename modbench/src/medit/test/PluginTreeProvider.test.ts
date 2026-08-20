@@ -85,6 +85,9 @@ function makeRepository(overrides: Partial<{
     getWorldspaces: vi.fn().mockResolvedValue([]),
     getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCell: null }),
     getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
+    // #415: the tree provider never edits — present only because the double implements the
+    // whole PluginRepository surface.
+    editRecordField: vi.fn(),
     getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   };
 }

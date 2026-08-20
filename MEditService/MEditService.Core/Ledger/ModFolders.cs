@@ -22,15 +22,28 @@ internal static class ModFolders
     /// </summary>
     internal static string? Of(IGameSession? session, PluginKey plugin)
     {
-        if (string.Equals(plugin.Origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase))
-            return null;
-
         var metadata = session?.Plugins.FirstOrDefault(p =>
             p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
             && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
 
-        return metadata?.Path is { } path ? Path.GetDirectoryName(path) : null;
+        return metadata is null ? null : Of(metadata.Origin, metadata.Path);
     }
+
+    /// <summary>The same rule stated over the two facts it actually needs, for callers that already
+    /// hold a plugin's own metadata and have no reason to look it up again by name.</summary>
+    internal static string? Of(string origin, string pluginPath)
+    {
+        if (string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        return Path.GetDirectoryName(pluginPath);
+    }
+
+    /// <summary>Whether this plugin's records can be edited at all: it has a mod folder, and that
+    /// folder is tracked. The single fact the editing surfaces gate on — "editing requires
+    /// tracking; viewing never does" (ADR-0041).</summary>
+    internal static bool IsEditable(string origin, string pluginPath) =>
+        Of(origin, pluginPath) is { } modFolder && LedgerRepository.IsTracked(modFolder);
 
     /// <summary>The mod folder only when it is actually tracked — the single condition under which a
     /// plugin has ledger text to read or write at all.</summary>

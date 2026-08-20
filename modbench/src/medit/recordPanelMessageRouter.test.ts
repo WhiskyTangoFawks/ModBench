@@ -16,8 +16,17 @@ function fakeChannel() {
 }
 const fakeReporter = { report: vi.fn() };
 
+// #415: the edit path's two deps default to "applied, nobody listening" so every pre-existing case
+// below keeps exercising exactly what it did; the edit tests override them explicitly.
+const fakeRepository = { editRecordField: vi.fn() };
+const onRecordEdited = vi.fn();
+
 function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRecordPanelMessageDeps {
-  return { channel: fakeChannel(), reporter: fakeReporter, ...overrides };
+  return {
+    channel: fakeChannel(), reporter: fakeReporter,
+    repository: fakeRepository, onRecordEdited,
+    ...overrides,
+  };
 }
 
 // Issue #174: the record editor webview and the extension host are different processes, bridged
@@ -28,6 +37,8 @@ describe('routeRecordPanelMessage', () => {
     executeCommand.mockReset();
     writeText.mockReset();
     fakeReporter.report.mockReset();
+    fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
+    onRecordEdited.mockReset();
   });
 
   it('OPEN_RECORD opens the named record in the editor', async () => {
@@ -73,5 +84,73 @@ describe('routeRecordPanelMessage', () => {
 
     expect(executeCommand).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
+  });
+});
+
+// #415/ADR-0041: the one write the panel can ask for. Routed through the host rather than posted
+// to the backend from the webview precisely so a refusal can become a native notification — which
+// is what these cases are really pinning.
+describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
+  const editMessage = {
+    type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
+    formKey: '000800:Mod.esp',
+    plugin: 'Mod.esp',
+    origin: 'SomeMod',
+    fieldPath: 'height_max',
+    value: 0.75,
+  };
+
+  beforeEach(() => {
+    fakeReporter.report.mockReset();
+    fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
+    onRecordEdited.mockReset();
+  });
+
+  it('sends the edit through the single write path with its compound plugin identity', async () => {
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    expect(fakeRepository.editRecordField)
+      .toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod', 'height_max', 0.75);
+  });
+
+  it('tells the panel to re-read once the edit has landed', async () => {
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp');
+    expect(fakeReporter.report).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a refusal with the message that names the way out, and does not re-read', async () => {
+    fakeRepository.editRecordField.mockResolvedValue({
+      applied: false,
+      refusal: 'PluginNotTracked',
+      message: 'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track Mod" on it once to start editing.',
+    });
+
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    // The backend's own wording, relayed rather than re-authored — it already names the command,
+    // and re-wording it here would put that text in two places with only one of them tested.
+    expect(fakeReporter.report).toHaveBeenCalledWith('warning', expect.stringContaining('Track Mod'));
+    expect(onRecordEdited).not.toHaveBeenCalled();
+  });
+
+  it('a refusal is a warning, not an error — the user got a clear answer with a next step', async () => {
+    fakeRepository.editRecordField.mockResolvedValue({
+      applied: false, refusal: 'PluginHasNoModFolder', message: 'Author a patch plugin and edit the override there.',
+    });
+
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    expect(fakeReporter.report.mock.calls[0][0]).toBe('warning');
+  });
+
+  it('a transport failure is an error — nothing answered at all', async () => {
+    fakeRepository.editRecordField.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await routeRecordPanelMessage(editMessage, makeDeps());
+
+    expect(fakeReporter.report).toHaveBeenCalledWith('error', expect.any(String), 'ECONNREFUSED');
+    expect(onRecordEdited).not.toHaveBeenCalled();
   });
 });

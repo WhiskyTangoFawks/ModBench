@@ -604,6 +604,7 @@ export interface components {
             masterIssues?: components["schemas"]["MasterIssue"][] | null;
             inLoadOrder?: boolean;
             hasMatchingRecords?: boolean;
+            isTracked?: boolean;
         };
         ProblemDetails: {
             type?: string | null;

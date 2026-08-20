@@ -467,6 +467,12 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     channel: outputChannel,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
     reporter: makeReporter(outputChannel, 'copyToClipboard'),
+    // #415/ADR-0041: the single write path, and the broadcast that tells every open panel showing
+    // this record to re-read. Broadcast rather than replying to the one panel that asked: the same
+    // record can be open in more than one panel (openEditorBeside), and all of them are now stale.
+    repository: deps.repository,
+    onRecordEdited: (formKey: string) =>
+      broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey }),
   };
   return [
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),

@@ -5,6 +5,15 @@ import type {
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
+/**
+ * #415: what one field edit came to. A refusal is a first-class outcome here, not an exception —
+ * `refusal` is the backend's RecordEditRefusal name, which is what lets the caller act differently
+ * for an untracked mod (offer Track) than for a base-game master (name the patch-plugin path).
+ */
+export type RecordFieldEditOutcome =
+  | { applied: true }
+  | { applied: false; refusal: string; message: string };
+
 type PluginResponse = components['schemas']['PluginResponse'];
 type GeneratedMasterIssue = components['schemas']['MasterIssue'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
@@ -141,6 +150,16 @@ export interface PluginRepository {
 
   // Phase 16: per-plugin worldspace tree. origin (#305 / ADR-0036): same optional shape as
   // getRecordTypes/getRecords above — a row that stands for a specific copy states it.
+  /**
+   * #415/ADR-0041: one field edit through the single write path. Never throws on a refusal — a
+   * refused edit is an ordinary, expected answer (the plugin is untracked, the link would dangle),
+   * not a failure to report as one, so it comes back as a typed result the caller surfaces. Only a
+   * genuine transport failure rejects.
+   */
+  editRecordField(
+    formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
+  ): Promise<RecordFieldEditOutcome>;
+
   getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]>;
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
@@ -284,6 +303,29 @@ export class ApiPluginRepository implements PluginRepository {
     const { data, error, response } = await this.client.GET('/session/filter', {});
     this.ensureOk('getActiveFilter', response, error);
     return data?.sql ?? null;
+  }
+
+  async editRecordField(
+    formKey: string, plugin: string, origin: string, fieldPath: string, value: unknown,
+  ): Promise<RecordFieldEditOutcome> {
+    const { data, error, response } = await this.client.POST('/records/{formKey}/field', {
+      params: { path: { formKey } },
+      body: { plugin, origin, fieldPath, value },
+    });
+    if (response.ok && data?.applied) return { applied: true };
+
+    // The backend's own typed discriminator, read off the ProblemDetails extension rather than
+    // re-derived from the status code — the status says what *kind* of problem it is, this says
+    // which one, and only the latter can tell "not tracked" from "no mod folder", whose ways out
+    // differ (ADR-0026).
+    const problem = error as { refusal?: string; detail?: string } | undefined;
+    const outcome: RecordFieldEditOutcome = {
+      applied: false,
+      refusal: problem?.refusal ?? 'Unknown',
+      message: problem?.detail ?? errorText(error) ?? `Edit failed (${response.status}).`,
+    };
+    this.log(`[PluginRepository] editRecordField(${formKey}.${fieldPath}) refused: ${outcome.refusal} — ${outcome.message}`);
+    return outcome;
   }
 
   async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {

@@ -9,6 +9,7 @@ import { buildConditionRows } from './conditionTreeAdapter';
 import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
+import { editField } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
 import type { RecordSessionClient } from './RecordSessionClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
@@ -55,6 +56,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // (distinct from "is immutable"; see recordUtils.ts's readOnlyReason) drives PluginHeader's
   // dimming/tooltip wording independently of the plain immutable fact.
   const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
+  // #415 / ADR-0041: the columns whose plugin's mod is tracked. Starts empty and stays empty until
+  // a load says otherwise — fail-closed, so a panel that has not heard from /plugins offers no
+  // editing rather than offering edits that cannot land.
+  const [trackedSet, setTrackedSet] = useState<Set<ColumnKey>>(new Set());
   // #308 / ADR-0035: whether the winner sweep has run — GET /session/status's own field, read by
   // client.load() alongside compare/changes/plugins. Initial `true` only matters until the first
   // load lands (the `!result` early-return below renders "Loading…" until then, so this can never
@@ -87,6 +92,34 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
   // apart from a real cross-column copy. #272: sourcePlugin is a ColumnKey.
 
+  // #415/ADR-0041: the one definition of "this column can be written", computed once for the whole
+  // grid. Three conditions, all of them already known here: the plugin is not immutable (a vanilla
+  // or DLC master), the load order actually names this copy (editing a shadowed one changes nothing
+  // anywhere), and the plugin's mod is tracked (editing requires tracking; viewing never does).
+  //
+  // Derived rather than asked of the backend per cell: the panel already holds all three facts from
+  // its own load(), and a per-cell round trip would make editability lag the grid it decorates.
+  const editableColumns = useMemo(() => {
+    const writable = new Set<ColumnKey>();
+    for (const o of result?.overrides ?? []) {
+      const key = columnKey(o.plugin, o.origin);
+      if (!immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key)) writable.add(key);
+    }
+    return writable;
+  }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
+
+  // #415: one field edit leaves for the single write path. Nothing is applied optimistically — the
+  // grid keeps showing the committed value until the host reports the edit landed and the panel
+  // re-reads (RECORD_EDITED). An optimistic patch would show a value the write path had not
+  // actually accepted, which for a refused edit is a lie the user never gets corrected.
+  const handleEditCell = useCallback((plugin: ColumnKey, fieldPath: string, value: unknown) => {
+    // The override carries the compound identity the write path needs; the column key alone is a
+    // rendering key, not something the backend can resolve (ADR-0036).
+    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
+    if (!override) return;
+    editField(formKey, override.plugin, override.origin, fieldPath, value);
+  }, [result, formKey]);
+
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
     try {
@@ -96,6 +129,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       setResult(loaded.result);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
+      // #415: `??`, not a truthiness guard like the two above — those degrade to "unrestricted" on
+      // a failed fetch, which is safe for them; this one has to degrade to "nothing is editable",
+      // so a null must actively clear the set rather than leave a previous record's answer standing.
+      setTrackedSet(loaded.trackedSet ?? new Set());
       // #308: no `?? true` fallback. Against a real client, `conflictsComputed` is required on
       // LoadResult (RecordSessionClient.ts), so a genuine response omitting it fails to compile.
       // That guarantee does *not* reach this webview's own test fixtures — RecordPanel.test.tsx's
@@ -138,6 +175,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         // open must still re-load (the effect never fires, formKey didn't change) — the
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
         void refreshRef.current(msg.formKey);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.RECORD_EDITED) {
+        // #415: the edit landed as a working-tree change. Re-read rather than patch: the write
+        // path re-serialized the record through the codec, and this record's conflict picture
+        // across every other column may have moved with it.
+        if (msg.formKey === prevFormKeyRef.current) void refreshRef.current(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED) {
         // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
         // data, not just clear its own banner over stale content — refresh() re-runs client.load()
@@ -303,6 +345,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         overrideMap={overrideMap}
         fieldMetaMap={fieldMetaMap}
         notInLoadOrderSet={notInLoadOrderSet}
+        editableColumns={editableColumns}
+        onEditCell={handleEditCell}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         context={{ path, overrideMeta: meta, rootField }}
