@@ -1,7 +1,9 @@
+using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Session;
 
 namespace MEditService.Api.Endpoints;
@@ -108,6 +110,54 @@ public static class PluginEndpoints
             .Produces<CompileResult>()
             .ProducesProblem(400)
             .ProducesProblem(500);
+
+        // #417: polled the same way GET /plugins/track/status is — always 200, an empty list when
+        // nothing is pending, no session dependency of its own (the watcher's queue lives on the
+        // singleton ExternalChangeWatcher, same idiom as TrackService.Progress).
+        app.MapGet("/plugins/external-changes/status", ExternalChangeStatus)
+            .WithName("GetExternalChangeStatus")
+            .WithTags(Tag)
+            .Produces<IReadOnlyList<PendingExternalChangeResponse>>();
+
+        // #417: Absorb Upstream Update. 200 either way — a refusal here is the same typed-result
+        // posture Compile already established, not an HTTP error a client has to distinguish from a
+        // transport failure.
+        app.MapPost("/plugins/{plugin}/external-change/absorb", AbsorbExternalChange)
+            .WithName("AbsorbExternalChange")
+            .WithTags(Tag)
+            .Produces<ExternalChangeActionResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
+        // #417: Keep as My Edit. Same-record collision is ExternalChangeActionResponse.Succeeded ==
+        // false with RefusalReason naming the records — never an HTTP error.
+        app.MapPost("/plugins/{plugin}/external-change/keep", KeepExternalChange)
+            .WithName("KeepExternalChange")
+            .WithTags(Tag)
+            .Produces<ExternalChangeActionResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(500)
+            .ProducesProblem(503);
+
+        // #417: the offered rebase, and its re-runnable form (Modbench: Rebase onto Updated
+        // Baseline). Origin-scoped, not plugin-scoped — the repo is the unit of baselines and
+        // rebase, and a mod folder can hold more than one plugin.
+        app.MapPost("/plugins/rebase", Rebase)
+            .WithName("RebaseEditBranch")
+            .WithTags(Tag)
+            .Produces<RebaseResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
+
+        app.MapPost("/plugins/rebase/continue", ContinueRebase)
+            .WithName("ContinueRebaseEditBranch")
+            .WithTags(Tag)
+            .Produces<RebaseResponse>()
+            .ProducesProblem(400)
+            .ProducesProblem(404)
+            .ProducesProblem(503);
 
         return app;
     }
@@ -336,6 +386,151 @@ public static class PluginEndpoints
             return Results.Problem($"Could not compile {decoded}: {ex.Message}", statusCode: 500);
         }
     }
+
+    // #417: the watcher's own queue plus (best-effort) the origin each pending plugin currently
+    // resolves to in the loaded session — a session that has since reloaded away from a plugin still
+    // reports the question with an empty Origin rather than dropping it, since the question itself
+    // is still real and unanswered regardless of what's loaded right now.
+    internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogTrace("Received GetExternalChangeStatus");
+        var session = sessionManager.Session;
+        var responses = watcher.Pending().Select(p =>
+        {
+            var origin = session?.Plugins.FirstOrDefault(pl =>
+                pl.Name.Equals(p.PluginName, StringComparison.OrdinalIgnoreCase)
+                && ModFolders.Of(pl.Origin, pl.Path) == p.ModFolder)?.Origin ?? "";
+            return new PendingExternalChangeResponse(p.PluginName, origin, p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion);
+        }).ToList();
+        return Results.Ok(responses);
+    }
+
+    // #417: Absorb Upstream Update. The plugin name and origin resolve the target the same way
+    // Compile does; GameRelease comes off the loaded session, never guessed.
+    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var decoded = Uri.UnescapeDataString(plugin);
+        logger.LogInformation("Received AbsorbExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+
+        var (modFolder, pluginPath, session) = ResolvePluginPath(sessionManager, decoded, req.Origin, logger);
+        if (modFolder is null)
+            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the loaded session.", statusCode: 503);
+
+        try
+        {
+            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!.GameRelease, reflector);
+            watcher.ClearPending(modFolder, decoded);
+            watcher.Watch(modFolder, decoded, pluginPath!);
+            return Results.Ok(new ExternalChangeActionResponse(true, null));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not absorb upstream update for {Plugin}", decoded);
+            return Results.Problem($"Could not absorb upstream update for {decoded}: {ex.Message}", statusCode: 500);
+        }
+    }
+
+    // #417: Keep as My Edit. A same-record collision is a typed refusal (ExternalChangeLandResult.
+    // Applied == false), not an exception — it travels straight through as a 200, same posture as
+    // Compile's own refusal.
+    internal static IResult KeepExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var decoded = Uri.UnescapeDataString(plugin);
+        logger.LogInformation("Received KeepExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+
+        var (modFolder, pluginPath, session) = ResolvePluginPath(sessionManager, decoded, req.Origin, logger);
+        if (modFolder is null)
+            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the loaded session.", statusCode: 503);
+
+        try
+        {
+            var result = ExternalChangeEditLander.Keep(modFolder, decoded, pluginPath!, session!.GameRelease, reflector);
+            if (result.Applied)
+            {
+                watcher.ClearPending(modFolder, decoded);
+                watcher.Watch(modFolder, decoded, pluginPath!);
+            }
+            return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not keep external change for {Plugin}", decoded);
+            return Results.Problem($"Could not keep external change for {decoded}: {ex.Message}", statusCode: 500);
+        }
+    }
+
+    // #417: the offered rebase, origin-scoped — the repo is the unit of baselines and rebase, not
+    // any one plugin inside it.
+    internal static IResult Rebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        logger.LogInformation("Received RebaseEditBranch for {Origin}", req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+
+        if (ResolveModFolder(sessionManager, req.Origin, logger) is not { } modFolder)
+            return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
+
+        var result = LedgerRepository.RebaseEditBranch(modFolder);
+        return Results.Ok(ToRebaseResponse(result));
+    }
+
+    internal static IResult ContinueRebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        logger.LogInformation("Received ContinueRebaseEditBranch for {Origin}", req.Origin);
+        if (string.IsNullOrWhiteSpace(req.Origin))
+            return Results.Problem("Origin is required.", statusCode: 400);
+
+        if (ResolveModFolder(sessionManager, req.Origin, logger) is not { } modFolder)
+            return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
+
+        var result = LedgerRepository.ContinueRebase(modFolder);
+        return Results.Ok(ToRebaseResponse(result));
+    }
+
+    private static RebaseResponse ToRebaseResponse(RebaseResult result) =>
+        new(result.Outcome.ToString(), result.RefusalReason, result.ConflictedPaths);
+
+    // Deliberately not PluginOriginResolver.Resolve — that resolver filters to load-order members
+    // only (by design, so a bare filename stays a safe write target), but #417's origin-scoped
+    // gestures must still resolve a shadowed copy: a plugin loaded under this origin but shadowed
+    // by a higher-priority mod of the same filename is exactly a mod whose external-change
+    // question, absorb, keep, or rebase still needs answering.
+    private static string? ResolveModFolder(ISessionManager sessionManager, string origin, ILogger logger)
+    {
+        var plugin = sessionManager.Session?.Plugins.FirstOrDefault(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
+        if (plugin == null)
+        {
+            logger.LogWarning("No loaded plugin has origin {Origin}", origin);
+            return null;
+        }
+        return Path.GetDirectoryName(plugin.Path);
+    }
+
+    // Same reason ResolveModFolder above doesn't reuse PluginOriginResolver.Resolve: this must
+    // still find a plugin shadowed out of the load order, since that copy is exactly what
+    // absorb/keep target when it's the one whose origin the pending question named.
+    private static (string? ModFolder, string? PluginPath, IGameSession? Session) ResolvePluginPath(
+        ISessionManager sessionManager, string pluginName, string origin, ILogger logger)
+    {
+        var session = sessionManager.Session;
+        var plugin = session?.Plugins.FirstOrDefault(p =>
+            p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase) && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
+        if (plugin == null)
+        {
+            logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
+            return (null, null, null);
+        }
+        var modFolder = ModFolders.TrackedOf(session, new PluginKey(plugin.Name, plugin.Origin));
+        return (modFolder, plugin.Path, session);
+    }
 }
 
 public record CreatePluginRequest(string Name);
@@ -358,3 +553,22 @@ public record TrackResponse(string Origin);
 // #416: Ref null means CompileSource.WorkingTree (the normal Save & Compile); a name (e.g. "main")
 // means CompileSource.AtRef — no confirmation flag, that UX lives entirely on the extension side.
 public record CompileRequest(string Origin, string? Ref);
+
+// #417: one queued external-change question, as the dialog needs it — MetaChanged/OldVersion/
+// NewVersion are the evidence the pinned UX contract says must be shown, not hidden, and
+// MetaChanged alone (never acted on server-side) is what the extension uses to pick the default
+// button.
+public record PendingExternalChangeResponse(string Plugin, string Origin, bool MetaChanged, string? OldVersion, string? NewVersion);
+
+// #417: Absorb Upstream Update / Keep as My Edit both take just an origin — the plugin name already
+// rides the route, matching CompileRequest's own shape.
+public record ExternalChangeActionRequest(string Origin);
+
+public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason);
+
+// #417: origin-scoped — the repo is the unit of baselines and rebase.
+public record RebaseRequest(string Origin);
+
+// #417: Outcome is RebaseOutcome's wire-safe string form ("Clean"/"Refused"/"Conflicted").
+// ConflictedPaths is the extension's cue to open each path in VS Code's native merge editor.
+public record RebaseResponse(string Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths);

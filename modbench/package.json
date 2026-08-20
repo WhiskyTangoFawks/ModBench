@@ -411,6 +411,11 @@
         "command": "modbench.pluginListTree.compileAtMain",
         "title": "Save & Compile from main…",
         "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.rebase",
+        "title": "Rebase onto Updated Baseline",
+        "category": "Modbench"
       }
     ],
     "menus": {
@@ -509,6 +514,10 @@
         },
         {
           "command": "modbench.pluginListTree.compileAtMain",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.rebase",
           "when": "false"
         }
       ],
@@ -771,6 +780,11 @@
           "command": "modbench.pluginListTree.compileAtMain",
           "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
           "group": "pluginActions@5"
+        },
+        {
+          "command": "modbench.pluginListTree.rebase",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "group": "pluginActions@6"
         }
       ]
     },

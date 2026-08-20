@@ -75,6 +75,8 @@ function makeRepository(overrides: Partial<{
       { totalPlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [] }),
     // #414 review F2.
     getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', recordsDone: 0, recordsTotal: 0 }),
+    // #417.
+    getExternalChangeStatus: vi.fn().mockResolvedValue([]),
     getRecordTypes: vi.fn().mockResolvedValue(overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }]),
     getRecords: vi.fn().mockResolvedValue(overrides.records ?? { items: [makeRecord(0)], total: 1 }),
     searchRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),

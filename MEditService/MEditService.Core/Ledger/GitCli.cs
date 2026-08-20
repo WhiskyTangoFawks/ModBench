@@ -37,7 +37,7 @@ internal static class GitCli
 
     internal static string Run(string gitDir, string workTree, params string[] args)
     {
-        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, args);
+        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, null, args);
         if (exitCode != 0)
             throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({exitCode}): {stderr}");
         return stdout;
@@ -47,12 +47,28 @@ internal static class GitCli
     /// (<c>git cat-file -e</c>) where "not found" is an expected, non-exceptional outcome.</summary>
     internal static bool TryRun(string gitDir, string workTree, out string stdout, params string[] args)
     {
-        var (exitCode, output, _) = Execute(gitDir, workTree, args);
+        var (exitCode, output, _) = Execute(gitDir, workTree, null, args);
         stdout = output;
         return exitCode == 0;
     }
 
-    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string[] args)
+    /// <summary>
+    /// <see cref="Run"/> against a scratch index file instead of the repo's own <c>$GIT_DIR/index</c>
+    /// — #417's <c>LedgerRepository.CommitPristineToMain</c> needs to build a tree object (<c>add</c>,
+    /// <c>write-tree</c>) without disturbing whatever the edit branch's real index currently holds
+    /// (which may itself carry the user's own staged dirt). <paramref name="workTree"/> is a scratch
+    /// directory too in that caller, never the mod folder — plumbing that touches neither the mod
+    /// folder's working tree nor its index is the whole point of "without checking main out".
+    /// </summary>
+    internal static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args)
+    {
+        var (exitCode, stdout, stderr) = Execute(gitDir, workTree, indexFile, args);
+        if (exitCode != 0)
+            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({exitCode}): {stderr}");
+        return stdout;
+    }
+
+    private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string? indexFile, string[] args)
     {
         var psi = new ProcessStartInfo("git")
         {
@@ -63,6 +79,7 @@ internal static class GitCli
         foreach (var arg in args) psi.ArgumentList.Add(arg);
         psi.Environment["GIT_DIR"] = gitDir;
         psi.Environment["GIT_WORK_TREE"] = workTree;
+        if (indexFile != null) psi.Environment["GIT_INDEX_FILE"] = indexFile;
 
         // Read both streams concurrently, not sequentially: reading stdout to completion before
         // touching stderr (or vice versa) is the classic .NET Process deadlock — a child that fills

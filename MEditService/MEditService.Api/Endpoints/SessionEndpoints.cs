@@ -1,3 +1,4 @@
+using MEditService.Bridge;
 using MEditService.Core.Queries;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
@@ -75,7 +76,7 @@ public static class SessionEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    internal static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    internal static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
         logger.LogInformation("Received LoadSession for {DataFolder}", req.DataFolderPath);
@@ -89,6 +90,10 @@ public static class SessionEndpoints
         try
         {
             sessionManager.Load(req.DataFolderPath, req.PluginsTxtPath, gameRelease);
+            // #417 AC4: the load-time hash check, plus (re-)registering the live watch for every
+            // tracked plugin this load now holds — one pass, right after the completion signal this
+            // endpoint has always been (POST /session/load returns only once loading finishes).
+            ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
         }
         catch (OperationCanceledException ex)
@@ -102,7 +107,7 @@ public static class SessionEndpoints
         }
     }
 
-    private static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    private static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
         logger.LogInformation("Received LoadExplicitSession for {GameDirectory}", req.GameDirectory);
@@ -127,6 +132,7 @@ public static class SessionEndpoints
                 .Select(p => new ExplicitPluginInput(p.Name, p.Path, p.Origin, p.Participates!.Value))
                 .ToList();
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
+            ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
         }
         catch (OperationCanceledException ex)

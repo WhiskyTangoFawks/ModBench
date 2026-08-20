@@ -2,6 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
+  PendingExternalChange,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -126,6 +127,9 @@ export interface PluginRepository {
   // #414 review F2: the Track gesture's own progress, polled alongside the in-flight track POST —
   // same idiom as getSessionStatus above.
   getTrackStatus(): Promise<TrackStatus>;
+  // #417: every plugin currently holding an unanswered external-change question — polled the same
+  // way, no session dependency of its own (the queue lives on the backend's singleton watcher).
+  getExternalChangeStatus(): Promise<PendingExternalChange[]>;
   // origin (#34 / ADR-0036): which copy of `plugin` to read, when the session holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
@@ -226,6 +230,20 @@ export class ApiPluginRepository implements PluginRepository {
       recordsDone: data?.recordsDone ?? 0,
       recordsTotal: data?.recordsTotal ?? 0,
     };
+  }
+
+  // #417: same "always 200, never degrade a fault into a fake empty queue" posture as
+  // getSessionStatus/getTrackStatus above.
+  async getExternalChangeStatus(): Promise<PendingExternalChange[]> {
+    const { data, error, response } = await this.client.GET('/plugins/external-changes/status', {});
+    this.ensureOk('GET /plugins/external-changes/status', response, error);
+    return (data ?? []).map((p) => ({
+      plugin: p.plugin ?? '',
+      origin: p.origin ?? '',
+      metaChanged: p.metaChanged ?? false,
+      oldVersion: p.oldVersion ?? null,
+      newVersion: p.newVersion ?? null,
+    }));
   }
 
   async getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]> {

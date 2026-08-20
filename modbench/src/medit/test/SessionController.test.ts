@@ -863,3 +863,145 @@ describe('SessionController.track progress polling', () => {
   });
 });
 
+// #417 ────────────────────────────────────────────────────────────────────────
+
+describe('SessionController.absorbUpstreamUpdate', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the plugin and origin, and refreshes the tree on success', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({ response: { ok: true, status: 200 }, data: { succeeded: true, refusalReason: null } });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.absorbUpstreamUpdate('Fixture.esp', 'ModA');
+
+    expect(result).toEqual({ succeeded: true, refusalReason: null });
+    expect(client.POST).toHaveBeenCalledWith('/plugins/{plugin}/external-change/absorb', {
+      params: { path: { plugin: 'Fixture.esp' } },
+      body: { origin: 'ModA' },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('surfaces a transport failure as null, without refreshing', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue(drainedError(500, 'git unavailable'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.absorbUpstreamUpdate('Fixture.esp', 'ModA');
+
+    expect(result).toBeNull();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('git unavailable'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+});
+
+describe('SessionController.keepAsMyEdit', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('surfaces a typed collision refusal as a real result, not a thrown error', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({
+      response: { ok: true, status: 200 },
+      data: { succeeded: false, refusalReason: 'Fixture.esp has uncommitted changes on 000800:Fixture.esp.' },
+    });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.keepAsMyEdit('Fixture.esp', 'ModA');
+
+    expect(result).toEqual({ succeeded: false, refusalReason: 'Fixture.esp has uncommitted changes on 000800:Fixture.esp.' });
+    // A refused Keep changed nothing — no reason to refresh.
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('refreshes the tree once a Keep actually lands', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({ response: { ok: true, status: 200 }, data: { succeeded: true, refusalReason: null } });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    await controller.keepAsMyEdit('Fixture.esp', 'ModA');
+
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+});
+
+describe('SessionController.rebaseOntoMain / continueRebase', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('rebaseOntoMain POSTs the origin to /plugins/rebase and reports a clean outcome', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({
+      response: { ok: true, status: 200 },
+      data: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
+    });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.rebaseOntoMain('ModA');
+
+    expect(result).toEqual({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
+    expect(client.POST).toHaveBeenCalledWith('/plugins/rebase', { body: { origin: 'ModA' } });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('rebaseOntoMain reports a refused outcome (uncommitted dirt), still typed, not thrown', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({
+      response: { ok: true, status: 200 },
+      data: { outcome: 'Refused', refusalReason: 'Cannot rebase: uncommitted changes in X.', conflictedPaths: [] },
+    });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.rebaseOntoMain('ModA');
+
+    expect(result?.outcome).toBe('Refused');
+    expect(result?.refusalReason).toContain('uncommitted changes');
+  });
+
+  it('rebaseOntoMain reports a conflicted outcome naming the paths', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({
+      response: { ok: true, status: 200 },
+      data: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['Fixture.esp.ledger/npc_/Fixture.esp/000800.json'] },
+    });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.rebaseOntoMain('ModA');
+
+    expect(result?.outcome).toBe('Conflicted');
+    expect(result?.conflictedPaths).toEqual(['Fixture.esp.ledger/npc_/Fixture.esp/000800.json']);
+  });
+
+  it('continueRebase POSTs to /plugins/rebase/continue', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue({
+      response: { ok: true, status: 200 },
+      data: { outcome: 'Clean', refusalReason: null, conflictedPaths: [] },
+    });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    await controller.continueRebase('ModA');
+
+    expect(client.POST).toHaveBeenCalledWith('/plugins/rebase/continue', { body: { origin: 'ModA' } });
+  });
+
+  it('surfaces a transport failure as null', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue(drainedError(404, "No loaded plugin has origin 'ModA'."));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const result = await controller.rebaseOntoMain('ModA');
+
+    expect(result).toBeNull();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining("No loaded plugin has origin 'ModA'"));
+  });
+});
+

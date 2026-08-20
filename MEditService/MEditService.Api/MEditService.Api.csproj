@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MEditService.Core\MEditService.Core.csproj" />
+    <ProjectReference Include="..\MEditService.Bridge\MEditService.Bridge.csproj" />
   </ItemGroup>
 
 </Project>

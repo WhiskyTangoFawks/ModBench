@@ -1,4 +1,5 @@
 using MEditService.Api.Endpoints;
+using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -46,7 +47,7 @@ public sealed class EndpointReceptionLoggingTests
             File.WriteAllText(pluginsTxt, "");
             var req = new SessionLoadRequest(tempDir, pluginsTxt, "Fallout4");
 
-            SessionEndpoints.LoadSession(req, new StubSessionManager(), loggerFactory);
+            SessionEndpoints.LoadSession(req, new StubSessionManager(), new ExternalChangeWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
         }
@@ -66,7 +67,7 @@ public sealed class EndpointReceptionLoggingTests
         var sessionManager = new StubSessionManager();
         var req = new SessionLoadRequest("Z:\\does-not-exist", "Z:\\does-not-exist\\Plugins.txt", "Fallout4");
 
-        var result = SessionEndpoints.LoadSession(req, sessionManager, loggerFactory);
+        var result = SessionEndpoints.LoadSession(req, sessionManager, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);

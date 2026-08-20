@@ -377,6 +377,31 @@ describe('ApiPluginRepository.getSessionStatus', () => {
   });
 });
 
+// #417: polled the same way getTrackStatus/getSessionStatus are.
+describe('ApiPluginRepository.getExternalChangeStatus', () => {
+  it('calls GET /plugins/external-changes/status and maps every queued question', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: [
+          { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' },
+        ],
+        response: { ok: true },
+      }),
+    } as any;
+
+    const pending = await new ApiPluginRepository(client).getExternalChangeStatus();
+
+    expect(pending).toEqual([
+      { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' },
+    ]);
+    expect(client.GET).toHaveBeenCalledWith('/plugins/external-changes/status', expect.anything());
+  });
+
+  it('throws on a non-OK response rather than degrading to an empty queue', async () => {
+    await expect(new ApiPluginRepository(nonOkClient()).getExternalChangeStatus()).rejects.toThrow(/500/);
+  });
+});
+
 // Issue #211: the condition-function catalogue backing the extension-host QuickPick. Unlike most
 // PluginRepository reads (ensureOk-then-throw), this mirrors the deleted webview-side
 // RecordSessionClient.conditionFunctions()'s degrade-to-[] convention (closer precedent:

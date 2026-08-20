@@ -17,6 +17,7 @@ import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
+import { startExternalChangePolling, runRebase, type OpenMergeEditor } from './medit/externalChangeCoordinator';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
@@ -362,12 +363,10 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
-
   // #416: Save & Compile's diagnostics — one collection for every tracked mod's ledger files, kept
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
-
   backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
   const client = createApiClient(port);
@@ -410,6 +409,9 @@ export function activate(context: vscode.ExtensionContext) {
     registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
     registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
+    registerRebaseCommand(controller, repository, outputChannel),
+    // #417: started once at activation, not per session — see the function's own doc comment.
+    { dispose: startExternalChangeDialogPolling(repository, controller, outputChannel, log) },
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
@@ -1023,6 +1025,77 @@ function registerTrackCommand(
       await onTracked();
     });
   });
+}
+
+/** #417: polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and
+ *  its load-time hash check) and runs the one dialog, sequentially, for whatever it finds — pulled
+ *  out of `activate()` purely for that function's own line budget. Returns the stop function. */
+function startExternalChangeDialogPolling(
+  repository: PluginRepository, controller: SessionController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+): () => void {
+  return startExternalChangePolling({
+    repository,
+    controller,
+    showDialog: (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
+    showRebaseOffer: (message, ...buttons) => Promise.resolve(vscode.window.showInformationMessage(message, ...buttons)),
+    openMergeEditor: makeMergeEditorOpener(repository, outputChannel),
+    log,
+  });
+}
+
+/** #417: `Modbench: Rebase onto Updated Baseline` — origin-scoped (the repo, not any one plugin,
+ *  is the unit of baselines and rebase), resolved from a tracked plugin row the same way Track
+ *  resolves origin. Also the *re-runnable* form: {@link LedgerRepository.RebaseEditBranch}'s own
+ *  resumption-aware design means this same command both starts a rebase and resumes one left
+ *  conflicted after the user resolves it in the native merge editor. */
+function registerRebaseCommand(
+  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.rebase', async (node?: PluginListNode) => {
+    if (node?.kind !== 'plugin') return;
+    const name = node.plugin.name;
+    const origin = await controller.resolveOrigin(name);
+    if (!origin) {
+      outputChannel.error(`[extension] rebase could not resolve an origin for "${name}"`);
+      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${name}" belongs to.`);
+      return;
+    }
+
+    const result = await runRebase({ controller, openMergeEditor: makeMergeEditorOpener(repository, outputChannel) }, origin);
+    if (!result) return; // transport failure already surfaced by SessionController
+
+    if (result.outcome === 'Refused') {
+      void vscode.window.showWarningMessage(`Modbench: ${result.refusalReason ?? 'Rebase refused.'}`);
+    } else if (result.outcome === 'Clean') {
+      void vscode.window.showInformationMessage(`Modbench: Rebased "${origin}" onto the updated baseline.`);
+    } else {
+      void vscode.window.showWarningMessage(
+        `Modbench: Rebasing "${origin}" hit conflicts — resolve them in the opened merge editor(s), ` +
+          'then run "Modbench: Rebase onto Updated Baseline" again to continue.',
+      );
+    }
+  });
+}
+
+/** The {@link OpenMergeEditor} every rebase caller shares — resolves `origin`'s mod folder from any
+ *  plugin already known to share it, then opens the conflicted path inside it. VS Code's built-in
+ *  git extension shows its own 3-way merge editor for a file it recognizes as conflicted in a
+ *  tracked repo (confirmed against the local vscode-docs clone's 1.70 release notes: "The merge
+ *  editor can be opened by clicking on a conflicting file in the Source Control view" — `vscode.
+ *  open` is that same gesture, scripted). Resolved fresh per call rather than pre-bound to one
+ *  origin: the dialog-driven path (unlike the standalone command) has no single already-resolved
+ *  origin in scope, since more than one repo can be mid-answer at once. */
+function makeMergeEditorOpener(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): OpenMergeEditor {
+  return async (origin, relativePath) => {
+    const plugins = await repository.getPlugins();
+    const anyPluginPath = plugins.find((p) => p.origin === origin)?.path;
+    const modFolder = anyPluginPath ? path.dirname(anyPluginPath) : undefined;
+    if (!modFolder) {
+      outputChannel.error(`[extension] openMergeEditor: could not resolve "${origin}"'s mod folder`);
+      return;
+    }
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(path.join(modFolder, relativePath)));
+  };
 }
 
 /** #416: Save & Compile — reachable from a tracked plugin row's context menu (`node` given), the

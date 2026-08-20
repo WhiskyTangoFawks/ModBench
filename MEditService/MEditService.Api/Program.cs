@@ -4,6 +4,7 @@ using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using MEditService.Api;
 using MEditService.Api.Endpoints;
+using MEditService.Bridge;
 using MEditService.Core.Edits;
 using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
@@ -75,6 +76,9 @@ try
     builder.Services.AddSingleton<RecordEditService>();
     // #416: the write path's other half — ledger text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
+    // #417: the bridge's own live-watch lifecycle and pending-question queue — one instance for the
+    // whole process, so the load-time check (session-load handlers) and the live watcher share it.
+    builder.Services.AddSingleton<ExternalChangeWatcher>();
 
     var app = builder.Build();
 

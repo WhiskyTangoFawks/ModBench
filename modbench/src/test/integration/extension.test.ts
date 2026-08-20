@@ -362,6 +362,9 @@ describe('modbench command registration', () => {
     // the palette, same posture as Track — naming a ref to compile at with no plugin in hand isn't
     // a gesture the palette can support.
     'modbench.pluginListTree.compileAtMain',
+    // #417: Modbench: Rebase onto Updated Baseline — the offered rebase's re-runnable form. Gated
+    // to the clicked row and hidden from the palette, same posture as Track/compileAtMain.
+    'modbench.pluginListTree.rebase',
     // #368: the aggregate SCM provider's resource-click command — opens the record's
     // committed-vs-dirty raw text diff. Reached from a SourceControlResourceState's own
     // `command`, not a menu contribution, but still registered (and palette-visible) like every

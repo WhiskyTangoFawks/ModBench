@@ -90,7 +90,7 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
                     cancel.ThrowIfCancellationRequested();
                     ContainerStripFields.StripInPlace(record);
 
-                    var recordType = ResolveRecordType(record, schemas);
+                    var recordType = LedgerRecordType.Resolve(record, schemas);
                     var relativePath = LedgerRecordPath.For(plugin.Name, recordType, record.FormKey.ToString());
                     pristineFiles.Add(await SerializeToPristineFileAsync(codec, record, relativePath, session.GameRelease, cancel));
                     recordsDone++;
@@ -101,7 +101,7 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
             }
 
             SetProgress(origin, TrackPhase.Committing, recordsTotal, recordsTotal);
-            var trailers = new TrackProvenance(ReadMetaIniVersion(modFolder), ComputeMetaIniSha256(modFolder), binaryHashesByPlugin);
+            var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binaryHashesByPlugin);
 
             logger.LogInformation("Tracking {Origin}: {RecordCount} records across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
             LedgerRepository.Track(modFolder, preset, pristineFiles, trailers);
@@ -140,47 +140,6 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
 
     private static readonly ILogger<RecordTextCodec> NoOpLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance;
 
-    // Same resolution DuckDbRecordIndex.ResolveRecordType uses (schema table name by type
-    // match, else the CLR type name lowercased) — duplicated rather than shared, deliberately: it's
-    // ten lines with no other caller today, and promoting it costs touching an established indexing
-    // path for one new consumer (Minimal-by-Default, root CLAUDE.md).
-    private static string ResolveRecordType(IMajorRecordGetter record, IReadOnlyDictionary<string, RecordTableSchema> schemas)
-    {
-        foreach (var (tableName, schema) in schemas)
-        {
-            if (schema.RecordType.IsInstanceOfType(record)) return tableName;
-        }
-
-        return record.GetType().Name.ToLowerInvariant();
-    }
-
     private static string ComputeSha256(string filePath) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));
-
-    // meta.ini is a source, never tracked content (ADR-0041 amendment) — read here as opaque bytes,
-    // the one field this ticket's trailer set needs (Upstream-Version); absent entirely for
-    // authored/manually-installed mods, which is fine, everything on TrackProvenance is optional.
-    private static string? ReadMetaIniVersion(string modFolder)
-    {
-        var metaPath = Path.Combine(modFolder, "meta.ini");
-        if (!File.Exists(metaPath)) return null;
-
-        foreach (var line in File.ReadAllLines(metaPath))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.StartsWith("version=", StringComparison.OrdinalIgnoreCase))
-                return trimmed["version=".Length..];
-        }
-
-        return null;
-    }
-
-    // The Meta-SHA256 half of the same trailer set (ADR-0041 amendment) — opaque bytes, same as
-    // the version read above; absent (not fabricated) when meta.ini itself is absent, since every
-    // TrackProvenance field is optional and authored/manually-installed mods routinely have none.
-    private static string? ComputeMetaIniSha256(string modFolder)
-    {
-        var metaPath = Path.Combine(modFolder, "meta.ini");
-        return File.Exists(metaPath) ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(metaPath))) : null;
-    }
 }

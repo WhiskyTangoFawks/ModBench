@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- #417/ADR-0041: "a standalone assembly hosted in the existing backend process — watch /
+         deserialize / compile, knowing nothing of sessions or the DB." This project is the literal
+         reading of that sentence: it exists so the property is a compile-time fact (MEditService.
+         Tests/Bridge/BridgeKnowsNothingOfSessionsTests.cs greps its own sources for the forbidden
+         namespaces), not a discipline someone has to remember. It stays thin by design — the watch
+         lifecycle and an in-memory pending-question queue are all that live here. Every git/codec
+         mechanic it calls (classification, plumbing commit, rebase, the deferral marker) lives in
+         MEditService.Core/Ledger instead, next to LedgerRepository/CompileJournal/LedgerFreshness,
+         which are already session/DB-free by the same construction — that's what lets the load-time
+         hash check (fired from the session-load path in MEditService.Api, which cannot depend on
+         this project without a circular reference back through Core) call the identical
+         classification logic this project's watcher calls, with no code shared between them twice. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>MEditService.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MEditService.Core\MEditService.Core.csproj" />
+  </ItemGroup>
+
+</Project>
