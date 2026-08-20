@@ -5,7 +5,8 @@ import * as fs from 'fs';
 import * as cp from 'child_process';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type ApiClient, type MasterIssue, type CompileResult } from './medit/ApiClient';
+import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer } from './medit/ApiClient';
+import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { detectGamePaths } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
@@ -407,7 +408,8 @@ export function activate(context: vscode.ExtensionContext) {
     },
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository) });
+  const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
+  const { modListProvider, downloadsProvider, pluginListProvider } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
 
   context.subscriptions.push(
     referencedByTreeView,
@@ -1300,6 +1302,21 @@ function startExternalChangeDialogPolling(
   });
 }
 
+/** #381: composes the loud crash-repair offer sequence over Save & Compile's existing tail
+ *  (`compileAndReport`) — pulled out of `activate()` purely for that function's own line budget,
+ *  same reason `startExternalChangeDialogPolling` above was. Run once per completed session load
+ *  (`makeEnterEditing`'s own call site), never a poller: see `crashRepairOffer.ts`'s own doc
+ *  comment for why a session load is the only moment either offer reason can newly arise. */
+function makeCrashRepairOffersPresenter(
+  controller: SessionController, diagnostics: vscode.DiagnosticCollection,
+): (offers: CrashRepairOffer[]) => Promise<void> {
+  return (offers) => presentCrashRepairOffers(
+    offers,
+    (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
+    (offer, atRef) => compileAndReport(controller, diagnostics, { name: offer.plugin, origin: offer.origin }, atRef),
+  );
+}
+
 /** #417: `Modbench: Rebase onto Updated Baseline` — origin-scoped (the repo, not any one plugin,
  *  is the unit of baselines and rebase), resolved from a tracked plugin row the same way Track
  *  resolves origin. Also the *re-runnable* form: {@link LedgerRepository.RebaseEditBranch}'s own
@@ -1767,13 +1784,17 @@ interface LoadoutViewDeps {
   /** #270: the plugin files the running session holds, for deciding which rows can expand.
    *  Injected as a getter so the composite's own wiring stays at the composition root. */
   sessionPluginFiles: () => Promise<SessionPluginFiles>;
+  /** #381: run the loud crash-repair offer sequence for whatever a completed session load found.
+   *  Composed once at the composition root (activate()), where the diagnostics collection and
+   *  compileAndReport's own compile door already live. */
+  showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
 }
 /** Register the Loadout (Mod List) view and its commands. Returns the live
  *  ModListProvider and DownloadsProvider (exposed via activate() for integration
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
-  const { context, log, outputChannel, revealLog, controller, recordBrowser, sessionPluginFiles } = deps;
+  const { context, log, outputChannel, revealLog, controller, recordBrowser, sessionPluginFiles, showCrashRepairOffers } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -1813,7 +1834,9 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       createModListView(modListProvider, modlistSource, outputChannel);
 
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing({ instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles });
+    const enterEditing = makeEnterEditing({
+      instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers,
+    });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.
     enterEditingFn = enterEditing;
@@ -2082,6 +2105,8 @@ interface EnterEditingDeps {
   sessionPluginFiles: () => Promise<SessionPluginFiles>;
   /** Surface the Modbench output channel so the user can watch the launch steps. */
   revealLog: () => void;
+  /** #381: run once a load completes, for whatever crash-repair offers it reported. */
+  showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
 }
 /** Build the enter-editing action: spawn/attach the backend and load the active
  *  modlist as a load-explicit session, then reveal the editing view. Also the
@@ -2093,7 +2118,7 @@ interface EnterEditingDeps {
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
     instanceRoot, modlistSource, controller,
-    outputChannel, revealLog, sessionPluginFiles,
+    outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers,
   } = deps;
   const enter = async (): Promise<void> => {
       const { signal, abandoned } = armLoadAbort(outputChannel);
@@ -2154,6 +2179,14 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       }
       await controller.syncFilterState();
       await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
+      // #381: the loud detect-and-offer, run once per load — after the tree has already settled,
+      // awaited and sequential (one native modal at a time; see crashRepairOffer.ts's own doc
+      // comment). Declining leaves the marker/missing binary exactly as it is; nothing here clears
+      // it, so the offer re-appears at the next session load by construction.
+      if (result.crashRepairOffers.length > 0) {
+        outputChannel.info(`[extension] ${result.crashRepairOffers.length} crash-repair offer(s) to present`);
+        await showCrashRepairOffers(result.crashRepairOffers);
+      }
       outputChannel.info('[extension] editing session ready');
   };
   return () => withPluginsViewProgress(enter);

@@ -90,11 +90,13 @@ public static class SessionEndpoints
         try
         {
             sessionManager.Load(req.DataFolderPath, req.PluginsTxtPath, gameRelease);
-            // #417 AC4: the load-time hash check, plus (re-)registering the live watch for every
-            // tracked plugin this load now holds — one pass, right after the completion signal this
-            // endpoint has always been (POST /session/load returns only once loading finishes).
-            ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
-            return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
+            // #417 AC4 / #381: the load-time hash check, plus (re-)registering the live watch for
+            // every tracked plugin this load now holds — one pass, right after the completion
+            // signal this endpoint has always been (POST /session/load returns only once loading
+            // finishes). Its return is #381's crash-repair offers, riding the response the same way
+            // LoadFailures already does.
+            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
+            return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? [], crashRepairOffers));
         }
         catch (OperationCanceledException ex)
         {
@@ -107,7 +109,10 @@ public static class SessionEndpoints
         }
     }
 
-    private static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
+    // internal (not private), matching LoadSession/Compile/ExternalChangeStatus's own visibility in
+    // this codebase: the door SessionEndpointsTests exercises directly, real fixture and all — same
+    // "thin, mapping-only" precedent ExternalChangeEndpointsTests already established.
+    internal static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
         logger.LogInformation("Received LoadExplicitSession for {GameDirectory}", req.GameDirectory);
@@ -132,8 +137,8 @@ public static class SessionEndpoints
                 .Select(p => new ExplicitPluginInput(p.Name, p.Path, p.Origin, p.Participates!.Value))
                 .ToList();
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
-            ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
-            return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? []));
+            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
+            return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? [], crashRepairOffers));
         }
         catch (OperationCanceledException ex)
         {

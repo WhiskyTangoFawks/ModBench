@@ -1,5 +1,6 @@
 import type {
   ApiClient, CompileResult, SessionStatus, TrackStatus, ExternalChangeActionResult, RebaseResult,
+  CrashRepairOffer, CrashRepairReason,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
@@ -48,7 +49,10 @@ export type SessionLoadProgress = SessionStatus;
 /** #307: how a load ended. Three outcomes, because there are three, and a caller must respond to
  *  each differently:
  *
- *  - `loaded` — the session is up; `failures` are the plugins it skipped (#277 / ADR-0037 AC7).
+ *  - `loaded` — the session is up; `failures` are the plugins it skipped (#277 / ADR-0037 AC7);
+ *    `crashRepairOffers` are #381's own loud detect-and-offer targets — a plugin this same load
+ *    found with an interrupted compile or an unreadable binary, riding the response the same way
+ *    `failures` already does.
  *  - `failed` — the load itself failed, already surfaced (ADR-0026 "explicit action failed").
  *    The backend disposes the previous session before attempting a new one, so this means *no*
  *    session, not a stale one — the caller must tear the view down (#295 AC4).
@@ -60,9 +64,29 @@ export type SessionLoadProgress = SessionStatus;
  *  A tagged union rather than a third sentinel value: `undefined` already had to be documented
  *  everywhere it was read (#295), and a second one would be a rule every call site must remember. */
 export type SessionLoadOutcome =
-  | { outcome: 'loaded'; failures: { name?: string | null; reason?: string | null }[] }
+  | { outcome: 'loaded'; failures: { name?: string | null; reason?: string | null }[]; crashRepairOffers: CrashRepairOffer[] }
   | { outcome: 'failed' }
   | { outcome: 'abandoned' };
+
+// #381: the generated CrashRepairReason is numeric (0|1) for the same Swashbuckle/
+// JsonStringEnumConverter mismatch PluginRepository's toWorkingTreeState/toTrackPhase already
+// document — Program.cs registers that converter globally, so the real wire value is the string.
+// Trust the string.
+function toCrashRepairReason(reason: unknown): CrashRepairReason {
+  return typeof reason === 'string' ? (reason as CrashRepairReason) : 'InterruptedCompile';
+}
+
+function toCrashRepairOffer(o: { plugin?: string | null; origin?: string | null; reason?: unknown }): CrashRepairOffer {
+  return { plugin: o.plugin ?? '', origin: o.origin ?? '', reason: toCrashRepairReason(o.reason) };
+}
+
+// Pulled out of loadExplicitSession purely for that method's own complexity budget (eslint
+// `complexity`) — the optional-chaining/map here belongs to this function's count, not that one's.
+function crashRepairOffersFrom(
+  data: { crashRepairOffers?: { plugin?: string | null; origin?: string | null; reason?: unknown }[] | null } | undefined,
+): CrashRepairOffer[] {
+  return (data?.crashRepairOffers ?? []).map(toCrashRepairOffer);
+}
 
 /** #307: what a caller may pass to observe (and abandon) a load in progress. Deliberately plain
  *  stdlib — `AbortSignal`, not a bespoke token — so this interface still carries no VS Code types
@@ -149,7 +173,7 @@ export class SessionController {
       // down, which is what makes this distinct from `loaded` with an empty failure list.
       return { outcome: 'failed' };
     }
-    return this.reportLoadedSession(plugins, data?.failures ?? []);
+    return this.reportLoadedSession(plugins, data?.failures ?? [], crashRepairOffersFrom(data));
   }
 
   /** #307 AC7: whether a rejected load POST was the user closing the session rather than a
@@ -168,6 +192,7 @@ export class SessionController {
   private reportLoadedSession(
     plugins: { participates: boolean }[],
     failures: { name?: string | null; reason?: string | null }[],
+    crashRepairOffers: CrashRepairOffer[],
   ): SessionLoadOutcome {
     reportSkippedPlugins(failures, {
       log: (m) => this.log(`[SessionController] ${m}`),
@@ -198,7 +223,7 @@ export class SessionController {
     // Whoever wires live mutation owes the record panel the same notification on the way *out* of
     // settled, or this banner will silently stop working the moment #97 ships.
     this.deps.notifyConflictsComputed();
-    return { outcome: 'loaded', failures };
+    return { outcome: 'loaded', failures, crashRepairOffers };
   }
 
   /** #307: poll `GET /session/status` until the caller stops us, reporting each answer. Returns

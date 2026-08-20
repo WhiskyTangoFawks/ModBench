@@ -2,8 +2,8 @@
 
 **Status: Implemented.** Track (#414), the text-first edit path (#415), Save & Compile
 (#416), external-change handling (#417), the editor gesture inventory (#426), the
-lifecycle gestures (#427), record-row Modified/Added badges (#428), and the closeout
-truing (#418) have all shipped.
+lifecycle gestures (#427), record-row Modified/Added badges (#428), the closeout
+truing (#418), and crash repair (#381) have all shipped.
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -268,10 +268,33 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
 
 ### Crash repair (#381)
 
-A journal marker present at load means the mismatch is Modbench's own interrupted
-compile: that routes to a loud detect-and-offer (rebuild the binary from the working tree,
-or from `main`, user's choice) — never to the external-change dialog. The two prompts
-never both fire for one event.
+Live: the load-time hash check (`ExternalChangeSessionHook`, shared with #417) covers two
+states on every tracked plugin, both detected only at session load — the only moment either
+can newly arise, since one is this same process's own interrupted compile and the other is a
+read failure a running session would already have hit once. A pending `CompileJournal` marker
+(a crash, or a kill, between the binary write landing and the marker clearing) classifies as
+`CrashRecovery` and routes here, never to #417's dialog — the two prompts never both fire for
+one event, checked at the classifier itself before any hash compare. A tracked plugin's binary
+that cannot be read at all (deleted, moved, or torn, while the mod folder and its repo
+survive — distinct from the repo itself being destroyed, which reads as untracked per
+ADR-0041 and is a different path entirely) is caught directly, with nothing to classify
+against. Both surface identically to the extension as `CrashRepairOffer`s riding
+`POST /session/load[-explicit]`'s own response (`SessionLoadResponse.CrashRepairOffers`,
+the same structured-failures posture `Failures` already has, ADR-0026) — no second endpoint,
+no poller: a session load already observes both triggers.
+
+One native modal per offer, sequential, run once right after a completed load settles the
+tree: **Compile from Working Tree** (default/first — an interrupted compile means the user
+was compiling their own working tree, and there is no meta-style tell here to justify a
+cleverer default) or **Compile at main**, composing Save & Compile's existing tail
+(`compileAndReport`) rather than a second compile path — accepting either button is the same
+call `saveAndCompile`/`compileAtMain` already make. The detail text names exactly what was
+detected (interrupted compile vs missing/unreadable binary), the evidence shown, not hidden,
+same posture as #417's own dialog. Esc/dismiss is a true decline: nothing is written, the
+marker or missing binary stays exactly as it is, editing stays live throughout (text at `main`
+is authoritative for tracked records regardless of binary staleness — nothing gates edits on
+this state), and the offer re-appears at the next session load by construction. Untracked
+plugins are never probed at all.
 
 ## Implementation Decisions
 

@@ -674,6 +674,16 @@ export interface components {
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
+        CrashRepairOffer: {
+            plugin?: string | null;
+            origin?: string | null;
+            reason?: components["schemas"]["CrashRepairReason"];
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        CrashRepairReason: 0 | 1;
         CreatePluginRequest: {
             name?: string | null;
         };
@@ -926,6 +936,7 @@ export interface components {
         SessionLoadResponse: {
             status?: string | null;
             failures?: components["schemas"]["PluginLoadFailure"][] | null;
+            crashRepairOffers?: components["schemas"]["CrashRepairOffer"][] | null;
         };
         /**
          * Format: int32

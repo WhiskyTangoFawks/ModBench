@@ -98,6 +98,22 @@ export interface PendingExternalChange {
   newVersion: string | null;
 }
 
+/** #381: the two ways a tracked plugin's binary can turn up stale relative to what Modbench itself
+ *  last knows — an interrupted compile (a pending journal marker) or a binary that could not be
+ *  read at all. Mirrors the backend's CrashRepairReason enum name exactly (no re-wording on the
+ *  wire boundary, same posture WorkingTreeState above already established). */
+export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
+
+/** #381: one plugin's crash-repair offer, riding `POST /session/load[-explicit]`'s own response
+ *  the same way `failures` already does (ADR-0026) — there is no separate poller or endpoint for
+ *  this: the only way either reason can newly arise is a compile this same process drives, or a
+ *  process restart, and a session load already observes both. */
+export interface CrashRepairOffer {
+  plugin: string;
+  origin: string;
+  reason: CrashRepairReason;
+}
+
 /** #417: Absorb Upstream Update / Keep as My Edit's shared result shape — a refusal (e.g. Keep's
  *  same-record collision) is a typed, successful (HTTP 200) answer, the same posture
  *  {@link CompileResult} already established. */
