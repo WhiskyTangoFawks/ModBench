@@ -1220,7 +1220,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = """
             SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             FROM cell_location cl
-            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+            LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
             ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
             """;
@@ -1256,7 +1256,7 @@ public sealed class DuckDbRecordRepository : IRecordRepository
         cmd.CommandText = $"""
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
-            LEFT JOIN cell c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+            LEFT JOIN records c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
             ORDER BY c.editor_id
             LIMIT {limit} OFFSET {offset}
@@ -1281,19 +1281,25 @@ public sealed class DuckDbRecordRepository : IRecordRepository
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string origin)
     {
         var schemas = RequireSchemas();
-        var placedTables = PlacedTableNames.Where(schemas.ContainsKey).ToList();
-        if (placedTables.Count == 0)
+        var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
+        if (placedTypes.Count == 0)
             return new CellReferences([], []);
 
-        var union = string.Join("\nUNION ALL\n",
-            placedTables.Select(t => $"SELECT '{t}' AS rt, form_key, plugin, origin, editor_id, \"base\" FROM \"{t}\""));
+        // ADR-0041 / #413: one single-table query where this used to UNION a wide table per placed
+        // type — the record_type column is what the union was standing in for. The placed ref's base
+        // form comes out of the document rather than a `base` column; json_extract_string unquotes
+        // the stored FormLink text, and a placed ref with no base at all reads NULL exactly as the
+        // wide column did (RealDataReadGoldenTests.SpatialReads_MatchGolden pins both shapes).
+        var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            SELECT p.placement_group, r.rt, p.form_key, r.editor_id, r.base
+            SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
+                   json_extract_string(r.body, '$.Base')
             FROM placement p
-            JOIN ({union}) r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
+            JOIN records r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
             WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
+              AND r.record_type IN ({typeList})
             ORDER BY r.editor_id
             """;
         AddParams(cmd, [cellFormKey, plugin, origin]);
