@@ -126,9 +126,13 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
-| `Edits/` | The single write path: one field edit becomes a working-tree change | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter` |
+| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns ledger text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `ContainerAssembler` |
 | `Serialization/` | Per-record text ledger codec (ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
-| `Ledger/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, and read-time freshness over its text (ADR-0041, #414, #415) | `LedgerRepository`, `TrackService`, `LedgerFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerStripFields` |
+| `Ledger/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `LedgerRepository`, `TrackService`, `LedgerFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerStripFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
+
+`MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
+lifecycle plus the pending-external-change queue, nothing else — it references only
+session/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfSessionsTests`.
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
 

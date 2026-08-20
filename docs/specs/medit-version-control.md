@@ -1,7 +1,8 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: partially implemented — Track (#414), the text-first edit path (#415), and
-Save & Compile (#416) shipped; external-change handling (#417) designed, not yet implemented.**
+**Status: implemented — Track (#414), the text-first edit path (#415), Save & Compile
+(#416), and external-change handling (#417) shipped; the split-out gesture inventory,
+lifecycle gestures, and dirty badges (#426/#427/#428) and closeout truing (#418) remain.**
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -19,7 +20,14 @@ in load order, container structure assembled from the index (`container_child` +
 placement), typed refusals for unemittable states, diagnostics to the Problems panel on
 success, per-repo `.git` journal markers (batch of one, `PendingRecovery` readable), and a
 parked `refs/medit/last-compile/<plugin>` advance after every landed write, `AtRef`
-included. The remaining editor gestures, lifecycle gestures, and dirty-badge decorations are
+included. External-change handling is live: the Bridge watcher and the load-time hash
+check classify against the parked ref (self-echo suppressed, crash markers routed away
+from this dialog), one modal per affected repo offers Absorb Upstream Update / Keep as My
+Edit / defer-read-only (deferral refuses edits per-plugin until answered), Absorb commits
+new baselines to `main` by plumbing and offers the rebase
+(`modbench.pluginListTree.rebase` re-runs it; conflicts resolve in the merge editor and
+the result compiles), and collisions with uncommitted dirt refuse naming the records.
+The remaining editor gestures, lifecycle gestures, and dirty-badge decorations are
 split-out follow-ups. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
