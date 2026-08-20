@@ -84,6 +84,7 @@ class FakeSource implements IModlistSource {
     this.reorderPluginsCalls.push({ names, toIndex });
     return Promise.resolve();
   }
+  appendPlugin(): Promise<void> { throw new Error('unused'); }
 }
 
 // #276: the leading slot answers exactly one question — "can you change whether this loads?"

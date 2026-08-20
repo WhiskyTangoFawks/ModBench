@@ -107,15 +107,24 @@ export class SessionController {
     this.log = deps.log ?? (() => {});
   }
 
-  async createPlugin(name: string): Promise<void> {
-    const { error, response } = await this.deps.client.POST('/plugins/create', { body: { name } });
+  /**
+   * #288 / ADR-0041: creates a plugin at a caller-resolved destination (path/origin — Mod
+   * Management's destination QuickPick: overwrite/, an existing mod, or a freshly installed mod
+   * folder) and Tracks it if untracked, the same division of labour `track`/`loadUnlistedPlugin`
+   * already follow. Returns the created plugin's own name (never assumed to equal the requested
+   * one) on success, undefined on failure. Deliberately does not refresh the tree — that only
+   * makes sense once the caller's own `plugins.txt` append has also landed (the extension's
+   * composition root), so a partially-done create is never shown as done.
+   */
+  async createPlugin(name: string, path: string, origin: string): Promise<{ name: string } | undefined> {
+    const { error, response, data } = await this.deps.client.POST('/plugins/create', { body: { name, path, origin } });
     if (!response.ok) {
       const text = errorText(error);
       this.log(`[SessionController] createPlugin failed (${response.status}): ${text}`);
       this.deps.showError(`mEdit: Failed to create plugin — ${text}`);
-      return;
+      return undefined;
     }
-    this.deps.refreshTree();
+    return { name: data?.name ?? name };
   }
 
   /** Load the editing session from an ordered { name, path, origin, participates } list built

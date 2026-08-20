@@ -81,6 +81,7 @@ class FakeSource implements IModlistSource {
   readEnabledPlugins(): Promise<string[]> { return Promise.resolve([]); }
   setPluginEnabled(): Promise<void> { return Promise.resolve(); }
   reorderPlugins(): Promise<void> { return Promise.resolve(); }
+  appendPlugin(): Promise<void> { return Promise.resolve(); }
 }
 
 describe('ModListProvider', () => {

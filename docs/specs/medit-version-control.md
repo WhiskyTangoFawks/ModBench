@@ -3,7 +3,7 @@
 **Status: Implemented.** Track (#414), the text-first edit path (#415), Save & Compile
 (#416), external-change handling (#417), the editor gesture inventory (#426), the
 lifecycle gestures (#427), record-row Modified/Added badges (#428), the closeout
-truing (#418), and crash repair (#381) have all shipped.
+truing (#418), crash repair (#381), and New Plugin (#288) have all shipped.
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -153,6 +153,32 @@ using git.
    diff before they become history.
 
 ## The surfaces
+
+### New Plugin
+
+- **Where**: the Plugins tree's navigation bar (`modbench.newPlugin`) and the command palette.
+  Prompts for a name (`.esp`/`.esm`/`.esl`, xEdit's own extensions), then a destination
+  QuickPick: **overwrite/** (default — first in the list, so Enter alone accepts it, preserving
+  the xEdit-under-MO2 reflex), **an existing mod** (searchable — native QuickPick filtering),
+  or **a new mod** (name prompt; creates the mod folder itself via the same install path
+  `modbench.modList.installFromFolder` uses, with an empty source directory — the mod
+  registers in `modlist.txt` and the Mods tree exactly as any other install does, disabled by
+  default until the user enables it, same as every other install).
+- **Creation is Editing's job, participation is Mod Management's** (#288, an unwritten
+  implication of ADR-0035 — the two contexts still never share a payload beyond origin + path,
+  ADR-0036). The backend writes the binary, Tracks the destination under the **Edits** preset
+  if it is not already tracked (silently — no second preset prompt; the destination QuickPick's
+  one-keystroke framing rules out one, and Edits is Track's own default. A user wanting a
+  different preset deletes `.git` and re-Tracks by hand, the same gesture Track always offered),
+  and indexes the plugin. Only once that has actually succeeded does the extension's
+  composition root call a new Mod Management writer (`IModlistSource.appendPlugin`,
+  `modmanager/mo2/pluginsText.ts`) that appends an enabled entry line at the winning end of
+  `plugins.txt`. This ordering is the whole of the surface's own invariant: `plugins.txt` can
+  never name a file that does not yet exist, because nothing writes the line until the file and
+  its index entry are already real.
+- **A created plugin is ordinary working-tree text on its destination mod's edit branch** — no
+  Authored mode, no provenance flag. "Authored" is what merging to `main` at will already means
+  (ADR-0041 amendment); a created plugin arrives no differently than any other tracked edit.
 
 ### Track
 

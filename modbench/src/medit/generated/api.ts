@@ -61,6 +61,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** @description Creates a new plugin at the given path/origin (#288 / ADR-0041), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer per ADR-0024) is responsible for that. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -686,6 +687,8 @@ export interface components {
         CrashRepairReason: 0 | 1;
         CreatePluginRequest: {
             name?: string | null;
+            path?: string | null;
+            origin?: string | null;
         };
         ExplicitPlugin: {
             name?: string | null;
@@ -1141,6 +1144,24 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

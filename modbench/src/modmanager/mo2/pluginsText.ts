@@ -70,6 +70,45 @@ export function setPluginEnabledInText(text: string, pluginName: string, enabled
   });
 }
 
+/** The EOL terminator the file already uses, sniffed off its first terminated line — never
+ *  guessed from platform defaults. Falls back to `\n` when the text has no terminated line at all
+ *  (empty file, or a single line with none). */
+function detectEol(text: string): string {
+  for (const { contentEnd, end } of lineRanges(text)) {
+    if (end > contentEnd) return text.slice(contentEnd, end);
+  }
+  return '\n';
+}
+
+/** #288: the New Plugin gesture's own write — appends a new, always-enabled entry line at the
+ *  winning end (bottom: "bottom wins record overrides", this file's own header comment), landing
+ *  before any trailing comment/blank lines rather than after them, the same "before the tail"
+ *  placement `movePluginsInText`'s own end-of-file case uses. Byte-faithful: every existing byte
+ *  survives untouched, and the new line's EOL matches whatever the file already uses. Throws if
+ *  the name is already present — never a silent duplicate line. */
+export function appendPluginInText(text: string, pluginName: string): string {
+  return withBomPreserved(text, (bomless) => {
+    for (const { start, contentEnd } of lineRanges(bomless)) {
+      const content = bomless.slice(start, contentEnd);
+      if (isEntryLine(content) && pluginNameOf(content) === pluginName) {
+        throw new Error(`Plugin already in plugins.txt: ${pluginName}`);
+      }
+    }
+
+    const eol = detectEol(bomless);
+    if (bomless.length === 0) return `*${pluginName}${eol}`;
+
+    const lines = splitLinesKeepEol(bomless);
+    const last = lines[lines.length - 1];
+    if (!/\r\n$|\r$|\n$/.test(last)) lines[lines.length - 1] = last + eol;
+
+    const entryLineIdx = [...lines.keys()].filter((i) => isEntryLine(lines[i]));
+    const insertAt = entryLineIdx.length === 0 ? lines.length : entryLineIdx.at(-1)! + 1;
+    lines.splice(insertAt, 0, `*${pluginName}${eol}`);
+    return lines.join('');
+  });
+}
+
 /** Move one or more plugins (by name) so the moved block occupies entry-index
  *  `toIndex` among plugins.txt's entry lines (top = loads first), counting the
  *  entries with the moved lines removed. The moved lines keep their original

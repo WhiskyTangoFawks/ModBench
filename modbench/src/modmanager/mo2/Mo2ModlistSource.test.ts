@@ -181,6 +181,23 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(after).not.toContain('*Unofficial Fallout 4 Patch.esp');
   });
 
+  // #288: the New Plugin gesture's own write to disk.
+  it('appendPlugin writes a new enabled entry line to disk', async () => {
+    const before = await readFile(pluginsPath(), 'utf8');
+    await src.appendPlugin('NewPlugin.esp');
+    const after = await readFile(pluginsPath(), 'utf8');
+    expect(after).toBe(before + '*NewPlugin.esp\r\n');
+    expect(await src.readPluginOrder()).toContain('NewPlugin.esp');
+  });
+
+  it('appendPlugin throws for a name already present, and does not block a later mutation', async () => {
+    await expect(src.appendPlugin('Unofficial Fallout 4 Patch.esp')).rejects.toThrow(
+      /Unofficial Fallout 4 Patch\.esp/,
+    );
+    await src.appendPlugin('AnotherNewPlugin.esp');
+    expect(await src.readPluginOrder()).toContain('AnotherNewPlugin.esp');
+  });
+
   it('insertSeparator after a mod places the new separator immediately below it', async () => {
     await src.insertSeparator('New Group', 'SKK Fast Start new game (Fallout 4)');
     const entries = await src.readModlist();
