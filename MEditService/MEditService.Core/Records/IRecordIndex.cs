@@ -93,10 +93,21 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// owns picking a FormKey nothing already answers to; this method only refuses to silently
     /// overwrite one that does.</para>
     ///
-    /// <para>Carries the same doc-comment signpost as <see cref="ApplyWorkingTreeChanges"/>: no #417
-    /// external-change deferral check lives here either, for the identical reason, and every new write
-    /// gesture must enter through <c>Edits.RecordEditService</c> to inherit that refusal rather than
-    /// calling this method directly.</para>
+    /// <para><b>No #417 external-change deferral check lives here, deliberately</b> — the same
+    /// signpost <see cref="ApplyWorkingTreeChanges"/> carries, and for the identical reason: this
+    /// method has two legitimate callers, not one. <c>Edits.RecordEditService.CreateRecord</c> is the
+    /// actual write gesture, and every new write gesture must enter through
+    /// <c>Edits.RecordEditService</c> to inherit the deferral/untracked refusals — never call this
+    /// method directly for a gesture. The second is
+    /// <c>Ledger.WorkingTreeCreateRediscovery</c>'s session-load sweep, which is recovery, not
+    /// editing: a record a prior, uncompiled session created has no binary row for ordinary
+    /// <see cref="Index"/> ingest to seed, so without this second caller it would silently vanish from
+    /// the read model on every restart while compile (which assembles from ledger files on disk) still
+    /// emits it — the same "reads must keep serving what the ledger actually says" posture that makes
+    /// <c>LedgerFreshness</c> <see cref="ApplyWorkingTreeChanges"/>'s own second caller. Neither
+    /// second caller is a user-facing edit, so gesture-only guards (deferral, untracked signposting)
+    /// are intentionally not applicable to it — enforcing them here would be blocking a read/recovery
+    /// path with a check that means something only for the write path.</para>
     /// </summary>
     void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body);
 

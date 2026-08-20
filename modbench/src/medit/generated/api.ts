@@ -417,6 +417,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Delete a record as a working-tree change (#415/#427).
+         * @description Deletes the record's ledger file — a git-native, null-Body working-tree change (#415's mechanism): gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other dangling link.
+         */
         post: operations["DeleteRecord"];
         delete?: never;
         options?: never;
@@ -1515,8 +1519,17 @@ export interface operations {
                     "application/json": components["schemas"]["NextFreeFormKeyResponse"];
                 };
             };
-            /** @description Service Unavailable */
-            503: {
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

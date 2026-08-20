@@ -82,6 +82,13 @@ public static class RecordEndpoints
             string formKey, RecordDeleteRequest request, RecordEditService edits) =>
             DeleteRecord(formKey, request, edits, logger))
         .WithName("DeleteRecord")
+        .WithSummary("Delete a record as a working-tree change (#415/#427).")
+        .WithDescription(
+            "Deletes the record's ledger file — a git-native, null-Body working-tree change (#415's " +
+            "mechanism): gone at Effective, still served at Head until the deletion is committed and " +
+            "compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes " +
+            "dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other " +
+            "dangling link.")
         .WithTags("Records")
         .Produces<RecordDeleteResponse>()
         .ProducesProblem(400)

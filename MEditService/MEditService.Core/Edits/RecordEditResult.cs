@@ -63,13 +63,21 @@ public enum RecordEditRefusal
     /// plugin; for the second, typing a FormKey native to this plugin, or leaving it blank to
     /// auto-allocate.</summary>
     NotNativeRecord,
+
+    /// <summary>#427 create/renumber/peek: the plugin's native FormKey space is full — every local ID
+    /// up to <c>0xFFFFFF</c> is already in use at one ref or the other. A typed refusal (review
+    /// finding #1), not an exception: a full plugin refusing a new record is an ordinary, expected
+    /// outcome on this write path, the same doctrine as every other refusal here — never conflated
+    /// with "no usable session" by a caller's generic exception handling.</summary>
+    FormKeySpaceExhausted,
 }
 
 /// <summary>
 /// One edit's outcome. <see cref="Message"/> is user-facing prose for the refusal — it names the way
 /// out, since a refusal the user cannot act on is just dead UI (AC4's "no silent dead UI").
-/// <see cref="NewFormKey"/> is null for every gesture except a successful create or renumber (#427),
-/// which are the only two that mint a FormKey the caller did not already have.
+/// <see cref="NewFormKey"/> is null for every gesture except a successful create, renumber or
+/// <c>PeekNextFreeFormKey</c> (#427), which are the only ones that mint or suggest a FormKey the
+/// caller did not already have.
 /// </summary>
 public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null)
 {

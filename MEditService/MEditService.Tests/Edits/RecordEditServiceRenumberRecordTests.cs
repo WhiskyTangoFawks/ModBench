@@ -60,6 +60,22 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
     }
 
+    // Review finding #1: the auto-allocator's own exhaustion must be a typed refusal here too, not
+    // an InvalidOperationException the endpoint's session-missing catch would misreport.
+    [Fact]
+    public void RenumberRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.RenumberRecord(mod.Plugin, mod.Npc.ToString());
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+    }
+
     [Fact]
     public void RenumberRecord_Refuses_OnAnOverrideRecord_NamingTheOriginatingPlugin()
     {
@@ -141,8 +157,36 @@ public sealed class RecordEditServiceRenumberRecordTests
         var suggested = service.PeekNextFreeFormKey(mod.Plugin);
         var result = service.RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
-        Assert.NotNull(suggested);
-        Assert.Equal(suggested, result.NewFormKey);
+        Assert.True(suggested.Applied, suggested.Message);
+        Assert.Equal(suggested.NewFormKey, result.NewFormKey);
+    }
+
+    [Fact]
+    public void PeekNextFreeFormKey_Refuses_WhenNoSessionIsLoaded()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        mod.Sessions.Dispose();
+
+        var suggested = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .PeekNextFreeFormKey(mod.Plugin);
+
+        Assert.False(suggested.Applied);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, suggested.Refusal);
+    }
+
+    // Review finding #2: brought to the same typed-refusal standard as Create/Renumber.
+    [Fact]
+    public void PeekNextFreeFormKey_Refuses_WhenTheFormKeySpaceIsExhausted()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.PeekNextFreeFormKey(mod.Plugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
     /// <summary>

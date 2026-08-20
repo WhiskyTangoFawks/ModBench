@@ -160,6 +160,23 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
+    // Review finding #1: the auto-allocator's own exhaustion (every local ID up to 0xFFFFFF taken)
+    // must be a typed refusal, not an InvalidOperationException an endpoint's generic session-missing
+    // catch would misreport as "no usable session".
+    [Fact]
+    public void CreateRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+    }
+
     [Fact]
     public void CreateRecord_WithAFreeRequestedFormKey_UsesItExactly()
     {

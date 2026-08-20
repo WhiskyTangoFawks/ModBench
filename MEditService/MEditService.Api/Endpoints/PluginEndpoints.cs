@@ -135,19 +135,23 @@ public static class PluginEndpoints
         // #427: a read-only peek at what CreateRecord/RenumberRecord would auto-allocate — feeds the
         // Renumber gesture's FormID input box a suggested default (xEdit's own "New FormID
         // generated" flow), never a write, no tracked gate (pure arithmetic over indexed state).
+        // Review finding #2: brought to the same typed-refusal standard as its siblings (no session,
+        // FormKey space exhausted) via the same RecordEditResult/Refusal mapping they use, rather
+        // than a bespoke nullable-string contract with no way to distinguish the two.
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
             string plugin, string origin, RecordEditService edits, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
             var decoded = Uri.UnescapeDataString(plugin);
             logger.LogInformation("Received PeekNextFreeFormKey for {Plugin} ({Origin})", decoded, origin);
-            var formKey = edits.PeekNextFreeFormKey(new PluginKey(decoded, origin));
-            return formKey is null ? Results.Problem("No session is loaded.", statusCode: 503) : Results.Ok(new NextFreeFormKeyResponse(formKey));
+            var result = edits.PeekNextFreeFormKey(new PluginKey(decoded, origin));
+            return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : RecordEndpoints.Refusal(result);
         })
             .WithName("PeekNextFreeFormKey")
             .WithTags(Tag)
             .Produces<NextFreeFormKeyResponse>()
-            .ProducesProblem(503);
+            .ProducesProblem(404)
+            .ProducesProblem(422);
 
         // #417: polled the same way GET /plugins/track/status is — always 200, an empty list when
         // nothing is pending, no session dependency of its own (the watcher's queue lives on the

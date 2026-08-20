@@ -156,22 +156,7 @@ public sealed class RecordEditService(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
 
-        string targetFormKey;
-        if (requestedFormKey != null)
-        {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin) is { } notNative) return notNative;
-            if (!IsFreeAtBothRefs(index, plugin, requestedFormKey))
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.FormKeyCollision,
-                    $"{requestedFormKey} is already held by a record in {plugin.Name} at some ref.");
-            }
-            targetFormKey = requestedFormKey;
-        }
-        else
-        {
-            targetFormKey = NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
-        }
+        if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         // Mutagen's own generic-across-games factory (Mutagen.Bethesda.Plugins.Utility) — every
         // generated major-record type's (FormKey, GameRelease) constructor is declared private
@@ -246,22 +231,7 @@ public sealed class RecordEditService(
                 $"Renumber it there instead.");
         }
 
-        string targetFormKey;
-        if (requestedFormKey != null)
-        {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin) is { } notNative) return notNative;
-            if (!IsFreeAtBothRefs(index, plugin, requestedFormKey))
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.FormKeyCollision,
-                    $"{requestedFormKey} is already held by a record in {plugin.Name} at some ref.");
-            }
-            targetFormKey = requestedFormKey;
-        }
-        else
-        {
-            targetFormKey = NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
-        }
+        if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
         // Every distinct record that references formKey, source-record-deduplicated: GetReferencedBy
         // is one row per (source record, field), and a record referencing the target through two
@@ -302,16 +272,22 @@ public sealed class RecordEditService(
             RenumberTheRecordItself(index, plugin, modFolder, formKey, targetFormKey, release);
             writtenRepos.Add($"{plugin.Name} ({plugin.Origin})");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex)
         {
             // Q5(b): names exactly which repos already carry working-tree dirt from this partial
             // cascade — every one of them is independently reviewable and revertable in the Source
             // Control panel, which is the whole reason write order (referencers first, target last)
             // matters: nothing here is a half-renumbered *target* record, only whichever referencers
-            // got as far as this exception. Rethrown as IOException (not InvalidOperationException,
-            // which the endpoint layer already maps to 503 "no usable session" for a different
-            // reason) so this reaches the client as the same 500 every other write-path I/O failure
-            // does, carrying this richer message instead of the bare one.
+            // got as far as this exception. Deliberately unfiltered (not `when (ex is IOException or
+            // UnauthorizedAccessException)`): a concurrent external change mid-cascade — another
+            // process deleting a referencer between GetReferencedBy and its own rewrite, say — throws
+            // RewriteReferenceField's/RenumberTheRecordItself's own InvalidOperationException, and
+            // that must carry this same written-repos disclosure rather than silently losing it by
+            // falling through this catch to the endpoint's *different* InvalidOperationException
+            // handler ("no usable session" — a different question entirely, and a misleading answer
+            // to this one). Rethrown as IOException, always, regardless of the original exception's
+            // type, so this reaches the client as the same 500 every other write-path fault does,
+            // carrying this richer message instead of the bare one.
             throw new IOException(
                 $"Renumbering {formKey} to {targetFormKey} failed after writing to: {string.Join(", ", writtenRepos)}. " +
                 "Those repos now hold working-tree dirt from this partial renumber — review and revert " +
@@ -381,6 +357,51 @@ public sealed class RecordEditService(
         index.GetDocument(formKey, plugin) == null && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
 
     /// <summary>
+    /// #427: the target-FormKey resolution <see cref="CreateRecord"/> and <see cref="RenumberRecord"/>
+    /// both need — a caller-typed target (xEdit's own typed-FormID path: validated native to
+    /// <paramref name="plugin"/>, then collision-checked at both refs) when
+    /// <paramref name="requestedFormKey"/> is given, else the both-refs next-free auto-allocation.
+    ///
+    /// <para>Null means resolved: <paramref name="targetFormKey"/> carries the FormKey to use.
+    /// Non-null is the refusal to return as-is — <paramref name="targetFormKey"/> is <c>""</c> in
+    /// that case, the same "assign a harmless placeholder in the refused branch" shape
+    /// <see cref="RefuseIfBlocked"/> already uses for its own <c>out</c> parameter, so this stays a
+    /// plain non-nullable <see cref="string"/> rather than forcing every call site to null-check it
+    /// a second time after already checking the return value.</para>
+    /// </summary>
+    private RecordEditResult? ResolveTargetFormKey(
+        IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey)
+    {
+        if (requestedFormKey != null)
+        {
+            if (RefuseIfNotNativeTarget(requestedFormKey, plugin) is { } notNative)
+            {
+                targetFormKey = "";
+                return notNative;
+            }
+            if (!IsFreeAtBothRefs(index, plugin, requestedFormKey))
+            {
+                targetFormKey = "";
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.FormKeyCollision,
+                    $"{requestedFormKey} is already held by a record in {plugin.Name} at some ref.");
+            }
+            targetFormKey = requestedFormKey;
+            return null;
+        }
+
+        var allocated = NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
+        if (allocated != null)
+        {
+            targetFormKey = allocated;
+            return null;
+        }
+
+        targetFormKey = "";
+        return RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin));
+    }
+
+    /// <summary>
     /// #427: a caller-typed target FormKey (xEdit's own typed-FormID path, on both create and
     /// renumber) must belong to <paramref name="plugin"/>'s own ModKey — the ledger path a native
     /// record's FormKey embeds is exactly <paramref name="plugin"/>'s own directory, so a foreign
@@ -411,8 +432,15 @@ public sealed class RecordEditService(
     /// (<see cref="IModGetter.GetDefaultInitialNextFormID"/>, mirroring
     /// <c>SessionManager.SafeNextFormId</c>'s identical floor) when <paramref name="mod"/> is
     /// available, else the conservative literal floor every Bethesda game shares.
+    ///
+    /// <para>Null means the plugin's FormKey space is exhausted (every local ID up to
+    /// <c>0xFFFFFF</c> already in use) — a typed refusal at both call sites
+    /// (<see cref="RecordEditRefusal.FormKeySpaceExhausted"/>), not an exception: a full plugin
+    /// refusing a new record is an ordinary, expected outcome (review finding #1), the same doctrine
+    /// as every other refusal on this write path, not a fault for the caller's generic exception
+    /// handling to (mis)classify as "no usable session."</para>
     /// </summary>
-    private static string NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod)
+    private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod)
     {
         var floor = mod?.GetDefaultInitialNextFormID() ?? 0x800u;
         var highest = index.GetNativeFormKeys(plugin)
@@ -421,13 +449,11 @@ public sealed class RecordEditService(
             .DefaultIfEmpty(0u)
             .Max();
         var next = Math.Max(floor, highest + 1);
-        if (next > 0xFFFFFF)
-        {
-            throw new InvalidOperationException(
-                $"{plugin.Name} has exhausted its FormKey space (next local ID 0x{next:X} exceeds 0xFFFFFF).");
-        }
-        return $"{next:X6}:{plugin.Name}";
+        return next > 0xFFFFFF ? null : $"{next:X6}:{plugin.Name}";
     }
+
+    private static string FormKeySpaceExhaustedMessage(PluginKey plugin) =>
+        $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use.";
 
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
@@ -437,13 +463,26 @@ public sealed class RecordEditService(
     /// internally, exposed read-only so the Renumber gesture's FormID input box can prefill a
     /// suggested value the way xEdit's own "New FormID generated" flow does — never a write, and no
     /// tracked/untracked gate: it is pure arithmetic over already-indexed state, harmless to ask for
-    /// a plugin nobody can edit yet. Returns null when no session is loaded.
+    /// a plugin nobody can edit yet.
+    ///
+    /// <para>Returns the same typed <see cref="RecordEditResult"/> shape every other entry point on
+    /// this write path does (review finding #2: brought to the same standard as
+    /// <see cref="CreateRecord"/>/<see cref="RenumberRecord"/>, rather than a bespoke nullable-string
+    /// contract) — <see cref="RecordEditRefusal.RecordNotFound"/> when no session is loaded (matching
+    /// every sibling method's own "No session is loaded." refusal here) and
+    /// <see cref="RecordEditRefusal.FormKeySpaceExhausted"/> when the plugin's FormKey space is full;
+    /// <see cref="RecordEditResult.NewFormKey"/> carries the suggestion on success.</para>
     /// </summary>
-    public string? PeekNextFreeFormKey(PluginKey plugin)
+    public RecordEditResult PeekNextFreeFormKey(PluginKey plugin)
     {
         var index = sessions.Index;
-        if (index == null) return null;
-        return NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
+        if (index == null)
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+
+        var formKey = NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
+        return formKey != null
+            ? RecordEditResult.Success(formKey)
+            : RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin));
     }
 
     /// <summary>
