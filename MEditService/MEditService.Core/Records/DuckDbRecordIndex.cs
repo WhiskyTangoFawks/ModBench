@@ -17,7 +17,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-public sealed class DuckDbRecordIndex : IRecordRepository
+// #421: implements both the old (IRecordRepository/IRecordReader/IRecordIndexer) and new
+// (IRecordIndex/IRecordReads) seams during the migration — the orchestrator's corrected
+// sequencing keeps the tree compiling at every step rather than demolishing the old interfaces
+// before every consumer is repointed. The old members are removed, and this implements only
+// IRecordIndex, in the final demolition slice.
+public sealed class DuckDbRecordIndex : IRecordRepository, IRecordIndex
 {
     private readonly ISchemaReflector _schemaReflector;
     private readonly ITableDdlBuilder _ddlBuilder;
@@ -503,6 +508,348 @@ public sealed class DuckDbRecordIndex : IRecordRepository
         return list;
     }
 
+    // #421: IRecordReads / IRecordIndex — the new seam, implemented alongside the old
+    // IRecordRepository/IRecordReader/IRecordIndexer surface above during the migration. Identity-
+    // bearing wrappers such as Index/Unindex/SetPluginParticipation/GetNativeFormKeys and the
+    // spatial reads simply unpack a PluginKey and delegate to the plugin-and-origin implementation
+    // already above; GetDocument/GetOverrideStack/Search/GetRecordTypeCounts/GetEffectiveMasters/At
+    // are genuinely new. VMAD/condition reconstitution is deliberately NOT added here —
+    // GetVmad/GetConditions are rejected from this seam; the capability relocates to Queries/ in a
+    // later slice.
+
+    public IRecordReads At(RecordRef recordRef) => this;
+    // #421: Head answers identically to Effective — both map onto the single LedgerRef.Committed
+    // value records.ref carries today (ADR-0041). Literally the same instance (not merely equal
+    // values): #415 is what gives Head its own.
+
+    public RecordDocument? GetDocument(string formKey)
+    {
+        var tableName = FindRecordType(formKey);
+        return tableName == null ? null : ReadDocument(tableName, formKey, plugin: null, origin: null, winnerOnly: true);
+    }
+
+    public RecordDocument? GetDocument(string formKey, PluginKey plugin)
+    {
+        var tableName = FindRecordType(formKey);
+        return tableName == null ? null : ReadDocument(tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+    }
+
+    private RecordDocument? ReadDocument(string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
+    {
+        var schema = RequireSchemas()[tableName];
+        var conditions = new List<string> { "form_key = $1" };
+        var values = new List<string> { formKey };
+
+        if (winnerOnly) conditions.Add("is_winner = true");
+        if (plugin != null) { conditions.Add($"plugin = ${values.Count + 1}"); values.Add(plugin); }
+        if (origin != null) { conditions.Add($"origin = ${values.Count + 1}"); values.Add(origin); }
+
+        var isHeader = IsHeaderTable(tableName);
+        if (!isHeader) { conditions.Add($"record_type = ${values.Count + 1}"); values.Add(NormalizeRecordType(tableName)); }
+
+        var where = " WHERE " + string.Join(" AND ", conditions);
+        var sql = isHeader
+            ? $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+                FROM "{HeaderIndexer.TableName}"{where}
+                LIMIT 1
+                """
+            : $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
+                FROM records{where}
+                LIMIT 1
+                """;
+
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = sql;
+        AddParams(cmd, values);
+        using var reader = cmd.ExecuteReader();
+        if (!reader.Read()) return null;
+
+        var cache = new Dictionary<string, RecordLookupEntry?>();
+        RecordLookupEntry? Resolve(string fk)
+        {
+            if (cache.TryGetValue(fk, out var t)) return t;
+            var resolved = ResolveFormKey(fk);
+            cache[fk] = resolved;
+            return resolved;
+        }
+
+        return isHeader
+            ? ReadDocumentFromColumns(reader, schema, Resolve)
+            : ReadDocumentFromBody(reader, schema, Resolve);
+    }
+
+    public RecordOverrides? GetOverrideStack(string formKey)
+    {
+        var tableName = FindRecordType(formKey);
+        if (tableName == null) return null;
+        var schema = RequireSchemas()[tableName];
+        var isHeader = IsHeaderTable(tableName);
+        var sql = isHeader
+            ? $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+                FROM "{HeaderIndexer.TableName}"
+                WHERE form_key = $1
+                ORDER BY load_order_idx
+                """
+            : """
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body
+                FROM records
+                WHERE form_key = $1 AND record_type = $2
+                ORDER BY load_order_idx
+                """;
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        if (!isHeader)
+            cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
+        using var reader = cmd.ExecuteReader();
+
+        var cache = new Dictionary<string, RecordLookupEntry?>();
+        RecordLookupEntry? Resolve(string fk)
+        {
+            if (cache.TryGetValue(fk, out var t)) return t;
+            var resolved = ResolveFormKey(fk);
+            cache[fk] = resolved;
+            return resolved;
+        }
+
+        var entries = new List<OverrideStackEntry>();
+        while (reader.Read())
+        {
+            var doc = isHeader
+                ? ReadDocumentFromColumns(reader, schema, Resolve)
+                : ReadDocumentFromBody(reader, schema, Resolve);
+            // #421: Head and Effective are the same instance for every entry — #415 gives them
+            // independent ones.
+            entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, doc, HasWorkingTreeChange: false));
+        }
+
+        return entries.Count == 0 ? null : new RecordOverrides(formKey, tableName, entries);
+    }
+
+    public PagedResult<RecordSummary> Search(RecordQuery query)
+    {
+        var (where, paramValues) = BuildWhere(
+            query.Plugin?.Name, query.Search, _filterActive, query.Plugin?.Origin, query.RecordTypes);
+        const string cols = "form_key, plugin, load_order_idx, is_winner, editor_id, origin";
+
+        using var countCmd = Connection.CreateCommand();
+        countCmd.CommandText = $"SELECT COUNT(*) FROM records{where}";
+        AddParams(countCmd, paramValues);
+        var total = (long)countCmd.ExecuteScalar()!;
+
+        using var dataCmd = Connection.CreateCommand();
+        dataCmd.CommandText = $"""
+            SELECT {cols} FROM records{where}
+            ORDER BY editor_id
+            LIMIT {query.Limit} OFFSET {query.Offset}
+            """;
+        AddParams(dataCmd, paramValues);
+
+        var items = new List<RecordSummary>();
+        using var reader = dataCmd.ExecuteReader();
+        while (reader.Read())
+            items.Add(ReadSummary(reader));
+
+        return new PagedResult<RecordSummary>(items, (int)total);
+    }
+
+    public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "SELECT record_type, COUNT(*) FROM records WHERE plugin = $1 AND origin = $2 GROUP BY record_type";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+        using var reader = cmd.ExecuteReader();
+
+        var counts = new List<RecordTypeCount>();
+        while (reader.Read())
+            counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1)));
+        return counts;
+    }
+
+    public RecordLookupEntry? Resolve(string formKey) => ResolveFormKey(formKey);
+
+    public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => GetReferences(targetFormKey);
+
+    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => GetNativeFormKeys(plugin.Name, plugin.Origin!);
+
+    /// <summary>
+    /// See <see cref="IRecordReads.GetEffectiveMasters"/> — derived, not declared. Union of (a) the
+    /// owning plugin of every FormKey this plugin's records reference outward (<c>form_references</c>)
+    /// and (b) the owning plugin of every FormKey this plugin carries that isn't native to it (an
+    /// override forces that master), in deterministic load-order order, excluding the plugin itself.
+    /// A master this plugin's header declares but nothing in it references or overrides is not
+    /// effective, and is excluded — the ADR-0038 "effective masters" concept, reimplemented against
+    /// the read model instead of a write-time content walk.
+    /// </summary>
+    public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin)
+    {
+        var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        using (var cmd = Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT DISTINCT target_form_key FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                if (ModKeyNameOf(reader.GetString(0)) is { } name) required.Add(name);
+            }
+        }
+
+        using (var cmd = Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT DISTINCT form_key FROM records WHERE plugin = $1 AND origin = $2";
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var fk = reader.GetString(0);
+                if (ModKeyNameOf(fk) is { } name && !string.Equals(name, plugin.Name, StringComparison.OrdinalIgnoreCase))
+                    required.Add(name);
+            }
+        }
+
+        required.Remove(plugin.Name);
+        if (required.Count == 0) return [];
+
+        // Deterministic load-order order: a master this session has indexed sorts by its own
+        // load_order_idx; one it hasn't (referenced but never opened) falls after every indexed
+        // master, alphabetically among themselves, so the result is stable either way.
+        var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        using (var cmd = Connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT plugin, MIN(load_order_idx) FROM plugins GROUP BY plugin";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                order[reader.GetString(0)] = reader.GetInt32(1);
+        }
+
+        return [.. required
+            .OrderBy(n => order.GetValueOrDefault(n, int.MaxValue))
+            .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)];
+    }
+
+    // The plugin-filename half of a stored FormKey ("012345:Base.esm" -> "Base.esm") — mirrors
+    // GetNativeFormKeys' own colon-split, reused here for GetEffectiveMasters' derivation.
+    private static string? ModKeyNameOf(string formKey)
+    {
+        var colon = formKey.IndexOf(':');
+        return colon > 0 ? formKey[(colon + 1)..] : null;
+    }
+
+    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
+        GetWorldspaceCells(plugin.Name, worldspaceFormKey, plugin.Origin!);
+
+    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
+        GetInteriorCells(plugin.Name, limit, offset, plugin.Origin!);
+
+    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
+        GetCellReferences(plugin.Name, cellFormKey, plugin.Origin!);
+
+    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
+        GetPlacement(formKey, plugin.Name, plugin.Origin!);
+
+    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
+        Index(plugin, loadOrderIndex, participates, key.Origin!);
+
+    public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
+
+    public void SetPluginParticipation(PluginKey key, bool participates) =>
+        SetPluginParticipation(key.Name, participates, key.Origin!);
+
+    /// <summary>Reads a record's document row into a <see cref="RecordDocument"/> — the
+    /// <see cref="RecordDocument.Body"/>-carrying twin of <see cref="ReadDetailFromDocument"/>,
+    /// sharing its extraction via <see cref="ExtractFields"/> so the two agree by construction.
+    /// Kept as a separate reader (rather than building a <c>RecordDetail</c> and wrapping it) so
+    /// the old path stays byte-for-byte unchanged while it still exists.</summary>
+    private RecordDocument ReadDocumentFromBody(
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var formKey = reader.GetString(0);
+        var plugin = reader.GetString(1);
+        var origin = reader.GetString(2);
+        var loadOrderIndex = reader.GetInt32(3);
+        var isWinner = reader.GetBoolean(4);
+        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
+        var body = reader.GetString(6);
+
+        var record = _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
+            .GetAwaiter().GetResult();
+
+        return new RecordDocument(
+            formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
+            body, ExtractFields(schema, record, resolveFormKey));
+    }
+
+    /// <summary>The header's own reader (D8: no document) — the <see cref="RecordDocument"/> twin
+    /// of <see cref="ReadDetailFromColumns"/>. <see cref="RecordDocument.Body"/> is null.</summary>
+    private static RecordDocument ReadDocumentFromColumns(
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var formKey = reader.GetString(0);
+        var plugin = reader.GetString(1);
+        var origin = reader.GetString(2);
+        var loadOrderIndex = reader.GetInt32(3);
+        var isWinner = reader.GetBoolean(4);
+        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
+
+        var fields = new List<FieldValue>();
+        for (int i = 0; i < schema.RecordColumns.Count; i++)
+        {
+            var col = schema.RecordColumns[i];
+            var isDbNull = reader.IsDBNull(6 + i);
+            object? value = (isDbNull, col.IsArray || col.SubFields != null) switch
+            {
+                (true, _) => null,
+                (false, true) => JsonSerializer.Deserialize<JsonElement>(reader.GetString(6 + i)),
+                _ => reader.GetValue(6 + i),
+            };
+            if (value != null && col.IsBitmask)
+                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+            var meta = col.ToFieldMetadata();
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
+        }
+
+        return new RecordDocument(formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName, null, fields);
+    }
+
+    // The ColumnSpec.Extract walk shared by ReadDetailFromDocument (old path) and
+    // ReadDocumentFromBody (new path) — factored so the two agree by construction rather than by a
+    // second implementation happening to match the first.
+    private static List<FieldValue> ExtractFields(
+        RecordTableSchema schema, IMajorRecord record, Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var fields = new List<FieldValue>();
+        foreach (var col in schema.RecordColumns)
+        {
+            var raw = CoerceToColumnType(col.Extract(record), col.DuckDbType);
+
+            var isJsonText = col.IsArray || col.SubFields != null;
+            object? value = raw switch
+            {
+                null => null,
+                string text when isJsonText => JsonSerializer.Deserialize<JsonElement>(text),
+                _ => raw,
+            };
+
+            if (value != null && col.IsBitmask)
+                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+
+            var meta = col.ToFieldMetadata();
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
+        }
+        return fields;
+    }
+
+    // end #421 new-seam block
+
     // origin (#272 / ADR-0036, required since #275): the mod folder that provided this plugin's
     // physical file, or a reserved PluginOrigin value — paired with plugin, never encoded into it.
     //
@@ -799,30 +1146,10 @@ public sealed class DuckDbRecordIndex : IRecordRepository
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
             .GetAwaiter().GetResult();
 
-        var fields = new List<FieldValue>();
-        foreach (var col in schema.RecordColumns)
-        {
-            var raw = CoerceToColumnType(col.Extract(record), col.DuckDbType);
-
-            // An array/struct column's extractor produces JSON text; the wide path stored that text
-            // in a VARCHAR and re-parsed it on read, so it is re-parsed here too rather than handed
-            // out as a string.
-            var isJsonText = col.IsArray || col.SubFields != null;
-            object? value = raw switch
-            {
-                null => null,
-                string text when isJsonText => JsonSerializer.Deserialize<JsonElement>(text),
-                _ => raw,
-            };
-
-            // Bitmask flag values can exceed 2^53 (e.g. FO4 Race.Flag bits 53/54). Surface them as
-            // decimal strings so they survive JSON round-tripping without IEEE 754 precision loss.
-            if (value != null && col.IsBitmask)
-                value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
-
-            var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
-        }
+        // #421: the extraction walk itself (array/struct JSON re-parse, bitmask-to-decimal-string)
+        // is factored into ExtractFields, shared with ReadDocumentFromBody, so the two agree by
+        // construction.
+        var fields = ExtractFields(schema, record, resolveFormKey);
 
         return new RecordDetail(formKey, plugin, loadOrderIndex, isWinner, editorId, fields, RecordType: schema.TableName, Origin: origin);
     }
