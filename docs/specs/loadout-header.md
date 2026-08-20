@@ -86,16 +86,16 @@ state where the user believes they have resynced and one tree still quietly disa
 remains a safety net for flaky watch events, never the primary path: every one of those
 sources is watcher-driven.
 
-**Reload Session** is not Refresh: it concerns the Editing session, costs seconds, and can
-disturb uncommitted working-tree changes, so it is separately named and lives in overflow. It
-re-runs the session load — re-resolves the game directory, rebuilds the explicit plugin set
-from the current modlist, and reloads it into the backend — the same `makeEnterEditing` path
-Launch mEdit and the crash-restart handler take
-([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)). Uncommitted working-tree
-changes make it confirm modally first (`showWarningMessage(…, { modal: true })`); with
-nothing uncommitted it reloads directly. A failed reload tears the session down the same way a
-failed launch does (`exitToLoadout`) rather than leave the Plugins tree decorated for a session
-the backend has already discarded.
+**Reload Session** is not Refresh: it concerns the Editing session and costs seconds, so it is
+separately named and lives in overflow. It re-runs the session load — re-resolves the game
+directory, rebuilds the explicit plugin set from the current modlist, and reloads it into the
+backend — the same `makeEnterEditing` path Launch mEdit and the crash-restart handler take
+([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)). **No confirm** (ADR-0041/#410):
+#295's confirm existed to warn that a reload would discard staged edits against the copy being
+reloaded; with the pending-change model gone a reload rebuilds read state and destroys no
+uncommitted working-tree change, so it reloads outright. A failed reload tears the session down
+the same way a failed launch does (`exitToLoadout`) rather than leave the Plugins tree decorated
+for a session the backend has already discarded.
 
 ### Launch…
 

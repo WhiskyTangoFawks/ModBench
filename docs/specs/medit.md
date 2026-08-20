@@ -32,7 +32,7 @@ overrides across plugins interact, and edit records — but the established tool
 is a standalone Windows application, disconnected from where the loadout is managed. Conflicts
 between plugins are the crux of patching: a modder needs to know, for a given record and field,
 which plugin wins, which lost an override, and whether an apparent conflict is a real
-disagreement or an identical duplicate — and then make a targeted edit that stages cleanly and
+disagreement or an identical duplicate — and then make a targeted edit that lands cleanly and
 writes back to the right physical file. Without an integrated editor, they leave their loadout
 tool, load a separate program, hand-correlate what it shows against their mod list, and edit
 blind to the loadout context.
@@ -97,7 +97,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   carrying whichever direction applies — and neither appears on any tree's title bar: starting
   and stopping a session is workspace-scope, and with every view always on screen there is no
   single tree it could sensibly belong to.
-- The mEdit view is composed of the four surfaces listed above. There is no toolbar or
+- The mEdit view is composed of the five surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
 - **One spec per surface** (see [README.md](README.md)). A surface is a top-level UI unit the
@@ -118,9 +118,10 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   mEdit (enter editing; spawn backend; load the session), Close mEdit (return to Loadout; tear
   down), Reload Session (re-runs the session load — re-resolves the game directory, rebuilds
   the explicit plugin set, reloads it into the backend, the same path Launch mEdit and the
-  crash-restart handler take; confirms modally only when there are uncommitted working-tree
-  changes to lose; deliberately *not* the same command as Refresh, and in the Loadout header's
-  overflow rather than its navigation group — #247, #295), Open Editor (internal; also bound to
+  crash-restart handler take; no confirm — ADR-0041/#410 — since a reload destroys no
+  uncommitted working-tree change; deliberately *not* the same command as Refresh, and in the
+  Loadout header's overflow rather than its navigation group — #247, #295), Open Editor
+  (internal; also bound to
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
 - A new end-to-end command is four touch points, or it is half-wired: backend endpoint →

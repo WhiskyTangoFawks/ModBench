@@ -584,8 +584,8 @@ overflow, then native **Collapse All** last.
   already had.
 - **No Refresh of its own** (#247). Re-reading `plugins.txt` is part of the single
   workspace-scope Refresh on the [Loadout header](loadout-header.md), which re-reads every
-  Mod-Management source together; re-reading a *session* (which can disturb uncommitted
-  working-tree changes) is the header's separate, explicitly-named Reload Session command.
+  Mod-Management source together; re-reading a *session* is the header's separate,
+  explicitly-named Reload Session command.
 
 ### Row context menu
 
