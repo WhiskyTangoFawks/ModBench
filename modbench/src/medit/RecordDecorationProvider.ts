@@ -25,6 +25,15 @@ import { parseRecordResourceUri } from './recordResourceUri';
  * edit is a refetch storm) yet still has to flip a badge on an already-rendered row. `refresh`
  * exists for exactly that gap: `FileDecorationProvider` re-queries independently of any tree
  * redraw when fired for a URI, so the badge updates with zero network cost.
+ *
+ * **Committing or reverting through the native Source Control panel pushes no live signal here**
+ * (#428 Q2, orchestrator gate ruling — punt approved, stated rather than hidden). Nothing in this
+ * extension retains the `Repository` handle `openRepository` returns or subscribes to its
+ * `state.onDidChange`, so a badge set by a Modbench-driven edit only clears (or a badge a native
+ * commit/revert should have changed only updates) at the next Modbench-driven read — the same
+ * no-watcher posture the record editor and compare grid already carry (#413's own "reverting
+ * through git restores the committed value at the next read"). Live reactivity to bare git-panel
+ * activity is a follow-up (repo-handle plumbing), not this ticket.
  */
 export class RecordDecorationProvider implements vscode.FileDecorationProvider {
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();

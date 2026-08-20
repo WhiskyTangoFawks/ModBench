@@ -41,15 +41,21 @@ write first, the target last, any untracked referencer refuses up front, and a t
 refusal covers overrides, collisions, and FormKey-space exhaustion. Record-row dirty
 badges are live (#428): `RecordSummary.WorkingTreeState` (`Search()`'s own `"ref"` plus a
 `records_committed` presence check — None/Modified/Added) reaches the Plugins tree, whose
-`RecordNode`s carry a synthetic `medit-record://<plugin>/<origin>/<formKey>` resourceUri
-(identity only, never state — deliberately not the real ledger path, which would double
-against `vscode.git`'s own decoration on the same tracked file) for a `FileDecorationProvider`
-to badge M/A with git's own `gitDecoration.modifiedResourceForeground`/
-`addedResourceForeground` colours. A field edit patches the one cached record and fires the
-decoration event for just that URI rather than a tree-wide refresh. Deleted is out of scope
-(follow-up filed separately): `Search()` is Effective-only, so a working-tree-deleted record
-has no row to badge at all — the same way VS Code's own Explorer drops a deleted file's row
-rather than badging it; the native Source Control panel already shows that D for free. This is the Track/Compile surface spec the
+`RecordNode`s carry a synthetic `medit-record:/<plugin>/<origin>/<formKey>` resourceUri
+(path-only, no authority — identity only, never state — deliberately not the real ledger
+path, which would double against `vscode.git`'s own decoration on the same tracked file)
+for a `FileDecorationProvider` to badge M/A with git's own
+`gitDecoration.modifiedResourceForeground`/`addedResourceForeground` colours. A field edit
+patches the one cached record (never downgrading a still-uncommitted create's Added to
+Modified) and fires the decoration event for just that URI rather than a tree-wide
+refresh. Committing or reverting through the native Source Control panel pushes no live
+signal to these badges — the extension retains no `Repository` handle from
+`openRepository` to react to, so a badge updates only at the next Modbench-driven read,
+the same no-watcher posture the record editor and compare grid already carry. Deleted is
+out of scope (follow-up filed separately): `Search()` is Effective-only, so a
+working-tree-deleted record has no row to badge at all — the same way VS Code's own
+Explorer drops a deleted file's row rather than badging it; the native Source Control
+panel already shows that D for free. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
 implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,

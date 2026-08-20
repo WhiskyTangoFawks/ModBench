@@ -462,6 +462,25 @@ describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', 
     const provider = new PluginTreeProvider(makeRepository());
     expect(provider.markWorkingTreeState('Fallout4.esm', 'ModA', '000001:Fallout4.esm', 'Modified')).toBe(false);
   });
+
+  // #428 review finding 1: a create never seeds records_committed no matter how many field edits
+  // follow it (the backend's own discrimination would still answer Added on the next real fetch),
+  // so a field edit on an Added row must never downgrade it to Modified — that would actively
+  // misrepresent a committed counterpart existing, not just go briefly stale. The rival: the
+  // original unconditional overwrite (`items[idx] = { ...items[idx], workingTreeState: state }`
+  // with no current-state check) fails this.
+  it('preserves Added across a field edit — create, then edit, still badges A', async () => {
+    const record = makeRecord(0, 'Added');
+    const repo = makeRepository({ records: { items: [record], total: 1 } });
+    const provider = new PluginTreeProvider(repo);
+    const [typeNode] = await provider.getPluginChildren('Fallout4.esm', 'ModA') as RecordTypeNode[];
+    await provider.getChildren(typeNode);
+
+    const changed = provider.markWorkingTreeState('Fallout4.esm', 'ModA', record.formKey, 'Modified');
+
+    expect(changed).toBe(true);
+    expect(provider.workingTreeStateOf('Fallout4.esm', 'ModA', record.formKey)).toBe('Added');
+  });
 });
 
 // ── #281: record rows carry their copy identity ──────────────────────────────
