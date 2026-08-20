@@ -114,6 +114,39 @@ public sealed class WorkingTreeDeletionTests : IDisposable
     }
 
     [Fact]
+    public void RestoringADeletedOverride_MakesItTheEffectiveWinnerAgain_WithoutMovingHead()
+    {
+        using var index = LoadedIndex();
+        var winnersCopy = index.GetDocument(_npc, WinnerKey)!.Body!;
+
+        // Winner.esp's copy is deleted in its working tree, so Base.esm holds the field...
+        index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, null)]);
+        Assert.Equal("Base.esm", index.GetDocument(_npc)!.Plugin.Name);
+
+        // ...and then the file comes back, carrying a *different* value than the commit had. This is
+        // the direction a create takes too: a row that does not exist at Effective appears, and its
+        // appearance has to move winner status — the mirror of the deletion case above, and the one
+        // the design named ("a working-tree create adding an override can flip the Effective
+        // winner"). An implementation that re-swept winners only when a row was removed passes the
+        // deletion test and fails this one.
+        var edited = winnersCopy.Replace("TestNpc", "RestoredByWorkingTree", StringComparison.Ordinal);
+        Assert.NotEqual(winnersCopy, edited);
+        index.ApplyWorkingTreeChanges(WinnerKey, [(_npc, edited)]);
+
+        var effectiveWinner = index.GetDocument(_npc)!;
+        Assert.Equal("Winner.esp", effectiveWinner.Plugin.Name);
+        Assert.True(effectiveWinner.IsWinner);
+        Assert.Equal("RestoredByWorkingTree", effectiveWinner.EditorId);
+
+        // Head never lost it, and must not have gained a second winner on the way through either.
+        var headStack = index.At(RecordRef.Head).GetOverrideStack(_npc)!;
+        Assert.Equal(
+            [("Base.esm", false), ("Winner.esp", true)],
+            headStack.Entries.Select(e => (e.Plugin.Name, e.IsWinner)));
+        Assert.Equal("TestNpc", headStack.Entries.Single(e => e.Plugin.Name == "Winner.esp").Head.EditorId);
+    }
+
+    [Fact]
     public void DeletingARecord_StopsItResolving_SoAFormLinkToItReadsAsDangling()
     {
         using var index = LoadedIndex();

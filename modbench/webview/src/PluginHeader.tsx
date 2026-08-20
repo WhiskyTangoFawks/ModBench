@@ -72,6 +72,10 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', {
       + 'nothing anywhere. Whether this file loads, and which copy, is decided in the Mods and '
       + 'Plugins views.',
   },
+  // The command is quoted exactly as the palette shows it — package.json's title ("Track\u2026")
+  // under its category ("Modbench"). PluginHeader.test.tsx asserts that exact string, so a rename
+  // of the command breaks the test rather than silently breaking the signpost.
+  //
   // The friction here is deliberate (ADR-0041): editing someone else's plugin in place is the
   // community's own anti-pattern, so tracking is a decision the user makes rather than something
   // that happens to them. Which is exactly why the label has to say the friction is one command
@@ -80,7 +84,7 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', {
     label: '(untracked)',
     title:
       'This plugin\u2019s mod is not tracked, so its records are read-only. '
-      + 'Run \u201cModbench: Track Mod\u201d on it once to start editing \u2014 '
+      + 'Run \u201cModbench: Track\u2026\u201d on it once to start editing \u2014 '
       + 'its records become text in the mod\u2019s own git repository, and your edits show up in Source Control.',
   },
 };

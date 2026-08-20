@@ -157,10 +157,14 @@ describe('PluginHeader — untracked signposting (#415)', () => {
     expect(screen.getByText('(untracked)')).toBeTruthy();
   });
 
-  it('names the Track command as the way out', () => {
+  // Asserted as the exact palette entry, not as "contains Track": package.json contributes the
+  // title "Track\u2026" under category "Modbench", and a signpost naming a command that does not
+  // exist verbatim is the dead end AC4 exists to prevent. A rename now breaks this test instead of
+  // the signpost.
+  it('names the Track command exactly as the palette shows it', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
 
-    expect(screen.getByTitle(/Track/)).toBeTruthy();
+    expect(screen.getByTitle(/Modbench: Track\u2026/)).toBeTruthy();
   });
 
   it('signposts the patch-plugin path instead for a master that cannot be tracked at all', () => {
@@ -171,6 +175,7 @@ describe('PluginHeader — untracked signposting (#415)', () => {
     const title = screen.getByTitle(/patch/i);
     expect(title).toBeTruthy();
     expect(title.getAttribute('title')).not.toMatch(/Track/);
+    expect(title.getAttribute('title')).not.toMatch(/Modbench: Track\u2026/);
   });
 
   it('says nothing at all once the mod is tracked', () => {

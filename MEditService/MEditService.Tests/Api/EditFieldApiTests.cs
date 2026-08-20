@@ -121,6 +121,40 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
+    public async Task EditField_WhenTheLedgerFileCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    {
+        using var fx = BuildOneModOnePlugin();
+        await LoadOnly(fx);
+        var modFolder = Path.GetDirectoryName(fx.Plugins.Single(p => p.Origin == Origin).Path)!;
+        (await _client.PostAsJsonAsync("/plugins/track", new { origin = Origin, preset = "Edits" })).EnsureSuccessStatusCode();
+        var formKey = await FirstNpcFormKey();
+
+        // Never-assume-exclusive-ownership (root CLAUDE.md), made concrete: something outside
+        // Modbench replaced this record's ledger file with a directory. Any I/O failure would do —
+        // a lock, a permissions change, a vanished mount — but this one needs no privileges and is
+        // deterministic, so it is the one the suite can actually run.
+        var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
+        var recordType = "npc_";
+        var ledgerPath = Path.Combine(
+            modFolder, $"{Plugin}.ledger", recordType,
+            formKey[(formKey.IndexOf(':', StringComparison.Ordinal) + 1)..],
+            $"{formKey[..formKey.IndexOf(':', StringComparison.Ordinal)]}.json");
+        Assert.True(File.Exists(ledgerPath), $"expected a ledger file at {ledgerPath}");
+        Assert.NotEqual(0, records.GetProperty("total").GetInt32());
+        File.Delete(ledgerPath);
+        Directory.CreateDirectory(ledgerPath);
+
+        var response = await PostEdit(formKey, "height_max", 0.75);
+
+        // A shaped ProblemDetails, the way every sibling write endpoint answers an I/O failure —
+        // not an unhandled exception escaping into an empty 500, which is what a client with no
+        // body to read cannot tell apart from the backend having died.
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(string.IsNullOrWhiteSpace(problem.GetProperty("detail").GetString()));
+    }
+
+    [Fact]
     public async Task EditField_WithoutAPlugin_Is400()
     {
         using var fx = BuildOneModOnePlugin();

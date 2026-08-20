@@ -133,6 +133,11 @@ public sealed class RecordEditService(
         return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, index.Resolve);
     }
 
+    /// <summary>The Track command as the palette actually shows it — <c>package.json</c>'s title
+    /// ("Track…", U+2026) under its category ("Modbench"). One constant, because a signpost naming
+    /// a command the user cannot find is worse than no signpost at all.</summary>
+    internal const string TrackCommandTitle = "Modbench: Track\u2026";
+
     // AC4: two refusals, because there are two different ways out and a message that named neither
     // would be the "silent dead UI" this ticket exists to avoid.
     private RecordEditResult RefuseUntracked(PluginKey plugin) =>
@@ -144,7 +149,11 @@ public sealed class RecordEditService(
             : RecordEditResult.Refused(
                 RecordEditRefusal.PluginNotTracked,
                 $"{plugin.Name} is not tracked, so it is read-only. " +
-                "Run \"Modbench: Track Mod\" on it once to start editing.");
+                // The palette entry verbatim: package.json contributes title "Track…" under
+                // category "Modbench", which VS Code renders as "Modbench: Track…". Naming a
+                // command that does not exist is the same dead end AC4 exists to prevent, so the
+                // tests assert this string exactly rather than merely containing "Track".
+                $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
     private static RecordEditResult RefuseFieldOutcome(FieldApplyOutcome outcome, string fieldPath, string recordType) =>
         outcome == FieldApplyOutcome.ReadOnly

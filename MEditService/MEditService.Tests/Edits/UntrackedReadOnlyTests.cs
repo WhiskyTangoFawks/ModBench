@@ -39,7 +39,12 @@ public sealed class UntrackedReadOnlyTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
-        Assert.Contains("Track", result.Message, StringComparison.Ordinal);
+        // The exact palette entry, not merely "contains Track": package.json contributes the title
+        // "Track…" under category "Modbench", and a signpost naming a command that does not exist
+        // verbatim is the dead end AC4 exists to prevent. Asserted against the literal here rather
+        // than against RecordEditService's own constant, so this test disagrees with a bad rename
+        // instead of moving with it.
+        Assert.Contains("Modbench: Track\u2026", result.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -85,6 +90,7 @@ public sealed class UntrackedReadOnlyTests
         Assert.NotEqual(trackable.Refusal, notTrackable.Refusal);
         Assert.DoesNotContain("patch", trackable.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Track", notTrackable.Message, StringComparison.Ordinal);
+        Assert.Contains("Modbench: Track\u2026", trackable.Message, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -124,14 +124,18 @@ describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
     fakeRepository.editRecordField.mockResolvedValue({
       applied: false,
       refusal: 'PluginNotTracked',
-      message: 'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track Mod" on it once to start editing.',
+      message: 'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.',
     });
 
     await routeRecordPanelMessage(editMessage, makeDeps());
 
-    // The backend's own wording, relayed rather than re-authored — it already names the command,
-    // and re-wording it here would put that text in two places with only one of them tested.
-    expect(fakeReporter.report).toHaveBeenCalledWith('warning', expect.stringContaining('Track Mod'));
+    // Relayed verbatim, not re-authored: the backend's message already names the command, and
+    // re-wording it here would put that text in two places with only one of them tested. Asserted
+    // as the whole string rather than a substring so a partial relay (a truncation, a reformat that
+    // drops the command) fails here.
+    expect(fakeReporter.report).toHaveBeenCalledWith(
+      'warning',
+      'Mod.esp is not tracked, so it is read-only. Run "Modbench: Track\u2026" on it once to start editing.');
     expect(onRecordEdited).not.toHaveBeenCalled();
   });
 
