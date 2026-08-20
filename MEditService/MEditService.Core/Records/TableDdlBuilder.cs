@@ -15,8 +15,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     public void CreateTables(DuckDBConnection connection, GameRelease release)
     {
         CreateRecordsTable(connection);
-        CreateCommittedRecordsTableAndHeadView(connection);
         CreatePluginsTable(connection);
+        // After `plugins`, not beside `records`: the Head view derives is_winner, and derives it
+        // through the same participation join UpdateWinners uses, so `plugins` has to exist first.
+        CreateCommittedRecordsTableAndHeadView(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
@@ -122,13 +124,36 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         // are disjoint by construction — ApplyWorkingTreeChanges writes the snapshot and flips the
         // Effective row's `ref` in the same transaction — so UNION ALL is exact, not an
         // approximation that DISTINCT would have to clean up after.
+        //
+        // is_winner is *derived here*, not carried through from either half, and that is load-bearing
+        // rather than tidiness. A record the working tree deleted stops existing at Effective, which
+        // promotes the next plugin down — and the promoted row is a clean row, physically shared with
+        // this view. Reading its stored flag would leak an Effective-only promotion into the committed
+        // answer and report two winners for one FormKey at Head. Deriving instead makes each ref's
+        // winner a fact about the stack *at that ref*, which is what "IsWinner correct at the
+        // requested ref" means; the correlated shape mirrors DuckDbRecordIndex.UpdateWinners' own
+        // sweep, participation join included, so the two cannot disagree about what winning is.
         Execute(connection, $"""
             CREATE OR REPLACE VIEW records_head AS
-            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash
-            FROM records_committed
-            UNION ALL
-            SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash
-            FROM records WHERE "ref" = '{LedgerRef.Committed}'
+            WITH head AS (
+                SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
+                FROM records_committed
+                UNION ALL
+                SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
+                FROM records WHERE "ref" = '{LedgerRef.Committed}'
+            )
+            SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, h.load_order_idx,
+                   (
+                     EXISTS (
+                       SELECT 1 FROM plugins p1
+                       WHERE p1.plugin = h.plugin AND p1.origin = h.origin AND p1.participates)
+                     AND h.load_order_idx = (
+                       SELECT MAX(h2.load_order_idx) FROM head h2
+                       JOIN plugins p2 ON p2.plugin = h2.plugin AND p2.origin = h2.origin AND p2.participates
+                       WHERE h2.form_key = h.form_key)
+                   ) AS is_winner,
+                   h."ref", h.body, h.content_hash
+            FROM head h
             """);
     }
 

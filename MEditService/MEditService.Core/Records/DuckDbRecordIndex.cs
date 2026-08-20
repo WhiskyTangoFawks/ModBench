@@ -139,20 +139,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             using var refAppender = Connection.CreateAppender("form_references");
             foreach (var r in refs)
-            {
-                var row = refAppender.CreateRow();
-                row.AppendValue(r.SourceFormKey);
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                row.AppendValue(r.TargetFormKey);
-                row.AppendValue(r.FieldPath);
-                row.AppendValue(r.RecordType);
-                if (r.EditorId is { } eid)
-                    row.AppendValue(eid);
-                else
-                    row.AppendNullValue();
-                row.EndRow();
-            }
+                AppendFormReference(refAppender, r, plugin, origin);
         }
 
         // ADR-0031: one form_lookup row per indexed record, populated in this same pass — no
@@ -402,12 +389,23 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (deltas.Count == 0) return;
 
         using var tx = Connection.BeginTransaction();
+        var structural = false;
         foreach (var (formKey, body) in deltas)
-            ApplyOneWorkingTreeChange(key, formKey, body);
+            structural |= ApplyOneWorkingTreeChange(key, formKey, body);
+
+        // Only a delta that added or removed a row can move winner status: a field edit leaves the
+        // stack exactly as it was. Re-swept for the whole session rather than for the touched
+        // FormKeys because UpdateWinners is the one definition of winning in this class, and a
+        // second, scoped copy of that SQL is precisely how the two would come to disagree. Structural
+        // changes have no user gesture in this ticket (create/delete are a lifecycle ticket of their
+        // own), so this is not on a hot path yet — worth scoping when it is.
+        if (structural) UpdateWinners();
         tx.Commit();
     }
 
-    private void ApplyOneWorkingTreeChange(PluginKey key, string formKey, string? body)
+    /// <summary>Applies one delta. Returns true when it added or removed an Effective row — a
+    /// <i>structural</i> change, the only kind that can move winner status.</summary>
+    private bool ApplyOneWorkingTreeChange(PluginKey key, string formKey, string? body)
     {
         // The committed bytes, wherever they currently live: the snapshot if this record already
         // diverged, else the still-clean Effective row itself. Reading through the Head relation is
@@ -425,18 +423,23 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             _logger.LogWarning(
                 "Ignoring a working-tree change for {FormKey}, which {Plugin} ({Origin}) does not hold at any ref",
                 formKey, key.Name, key.Origin);
-            return;
+            return false;
         }
 
+        var existedBefore = RowExistsAtEffective(key, formKey);
         SnapshotCommittedIfFirstDivergence(key, formKey);
 
         if (body == null)
         {
-            // Deleted in the working tree: gone at Effective, still answered at Head out of the
-            // snapshot taken immediately above.
+            // Deleted in the working tree: gone at Effective — document, lookup row and outgoing
+            // references alike — while still answered at Head out of the snapshot taken immediately
+            // above. Dropping only the document would leave the record resolvable and still sitting
+            // in the reference graph, i.e. present in every derived answer and absent from the one
+            // that stores it.
             ExecuteFor("DELETE FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
-            return;
+            DeleteDerivationsForRecord(key, formKey);
+            return existedBefore;
         }
 
         if (string.Equals(body, committedBody, StringComparison.Ordinal))
@@ -448,11 +451,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             RestoreFromSnapshot(key, formKey);
             ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
-            return;
+        }
+        else
+        {
+            UpsertEffectiveBody(key, formKey, body);
         }
 
-        UpsertEffectiveBody(key, formKey, body);
+        RederiveIndexRowsForRecord(key, formKey, body);
+        return !existedBefore;
     }
+
+    private bool RowExistsAtEffective(PluginKey key, string formKey) =>
+        ScalarString("SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!) != null;
 
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
     // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
@@ -510,6 +521,68 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         AddParams(cmd, [formKey, key.Name, key.Origin!, body, contentHash]);
         cmd.ExecuteNonQuery();
     }
+
+    // The extracted index tables (ADR-0041: form_lookup and form_references are derived *from* the
+    // document, never written independently of it) for one record, rebuilt from the bytes that just
+    // landed. Ingest does exactly this per record inside its own per-plugin loop; here it happens for
+    // one record at a time, through the same collectors, so an edit cannot leave the derived answers
+    // describing bytes that no longer exist.
+    private void RederiveIndexRowsForRecord(PluginKey key, string formKey, string body)
+    {
+        var recordType = ScalarString(
+            "SELECT record_type FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        if (recordType == null || !RequireSchemas().TryGetValue(recordType, out var schema)) return;
+
+        // form_lookup is *updated*, not delete-then-inserted: its is_winner is swept alongside
+        // `records`' own, and re-inserting would silently reset it to false for every ordinary field
+        // edit — which reads as "this FormKey resolves to nothing" through Resolve's winner filter.
+        // record_type cannot change (a record does not change type), so editor_id is the whole delta.
+        ExecuteFor("""
+            UPDATE form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
+            WHERE form_key = $1 AND plugin = $2 AND origin = $3
+            """, formKey, key.Name, key.Origin!, body);
+
+        // The row is absent when this record was previously deleted in the working tree and has now
+        // come back — the one case where there is nothing to update.
+        ExecuteFor($"""
+            INSERT INTO form_lookup (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner)
+            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id, r.load_order_idx, FALSE
+            FROM records r
+            WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
+              AND NOT EXISTS (
+                SELECT 1 FROM form_lookup l
+                WHERE l.form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin)
+            """, formKey, key.Name, key.Origin!);
+
+        var record = _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
+            .GetAwaiter().GetResult();
+
+        var refs = new List<FormRef>();
+        CollectFormRefs(refs, record, recordType, schema);
+        CollectVmadRefsForRecord(record, recordType, refs);
+        CollectConditionRefsForRecord(record, recordType, refs);
+
+        DeleteFormReferencesForRecord(key, formKey);
+        if (refs.Count == 0) return;
+
+        using var refAppender = Connection.CreateAppender("form_references");
+        foreach (var r in refs)
+            AppendFormReference(refAppender, r, key.Name, key.Origin!);
+    }
+
+    private void DeleteDerivationsForRecord(PluginKey key, string formKey)
+    {
+        ExecuteFor("DELETE FROM form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        DeleteFormReferencesForRecord(key, formKey);
+    }
+
+    private void DeleteFormReferencesForRecord(PluginKey key, string formKey) =>
+        ExecuteFor(
+            "DELETE FROM form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
+            formKey, key.Name, key.Origin!);
 
     private string? ScalarString(string sql, params string[] values)
     {
@@ -1147,6 +1220,25 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
+    // #415: one form_references row, appended the same way whether it came from a whole-plugin ingest
+    // or from a single record's working-tree change — extracted so the two paths cannot append
+    // different column orders into the same table.
+    private static void AppendFormReference(DuckDBAppender appender, FormRef r, string plugin, string origin)
+    {
+        var row = appender.CreateRow();
+        row.AppendValue(r.SourceFormKey);
+        row.AppendValue(plugin);
+        row.AppendValue(origin);
+        row.AppendValue(r.TargetFormKey);
+        row.AppendValue(r.FieldPath);
+        row.AppendValue(r.RecordType);
+        if (r.EditorId is { } eid)
+            row.AppendValue(eid);
+        else
+            row.AppendNullValue();
+        row.EndRow();
+    }
+
     private void DeleteFormReferencesForPlugin(string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
@@ -1171,22 +1263,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         foreach (var record in pluginMod.EnumerateMajorRecords<IHaveVirtualMachineAdapterGetter>(
                      throwIfUnknown: false))
         {
-            if (record.VirtualMachineAdapter is not { } vmad) continue;
+            if (record.VirtualMachineAdapter is null) continue;
             var recordType = ResolveRecordType(record);
             try
             {
-                var formKey = record.FormKey.ToString();
-                foreach (var script in vmad.Scripts)
-                {
-                    foreach (var property in script.Properties)
-                    {
-                        if (VmadCodec.Parse(property) is not { } parsed) continue;
-                        var propPath = $@"VMAD\{script.Name}\{property.Name}";
-                        foreach (var r in parsed.Refs)
-                            refs.Add(new FormRef(formKey, r.FormKey, propPath + r.RelativePath, recordType, null));
-                    }
-                }
-
+                CollectVmadRefsForRecord(record, recordType, refs);
                 vmadCount++;
                 // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests
                 // pins them) — "indexed" still describes what happens to this record's VMAD, even
@@ -1202,6 +1283,29 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
         }
         _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
+    }
+
+    // One record's VMAD Object-property refs — the body of the loop above, extracted so #415's
+    // per-record re-derivation walks VMAD through the identical code rather than a second copy of it.
+    // The parameter is IMajorRecordGetter rather than the VMAD aspect interface because the
+    // re-derivation path holds a record reconstituted from its document, and would otherwise have to
+    // repeat the aspect test at its own call site. A record with no VMAD contributes nothing.
+    private static void CollectVmadRefsForRecord(
+        IMajorRecordGetter record, string recordType, List<FormRef> refs)
+    {
+        if (record is not IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: { } vmad }) return;
+
+        var formKey = record.FormKey.ToString();
+        foreach (var script in vmad.Scripts)
+        {
+            foreach (var property in script.Properties)
+            {
+                if (VmadCodec.Parse(property) is not { } parsed) continue;
+                var propPath = $@"VMAD\{script.Name}\{property.Name}";
+                foreach (var r in parsed.Refs)
+                    refs.Add(new FormRef(formKey, r.FormKey, propPath + r.RelativePath, recordType, null));
+            }
+        }
     }
 
     // Phase 16: populate the worldspace-tree side tables from the GRUP hierarchy that
@@ -1287,16 +1391,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         var count = 0;
         foreach (var record in pluginMod.EnumerateMajorRecords())
         {
-            var owners = _conditionCodec.Extract(record);
-            if (!owners.Any()) continue;
-
-            var formKey = record.FormKey.ToString();
             var recordType = ResolveRecordType(record);
-            foreach (var owner in owners)
-            {
-                for (var ci = 0; ci < owner.Conditions.Count; ci++)
-                    CollectConditionRefsForOne(formKey, recordType, owner.FieldPath, ci, owner.Conditions[ci], refs);
-            }
+            if (!CollectConditionRefsForRecord(record, recordType, refs)) continue;
 
             count++;
             // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests pins
@@ -1306,6 +1402,27 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", count, plugin);
+    }
+
+    // One record's condition refs — the body of the loop above, extracted so #415's per-record
+    // re-derivation walks conditions through the identical code rather than a second copy of it.
+    // Returns whether this record owns any conditions at all, which is what the caller's own
+    // "indexed conditions for N records" count has always meant.
+    private bool CollectConditionRefsForRecord(IMajorRecordGetter record, string recordType, List<FormRef> refs)
+    {
+        if (_conditionCodec == null) return false;
+
+        var owners = _conditionCodec.Extract(record);
+        if (!owners.Any()) return false;
+
+        var formKey = record.FormKey.ToString();
+        foreach (var owner in owners)
+        {
+            for (var ci = 0; ci < owner.Conditions.Count; ci++)
+                CollectConditionRefsForOne(formKey, recordType, owner.FieldPath, ci, owner.Conditions[ci], refs);
+        }
+
+        return true;
     }
 
     // Mirrors the deleted ConditionIndexer.CollectConditionRefs: a condition's three FormKey-bearing
