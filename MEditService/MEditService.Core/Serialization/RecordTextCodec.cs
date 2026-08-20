@@ -123,7 +123,13 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var metaData = new SerializationMetaData(
             gameRelease, null, NoRecordFolders.Instance, DiscardChildRecordStreams.Instance, cancel);
 
-        var serialize = ResolveSerializeMethod(record.GetType());
+        // Dispatched through the game's *abstract* major-record serializer rather than the concrete
+        // one, so the kernel writes its own type discriminator ahead of the fields — see
+        // ResolveSerializeMethod. The concrete type is still resolved first, purely as a guard, so an
+        // unsupported record type keeps failing with this class's named exception rather than the
+        // generated code's bare NotImplementedException.
+        EnsureRecordTypeIsSupported(record.GetType());
+        var serialize = ResolveSerializeMethod(gameRelease);
         var task = (Task)serialize.Invoke(null, [writer, record, WriterKernel, metaData])!;
         await task.ConfigureAwait(false);
         WriterKernel.Finalize(streamPackage, writer);
@@ -135,18 +141,16 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         return [.. buffer.ToArray().Where(b => b != (byte)'\r'), (byte)'\n'];
     }
 
-    /// <summary>Reads a record back from its JSON text on disk.</summary>
+    /// <summary>Reads a record back from its JSON text on disk. The text names its own concrete
+    /// type, so no caller has to.</summary>
     /// <param name="filePath">Path to read the record's JSON text from.</param>
-    /// <param name="recordType">The concrete record type to construct (e.g. <c>typeof(Npc)</c>) —
-    /// the text itself carries no self-describing type tag, so the caller (which already knows the
-    /// type from its own ledger path/schema) states it.</param>
     /// <param name="gameRelease">Game release the text was serialized under.</param>
     /// <param name="cancel">Cancellation token.</param>
-    public async Task<IMajorRecord> DeserializeAsync(string filePath, Type recordType, GameRelease gameRelease, CancellationToken cancel = default)
+    public async Task<IMajorRecord> DeserializeAsync(string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
         using var stream = File.OpenRead(filePath);
         var record = await DeserializeCoreAsync(
-            stream, Path.GetDirectoryName(filePath) ?? string.Empty, recordType, gameRelease, cancel).ConfigureAwait(false);
+            stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, cancel).ConfigureAwait(false);
 
         logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
         return record;
@@ -161,50 +165,108 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// its own ledger text.
     /// </summary>
     /// <param name="bytes">The record's JSON text.</param>
-    /// <param name="recordType">The concrete record type to construct (e.g. <c>typeof(Npc)</c>) —
-    /// the text itself carries no self-describing type tag, so the caller (which already knows the
-    /// type from its own ledger path/schema) states it.</param>
     /// <param name="gameRelease">Game release the text was serialized under.</param>
     /// <param name="cancel">Cancellation token.</param>
-    public async Task<IMajorRecord> DeserializeFromBytesAsync(byte[] bytes, Type recordType, GameRelease gameRelease, CancellationToken cancel = default)
+    public async Task<IMajorRecord> DeserializeFromBytesAsync(byte[] bytes, GameRelease gameRelease, CancellationToken cancel = default)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        var record = await DeserializeCoreAsync(stream, string.Empty, recordType, gameRelease, cancel).ConfigureAwait(false);
+        var record = await DeserializeCoreAsync(stream, string.Empty, gameRelease, cancel).ConfigureAwait(false);
 
         logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
         return record;
     }
 
     private static async Task<IMajorRecord> DeserializeCoreAsync(
-        Stream stream, string directory, Type recordType, GameRelease gameRelease, CancellationToken cancel)
+        Stream stream, string directory, GameRelease gameRelease, CancellationToken cancel)
     {
         var streamPackage = new StreamPackage(stream, directory);
         var reader = ReaderKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
-        var deserialize = ResolveDeserializeMethod(recordType, reader.GetType());
+        var deserialize = ResolveDeserializeMethod(gameRelease, reader.GetType());
         var task = (Task)deserialize.Invoke(null, [reader, ReaderKernel, metaData])!;
-        await task.ConfigureAwait(false);
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is NotImplementedException or NullReferenceException)
+        {
+            // Text whose MutagenObjectType this game's dispatch cannot resolve — corrupt text, a
+            // hand-edited ledger file, or text from a future schema. Both exception types are the
+            // same failure arriving by two upstream routes, and neither is actionable as-is:
+            //
+            //   NotImplementedException — the generated dispatch's own "Unknown object name X",
+            //     raised when the name resolves to a Type it has no case for.
+            //   NullReferenceException — the name does not resolve to a Type at all. The kernel's
+            //     GetNextType returns null there, and the generated code calls GetSimpleName() on it
+            //     without a guard, so it faults before reaching its own default branch. That is an
+            //     upstream defect; catching it here converts it into the same named, actionable
+            //     failure rather than letting a bare NRE escape to a caller, which is the exact
+            //     outcome this class has always existed to prevent.
+            //
+            // Deliberately narrow: only these two types, only around the dispatch call itself, so
+            // nothing else that might throw inside deserialization is silently relabelled.
+            throw new RecordTypeSerializationUnsupportedException(
+                $"No record type in this game's schema matches the document's MutagenObjectType. {ex.Message}", ex);
+        }
+
         return (IMajorRecord)task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task)!;
     }
 
-    private static MethodInfo ResolveSerializeMethod(Type recordType) =>
-        SerializeMethods.GetOrAdd(recordType, static t =>
+    /// <summary>
+    /// The game's <i>abstract</i> major-record serializer — <c>&lt;Game&gt;MajorRecord_Serialization</c>
+    /// — not the concrete <c>&lt;Type&gt;_Serialization</c> this used to call.
+    ///
+    /// <para>That one choice is what makes a document self-describing. The generated
+    /// <c>SerializeWithCheck</c> writes <c>kernel.WriteType(writer, item.GetType())</c> — emitted by
+    /// the JSON kernel as a leading <c>"MutagenObjectType"</c> field — and then dispatches to the
+    /// concrete serializer; <c>DeserializeWithCheck</c> reads that field back and dispatches to the
+    /// matching concrete deserializer. It is the same mechanism the kernel already uses whenever a
+    /// group's element type is abstract, which is how Spriggit round-trips whole mods (a
+    /// <c>Group&lt;GameSetting&gt;</c> serializes each item through
+    /// <c>GameSetting_Serialization.SerializeWithCheck</c>), so this is the kernel's own answer
+    /// adopted wholesale rather than a discriminator of our invention.</para>
+    ///
+    /// <para>Without it, a record whose GRUP signature has several concrete subclasses could not be
+    /// read back at all: the text alone cannot say whether a GLOB is a GlobalFloat or a GlobalBool,
+    /// and guessing wrong throws (measured: deserializing a real GlobalFloat's document as the
+    /// schema's discovery-winner GlobalBool fails with "Unable to cast object of type
+    /// 'System.Double' to type 'System.Boolean'"). It also removes the need for any caller to say
+    /// what type it expects — the reason both Deserialize entry points lost their <c>Type</c>
+    /// parameter.</para>
+    ///
+    /// <para>The kernel normalizes the runtime type for us: a <c>NpcBinaryOverlay</c> is written as
+    /// <c>"Npc"</c>, so an overlay-read record and a deep-parsed one produce identical text.</para>
+    ///
+    /// <para>Keyed by game, and resolved from the game's own namespace rather than a named one, for
+    /// the same reason the concrete lookup is (#413 D5).</para>
+    /// </summary>
+    private static MethodInfo ResolveSerializeMethod(GameRelease gameRelease) =>
+        SerializeMethods.GetOrAdd(GameMajorRecordSerializationType(gameRelease), static t =>
         {
-            var generated = FindGeneratedSerializationType(t);
-            var open = generated.GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)
-                ?? throw new RecordTypeSerializationUnsupportedException(t, generated, "Serialize");
+            var open = t.GetMethod("SerializeWithCheck", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new RecordTypeSerializationUnsupportedException(t, t, "SerializeWithCheck");
             return open.MakeGenericMethod(typeof(NewtonsoftJsonSerializationWriterKernel), typeof(JsonWritingUnit));
         });
 
-    private static MethodInfo ResolveDeserializeMethod(Type recordType, Type readerType) =>
-        DeserializeMethods.GetOrAdd((recordType, readerType), static key =>
+    private static MethodInfo ResolveDeserializeMethod(GameRelease gameRelease, Type readerType) =>
+        DeserializeMethods.GetOrAdd((GameMajorRecordSerializationType(gameRelease), readerType), static key =>
         {
-            var generated = FindGeneratedSerializationType(key.Record);
-            var open = generated.GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)
-                ?? throw new RecordTypeSerializationUnsupportedException(key.Record, generated, "Deserialize");
+            var open = key.Record.GetMethod("DeserializeWithCheck", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new RecordTypeSerializationUnsupportedException(key.Record, key.Record, "DeserializeWithCheck");
             return open.MakeGenericMethod(key.Reader);
         });
+
+    private static Type GameMajorRecordSerializationType(GameRelease gameRelease)
+    {
+        var category = gameRelease.ToCategory();
+        var name = $"Mutagen.Bethesda.{category}.{category}MajorRecord_Serialization";
+        return typeof(RecordTextCodec).Assembly.GetType(name)
+            ?? throw new RecordTypeSerializationUnsupportedException(
+                $"No '{name}' was generated into this assembly, so no record of {category} can be " +
+                "serialized or read back. RecordTextCodecGeneratorSeed seeds generation per game; a " +
+                "game reaching here needs its own seed entry.");
+    }
 
     // The generated classes live in *this* assembly (seeded by RecordTextCodecGeneratorSeed) under
     // the Mutagen.Bethesda.Fallout4 namespace, not the Mutagen.Bethesda.Fallout4.dll assembly the
@@ -233,10 +295,18 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // convention `Fallout4Mod.CreateFromBinaryOverlay`'s output classes follow). Stripping that one
     // known suffix and retrying the direct lookup resolves overlay readers unambiguously, with no
     // risk of matching an unrelated sibling or ancestor interface.
-    private static Type FindGeneratedSerializationType(Type recordType) =>
-        TryFindGeneratedSerializationType(recordType, out var found)
-            ? found
-            : throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
+    /// <summary>
+    /// Guard only, since serialization itself now dispatches through the game's abstract base (see
+    /// <see cref="ResolveSerializeMethod"/>): a record type with no generated serializer of its own
+    /// would otherwise reach the base's <c>switch</c> and fail with the generated code's bare
+    /// "Unknown object" <see cref="NotImplementedException"/>, losing the named, actionable error
+    /// this class has always raised for that case.
+    /// </summary>
+    private static void EnsureRecordTypeIsSupported(Type recordType)
+    {
+        if (!TryFindGeneratedSerializationType(recordType, out _))
+            throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
+    }
 
     private const string OverlaySuffix = "BinaryOverlay";
 

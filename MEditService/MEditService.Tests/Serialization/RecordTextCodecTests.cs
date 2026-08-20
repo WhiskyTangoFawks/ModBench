@@ -52,7 +52,7 @@ public class RecordTextCodecTests
             var filePath = Path.Combine(dir.FullName, "weapon.json");
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
 
-            var roundTripped = (Weapon)await codec.DeserializeAsync(filePath, typeof(Weapon), GameRelease.Fallout4);
+            var roundTripped = (Weapon)await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
