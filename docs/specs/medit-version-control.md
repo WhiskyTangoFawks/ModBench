@@ -1,7 +1,7 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: partially implemented — Track (#414) and the text-first edit path (#415) shipped;
-Save & Compile (#416) and external-change handling (#417) designed, not yet implemented.**
+**Status: partially implemented — Track (#414), the text-first edit path (#415), and
+Save & Compile (#416) shipped; external-change handling (#417) designed, not yet implemented.**
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -11,7 +11,15 @@ grid, plus `POST /records/{formKey}/field` for scripts/agents); the editor and c
 render working-tree values; reverting through git restores the committed value at the next
 read (read-time freshness validation via `content_hash`, no watcher); untracked plugins are
 hard read-only with signposting (`Modbench: Track…`, or the patch-plugin path for vanilla
-masters). The remaining editor gestures, lifecycle gestures, and dirty-badge decorations are
+masters). Save & Compile is live end to end: `modbench.saveAndCompile` (record-editor icon
+resolving the active record's plugin, tree-row context menu, palette QuickPick fallback) and
+`modbench.pluginListTree.compileAtMain` (row-only, behind a modal naming the ref) compile
+ledger text to the binary through the journaled write pipeline — masters derived from content
+in load order, container structure assembled from the index (`container_child` +
+placement), typed refusals for unemittable states, diagnostics to the Problems panel on
+success, per-repo `.git` journal markers (batch of one, `PendingRecovery` readable), and a
+parked `refs/medit/last-compile/<plugin>` advance after every landed write, `AtRef`
+included. The remaining editor gestures, lifecycle gestures, and dirty-badge decorations are
 split-out follow-ups. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
