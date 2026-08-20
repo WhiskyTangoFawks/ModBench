@@ -8,6 +8,7 @@ import {
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
 import { buildVmadRows } from './vmadTreeAdapter';
+import { AddPropertyDialog } from './VmadPropertyOps';
 import { buildConditionRows } from './conditionTreeAdapter';
 import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
 import { columnKey } from './types';
@@ -90,6 +91,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // by the LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
   // navigation within the same panel session.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
+  // #426 Track 5: Add Property's own dialog state — which script/column VMAD_OPEN_ADD_PROPERTY
+  // named, or null when no dialog is open. AddPropertyDialog itself (VmadPropertyOps.tsx) collects
+  // name/type/value; this only remembers *where* to commit them once it confirms.
+  const [addPropertyDialog, setAddPropertyDialog] = useState<{ scriptName: string; plugin: ColumnKey } | null>(null);
   // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
   // than state. Cleared on drop (successful or rejected). Issue #206: carries sourcePlugin too —
   // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
@@ -282,6 +287,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   useLayoutEffect(() => { handleArrayOpRef.current = handleArrayOp; }, [handleArrayOp]);
   const fieldMetaMapRef = useRef(fieldMetaMap);
   useLayoutEffect(() => { fieldMetaMapRef.current = fieldMetaMap; }, [fieldMetaMap]);
+  // #426 Track 5: VMAD_STRUCTURAL_OP's own commit reaches through handleEditCell directly (the
+  // op-envelope value is already in EDIT_FIELD's own wire shape — RecordFieldWriter.ApplyVmadField
+  // dispatches on it) — same ref-for-a-mount-once-listener shape as handleArrayOpRef above, for the
+  // same reason (handleEditCell closes over `result`/`formKey`, both of which change).
+  const handleEditCellRef = useRef(handleEditCell);
+  useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
 
   // Listen for loadRecord messages from the extension (panel reuse), the session's own
   // conflicts-computed signal, and the array-op right-click commands (#426 Track 4) — the one
@@ -329,6 +340,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE ? 'remove'
           : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP ? 'moveUp' : 'moveDown';
         handleArrayOpRef.current(plugin, path, msg.fieldName, op, fieldMetaMapRef.current[msg.fieldName]?.elementType);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
+        // #426 Track 5: same self-filter-and-commit shape as the array-op branch above, except the
+        // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
+        // no webview-side computation of a next value, unlike an array op.
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        handleEditCellRef.current(columnKey(msg.plugin, msg.origin), msg.fieldPath, msg.value);
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        setAddPropertyDialog({ scriptName: msg.scriptName, plugin: columnKey(msg.plugin, msg.origin) });
       }
     };
     window.addEventListener('message', handler);
@@ -549,6 +569,24 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           </tbody>
         </table>
       </div>
+      {/* #426 Track 5 / #229: Add Property's own webview modal — the one deliberate exception to
+          right-click-menu commands resolving everything themselves (three fields at once: name,
+          type, and a type-appropriate value). `addPropertyDialog` names which script/column
+          VMAD_OPEN_ADD_PROPERTY opened it for; confirming builds the same op-envelope fieldPath/
+          value shape every other VMAD structural op commits, through the identical handleEditCell
+          write path. */}
+      {addPropertyDialog && (
+        <AddPropertyDialog
+          onCancel={() => setAddPropertyDialog(null)}
+          onConfirm={({ name, type, value }) => {
+            handleEditCell(
+              addPropertyDialog.plugin, `VMAD\\${addPropertyDialog.scriptName}\\${name}`,
+              { op: 'add_property', name, type, value },
+            );
+            setAddPropertyDialog(null);
+          }}
+        />
+      )}
     </div>
   );
 }

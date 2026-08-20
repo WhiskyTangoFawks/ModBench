@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 
 import { vscode } from './vscode';
-import { pickFormKey, openExtendedFieldEditor } from './nativeBridge';
+import { pickFormKey, pickConditionFunction, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
 // #426: restores the request/reply bridge mechanism #410 retired along with the pending-change
@@ -91,6 +91,39 @@ describe('pickFormKey', () => {
 
     window.dispatchEvent(new MessageEvent('message', {
       data: { type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId, formKey: null },
+    }));
+
+    expect(await resultPromise).toBeNull();
+  });
+});
+
+describe('pickConditionFunction', () => {
+  it('posts OPEN_CONDITION_FUNCTION_PICKER with the seed', () => {
+    void pickConditionFunction('GetIsID');
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER,
+      seed: 'GetIsID',
+    }));
+  });
+
+  it('resolves the function name from the matching reply', async () => {
+    const resultPromise = pickConditionFunction('');
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: 'GetDistance' },
+    }));
+
+    expect(await resultPromise).toBe('GetDistance');
+  });
+
+  it('resolves null when the reply carries functionName: null (Escape/blur)', async () => {
+    const resultPromise = pickConditionFunction('');
+    const requestId = postedRequestId();
+
+    window.dispatchEvent(new MessageEvent('message', {
+      data: { type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId, functionName: null },
     }));
 
     expect(await resultPromise).toBeNull();

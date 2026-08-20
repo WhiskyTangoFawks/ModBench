@@ -9,7 +9,12 @@ import { DiskCell } from './DiskCell';
 import { modelValue } from './modelValue';
 import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
-import { arrayElementContext, arrayParentContext, combineVscodeContexts, type Column, type PathSegment } from './recordUtils';
+import {
+  arrayElementContext, arrayParentContext, combineVscodeContexts,
+  vmadScriptsContext, vmadScriptContext, vmadPropertyContext, type Column, type PathSegment,
+} from './recordUtils';
+import { WRAPPER_NAME } from './vmadTreeAdapter';
+import { parseVmadPath } from './vmadOps';
 import type { ColumnKey, CompareOverride, ConflictAll, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 
 
@@ -95,21 +100,43 @@ function renderCell(
     );
   }
   // Issue #231: VMAD/Condition's synthesized composite leaf types — each picks its own widget
-  // from its own value's shape, dispatched here alongside 'formKey'.
+  // from its own value's shape, dispatched here alongside 'formKey'. #426 Track 5: same editable
+  // rule as every other branch above — presence of somewhere to write, ORed with the per-row
+  // readOnly veto (load-bearing for Conditions' own AND/OR gate, unconditionally read-only).
   if (meta.type === 'vmadObject') {
-    return <VmadObjectCell value={value} onOpen={onOpen} resolution={resolution} />;
+    return (
+      <VmadObjectCell
+        value={value} onOpen={onOpen} resolution={resolution}
+        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
+      />
+    );
   }
   if (meta.type === 'conditionFunction') {
-    return <ConditionFunctionCell value={value} isFocused={isFocused} />;
+    return <ConditionFunctionCell value={value} isFocused={isFocused} editable={onCommit != null && !meta.readOnly} onCommit={onCommit} />;
   }
   if (meta.type === 'conditionRunOn') {
-    return <ConditionRunOnCell value={value} meta={meta} isFocused={isFocused} onOpen={onOpen} resolution={resolution} />;
+    return (
+      <ConditionRunOnCell
+        value={value} meta={meta} isFocused={isFocused} onOpen={onOpen} resolution={resolution}
+        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
+      />
+    );
   }
   if (meta.type === 'conditionComparison') {
-    return <ConditionComparisonCell value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution} />;
+    return (
+      <ConditionComparisonCell
+        value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution}
+        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
+      />
+    );
   }
   if (meta.type === 'conditionParam') {
-    return <ConditionParamCell value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution} />;
+    return (
+      <ConditionParamCell
+        value={value} isFocused={isFocused} onOpen={onOpen} resolution={resolution}
+        editable={onCommit != null && !meta.readOnly} onCommit={onCommit}
+      />
+    );
   }
   return (
     <ScalarCell
@@ -266,6 +293,15 @@ export function DiffRow({
   const isUnsortedArrayParentRow = meta.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
   const lastPathSegment = context.path[context.path.length - 1];
   const isUnsortedArrayElementRow = lastPathSegment?.kind === 'index';
+  // Issue #231 (#426 Track 5: restored): a VMAD row's own kind, derived from context.rootField/
+  // path exactly the way isUnsortedArrayParentRow/Element above derive an array row's — no new
+  // FieldDiff field, since vmadTreeAdapter.ts's own shape (buildVmadRows' doc comment) is fixed:
+  // the wrapper is the subtree root itself (`path: []`, rootField the wrapper's own name), a
+  // script is one member-hop below it, and a property is a *different* subtree's own root
+  // (subtreeFor resets on FieldDiff.wirePath) whose rootField is its VMAD\Script\Prop wire path.
+  const isVmadWrapperRow = context.rootField === WRAPPER_NAME && context.path.length === 0;
+  const isVmadScriptRow = context.rootField === WRAPPER_NAME && context.path.length === 1 && context.path[0]?.kind === 'member';
+  const vmadPropertyPath = context.path.length === 0 ? parseVmadPath(context.rootField) : null;
   const isRowFocused = focusedCell?.rowKey === rowKey;
   // Issue #114: this row paints its own node's bottom-up conflict state, not a record-wide value
   // smeared onto every row. A struct/array row with children defers to its own children's tints
@@ -345,7 +381,12 @@ export function DiffRow({
             moveUp: isUnsortedArrayElementRow ? () => onArrayMoveUp?.(key) : undefined,
             moveDown: isUnsortedArrayElementRow ? () => onArrayMoveDown?.(key) : undefined,
           } : undefined;
-          const vscodeContext = arrayEditable ? combineVscodeContexts(
+          // Issue #231 (#426 Track 5: restored): VMAD structural ops offer no keyboard accelerator
+          // (none existed pre-#410 either — right-click-menu-only, unlike array ops' Insert/Delete/
+          // Ctrl+↑/↓) — only the vscodeContext half of DiskCell's contract applies here, wired
+          // below alongside the array contexts on the same writable-column gate.
+          const vmadEditable = !!onEditCell && editableColumns.has(key) && (isVmadWrapperRow || isVmadScriptRow || !!vmadPropertyPath);
+          const vscodeContext = (arrayEditable || vmadEditable) ? combineVscodeContexts(
             isUnsortedArrayParentRow
               ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField)
               : undefined,
@@ -353,6 +394,21 @@ export function DiffRow({
               ? arrayElementContext(
                   col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField,
                   lastPathSegment.index, Number.MAX_SAFE_INTEGER,
+                )
+              : undefined,
+            vmadEditable && isVmadWrapperRow
+              ? vmadScriptsContext(col.override.formKey, col.override.plugin, col.override.origin)
+              : undefined,
+            vmadEditable && isVmadScriptRow && context.path[0]?.kind === 'member'
+              ? vmadScriptContext(
+                  col.override.formKey, col.override.plugin, col.override.origin, context.path[0].name,
+                  typeof diff.values[key] === 'string' ? diff.values[key] : null,
+                )
+              : undefined,
+            vmadEditable && vmadPropertyPath
+              ? vmadPropertyContext(
+                  col.override.formKey, col.override.plugin, col.override.origin,
+                  vmadPropertyPath.script, vmadPropertyPath.prop,
                 )
               : undefined,
           ) : undefined;

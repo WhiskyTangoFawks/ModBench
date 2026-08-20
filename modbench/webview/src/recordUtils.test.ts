@@ -16,6 +16,9 @@ import {
   arrayElementContext,
   arrayParentContext,
   combineVscodeContexts,
+  vmadScriptsContext,
+  vmadScriptContext,
+  vmadPropertyContext,
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride } from './types';
@@ -343,6 +346,56 @@ describe('combineVscodeContexts', () => {
   it('skips an absent context among present ones', () => {
     const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'), undefined);
     expect(JSON.parse(result!).webviewSection).toBe('arrayParent');
+  });
+
+  it('combines two contexts\' webviewSection into one space-separated token list', () => {
+    const result = combineVscodeContexts(
+      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`),
+      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
+    );
+    const parsed = JSON.parse(result!);
+    expect(parsed.webviewSection).toBe('arrayParent vmadProperty');
+  });
+
+  it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
+    const result = combineVscodeContexts(
+      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`),
+      vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
+    );
+    const parsed = JSON.parse(result!);
+    expect(parsed.scriptName).toBe('S');
+    expect(parsed.propName).toBe('Levels');
+    expect(parsed.fieldName).toBe(String.raw`VMAD\S\Levels`);
+  });
+});
+
+describe('vmadScriptsContext / vmadScriptContext / vmadPropertyContext', () => {
+  it('vmadScriptsContext identifies the "Scripts (VMAD)" wrapper row', () => {
+    expect(vmadScriptsContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA')).toEqual({
+      webviewSection: 'vmadScripts', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('vmadScriptContext identifies a script row, carrying its current flags for the QuickPick seed', () => {
+    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Local')).toEqual({
+      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', scriptName: 'MyScript',
+      currentFlags: 'Local', preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('vmadScriptContext carries a null currentFlags when the column has no disk value', () => {
+    expect(vmadScriptContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', null)).toEqual({
+      webviewSection: 'vmadScript', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', scriptName: 'MyScript',
+      currentFlags: null, preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('vmadPropertyContext identifies a property row', () => {
+    expect(vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Health')).toEqual({
+      webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      scriptName: 'MyScript', propName: 'Health', preventDefaultContextMenuItems: true,
+    });
   });
 });
 

@@ -11,7 +11,8 @@ export interface RouteRecordPanelMessageDeps {
   // #426: also the FormKey picker's own search — the one `repository` field the real caller
   // passes the full PluginRepository into, so the per-panel formKeyPicker bundle below reuses it
   // rather than threading a second repository reference through OpenRecordPanelDeps.
-  repository: Pick<PluginRepository, 'editRecordField' | 'searchRecords'>;
+  // #426 Track 5: also the condition-function picker's own catalogue fetch — same reasoning.
+  repository: Pick<PluginRepository, 'editRecordField' | 'searchRecords' | 'getConditionFunctions'>;
   // #415: how the panel learns to re-read once an edit has landed. A plain callback rather than a
   // webview handle, so this router never has to know which panel asked.
   onRecordEdited: (formKey: string) => void;
@@ -30,6 +31,9 @@ export interface RouteRecordPanelMessageDeps {
   // `channel`/`reporter`. Undefined when the panel wasn't wired for the picker, matching every
   // other optional bundle's convention pre-#410.
   formKeyPicker: FormKeyPickerDeps | undefined;
+  // Issue #211 (#426 Track 5: restored): same per-panel reconstruction as formKeyPicker above, for
+  // the same reason — the reply must go back to the one panel that asked.
+  conditionFunctionPicker: ConditionFunctionPickerDeps | undefined;
   // Issue #230 (#426: restored): same per-panel reconstruction as formKeyPicker above (`reply`
   // must go back to the one panel that asked) — but this bundle also carries `tempRoot`/`log`,
   // which are session-static and simply copied into every per-panel reconstruction rather than
@@ -40,6 +44,11 @@ export interface RouteRecordPanelMessageDeps {
 
 export interface FormKeyPickerDeps {
   repository: Pick<PluginRepository, 'searchRecords'>;
+  reply: (msg: ExtensionToWebview) => void;
+}
+
+export interface ConditionFunctionPickerDeps {
+  repository: Pick<PluginRepository, 'getConditionFunctions'>;
   reply: (msg: ExtensionToWebview) => void;
 }
 
@@ -78,12 +87,38 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     deps.channel[m.level](m.message);
   } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {
     await copyToClipboard(deps.reporter, m.value);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD) {
+  } else {
+    await routeWritePathMessage(deps, m);
+  }
+}
+
+// Split out of routeRecordPanelMessage above purely to keep that function's own branch count from
+// growing every time this ticket's write path (EDIT_FIELD, the *Picker bridges, the extended
+// editor) gains another message type — a line-count concern (ESLint's complexity budget), not a
+// behavioral one; every message here still reaches exactly the same handler it would inline.
+async function routeWritePathMessage(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Promise<void> {
+  if (m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD) {
     await editField(deps, m);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
-    await replyFormKeyPicked(deps.formKeyPicker, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER || m.type === WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER) {
+    await routePickerMessage(deps, m);
   } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR) {
     await openExtendedEditor(deps.extendedFieldEditor, m);
+  }
+}
+
+// Issue #211/#212 (#426: restored): split out of routeRecordPanelMessage's own dispatch, matching
+// the pre-#410 shape, purely to keep that function's own branch count from growing every time
+// another *Picker bridge is added — this file's own two QuickPick pickers share nothing beyond
+// "resolve a value natively, then reply," so grouping them here rather than inlining two more
+// `else if` branches is a line-count concern, not a behavioral one.
+async function routePickerMessage(
+  deps: RouteRecordPanelMessageDeps,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER | typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER }>,
+): Promise<void> {
+  if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
+    await replyFormKeyPicked(deps.formKeyPicker, m);
+  } else {
+    await replyConditionFunctionPicked(deps.conditionFunctionPicker, m);
   }
 }
 
@@ -210,6 +245,49 @@ async function replyFormKeyPicked(
   if (!deps) return;
   const formKey = await pickFormKeyViaQuickPick(deps, m.seed, m.validTypes);
   deps.reply({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: m.requestId, formKey });
+}
+
+// Issue #211 (#426 Track 5: restored): the condition-function picker as a native QuickPick —
+// simpler than pickFormKeyViaQuickPick above (the webview cannot call vscode.window.showQuickPick
+// itself either), since the function catalogue is bounded/game-scoped and fetched once rather than
+// driven through createQuickPick's per-keystroke search. "Seeded with the current value" is
+// satisfied by sorting the seed to the front of the array passed to showQuickPick — that API has
+// no activeItem/activeItems option (only createQuickPick does), so array order is the only way to
+// pre-highlight an item, and VS Code focuses the first item by default. A seed absent from the
+// catalogue (or empty, e.g. a function-less value) leaves the array unreordered. Resolves to the
+// picked function name, or null when dismissed without a selection — the caller leaves the
+// condition unchanged, same convention as pickFormKeyViaQuickPick.
+export async function pickConditionFunctionViaQuickPick(
+  deps: ConditionFunctionPickerDeps, seed: string,
+): Promise<string | null> {
+  const all = await deps.repository.getConditionFunctions();
+  const items = seed && all.includes(seed) ? [seed, ...all.filter(f => f !== seed)] : all;
+  const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Select a condition function…' });
+  return picked ?? null;
+}
+
+// Issue #211: same shape as replyFormKeyPicked above, for the condition-function QuickPick.
+async function replyConditionFunctionPicked(
+  deps: ConditionFunctionPickerDeps | undefined,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER }>,
+): Promise<void> {
+  if (!deps) return;
+  const functionName = await pickConditionFunctionViaQuickPick(deps, m.seed);
+  deps.reply({ type: EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED, requestId: m.requestId, functionName });
+}
+
+// Issue #231 (#426 Track 5: restored): Add Script's own native input box — unlike the two pickers
+// above, this needs no reply bridge back to the webview at all: modbench.vmad.addScript
+// (extension.ts) calls it directly and broadcasts VMAD_STRUCTURAL_OP itself once a name comes
+// back, the same "no round trip" shape Set Script/Property Flags' own showQuickPick calls use.
+// Exported (not module-private) purely so extension.ts's command handler can call it — this file
+// is where every other native-prompt bridge already lives.
+export async function pickScriptNameViaInputBox(): Promise<string | null> {
+  const name = await vscode.window.showInputBox({
+    prompt: 'Script name',
+    validateInput: v => (v.trim() === '' ? 'Name is required' : null),
+  });
+  return name ?? null;
 }
 
 /**

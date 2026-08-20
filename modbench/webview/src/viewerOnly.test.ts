@@ -57,8 +57,16 @@ describe('the record editor webview writes through exactly one path (#415)', () 
   // (ADR-0017/0028, superseded by ADR-0041's working-tree model, which has no "pending" state to
   // stage into, no per-plugin Save button, and no whole-record column-header copy action of its
   // own): PENDING_CHANGED, OPEN_REVERT_GROUP_CONFIRM, PENDING_CELL_, COLUMN_HEADER_.
+  //
+  // Track 5 struck VMAD_OPEN_ADD_PROPERTY: Add Property's own dialog-open signal, restored
+  // unchanged (same name, same "which script/plugin to open the dialog for" shape). VMAD_ADD_/
+  // VMAD_REMOVE_/VMAD_SET_ stay blocked — those name the pre-#410 six-message-per-op design (one
+  // message per structural op); Track 5's own design deliberately replaced that with a single
+  // VMAD_STRUCTURAL_OP broadcast carrying an op-envelope value (messages.ts's own doc comment on
+  // it), so a message matching one of those three prefixes reappearing would mean the old,
+  // rejected shape crept back in, not that this ticket restored it.
   it('no retired pending-change message came back with the write path', () => {
-    const RETIRED_MESSAGE = /PENDING_CHANGED|OPEN_REVERT_GROUP_CONFIRM|PENDING_CELL_|VMAD_ADD_|VMAD_REMOVE_|VMAD_SET_|VMAD_OPEN_ADD_PROPERTY|COLUMN_HEADER_/;
+    const RETIRED_MESSAGE = /PENDING_CHANGED|OPEN_REVERT_GROUP_CONFIRM|PENDING_CELL_|VMAD_ADD_|VMAD_REMOVE_|VMAD_SET_|COLUMN_HEADER_/;
     const offenders = sources.filter((f) => RETIRED_MESSAGE.test(read(f)));
     expect(offenders).toEqual([]);
   });

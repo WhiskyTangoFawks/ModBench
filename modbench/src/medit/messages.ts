@@ -14,6 +14,11 @@ export const EXTENSION_TO_WEBVIEW = {
   // QuickPick that produced it only ever existed for that one request. `formKey: null` means the
   // user dismissed the picker (Escape/blur) — the caller leaves its field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
+  // #426 Track 5: same shape as FORM_KEY_PICKED above (direct reply, keyed by requestId, never a
+  // broadcast) — the condition-function QuickPick only ever exists for the one request that
+  // opened it. `functionName: null` means the user dismissed it — the caller leaves the
+  // condition's function unchanged.
+  CONDITION_FUNCTION_PICKED: 'conditionFunctionPicked',
   // #426: the extended editor's commit — unlike FORM_KEY_PICKED above (resolved once, then
   // done), a real editor tab can be saved more than once while it stays open, so this is not a
   // one-shot reply: the extension host posts one of these per `Ctrl+S` against the temp file it
@@ -40,6 +45,24 @@ export const EXTENSION_TO_WEBVIEW = {
   ARRAY_REMOVE: 'arrayRemove',
   ARRAY_MOVE_UP: 'arrayMoveUp',
   ARRAY_MOVE_DOWN: 'arrayMoveDown',
+  // Issue #231 (#426 Track 5: restored, simplified): VMAD's six structural-op right-click commands
+  // (Add/Remove Script, Add/Remove Property, Set Script/Property Flags) all reduce, on Track 0's
+  // backend, to the exact same shape EDIT_FIELD already carries — a VmadPath fieldPath
+  // (`VMAD\<Script>` or `VMAD\<Script>\<Property>`) and an op-envelope value
+  // (`{op: "add_script", ...}`, RecordFieldWriter.ApplyVmadField's own contract). Rather than six
+  // near-identical broadcast shapes (the pre-#410 design, when the backend dispatch was itself
+  // per-op-shaped), every command below resolves its own fieldPath/value and broadcasts this one
+  // message; each open panel self-filters on `formKey` and restages through the identical
+  // handleEditCell/EDIT_FIELD path every other gesture already uses — no new webview-side
+  // computation at all, unlike the array-op broadcasts above.
+  VMAD_STRUCTURAL_OP: 'vmadStructuralOp',
+  // Issue #231: Add Property is the one structural op that collects more than a single native
+  // prompt can hold (name, type, and a type-appropriate value) — #229's own deliberate exception,
+  // a webview-rendered dialog rather than a QuickPick chain. This broadcast only tells the
+  // matching panel which script/plugin to open it for; the dialog's own confirm computes the
+  // fieldPath/value itself and commits through the ordinary write path, the same as every other
+  // gesture — no reply travels back through this message.
+  VMAD_OPEN_ADD_PROPERTY: 'vmadOpenAddProperty',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -64,6 +87,13 @@ export const WEBVIEW_TO_EXTENSION = {
   // value and used to pre-select the matching item; `validTypes` is the field's allowed record
   // types, same filter the picker always applied (pre-#410 #210, resurrected unchanged).
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
+  // #426 Track 5: the condition-function picker moved off the webview the same way the FormKey
+  // picker did — onto a native `showQuickPick` over the loaded game's function catalogue
+  // (bounded, game-scoped, fetched once — no per-keystroke search, unlike OPEN_FORM_KEY_PICKER
+  // above). `seed` is the condition's current function; the extension host sorts it to the front
+  // of the QuickPick's item array (showQuickPick has no activeItem option the way createQuickPick
+  // does, so array order is the only way to pre-highlight an item).
+  OPEN_CONDITION_FUNCTION_PICKER: 'openConditionFunctionPicker',
   // #426: a `string`-typed value cell's double click — the *only* type/gesture combination where
   // double-click's target differs from second-click/F2's (see ScalarCell's own doc comment), so
   // this is the one new open-trigger message this ticket adds beyond the FormKey picker. `value`
@@ -98,6 +128,7 @@ export type WebviewToExtension =
       value: unknown;
     }
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER; requestId: string; seed: string }
   | {
       type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
       recordLabel: string; fieldName: string; plugin: string;
@@ -138,14 +169,52 @@ export interface ArrayParentContext {
   preventDefaultContextMenuItems: true;
 }
 
+// Issue #231 (#426 Track 5: restored): same mechanism as ArrayElementContext/ArrayParentContext
+// above, carried by VMAD's own row kinds instead — the "Scripts (VMAD)" wrapper row (Add Script),
+// a script row (Remove Script, Add Property, Set Script Flags), or a property row (Remove
+// Property, Set Property Flags). No extra identity beyond script/property name travels here: the
+// structural op itself resolves the rest from the record's own current VMAD tree, server-side.
+export interface VmadScriptsContext {
+  webviewSection: 'vmadScripts';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  preventDefaultContextMenuItems: true;
+}
+
+export interface VmadScriptContext {
+  webviewSection: 'vmadScript';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  scriptName: string;
+  // Seeds Set Script Flags' own QuickPick — null when this column has no disk value for the row
+  // (nothing to seed with).
+  currentFlags: string | null;
+  preventDefaultContextMenuItems: true;
+}
+
+export interface VmadPropertyContext {
+  webviewSection: 'vmadProperty';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  scriptName: string;
+  propName: string;
+  preventDefaultContextMenuItems: true;
+}
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; origin: string; fieldName: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; fieldName: string; index: number };
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP; formKey: string; plugin: string; origin: string; fieldPath: string; value: unknown }
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string };

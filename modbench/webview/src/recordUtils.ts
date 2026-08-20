@@ -122,8 +122,8 @@ export function appendArrayElement(array: unknown[], value: unknown): unknown[] 
 // The two interfaces themselves live in `src/medit/messages.ts` (imported below), not here —
 // extension.ts's own command handlers need the identical shape to type the `ctx` parameter VS
 // Code hands them, and that module is the one place both processes already share a contract.
-export type { ArrayElementContext, ArrayParentContext } from './messages';
-import type { ArrayElementContext, ArrayParentContext } from './messages';
+export type { ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext } from './messages';
+import type { ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext } from './messages';
 
 // Issue #227: DiffRow only attaches this on a mutable column's unsorted-array cell — its mere
 // presence is the gate, so no separate immutable/isSortable flag travels in the payload the way
@@ -150,6 +150,28 @@ export function arrayElementContext(
 
 export function arrayParentContext(formKey: string, plugin: string, origin: string, fieldName: string): ArrayParentContext {
   return { webviewSection: 'arrayParent', formKey, plugin, origin, fieldName, preventDefaultContextMenuItems: true };
+}
+
+// Issue #231 (resurrected #426 Track 5): same mechanism as arrayElementContext/arrayParentContext
+// above, carried by VMAD's own row kinds instead — see VmadScriptsContext/VmadScriptContext/
+// VmadPropertyContext's own doc comment (messages.ts) for why no extra identity travels beyond
+// script/property name.
+export function vmadScriptsContext(formKey: string, plugin: string, origin: string): VmadScriptsContext {
+  return { webviewSection: 'vmadScripts', formKey, plugin, origin, preventDefaultContextMenuItems: true };
+}
+
+export function vmadScriptContext(
+  formKey: string, plugin: string, origin: string, scriptName: string, currentFlags: string | null,
+): VmadScriptContext {
+  return { webviewSection: 'vmadScript', formKey, plugin, origin, scriptName, currentFlags, preventDefaultContextMenuItems: true };
+}
+
+export function vmadPropertyContext(
+  formKey: string, plugin: string, origin: string, scriptName: string, propName: string,
+): VmadPropertyContext {
+  return {
+    webviewSection: 'vmadProperty', formKey, plugin, origin, scriptName, propName, preventDefaultContextMenuItems: true,
+  };
 }
 
 // Issue #231 (review): combines every context object sharing one row into the single

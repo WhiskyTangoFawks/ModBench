@@ -21,8 +21,11 @@ import { startExternalChangePolling, runRebase, type OpenMergeEditor } from './m
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
-import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext } from './medit/messages';
-import { routeRecordPanelMessage, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
+import {
+  EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext,
+  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext,
+} from './medit/messages';
+import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
@@ -461,6 +464,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   return [
     ...registerRecordViewCommands(deps),
     ...registerArrayOpCommands(deps.recordPanels),
+    ...registerVmadOpCommands(deps.recordPanels),
   ];
 }
 
@@ -500,6 +504,89 @@ function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode
   ];
 }
 
+// Issue #231 (review): Set Script Flags/Set Property Flags' own QuickPick choices — VMAD's fixed,
+// stable flag vocabulary (the binary format's own enum, VmadCodec.cs's ScriptEntry.Flag/
+// ScriptProperty.Flag). Mirrored here rather than imported from webview/src/vmadOps.ts across the
+// webview/extension-host process boundary (nothing else on this side needs that module).
+const VMAD_SCRIPT_FLAGS = ['Local', 'Inherited', 'Removed', 'InheritedAndRemoved'] as const;
+const VMAD_PROP_FLAGS = ['Edited', 'Removed'] as const;
+
+// Issue #231 (#426 Track 5: restored, simplified): VMAD's own structural-op commands — same
+// broadcast-and-self-filter shape as registerArrayOpCommands above, reached from the "Scripts
+// (VMAD)" wrapper row (Add Script), a script row (Remove Script, Add Property, Set Script Flags),
+// or a property row (Remove Property, Set Property Flags). Unlike the historical (pre-#410)
+// six-message design, every op below (other than Add Script's own name prompt and Add Property's
+// dialog-open signal) collapses to one VMAD_STRUCTURAL_OP broadcast carrying a VmadPath fieldPath
+// and an op-envelope value — RecordFieldWriter.ApplyVmadField's own contract (Track 0), the same
+// door EDIT_FIELD already opens. Add Script still needs its own native input box
+// (pickScriptNameViaInputBox — no round trip through the webview, unlike the pre-#231 bridge) since
+// there is no existing row to right-click for a script that doesn't exist yet. Add Property
+// collects three fields at once (#229's own deliberate webview-modal exception), so its command
+// only tells the matching panel which script/plugin to open the dialog for — the dialog's own
+// confirm builds the fieldPath/op-envelope itself (RecordPanel.tsx). Set Script/Property Flags run
+// their own native QuickPick here, seeded (script only — no per-property read model carries a
+// current flag) the same way the condition-function picker sorts its own seed to the front.
+function registerVmadOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+  return [
+    vscode.commands.registerCommand('modbench.vmad.addScript', async (ctx?: VmadScriptsContext) => {
+      if (!ctx) return;
+      const name = await pickScriptNameViaInputBox();
+      if (name == null) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
+        fieldPath: `VMAD\\${name}`, value: { op: 'add_script' },
+      });
+    }),
+    vscode.commands.registerCommand('modbench.vmad.removeScript', (ctx?: VmadScriptContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
+        fieldPath: `VMAD\\${ctx.scriptName}`, value: { op: 'remove_script' },
+      });
+    }),
+    vscode.commands.registerCommand('modbench.vmad.addProperty', (ctx?: VmadScriptContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, scriptName: ctx.scriptName,
+      });
+    }),
+    vscode.commands.registerCommand('modbench.vmad.removeProperty', (ctx?: VmadPropertyContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
+        fieldPath: `VMAD\\${ctx.scriptName}\\${ctx.propName}`, value: { op: 'remove_property' },
+      });
+    }),
+    // Issue #231 (review): "seeded with the current value" means the script's own current flag is
+    // sorted to the front of the QuickPick's item array — showQuickPick has no activeItem option
+    // the way createQuickPick does, so array order is the only way to pre-highlight an item, the
+    // same convention pickConditionFunctionViaQuickPick already uses.
+    vscode.commands.registerCommand('modbench.vmad.setScriptFlags', async (ctx?: VmadScriptContext) => {
+      if (!ctx) return;
+      const items = ctx.currentFlags && (VMAD_SCRIPT_FLAGS as readonly string[]).includes(ctx.currentFlags)
+        ? [ctx.currentFlags, ...VMAD_SCRIPT_FLAGS.filter(f => f !== ctx.currentFlags)]
+        : [...VMAD_SCRIPT_FLAGS];
+      const picked = await vscode.window.showQuickPick(items, { placeHolder: 'Script flags' });
+      if (!picked) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
+        fieldPath: `VMAD\\${ctx.scriptName}`, value: { op: 'set_flags', flags: picked },
+      });
+    }),
+    // Issue #231 (review): no current-value seed — VmadPropertyContext (messages.ts) carries none,
+    // since the read model never surfaced a per-property flag even before this ticket.
+    vscode.commands.registerCommand('modbench.vmad.setPropertyFlags', async (ctx?: VmadPropertyContext) => {
+      if (!ctx) return;
+      const picked = await vscode.window.showQuickPick([...VMAD_PROP_FLAGS], { placeHolder: 'Property flags' });
+      if (!picked) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin,
+        fieldPath: `VMAD\\${ctx.scriptName}\\${ctx.propName}`, value: { op: 'set_flags', flags: picked },
+      });
+    }),
+  ];
+}
+
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
@@ -522,8 +609,9 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     repository: deps.repository,
     onRecordEdited: (formKey: string) =>
       broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey }),
-    // Placeholders — the onDidReceiveMessage wiring below overrides both per panel every call.
+    // Placeholders — the onDidReceiveMessage wiring below overrides all three per panel every call.
     formKeyPicker: undefined,
+    conditionFunctionPicker: undefined,
     extendedFieldEditor: undefined,
   };
   return [
@@ -2200,15 +2288,16 @@ function openRecordPanel(
   wireActiveRecordTracking(panel, formKey, activeRecordTracker);
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // Issue #210/#230 (#426: restored): both replies below must reach the one panel that asked,
-    // never a broadcast (see messages.ts' FORM_KEY_PICKED/OPEN_EXTENDED_EDITOR doc comments) —
-    // routerDeps itself is shared across every panel (built once in registerRecordViewCommands),
-    // so these are the two per-panel fields, rebuilt fresh on every message with the panel this
-    // closure already holds.
+    // Issue #210/#211/#230 (#426: restored): every reply below must reach the one panel that
+    // asked, never a broadcast (see messages.ts' FORM_KEY_PICKED/CONDITION_FUNCTION_PICKED/
+    // OPEN_EXTENDED_EDITOR doc comments) — routerDeps itself is shared across every panel (built
+    // once in registerRecordViewCommands), so these are the per-panel fields, rebuilt fresh on
+    // every message with the panel this closure already holds.
     const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
       formKeyPicker: { repository: routerDeps.repository, reply },
+      conditionFunctionPicker: { repository: routerDeps.repository, reply },
       // Issue #230: tempRoot/log/reporter are session-static (the same values every panel would
       // get); only `reply` genuinely varies per panel — bundled here anyway, matching
       // formKeyPicker's own reconstruction on this object.

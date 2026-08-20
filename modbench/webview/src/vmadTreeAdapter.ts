@@ -238,7 +238,10 @@ export interface VmadTreeRows {
 // "Scripts (VMAD)", matching the deleted VmadSection's own header text, so existing "does/doesn't
 // show a Scripts (VMAD) section" behavior (issue #119/#179) is unchanged in substance — only its
 // rendering mechanism (an ordinary row, not a hand-drawn section) is new.
-const WRAPPER_NAME = 'Scripts (VMAD)';
+// Exported (#426 Track 5) so DiffRow.tsx can tell a wrapper/script/property row apart from an
+// ordinary struct row purely from context.rootField/context.path — no new FieldDiff field, the
+// same "derive from the generic shape" convention isUnsortedArrayParentRow/Element already use.
+export const WRAPPER_NAME = 'Scripts (VMAD)';
 
 // The one exported entry point — RecordPanel merges `diffs` into its own `diffs` array and
 // `metaMap` into its own `fieldMetaMap` (both additive; "Scripts (VMAD)" and every VMAD script

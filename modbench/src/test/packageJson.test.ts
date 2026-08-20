@@ -430,6 +430,14 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.array.remove',
     'modbench.array.moveUp',
     'modbench.array.moveDown',
+    // #426 Track 5: same posture as the array-op commands above — each needs the clicked VMAD
+    // row's own script/property identity from its data-vscode-context, no ambient fallback.
+    'modbench.vmad.addScript',
+    'modbench.vmad.removeScript',
+    'modbench.vmad.addProperty',
+    'modbench.vmad.removeProperty',
+    'modbench.vmad.setScriptFlags',
+    'modbench.vmad.setPropertyFlags',
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
     'modbench.downloads.openFile',
@@ -461,7 +469,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(26);
+    expect(PALETTE_GATED).toHaveLength(32);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));

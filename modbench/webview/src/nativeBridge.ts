@@ -80,6 +80,21 @@ export function pickFormKey(seed: string, validTypes: string[]): Promise<string 
   );
 }
 
+// Issue #211 (#426 Track 5: restored): the condition-function picker as a native QuickPick — same
+// "webview can't call the native API itself" reasoning as pickFormKey above, but simpler: the
+// function catalogue is bounded and game-scoped, so the extension host fetches it once and hands
+// it to a plain `showQuickPick` rather than driving `createQuickPick`'s per-keystroke search.
+// `seed` is the condition's current function (empty string when there is none). Resolves to the
+// picked function name, or null when dismissed without a selection — the caller leaves the
+// condition unchanged either way, same convention as pickFormKey.
+export function pickConditionFunction(seed: string): Promise<string | null> {
+  return requestReply(
+    EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED,
+    msg => (msg.type === EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED ? msg.functionName : null),
+    requestId => ({ type: WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER, requestId, seed }),
+  );
+}
+
 // Issue #224: Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
 // (webview clipboard access isn't guaranteed), so DiskCell/DiffRow post the already-computed
 // model value (modelValue.ts) up here instead. Fire-and-forget: nothing needs to come back, since
