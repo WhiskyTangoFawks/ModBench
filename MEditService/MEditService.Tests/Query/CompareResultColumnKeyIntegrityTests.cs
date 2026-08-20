@@ -243,8 +243,8 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var ddl = new TableDdlBuilder(reflector);
         using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0, origin: "ModA", participates: true);
-        repo.Index((IModGetter)mod, 1, origin: "ModB", participates: true);
+        repo.Index((IModGetter)mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.Index((IModGetter)mod, 1, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data") };

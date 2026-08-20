@@ -49,14 +49,17 @@ public sealed class SessionManagerProgressiveLoadTests
         // after the whole load order had been indexed and swept.
         Assert.NotNull(manager.Session);
         Assert.NotNull(manager.Repository);
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "A.esp", PluginOrigin.DataDirectory));
+        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
-        Assert.Equal(0, manager.Repository!.CountRecordsForPlugin("npc_", "B.esp", PluginOrigin.DataDirectory));
+        Assert.Equal(0, manager.Repository!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
         gate.Release();
         await load;
 
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "B.esp", PluginOrigin.DataDirectory));
+        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
     [Fact]
@@ -251,7 +254,8 @@ public sealed class SessionManagerProgressiveLoadTests
         Assert.Equal(SessionState.Ready, manager.Status.State);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(survivor.WinnersComputed);
-        Assert.Equal(1, manager.Repository!.CountRecordsForPlugin("npc_", "C.esp", PluginOrigin.DataDirectory));
+        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("C.esp", PluginOrigin.DataDirectory))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
     [Fact]
@@ -268,7 +272,12 @@ public sealed class SessionManagerProgressiveLoadTests
         // The regression this pins: the load used to hold the session lock end to end, so this read
         // did not return wrong data — it returned nothing at all until the whole load order had been
         // indexed and swept. A timeout is the only way to tell "answered" from "eventually answered".
-        var read = Task.Run(() => manager.Repository?.CountRecordsForPlugin("npc_", "A.esp", PluginOrigin.DataDirectory));
+        var read = Task.Run(() =>
+        {
+            var repo = manager.Repository;
+            return repo == null ? (int?)null : repo.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
+                .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
+        });
         var finished = await Task.WhenAny(read, Task.Delay(TimeSpan.FromSeconds(5)));
 
         Assert.Same(read, finished); // timed out = a read is blocked behind the load again

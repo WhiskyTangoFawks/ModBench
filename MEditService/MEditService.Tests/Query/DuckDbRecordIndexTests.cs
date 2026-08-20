@@ -26,7 +26,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, origin: "Data");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -37,7 +37,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_ByTable_ReturnsAllRecords()
     {
         using var repo = LoadedRepository();
-        var result = repo.GetRecords("npc_", null, null, 100, 0);
+        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.Equal(TestPluginFixture.RecordCount, result.Items.Count);
     }
@@ -46,7 +46,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginFilter_ReturnsMatchingOnly()
     {
         using var repo = LoadedRepository();
-        var result = repo.GetRecords("npc_", TestPluginFixture.PluginName, null, 100, 0);
+        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey(TestPluginFixture.PluginName), Limit: 100, Offset: 0));
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.Equal(TestPluginFixture.PluginName, r.Plugin));
     }
@@ -55,7 +55,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_WithPluginFilter_WrongPlugin_ReturnsEmpty()
     {
         using var repo = LoadedRepository();
-        var result = repo.GetRecords("npc_", "NonExistent.esp", null, 100, 0);
+        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("NonExistent.esp"), Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
     }
@@ -64,7 +64,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_WithSearch_FiltersOnEditorId()
     {
         using var repo = LoadedRepository();
-        var result = repo.GetRecords("npc_", null, "TestNPC01", 100, 0);
+        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 100, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal("TestNPC01", result.Items[0].EditorId);
     }
@@ -73,8 +73,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void GetRecords_Pagination_RespectsLimitAndOffset()
     {
         using var repo = LoadedRepository();
-        var page1 = repo.GetRecords("npc_", null, null, 1, 0);
-        var page2 = repo.GetRecords("npc_", null, null, 1, 1);
+        var page1 = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 0));
+        var page2 = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 1, Offset: 1));
         Assert.Single(page1.Items);
         Assert.Single(page2.Items);
         Assert.NotEqual(page1.Items[0].FormKey, page2.Items[0].FormKey);
@@ -89,7 +89,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
+        var record = repo.GetDocument(formKey);
 
         Assert.NotNull(record);
         Assert.True(record.IsWinner);
@@ -104,7 +104,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         var formKey = _fixture.Npc1FormKey.ToString();
         var schema = Reflector.GetSchemas(GameRelease.Fallout4)["npc_"];
 
-        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
+        var record = repo.GetDocument(formKey);
 
         Assert.NotNull(record);
         Assert.NotEmpty(schema.RecordColumns);
@@ -133,10 +133,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(loaded, 0, participates: true, origin: "Data");
+        repo.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
+        var record = repo.GetDocument(npcFormKey.ToString());
 
         Assert.NotNull(record);
         var raceField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "race");
@@ -157,16 +157,16 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
-        repo.Index(mod, 0, origin: "ModA", participates: true);
-        repo.Index(mod, 1, origin: "ModB", participates: true);
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(mod, 1, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         var formKey = _fixture.Npc1FormKey.ToString();
-        var overrides = repo.GetAllOverrides("npc_", formKey);
+        var overrides = repo.GetOverrideStack(formKey)!.Entries;
 
         Assert.Equal(2, overrides.Count);
-        Assert.Contains(overrides, o => o.Origin == "ModA");
-        Assert.Contains(overrides, o => o.Origin == "ModB");
+        Assert.Contains(overrides, o => o.Plugin.Origin == "ModA");
+        Assert.Contains(overrides, o => o.Plugin.Origin == "ModB");
     }
 
     [Fact]
@@ -175,10 +175,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
 
-        var record = repo.GetRecord("npc_", formKey, TestPluginFixture.PluginName, "Data", winnerOnly: false);
+        var record = repo.GetDocument(formKey, new PluginKey(TestPluginFixture.PluginName, "Data"));
 
         Assert.NotNull(record);
-        Assert.Equal(TestPluginFixture.PluginName, record.Plugin);
+        Assert.Equal(TestPluginFixture.PluginName, record.Plugin.Name);
         Assert.Equal("TestNPC01", record.EditorId);
     }
 
@@ -204,10 +204,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(loaded, 0, participates: true, origin: "Data");
+            repo.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
-            var record = repo.GetRecord("race", formKey, null, null, winnerOnly: false);
+            var record = repo.GetDocument(formKey);
 
             Assert.NotNull(record);
             var flags = record.Fields.Single(f => f.Metadata.Name == "flags");
@@ -225,7 +225,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     {
         using var repo = LoadedRepository();
 
-        var record = repo.GetRecord("npc_", "FFFFFF:Unknown.esp", null, null, winnerOnly: false);
+        var record = repo.GetDocument("FFFFFF:Unknown.esp");
 
         Assert.Null(record);
     }
@@ -251,15 +251,15 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(modALoaded, 0, participates: true, origin: "Data");
-            repo.Index(modB, 1, participates: true, origin: "Data");
+            repo.Index(modALoaded, 0, participates: true, key: new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.Index(modB, 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
-            var record = repo.GetRecord("npc_", npcKey.ToString(), null, null, winnerOnly: true);
+            var record = repo.GetDocument(npcKey.ToString());
 
             Assert.NotNull(record);
             Assert.True(record.IsWinner);
-            Assert.Equal("PluginB.esp", record.Plugin);
+            Assert.Equal("PluginB.esp", record.Plugin.Name);
         }
         finally
         {
@@ -292,11 +292,11 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(modALoaded, 0, participates: true, origin: "Data");
-            repo.Index(modB, 1, participates: true, origin: "Data");
+            repo.Index(modALoaded, 0, participates: true, key: new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.Index(modB, 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
-            var overrides = repo.GetAllOverrides("npc_", npcKey.ToString());
+            var overrides = repo.GetOverrideStack(npcKey.ToString())!.Entries;
 
             Assert.Equal(2, overrides.Count);
             Assert.Equal(0, overrides[0].LoadOrderIndex);
@@ -316,7 +316,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_ReturnsCorrectCount()
     {
         using var repo = LoadedRepository();
-        var count = repo.CountRecordsForPlugin("npc_", TestPluginFixture.PluginName, "Data");
+        var count = repo.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         Assert.Equal(TestPluginFixture.RecordCount, count);
     }
 
@@ -324,7 +325,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void CountRecordsForPlugin_UnknownPlugin_ReturnsZero()
     {
         using var repo = LoadedRepository();
-        var count = repo.CountRecordsForPlugin("npc_", "NonExistent.esp", "Data");
+        var count = repo.GetRecordTypeCounts(new PluginKey("NonExistent.esp", "Data"))
+            .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         Assert.Equal(0, count);
     }
 
@@ -354,7 +356,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void ResolveFormKey_KnownFormKey_ReturnsRecordTypeAndEditorId()
     {
         using var repo = LoadedRepository();
-        var entry = repo.ResolveFormKey(_fixture.Npc1FormKey.ToString());
+        var entry = repo.Resolve(_fixture.Npc1FormKey.ToString());
         Assert.NotNull(entry);
         Assert.Equal("npc_", entry!.Value.RecordType);
         Assert.Equal("TestNPC01", entry.Value.EditorId);
@@ -364,7 +366,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void ResolveFormKey_UnknownFormKey_ReturnsNull()
     {
         using var repo = LoadedRepository();
-        var entry = repo.ResolveFormKey("FFFFFF:Unknown.esp");
+        var entry = repo.Resolve("FFFFFF:Unknown.esp");
         Assert.Null(entry);
     }
 
@@ -374,7 +376,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     public void UpdateWinners_SinglePlugin_AllRecordsAreWinners()
     {
         using var repo = LoadedRepository();
-        var result = repo.GetRecords("npc_", null, null, 100, 0);
+        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
     }
 
@@ -404,10 +406,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(loaded, 0, participates: true, origin: "Data");
+        repo.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
+        var record = repo.GetDocument(npcFormKey.ToString());
 
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
@@ -425,7 +427,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         using var repo = LoadedRepository();
         // Both conditions active — exercises the AND separator in BuildWhere.
         // Non-existent plugin + matching search = 0 results (not "all matching search").
-        var result = repo.GetRecords("npc_", "NonExistent.esp", "TestNPC", 100, 0);
+        var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("NonExistent.esp"), Search: "TestNPC", Limit: 100, Offset: 0));
         Assert.Equal(0, result.Total);
     }
 
@@ -455,11 +457,11 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(modALoaded, 0, participates: true, origin: "Data");
-            repo.Index(modBLoaded, 1, participates: true, origin: "Data");
+            repo.Index(modALoaded, 0, participates: true, key: new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.Index(modBLoaded, 1, participates: true, key: new PluginKey(modBLoaded.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
 
-            var result = repo.SearchRecords(["npc_"], "SearchA.esm", null, 100, 0);
+            var result = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("SearchA.esm"), Limit: 100, Offset: 0));
 
             Assert.Equal(1, result.Total);
             Assert.All(result.Items, r => Assert.Equal("SearchA.esm", r.Plugin));
@@ -491,13 +493,13 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(loaded, 0, participates: true, origin: "Data");
+        repo.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var summary = repo.GetRecords("npc_", null, null, 100, 0).Items.Single();
+        var summary = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0)).Items.Single();
         Assert.Null(summary.EditorId);
 
-        var detail = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: false);
+        var detail = repo.GetDocument(npcFormKey.ToString());
         Assert.NotNull(detail);
         Assert.Null(detail.EditorId);
     }
@@ -509,7 +511,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
     {
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            repo.GetRecord("npc_", "000001:Test.esp", null, null, winnerOnly: false));
+            repo.GetDocument("000001:Test.esp"));
         Assert.Equal("Call Initialize before using the repository.", ex.Message);
         repo.Dispose();
     }
@@ -604,7 +606,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         // Unset FormLink fields are appended as null → IsDBNull=true → must return C# null not DBNull.Value
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
-        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
+        var record = repo.GetDocument(formKey);
         Assert.NotNull(record);
         var linkField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "formKey" && f.Value == null);
         Assert.NotNull(linkField); // NPC has unset FormLink fields → null in DuckDB
@@ -616,7 +618,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         // Float fields (height, weight) are value types — always non-null in DuckDB
         using var repo = LoadedRepository();
         var formKey = _fixture.Npc1FormKey.ToString();
-        var record = repo.GetRecord("npc_", formKey, null, null, winnerOnly: true);
+        var record = repo.GetDocument(formKey);
         Assert.NotNull(record);
         var floatField = record.Fields.FirstOrDefault(f => f.Metadata.Type == "float");
         Assert.NotNull(floatField);
@@ -645,10 +647,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(loaded, 0, participates: true, origin: "Data");
+        repo.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
+        var record = repo.GetDocument(npcFormKey.ToString());
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
         Assert.NotNull(keywordsField);
@@ -676,10 +678,10 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(loaded, 0, participates: true, origin: "Data");
+        repo.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var record = repo.GetRecord("npc_", npcFormKey.ToString(), null, null, winnerOnly: true);
+        var record = repo.GetDocument(npcFormKey.ToString());
         Assert.NotNull(record);
         var keywordsField = record.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
         Assert.NotNull(keywordsField);
@@ -714,15 +716,15 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
 
         using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index(baseMod, 0, participates: true, origin: "Data");
-        repo.Index(patchMod, 1, participates: true, origin: "Data");
+        repo.Index(baseMod, 0, participates: true, key: new PluginKey(baseMod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(patchMod, 1, participates: true, key: new PluginKey(patchMod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
-        var overrides = repo.GetAllOverrides("npc_", npcFormKey.ToString());
+        var overrides = repo.GetOverrideStack(npcFormKey.ToString())!.Entries;
 
         Assert.Equal(2, overrides.Count);
-        var baseKw = overrides[0].Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
-        var patchKw = overrides[1].Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var baseKw = overrides[0].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
+        var patchKw = overrides[1].Effective.Fields.FirstOrDefault(f => f.Metadata.Name == "keywords");
         Assert.NotNull(baseKw);
         Assert.NotNull(patchKw);
         Assert.Null(baseKw.CheckError);

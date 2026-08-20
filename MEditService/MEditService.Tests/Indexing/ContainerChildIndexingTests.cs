@@ -55,7 +55,7 @@ public sealed class ContainerChildIndexingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0, participates: true, origin: "Data");
+        repo.Index((IModGetter)mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
 
         return new Built(

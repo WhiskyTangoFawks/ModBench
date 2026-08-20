@@ -162,7 +162,7 @@ public sealed class ConditionIndexerTests : IDisposable
             ModKey.FromFileName("CtdaTest.esp"),
             Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, origin: "Data");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -180,8 +180,8 @@ public sealed class ConditionIndexerTests : IDisposable
             Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
-        repo.Index(mod, 0, origin: "ModA", participates: true);
-        repo.Index(mod, 1, origin: "ModB", participates: true);
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(mod, 1, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         Assert.NotEmpty(GetConditions(repo, _cobjFormKey.ToString(), "CtdaTest.esp", "ModA"));
@@ -344,7 +344,7 @@ public sealed class ConditionIndexerTests : IDisposable
     public void GetReferences_RecordReferencedOnlyByCondition_ReturnsReferencingRecord()
     {
         using var repo = LoadedRepository();
-        var references = repo.GetReferences(_referenceTargetFormKey.ToString());
+        var references = repo.GetReferencedBy(_referenceTargetFormKey.ToString());
 
         var reference = Assert.Single(references);
         Assert.Equal(_runOnRefCobjFormKey.ToString(), reference.FormKey);

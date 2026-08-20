@@ -93,7 +93,7 @@ public sealed class VmadIndexerTests : IDisposable
             ModKey.FromFileName("VmadTest.esp"),
             Path.Combine(_fixture.DataFolder, "VmadTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, origin: "Data");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -145,7 +145,7 @@ public sealed class VmadIndexerTests : IDisposable
             ModKey.FromFileName("VmadTest.esp"),
             Path.Combine(_fixture.DataFolder, "VmadTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, origin: "Data");
+        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
 
         var count = CountRows(repo.Connection, "records",
             "form_key = $1 AND plugin = $2 AND origin = $3",
