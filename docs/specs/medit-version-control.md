@@ -1,10 +1,18 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: partially implemented — Track shipped (#414); everything else designed, not yet
-implemented.** Track is live end to end: preset QuickPick, progress-reported eager
-serialization, pristine `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256`
-trailers, checked-out `edit` branch, parked `refs/medit/last-compile/<plugin>` ref, and
-native SCM registration via `vscode.git` `openRepository`. This is the Track/Compile surface spec the
+**Status: partially implemented — Track (#414) and the text-first edit path (#415) shipped;
+Save & Compile (#416) and external-change handling (#417) designed, not yet implemented.**
+Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
+`main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
+branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
+`vscode.git` `openRepository`. Editing is live on the git-native model: a field edit writes
+the record's working-tree ledger JSON (the single write path — scalar inline gesture in the
+grid, plus `POST /records/{formKey}/field` for scripts/agents); the editor and compare grid
+render working-tree values; reverting through git restores the committed value at the next
+read (read-time freshness validation via `content_hash`, no watcher); untracked plugins are
+hard read-only with signposting (`Modbench: Track…`, or the patch-plugin path for vanilla
+masters). The remaining editor gestures, lifecycle gestures, and dirty-badge decorations are
+split-out follow-ups. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417). It is written ahead of
 implementation deliberately — the closeout slice (#418) trues it up to **Implemented**,
