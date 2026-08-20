@@ -425,3 +425,32 @@ describe('DiffRow — formKey cell wiring (#426)', () => {
       .toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '00001A:Fallout4.esm'));
   });
 });
+
+// #426: a string cell's double click reports its own identity (plugin/fieldPath/value/readOnly)
+// up to RecordPanel, which alone knows the record's own label for the bridge call — DiffRow never
+// opens the tab itself.
+describe('DiffRow — extended editor wiring (#426)', () => {
+  it('an editable string cell reports readOnly: false with its current value', () => {
+    const onOpenExtendedEditor = vi.fn();
+    renderRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      onOpenExtendedEditor,
+    });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]);
+    expect(onOpenExtendedEditor).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', 'disk-value', false);
+  });
+
+  it('an immutable string cell (no onEditCell wired) still reaches the bridge, with readOnly: true', () => {
+    const onOpenExtendedEditor = vi.fn();
+    renderRow({ onOpenExtendedEditor });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[0]);
+    expect(onOpenExtendedEditor).toHaveBeenCalledWith(columnKey('Fallout4.esm', null), 'Name', 'disk-value', true);
+  });
+
+  it('no bridge call when onOpenExtendedEditor is not wired', () => {
+    renderRow();
+    // Would throw if DiffRow assumed the prop present rather than guarding it.
+    expect(() => fireEvent.doubleClick(screen.getAllByText('disk-value')[0])).not.toThrow();
+  });
+});

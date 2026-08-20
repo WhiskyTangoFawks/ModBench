@@ -14,6 +14,20 @@ export const EXTENSION_TO_WEBVIEW = {
   // QuickPick that produced it only ever existed for that one request. `formKey: null` means the
   // user dismissed the picker (Escape/blur) — the caller leaves its field unchanged.
   FORM_KEY_PICKED: 'formKeyPicked',
+  // #426: the extended editor's commit — unlike FORM_KEY_PICKED above (resolved once, then
+  // done), a real editor tab can be saved more than once while it stays open, so this is not a
+  // one-shot reply: the extension host posts one of these per `Ctrl+S` against the temp file it
+  // opened for `requestId`, and the webview's nativeBridge keeps that `requestId`'s callback
+  // registered (not deleted after the first message) until EXTENDED_EDITOR_CLOSED arrives.
+  // `value` is the file's full saved content — the same string a normal commit would carry
+  // through `onCommit`.
+  EXTENDED_EDITOR_COMMITTED: 'extendedEditorCommitted',
+  // #426: fired once, when the user closes the tab (`onDidCloseTextDocument`) — the signal
+  // nativeBridge needs to delete its `requestId -> onCommit` map entry so a session that opens
+  // many fields' extended editors over time doesn't accumulate one stale entry per tab ever
+  // opened. Carries no value: closing commits nothing beyond whatever EXTENDED_EDITOR_COMMITTED
+  // messages already arrived before it.
+  EXTENDED_EDITOR_CLOSED: 'extendedEditorClosed',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -38,6 +52,14 @@ export const WEBVIEW_TO_EXTENSION = {
   // value and used to pre-select the matching item; `validTypes` is the field's allowed record
   // types, same filter the picker always applied (pre-#410 #210, resurrected unchanged).
   OPEN_FORM_KEY_PICKER: 'openFormKeyPicker',
+  // #426: a `string`-typed value cell's double click — the *only* type/gesture combination where
+  // double-click's target differs from second-click/F2's (see ScalarCell's own doc comment), so
+  // this is the one new open-trigger message this ticket adds beyond the FormKey picker. `value`
+  // seeds the tab; `readOnly` is decided by the webview (it already knows the column's own
+  // editability) rather than re-derived on the extension-host side. The extension host owns
+  // turning `recordLabel`/`fieldName`/`plugin` into a filesystem-safe path — a host-only concern
+  // (only it touches the filesystem), so the webview hands over identity, not a pre-built path.
+  OPEN_EXTENDED_EDITOR: 'openExtendedEditor',
 } as const;
 
 export type LogLevel = 'debug' | 'info' | 'warn';
@@ -63,10 +85,24 @@ export type WebviewToExtension =
       fieldPath: string;
       value: unknown;
     }
-  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] };
+  | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER; requestId: string; seed: string; validTypes: string[] }
+  | {
+      type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR; requestId: string; value: string;
+      recordLabel: string; fieldName: string; plugin: string;
+      // #272 / ADR-0036: required alongside `plugin`, consistent with every other column-identity
+      // payload above — folds into the temp-file path (extendedEditorPath's own directory
+      // segment) so two same-filename columns never alias onto one file.
+      origin: string;
+      readOnly: boolean;
+      // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is
+      // every call site's own meaning unless it's the pending column's own.
+      column?: 'pending';
+    };
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null };
+  | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
+  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
+  | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string };

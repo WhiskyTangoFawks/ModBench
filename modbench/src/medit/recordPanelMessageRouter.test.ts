@@ -10,6 +10,15 @@ vi.mock('vscode', () => ({
   window: { createQuickPick: (...args: unknown[]) => createQuickPick(...args) },
 }));
 
+// Issue #230: openExtendedFieldEditor has its own deep test suite (extendedFieldEditor.test.ts,
+// which exercises the real temp-file/save/close mechanics) — this file only needs to prove the
+// router dispatches OPEN_EXTENDED_EDITOR to it with the right params, so the function itself is
+// mocked here rather than pulling its full vscode surface into this file's own vscode mock too.
+const openExtendedFieldEditorMock = vi.fn();
+vi.mock('./extendedFieldEditor', () => ({
+  openExtendedFieldEditor: (...args: unknown[]) => openExtendedFieldEditorMock(...args),
+}));
+
 import {
   routeRecordPanelMessage, pickFormKeyViaQuickPick, normalizeFormKeyQuery,
   type FormKeyPickerDeps, type RouteRecordPanelMessageDeps,
@@ -17,7 +26,7 @@ import {
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 import type { RecordSummary } from './ApiClient';
 
-beforeEach(() => { createQuickPick.mockClear(); });
+beforeEach(() => { createQuickPick.mockClear(); openExtendedFieldEditorMock.mockClear(); });
 
 function fakeChannel() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn() };
@@ -39,6 +48,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
     // #426: undefined by default, matching every other per-panel bridge bundle — a message that
     // arrives with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
+    extendedFieldEditor: undefined,
     ...overrides,
   };
 }
@@ -475,5 +485,68 @@ describe('routeRecordPanelMessage — OPEN_FORM_KEY_PICKER (issue #210)', () => 
     await dispatchPromise;
 
     expect(reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED, requestId: 'r2', formKey: null });
+  });
+});
+
+describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => {
+  it('with extendedFieldEditor deps undefined is a no-op', async () => {
+    await expect(routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data', readOnly: false },
+      makeDeps(),
+    )).resolves.toBeUndefined();
+    expect(openExtendedFieldEditorMock).not.toHaveBeenCalled();
+  });
+
+  it('forwards the message identity/value/readOnly and the deps bundle to openExtendedFieldEditor', async () => {
+    const reply = vi.fn();
+    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true },
+      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
+    );
+
+    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
+      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true, column: undefined },
+      extendedFieldEditorDeps,
+    );
+  });
+
+  // #272 / ADR-0036: origin is forwarded even though extendedEditorPath doesn't use it yet
+  // (unreachable path collision until #34) — the router's own job is just faithful forwarding.
+  it('forwards origin through to openExtendedFieldEditor', async () => {
+    const reply = vi.fn();
+    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
+
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },
+      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
+    );
+
+    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }),
+      extendedFieldEditorDeps,
+    );
+  });
+
+  // Issue #242: the pending column's own request carries `column: 'pending'` — forwarded through
+  // to openExtendedFieldEditor's params so its tab identity stays independent of the disk cell's.
+  it('forwards column: "pending" through to openExtendedFieldEditor for a pending-cell request', async () => {
+    const reply = vi.fn();
+    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
+
+    await routeRecordPanelMessage(
+      {
+        type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'staged value',
+        recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data',
+        readOnly: false, column: 'pending',
+      },
+      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
+    );
+
+    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ column: 'pending' }),
+      extendedFieldEditorDeps,
+    );
   });
 });

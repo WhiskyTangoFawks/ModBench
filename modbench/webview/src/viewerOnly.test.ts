@@ -49,8 +49,16 @@ describe('the record editor webview writes through exactly one path (#415)', () 
     expect(posters).toEqual(['nativeBridge.ts']);
   });
 
+  // #426: EXTENDED_EDITOR_/ARRAY_*/VMAD_* are struck from this list one at a time as the gesture-
+  // inventory ticket restores each — they were never pending-change concepts themselves, only
+  // caught here because #410 retired everything on the old write path in one sweep (this ticket's
+  // own commit history shows EXTENDED_EDITOR_ leaving the list the moment #426 Track 3 restored
+  // it). Genuinely dead for good, because each *is* the pending-change/staging model itself
+  // (ADR-0017/0028, superseded by ADR-0041's working-tree model, which has no "pending" state to
+  // stage into, no per-plugin Save button, and no whole-record column-header copy action of its
+  // own): PENDING_CHANGED, OPEN_REVERT_GROUP_CONFIRM, PENDING_CELL_, COLUMN_HEADER_.
   it('no retired pending-change message came back with the write path', () => {
-    const RETIRED_MESSAGE = /PENDING_CHANGED|OPEN_REVERT_GROUP_CONFIRM|PENDING_CELL_|ARRAY_ADD|ARRAY_REMOVE|ARRAY_MOVE_|VMAD_ADD_|VMAD_REMOVE_|VMAD_SET_|VMAD_OPEN_ADD_PROPERTY|COLUMN_HEADER_|EXTENDED_EDITOR_/;
+    const RETIRED_MESSAGE = /PENDING_CHANGED|OPEN_REVERT_GROUP_CONFIRM|PENDING_CELL_|ARRAY_ADD|ARRAY_REMOVE|ARRAY_MOVE_|VMAD_ADD_|VMAD_REMOVE_|VMAD_SET_|VMAD_OPEN_ADD_PROPERTY|COLUMN_HEADER_/;
     const offenders = sources.filter((f) => RETIRED_MESSAGE.test(read(f)));
     expect(offenders).toEqual([]);
   });

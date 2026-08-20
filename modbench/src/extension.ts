@@ -485,8 +485,9 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     repository: deps.repository,
     onRecordEdited: (formKey: string) =>
       broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey }),
-    // Placeholder — the onDidReceiveMessage wiring below overrides this per panel every call.
+    // Placeholders — the onDidReceiveMessage wiring below overrides both per panel every call.
     formKeyPicker: undefined,
+    extendedFieldEditor: undefined,
   };
   return [
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
@@ -2082,6 +2083,11 @@ function promptPluginName(): Thenable<string | undefined> {
 
 const RECORD_PANEL_KEY = '__record_view__';
 
+// Issue #230 (#426: restored): the temp directory every extended-editor tab writes under —
+// session-static (the same value every panel gets), so it lives at module scope rather than in
+// any per-panel bundle.
+const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
+
 // #282: pulled out of openRecordPanel purely for its line budget (same reasoning as
 // createReferencedByTree/registerReferencedByCopyCommand above) — wires a freshly created panel
 // into activeRecordTracker. FormKey is recorded before the panel is declared active, so a brand
@@ -2157,13 +2163,24 @@ function openRecordPanel(
   wireActiveRecordTracking(panel, formKey, activeRecordTracker);
 
   panel.webview.onDidReceiveMessage((msg: unknown) => {
-    // Issue #210 (#426: restored): the FormKey picker's reply must reach the one panel that
-    // asked, never a broadcast (see messages.ts' FORM_KEY_PICKED doc comment) — routerDeps itself
-    // is shared across every panel (built once in registerRecordViewCommands), so this is the one
-    // per-panel field, rebuilt fresh on every message with the panel this closure already holds.
+    // Issue #210/#230 (#426: restored): both replies below must reach the one panel that asked,
+    // never a broadcast (see messages.ts' FORM_KEY_PICKED/OPEN_EXTENDED_EDITOR doc comments) —
+    // routerDeps itself is shared across every panel (built once in registerRecordViewCommands),
+    // so these are the two per-panel fields, rebuilt fresh on every message with the panel this
+    // closure already holds.
+    const reply = (m: ExtensionToWebview) => { void panel.webview.postMessage(m); };
     void routeRecordPanelMessage(msg, {
       ...routerDeps,
-      formKeyPicker: { repository: routerDeps.repository, reply: (m: ExtensionToWebview) => { void panel.webview.postMessage(m); } },
+      formKeyPicker: { repository: routerDeps.repository, reply },
+      // Issue #230: tempRoot/log/reporter are session-static (the same values every panel would
+      // get); only `reply` genuinely varies per panel — bundled here anyway, matching
+      // formKeyPicker's own reconstruction on this object.
+      extendedFieldEditor: {
+        tempRoot: extendedFieldEditorTempRoot,
+        reply,
+        log: (m: string) => routerDeps.channel.debug(m),
+        reporter: routerDeps.reporter,
+      },
     });
   });
 

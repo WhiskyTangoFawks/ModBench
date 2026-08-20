@@ -9,7 +9,7 @@ import { buildConditionRows } from './conditionTreeAdapter';
 import type { ColumnKey, CompareOverride, CompareResult, ConflictThis, FieldDiff, FieldMetadata } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
-import { editField } from './nativeBridge';
+import { editField, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
 import type { RecordSessionClient } from './RecordSessionClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
@@ -119,6 +119,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (!override) return;
     editField(formKey, override.plugin, override.origin, fieldPath, value);
   }, [result, formKey]);
+
+  // #426: a string cell's double click, opened in a real editor tab. Commits through the exact
+  // same handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
+  // identical write path, not a second one (extendedFieldEditor.ts's own doc comment).
+  const handleOpenExtended = useCallback((plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => {
+    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
+    if (!override) return;
+    // Issue #218's own composite label — the same "EditorID [FormKey]" string the FormKey picker
+    // seeds with and the header displays, so the tab's directory names the record the same way
+    // every other identity-bearing surface here already does.
+    const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
+    const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
+    openExtendedFieldEditor(
+      { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
+      (v: string) => handleEditCell(plugin, fieldPath, v),
+    );
+  }, [result, formKey, handleEditCell]);
 
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
@@ -347,6 +364,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={handleEditCell}
+        onOpenExtendedEditor={handleOpenExtended}
         collapsedColumns={collapsedColumns}
         onOpen={handleOpen}
         context={{ path, overrideMeta: meta, rootField }}

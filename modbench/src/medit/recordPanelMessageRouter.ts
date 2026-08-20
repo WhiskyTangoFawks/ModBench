@@ -3,6 +3,7 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 import type { Reporter } from '../modmanager/deployer';
 import type { RecordSummary } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
+import { openExtendedFieldEditor, type ExtendedFieldEditorDeps } from './extendedFieldEditor';
 
 export interface RouteRecordPanelMessageDeps {
   // #415/ADR-0041: the single write path, reached from the panel. Injected rather than imported so
@@ -29,6 +30,12 @@ export interface RouteRecordPanelMessageDeps {
   // `channel`/`reporter`. Undefined when the panel wasn't wired for the picker, matching every
   // other optional bundle's convention pre-#410.
   formKeyPicker: FormKeyPickerDeps | undefined;
+  // Issue #230 (#426: restored): same per-panel reconstruction as formKeyPicker above (`reply`
+  // must go back to the one panel that asked) — but this bundle also carries `tempRoot`/`log`,
+  // which are session-static and simply copied into every per-panel reconstruction rather than
+  // varying with it (see extendedFieldEditor.ts's own doc comment for why a real temp file is
+  // the vehicle).
+  extendedFieldEditor: ExtendedFieldEditorDeps | undefined;
 }
 
 export interface FormKeyPickerDeps {
@@ -75,7 +82,28 @@ export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPan
     await editField(deps, m);
   } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
     await replyFormKeyPicked(deps.formKeyPicker, m);
+  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR) {
+    await openExtendedEditor(deps.extendedFieldEditor, m);
   }
+}
+
+// Issue #230 (#426: restored): the extension host's own half of the extended-editor bridge — the
+// deps-present guard matches every other optional bundle's convention, and the real work
+// (temp file, tab, save/close listeners) lives entirely in extendedFieldEditor.ts, which owns its
+// reply(ies) itself (zero, one, or many — a save event per Ctrl+S, plus one on close), so this is
+// a thin pass-through rather than a reply-once wrapper.
+async function openExtendedEditor(
+  deps: ExtendedFieldEditorDeps | undefined,
+  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR }>,
+): Promise<void> {
+  if (!deps) return;
+  await openExtendedFieldEditor(
+    {
+      requestId: m.requestId, value: m.value, recordLabel: m.recordLabel, fieldName: m.fieldName,
+      plugin: m.plugin, origin: m.origin, readOnly: m.readOnly, column: m.column,
+    },
+    deps,
+  );
 }
 
 // Issue #210 (#426: restored): same "EditorID [FormKey]" label the picker's items have always
