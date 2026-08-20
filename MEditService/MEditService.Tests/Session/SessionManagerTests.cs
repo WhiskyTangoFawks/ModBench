@@ -23,7 +23,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     private static SessionManager MakeManager(IModImporter? modImporter = null)
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory,
             modImporter: modImporter);
     }
@@ -32,7 +32,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_DelegatesToFactory()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var spy = new SpyRepositoryFactory(inner);
         using var manager = new SessionManager(spy);
 
@@ -71,7 +71,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using var manager = MakeManager();
         manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
 
-        var result = manager.Repository!.GetRecords("npc_", null, null, 100, 0);
+        var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
@@ -328,13 +328,13 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
     // --- helpers ---
 
-    private sealed class SpyRepositoryFactory(IRecordRepositoryFactory inner) : IRecordRepositoryFactory
+    private sealed class SpyRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
     {
-        private readonly IRecordRepositoryFactory _inner = inner;
+        private readonly IRecordIndexFactory _inner = inner;
         public int CreateCallCount { get; private set; }
         public GameRelease? LastGameRelease { get; private set; }
 
-        public IRecordRepository Create(GameRelease gameRelease)
+        public IRecordIndex Create(GameRelease gameRelease)
         {
             CreateCallCount++;
             LastGameRelease = gameRelease;
@@ -517,7 +517,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
             await manager.ReindexPlugins(["Plugin.esp"]);
 
-            var detail = manager.Repository!.GetRecord("npc_", npcKey.ToString(), "Plugin.esp", "Data", winnerOnly: false)!;
+            var detail = manager.Repository!.GetDocument(npcKey.ToString(), new PluginKey("Plugin.esp", "Data"))!;
             var aggressionValue = detail.Fields.First(f => f.Metadata.Name == "aggression").Value?.ToString();
             Assert.Equal("Frenzied", aggressionValue);
             Assert.True(detail.IsWinner);

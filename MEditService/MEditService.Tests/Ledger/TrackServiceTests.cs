@@ -32,7 +32,7 @@ public sealed class TrackServiceTests
             var npc2 = mod.Npcs.AddNew("SecondNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ISessionManager sessionManager = manager;
             sessionManager.LoadExplicit(
                 gameDir,
@@ -86,7 +86,7 @@ public sealed class TrackServiceTests
             File.WriteAllBytes(Path.Combine(modFolder, "meta.ini"), metaBytes);
             var expectedHash = Convert.ToHexString(SHA256.HashData(metaBytes));
 
-            using var manager = new SessionManager(new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ISessionManager sessionManager = manager;
             sessionManager.LoadExplicit(
                 gameDir,
@@ -122,7 +122,7 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ISessionManager sessionManager = manager;
             sessionManager.LoadExplicit(
                 gameDir,
@@ -163,7 +163,7 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ISessionManager sessionManager = manager;
             sessionManager.LoadExplicit(
                 gameDir,
@@ -210,7 +210,7 @@ public sealed class TrackServiceTests
             for (var i = 0; i < 400; i++) mod.Npcs.AddNew($"Npc{i}");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordRepositoryFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ISessionManager sessionManager = manager;
             sessionManager.LoadExplicit(
                 gameDir,

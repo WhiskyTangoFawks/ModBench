@@ -2,6 +2,7 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
@@ -24,7 +25,7 @@ namespace MEditService.Tests.RealData;
 /// </summary>
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
 {
-    private readonly DuckDbRecordRepository _repo = fixture.Repo;
+    private readonly DuckDbRecordIndex _repo = fixture.Repo;
     private const string Origin = "Data";
     private const int PerType = 3;
     // Larger than the record count of any type in the cut-down plugin (info, the largest, has 2,873).
@@ -32,6 +33,20 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
 
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+
+    // #421: GetVmad/GetConditions are rejected from IRecordReads/IRecordIndex — reconstitution
+    // moved to Queries/RecordDocumentCodecs, operating on RecordDocument.Body.
+    private VmadData? GetVmad(string formKey)
+    {
+        var document = _repo.GetDocument(formKey, new PluginKey(TestPluginName, Origin));
+        return document == null ? null : RecordDocumentCodecs.GetVmad(document, GameRelease.Fallout4, NullLogger.Instance);
+    }
+
+    private IReadOnlyList<ConditionOwner> GetConditions(string formKey)
+    {
+        var document = _repo.GetDocument(formKey, new PluginKey(TestPluginName, Origin));
+        return document == null ? [] : RecordDocumentCodecs.GetConditions(document, GameRelease.Fallout4, ConditionCodecRegistry.For(GameRelease.Fallout4.ToCategory()));
+    }
 
     /// <summary>Record types the cut-down plugin actually carries, in a fixed order.</summary>
     private static readonly string[] Types =
@@ -91,7 +106,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     {
         var captured = Types
             .SelectMany(type => FormKeysOf(type).Select(fk => (Type: type, FormKey: fk)))
-            .Select(r => (r.Type, r.FormKey, Vmad: _repo.GetVmad(r.FormKey, TestPluginName, Origin)))
+            .Select(r => (r.Type, r.FormKey, Vmad: GetVmad(r.FormKey)))
             .Where(r => r.Vmad != null)
             .ToDictionary(r => $"{r.Type}/{r.FormKey}", r => r.Vmad);
 
@@ -104,7 +119,7 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     {
         var captured = Types
             .SelectMany(type => FormKeysOf(type).Select(fk => (Type: type, FormKey: fk)))
-            .Select(r => (r.Type, r.FormKey, Owners: _repo.GetConditions(r.FormKey, TestPluginName, Origin)))
+            .Select(r => (r.Type, r.FormKey, Owners: GetConditions(r.FormKey)))
             .Where(r => r.Owners.Count > 0)
             .ToDictionary(r => $"{r.Type}/{r.FormKey}", r => r.Owners);
 

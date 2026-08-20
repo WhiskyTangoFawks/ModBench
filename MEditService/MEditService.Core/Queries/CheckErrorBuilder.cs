@@ -8,7 +8,7 @@ namespace MEditService.Core.Queries;
 /// </summary>
 public static class CheckErrorBuilder
 {
-    // ADR-0031: resolve callers pass IRecordRepository.ResolveFormKey (the O(1) form_lookup read),
+    // ADR-0031: resolve callers pass IRecordReads.Resolve (the O(1) form_lookup read),
     // not FindRecordType's per-table scan — resolve is a raw lookup; the not-found/wrong-type/
     // valid-type distinction is computed uniformly here via FormKeyResolution.From, the same factory
     // FieldDiff/VmadPropertyDiff resolution uses.

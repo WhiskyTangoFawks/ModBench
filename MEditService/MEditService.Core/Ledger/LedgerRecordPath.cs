@@ -25,9 +25,10 @@ internal sealed record LedgerRecordIdentity(string PluginFileName, string Record
 ///   only unique within its own origin ModKey, not globally, so two records from *different*
 ///   masters sharing a local ID and written into the same target plugin would otherwise collide on
 ///   one path and silently clobber each other's baseline and history — confirmed as a real defect
-///   (review, #370) before this segment existed. <c>RecordQueryService.GetRecordForPlugin</c>
-///   exists precisely because "held by a plugin that isn't the record's origin" is routine, not
-///   an edge case, so this can't be assumed away.
+///   (review, #370) before this segment existed. A plugin holding a record it did not
+///   originate — an override — is the routine case, not an edge case: every override is exactly
+///   this (<see cref="Records.IRecordReads.GetDocument(string, Records.PluginKey)"/> resolves one
+///   on demand), so this can't be assumed away.
 ///
 /// A child record's placement inside its parent (e.g. a placed ref's parent cell) is not encoded
 /// in this path — nothing in #370 vendors a placed child yet (that's #373's write shape), so there

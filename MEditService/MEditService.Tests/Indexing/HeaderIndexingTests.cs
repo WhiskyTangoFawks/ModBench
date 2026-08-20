@@ -21,14 +21,14 @@ public class HeaderIndexingTests
 
     private static long ToLong(object? v) => Convert.ToInt64(v, CultureInfo.InvariantCulture);
 
-    private static DuckDbRecordRepository NewRepo()
+    private static DuckDbRecordIndex NewRepo()
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         return repo;
     }
 
-    private static List<Dictionary<string, object?>> Query(DuckDbRecordRepository repo, string sql, params string[] parameters)
+    private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql, params string[] parameters)
     {
         using var cmd = repo.Connection.CreateCommand();
         cmd.CommandText = sql;

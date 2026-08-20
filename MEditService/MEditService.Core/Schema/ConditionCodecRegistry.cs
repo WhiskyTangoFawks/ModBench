@@ -2,7 +2,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Schema;
 
-// The per-game condition-codec registry (ADR-0032) — the single source DuckDbRecordRepository
+// The per-game condition-codec registry (ADR-0032) — the single source DuckDbRecordIndex
 // (read-side indexing), PluginWriter (write-back), and RecordQueryService (the function catalog,
 // #152) all resolve a game's IConditionCodec through, so registering a new game is one line here
 // rather than three separately-maintained copies. An absent game simply has no condition support.

@@ -17,9 +17,9 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         return this;
     }
 
-    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true, string origin = PluginOrigin.DataDirectory)
+    public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>> configure, bool listed = true, bool enabled = true, string origin = PluginOrigin.DataDirectory, BinaryWriteParameters? writeParams = null)
     {
-        _plugins.Add((name, listed, enabled, configure, null, origin));
+        _plugins.Add((name, listed, enabled, configure, writeParams, origin));
         return this;
     }
 

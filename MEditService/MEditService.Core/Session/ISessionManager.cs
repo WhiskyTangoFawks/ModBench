@@ -8,7 +8,7 @@ namespace MEditService.Core.Session;
 public interface ISessionManager
 {
     IGameSession? Session { get; }
-    IRecordReader? Repository { get; }
+    IRecordReads? Repository { get; }
 
     /// <summary>
     /// Where the load is and what it has established so far (#274 / ADR-0035). A session is readable

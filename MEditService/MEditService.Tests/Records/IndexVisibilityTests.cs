@@ -39,7 +39,7 @@ public sealed class IndexVisibilityTests
         try
         {
             var reflector = SharedSchemaReflector.Instance;
-            using var repository = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector))
+            using var repository = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector))
                 .Create(GameRelease.Fallout4);
             using var loaded = ModFactory.ImportGetter(modPath, GameRelease.Fallout4);
 
@@ -56,7 +56,11 @@ public sealed class IndexVisibilityTests
                 }
             })).ToArray();
 
-            repository.Index(loaded, 0, participates: true, PluginOrigin.DataDirectory);
+            // #421: origin: named explicitly — PluginKey's implicit string conversion makes a bare
+            // positional 4th argument here resolve to Index(..., PluginKey) instead of the intended
+            // Index(..., string origin) shim, silently reading "Data" as the plugin name rather than
+            // the origin.
+            repository.Index(loaded, 0, participates: true, origin: PluginOrigin.DataDirectory);
             await indexing.CancelAsync();
             await Task.WhenAll(readers);
 

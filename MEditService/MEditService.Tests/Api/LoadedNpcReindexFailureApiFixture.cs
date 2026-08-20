@@ -68,7 +68,7 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
     private sealed class ReindexThrowingSessionManager(ISessionManager inner) : ISessionManager
     {
         public IGameSession? Session => inner.Session;
-        public IRecordReader? Repository => inner.Repository;
+        public IRecordReads? Repository => inner.Repository;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
 

@@ -15,9 +15,9 @@ public class FilterTests(TestPluginFixture fixture)
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
     private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
-    private DuckDbRecordRepository LoadedRepository()
+    private DuckDbRecordIndex LoadedRepository()
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, NullLogger.Instance);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName(TestPluginFixture.PluginName),

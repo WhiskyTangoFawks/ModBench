@@ -13,7 +13,7 @@ namespace MEditService.Tests.Records;
 // SessionManager already logs at Info (#216), so they move to Debug here. Individual record
 // processing during indexing (append, VMAD, conditions) gets new Trace coverage — the "per-record
 // trace" gap the original #205/#215 audit called out. Indexing *behavior* (rows land correctly,
-// VMAD/conditions round-trip) is already covered by DuckDbRecordRepositoryTests, VmadIndexerTests
+// VMAD/conditions round-trip) is already covered by DuckDbRecordIndexTests, VmadIndexerTests
 // and ConditionIndexerTests, which remain the safety net for this reclassification; this file only
 // asserts on log level/content, which none of those do.
 public sealed class RecordIndexingLoggingTests : IDisposable
@@ -74,9 +74,9 @@ public sealed class RecordIndexingLoggingTests : IDisposable
         return (factory, entries);
     }
 
-    private DuckDbRecordRepository IndexedRepository(ILogger logger)
+    private DuckDbRecordIndex IndexedRepository(ILogger logger)
     {
-        var repo = new DuckDbRecordRepository(Reflector, Ddl, logger);
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, logger);
         repo.Initialize(GameRelease.Fallout4);
         var modPath = new ModPath(
             ModKey.FromFileName("LogTrace.esp"),
@@ -91,7 +91,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordRepository)));
+        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
 
         Assert.Contains(entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Indexed VMAD for"));
         Assert.DoesNotContain(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Indexed VMAD for"));
@@ -105,7 +105,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordRepository)));
+        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
 
         Assert.Contains(entries, e =>
             e.Level == LogLevel.Trace && e.Message.Contains(_npcFormKey.ToString()) && e.Message.Contains("Appended"));
@@ -116,7 +116,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordRepository)));
+        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
 
         Assert.Contains(entries, e =>
             e.Level == LogLevel.Trace
@@ -129,7 +129,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordRepository)));
+        using var repo = IndexedRepository(loggerFactory.CreateLogger(nameof(DuckDbRecordIndex)));
 
         Assert.Contains(entries, e =>
             e.Level == LogLevel.Trace

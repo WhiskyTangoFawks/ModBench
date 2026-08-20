@@ -115,8 +115,9 @@ public enum ConditionParamCategory
 // Sex 0 -> "Male"), via IConditionCodec.DecodeParamValue; null when undecodable (no table for
 // TypeName, or a value outside the table's known members) or the parameter isn't Number-category
 // (a Form/Text parameter is already human-legible without decoding). Never persisted — it's a pure
-// function of (TypeName, Number), recomputed at read time in DuckDbRecordRepository.GetConditions
-// rather than stored, so it can never drift from the raw value it was derived from.
+// function of (TypeName, Number), recomputed at read time in Queries/RecordDocumentCodecs.GetConditions
+// (#421: relocated from Records/DuckDbRecordIndex) rather than stored, so it can never drift from
+// the raw value it was derived from.
 public sealed record ParsedConditionParam(
     ConditionParamCategory Category,
     string TypeName,

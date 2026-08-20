@@ -1,6 +1,6 @@
 using System.Text.Json;
-using DuckDB.NET.Data;
 using MEditService.Core.Edits;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
@@ -22,7 +22,7 @@ public sealed class SessionManagerRereadPluginTests
     private static SessionManager MakeManager()
     {
         var reflector = SharedSchemaReflector.Instance;
-        var factory = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         return new SessionManager(factory);
     }
 
@@ -44,17 +44,14 @@ public sealed class SessionManagerRereadPluginTests
         return path;
     }
 
+    // #421: reads through the seam (Search) rather than raw SQL against .Connection — the interface
+    // no longer exposes one (invariant 8). RecordSummary already carries all three fields this once
+    // read positionally off the npc_ table.
     private static (string Origin, string EditorId, bool IsWinner) ReadIndexedNpc(SessionManager manager, string plugin)
     {
-        var repository = (IRecordRepository)manager.Repository!;
-        using var cmd = repository.Connection.CreateCommand();
-        cmd.CommandText = "SELECT origin, editor_id, is_winner FROM npc_ WHERE plugin = $1";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        using var reader = cmd.ExecuteReader();
-        Assert.True(reader.Read(), $"expected exactly one indexed npc_ row for {plugin}");
-        var row = (reader.GetString(0), reader.GetString(1), reader.GetBoolean(2));
-        Assert.False(reader.Read(), $"expected exactly one indexed npc_ row for {plugin}, found more");
-        return row;
+        var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey(plugin), Limit: 10, Offset: 0));
+        var row = Assert.Single(result.Items);
+        return (row.Origin, row.EditorId!, row.IsWinner);
     }
 
     [Fact]
@@ -119,7 +116,7 @@ public sealed class SessionManagerRereadPluginTests
         var newPath = WriteCopy(fx.Root, "mod-ModB", "A.esp", "FromModB");
 
         var reflector = SharedSchemaReflector.Instance;
-        var inner = new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector));
+        var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
         using var manager = new SessionManager(gate);
         ISessionManager sessionManager = manager;
@@ -143,17 +140,17 @@ public sealed class SessionManagerRereadPluginTests
     /// is replacing — i.e. from *inside* the mutation, which is the only place a test can get a
     /// thread in edgeways while <see cref="SessionManager.RereadPlugin"/> holds the session lock.
     /// Nothing on the load path calls Unindex, so the hook cannot fire early.</summary>
-    private sealed class UnindexHookFactory(IRecordRepositoryFactory inner, Action onUnindex) : IRecordRepositoryFactory
+    private sealed class UnindexHookFactory(IRecordIndexFactory inner, Action onUnindex) : IRecordIndexFactory
     {
-        public IRecordRepository Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
+        public IRecordIndex Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
 
-        private sealed class HookedRepository(IRecordRepository inner, Action onUnindex) : DelegatingRecordRepository(inner)
+        private sealed class HookedRepository(IRecordIndex inner, Action onUnindex) : DelegatingRecordIndex(inner)
         {
             private bool _fired;
-            public override void Unindex(string plugin, string origin)
+            public override void Unindex(PluginKey key)
             {
                 if (!_fired) { _fired = true; onUnindex(); }
-                base.Unindex(plugin, origin);
+                base.Unindex(key);
             }
         }
     }
@@ -184,7 +181,7 @@ public sealed class SessionManagerRereadPluginTests
         SessionManager? manager = null;
         Task? teardown = null;
         var factory = new UnindexHookFactory(
-            new DuckDbRecordRepositoryFactory(reflector, new TableDdlBuilder(reflector)),
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)),
             () =>
             {
                 var started = new ManualResetEventSlim();

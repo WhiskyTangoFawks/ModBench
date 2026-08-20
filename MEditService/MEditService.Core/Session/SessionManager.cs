@@ -11,16 +11,16 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Session;
 
 public sealed class SessionManager(
-    IRecordRepositoryFactory repositoryFactory,
+    IRecordIndexFactory repositoryFactory,
     ILogger<SessionManager>? logger = null,
     IModImporter? modImporter = null) : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<SessionManager> _logger = logger ?? NullLogger<SessionManager>.Instance;
-    private readonly IRecordRepositoryFactory _repositoryFactory = repositoryFactory;
+    private readonly IRecordIndexFactory _repositoryFactory = repositoryFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
     private GameSession? _session;
-    private IRecordRepository? _repository;
+    private IRecordIndex? _repository;
     private readonly Dictionary<string, uint> _nextFormIds = new(StringComparer.OrdinalIgnoreCase);
     // #274: the load's own progress. Guarded by _lock like _session/_repository — written by the
     // loading thread as each plugin lands, read by whoever asks for Status meanwhile.
@@ -57,7 +57,7 @@ public sealed class SessionManager(
     private GameRelease _gameRelease;
 
     public IGameSession? Session { get { lock (_lock) return _session; } }
-    public IRecordReader? Repository { get { lock (_lock) return _repository; } }
+    public IRecordReads? Repository { get { lock (_lock) return _repository; } }
 
     /// <summary>
     /// What the session can honestly say about itself right now (#274 / ADR-0035) — the read behind
@@ -223,7 +223,7 @@ public sealed class SessionManager(
         }
     }
 
-    private void IndexProgressively(GameSession session, IRecordRepository repository, CancellationToken token)
+    private void IndexProgressively(GameSession session, IRecordIndex repository, CancellationToken token)
     {
         // #274: open and index one plugin at a time. Opening the whole load order first cost the
         // same total time but made every plugin wait on the slowest one before any of them could
@@ -244,7 +244,7 @@ public sealed class SessionManager(
                 // #271 / ADR-0036: threads the origin GameSession already resolved (#269) into the
                 // index, so the DuckDB row is identified by (origin, plugin) together, not filename
                 // alone.
-                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates, plugin.Origin);
+                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates, new PluginKey(plugin.Name, plugin.Origin));
             }
             catch (Exception ex)
             {
@@ -349,7 +349,7 @@ public sealed class SessionManager(
             // No UpdateWinners: a non-participating plugin is excluded from the winner sweep by the
             // `plugins` join, so nothing already computed can change. That is the whole reason
             // ADR-0035 lets these arrive lazily while load-order plugins must load together.
-            _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+            _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -367,7 +367,7 @@ public sealed class SessionManager(
                 throw new KeyNotFoundException($"No unlisted plugin '{plugin}' from origin '{origin}' is loaded.");
 
             _logger.LogInformation("Unloading unlisted plugin {Plugin} from {Origin}", plugin, origin);
-            _repository!.Unindex(plugin, origin);
+            _repository!.Unindex(new PluginKey(plugin, origin));
         }
     }
 
@@ -415,9 +415,9 @@ public sealed class SessionManager(
             // the session untouched if that open throws.
             var metadata = _session!.RebindPlugin(previous, newPath, newOrigin);
 
-            repository.Unindex(previous.Name, previous.Origin);
+            repository.Unindex(new PluginKey(previous.Name, previous.Origin));
             var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
-            repository.Index(mod, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+            repository.Index(mod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
             // AC7: the whole-set sweep, so winner status and conflict badges describe the new file.
             repository.UpdateWinners();
 
@@ -439,7 +439,7 @@ public sealed class SessionManager(
 
         lock (_lock)
         {
-            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
             repository.UpdateWinners();
         }
 
@@ -448,7 +448,7 @@ public sealed class SessionManager(
 
     public Task ReindexPlugins(IReadOnlyList<string> plugins)
     {
-        var loaded = new List<(PluginMetadata Metadata, IRecordRepository Repository, ILoadedMod Loaded)>(plugins.Count);
+        var loaded = new List<(PluginMetadata Metadata, IRecordIndex Repository, ILoadedMod Loaded)>(plugins.Count);
         try
         {
             foreach (var plugin in plugins)
@@ -462,7 +462,7 @@ public sealed class SessionManager(
             lock (_lock)
             {
                 foreach (var (metadata, repository, item) in loaded)
-                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates, metadata.Origin);
+                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
                 if (loaded.Count > 0)
                     loaded[0].Repository.UpdateWinners();
             }
@@ -476,7 +476,7 @@ public sealed class SessionManager(
         return Task.CompletedTask;
     }
 
-    private (PluginMetadata Metadata, IRecordRepository Repository, GameRelease GameRelease) RequirePlugin(string plugin)
+    private (PluginMetadata Metadata, IRecordIndex Repository, GameRelease GameRelease) RequirePlugin(string plugin)
     {
         lock (_lock)
         {

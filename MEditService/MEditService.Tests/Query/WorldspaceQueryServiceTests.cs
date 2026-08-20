@@ -15,55 +15,53 @@ public class WorldspaceQueryServiceTests
     private sealed class StubReader(
         IReadOnlyList<CellLocationSummary> cells,
         IReadOnlyList<RecordSummary>? records = null,
-        CellReferences? cellRefs = null) : IRecordReader
+        CellReferences? cellRefs = null) : IRecordReads
     {
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(string plugin, string worldspaceFormKey, string origin)
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey)
         {
-            LastGetWorldspaceCellsOrigin = origin;
+            LastGetWorldspaceCellsOrigin = plugin.Origin;
             return cells;
         }
 
         // #296/#305: capture the origin each method actually resolved (or was explicitly given)
         // and passed down, so the plumbing (not just the repository-level filter) is verified
         // independently of DuckDB.
-        public string? LastGetRecordsOrigin { get; private set; }
+        public string? LastSearchOrigin { get; private set; }
         public string? LastGetWorldspaceCellsOrigin { get; private set; }
         public string? LastGetInteriorCellsOrigin { get; private set; }
         public string? LastGetCellReferencesOrigin { get; private set; }
 
-        public PagedResult<RecordSummary> GetRecords(string t, string? p, string? s, int l, int o, string? origin = null)
+        public PagedResult<RecordSummary> Search(RecordQuery query)
         {
-            LastGetRecordsOrigin = origin;
+            LastSearchOrigin = query.Plugin?.Origin;
             return new(records ?? [], (records ?? []).Count);
         }
-        public RecordDetail? GetRecord(string t, string fk, string? p, string? origin, bool w) => null;
-        public IReadOnlyList<RecordDetail> GetAllOverrides(string t, string fk) => [];
-        public VmadData? GetVmad(string fk, string p, string origin) => null;
-        public IReadOnlyList<ConditionOwner> GetConditions(string fk, string p, string origin) => [];
-        public int CountRecordsForPlugin(string t, string p, string origin) => 0;
-        public string? FindRecordType(string fk) => null;
-        public RecordLookupEntry? ResolveFormKey(string fk) => null;
-        public IReadOnlyList<string> GetNativeFormKeys(string plugin, string origin) => [];
-        public PagedResult<RecordSummary> SearchRecords(IReadOnlyList<string> t, string? p, string? s, int l, int o, string? origin = null) => new([], 0);
+        public RecordDocument? GetDocument(string formKey) => null;
+        public RecordDocument? GetDocument(string formKey, PluginKey plugin) => null;
+        public RecordOverrides? GetOverrideStack(string formKey) => null;
+        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => [];
+        public RecordLookupEntry? Resolve(string formKey) => null;
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
-        public IReadOnlyList<ReferenceResult> GetReferences(string fk) => [];
-        public PagedResult<CellSummary> GetInteriorCells(string p, int l, int o, string origin)
+        public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];
+        public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => [];
+        public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => [];
+        public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int l, int o)
         {
-            LastGetInteriorCellsOrigin = origin;
+            LastGetInteriorCellsOrigin = plugin.Origin;
             return new(cells.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY)).ToList(), cells.Count);
         }
-        public CellReferences GetCellReferences(string p, string fk, string origin)
+        public CellReferences GetCellReferences(PluginKey plugin, string fk)
         {
-            LastGetCellReferencesOrigin = origin;
+            LastGetCellReferencesOrigin = plugin.Origin;
             return cellRefs ?? new([], []);
         }
-        public PlacementRow? GetPlacement(string formKey, string plugin, string origin) => null;
+        public PlacementRow? GetPlacement(string formKey, PluginKey plugin) => null;
     }
 
-    private sealed class StubSession(IRecordReader repo, IGameSession? session = null) : ISessionManager
+    private sealed class StubSession(IRecordReads repo, IGameSession? session = null) : ISessionManager
     {
         public IGameSession? Session => session;
-        public IRecordReader? Repository => repo;
+        public IRecordReads? Repository => repo;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
         public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
@@ -150,7 +148,7 @@ public class WorldspaceQueryServiceTests
     // Regression (#173): GetWorldspaces queried table "worldspace", but the schema's real table
     // name — like every other spatial type ("cell", "refr", "achr") — is the raw record
     // signature lowercased ("wrld"). The StubReader above ignores its table-name argument, so it
-    // can't catch this; this test runs against a real DuckDbRecordRepository (via the committed
+    // can't catch this; this test runs against a real DuckDbRecordIndex (via the committed
     // cut-down Fallout4.esm fixture) so a wrong table name surfaces as a real failure.
     [Fact]
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
@@ -204,7 +202,7 @@ public class WorldspaceQueryServiceTests
 
         svc.GetWorldspaces("M.esp");
 
-        Assert.Equal("ModA", reader.LastGetRecordsOrigin);
+        Assert.Equal("ModA", reader.LastSearchOrigin);
     }
 
     // #305: a caller that already knows which copy it's browsing (a tree row built from a
@@ -223,7 +221,7 @@ public class WorldspaceQueryServiceTests
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
-        Assert.Equal("ModB", reader.LastGetRecordsOrigin);
+        Assert.Equal("ModB", reader.LastSearchOrigin);
     }
 
     [Fact]
