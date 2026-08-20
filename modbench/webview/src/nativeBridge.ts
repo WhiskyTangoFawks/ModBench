@@ -118,7 +118,7 @@ export function editField(
 // tab — the extension host can't be reached any other way (only it can call
 // vscode.workspace.openTextDocument/showTextDocument). Unlike every bridge above, this doesn't
 // return a Promise: there's no single answer to await, since the tab can be saved any number of
-// times (each save re-stages, exactly like any other edit) before the user closes it, or never
+// times (each save commits, exactly like any other edit) before the user closes it, or never
 // saved at all if they abandon it. `onCommit` is called once per save with that save's full
 // content — DiffRow passes the same `onCommit` closure it already builds for the cell's inline
 // editor, so this is a second *trigger* onto the identical commit path, not a second path.

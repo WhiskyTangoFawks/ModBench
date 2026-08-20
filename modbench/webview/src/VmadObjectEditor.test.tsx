@@ -95,8 +95,8 @@ describe('VmadObjectEditor — alias edits', () => {
 
   // Issue #229: the same no-op guard AC1 introduces for scalar leaves, applied to the one leaf
   // VMAD still hand-rolls after this refactor — activating and blurring with no change must not
-  // stage a change.
-  it('does not stage a change when the alias is blurred with the same value (no-op guard)', () => {
+  // commit a change.
+  it('does not commit a change when the alias is blurred with the same value (no-op guard)', () => {
     const onCommit = vi.fn();
     renderInactive('000123:Foo.esp [2]', onCommit);
     activate();

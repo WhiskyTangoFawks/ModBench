@@ -76,7 +76,7 @@ export function VmadObjectEditor({ value, read, onCommit, onOpen, resolution }: 
         onChange={e => setAlias(Number(e.target.value))}
         // Issue #229: same no-op guard as the scalar leaves — alias is the one value VMAD still
         // hand-rolls after this refactor, so it gets the identical fix rather than being left as
-        // the one leaf that still stages a no-op edit.
+        // the one leaf that still commits a no-op edit.
         onBlur={() => { if (alias !== diskAlias) onCommit({ formKey: pendingFk, alias }); }}
         aria-label="Alias"
         style={{ width: 50, fontFamily: mono, fontSize: '12px' }}

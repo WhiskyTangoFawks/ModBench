@@ -184,7 +184,7 @@ describe('openExtendedFieldEditor', () => {
     expect(mode & 0o200).toBe(0); // owner-write bit cleared
   });
 
-  // AC4: committing from it stages through the same path as any other edit — each save posts
+  // AC4: committing from it writes through the same path as any other edit — each save posts
   // EXTENDED_EDITOR_COMMITTED with the saved content, correlated by requestId.
   it('replies with EXTENDED_EDITOR_COMMITTED carrying the saved content when the doc is saved', async () => {
     const tempRoot = await makeTempRoot();

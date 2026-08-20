@@ -84,8 +84,8 @@ export function hasElementAt(length: number, index: number): boolean {
 // Issue #227 (resurrected #426): the three pure array-arity/order mutations behind Move Up/Move
 // Down/Remove/Add — shared by the keyboard accelerator (DiskCell's onKeyDown, a pure in-webview
 // call) and the right-click menu's broadcast handler (RecordPanel, arriving asynchronously from
-// the extension host), so both restage the array identically without needing to share one runtime
-// call path. Each returns a new array; callers restage the whole thing via onEditCell, the same
+// the extension host), so both write the array identically without needing to share one runtime
+// call path. Each returns a new array; callers commit the whole thing via onEditCell, the same
 // as any other field commit.
 //
 // Issue #168: `index` itself must be bounds-checked here, not just the swap target `j` (index ===
@@ -295,8 +295,8 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
 }
 
 // #426 (resurrected from before #410): setAtPath's own write-side counterpart — the one generic
-// implementation an edit anywhere in a struct/array restages through (ADR-0017: the whole subtree
-// is restaged as one atomic value). Never mutates its input: each hop copies its own level before
+// implementation an edit anywhere in a struct/array writes through (ADR-0041: the whole subtree
+// commits as one atomic ledger write). Never mutates its input: each hop copies its own level before
 // recursing, so a caller can compare the result against the original root by reference.
 export function setAtPath(root: unknown, path: readonly PathSegment[], value: unknown): unknown {
   if (path.length === 0) return value;

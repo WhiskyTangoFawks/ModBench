@@ -40,7 +40,7 @@ export function DiskCell({
   // value: the cell doesn't need to know *what* it copies, only *when*.
   onCopy: () => void;
   // Issue #227: Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu
-  // offers — pure in-webview state (the array's own new value restages through the ordinary
+  // offers — pure in-webview state (the array's own new value writes through the ordinary
   // onEditCell path), no extension-host round trip needed for the keys themselves.
   arrayOps?: ArrayOps;
   // Issue #208/#227 (#426: restored): the already-combined `data-vscode-context` JSON string

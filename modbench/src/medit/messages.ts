@@ -36,7 +36,7 @@ export const EXTENSION_TO_WEBVIEW = {
   // Issue #142/#227 (#426 Track 4: restored): the array-op right-click commands broadcast to every
   // open record panel and let each self-filter on `formKey` — the extension host has no live
   // reference into the webview's own React state (which alone holds the record's current values),
-  // so the actual mutation (moveArrayElement/removeArrayElement/appendArrayElement, then restaging
+  // so the actual mutation (moveArrayElement/removeArrayElement/appendArrayElement, then writing
   // through the ordinary EDIT_FIELD write path) happens webview-side, the same computation the
   // keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use. `fieldName`
   // is the row's own wire identity (context.rootField), matching arrayParentContext/
@@ -52,7 +52,7 @@ export const EXTENSION_TO_WEBVIEW = {
   // (`{op: "add_script", ...}`, RecordFieldWriter.ApplyVmadField's own contract). Rather than six
   // near-identical broadcast shapes (the pre-#410 design, when the backend dispatch was itself
   // per-op-shaped), every command below resolves its own fieldPath/value and broadcasts this one
-  // message; each open panel self-filters on `formKey` and restages through the identical
+  // message; each open panel self-filters on `formKey` and commits through the identical
   // handleEditCell/EDIT_FIELD path every other gesture already uses — no new webview-side
   // computation at all, unlike the array-op broadcasts above.
   VMAD_STRUCTURAL_OP: 'vmadStructuralOp',

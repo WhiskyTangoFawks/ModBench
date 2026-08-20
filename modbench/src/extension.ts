@@ -472,7 +472,7 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
 // host has no live reference into any open panel's own React state (which alone holds the
 // record's current values), so each command only resolves *which* row/column was clicked (from
 // the `data-vscode-context` VS Code parses and hands it as `ctx`) and broadcasts; every open
-// panel self-filters on `formKey` and, if it matches, restages the array through the exact same
+// panel self-filters on `formKey` and, if it matches, writes the array through the exact same
 // computation (recordUtils.ts's moveArrayElement/removeArrayElement/appendArrayElement, then
 // EDIT_FIELD) the keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use.
 function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {

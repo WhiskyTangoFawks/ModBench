@@ -227,7 +227,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // than a per-field special case. `rootField` locates the subtree's own root FieldDiff (whichever
   // of diffs/vmadTree.diffs/conditionTree.diffs it came from); `path` addresses the array within
   // that root's own per-column value (getAtPath/setAtPath, the same generic accessors every field
-  // commit already restages through). `elementMeta` is only needed for 'add' (defaultElementValue).
+  // commit already writes through). `elementMeta` is only needed for 'add' (defaultElementValue).
   const handleArrayOp = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string,
     op: 'add' | 'remove' | 'moveUp' | 'moveDown', elementMeta?: FieldMetadata,
@@ -246,7 +246,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     const nextArray = op === 'add' ? appendArrayElement(currentArray, defaultElementValue(elementMeta ?? { name: '', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] }))
       : op === 'remove' ? removeArrayElement(currentArray, index)
       : moveArrayElement(currentArray, index, op === 'moveUp' ? -1 : 1);
-    if (nextArray === currentArray) return; // boundary no-op — nothing to restage
+    if (nextArray === currentArray) return; // boundary no-op — nothing to write
     handleEditCell(plugin, rootField, setAtPath(rootValue, arrayPath, nextArray));
   }, [result, vmadTree, conditionTree, handleEditCell]);
 

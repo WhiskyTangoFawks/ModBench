@@ -89,7 +89,7 @@ export interface ExtendedFieldEditorDeps {
 // enforce that — and read-only enforcement is the OS file-permission bit VS Code already honors
 // (`chmod` below), not a bespoke read-only UI state.
 //
-// Issue #230 (seam: commit trigger): each `Ctrl+S` re-stages the current content through
+// Issue #230 (seam: commit trigger): each `Ctrl+S` re-sends the current content through
 // EXTENDED_EDITOR_COMMITTED — the same discrete, explicit-action shape every other commit in this
 // surface has (never on keystroke, never only on close). Closing sends only
 // EXTENDED_EDITOR_CLOSED, the signal nativeBridge needs to drop its own bookkeeping for this

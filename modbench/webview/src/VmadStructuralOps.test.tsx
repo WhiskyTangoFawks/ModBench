@@ -17,7 +17,7 @@ import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 // #426)" suite (the extension host has no live reference into this panel's React state), except
 // every op here (bar Add Property's own dialog) collapses to one VMAD_STRUCTURAL_OP broadcast
 // carrying an op-envelope value RecordFieldWriter.ApplyVmadField (Track 0) already dispatches on
-// — restaging through the exact same EDIT_FIELD write path every other gesture uses, with no
+// — writing through the exact same EDIT_FIELD write path every other gesture uses, with no
 // webview-side computation of a next value the way an array op needs.
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -111,7 +111,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
     });
   });
 
-  it('VMAD_STRUCTURAL_OP (remove_script) restages the op-envelope via EDIT_FIELD', async () => {
+  it('VMAD_STRUCTURAL_OP (remove_script) writes the op-envelope via EDIT_FIELD', async () => {
     renderVmadPanel();
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
 
@@ -139,7 +139,7 @@ describe('RecordPanel — VMAD structural-op right-click menu (issue #231)', () 
       .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
   });
 
-  it('VMAD_OPEN_ADD_PROPERTY opens the Add Property dialog, and confirming stages an add_property op', async () => {
+  it('VMAD_OPEN_ADD_PROPERTY opens the Add Property dialog, and confirming commits an add_property op', async () => {
     renderVmadPanel();
     await waitFor(() => screen.getByText('Scripts (VMAD)'));
 

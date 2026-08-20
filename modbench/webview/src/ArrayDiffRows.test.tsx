@@ -349,7 +349,7 @@ describe('RecordPanel — a struct member that is itself an array of structs (is
 });
 
 // #426 Track 4 (resurrected #142/#227): Add/Remove/Move Up/Move Down on an unsorted array — the
-// keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) on the focused cell, restaging the whole
+// keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) on the focused cell, writing the whole
 // array through the exact same write path (EDIT_FIELD) every other gesture uses.
 describe('RecordPanel — array editing (unsorted, #426)', () => {
   const intArrayMeta: FieldMetadata = {
@@ -461,7 +461,7 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
   // #426 Track 4: the right-click menu's own trigger — a broadcast from the extension host (no
   // live reference into this panel's React state), self-filtered on formKey, reaching the exact
   // same handleArrayOp computation the keyboard accelerators already use.
-  it('an ARRAY_REMOVE broadcast for this open record restages the array via EDIT_FIELD', async () => {
+  it('an ARRAY_REMOVE broadcast for this open record writes the array via EDIT_FIELD', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
 
