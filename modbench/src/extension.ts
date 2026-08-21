@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as cp from 'child_process';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer } from './medit/ApiClient';
@@ -378,7 +379,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(compileDiagnostics);
   backendManager = createBackendManager(port, outputChannel, statusBarItem);
 
-  const client = createApiClient(port);
+  const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
   const treeProvider = new PluginTreeProvider(repository, log);
   recordBrowserProvider = treeProvider;
@@ -2310,6 +2311,34 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   return () => withPluginsViewProgress(enter);
 }
 
+
+/** #431: undici's default Agent times out a fetch with no response bytes after ~300s
+ *  (headersTimeout/bodyTimeout). The backend's blocking endpoints — POST /session/load-explicit
+ *  chief among them — legitimately run for minutes on a large load order, and every such call
+ *  already carries its own deliberate abort signal where one is wanted (#307 AC7), so nothing
+ *  else should time it out. 0 disables both.
+ *
+ *  Bound per-request via `ApiClient`'s own `fetch` override, not `undici.setGlobalDispatcher` —
+ *  tried first, and confirmed *not* to reach the actual outgoing request from inside the
+ *  extension host (VS Code's own network stack sits in front of the ambient global `fetch`;
+ *  the global dispatcher override never took effect there, only in a bare Node process). This
+ *  bypasses that entirely by calling undici's own `fetch` directly, dispatcher attached to each
+ *  call.
+ *
+ *  Can't just forward openapi-fetch's `Request` object straight through: it's built with the
+ *  *global* `Request` constructor, a distinct class from undici's own internal one, and undici's
+ *  `fetch` only recognizes its own — handed a global `Request`, it falls back to coercing it to a
+ *  URL string and fails with "Failed to parse URL from [object Request]". Unpacked into a plain
+ *  url/method/headers/body call instead. Lives here, not in ApiClient.ts: that module is also
+ *  imported by the webview bundle (RecordSessionClient.ts), which has no `undici`/Node runtime. */
+function createUnlimitedFetch(): (input: Request) => Promise<Response> {
+  const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+  return async (input) => {
+    const hasBody = input.method !== 'GET' && input.method !== 'HEAD';
+    const body = hasBody ? await input.clone().arrayBuffer() : undefined;
+    return undiciFetch(input.url, { method: input.method, headers: [...input.headers], body, dispatcher });
+  };
+}
 
 /** Construct the editing backend manager wired to the bundled binary + status bar. */
 function createBackendManager(port: number, channel: vscode.LogOutputChannel, statusBarItem: vscode.StatusBarItem): BackendManager {

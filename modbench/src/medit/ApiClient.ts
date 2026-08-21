@@ -196,8 +196,8 @@ export interface WorldspaceBlocks {
   topCell: CellSummary | null;
 }
 
-export function createApiClient(port: number) {
-  return createClient<paths>({ baseUrl: `http://localhost:${port}` });
+export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {
+  return createClient<paths>({ baseUrl: `http://localhost:${port}`, ...(fetch ? { fetch } : {}) });
 }
 
 /** Stringify openapi-fetch's `error` value from a non-ok response. openapi-fetch
