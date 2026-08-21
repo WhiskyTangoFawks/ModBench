@@ -10,6 +10,12 @@ status: accepted
 > (`<plugin>.source/`), wire surface, and living docs are renamed; this ADR keeps its
 > original vocabulary as a historical record — read every "ledger" below as "source".
 
+> **Amendment (2026-08-21, #444):** the source tree's inner layout, the shallow-strip
+> containment posture, the DB-seeded-from-binary ingest for tracked mods, and the
+> whole-mod-API prohibition are all superseded by the final amendment section below
+> ("Source is complete…"). The flat `<type>/<formkey>.json` layout described in this
+> ADR's body never shipped in that form.
+
 Supersedes [ADR-0040](0040-git-native-pending-changes.md) and both of its 2026-08
 amendments. Decided in the 2026-08-19 design conversation (grilled to closure); the
 migration epic is the rebuilt milestone "5 — Git-native editing".
@@ -266,3 +272,109 @@ scenarios are deferred to compile-time design when a real need arrives.
 serializes, commits pristine to `main`, and checks out the edit branch. "Authored" is the
 workflow of merging into `main` at will; "Modified" is the workflow of keeping `main`
 pristine. Modbench stores no mode and nothing branches on the distinction.
+
+#### Source is complete, tracked plugins load from source, and Spriggit is the format specification *(amendment, 2026-08-21, #444)*
+
+Decided in the #444 design pass (maintainer-grilled to closure over three rounds), on
+the evidence of the #444 spike
+([spike-444-folder-split-containers.md](../research/spike-444-folder-split-containers.md)):
+both #387 container defects that forced the shallow-strip are artifacts of driving the
+generated serializers per-record with a shared target directory — the whole-mod
+folder-split path has neither, probe-confirmed on real data. "The source must contain
+everything required to compile the plugin, and a tracked plugin's read model must load
+from its source — never from the compiled artifact" is the principle this lands
+("that's not how coding is supposed to work" was the test the prior design failed).
+
+**1. The source tree adopts Spriggit's layout wholesale.** Inner layout of
+`<plugin>.source/` (root folder and deployer rules stay #441's): the serialization
+library's folder-split output exactly as Spriggit configures it — group folders,
+block/sub-block directory nesting (`Cells/<b>/<sb>/…`, `Worldspaces/<ws>/<X, Y>/<X, Y>/…`),
+`<EditorID> - <FormKey>.json` record names (bare FormKey when no EditorID; an EditorID
+edit is a git rename with identity machine-recoverable from the suffix), root
+`RecordData.json` as the **mod header's source file** — closing the header-only-in-binary
+gap — and Spriggit's embed customization verbatim
+(`Cell.{Temporary,Persistent,Landscape,NavigationMeshes}`, `Worldspace.TopCell` inline;
+their `SortList` calls excluded only until the 1.38.x bump). Containment is the path:
+a cell's place in the world is its directory, and **`ContainerAssembler`'s DB-driven
+reassembly retires** — compile reads structure from the tree. The **shallow-strip
+posture retires with it** (`ContainerStripFields`, the codec's `NoRecordFolders` /
+`DiscardChildRecordStreams` suppressions — all existed to fight the un-customized
+serializer). "One record = one file" is restated as **one source unit = one file**:
+embedded child records are index rows extracted from the parent document, and there is
+**one document shape everywhere** — probe-pinned byte-identical between the per-record
+door and the whole-mod door once two codec-side deltas are removed (below).
+
+**2. Tracked plugins ingest from source.** Working tree → Effective, git `HEAD` → Head;
+the binary is never consulted for a tracked plugin's content. By construction this
+deletes the reconciliation-sweep class (`WorkingTreeCreateRediscovery`, the
+delete-at-load reappearing-record gap) and dissolves the #369 decompile-vs-parse
+structural mismatch for tracked plugins — one parse, not two. `SourceFreshness` narrows
+to mid-session external moves; it no longer corrects a binary-seeded ingest. Untracked
+plugins keep the binary-overlay ingest unchanged — same document shape by construction,
+so the read model never sees a dialect. Measured cost (JSON, dev machine): 843 ms for
+the 768 KB subset, 5.1 s cold for a 20 MB mega-plugin, before any clean-path shortcut.
+
+**3. Spriggit is the format specification — never a code dependency.** The dependency
+ladder was walked with compatibility weighted as a goal, and every code-dependency form
+is structurally unavailable, not merely unwise: translation packages ship as dotnet-tool
+executables (not `PackageReference`-able), their per-record `<Type>_Serialization`
+classes are `internal` (and Modbench's editing middle — point writes, per-record ingest —
+needs per-record access, so we run the source generator in our own assembly under every
+option), their pins are exact on the Mutagen 0.54 line whose ObjectTemplate regression
+(#385) our round-trip gate exists to reject, and Spriggit.Engine's headline feature is
+runtime `dotnet tool install` + subprocess spawning. Spriggit's unique content above the
+serialization library we already share is ~80 lines of convention — replicated, and
+**bound by gates so it cannot drift**:
+
+- **Parity gate**: serialize a fixture mod through our path and through real Spriggit
+  (their engine accepts an injected entry point — runs in-process in CI), diff the
+  trees against a pinned allowlist of *named* divergences. Today's allowlist:
+  `SortList`, `OmitUnknownGroupData`, `OmitUnusedConditionDataFields` — all
+  Serialization 1.38.x features, all expected to close at the bump.
+- **Interchange gate**: stock Spriggit reconstructs a plugin from our tree and we
+  compile a tree Spriggit wrote. This is the shipped guarantee today; **byte parity is
+  the convergence target**, gated on #385 — which **we fix upstream ourselves if it
+  stays unowned** (maintainer-accepted posture). Two further upstream reports from the
+  spike: the parallel-dropoff captured-`streamPackage` race in
+  `MajorRecordListParallelHelper` (until fixed, our whole-mod door pins a sequential
+  dropoff) and the missing two-cells-per-sub-block layout coverage.
+- **Sidecars verbatim, nothing extra**: `spriggit-meta.json` and the `SpriggitSource`
+  `extraMeta` object in the root `RecordData.json` carry the real Spriggit package
+  coordinates we converge toward (gate-verified; fallback if interchange proves broken
+  pre-convergence: our own package name); `.spriggit` `KnownMasters` populated from the
+  load order at Track. No Modbench-own sidecar — stock Spriggit deletes files it didn't
+  write, and our provenance already lives in commit trailers (this ADR's own mechanism).
+- **JSON only** (ADR-0041's format decision stands; JSON is first-class in Spriggit and
+  auto-detected via the sidecars). YAML is a boundary conversion — an export command
+  offered on demand, never a second live format: dual formats would fork the
+  document-identity invariant, the single write path, and the gate matrix.
+- **Import is binary-first**: a foreign Spriggit-managed folder is tracked from its
+  binary (the interchange truth, ADR-0002); foreign trees are never parsed, so foreign
+  serializer pins never need honoring and Engine's machinery stays unneeded.
+
+**4. Codec scope amended; the whole-mod prohibition inverts.** The generated whole-mod
+mixin becomes the **designated door for Track, ingest-from-source, and compile** —
+`RecordTextCodecGeneratorSeed`'s AC2 guard re-scopes from "no caller, ever" (whose
+rationale — lazy per-edit whole-mod cost and ADR-0040's redistribution story — is
+superseded) to "only at the designated doors, always with a sequential dropoff." The
+per-record codec survives for untracked ingest, reconstitution of typed reads, and
+point writes, with two changes that make its bytes identical to the whole-mod door's
+(probe-pinned as the only two deltas): it adopts the whole-mod **discriminator policy**
+(top-level `MutagenObjectType` only where the group's element type is abstract and the
+path is ambiguous — `record_type` is already an index column, and embedded children
+keep their discriminators via the kernel's own abstract-element rule), and it drops its
+self-added **trailing newline**. Canonicalization clause: bare `\n` newlines, no
+trailing newline — Windows behavior of the whole-mod door verified at implementation,
+the parity gate adjudicating.
+
+**Numbers** (dev machine, JSON kernel, embed applied): whole-mod serialize 1.5 s /
+3,943 files (768 KB subset, un-embedded) and 5.8 s / **19,430 files** / 135 MB for the
+20 MB mega-plugin — embed cuts the mega-mod file count 85% from the un-embedded
+132,787, softening consequence 4's mega-repo cost; round trips byte-stable in both
+configurations.
+
+**Interactions**: #441 keeps the root folder + deployer rules, and its inner-layout
+question is answered here. #440 (container copy) re-triages against
+containment-as-path. The #430/#432 delete-at-load gap is resolved by construction, not
+patched. The dormant "Spriggit import/export" milestone is substantially absorbed:
+matching the format *is* import/export, with YAML export as the on-demand residue.
