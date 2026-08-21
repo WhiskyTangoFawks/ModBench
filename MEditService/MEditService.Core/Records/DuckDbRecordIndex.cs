@@ -231,7 +231,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // #416 S1b: Cell.Persistent/Temporary and Worldspace.TopCell/SubCells are already fully covered
     // by IndexPlacement (placement/cell_location) — this skip-list keeps container_child additive to
     // those tables rather than a second, competing copy of the same relationship. Keyed by
-    // ContainerStripFields.NormalizedTypeName so it can never drift from what EnumerateChildren
+    // ContainerChildFields.NormalizedTypeName so it can never drift from what EnumerateChildren
     // itself walks (both read the same ByTypeName table).
     private static readonly HashSet<(string ParentType, string Slot)> CoveredByPlacementTables =
     [
@@ -244,23 +244,32 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         string plugin, string origin, int loadOrderIndex, GameRelease gameRelease,
         List<ContainerChildRow> containerChildRows)
     {
-        // #416 S1b: read the *unstripped* record's children before stripping it below — the same
-        // fields ContainerStripFields is about to clear are exactly the ones container_child needs a
-        // parent slot recorded for. One source of truth (ByTypeName, via EnumerateChildren) drives
-        // both what gets stripped and what gets remembered, so they cannot drift apart.
-        var parentType = ContainerStripFields.NormalizedTypeName(record.GetType());
-        foreach (var (slotName, slotIndex, child) in ContainerStripFields.EnumerateChildren(record))
+        // #416 S1b: a container's children get a recorded parent slot, for the relationships
+        // placement/cell_location don't already carry. Read off the same record about to be
+        // serialized, so what is remembered and what is stored cannot describe different graphs.
+        var parentType = ContainerChildFields.NormalizedTypeName(record.GetType());
+        foreach (var (slotName, slotIndex, child) in ContainerChildFields.EnumerateChildren(record))
         {
             if (CoveredByPlacementTables.Contains((parentType, slotName))) continue;
             containerChildRows.Add(new ContainerChildRow(
                 child.FormKey.ToString(), record.FormKey.ToString(), recordType, slotName, slotIndex));
         }
 
-        // D8: a container is serialized from a stripped deep copy, everything else from the getter
-        // ingest already holds. Children are their own documents; a parent carrying them would store
-        // the same data twice and hold a body no source file can match.
-        var toSerialize = ContainerStripFields.StrippedForSerialization(record);
-        var body = _codec.SerializeToBytesAsync(toSerialize, gameRelease).GetAwaiter().GetResult();
+        // #450 retires #413 D8's deep-copy-and-strip: every record is serialized straight from the
+        // getter ingest already holds, container or not. A container's document now carries the
+        // children Spriggit embeds, because that is what its source file holds — the whole point of
+        // one document shape (ADR-0041's #444 amendment). The deep copy that made stripping possible
+        // was the only per-container cost on this path (~5% of a real corpus) and goes with it.
+        //
+        // Known and deliberate for now: an embedded child is represented twice — inline in this
+        // parent's document, and again as its own `records` row with its own source file — so an
+        // edit to the child's own file leaves the parent's inline copy stale until the next ingest.
+        // Compile is unaffected (ContainerAssembler replaces each slot from the children's own
+        // files). The window closes at **#452**, which makes a tracked plugin ingest from its source
+        // tree, where an embedded child has no separate file to diverge from; #454 retires the
+        // assembler with it. Do not paper over this with a reconciliation pass — that is the shape
+        // ADR-0041's amendment exists to delete.
+        var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
 
         var row = documentAppender.CreateRow();
         row.AppendValue(record.FormKey.ToString());
@@ -714,7 +723,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             """, formKey, key.Name, key.Origin!);
 
         var record = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, recordType)
             .GetAwaiter().GetResult();
 
         var refs = new List<FormRef>();
@@ -1113,7 +1122,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         var body = reader.GetString(6);
 
         var record = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release)
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, schema.TableName)
             .GetAwaiter().GetResult();
 
         return new RecordDocument(

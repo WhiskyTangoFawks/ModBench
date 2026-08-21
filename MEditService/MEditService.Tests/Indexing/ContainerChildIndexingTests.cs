@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Indexing;
 
 /// <summary>
-/// #416 S1b: the five <c>ContainerStripFields</c> relationships <c>placement</c>/<c>cell_location</c>
+/// #416 S1b: the five <c>ContainerChildFields</c> relationships <c>placement</c>/<c>cell_location</c>
 /// don't already carry — Cell.NavigationMeshes/Landscape, Quest.DialogBranches/DialogTopics,
 /// DialogTopic.Responses — land in <c>container_child</c> at ingest, in original slot order, and
 /// Cell.Persistent/Temporary/Worldspace.TopCell/SubCells (already covered by placement/cell_location)
@@ -113,7 +113,7 @@ public sealed class ContainerChildIndexingTests
 
     // Rival for the completeness of Q1/S1b's own scope: placement/cell_location already cover
     // Persistent/Temporary/TopCell/SubCells, so container_child must never carry a second, competing
-    // copy of those slots — a naive "index every ContainerStripFields relationship" implementation
+    // copy of those slots — a naive "index every ContainerChildFields relationship" implementation
     // would fail this.
     [Fact]
     public void Index_DoesNotDuplicate_RelationshipsAlreadyCoveredByPlacementTables()

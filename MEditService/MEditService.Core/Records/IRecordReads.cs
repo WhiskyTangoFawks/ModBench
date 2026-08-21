@@ -81,7 +81,7 @@ public interface IRecordReads
     CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey);
 
     /// <summary>
-    /// <paramref name="parentFormKey"/>'s children among the five <see cref="Source.ContainerStripFields"/>
+    /// <paramref name="parentFormKey"/>'s children among the five <see cref="Source.ContainerChildFields"/>
     /// relationships <see cref="GetPlacement"/>/<see cref="GetWorldspaceCells"/> don't already carry
     /// (#416 S1b) — <c>Cell.NavigationMeshes</c>/<c>Landscape</c>, <c>Quest.DialogBranches</c>/
     /// <c>DialogTopics</c>, <c>DialogTopic.Responses</c> — in original slot order. Empty when

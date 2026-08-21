@@ -82,7 +82,8 @@ internal static class RecordDocumentCodecs
     private static IMajorRecord? Deserialize(RecordDocument document, GameRelease release) =>
         document.Body is not { } body
             ? null
-            : Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release).GetAwaiter().GetResult();
+            : Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, document.RecordType)
+                .GetAwaiter().GetResult();
 
     // #165: only a Number-category parameter is ever decodable (Form/Text are already
     // human-legible); a Form/Text row's stored number_value is null regardless of category, so this

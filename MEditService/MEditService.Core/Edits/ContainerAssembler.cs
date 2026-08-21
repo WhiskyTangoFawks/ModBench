@@ -9,12 +9,12 @@ namespace MEditService.Core.Edits;
 /// <summary>
 /// Wires a flat set of deserialized source records into a freshly-created, otherwise-empty
 /// <see cref="IMod"/>'s real containment structure (#416 S1b) — the inverse of the split
-/// <see cref="Source.ContainerStripFields"/> makes at ingest and Track time. Nothing here is
+/// <see cref="Source.ContainerChildFields"/> makes at ingest and Track time. Nothing here is
 /// game-specific: every structural fact (which cell holds which placed ref, which worldspace holds
 /// which cell, which quest holds which dialog topic) comes from the index
 /// (<see cref="IRecordReads.GetPlacement"/>/<see cref="IRecordReads.GetCellLocation"/>/
 /// <see cref="IRecordReads.GetContainerChildren"/>), never from a hardcoded type name beyond the
-/// handful <see cref="Source.ContainerStripFields"/> itself already names.
+/// handful <see cref="Source.ContainerChildFields"/> itself already names.
 ///
 /// <para><b>Ref-invariant reads, deliberately</b> (Q1's #416 ruling): containment is carried
 /// structure, not source content — no gesture in this arc lets a user move a record between
@@ -48,7 +48,7 @@ internal static class ContainerAssembler
     }
 
     // Same reference-identity reasoning as ReferenceKeyComparer, for the (parent, slot) pairs
-    // ClearSlotOnce tracks.
+    // AttachBufferedChildren groups by.
     private sealed class ParentSlotComparer : IEqualityComparer<(object Parent, string Slot)>
     {
         public bool Equals((object Parent, string Slot) a, (object Parent, string Slot) b) =>
@@ -63,15 +63,22 @@ internal static class ContainerAssembler
         var placed = new HashSet<string>(StringComparer.Ordinal);
         var unplaceable = new List<string>();
         var gridChildren = new Dictionary<(object Parent, string List, int X, int Y), object>(new ReferenceKeyComparer());
-        // #416 review: a slot this pass is about to populate is cleared exactly once, the first time
-        // anything tries to attach to it — never assume a freshly-deserialized parent's slot is empty.
-        // A repo tracked before a ContainerStripFields fix landed (Quest.Scenes, until this same
-        // ticket) has committed baselines whose Quest source still inlines its old, unstripped
-        // content while the same Scene also has its own separate source file; replacing beats
-        // appending onto whatever the parent's source text happened to carry (never-assume-exclusive-
-        // ownership, root CLAUDE.md — that applies to committed text this process didn't just write,
-        // not only to files on disk).
-        var clearedSlots = new HashSet<(object Parent, string Slot)>(new ParentSlotComparer());
+        // Child attachments are buffered rather than applied as they are found, and flushed per
+        // (parent, slot) by AttachBufferedChildren below. Two reasons, both #450's:
+        //
+        //   Clearing. A container's source text now carries its embedded children (Spriggit's embed
+        //     customization), so a freshly-deserialized parent arrives here with its slots already
+        //     populated — appending would double every child, the parent's own inline copy plus the
+        //     one attached from the child's own source file. Buffering makes "clear once, then fill"
+        //     structural rather than something a HashSet has to remember (#416 review's original
+        //     point, which also covered committed baselines carrying pre-fix inlined content).
+        //   Ordering. The order to restore is the parent's own — placement carries no ordering
+        //     column, so attaching in FormKey order rewrote every populated cell's Persistent and
+        //     Temporary lists into a different order than the source held, which the #369 compile
+        //     round-trip gate reads as a content change (measured on cell 018AA2). The parent's
+        //     document is now the authority on that order, so the flush reads it off the slot before
+        //     clearing it.
+        var pendingChildren = new List<(object Parent, string Slot, IMajorRecord Child)>();
 
         // Pass 1: every record that has a genuine top-level group (the ~95% non-container case, plus
         // Worldspace and Quest — top-level records that are *themselves* containers of stripped
@@ -90,7 +97,7 @@ internal static class ContainerAssembler
         object? interiorSubBlock = null;
         foreach (var (formKey, record) in recordsByFormKey)
         {
-            if (ContainerStripFields.NormalizedTypeName(record.GetType()) != "Cell") continue;
+            if (ContainerChildFields.NormalizedTypeName(record.GetType()) != "Cell") continue;
 
             var loc = index.GetCellLocation(plugin, formKey);
             if (loc == null) { unplaceable.Add(formKey); continue; }
@@ -135,8 +142,7 @@ internal static class ContainerAssembler
             }
 
             var slotName = placement.Value.PlacementGroup == "persistent" ? "Persistent" : "Temporary";
-            ClearSlotOnce(cell, slotName, clearedSlots);
-            AttachChild(cell, slotName, recordsByFormKey[formKey]);
+            pendingChildren.Add((cell, slotName, recordsByFormKey[formKey]));
             placed.Add(formKey);
         }
 
@@ -148,7 +154,7 @@ internal static class ContainerAssembler
         // pass that attaches the DialogTopic to its Quest, in either order.
         foreach (var (formKey, record) in recordsByFormKey)
         {
-            var parentType = ContainerStripFields.NormalizedTypeName(record.GetType());
+            var parentType = ContainerChildFields.NormalizedTypeName(record.GetType());
             if (parentType is not ("Cell" or "Quest" or "DialogTopic")) continue;
 
             foreach (var child in index.GetContainerChildren(plugin, formKey))
@@ -158,11 +164,12 @@ internal static class ContainerAssembler
                     unplaceable.Add(child.ChildFormKey);
                     continue;
                 }
-                ClearSlotOnce(record, child.SlotName, clearedSlots);
-                AttachChild(record, child.SlotName, childRecord);
+                pendingChildren.Add((record, child.SlotName, childRecord));
                 placed.Add(child.ChildFormKey);
             }
         }
+
+        AttachBufferedChildren(pendingChildren);
 
         var trulyUnplaced = recordsByFormKey.Keys.Where(fk => !placed.Contains(fk));
         var allUnplaceable = unplaceable.Concat(trulyUnplaced).Distinct(StringComparer.Ordinal).ToList();
@@ -180,7 +187,7 @@ internal static class ContainerAssembler
         catch (ArgumentException)
         {
             // IModGetter.TryGetTopLevelGroup's own documented "nested types" case: Cell and every
-            // stripped-child type ContainerStripFields names are exactly the types that land here.
+            // stripped-child type ContainerChildFields names are exactly the types that land here.
             // Not top-level — pass 2 through 4 place these instead.
             return false;
         }
@@ -188,7 +195,7 @@ internal static class ContainerAssembler
 
     // ── Exterior cell placement — WorldspaceBlock/WorldspaceSubBlock, grouped by the same
     //    coordinates PlacementWalker captured at ingest. Types are resolved by name from the
-    //    worldspace object's own assembly/namespace (RecordTextCodec/ContainerStripFields' pattern,
+    //    worldspace object's own assembly/namespace (RecordTextCodec/ContainerChildFields' pattern,
     //    root CLAUDE.md's game-generalization rule), never a hardcoded game type.
 
     private static void AttachExteriorCell(
@@ -252,19 +259,54 @@ internal static class ContainerAssembler
     // ── generic reflection plumbing ──────────────────────────────────────────────
 
     /// <summary>
-    /// Clears <paramref name="parent"/>'s named slot the first time anything is about to attach to
-    /// it this <see cref="Assemble"/> call — a no-op every subsequent time (tracked in
-    /// <paramref name="clearedSlots"/>), so a slot with N children is cleared once and then filled,
-    /// never cleared between siblings. Same dual-mode shape as
-    /// <see cref="Source.ContainerStripFields.StripInPlace"/> (<c>Clear()</c> for a list, null for a
-    /// single reference) — deliberately, since this is that method's own inverse: replacing whatever
-    /// a freshly-deserialized parent's source text happened to carry in this slot, never trusting it
-    /// to already be empty.
+    /// Applies every buffered attachment, one (parent, slot) at a time: read the order the parent's
+    /// own source text has for that slot, clear it, then re-fill it in that order.
+    ///
+    /// <para>Reading the order before clearing is the whole point. Nothing in the index records a
+    /// child's position within its parent's list — <c>placement</c> has no ordering column, and
+    /// <c>container_child</c>'s <c>SlotIndex</c> only covers the five relationships it carries — but
+    /// since #450 the parent's document embeds its children, so the order is right there in the
+    /// record this pass was handed. A child with no position in it (added since, or attached through
+    /// a relationship the parent's document does not inline) sorts last, by FormKey, so the result is
+    /// deterministic either way — which is what
+    /// <c>CompileRoundTripGateTests.Compile_OfTheRealFixture_IsDeterministic</c> requires.</para>
     /// </summary>
-    private static void ClearSlotOnce(object parent, string slotName, HashSet<(object Parent, string Slot)> clearedSlots)
+    private static void AttachBufferedChildren(List<(object Parent, string Slot, IMajorRecord Child)> pending)
     {
-        if (!clearedSlots.Add((parent, slotName))) return;
+        foreach (var group in pending.GroupBy(p => (p.Parent, p.Slot), new ParentSlotComparer()))
+        {
+            var (parent, slotName) = group.Key;
+            var sourceOrder = SlotChildFormKeys(parent, slotName);
+            ClearSlot(parent, slotName);
 
+            foreach (var item in group
+                         .OrderBy(i => SourcePosition(sourceOrder, i.Child))
+                         .ThenBy(i => i.Child.FormKey.ToString(), StringComparer.Ordinal))
+            {
+                AttachChild(parent, slotName, item.Child);
+            }
+        }
+    }
+
+    /// <summary>The FormKeys currently in <paramref name="parent"/>'s named slot, in order — the
+    /// embedded children its own source text carried. Empty for a slot the document did not
+    /// inline.</summary>
+    private static List<string> SlotChildFormKeys(object parent, string slotName) =>
+        RequireProperty(parent, slotName).GetValue(parent) switch
+        {
+            IMajorRecordGetter single => [single.FormKey.ToString()],
+            System.Collections.IEnumerable list and not string =>
+                [.. list.OfType<IMajorRecordGetter>().Select(r => r.FormKey.ToString())],
+            _ => [],
+        };
+
+    private static int SourcePosition(List<string> sourceOrder, IMajorRecord child) =>
+        sourceOrder.IndexOf(child.FormKey.ToString()) is var i && i >= 0 ? i : int.MaxValue;
+
+    /// <summary>Empties <paramref name="parent"/>'s named slot. Dual-mode (<c>Clear()</c> for a list,
+    /// null for a single reference) because the slots are.</summary>
+    private static void ClearSlot(object parent, string slotName)
+    {
         var property = RequireProperty(parent, slotName);
         var current = property.GetValue(parent);
         var clear = current?.GetType().GetMethod("Clear", Type.EmptyTypes);
@@ -275,8 +317,8 @@ internal static class ContainerAssembler
     }
 
     /// <summary>Attaches <paramref name="child"/> to <paramref name="parent"/>'s named slot — a list
-    /// property (<c>Add</c>) or a still-null single-reference property (direct assignment), matching
-    /// <see cref="Source.ContainerStripFields.StripInPlace"/>'s own dual-mode shape inverted.</summary>
+    /// property (<c>Add</c>) or a still-null single-reference property (direct assignment) — the
+    /// same dual-mode shape <see cref="ClearSlot"/> handles, on the filling side.</summary>
     private static void AttachChild(object parent, string slotName, IMajorRecord child)
     {
         var property = RequireProperty(parent, slotName);
@@ -310,7 +352,7 @@ internal static class ContainerAssembler
 
     // #416 review: the single place "does this reflected object have the property this call site
     // needs" is asked and answered — every other member here that used to repeat its own
-    // GetProperty(name) ?? throw goes through this instead, so a stale ContainerStripFields entry
+    // GetProperty(name) ?? throw goes through this instead, so a stale ContainerChildFields entry
     // (or a game module missing a property the walker assumes) fails with the same named, actionable
     // message no matter which of the five call sites hit it first.
     private static PropertyInfo RequireProperty(object owner, string name) =>

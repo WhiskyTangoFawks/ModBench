@@ -51,7 +51,13 @@ public sealed class PluginCompileService(
         var collidingFormKeys = new List<string>();
         foreach (var (relativePath, bytes) in sourceFiles)
         {
-            var record = _codec.DeserializeFromBytesAsync(bytes, session.GameRelease).GetAwaiter().GetResult();
+            // #450: a source document only names its own type when its path could not, so the type
+            // comes from the path — the record-type segment SourceRecordPath.For itself wrote, which
+            // is the same string the index's record_type column carries. A path this layout could
+            // not have produced yields null, which reads as "expect the document to self-describe"
+            // and fails there with the codec's named exception rather than here with a guess.
+            var recordType = SourceRecordPath.TryParse(relativePath, out var identity) ? identity.RecordType : null;
+            var record = _codec.DeserializeFromBytesAsync(bytes, session.GameRelease, recordType).GetAwaiter().GetResult();
             var formKey = record.FormKey.ToString();
             // Structurally impossible to emit: two distinct source files both claiming the same
             // FormKey (a hand-edit, a corrupted rename, a renumber that collided) would collapse to

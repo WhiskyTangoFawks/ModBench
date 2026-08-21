@@ -8,7 +8,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 
 /// <summary>
 /// The source's own file layout policy: one record, one file, always — including a container
-/// record's own (shallow) file, per <see cref="ContainerStripFields"/>. Flat, not nested under a
+/// record's own (shallow) file, per <see cref="ContainerChildFields"/>. Flat, not nested under a
 /// parent's own path:
 /// <c>&lt;pluginFileName&gt;.source/&lt;recordType&gt;/&lt;originModKey&gt;/&lt;localFormID
 /// hex6&gt;.json</c>, relative to the origin folder (the source's working tree).

@@ -81,9 +81,10 @@ public sealed class CompileRoundTripGateTests : IDisposable
             .ToDictionary(f => Path.GetRelativePath(_modFolder, f), File.ReadAllBytes);
 
     // Deep-parses `pluginPath` and re-derives what Track would have written for every record — the
-    // same codec, the same container stripping, no shortcuts — so this dict is directly comparable
-    // to ReadSourceTree()'s (same relative-path keys, since SourceRecordPath.For is the one path
-    // rule both Track and this call use).
+    // same codec, no shortcuts — so this dict is directly comparable to ReadSourceTree()'s (same
+    // relative-path keys, since SourceRecordPath.For is the one path rule both Track and this call
+    // use). Since #450 that is the codec call and nothing else: Track has no strip step left, so
+    // "what Track would have written" and "serialize the record" became the same sentence.
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
@@ -95,8 +96,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
         {
             var recordType = ResolveRecordType(record);
             var relativePath = SourceRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString());
-            var stripped = ContainerStripFields.StrippedForSerialization(record);
-            var bytes = codec.SerializeToBytesAsync(stripped, release).GetAwaiter().GetResult();
+            var bytes = codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
             result[relativePath] = bytes;
         }
         return result;

@@ -10,14 +10,16 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #413 S4 / D8: a container record's document holds only the container's own fields.
+/// #450 S4 (ADR-0041's #444 amendment), inverting #413 D8: a container record's document holds its
+/// <b>embedded children</b>, because that is what the whole-mod folder-split path — Spriggit's own
+/// output — puts in that record's file. The deep-copy-and-strip step D8 introduced is gone with the
+/// posture that needed it: the parent's file is the child's source unit now, and the index's
+/// container_child/placement rows are extracted <i>from</i> the parent rather than replacing it.
 ///
-/// A Cell/Worldspace/Quest/DialogTopic serialized straight off the binary overlay ingest holds can
-/// still inline its children — suppressing the serializer's per-child streams and folders stops the
-/// filesystem writes, not the parent's own stream (that distinction is measured and recorded on
-/// <c>RecordTextCodec.DiscardChildRecordStreams</c>). Children are their own records, their own
-/// documents and their own source entries (ADR-0040/#387); a parent that carried them would store
-/// the same data twice and give the parent a body that no source file will ever match.
+/// The scope of "embedded" is Spriggit's, not ours: <c>Cell.{Persistent,Temporary,Landscape,
+/// NavigationMeshes}</c> and <c>Worldspace.TopCell</c> only. A quest's dialog topics stay
+/// folder-split on both doors, so a quest's document still carries none of them — which is why the
+/// second test below is a quest and reads as "no change" rather than as an oversight.
 ///
 /// The subject is found by measurement rather than pinned by FormKey: the curated plugin is
 /// regenerable, so a hardcoded FormKey would silently decay into testing nothing. Every assertion
@@ -38,49 +40,52 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     }
 
     /// <summary>
-    /// The case that makes the strip load-bearing: a cell whose raw overlay serialization really
-    /// does carry child records. Its stored document must not.
+    /// The case that used to make the strip load-bearing, now read the other way round: a cell whose
+    /// codec bytes carry child records must have exactly those bytes stored against it. Anything that
+    /// re-introduced a strip — at ingest, or by reviving the child-stream suppression for the
+    /// embedded slots — puts the index back out of step with the source file and fails here.
     /// </summary>
     [Fact]
-    public async Task Index_ForACellWhoseOverlayInlinesChildren_StoresOnlyTheCellsOwnFields()
+    public async Task Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         using var overlay = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
             GameRelease.Fallout4);
 
-        var withInlinedChildren = new List<ICellGetter>();
+        var withInlinedChildren = new List<(ICellGetter Cell, string[] Fields)>();
         foreach (var cell in overlay.EnumerateMajorRecords<ICellGetter>(throwIfUnknown: false))
         {
             using var doc = JsonDocument.Parse(await codec.SerializeToBytesAsync(cell, GameRelease.Fallout4));
-            if (CellChildFields.Any(f => doc.RootElement.TryGetProperty(f, out _)))
-                withInlinedChildren.Add(cell);
+            var present = CellChildFields.Where(f => doc.RootElement.TryGetProperty(f, out _)).ToArray();
+            if (present.Length > 0) withInlinedChildren.Add((cell, present));
         }
 
         Assert.True(withInlinedChildren.Count > 0,
-            "Positive control: at least one cell in the corpus must inline children when serialized " +
-            "raw, or this test proves nothing about stripping them.");
+            "Positive control: at least one cell in the corpus must carry embedded children when " +
+            "serialized, or this test proves nothing about storing them.");
 
-        var offenders = new List<string>();
-        foreach (var cell in withInlinedChildren)
+        var missing = new List<string>();
+        foreach (var (cell, expected) in withInlinedChildren)
         {
             var body = StoredBody(cell.FormKey.ToString());
             Assert.NotNull(body);
             using var stored = JsonDocument.Parse(body);
-            foreach (var field in CellChildFields)
+            foreach (var field in expected)
             {
-                if (stored.RootElement.TryGetProperty(field, out _))
-                    offenders.Add($"{cell.FormKey}.{field}");
+                if (!stored.RootElement.TryGetProperty(field, out _))
+                    missing.Add($"{cell.FormKey}.{field}");
             }
         }
 
-        Assert.Empty(offenders);
+        Assert.Empty(missing);
     }
 
     /// <summary>
-    /// Stripping must not become "store less of everything". The container's own fields survive
-    /// intact — asserted against the same codec output the source path produces, so this pins
-    /// equality with the source's bytes rather than merely the absence of children.
+    /// The invariant the whole document shape rests on: what the index stores for a record is
+    /// byte-for-byte what its source file holds. Asserted on a quest — the container Spriggit does
+    /// not embed — so it also pins that dropping the strip did not quietly start inlining the
+    /// folder-split children too.
     /// </summary>
     [Fact]
     public async Task Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
@@ -93,8 +98,8 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         var quest = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
         var formKey = quest.FormKey.ToString();
 
-        // Exactly what TrackService does before writing a source file.
-        MEditService.Core.Source.ContainerStripFields.StripInPlace(quest);
+        // Exactly what TrackService does to write a source file — which since #450 is nothing but
+        // the codec call itself.
         var sourceBytes = await codec.SerializeToBytesAsync(quest, GameRelease.Fallout4);
 
         var body = StoredBody(formKey);
@@ -104,9 +109,8 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     }
 
     /// <summary>
-    /// The strip is scoped to containers. A non-container record must be stored exactly as the codec
-    /// renders it — the deep copy the container path needs is ~5% of a real corpus, and quietly
-    /// applying it (or anything else) to the other 95% would be a cost with no cause.
+    /// And the same for the ~95% that were never containers, which #413 D8's deep copy already
+    /// skipped: the stored body is the codec's own bytes, with nothing interposed.
     /// </summary>
     [Fact]
     public async Task Index_ForANonContainer_StoresTheCodecsBytesUnchanged()

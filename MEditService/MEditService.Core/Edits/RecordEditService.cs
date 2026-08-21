@@ -607,13 +607,15 @@ public sealed class RecordEditService(
     /// </summary>
     private IMajorRecord ReadRecordFromSource(string sourcePath, RecordDocument document, GameRelease release)
     {
+        // #450: both reads state the record's type rather than relying on the document to name it —
+        // the same document either way, so the same record_type identifies it either way.
         if (File.Exists(sourcePath))
-            return _codec.DeserializeAsync(sourcePath, release).GetAwaiter().GetResult();
+            return _codec.DeserializeAsync(sourcePath, release, document.RecordType).GetAwaiter().GetResult();
 
         logger.LogWarning(
             "Source file {SourcePath} is missing; editing from the indexed document and rewriting it", sourcePath);
         return _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release)
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
             .GetAwaiter().GetResult();
     }
 }
