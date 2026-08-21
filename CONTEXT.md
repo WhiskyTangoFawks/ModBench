@@ -38,9 +38,11 @@
 
 **Plugin load order**: Ordered list of plugins the game loads (`plugins.txt`); determines which override wins. Written by Mod Management (the Plugins tab); Editing consumes it read-only to build a session (`load-explicit`). Distinct from Mod Management's mod-level ordering (file conflicts, not overrides) — see [CONTEXT-MAP.md](CONTEXT-MAP.md). _Avoid: load order (ambiguous with Mod load order), plugin list._
 
-**Override**: Record definition in a plugin other than the originating plugin. _Avoid: copy, patch entry._
+**Override**: Record definition in a plugin other than the originating plugin. Record-level — where the level could be ambiguous, say *record override* (see Resolution stack). _Avoid: copy, patch entry._
 
 **Override stack**: Full ordered sequence of overrides for one FormKey across all loaded plugins. Primary structure for the compare view and conflict detection.
+
+**Resolution stack**: The one model recurring at three levels: a stack of candidates on a shared identity, resolved to a single winner (#397). **File level** — multiple mods provide the same plugin filename; Mod ordering resolves which file exists (MO2 calls this "overwritten" — its dialect for the same thing). **Record level** — multiple plugins provide the same FormKey; plugin load order resolves the winner (the Override stack above). **State level** — within a tracked copy, source stacks on the compiled binary; the working tree wins in the editor, and compile collapses the layer. "Override"/"overwrite" unqualified is inherently vague across levels — always name the level: *file override*, *record override*, *source override*. Editability is orthogonal to the stack: load-order membership decides write access, so a file-level loser is read-only even when tracked. _Avoid: shadowed plugin (pre-#397 term for a file-level loser), override/overwrite unqualified where the level isn't obvious from context._
 
 **Underride**: The mirror of an override — placing a record *down* into an earlier-loading plugin (a master) rather than up into a later one. Because a FormKey encodes its origin plugin, an underride entails renumbering the record into the target master's FormID range (cf. xEdit "inject into master"), so mechanically it is a move+renumber despite the copy-flavored name. _Avoid: inject, inject-to-master._
 
