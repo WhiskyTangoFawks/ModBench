@@ -428,10 +428,24 @@ serialization library we already share is ~80 lines of convention — replicated
 > only against Spriggit: `wbDefinitionsFO4.pas` declares those three bytes `wbUnused(3)`, the
 > affirmative classification xEdit curates separately from `wbUnknown`.
 >
-> **Interchange and CI are #465**, split out of #455. Direction (a) is already evidenced — the real
-> tool deserialized our tree into a plugin that deep-parses to all 3,940 fixture records — but the
-> gate for it, and the CI that would keep either gate from being skipped everywhere, are that
-> ticket's. There is no CI in this repo today; the "11 — Continuous integration" milestone tracks it.
+> **That adoption is a format change, and existing tracked trees need re-Tracking.** These are
+> generation-time customizations, so both doors change together and the omitted fields simply stop
+> being written — which moves `records.content_hash` for every condition-bearing record and for the
+> mod header. On upgrade an already-tracked mod's working tree therefore reads as wholly changed
+> against its own baseline; the right response is to re-Track it, not to commit that churn as an
+> edit. 981 of the fixture's 3,858 documents were affected, so on a dialogue-heavy plugin this is
+> most of the tree. Accepted on the same posture this ADR already takes for #451's layout change:
+> the product is alpha with no shipped users, and a one-time re-Track is strictly cheaper than
+> carrying a permanent divergence from the format specification. The binary path is untouched —
+> compile still produces a loadable plugin, and what is dropped is CTDA padding plus counters the
+> writer recomputes.
+>
+> **Interchange and CI are #465**, split out of #455. Direction (a) was measured during #455's survey
+> — the real tool deserialized our tree into a plugin that deep-parses to all 3,940 fixture records —
+> but **nothing in this repo exercises it**: `SpriggitOracle` implements `serialize` only. #465's
+> issue body records that measurement and owns building the test, so treat the number as attributed
+> to that ticket rather than as a claim this repo can currently substantiate. There is no CI here
+> today either; the "11 — Continuous integration" milestone tracks it.
 
 **4. Codec scope amended; the whole-mod prohibition inverts.** The generated whole-mod
 mixin becomes the **designated door for Track, ingest-from-source, and compile** —

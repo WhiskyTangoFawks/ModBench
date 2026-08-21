@@ -98,10 +98,19 @@ internal static class SpriggitDivergenceAllowlist
                 + "rather than observed: the committed fixture's conditions carry no such field, proved "
                 + "by count — stripping Condition.Unknown1 alone made all 981 condition-bearing files "
                 + "exactly equal before that omission was adopted. Asserting zero still catches an "
-                + "upstream change that makes it appear.",
+                + "upstream change that makes it appear.\n"
+                + "The enclosing-object scope is load-bearing, not decoration. \"Unused\" names real "
+                + "gameplay fields elsewhere in Fallout 4 — Quest.UnusedConditions is an "
+                + "ExtendedList<Condition> and Worldspace.UnusedWorldspaceParent is a live FormLink, "
+                + "both legacy Creation Kit names for fields that carry data — so a predicate matching "
+                + "the bare key name anywhere in the document would claim divergences in fields this row "
+                + "has nothing to do with. Today that would surface as a red gate with a wrong diagnosis, "
+                + "since the row asserts zero; at the 1.38.x bump, when this row is promoted to Observed, "
+                + "it would become a hiding place instead — and surviving that bump is what the allowlist "
+                + "is for.",
             ClosesAt: ClosesAtSerializationBump,
             Tier: DivergenceTier.DeclaredUnobserved,
-            Normalize: node => RemoveKeys(node, key => key.Contains("unused", StringComparison.OrdinalIgnoreCase))),
+            Normalize: RemoveUnusedConditionDataFields),
 
         new SpriggitDivergence(
             Name: "DefaultValuedMemberSkipping",
@@ -148,6 +157,41 @@ internal static class SpriggitDivergenceAllowlist
             case JsonArray array:
                 var items = new JsonArray();
                 foreach (var item in array) items.Add(RemoveStatsVersion(item?.DeepClone()));
+                return items;
+            default:
+                return node?.DeepClone();
+        }
+    }
+
+    /// <summary>
+    /// Drops properties whose name contains "unused" <b>only from objects that are condition data</b> —
+    /// mirroring the upstream rule exactly (<c>CustomizationDriver.WrapOmission</c>: the declaring
+    /// object's type name must contain <c>ConditionData</c> and the property name must contain
+    /// <c>unused</c>, both case-handled as here).
+    ///
+    /// <para>The object's type is read from the <c>MutagenObjectType</c> discriminator, which condition
+    /// data always carries because <c>IConditionData</c> is abstract — the kernel writes a discriminator
+    /// exactly when the element type is ambiguous. An object with no discriminator is left alone rather
+    /// than guessed at: over-removal is the failure mode that matters here, since it would let a real
+    /// divergence be claimed by this row.</para>
+    /// </summary>
+    private static JsonNode? RemoveUnusedConditionDataFields(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                var isConditionData = obj["MutagenObjectType"]?.GetValue<string>()
+                    .Contains("ConditionData", StringComparison.Ordinal) == true;
+                var mapped = new JsonObject();
+                foreach (var (key, value) in obj)
+                {
+                    if (isConditionData && key.Contains("unused", StringComparison.OrdinalIgnoreCase)) continue;
+                    mapped[key] = RemoveUnusedConditionDataFields(value?.DeepClone());
+                }
+                return mapped;
+            case JsonArray array:
+                var items = new JsonArray();
+                foreach (var item in array) items.Add(RemoveUnusedConditionDataFields(item?.DeepClone()));
                 return items;
             default:
                 return node?.DeepClone();
