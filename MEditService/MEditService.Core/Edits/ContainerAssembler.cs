@@ -293,6 +293,26 @@ internal static class ContainerAssembler
     /// different order, and it reaches the user's source text through the next ingest.
     /// <c>ContainerAssemblerOrderingTests</c> covers the <c>container_child</c> half; the #369
     /// real-fixture compile gate covers the embedded half (it caught cell <c>018AA2</c>).</para>
+    ///
+    /// <para><b>#452 changed what <c>SlotIndex</c> means, and the change is deliberate — read this
+    /// before treating a reordering as a bug.</b> This ordering fix was justified against a
+    /// <i>binary</i>-seeded ingest, where <c>SlotIndex</c> was the binary's own GRUP order. A tracked
+    /// plugin now ingests from its source tree, so <c>SlotIndex</c> is whatever the deserializer
+    /// produced — and <b>Spriggit's layout carries no child ordering at all</b>: its reader sorts by a
+    /// <c>"[N] "</c> file-name prefix that is written only under <c>Overall.EnforceRecordOrder</c>,
+    /// which neither this project nor Spriggit enables, so a stable sort on an all-null key leaves
+    /// filesystem order (traced in <c>references/mutagen-serialization</c>; measured at 233 parents on
+    /// the real fixture by <c>SourceIngestParityTests</c>, which pins it as a named allowlist entry).</para>
+    ///
+    /// <para>So for a tracked plugin, compile reproduces the <i>tree's</i> child order, not the
+    /// original binary's. That is consistent with the arc's model rather than a regression against it:
+    /// source is the truth, order stays <b>stable</b> (same tree, same order) without being
+    /// <b>canonical</b> against the pre-Track binary — which is exactly what #454's scope item 4 says
+    /// a compiled-from-text binary does, and what <c>CompileRoundTripGateTests</c>' own doc comment
+    /// already concedes ("no canonical 'correct' value to reproduce, only a stable one"). Enabling
+    /// <c>EnforceRecordOrder</c> would restore canonical order and was rejected: it puts <c>"[N] "</c>
+    /// into on-disk file names, abandoning the layout ADR-0041 pins wholesale and the Spriggit
+    /// byte-parity convergence target #455 gates.</para>
     /// </summary>
     private static void AttachBufferedChildren(
         List<(object Parent, string Slot, IMajorRecord Child, int? SlotIndex)> pending)

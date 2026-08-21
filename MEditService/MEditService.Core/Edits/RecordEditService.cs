@@ -24,10 +24,18 @@ namespace MEditService.Core.Edits;
 /// <para><b>The source text is the source, not the index.</b> Each edit reads the record's source
 /// file, applies the field to the record that text deserializes to, and writes the file back; the
 /// index is then told what landed. Reading the file rather than the indexed body is deliberate and
-/// measured: ingest serializes from a plugin's <i>binary overlay</i> while the source holds a
+/// measured: ingest used to serialize from a plugin's <i>binary overlay</i> while the source held a
 /// <i>deep parse</i>, and the two are not always structurally identical (#369's 1-in-3,940 hole,
 /// documented on <see cref="GitBlobHash"/>). Editing the file's own bytes means an edit can never
-/// silently rewrite a record's unrelated fields into the overlay's shape.</para>
+/// silently rewrite a record's unrelated fields into the overlay's shape.
+///
+/// <para>#452 dissolved that specific hazard for a <b>tracked</b> plugin — which is every plugin this
+/// class will edit, since editing requires tracking. Its index rows are now seeded from the same
+/// source tree this reads, so there is exactly one parse and the two cannot disagree
+/// (<c>SourceIngestParityTests</c> measures the residue: 2,576 of 2,577 real documents byte-identical,
+/// the one exception being #369 itself, which can only appear on the untracked binary path). Reading
+/// the file nonetheless stays correct and stays the rule: it is the shortest path to the bytes being
+/// edited, and it keeps this class independent of how fresh the index happens to be.</para>
 ///
 /// <para>Every refusal happens <b>before</b> anything is written, so a refused edit leaves the
 /// working tree exactly as it was — there is no half-applied state for the user to discover in the

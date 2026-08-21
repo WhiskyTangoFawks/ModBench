@@ -11,7 +11,7 @@ namespace MEditService.Core.Source;
 /// splitting the filename alone ambiguous in the general case. Every caller either already holds the
 /// record's bytes (<c>PluginCompileService</c>, which never needed a path-derived FormKey — the
 /// deserialized record's own <c>FormKey</c> is authoritative) or reads them right after a successful
-/// parse (<c>WorkingTreeCreateRediscovery</c>) — identity comes from the document, not the path,
+/// parse (<c>SourceIngest.ReconcileHead</c>) — identity comes from the document, not the path,
 /// matching the rest of this codebase's own posture (<c>IRecordIndex.GetDocument</c> et al.).</summary>
 internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType);
 

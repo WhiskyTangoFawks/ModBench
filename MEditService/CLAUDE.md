@@ -4,7 +4,17 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 
 ## Invariants
 
-- Binary plugins = source of truth; DuckDB = indexed read model of committed data. Reads only via `IRecordReads`/`IRecordIndex`, never Mutagen directly.
+- **A tracked plugin's source tree is the source of truth; the binary is for untracked plugins**
+  (#452 / ADR-0041's #444 amendment). Session load ingests a tracked plugin by deserializing
+  `<plugin>.source/` whole (`Source/SourceIngest`, a designated whole-mod door) — working tree →
+  Effective, git `HEAD` → Head — and never consults the binary for its *content*. Untracked plugins
+  keep the binary-overlay ingest unchanged; both paths end in the same `IRecordIndex.Index` over the
+  same `IModGetter`, so the read model never sees a dialect. The binary is still opened for a tracked
+  plugin's *metadata* (masters, record count) and for the save path — a bounded decision, stated at
+  `SessionManager.IndexOnePlugin`. An unreadable source tree degrades to the binary **and records a
+  visible `PluginLoadFailure`**; a silent fallback would let a user read pre-Track content believing
+  it was their source. DuckDB = indexed read model. Reads only via `IRecordReads`/`IRecordIndex`,
+  never Mutagen directly.
 - Records table key: `(form_key, origin, plugin)` — one row per (origin, plugin) per FormKey. `origin` (ADR-0036, amends ADR-0006) is the mod folder that provided the file, or a reserved `PluginOrigin` value; `plugin` alone is not a unique identity. #271/#272 closed every gap deliberately left filename-only-keyed for the record editor's own single-record field reads: VMAD, conditions, header and `form_lookup` indexing/delete/winner-join (`DuckDbRecordIndex`); `IRecordReads.GetPlacement` (`GetVmad`/`GetConditions` since relocated to `Queries/RecordDocumentCodecs`, #421); the `pending_changes` read/delete surface itself — `IPendingChangeService.GetChanges`, `GetPendingFields`, `RemoveFieldsWithPrefix`, `GetStagedFormKeys`, `GetPendingNativeFormKeyChanges`, `Revert` all take/filter by `origin`; and `pending_form_references`. #275 closed the wire/DTO shims layered on top: `PluginResponse`/`RecordDetail`/`CompareOverride`/`PendingChangeUpsert`/`GroupMember`/`PendingChange`/`ExplicitPlugin`/`PluginMetadata` all require `Origin` (or `origin`) rather than defaulting it, and the origin-less `LoadExplicit` overloads (`GameSession`/`ISessionManager`/`SessionManager`, including the `ISessionManager` default-interface method that used to discard origin) are gone. #296 closed the remaining read surfaces (Worldspace tree, Referenced By, record listing/lookup, plugin record-type counts, ESL native-FormKey validation): `GetWorldspaceCells`/`GetInteriorCells`/`GetCellReferences`/`GetDocument(formKey, PluginKey)` (replacing `GetRecordForPlugin`)/`GetRecordTypeCounts` (replacing `CountRecordsForPlugin`)/`GetNativeFormKeys` all take a required plugin identity — the compound `PluginKey` since #421 — plugin never optional at any of their call sites, mirroring GetPlacement. `IRecordReads.GetDocument(formKey)` is the global-winner lookup instead — #421 replaced the old nullable-`plugin`/nullable-`origin` pair with a separate no-plugin overload rather than nulling both; `GetDocument(formKey, PluginKey)` is the specific-plugin sibling that gets the plain required treatment `GetRecordForPlugin` once did. `Search(RecordQuery)` (#421, replacing `GetRecords`/`SearchRecords`) takes a nullable `PluginKey` *filter* instead via `RecordQuery.Plugin` (plugin itself is optional there — browsing every plugin is legitimate — mirroring `DuckDbPendingChangeService.BuildFilter`'s own origin parameter); `RecordSummary` and `ReferenceResult` both gained an `Origin` field; `WorldspaceQueryService.GetCellReferences`'s pending-overlay call and `IRecordQueryService.GetPluginRecordTypes` resolve origin server-side via the new shared `PluginOriginResolver` (Session/) rather than taking it as a wire parameter, since no frontend caller has ever had origin to supply on these routes. `IRecordQueryService.GetChanges` lost its `plugin` parameter entirely (deleted, not origin-threaded — nothing ever called it) rather than gaining one; `formKey`/`memberChangeId` are real, kept as-is.
 
   #34's backend half closed the last of the compound-identity gaps *inside the session*: `GameSession` keys its opened mods by `(origin, filename)` and `GetMod` requires an origin; `AddUnlistedPlugin`/`RemoveUnlistedPlugin` + `SessionManager.LoadUnlistedPlugin`/`UnloadUnlistedPlugin` + `POST /plugins/load`/`/plugins/unload` open and index (or drop) a plugin file the effective load order does not name — read-only, non-participating, and absent from Mutagen's `LoadOrder` entirely, which refuses a second listing per ModKey. `PluginMetadata`/`PluginResponse` carry `InLoadOrder`, which `Participates` cannot express (a disabled `plugins.txt` line is still in the load order and still a legitimate write target). `IRecordIndexer.Unindex` is `Index`'s inverse, table for table — ADR-0035's "hidden means absent" is unloading, never filtering. `RecordQueryService.GetCompare`'s `pluginMasters`/`pluginParticipates` are `ColumnKey`-keyed (they threw outright on a duplicate filename, not merely mis-keyed), as are all three classifiers' participation filters. `PluginOriginResolver.Resolve` and `SessionManager.RequirePlugin` resolve **only among load-order members**, which restores the property that makes bare filenames safe as write targets: `plugins.txt` cannot list a name twice. `IEditOrchestrator.CopyRecordTo` takes `sourceOrigin` so a copy binds to the column it was invoked on. `GetRecords`/`GetPluginRecordTypes` take an optional `origin` — stated by a caller that knows which copy it is browsing, else resolved from the load order as since #296.
@@ -55,17 +65,25 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     both doors, which is why the codec keeps its child-stream/child-folder suppressions — deleting
     them puts 1,057 directories per real Quest back in the process's working directory. Canonical
     document form is bare `\n` newlines with **nothing after the closing brace**: no trailing
-    newline, on every platform. Until #452 lands ingest-from-source, an embedded child is
-    represented twice — inline in its parent's document and again as its own row and source file.
+    newline, on every platform. An embedded child is represented inline in its parent's document and
+    also as its own `records` row extracted from it; since #452 a tracked plugin has one parse, so
+    the two cannot drift apart. **Spriggit's layout carries no ordering for folder-split children**
+    (its `[N] ` file-name prefix is gated on `Overall.EnforceRecordOrder`, which neither this project
+    nor Spriggit enables), so `container_child.SlotIndex` is the *tree's* order for a tracked plugin,
+    not the binary's — stable, not canonical. Pinned as a named allowlist entry by
+    `SourceIngestParityTests`; see `ContainerAssembler.AttachBufferedChildren` before treating a
+    reordering as a bug.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
   ADR-0041). `Edits/RecordEditService.EditField` reads the record's source file, applies the field,
   writes the file back atomically, and tells the index what landed. It reads the **file**, not the
-  indexed body: ingest serializes from a plugin's binary overlay while the source holds a deep
+  indexed body: ingest used to serialize from a plugin's binary overlay while the source held a deep
   parse, and the two are not always structurally identical (#369's measured 1-in-3,940 hole, on
   `GitBlobHash`), so editing the file's own bytes is what stops an edit rewriting a record's
-  untouched fields into the overlay's shape. `POST /records/{formKey}/field` is the same service's
+  untouched fields into the overlay's shape. #452 dissolved that hazard for tracked plugins (one
+  parse — and editing requires tracking), but reading the file stays the rule: it is the shortest
+  path to the bytes being edited and keeps the write path independent of index freshness. `POST /records/{formKey}/field` is the same service's
   HTTP door — scripts and agents (ADR-0024) share the one path, they do not get a second.
   - **Refusals are typed and happen before any write** (`RecordEditRefusal`), so a refused edit
     leaves the working tree untouched. Two of them are the untracked signposting: `PluginNotTracked`

@@ -31,6 +31,16 @@ namespace MEditService.Core.Source;
 ///
 /// <para>A <c>content_hash</c> mismatch is never treated as proof of a user edit — it routes to a
 /// byte compare, which decides (<see cref="GitBlobHash"/>'s one-directional contract).</para>
+///
+/// <para><b>Narrowed by #452 to mid-session external moves — in meaning, not in code.</b> This class
+/// used to carry a second, unstated job: correcting a read model seeded from the <i>binary</i>, where
+/// the very first read of a record whose source file had changed before the session even started was
+/// doing catch-up work. Ingest-from-source removes that job at the root — <see cref="SourceIngest"/>
+/// seeds both refs from the tree, so at load time there is nothing here to correct. Nothing was
+/// deleted to achieve it, and nothing should be: every method below is still exactly the right
+/// re-check for a file that moves <i>after</i> the session is up (a <c>git restore</c> from the Source
+/// Control panel, a terminal commit, an agent's script), which no ingest can anticipate. What changed
+/// is that on a freshly loaded session the first read now finds the answer already correct.</para>
 /// </summary>
 public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFreshness> logger)
 {
