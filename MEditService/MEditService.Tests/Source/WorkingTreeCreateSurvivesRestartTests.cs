@@ -6,17 +6,24 @@ using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
-namespace MEditService.Tests.Session;
+namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #427 Epic B′: a working-tree-only create must survive a backend restart before the record is ever
-/// compiled — <c>IRecordIndex.Index()</c> only knows the binary, so without a session-load sweep the
-/// record would answer at Effective during the session that created it and then silently vanish from
-/// the next session's read model while compile (which assembles from source files on disk) still
-/// emits it. Reloads the same mod folder in a brand-new <see cref="SessionManager"/> — the honest way
-/// to prove "survives a restart" rather than asserting anything about the first session's own state.
+/// A working-tree-only create must survive a backend restart before the record is ever compiled: it
+/// answers at Effective, and at Head it answers nothing at all, because no commit holds it yet.
+///
+/// <para><b>Kept deliberately when #452 deleted the class it was written for</b> (#427 Epic B′'s
+/// <c>WorkingTreeCreateRediscovery</c>). AC4 deletes the reconciliation sweep, not the behaviour it
+/// was reconciling toward — and a deletion slice that also deletes its own safety net proves nothing.
+/// These two assertions are exactly what tells "ingest-from-source produces this state on its own"
+/// apart from "the state stopped being produced"; the second of them (Head answers nothing) is what
+/// went red the moment ingest started seeding both refs from one whole-tree read, and what
+/// <c>IRecordIndex.MarkWorkingTreeOnly</c> exists to put right.</para>
+///
+/// <para>Reloads the same mod folder in a brand-new <see cref="SessionManager"/> — the honest way to
+/// prove "survives a restart" rather than asserting anything about the first session's own state.</para>
 /// </summary>
-public sealed class WorkingTreeCreateRediscoveryTests
+public sealed class WorkingTreeCreateSurvivesRestartTests
 {
     [Fact]
     public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterASessionRestart()

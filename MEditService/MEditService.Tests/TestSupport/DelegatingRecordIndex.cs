@@ -30,6 +30,10 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.CreateWorkingTreeRecord(key, formKey, recordType, body);
     public virtual void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines) =>
         Inner.SetCommittedBaseline(key, baselines);
+    public virtual void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys) =>
+        Inner.MarkWorkingTreeOnly(key, formKeys);
+    public virtual void SeedCommittedOnly(PluginKey key, string formKey, string recordType, string body) =>
+        Inner.SeedCommittedOnly(key, formKey, recordType, body);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);

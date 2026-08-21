@@ -241,7 +241,7 @@ public sealed class SessionManager(
                 // index, so the DuckDB row is identified by (origin, plugin) together, not filename
                 // alone.
                 key = new PluginKey(plugin.Name, plugin.Origin);
-                repository.Index(mod, plugin.LoadOrderIndex, plugin.Participates, key);
+                IndexOnePlugin(session, repository, plugin, key, mod, token);
             }
             catch (Exception ex)
             {
@@ -254,23 +254,11 @@ public sealed class SessionManager(
                 continue;
             }
 
-            // #427 Epic B′: rediscover any working-tree-only create this plugin's source tree already
-            // holds — Index() above only knows the binary, so a record created in a prior, uncompiled
-            // session would otherwise vanish from the read model here. A separate try/catch from
-            // Index() above: the plugin's binary content indexed fine, so a sweep failure (the source
-            // folder locked, vanished, or otherwise unreadable — never-assume-exclusive-ownership)
-            // degrades to "this session doesn't see that pending create yet", not to dropping the
-            // whole plugin the way a real indexing failure does.
-            try
-            {
-                if (ModFolders.Of(plugin.Origin, plugin.Path) is { } modFolder && SourceRepository.IsTracked(modFolder))
-                    WorkingTreeCreateRediscovery.Sweep(repository, modFolder, key, session.GameRelease);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
-            {
-                _logger.LogWarning(ex,
-                    "Could not rediscover working-tree-only creates for {Plugin}; serving the indexed state", plugin.Name);
-            }
+            // #452 retires #427 Epic B′'s rediscovery sweep, which used to run here. It existed only to
+            // correct a binary-seeded ingest: Index() knew the binary alone, so a record created but
+            // never compiled had no row to seed from and had to be swept back in. IndexOnePlugin above
+            // now reads the source tree itself, where that record is simply present — the sweep has
+            // nothing left to discover, and the class is deleted rather than disabled (AC4).
 
             lock (_lock)
             {
@@ -292,6 +280,72 @@ public sealed class SessionManager(
         repository.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
 
+    }
+
+    /// <summary>
+    /// Where one plugin's records come from (#452 / ADR-0041's #444 amendment, point 2): a tracked
+    /// plugin's own source tree, and the binary for everything else. Both branches end in the same
+    /// <see cref="IRecordIndex.Index"/> call over the same <c>IModGetter</c> shape, which is what
+    /// keeps the read model free of a dialect — see <see cref="SourceIngest"/>'s own doc comment.
+    ///
+    /// <para><b>The binary is still opened for a tracked plugin, and that is a bounded decision, not
+    /// an oversight.</b> <see cref="GameSession"/> reads the overlay for <i>metadata</i> — masters,
+    /// record count — and the write path builds its typed link cache from the same open getter.
+    /// "Never consult the binary for a tracked plugin's <i>content</i>" is what this method
+    /// establishes, and content is exactly what it redirects. Moving masters/record count onto the
+    /// tree as well (the source's root <c>RecordData.json</c> is the mod header's source file, so the
+    /// facts are all there) is a real and reasonable further step — it is simply not this one, and it
+    /// would reach into <see cref="GameSession"/>'s mod registry and the save path. Anyone deciding
+    /// otherwise should start from this sentence rather than rediscovering the question.</para>
+    ///
+    /// <para><b>A failed source read degrades to the binary, loudly.</b> The source tree is a file on
+    /// disk like any other: MO2, xEdit, a git operation, or the user can mangle or remove it between
+    /// two session loads (root CLAUDE.md's never-assume-exclusive-ownership rule). Dropping the plugin
+    /// entirely would be the worse failure, so the load falls back — but a fallback nobody is told
+    /// about is precisely the hazard, since the user would be reading pre-Track binary content while
+    /// believing they were reading their own tracked source. So this records a real
+    /// <c>PluginLoadFailure</c> through the session's own partial-success channel (the same one
+    /// surfaced by <c>GET /session/status</c>), not merely a log line.</para>
+    /// </summary>
+    private void IndexOnePlugin(
+        GameSession session, IRecordIndex repository, PluginMetadata plugin, PluginKey key,
+        IModGetter binary, CancellationToken token)
+    {
+        if (SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name) is not { } sourceTree)
+        {
+            repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key);
+            return;
+        }
+
+        try
+        {
+            _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
+            SourceIngest.Ingest(
+                repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
+                plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease, _logger, token);
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            // The load is being torn down; this is not a source failure and must not be reported as
+            // one, nor absorbed into a fallback that would keep working after the cancel.
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Deliberately every other exception, not a curated set: the failure modes of reading a
+            // whole folder tree through a third-party deserializer are open-ended (malformed JSON, a
+            // half-written file, a truncated tree, a schema the pinned serializer cannot read), and a
+            // list of the ones seen so far would silently drop the first one that isn't on it back
+            // into the caller's "this plugin is unqueryable" branch.
+            _logger.LogWarning(ex,
+                "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
+            session.RecordIndexFailure(plugin.Name,
+                $"Could not read this plugin's source tree ({ex.Message}). Showing the compiled binary " +
+                "instead — edits made since the last compile are not reflected.");
+        }
+
+        repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key);
     }
 
     /// <summary>

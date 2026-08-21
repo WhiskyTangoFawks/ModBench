@@ -164,8 +164,10 @@ internal sealed class RecordTypeDispatch
         // #451 review: keyed by folder, valued by the *schema table name* spelling (the lowercased
         // GRUP signature — matching SchemaReflector.cs's own `recordType.Type.ToLowerInvariant()`),
         // never the bare CLR type name. DuckDbRecordIndex's own record-type dictionary is keyed by
-        // that schema spelling only, case-sensitively — WorkingTreeCreateRediscovery.Sweep handing it
-        // "Npc" instead of "npc_" threw KeyNotFoundException, caught running the suite. The codec's own
+        // that schema spelling only, case-sensitively — the #427 rediscovery sweep handing it "Npc"
+        // instead of "npc_" threw KeyNotFoundException, caught running the suite. (That sweep is gone
+        // as of #452, but the constraint it exposed is not: SourceIngest.ReconcileHead is the caller
+        // that relies on this spelling now.) The codec's own
         // dispatch (RecordTextCodec) tolerates either spelling (ConcreteFor's dual keys), so this
         // narrower, correct spelling costs that caller nothing.
         var typesByFolder = new Dictionary<string, List<string>>(StringComparer.Ordinal);

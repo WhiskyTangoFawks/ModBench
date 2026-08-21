@@ -127,4 +127,30 @@ internal static class RecordTextCodecGeneratorSeed
     /// </summary>
     internal static Task SerializeWholeMod(IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
         => MutagenJsonConverter.Instance.Serialize(mod, folder, workDropoff: workDropoff, cancel: cancel);
+
+    /// <summary>
+    /// The read side of the same door (#452, ingest-from-source): a whole <c>&lt;plugin&gt;.source/</c>
+    /// tree back into a mod. Same rule as <see cref="SerializeWholeMod"/> — every real caller comes
+    /// through here, never through <c>MutagenJsonConverter.Instance</c> directly.
+    ///
+    /// <para><b>This second call site does not re-trigger CS8785, and the reason is structural rather
+    /// than lucky.</b> The generator's <c>BootstrapInvocationDetector</c> inspects <i>argument 0</i> and
+    /// records an <c>ObjectRegistration</c> only when that argument's type is Loqui-shaped; here
+    /// argument 0 is the folder, so the invocation is detected with a <see langword="null"/>
+    /// <c>ObjectRegistration</c>. <c>MixinGenerator.Generate</c> opens with
+    /// <c>if (bootstrap.ObjectRegistration == null) return;</c>, so this emits no mixin at all and
+    /// therefore cannot collide on <c>MutagenJsonConverter_Fallout4Mod_MixIns.g.cs</c>'s hint name the
+    /// way a second <i>mod-typed</i> call site did. Nor does it emit the fallback stub:
+    /// <c>StubGenerator</c> fires only for a bootstrap whose invocations are
+    /// <c>All(x =&gt; x.ObjectRegistration == null)</c>, and <see cref="SerializeWholeMod"/>'s is not.
+    /// Traced in the generator's own source under <c>references/mutagen-serialization</c> while
+    /// implementing #452 — not inferred after the fact from the build happening to succeed.</para>
+    ///
+    /// <para>Sequential dropoff for the same reason the write side names one (#444 spike finding 4 —
+    /// a real upstream race in the parallel helpers), stated explicitly so a swap is a visible diff
+    /// that <see cref="RecordTextCodecGeneratorSeedTests"/>' own guard can catch.</para>
+    /// </summary>
+    internal static Task<IFallout4Mod> DeserializeWholeMod(
+        string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
+        => MutagenJsonConverter.Instance.Deserialize(folder, workDropoff: workDropoff, cancel: cancel);
 }

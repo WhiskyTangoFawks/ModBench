@@ -632,6 +632,62 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             """, formKey, key.Name, key.Origin!);
     }
 
+    /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
+    public void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys)
+    {
+        if (formKeys.Count == 0) return;
+
+        using var tx = Connection.BeginTransaction();
+        foreach (var formKey in formKeys)
+        {
+            // The snapshot delete is not defensive padding: a fresh ingest leaves none behind, but this
+            // is also reachable for a record that diverged earlier in the same session, and a stale
+            // snapshot would keep answering at Head through records_head's own UNION — which is exactly
+            // the state this method exists to end.
+            ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+                formKey, key.Name, key.Origin!);
+            ExecuteFor($"""
+                UPDATE records SET "ref" = '{SourceRef.WorkingTree}'
+                WHERE form_key = $1 AND plugin = $2 AND origin = $3
+                """, formKey, key.Name, key.Origin!);
+        }
+
+        // No UpdateWinners: nothing was added to or removed from Effective, so that stack is untouched,
+        // and records_head derives its own is_winner per ref rather than reading a stored flag (see
+        // TableDdlBuilder's note on that view) — Head's winner answer is already correct for the
+        // smaller set without a sweep.
+        tx.Commit();
+    }
+
+    /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>.</summary>
+    public void SeedCommittedOnly(PluginKey key, string formKey, string recordType, string body)
+    {
+        if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
+
+        var loadOrderIdx = ScalarInt32(
+            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
+            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+
+        // Straight into records_committed with no `records` counterpart — the exact inverse of
+        // InsertNewWorkingTreeRow's "records row with no snapshot", and it falls out of records_head's
+        // existing definition (the snapshot table UNION the still-clean rows) with no change to that
+        // view: present in its first half, absent from its second. is_winner is stored FALSE and never
+        // read — the view derives its own, per ref.
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            INSERT INTO records_committed (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.Committed}', $5, $7)
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
+        cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
+        cmd.Parameters.Add(new DuckDBParameter { Value = body });
+        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
+        cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
+        cmd.ExecuteNonQuery();
+    }
+
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
     // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
     // never the previous working-tree ones.
