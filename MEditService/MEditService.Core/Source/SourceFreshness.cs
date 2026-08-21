@@ -55,11 +55,14 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
             {
                 ValidateOne(index, session, entry, stack.RecordType, formKey);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
             {
                 // A read must degrade to "serve what we have", never fail, when the source cannot be
                 // consulted — the folder vanished mid-read, the file is locked by another tool, git
-                // is mid-rebase. Logged rather than swallowed (modbench/CLAUDE.md: no silent catch).
+                // is mid-rebase, or (#451 review) the record is a container type SourceRecordPath.For
+                // has no flat path for at all (Cell/Worldspace/Quest — #453's own point-write territory,
+                // not a read failure this class should ever surface as one). Logged rather than
+                // swallowed (modbench/CLAUDE.md: no silent catch).
                 logger.LogWarning(ex,
                     "Could not validate source freshness for {FormKey} in {Plugin}; serving the indexed state",
                     formKey, entry.Plugin.Name);

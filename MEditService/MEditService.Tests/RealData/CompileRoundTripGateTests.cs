@@ -117,6 +117,29 @@ public sealed class CompileRoundTripGateTests : IDisposable
         return record.GetType().Name.ToLowerInvariant();
     }
 
+    // #451 review, finding 5 (AC1 gap): the spike doc's own layout sketch names Cells/<block>/
+    // <subblock>/... and Worldspaces/<ws>/<X, Y>/<X, Y>/... nesting, and nothing anywhere asserted
+    // either exists after a real Track — even though this class's own constructor Tracks exactly the
+    // one fixture with real populated cells/worldspaces (mEditTestSubset.esm) this suite has.
+    // TrackServiceTests' own fixture is flat-only (two NPCs) and structurally cannot exercise this.
+    // Key paths only, per AC1's own wording, via pattern match rather than a hardcoded block/
+    // sub-block number this test has no independent way to verify without reading the fixture's own
+    // binary data by hand.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesTheSpriggitContainerLayout()
+    {
+        var allFiles = Directory.EnumerateFiles(SourceRoot, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(SourceRoot, f).Replace('\\', '/'))
+            .ToList();
+        Assert.NotEmpty(allFiles);
+
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
+            f, @"^Cells/-?\d+/-?\d+/[^/]+/RecordData\.json$"));
+
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
+            f, @"^Worldspaces/[^/]+/-?\d+, -?\d+/-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+    }
+
     [Fact]
     public void Compile_OfTheRealFixture_Succeeds()
     {

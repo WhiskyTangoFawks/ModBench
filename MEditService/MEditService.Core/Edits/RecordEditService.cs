@@ -65,6 +65,8 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
         var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey, document.EditorId, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
@@ -120,6 +122,8 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
         var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey, document.EditorId, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
@@ -158,6 +162,7 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
+        if (RefuseIfContainerType(recordType, release) is { } containerRefusal) return containerRefusal;
 
         if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
@@ -227,6 +232,9 @@ public sealed class RecordEditService(
                 RecordEditRefusal.RecordNotFound, $"{plugin.Name} does not hold record {formKey}.");
         }
 
+        var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } targetContainerRefusal) return targetContainerRefusal;
+
         var originatingPlugin = FormKey.Factory(formKey).ModKey.FileName.String;
         if (!originatingPlugin.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
         {
@@ -263,7 +271,22 @@ public sealed class RecordEditService(
                 "so the renumber cannot rewrite their FormLinks. Track them first, then try again.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        // #451 review: a referencer that is itself a container record has no flat source path either
+        // (SourceRecordPath.For would throw mid-cascade, after some referencers already landed) —
+        // refused up front, before any write, same as the untracked-referencer case just above.
+        var containerReferencers = referencers
+            .Select(r => (r.FormKey, r.Plugin, Document: index.GetDocument(r.FormKey, r.Plugin)))
+            .Where(t => t.Document != null && RefuseIfContainerType(t.Document.RecordType, release) != null)
+            .Select(t => $"{t.FormKey} in {t.Plugin.Name}")
+            .ToList();
+        if (containerReferencers.Count > 0)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ContainerRecordNotYetSupported,
+                $"{formKey} is referenced by container record(s) {string.Join(", ", containerReferencers)}, whose " +
+                "own source file this can't yet rewrite (#453). Renumber is not available until then.");
+        }
+
         var writtenRepos = new List<string>();
         try
         {
@@ -601,6 +624,24 @@ public sealed class RecordEditService(
         outcome == FieldApplyOutcome.ReadOnly
             ? RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.")
             : RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
+
+    /// <summary>
+    /// #451 review: Cell/Worldspace/Quest have no flat source path (<c>SourceRecordPath.For</c> throws
+    /// rather than produce a wrong one — <see cref="RecordTypeDispatch.FolderNameFor"/>'s own doc
+    /// comment) — checked here, before any write, at every entry point that would otherwise reach
+    /// <c>SourceRecordPath.For</c> unconditionally. Point-write support for containers is #453's; this
+    /// is the typed refusal that stands in for it until then, not a silent skip or an unhandled
+    /// exception escaping to the API.
+    /// </summary>
+    private static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
+    {
+        if (RecordTypeDispatch.For(release).FolderNameFor(recordType) is not null) return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.ContainerRecordNotYetSupported,
+            $"'{recordType}' is a container record type (Cell, Worldspace or Quest) — point-write " +
+            "support for it isn't built yet (#453).");
+    }
 
     /// <summary>
     /// The record as its source text has it. Falls back to the indexed body only when the file is

@@ -101,7 +101,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 // a second generator defect, reproduced implementing #451).
                 SpriggitRootHeader.MergeSpriggitSource(Path.Combine(pluginScratchDir, SpriggitRootHeader.RecordDataFileName));
 
-                SpriggitSidecarWriter.Write(pluginScratchDir, plugin.Name, session.GameRelease, plugins);
+                SpriggitSidecarWriter.Write(pluginScratchDir, plugin.Name, session);
 
                 // #451 AC4: canonicalization at the door. The whole-mod door's writer goes through the
                 // same JSON kernel the per-record codec does, whose own doc comment already established
@@ -136,8 +136,8 @@ public sealed class TrackService(ILogger<TrackService> logger)
         }
     }
 
-    private void SetProgress(string? origin, TrackPhase phase, int recordsDone, int recordsTotal) =>
-        Volatile.Write(ref _progress, new TrackProgress(origin, phase, recordsDone, recordsTotal));
+    private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal) =>
+        Volatile.Write(ref _progress, new TrackProgress(origin, phase, pluginsDone, pluginsTotal));
 
     private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 

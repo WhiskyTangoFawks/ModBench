@@ -1,6 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Source;
 
@@ -43,10 +45,16 @@ internal sealed record SpriggitConfigSidecar(
 }
 
 /// <summary>One load-order entry as <c>.spriggit</c>'s own <c>KnownMasters</c> array holds it — a
-/// plugin file name and a coarse master style (<c>"Light"</c> for an <c>.esl</c>, <c>"Full"</c>
-/// otherwise; Spriggit's own finer <c>MasterStyle</c> distinctions are not read back by anything this
-/// project builds, so this is not attempting parity beyond the two styles the extension itself
-/// carries).</summary>
+/// plugin file name and its real <c>Mutagen.Bethesda.Plugins.MasterStyle</c> name (<c>"Full"</c>,
+/// <c>"Small"</c> — the ESL/light-master flag; the modding scene's own colloquial "light master" is
+/// not the enum's own spelling, a #451 review catch — or <c>"Medium"</c>). <c>KnownMaster.Style</c> is
+/// itself typed <c>MasterStyle</c> on the real Spriggit side
+/// (<c>references/spriggit/Spriggit.Core/SpriggitMeta.cs</c>), so a wrong spelling here is not a
+/// cosmetic mismatch — <c>SpriggitFileLocator.Parse</c> rethrows on deserialize failure, and a
+/// <c>.spriggit</c> we write would be unreadable by real Spriggit. Resolved from the mod's own header
+/// flags (<c>IModFlagsGetter.MasterStyle</c>, <c>references/Mutagen/Mutagen.Bethesda.Core/Plugins/
+/// Extensions/IModExt.cs</c>'s <c>GetMasterStyle()</c>), never guessed from the file extension — a
+/// small master can carry an <c>.esp</c> extension and vice versa.</summary>
 internal sealed record SpriggitKnownMaster(string ModKey, string Style);
 
 /// <summary>
@@ -67,15 +75,15 @@ internal static class SpriggitSidecarWriter
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
-    internal static void Write(string treeDirectory, string pluginFileName, GameRelease gameRelease, IReadOnlyList<PluginMetadata> loadOrder)
+    internal static void Write(string treeDirectory, string pluginFileName, IGameSession session)
     {
         var source = SpriggitSource.Current();
-        var release = gameRelease.ToString();
+        var release = session.GameRelease.ToString();
 
-        var knownMasters = loadOrder
+        var knownMasters = session.Plugins
             .Where(p => p.InLoadOrder)
             .OrderBy(p => p.LoadOrderIndex)
-            .Select(p => new SpriggitKnownMaster(p.Name, IsLightMaster(p.Name) ? "Light" : "Full"))
+            .Select(p => new SpriggitKnownMaster(p.Name, ResolveMasterStyle(session, p).ToString()))
             .ToList();
 
         var config = new SpriggitConfigSidecar(source.PackageName, source.Version, release, knownMasters);
@@ -85,33 +93,64 @@ internal static class SpriggitSidecarWriter
         File.WriteAllText(Path.Combine(treeDirectory, SpriggitMetaSidecar.FileName), JsonSerializer.Serialize(meta, Options));
     }
 
-    private static bool IsLightMaster(string pluginFileName) =>
-        pluginFileName.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
+    // The real header flag (IModFlagsGetter.MasterStyle), read off whichever mod object the session
+    // already holds for this load-order entry — never guessed from the file extension (a small/light
+    // master can carry a plain .esp extension and vice versa; #451 review). A plugin the session
+    // couldn't resolve (excluded, indexing failure — never-assume-exclusive-ownership) degrades to
+    // Full, the enum's own safe default and the style every master was before light masters existed,
+    // rather than failing the whole Track over one unresolvable KnownMasters entry.
+    private static MasterStyle ResolveMasterStyle(IGameSession session, PluginMetadata plugin) =>
+        session.GetMod(plugin.Name, plugin.Origin) is IModFlagsGetter flagged ? flagged.MasterStyle : MasterStyle.Full;
 }
 
 /// <summary>Merges <see cref="SpriggitSource"/> into the whole-mod door's own root document — the
 /// <c>extraMeta</c> content, written by hand rather than through the mixin's own (defective, see
-/// <see cref="SpriggitSource"/>'s own doc comment) <c>extraMeta</c> parameter. The merged shape matches
-/// what the generator's own <c>WriteLoqui(writer, extraMeta.GetType().Name, extraMeta, ...)</c> would
-/// have produced: a top-level property named after the object's own type
+/// <see cref="SpriggitSource"/>'s own doc comment) <c>extraMeta</c> parameter.
+///
+/// <para><b>A text splice, not a parse-mutate-reserialize round trip (#451 review).</b> The generator's
+/// own <c>WriteLoqui(writer, extraMeta.GetType().Name, extraMeta, ...)</c> call
 /// (<c>Mutagen.Bethesda.Serialization.SourceGenerator/Serialization/MixinGenerator.cs</c>, traced at
-/// implementation), holding its public properties.</summary>
+/// implementation) runs <i>before</i> the mod's own fields serialize, not after — so real Spriggit's
+/// root document has <c>SpriggitSource</c> as its <b>first</b> key, and this must too, or a tree we
+/// write is not the tree Spriggit would have (#455's byte-parity gate). Parsing the whole document with
+/// <c>System.Text.Json</c>, adding a key, and writing it back — this class's first version — gets the
+/// key <i>position</i> wrong (appends, since <c>JsonObject</c> preserves insertion order over parse
+/// order) and is a second, independent formatting-drift risk on top of that: the document the mixin
+/// wrote is Newtonsoft's own <c>Formatting.Indented</c> output, and nothing pins
+/// <c>System.Text.Json</c>'s serializer to reproduce it byte-for-byte. Splicing the new key's own text
+/// in immediately after the opening <c>{</c>, using whitespace <i>read from the document itself</i> (not
+/// assumed — the kernel's own indent width is not pinned anywhere this class can cite), leaves every
+/// byte the mixin wrote for its own fields untouched.</para>
+/// </summary>
 internal static class SpriggitRootHeader
 {
     internal const string RecordDataFileName = "RecordData.json";
 
     internal static void MergeSpriggitSource(string rootRecordDataPath)
     {
-        var root = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(rootRecordDataPath))?.AsObject()
-            ?? throw new InvalidOperationException($"'{rootRecordDataPath}' did not parse as a JSON object.");
+        var text = File.ReadAllText(rootRecordDataPath);
+        var openBrace = text.IndexOf('{');
+        if (openBrace < 0)
+            throw new InvalidOperationException($"'{rootRecordDataPath}' did not start with a JSON object.");
+
+        // The whitespace between "{" and the first existing key (typically "\n  ") is this document's
+        // own one-level indent, read rather than assumed — whatever width/newline convention the
+        // kernel used, the spliced-in key matches it exactly because it's built from the same string.
+        var afterBrace = openBrace + 1;
+        var firstKeyStart = afterBrace;
+        while (firstKeyStart < text.Length && char.IsWhiteSpace(text[firstKeyStart])) firstKeyStart++;
+        var oneIndent = text[afterBrace..firstKeyStart];
+        if (oneIndent.Length == 0)
+            throw new InvalidOperationException($"'{rootRecordDataPath}' has no existing field to read this document's indent from.");
+        var twoIndent = oneIndent + oneIndent[(oneIndent.LastIndexOf('\n') + 1)..];
 
         var source = SpriggitSource.Current();
-        root[nameof(SpriggitSource)] = new System.Text.Json.Nodes.JsonObject
-        {
-            [nameof(SpriggitSource.PackageName)] = source.PackageName,
-            [nameof(SpriggitSource.Version)] = source.Version,
-        };
+        var spliced =
+            $"{oneIndent}\"{nameof(SpriggitSource)}\": {{" +
+            $"{twoIndent}\"{nameof(SpriggitSource.PackageName)}\": \"{source.PackageName}\"," +
+            $"{twoIndent}\"{nameof(SpriggitSource.Version)}\": \"{source.Version}\"" +
+            $"{oneIndent}}},";
 
-        File.WriteAllText(rootRecordDataPath, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(rootRecordDataPath, text[..afterBrace] + spliced + text[firstKeyStart..]);
     }
 }

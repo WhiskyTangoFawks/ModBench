@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Serialization.Newtonsoft;
 
 namespace MEditService.Tests.Source;
 
@@ -64,12 +65,30 @@ public sealed class TrackServiceTests
             var roundTripped = await codec.DeserializeAsync(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
-            // AC2: both sidecars present, and the root document carries SpriggitSource.
+            // AC2: both sidecars present, and the root document carries SpriggitSource, positioned
+            // and shaped exactly as the generator's own extraMeta hook would have written it (#451
+            // review, finding 3 — key placement and Newtonsoft-vs-System.Text.Json formatting drift).
             Assert.True(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
             Assert.True(File.Exists(Path.Combine(sourceRoot, "spriggit-meta.json")));
             var rootText = await File.ReadAllTextAsync(rootHeader);
-            Assert.Contains("\"SpriggitSource\"", rootText, StringComparison.Ordinal);
             Assert.Contains($"\"PackageName\": \"{SpriggitSource.CurrentPackageName}\"", rootText, StringComparison.Ordinal);
+            var firstKey = rootText.IndexOf('"', rootText.IndexOf('{') + 1);
+            Assert.StartsWith("\"SpriggitSource\"", rootText[firstKey..], StringComparison.Ordinal);
+
+            // AC2, made real (#451 review, finding 6): a string-contains check passes on JSON the
+            // real deserializer can't read at all — round-trip the root document through the
+            // whole-mod door's own Deserialize, the same generated mixin Serialize went through, and
+            // confirm the two NPCs it wrote come back out. This is Tests-side, not Core (AC2's own
+            // guard scans Core's sources only — DocumentShapeParityTests already established this is
+            // exactly how the two doors are meant to be checked against each other). No extraMeta
+            // argument: the generated Deserialize's own extraMeta parameter hits the identical
+            // overload-collision defect Serialize's does (RecordTextCodecGeneratorSeed's own doc
+            // comment) — this proves the tree (SpriggitSource splice included) is genuinely valid,
+            // parseable Spriggit-shape JSON, which is AC2's actual claim.
+            var deserializedMod = await MutagenJsonConverter.Instance.Deserialize(sourceRoot);
+            Assert.Equal(2, deserializedMod.Npcs.Count);
+            Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc1.FormKey && n.EditorID == "FirstNpc");
+            Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc2.FormKey && n.EditorID == "SecondNpc");
 
             // AC4: no \r anywhere in the tracked tree.
             foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
@@ -260,7 +279,7 @@ public sealed class TrackServiceTests
                 observed.Add(service.Progress);
             await trackTask;
 
-            Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.RecordsDone > 0 && p.RecordsDone < p.RecordsTotal);
+            Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
         }
         finally

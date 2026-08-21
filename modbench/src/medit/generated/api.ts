@@ -963,9 +963,9 @@ export interface components {
             origin?: string | null;
             phase?: components["schemas"]["TrackPhase"];
             /** Format: int32 */
-            recordsDone?: number;
+            pluginsDone?: number;
             /** Format: int32 */
-            recordsTotal?: number;
+            pluginsTotal?: number;
         };
         TrackRequest: {
             origin?: string | null;
