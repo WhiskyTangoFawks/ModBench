@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -27,8 +28,10 @@ namespace MEditService.Core.Source;
 /// </summary>
 public static class ExternalChangeEditLander
 {
-    public static ExternalChangeLandResult Keep(string modFolder, string pluginName, string pluginPath, GameRelease gameRelease, ISchemaReflector reflector)
+    public static ExternalChangeLandResult Keep(
+        string modFolder, string pluginName, string pluginPath, GameRelease gameRelease, ISchemaReflector reflector, ILogger? logger = null)
     {
+        logger ??= NullLogger.Instance;
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var schemas = reflector.GetSchemas(gameRelease);
 
@@ -41,8 +44,23 @@ public static class ExternalChangeEditLander
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
             var recordType = SourceRecordType.Resolve(record, schemas);
+
+            // #451 review: unlike Absorb (which rebuilds the whole tree and would silently drop a
+            // skipped container from the new commit — refused wholesale instead, see
+            // ExternalChangeAbsorber), Keep only ever writes individual touched records straight into
+            // the existing tree, so skipping one here loses nothing already on disk — it just means an
+            // external change to a container record isn't offered as landable dirt yet (#453's own
+            // territory). Not a silent catch: logged, and it's a `continue`, not a swallowed exception.
+            if (RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType) is null)
+            {
+                logger.LogDebug(
+                    "Skipping {FormKey} ({RecordType}) in {Plugin}: container records have no flat source path yet (#453)",
+                    record.FormKey, recordType, pluginName);
+                continue;
+            }
+
             var formKey = record.FormKey.ToString();
-            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey);
+            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease);
             var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
 
             baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);

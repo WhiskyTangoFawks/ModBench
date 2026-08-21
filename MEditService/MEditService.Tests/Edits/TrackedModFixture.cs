@@ -61,7 +61,7 @@ public sealed class TrackedModFixture : IDisposable
 
         if (track)
         {
-            new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+            new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(Sessions.Session!, ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
@@ -73,24 +73,75 @@ public sealed class TrackedModFixture : IDisposable
     /// directory (ADR-0041), so this is the whole of "untracked".</summary>
     public static TrackedModFixture Untracked() => new(track: false);
 
-    public string SourceFileFor(FormKey formKey, string recordType) =>
-        Path.Combine(ModFolder, SourceRecordPath.For(PluginName, recordType, formKey.ToString()));
+    public const string NpcEditorId = "FixtureNpc";
+    public const string RaceEditorId = "FixtureRace";
+    public const string KeywordEditorId = "FixtureKeyword";
+    public const string OtherNpcEditorId = "UntouchedNpc";
 
-    public string NpcSourceFile => SourceFileFor(Npc, "npc_");
+    // #451: editorId is a required parameter, not looked up internally — Spriggit's flat file name
+    // embeds it, and a caller asking for a record's path (an edit-created one included, whose
+    // EditorID this fixture never saw) is exactly the case a fixture-internal FormKey->EditorID table
+    // could not answer. Every call site names the EditorID it already knows it created or expects.
+    public string SourceFileFor(FormKey formKey, string recordType, string? editorId) =>
+        Path.Combine(ModFolder, RelativeSourcePath(formKey, recordType, editorId));
+
+    public string NpcSourceFile => SourceFileFor(Npc, "npc_", NpcEditorId);
 
     /// <summary>Porcelain status, scoped to the mod folder — what the native Source Control panel
-    /// renders, asked the way a user would ask it.</summary>
+    /// renders, asked the way a user would ask it.
+    ///
+    /// <para>#451: unquoted. Plain (non-<c>-z</c>) porcelain v1 always wraps a path containing a space
+    /// in <c>"..."</c> — unconditionally, not gated by <c>core.quotePath</c> (that setting governs only
+    /// bytes above 0x80; verified empirically against git 2.43 implementing this, not assumed from the
+    /// docs). The Spriggit flat layout's own file names routinely carry a space
+    /// (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>), which the pre-#451 flat
+    /// layout's hex-only segments never did, so every caller here that compares against a plain
+    /// expected string needs the same unquoted text <see cref="SourceRecordPath.For"/> itself
+    /// produces — <see cref="SourceRepository.WorkingTreeStatus"/>'s own <c>-z</c> read sidesteps this
+    /// question entirely; this helper, using plain porcelain for human-readable test assertions, does
+    /// not have that option and unquotes by hand instead.</para>
+    /// </summary>
     public IReadOnlyList<string> GitStatus() =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => l.Trim())
+            .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();
+
+    // "XY <path>" — <path> is C-quoted (wrapped in "...", \\ and \" escaped, higher bytes as \NNN
+    // octal when core.quotePath's default applies) exactly when it needs to be; this repo's own Track
+    // sets core.quotePath=false, so the only escapes a filename built from For()'s own naming scheme
+    // can ever produce are \\ and \" — but is written generally rather than special-cased to that.
+    private static string UnquotePorcelainLine(string line)
+    {
+        var space = line.IndexOf(' ');
+        if (space < 0) return line;
+        var status = line[..space];
+        var rest = line[(space + 1)..].TrimStart();
+        if (rest.Length < 2 || rest[0] != '"' || rest[^1] != '"') return line;
+
+        var inner = rest[1..^1];
+        var unquoted = new System.Text.StringBuilder(inner.Length);
+        for (var i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] != '\\' || i + 1 >= inner.Length) { unquoted.Append(inner[i]); continue; }
+            var next = inner[++i];
+            unquoted.Append(next switch
+            {
+                '"' => '"',
+                '\\' => '\\',
+                't' => '\t',
+                'n' => '\n',
+                _ => next,
+            });
+        }
+        return $"{status} {unquoted}";
+    }
 
     public string GitShowHead(string relativePath) =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
-    public static string RelativeSourcePath(FormKey formKey, string recordType) =>
-        SourceRecordPath.For(PluginName, recordType, formKey.ToString());
+    public static string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
+        SourceRecordPath.For(PluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
     public void Dispose()
     {

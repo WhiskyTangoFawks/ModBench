@@ -36,7 +36,7 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.EndsWith(":" + TrackedModFixture.PluginName, result.NewFormKey, StringComparison.Ordinal);
 
         var sourceFile = Path.Combine(mod.ModFolder, TrackedModFixture.RelativeSourcePath(
-            Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_"));
+            Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_", "BrandNewNpc"));
         Assert.True(File.Exists(sourceFile));
 
         var doc = mod.Sessions.Index!.GetDocument(result.NewFormKey!, mod.Plugin);

@@ -1,25 +1,31 @@
 using System.Security.Cryptography;
-using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog.WorkEngine;
 
 namespace MEditService.Core.Source;
 
 /// <summary>
 /// #414's orchestration seam: the Track gesture end to end. Resolves every plugin the session
-/// loaded under one mod-folder origin, eagerly serializes every one of their records to the source
-/// (deep-parsing each plugin file itself — the session's own overlay reader is read-only and, per
-/// #369's pinned defect, not always structurally faithful; a fresh deep parse is the same source
-/// <see cref="RecordTextCodecRealDataTests"/>'s codec fidelity already depends on), computes
-/// provenance, then hands the git mechanics to <see cref="SourceRepository.Track"/>. This class
-/// invents no record content and no provenance content on its own account either — the binary hash
-/// and <c>meta.ini</c> version string are both read as opaque bytes, never interpreted.
+/// loaded under one mod-folder origin, deep-parses each (the session's own overlay reader is
+/// read-only and, per #369's pinned defect, not always structurally faithful), then serializes the
+/// whole mod through the whole-mod door (#451 slice A — ADR-0041's #444 amendment: "the source tree
+/// adopts Spriggit's layout wholesale"), computes provenance, then hands the git mechanics to
+/// <see cref="SourceRepository.Track"/>. This class invents no record content and no provenance
+/// content on its own account either — the binary hash and <c>meta.ini</c> version string are both
+/// read as opaque bytes, never interpreted.
+///
+/// <para><b>This is a designated door</b> for the generated whole-mod mixin
+/// (<see cref="Serialization.RecordTextCodecGeneratorSeed"/>'s AC2 guard, re-scoped by #451 from "no
+/// caller, ever" to "only the designated doors" — <see cref="Serialization.RecordTextCodecGeneratorSeedTests"/>
+/// enforces the whitelist).</para>
 /// </summary>
-public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackService> logger)
+public sealed class TrackService(ILogger<TrackService> logger)
 {
     // #414 review F2: "reports progress" (AC4) — one shared instance on this singleton, read
     // concurrently by GET /plugins/track/status while a track's own POST is still in flight, same
@@ -47,97 +53,93 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
             throw new SourceAlreadyTrackedException($"'{modFolder}' is already tracked.");
         GitCli.EnsureOnPath();
 
+        var scratchRoot = Directory.CreateTempSubdirectory("medit-track-").FullName;
         try
         {
-            var codec = new RecordTextCodec(NoOpLogger);
-            var schemas = reflector.GetSchemas(session.GameRelease);
             var pristineFiles = new List<PristineFile>();
             var binaryHashesByPlugin = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            // Pass 1: deep-parse every plugin and materialize its record list. ModFactory.ImportSetter
-            // already reads the whole file into memory eagerly ("deep parse" is the parse, not a lazy
-            // view of one) — EnumerateMajorRecords().ToList() here is a cheap in-memory walk of a graph
-            // already built, not a second parse from disk, so this pass is what makes RecordsTotal
-            // knowable at all before Serializing starts, at no real extra cost.
-            var perPluginRecords = new List<(PluginMetadata Plugin, List<IMajorRecord> Records)>();
-            var recordsTotal = 0;
-            SetProgress(origin, TrackPhase.Parsing, 0, 0);
+            SetProgress(origin, TrackPhase.Parsing, 0, plugins.Count);
+            var parsedDone = 0;
             foreach (var plugin in plugins)
             {
                 cancel.ThrowIfCancellationRequested();
 
                 // A fresh deep parse, deliberately — not the session's own already-open overlay,
-                // which belongs to the session and whose lifetime Track does not control. The
-                // original reason was stronger (the strip needed a mutable IMajorRecord, and an
-                // overlay is read-only) and is gone with the strip itself (#450); a second parse is
-                // still what keeps Track off the session's own state. Reader-agnosticism between the
-                // two — that a deep-parsed record and an overlay serialize to the same bytes — is
-                // what RecordTextCodecRealDataTests protects at the codec seam.
+                // which belongs to the session and whose lifetime Track does not control.
+                // Reader-agnosticism between the two — that a deep-parsed record and an overlay
+                // serialize to the same bytes — is what RecordTextCodecRealDataTests protects at the
+                // codec seam.
                 var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease);
-                var records = deepParsed.EnumerateMajorRecords().ToList();
-                perPluginRecords.Add((plugin, records));
-                recordsTotal += records.Count;
-                SetProgress(origin, TrackPhase.Parsing, 0, recordsTotal);
-            }
+                parsedDone++;
+                SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
 
-            // Pass 2: strip + serialize, one record at a time — RecordsDone advances per record.
-            var recordsDone = 0;
-            SetProgress(origin, TrackPhase.Serializing, recordsDone, recordsTotal);
-            foreach (var (plugin, records) in perPluginRecords)
-            {
-                foreach (var record in records)
+                var pluginScratchDir = Path.Combine(scratchRoot, plugin.Name);
+                Directory.CreateDirectory(pluginScratchDir);
+
+                SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
+                // The whole-mod door — this class is one of the designated callers (AC2 re-scope,
+                // #451). Always a sequential/inline dropoff, explicitly, even though it is already
+                // the library's own default (SerializationMetaData falls back to InlineWorkDropoff
+                // when handed null): the #444 spike's own finding 4 is a real upstream race in
+                // MajorRecordListParallelHelper under a genuinely parallel dropoff (nested-list
+                // containers writing into each other's folders), so this is named rather than relied
+                // on implicitly — RecordTextCodecGeneratorSeedTests' companion guard fails loudly if
+                // this ever gets quietly swapped for a genuinely parallel one.
+                await RecordTextCodecGeneratorSeed.SerializeWholeMod(
+                    // FO4-typed, matching RecordTextCodecGeneratorSeed's own seed type — the generated
+                    // whole-mod mixin is itself FO4-specific (seeded from an FO4 mod type), so this is
+                    // the existing generalization boundary, not a new one.
+                    (IFallout4ModGetter)deepParsed,
+                    pluginScratchDir,
+                    InlineWorkDropoff.Instance,
+                    cancel);
+
+                // SpriggitSource as extraMeta in the root document (ADR-0041's #444 amendment) —
+                // merged into the header file the mixin just wrote, not passed through the mixin's own
+                // extraMeta parameter (RecordTextCodecGeneratorSeed.SerializeWholeMod's own doc comment:
+                // a second generator defect, reproduced implementing #451).
+                SpriggitRootHeader.MergeSpriggitSource(Path.Combine(pluginScratchDir, SpriggitRootHeader.RecordDataFileName));
+
+                SpriggitSidecarWriter.Write(pluginScratchDir, plugin.Name, session);
+
+                // #451 AC4: canonicalization at the door. The whole-mod door's writer goes through the
+                // same JSON kernel the per-record codec does, whose own doc comment already established
+                // (RecordTextCodec.SerializeCoreAsync) that Newtonsoft's JsonTextWriter has no reachable
+                // NewLine to pin — the per-record codec answers this with its own post-write \r-strip,
+                // and this mirrors that precedent for the whole-mod door rather than assuming Linux's
+                // own \n-native Environment.NewLine generalizes to every platform this ships on.
+                foreach (var file in Directory.EnumerateFiles(pluginScratchDir, "*", SearchOption.AllDirectories))
                 {
                     cancel.ThrowIfCancellationRequested();
-
-                    var recordType = SourceRecordType.Resolve(record, schemas);
-                    var relativePath = SourceRecordPath.For(plugin.Name, recordType, record.FormKey.ToString());
-                    pristineFiles.Add(await SerializeToPristineFileAsync(codec, record, relativePath, session.GameRelease, cancel));
-                    recordsDone++;
-                    SetProgress(origin, TrackPhase.Serializing, recordsDone, recordsTotal);
+                    var relativePath = Path.Combine($"{plugin.Name}{SourceRecordPath.SourceSuffix}", Path.GetRelativePath(pluginScratchDir, file));
+                    var bytes = StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel));
+                    pristineFiles.Add(new PristineFile(relativePath, bytes));
                 }
 
                 binaryHashesByPlugin[plugin.Name] = ComputeSha256(plugin.Path);
+                SetProgress(origin, TrackPhase.Serializing, parsedDone, plugins.Count);
             }
 
-            SetProgress(origin, TrackPhase.Committing, recordsTotal, recordsTotal);
+            SetProgress(origin, TrackPhase.Committing, plugins.Count, plugins.Count);
             var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binaryHashesByPlugin);
 
-            logger.LogInformation("Tracking {Origin}: {RecordCount} records across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
+            logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
             SourceRepository.Track(modFolder, preset, pristineFiles, trailers);
         }
         finally
         {
+            Directory.Delete(scratchRoot, recursive: true);
             // Idle at rest, success or failure alike — a poller reading after this call returns
             // (or throws) must never keep reporting a track that is no longer actually running.
             SetProgress(null, TrackPhase.Idle, 0, 0);
         }
     }
 
-    private void SetProgress(string? origin, TrackPhase phase, int recordsDone, int recordsTotal) =>
-        Volatile.Write(ref _progress, new TrackProgress(origin, phase, recordsDone, recordsTotal));
+    private void SetProgress(string? origin, TrackPhase phase, int pluginsDone, int pluginsTotal) =>
+        Volatile.Write(ref _progress, new TrackProgress(origin, phase, pluginsDone, pluginsTotal));
 
-    // RecordTextCodec's own write path is a real, atomic file write (temp-file-then-rename) with no
-    // in-memory byte[] exit — appropriate for its own callers, but Track needs bytes to hand to
-    // SourceRepository.Track's PristineFile list rather than writing into the (not yet git-tracked)
-    // mod folder directly. A scratch temp file per record bridges the two without changing the
-    // codec's own contract.
-    private static async Task<PristineFile> SerializeToPristineFileAsync(
-        RecordTextCodec codec, IMajorRecord record, string relativePath, GameRelease gameRelease, CancellationToken cancel)
-    {
-        var tempPath = Path.Combine(Path.GetTempPath(), $"medit-track-{Guid.NewGuid():N}.json");
-        try
-        {
-            await codec.SerializeAsync(record, tempPath, gameRelease, cancel);
-            var bytes = await File.ReadAllBytesAsync(tempPath, cancel);
-            return new PristineFile(relativePath, bytes);
-        }
-        finally
-        {
-            if (File.Exists(tempPath)) File.Delete(tempPath);
-        }
-    }
-
-    private static readonly ILogger<RecordTextCodec> NoOpLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance;
+    private static byte[] StripCarriageReturns(byte[] bytes) => [.. bytes.Where(b => b != (byte)'\r')];
 
     private static string ComputeSha256(string filePath) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));

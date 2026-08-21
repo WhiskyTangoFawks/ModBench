@@ -70,6 +70,12 @@ public enum RecordEditRefusal
     /// outcome on this write path, the same doctrine as every other refusal here — never conflated
     /// with "no usable session" by a caller's generic exception handling.</summary>
     FormKeySpaceExhausted,
+
+    /// <summary>#451 review: the record (or, for renumber, a referencer of it) is a container type —
+    /// Cell, Worldspace or Quest — that the Spriggit flat layout does not give a single-file path
+    /// (<c>SourceRecordPath.For</c> throws rather than produce a wrong one). Point-write support for
+    /// these lands in #453; refused rather than crashing, until then.</summary>
+    ContainerRecordNotYetSupported,
 }
 
 /// <summary>

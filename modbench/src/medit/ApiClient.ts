@@ -66,8 +66,10 @@ export type TrackPhase = 'Idle' | 'Parsing' | 'Serializing' | 'Committing';
 
 export interface TrackStatus {
   phase: TrackPhase;
-  recordsDone: number;
-  recordsTotal: number;
+  /** #451 review: plugin counts, not record counts, since Track's own #451 slice A rewrite — renamed
+   *  from `recordsDone` so the wire contract can't lie about its own granularity again. */
+  pluginsDone: number;
+  pluginsTotal: number;
 }
 
 /** #416: Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,

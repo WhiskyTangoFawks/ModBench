@@ -34,7 +34,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
     }
 
@@ -63,7 +63,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var status = _mod.GitStatus();
         Assert.Single(status);
-        Assert.DoesNotContain(TrackedModFixture.RelativeSourcePath(_mod.OtherNpc, "npc_").Replace('\\', '/'), status[0], StringComparison.Ordinal);
+        Assert.DoesNotContain(TrackedModFixture.RelativeSourcePath(_mod.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId).Replace('\\', '/'), status[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
         Assert.DoesNotContain("0.75", head.Body!, StringComparison.Ordinal);
-        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_")), head.Body);
+        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var index = _mod.Sessions.Index!;
         Assert.Contains("0.5", index.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!, StringComparison.Ordinal);
         Assert.Equal(
-            _mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_")),
+            _mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)),
             index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body);
     }
 

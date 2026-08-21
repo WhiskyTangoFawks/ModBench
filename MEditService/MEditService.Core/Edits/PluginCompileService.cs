@@ -51,12 +51,24 @@ public sealed class PluginCompileService(
         var collidingFormKeys = new List<string>();
         foreach (var (relativePath, bytes) in sourceFiles)
         {
-            // #450: a source document only names its own type when its path could not, so the type
-            // comes from the path — the record-type segment SourceRecordPath.For itself wrote, which
-            // is the same string the index's record_type column carries. A path this layout could
-            // not have produced yields null, which reads as "expect the document to self-describe"
-            // and fails there with the codec's named exception rather than here with a guess.
-            var recordType = SourceRecordPath.TryParse(relativePath, out var identity) ? identity.RecordType : null;
+            // #451: the root header (Track's own free "no source file" fix, ADR-0041's #444 amendment)
+            // and the auto-persisted spriggit-meta.json sidecar are real files directly under
+            // "<plugin>.source/", not records — feeding either to the codec below is not "an
+            // unresolvable type" (the loud, attributable #454 case immediately after this), it is not
+            // a record at all, and asking it to self-describe crashes the generated dispatch outright
+            // (NullReferenceException from GetSimpleName on a document with no MutagenObjectType field
+            // to read). Skipped explicitly, by the same two names Track itself writes — not a general
+            // "ignore anything that fails to parse" rule, so a genuine container path still reaches the
+            // codec and fails loudly two lines down.
+            if (IsRootSidecarOrHeader(relativePath)) continue;
+
+            // #450/#451: a source document only names its own type when its path could not, so the
+            // type comes from the path — the group-folder segment SourceRecordPath.For itself wrote,
+            // which resolves to the same string the index's record_type column carries. A path this
+            // *flat* layout could not have produced (any container path — Cells/Worldspaces/Quests)
+            // also yields null here; that is #453/#454's structure to read, not this loop's, and it
+            // fails loudly below (the codec's own named exception) rather than silently guessing.
+            var recordType = SourceRecordPath.TryParse(relativePath, session.GameRelease, out var identity) ? identity.RecordType : null;
             var record = _codec.DeserializeFromBytesAsync(bytes, session.GameRelease, recordType).GetAwaiter().GetResult();
             var formKey = record.FormKey.ToString();
             // Structurally impossible to emit: two distinct source files both claiming the same
@@ -162,5 +174,28 @@ public sealed class PluginCompileService(
         return Directory.EnumerateFiles(sourceDir, "*.json", SearchOption.AllDirectories)
             .Select(path => (Path.GetRelativePath(modFolder, path), File.ReadAllBytes(path)))
             .ToList();
+    }
+
+    // "<plugin>.source/RecordData.json" (the mod header), "<plugin>.source/spriggit-meta.json" (the
+    // auto-persisted sidecar) or "<plugin>.source/.spriggit" (the CLI pin file) — exactly two segments,
+    // all three names Track itself writes at the tree root (TrackService.cs,
+    // SpriggitRootHeader/SpriggitMetaSidecar/SpriggitConfigSidecar). Deliberately name-based, not
+    // "anything TryParse rejects": a nested RecordData.json (a Cell/Quest's own document) must still
+    // reach the codec and fail loudly, not be silently swept up by a broader rule.
+    //
+    // ".spriggit" only ever reaches this loop via CompileSource.AtRef — EnumerateWorkingTreeSource's
+    // own "*.json" glob already excludes it (its name has no .json extension at all), but
+    // SourceRepository.EnumerateSourceAtRef's `git ls-tree -r` walks every blob under the source
+    // prefix with no extension filter, so the two CompileSource cases are not otherwise symmetric here
+    // — caught running PluginCompileServiceParkedRefTests' own AtRef case.
+    private static bool IsRootSidecarOrHeader(string relativePath)
+    {
+        var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length != 2) return false;
+
+        var fileName = segments[1];
+        return fileName.Equals("RecordData.json", StringComparison.Ordinal)
+            || fileName.Equals(SpriggitMetaSidecar.FileName, StringComparison.Ordinal)
+            || fileName.Equals(SpriggitConfigSidecar.FileName, StringComparison.Ordinal);
     }
 }

@@ -1,78 +1,111 @@
+using MEditService.Core.Serialization;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Source;
 
-/// <summary>A record's identity as recovered from its own source path — the inverse of
-/// <see cref="SourceRecordPath.For"/>.</summary>
-internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType, string FormKey);
+/// <summary>A flat record's identity as recovered from its own source path — the inverse of
+/// <see cref="SourceRecordPath.For"/>. No <c>FormKey</c> field (#451 review): the whole-mod door's own
+/// file name embeds EditorID ahead of the FormKey (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>),
+/// and an EditorID can itself legally contain <c>" - "</c>, which makes recovering a FormKey by
+/// splitting the filename alone ambiguous in the general case. Every caller either already holds the
+/// record's bytes (<c>PluginCompileService</c>, which never needed a path-derived FormKey — the
+/// deserialized record's own <c>FormKey</c> is authoritative) or reads them right after a successful
+/// parse (<c>WorkingTreeCreateRediscovery</c>) — identity comes from the document, not the path,
+/// matching the rest of this codebase's own posture (<c>IRecordIndex.GetDocument</c> et al.).</summary>
+internal sealed record SourceRecordIdentity(string PluginFileName, string RecordType);
 
 /// <summary>
-/// The source's own file layout policy: one record, one file, always — including a container
-/// record's own (shallow) file, per <see cref="ContainerChildFields"/>. Flat, not nested under a
-/// parent's own path:
-/// <c>&lt;pluginFileName&gt;.source/&lt;recordType&gt;/&lt;originModKey&gt;/&lt;localFormID
-/// hex6&gt;.json</c>, relative to the origin folder (the source's working tree).
+/// The source's own file layout policy for <b>flat</b> (single-file) records — one record, one file,
+/// under the whole-mod door's own group-folder naming (ADR-0041's #444 amendment, "the source tree
+/// adopts Spriggit's layout wholesale"; #451 slice E). Relative to the origin folder (the source's
+/// working tree):
+/// <c>&lt;pluginFileName&gt;.source/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>.
 ///
-/// Two path segments are load-bearing, not decoration:
-/// - The <c>.source</c> suffix on the first segment: the working tree *is* the origin folder,
-///   which already contains the plugin binary itself at literally <c>&lt;pluginFileName&gt;</c> —
-///   a bare <c>pluginFileName/</c> directory would collide with that file (confirmed:
-///   <c>Directory.CreateDirectory</c> throws <see cref="DirectoryNotFoundException"/> when an
-///   ancestor segment is an existing file, not a missing directory).
-/// - The <c>&lt;originModKey&gt;</c> segment (the record's *origin* plugin — <c>FormKey.ModKey</c>
-///   — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
-///   legitimately differ, e.g. an override edited through a patch plugin): a FormKey's local ID is
-///   only unique within its own origin ModKey, not globally, so two records from *different*
-///   masters sharing a local ID and written into the same target plugin would otherwise collide on
-///   one path and silently clobber each other's baseline and history — confirmed as a real defect
-///   (review, #370) before this segment existed. A plugin holding a record it did not
-///   originate — an override — is the routine case, not an edge case: every override is exactly
-///   this (<see cref="Records.IRecordReads.GetDocument(string, Records.PluginKey)"/> resolves one
-///   on demand), so this can't be assumed away.
+/// <para><b>Only flat records.</b> Cell, Worldspace and Quest (see
+/// <see cref="RecordTypeDispatch.FolderNameFor"/>'s own doc comment for why exactly these three) get
+/// their own directory (<c>&lt;GroupFolder&gt;/&lt;name&gt;/RecordData.json</c>, with block/sub-block or
+/// XY nesting ahead of it for Cell/Worldspace) instead of a flat file — reading and writing that
+/// structure is #453/#454's job ("compile/ingest reads structure from the tree"), not this helper's.
+/// <see cref="For"/> refuses (a named exception, never a silently wrong flat path) for any record type
+/// that resolves to one of those three or to no top-level group at all; <see cref="TryParse"/> simply
+/// answers false for any path deeper or shallower than the flat shape.</para>
 ///
-/// A child record's placement inside its parent (e.g. a placed ref's parent cell) is not encoded
-/// in this path — nothing in #370 vendors a placed child yet (that's #373's write shape), so there
-/// is no containment relationship to encode here today; a future ticket that does can revisit the
-/// layout without this one's own paths moving.
+/// <para><b>The folder segment is the whole-mod door's own group-property name</b> (<c>"Npcs"</c>,
+/// <c>"Weapons"</c>) — traced to <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c>
+/// in <c>references/mutagen-serialization</c>, not invented — via <see cref="RecordTypeDispatch"/>'s
+/// reflection, the same source <see cref="RecordTextCodec"/>'s own discriminator policy reads. The
+/// file name segment mirrors <c>Mutagen.Bethesda.Core</c>'s own <c>FormKey.ToFilesafeString()</c>
+/// (<c>"{hex6}_{ModKeyFileName}"</c>) with an optional <c>"{EditorID} - "</c> prefix — exactly
+/// <c>SerializationHelper.RecordFileNameProvider</c>'s own scheme, verified against
+/// <c>references/mutagen-serialization</c> and <c>references/Mutagen</c> at implementation (#451), not
+/// reconstructed from memory. No <c>[N] </c> ordering prefix: that is gated on
+/// <c>Overall.EnforceRecordOrder</c>, which neither this project's customizations nor Spriggit's own
+/// (grepped, zero call sites) ever turn on.</para>
+///
+/// <para>The <c>&lt;originModKey&gt;</c> segment (the record's <i>origin</i> plugin — <c>FormKey.ModKey</c>
+/// — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
+/// legitimately differ, e.g. an override edited through a patch plugin) is exactly
+/// <see cref="FormKey.ToFilesafeString"/>'s own <c>ModKey.FileName</c>, so two records from different
+/// masters sharing a local ID never collide on one path (#370, restated for the new layout).</para>
 /// </summary>
 internal static class SourceRecordPath
 {
     internal const string SourceSuffix = ".source";
     private const string JsonSuffix = ".json";
 
-    internal static string For(string pluginFileName, string recordType, string formKeyString)
+    // The whole-mod door's own header/group-level files (SerializationHelper.RecordDataFileNameWithoutExtension
+    // / TypicalGroupFileName in references/mutagen-serialization) — never a flat record's own file, so
+    // TryParse must reject one rather than mistake it for a record whose folder happens to match a
+    // known group name.
+    private const string RecordDataFileName = "RecordData.json";
+    private const string GroupRecordDataFileName = "GroupRecordData.json";
+
+    internal static string For(
+        string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
     {
         var formKey = FormKey.Factory(formKeyString);
-        return Path.Combine($"{pluginFileName}.source", recordType, formKey.ModKey.FileName.String, $"{formKey.ID:X6}.json");
+        var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
+            ?? throw new NotSupportedException(
+                $"'{recordType}' has no flat source path under the Spriggit layout — it is a " +
+                "directory-per-record container type (Cell/Worldspace/Quest), or has no top-level " +
+                "group at all, and #453/#454's structure-aware reader owns it, not this helper.");
+
+        var fileName = string.IsNullOrEmpty(editorId)
+            ? $"{FilesafeFormKey(formKey)}{JsonSuffix}"
+            : $"{editorId} - {FilesafeFormKey(formKey)}{JsonSuffix}";
+
+        return Path.Combine($"{pluginFileName}{SourceSuffix}", folder, fileName);
     }
 
-    /// <summary>Recovers a record's identity straight from its own path text — no JSON parse, no
-    /// git read (#368: a status listing needs to name every changed record, not read its content).
-    /// Lossless by construction: every segment <see cref="For"/> writes is exactly what this reads
-    /// back, and a FormKey's wire format (<c>&lt;hex6&gt;:&lt;ModKeyFileName&gt;</c>) is assembled
-    /// from the same two path segments <see cref="For"/> derived it from. Fails closed (returns
-    /// <see langword="false"/>) on anything not shaped like a path this layout could have produced —
-    /// git status scoped to <c>*.source/*</c> (<see cref="SourceRepository.WorkingTreeStatus"/>)
-    /// should never hand this a non-conforming path, but a caller must not silently misreport one
-    /// as belonging to a record it doesn't.</summary>
-    internal static bool TryParse(string relativePath, out SourceRecordIdentity identity)
+    private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
+
+    /// <summary>Recovers a flat record's plugin/type identity straight from its own path text — no
+    /// JSON parse, no git read, matching <see cref="For"/>'s own flat shape exactly (three segments:
+    /// <c>&lt;plugin&gt;.source/&lt;GroupFolder&gt;/&lt;file&gt;.json</c>). Fails closed (returns
+    /// <see langword="false"/>) on anything not shaped like a path a flat record could produce —
+    /// including every container path (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
+    /// <c>Quests/&lt;name&gt;/RecordData.json</c>) and the root <c>RecordData.json</c> header file —
+    /// so a caller walking the whole tree never silently misreads one of those as a flat record.</summary>
+    internal static bool TryParse(string relativePath, GameRelease gameRelease, out SourceRecordIdentity identity)
     {
         identity = null!;
         var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 4) return false;
+        if (segments.Length != 3) return false;
 
-        var (pluginSegment, recordType, originModKey, fileSegment) = (segments[0], segments[1], segments[2], segments[3]);
+        var (pluginSegment, folder, fileSegment) = (segments[0], segments[1], segments[2]);
         if (!pluginSegment.EndsWith(SourceSuffix, StringComparison.Ordinal)) return false;
         if (!fileSegment.EndsWith(JsonSuffix, StringComparison.Ordinal)) return false;
+        if (fileSegment.Equals(RecordDataFileName, StringComparison.Ordinal)) return false;
+        if (fileSegment.Equals(GroupRecordDataFileName, StringComparison.Ordinal)) return false;
 
         var pluginFileName = pluginSegment[..^SourceSuffix.Length];
-        var localId = fileSegment[..^JsonSuffix.Length];
-        // No originModKey.Length == 0 check: RemoveEmptyEntries above already guarantees every
-        // segment (this one included) is non-empty — provably unreachable, not merely untested
-        // (mutation review, #368), so it isn't pinned in place with a test that can never fail it.
-        if (pluginFileName.Length == 0 || localId.Length == 0) return false;
+        if (pluginFileName.Length == 0) return false;
 
-        identity = new SourceRecordIdentity(pluginFileName, recordType, $"{localId}:{originModKey}");
+        var recordType = RecordTypeDispatch.For(gameRelease).RecordTypeForFolder(folder);
+        if (recordType is null) return false;
+
+        identity = new SourceRecordIdentity(pluginFileName, recordType);
         return true;
     }
 }

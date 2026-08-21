@@ -92,7 +92,7 @@ public sealed class EndpointReceptionLoggingTests
         try
         {
             var req = new CreatePluginRequest("NewPlugin.esp", destination, "SomeMod");
-            var trackService = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
+            var trackService = new TrackService(NullLogger<TrackService>.Instance);
 
             await PluginEndpoints.CreatePlugin(req, new StubSessionManager(), trackService, loggerFactory);
 

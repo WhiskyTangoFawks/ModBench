@@ -78,7 +78,7 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         // Two source files claiming one FormKey (PluginCompileServiceRefusalTests' own scenario) —
         // structurally cannot emit, so nothing about the plugin's parked state should move.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var collidingPath = _mod.SourceFileFor(_mod.Npc, "keyword");
+        var collidingPath = _mod.SourceFileFor(_mod.Npc, "keyword", TrackedModFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
         File.WriteAllText(collidingPath, npcSourceText);
 

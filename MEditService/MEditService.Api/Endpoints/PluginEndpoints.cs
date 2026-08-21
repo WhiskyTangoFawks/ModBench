@@ -544,6 +544,14 @@ public static class PluginEndpoints
             watcher.Watch(modFolder, decoded, pluginPath!);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
         }
+        // #451 review: a container record (Cell/Worldspace/Quest) in the plugin — #453's own
+        // territory, not a server fault, so it gets the same 409 shape SourceAlreadyTrackedException
+        // does elsewhere in this file, not a bare 500.
+        catch (ContainerRecordsNotYetSupportedException ex)
+        {
+            logger.LogWarning(ex, "Could not absorb upstream update for {Plugin}: container records not yet supported", decoded);
+            return Results.Problem(ex.Message, statusCode: 409);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not absorb upstream update for {Plugin}", decoded);
@@ -568,7 +576,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = ExternalChangeEditLander.Keep(modFolder, decoded, pluginPath!, session!.GameRelease, reflector);
+            var result = ExternalChangeEditLander.Keep(modFolder, decoded, pluginPath!, session!.GameRelease, reflector, logger);
             if (result.Applied)
             {
                 watcher.ClearPending(modFolder, decoded);

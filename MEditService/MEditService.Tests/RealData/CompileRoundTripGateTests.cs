@@ -52,7 +52,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
             [new ExplicitPluginInput(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, true)],
             GameRelease.Fallout4);
 
-        new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
@@ -95,7 +95,12 @@ public sealed class CompileRoundTripGateTests : IDisposable
         foreach (var record in mod.EnumerateMajorRecords())
         {
             var recordType = ResolveRecordType(record);
-            var relativePath = SourceRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString());
+            // #451: this per-record reconstruction is the *old* Track model. SourceRecordPath.For now
+            // covers flat records only (#453/#454 own the container/embedded-child structure a real
+            // Cell/Worldspace/Quest in this fixture needs) and throws for the rest — an expected,
+            // attributable failure this permanent gate now surfaces until #454 lands, not a defect in
+            // this helper.
+            var relativePath = SourceRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString(), record.EditorID, release);
             var bytes = codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
             result[relativePath] = bytes;
         }
@@ -110,6 +115,29 @@ public sealed class CompileRoundTripGateTests : IDisposable
             if (schema.RecordType.IsInstanceOfType(record)) return tableName;
         }
         return record.GetType().Name.ToLowerInvariant();
+    }
+
+    // #451 review, finding 5 (AC1 gap): the spike doc's own layout sketch names Cells/<block>/
+    // <subblock>/... and Worldspaces/<ws>/<X, Y>/<X, Y>/... nesting, and nothing anywhere asserted
+    // either exists after a real Track — even though this class's own constructor Tracks exactly the
+    // one fixture with real populated cells/worldspaces (mEditTestSubset.esm) this suite has.
+    // TrackServiceTests' own fixture is flat-only (two NPCs) and structurally cannot exercise this.
+    // Key paths only, per AC1's own wording, via pattern match rather than a hardcoded block/
+    // sub-block number this test has no independent way to verify without reading the fixture's own
+    // binary data by hand.
+    [Fact]
+    public void Track_OfTheRealFixture_WritesTheSpriggitContainerLayout()
+    {
+        var allFiles = Directory.EnumerateFiles(SourceRoot, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(SourceRoot, f).Replace('\\', '/'))
+            .ToList();
+        Assert.NotEmpty(allFiles);
+
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
+            f, @"^Cells/-?\d+/-?\d+/[^/]+/RecordData\.json$"));
+
+        Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
+            f, @"^Worldspaces/[^/]+/-?\d+, -?\d+/-?\d+, -?\d+/[^/]+/RecordData\.json$"));
     }
 
     [Fact]
