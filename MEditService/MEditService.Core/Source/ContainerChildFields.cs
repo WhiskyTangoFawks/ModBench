@@ -110,24 +110,63 @@ internal static class ContainerChildFields
     /// it completely unchanged, and there is no second copy of the document's structure to keep in
     /// step with the serializer.
     ///
-    /// <para>Walks only <paramref name="parent"/>'s own declared child slots (this class's table),
-    /// never recursively: a source unit's embedded children are exactly one level deep, because
-    /// anything deeper is its own source unit with its own file.</para>
+    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> (#453 review
+    /// finding 2 — this used to stop at one, on the stated premise that "anything deeper is its own
+    /// source unit with its own file", which is false for exactly one real shape). A worldspace's
+    /// <c>RecordData.json</c> embeds its <c>TopCell</c>, and that cell embeds its own placed
+    /// references: such a reference is <b>two</b> levels down inside one file, with no file of its own
+    /// anywhere. Stopping at one level refused it — and refused it citing an external change that had
+    /// not happened.</para>
+    ///
+    /// <para><b>Descent is bounded to <see cref="SpriggitEmbeddedSlots"/>, and that bound is
+    /// correctness rather than thrift.</b> A Quest's dialog topics and scenes are children in this
+    /// class's table too, but they are folder-split — each is its own source unit with its own file.
+    /// Descending into one and editing it here would write the change into the <i>quest's</i> document
+    /// while the child's own file, which is what compile and ingest actually read, kept the old value:
+    /// a silently lost edit. So the walk follows containment only as far as the document itself
+    /// does.</para>
     /// </summary>
     internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
     {
+        var parentType = NormalizedTypeName(parent.GetType());
+
         foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
         {
-            if (!child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal)) continue;
+            if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
+            {
+                // A deserialized parent's children are settable records, so this cast holds for every
+                // caller on the write path. Guarded rather than assumed so a read-only graph (a binary
+                // overlay, which no write-path caller holds) declines instead of throwing.
+                return child is IMajorRecord settable ? new EmbeddedChild(slotName, slotIndex, settable) : null;
+            }
 
-            // A deserialized parent's children are settable records, so this cast holds for every
-            // caller on the write path. Guarded rather than assumed so a read-only graph (a binary
-            // overlay, which no write-path caller holds) declines instead of throwing.
-            return child is IMajorRecord settable ? new EmbeddedChild(slotName, slotIndex, settable) : null;
+            if (!SpriggitEmbeddedSlots.Contains((parentType, slotName))) continue;
+            if (FindEmbeddedChild(child, formKey) is { } deeper) return deeper;
         }
 
         return null;
     }
+
+    /// <summary>
+    /// The child slots that serialize <b>inline into their parent's own document</b> rather than to a
+    /// file of their own — exactly the set
+    /// <see cref="MEditService.Core.Serialization.SpriggitCellEmbedCustomization"/> and
+    /// <see cref="MEditService.Core.Serialization.SpriggitWorldspaceEmbedCustomization"/> configure,
+    /// restated here as data because <c>EmbedRecordsInSameFile</c> is a generation-time call with
+    /// nothing readable at runtime.
+    ///
+    /// <para><b>A strict subset of <see cref="ByTypeName"/>, and the distinction is the point</b> —
+    /// that table names every parent-child relationship, this one names only the relationships that
+    /// share a file. <c>Quest.{DialogBranches,DialogTopics,Scenes}</c> and <c>DialogTopic.Responses</c>
+    /// are children but stay folder-split, so their absence here is deliberate. Keep this in step with
+    /// the two customization classes: they are the source of truth and this is their runtime shadow.
+    /// </para>
+    /// </summary>
+    private static readonly HashSet<(string ParentType, string Slot)> SpriggitEmbeddedSlots =
+    [
+        ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
+        ("Worldspace", "TopCell"),
+    ];
 
     internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)

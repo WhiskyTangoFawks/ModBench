@@ -102,8 +102,14 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
-                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text no longer does. " +
-                    "The container changed outside Modbench — reload the session and try again.");
+                    // Deliberately does not blame an external change (#453 review finding 2: it used
+                    // to, and that was a false diagnosis for the one shape that actually reached it —
+                    // a ref two levels inside a worldspace's document, which the search simply did not
+                    // descend to. A wrong explanation is worse than none: it sends the user hunting a
+                    // problem that is not there.) States only what is observed.
+                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
+                    "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
+                    "report it; otherwise reload the session so the index re-reads the tree.");
             }
             target = found.Child;
         }
@@ -223,10 +229,18 @@ public sealed class RecordEditService(
     ///
     /// <para><b>Move first, then write</b> — deliberately, and please do not tidy this into the other
     /// order. A crash between the two leaves the file at its new name holding its old content: valid
-    /// JSON, still resolvable (the FormKey suffix in the name is untouched by a rename), and one
-    /// re-edit from correct. The reverse order — write the new path, then delete the old — leaves two
-    /// files on disk claiming one FormKey for the duration of the window, which is exactly the
-    /// corrupt-tree state <see cref="AmbiguousSourceUnitException"/> exists to refuse.</para>
+    /// JSON, one re-edit from correct, and still findable — because
+    /// <see cref="SourceUnitResolver.FlatSourcePath"/> falls back to the FormKey suffix when the
+    /// computed name is absent. The reverse order — write the new path, then delete the old — leaves
+    /// two files claiming one FormKey for the duration of the window, which is the corrupt-tree state
+    /// <see cref="AmbiguousSourceUnitException"/> exists to refuse.</para>
+    ///
+    /// <para><b>That "still findable" is load-bearing, and it was not true when this first shipped</b>
+    /// (#453 review finding 1). Resolution computed the flat path from the indexed EditorID and stopped
+    /// there, so a name/content divergence read as an absent file and marked a live record deleted. The
+    /// fallback is what makes this ordering recoverable — and it is not only about crashes: the same
+    /// divergence arrives whenever anything edits <c>EditorID</c> inside a source file directly, which
+    /// is the ordinary never-assume-exclusive-ownership case rather than an exotic one.</para>
     ///
     /// <para>Only the leaf moves. A container's directory is moved whole, so the folder-split children
     /// Spriggit does not embed (a Quest's dialog topics and scenes) travel with their parent rather

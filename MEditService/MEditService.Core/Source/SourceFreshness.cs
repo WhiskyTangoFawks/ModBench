@@ -85,14 +85,24 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
     {
         if (ModFolders.TrackedOf(session, entry.Plugin) is not { } modFolder) return;
 
-        var relativePath = SourceRecordPath.For(entry.Plugin.Name, recordType, formKey, entry.Effective.EditorId, session.GameRelease);
-        var fullPath = Path.Combine(modFolder, relativePath);
+        // Through SourceUnitResolver rather than SourceRecordPath directly (#453 review finding 1):
+        // the computed name embeds the *indexed* EditorID, which since #452 is read from the file's
+        // own content, while the file's *name* carries whatever EditorID it was last written under
+        // (#451). When those diverge — someone edits EditorID inside a source file with their own
+        // editor, or a rename is interrupted partway — the computed path is simply absent, and the
+        // null below would then be taken for "the user deleted this record", marking a live record
+        // gone at Effective. The resolver falls back to the FormKey suffix, the stable half of the
+        // name, so "genuinely absent" and "present under a different name" stay distinguishable.
+        var fullPath = SourceUnitResolver.FlatSourcePath(
+            modFolder, entry.Plugin.Name, recordType, formKey, entry.Effective.EditorId, session.GameRelease);
+        var relativePath = Path.GetRelativePath(modFolder, fullPath);
 
         var fileText = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;
         if (!string.Equals(fileText, entry.Effective.Body, StringComparison.Ordinal))
         {
             // The file is the source for a tracked plugin, so whatever it says now is Effective —
-            // including a null, which is the record's file having been deleted. ApplyWorkingTreeChanges
+            // including a null, which now genuinely is the record's file having been deleted rather
+            // than merely not being where its indexed EditorID said it would be. ApplyWorkingTreeChanges
             // decides for itself whether that is a change or a convergence back to committed.
             index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
             // #422: a read-time self-heal is still a mutation — the row it just folded in can newly

@@ -117,7 +117,7 @@ internal sealed class RecordTypeDispatch
     /// <c>references/mutagen-serialization</c>). Null for three reasons a caller must treat alike —
     /// "this flat helper cannot answer, ask #453/#454's structure-aware reader instead": the type has
     /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous"/>'s
-    /// doc comment already names), the type is one of <see cref="DirectoryPerRecordTypeNames"/> (its
+    /// doc comment already names), the type is one of <see cref="DirectoryPerRecordFolders"/> (its
     /// own directory holds a <c>RecordData.json</c>, not a flat file), or <paramref name="recordType"/>
     /// does not resolve to a concrete type at all.
     /// </summary>
@@ -224,7 +224,7 @@ internal sealed class RecordTypeDispatch
 
             // #451: the folder half, keyed off the same discovery pass — every concrete major-record
             // type gets mapped to its owning top-level group property's own name, unless it is one of
-            // the directory-per-record types (see DirectoryPerRecordTypeNames) or has no top-level
+            // the directory-per-record types (see DirectoryPerRecordFolders) or has no top-level
             // group at all (a placed ref, a landscape — FolderNameFor's own doc comment).
             if (DirectoryPerRecordFolders.ContainsKey(type.Name)) continue;
             var owningFolder = groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;

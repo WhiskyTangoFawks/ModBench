@@ -87,12 +87,13 @@ internal static class SourceUnitResolver
         IRecordReads reads, PluginKey plugin, string modFolder,
         string formKey, string recordType, string? editorId, GameRelease release)
     {
-        // A flat record: SourceRecordPath computes the path exactly, so there is nothing to search
-        // for. This is the overwhelmingly common edit and it pays nothing.
+        // A flat record: the path is computed, then corrected if the file has been renamed out from
+        // under it. The overwhelmingly common edit pays one File.Exists and searches nothing.
         try
         {
-            var flat = SourceRecordPath.For(plugin.Name, recordType, formKey, editorId, release);
-            return new SourceUnit(Path.Combine(modFolder, flat), flat, formKey, recordType, IsEmbedded: false);
+            var flat = FlatSourcePath(modFolder, plugin.Name, recordType, formKey, editorId, release);
+            return new SourceUnit(
+                flat, Path.GetRelativePath(modFolder, flat), formKey, recordType, IsEmbedded: false);
         }
         catch (NotSupportedException)
         {
@@ -122,6 +123,64 @@ internal static class SourceUnitResolver
                      ?? reads.GetCellLocation(plugin, formKey)?.ParentWorldspace;
 
         return parent == null ? null : ResolveOwner(reads, plugin, modFolder, parent, release);
+    }
+
+    /// <summary>
+    /// Where a <b>flat</b> record's file actually is: <see cref="SourceRecordPath.For"/>'s computed
+    /// path when that file exists, otherwise whichever file in the same group folder carries this
+    /// FormKey, and failing both the computed path anyway.
+    ///
+    /// <para><b>The filename's EditorID and the document's EditorID are not guaranteed to agree, and
+    /// resolution must not assume they do.</b> Since #452 a tracked plugin's indexed EditorID comes
+    /// from the file's <i>content</i>; the file <i>name</i> carries whatever EditorID it had when it
+    /// was last written (#451). Nothing keeps those in step. Two ordinary things pull them apart: a
+    /// user or another tool editing <c>EditorID</c> inside a source file with their own editor — the
+    /// standing never-assume-exclusive-ownership case, and the likelier of the two — and a crash
+    /// between <c>RecordEditService</c>'s rename and the content write that follows it.</para>
+    ///
+    /// <para>Computing the path from the indexed EditorID and stopping there turns either of those
+    /// into a <i>false deletion</i>: the file is not where the name says, so <c>File.Exists</c> is
+    /// false, and both this class's caller and <see cref="SourceFreshness"/> would read "absent" as
+    /// "the user deleted this record" and mark a live record gone at Effective. Resolution therefore
+    /// leans on the FormKey, which is the stable half of the name — exactly what #453's own scope 3
+    /// says it is for ("FormKey in the suffix keeps resolution stable mid-rename").</para>
+    ///
+    /// <para><b>It costs nothing when nothing is wrong.</b> The fallback runs only when the computed
+    /// path is absent, and it lists <i>one</i> group directory non-recursively — never the tree walk
+    /// the container path takes. A record that is genuinely gone still resolves to its computed path,
+    /// so the caller's existing "edit from the indexed body and rewrite the file" recovery is
+    /// untouched.</para>
+    /// </summary>
+    internal static string FlatSourcePath(
+        string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
+        GameRelease release)
+    {
+        var computed = Path.Combine(
+            modFolder, SourceRecordPath.For(pluginFileName, recordType, formKey, editorId, release));
+        if (File.Exists(computed)) return computed;
+
+        var groupFolder = RecordTypeDispatch.For(release).FolderNameFor(recordType);
+        if (groupFolder == null) return computed;
+
+        var groupDirectory = Path.Combine(modFolder, $"{pluginFileName}{SourceRecordPath.SourceSuffix}", groupFolder);
+        if (!Directory.Exists(groupDirectory)) return computed;
+
+        var suffix = FilesafeFormKey(formKey) + JsonSuffix;
+        var matches = Directory
+            .EnumerateFiles(groupDirectory, $"*{suffix}", SearchOption.TopDirectoryOnly)
+            .Where(f => NameCarries(Path.GetFileName(f), suffix))
+            .Take(2)
+            .ToList();
+
+        return matches.Count switch
+        {
+            0 => computed,
+            1 => matches[0],
+            _ => throw new AmbiguousSourceUnitException(
+                $"More than one file in '{groupDirectory}' claims FormKey {formKey}. A FormKey is unique " +
+                "within a mod, so this tree is corrupt — most likely a rename that was interrupted " +
+                "partway. Resolve the duplicate by hand before editing."),
+        };
     }
 
     /// <summary>
@@ -265,11 +324,15 @@ internal static class SourceUnitResolver
     }
 }
 
-/// <summary>Thrown when two source units under one plugin's tree carry the same FormKey. Named rather
-/// than a bare <see cref="InvalidOperationException"/> because it says something specific and
-/// actionable about the tree — a FormKey is unique within a mod, so this is corruption to resolve by
-/// hand, not a transient condition to retry.</summary>
-public sealed class AmbiguousSourceUnitException : Exception
+/// <summary>Thrown when two source units under one plugin's tree carry the same FormKey — a FormKey is
+/// unique within a mod, so this is corruption to resolve by hand, not a transient condition to retry.
+///
+/// <para>Derives from <see cref="InvalidOperationException"/> rather than <see cref="Exception"/> so
+/// that the read path already degrades on it: <see cref="SourceFreshness.Validate"/>'s catch list
+/// names that type, and a corrupt tree must not turn a record <i>read</i> into a thrown error — it
+/// serves what the index has, logs, and leaves the write path to refuse. Still its own named type
+/// because the message is specific and actionable in a way a bare invalid-operation is not.</para></summary>
+public sealed class AmbiguousSourceUnitException : InvalidOperationException
 {
     public AmbiguousSourceUnitException() : base("More than one source unit claims one FormKey.")
     {

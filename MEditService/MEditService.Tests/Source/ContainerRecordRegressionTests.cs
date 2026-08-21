@@ -132,15 +132,19 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     {
         var file = CellSourceFile;
         var before = File.ReadAllText(file);
-        Assert.Contains("100.0", before, StringComparison.Ordinal);
+        Assert.Contains("\"WaterHeight\": 100.0", before, StringComparison.Ordinal);
 
         var result = EditService().EditField(Plugin, Cell.ToString(), "water_height", Json("250.0"));
 
         Assert.True(result.Applied, result.Message);
         // AC1, in its strongest form: the whole file is byte-identical outside the one field's own
         // text. Not a diff-line count — every untouched byte is compared, which is what makes
-        // "only that field's line(s) diff" a measurement rather than an assertion.
-        Assert.Equal(before.Replace("100.0", "250.0", StringComparison.Ordinal), File.ReadAllText(file));
+        // "only that field's line(s) diff" a measurement rather than an assertion. Field-qualified
+        // rather than a bare "100.0" so the substitution stays pinned to this one field as the
+        // document grows and other numbers appear beside it.
+        Assert.Equal(
+            before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
+            File.ReadAllText(file));
         // Scope 4: the source unit's own indexed document moved with the file.
         Assert.Contains("250.0", Sessions.Index!.GetDocument(Cell.ToString(), Plugin)!.Body!, StringComparison.Ordinal);
     }
