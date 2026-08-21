@@ -174,6 +174,8 @@ internal static class SourceIngest
             baselines.Add((record.FormKey.ToString(), headText));
         }
 
+        PairRenamedSourceUnits(baselines, workingTreeOnly, deletedInWorkingTree);
+
         // Applied only once the whole dirty set has been read, never per iteration. A path that throws
         // mid-loop therefore leaves Head untouched rather than half-moved — which matters because the
         // caller's response to that throw is to re-ingest this same key from the binary, and a Head
@@ -184,6 +186,48 @@ internal static class SourceIngest
         index.SetCommittedBaseline(key, baselines);
         index.MarkWorkingTreeOnly(key, workingTreeOnly);
         index.SeedCommittedOnly(key, deletedInWorkingTree);
+    }
+
+    /// <summary>
+    /// Folds a <b>renamed</b> source unit's two halves back into the one record it is (#453 slice 4).
+    ///
+    /// <para>An EditorID edit moves the source unit's file, because the file name carries the EditorID
+    /// (<c>RecordEditService.RenameSourceUnit</c>). The dirty set then holds the same FormKey twice:
+    /// the old path, absent from the working tree but present in <c>HEAD</c>, which the loop above
+    /// classified as a deletion; and the new path, present in the working tree and in no commit, which
+    /// it classified as a create. Left that way the record would be handed to
+    /// <see cref="IRecordIndex.MarkWorkingTreeOnly"/> and <see cref="IRecordIndex.SeedCommittedOnly"/>
+    /// at once — one FormKey in <i>both</i> halves of <c>records_head</c>, which is exactly the
+    /// disjointness #452's review commit landed to protect, and which would leave the record answering
+    /// twice at Head.</para>
+    ///
+    /// <para>What it actually is is an ordinary dirty record: the working tree holds the new bytes, and
+    /// <c>HEAD</c> holds the old ones at the old path. That is a committed baseline, so the pair
+    /// collapses into <paramref name="baselines"/> and leaves both other lists.</para>
+    ///
+    /// <para><b>Only flat records reach this</b>, because only flat paths parse
+    /// (<see cref="SourceRecordPath.TryParse"/> fails closed on container paths). A renamed container's
+    /// Head therefore still goes unreconciled — the same bounded gap
+    /// <c>SourceIngestContainerTests</c> pins for #454, not a new one this introduces.</para>
+    /// </summary>
+    private static void PairRenamedSourceUnits(
+        List<(string FormKey, string Body)> baselines,
+        List<string> workingTreeOnly,
+        List<(string FormKey, string RecordType, string Body)> deletedInWorkingTree)
+    {
+        if (workingTreeOnly.Count == 0 || deletedInWorkingTree.Count == 0) return;
+
+        var created = workingTreeOnly.ToHashSet(StringComparer.Ordinal);
+        var renamed = deletedInWorkingTree.Where(d => created.Contains(d.FormKey)).ToList();
+        if (renamed.Count == 0) return;
+
+        foreach (var (formKey, _, headBody) in renamed)
+        {
+            baselines.Add((formKey, headBody));
+            workingTreeOnly.Remove(formKey);
+        }
+
+        deletedInWorkingTree.RemoveAll(d => created.Contains(d.FormKey));
     }
 
     /// <summary>Re-seeds a working-tree-deleted record's committed side from <c>HEAD</c>'s own bytes,

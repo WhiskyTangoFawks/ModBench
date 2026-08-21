@@ -161,13 +161,25 @@ public sealed class SourceIngestContainerTests : IDisposable
     /// <c>SourceIngest.ReconcileHead</c> identifies a dirty source unit through
     /// <see cref="SourceRecordPath.TryParse"/>, which fails closed for every container path by design:
     /// recovering a record type from <c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c> or
-    /// <c>Quests/&lt;n&gt;/DialogTopics/&lt;n&gt;/RecordData.json</c> needs the structure-aware reader
-    /// #453/#454 own — a Quest's own directory and its DialogTopics children share a group-folder
-    /// segment, so position alone cannot tell them apart. It degrades and logs; it never throws, which
-    /// is the part that matters for a session load.</para>
+    /// <c>Quests/&lt;n&gt;/DialogTopics/&lt;n&gt;/RecordData.json</c> needs a structure-aware reader —
+    /// a Quest's own directory and its DialogTopics children share a group-folder segment, so position
+    /// alone cannot tell them apart. It degrades and logs; it never throws, which is the part that
+    /// matters for a session load.</para>
     ///
-    /// <para>When #453/#454 land, this test should go red and be replaced by the real assertion (Head
-    /// holds the committed bytes). That is the intended lifecycle, not a regression.</para>
+    /// <para><b>#454's, not #453's</b> — narrowed when #453 landed, which had said "#453/#454". #453
+    /// needed only the forward direction, FormKey → path, which <c>SourceUnitResolver</c> answers by
+    /// finding the file on disk with no path grammar at all. What is missing here is the <i>reverse</i>:
+    /// path → record identity for an arbitrary container path. That is precisely "compile reads
+    /// structure from the tree", #454's own charter, and building it early here would mean building it
+    /// twice.</para>
+    ///
+    /// <para>Note what #453 did change about the neighbouring case: a <i>flat</i> record renamed by an
+    /// EditorID edit now reconciles correctly across a reload rather than landing in both halves of
+    /// <c>records_head</c> (<c>SourceIngestTests.AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete</c>).
+    /// A renamed <i>container</i> still does not, for the reason above.</para>
+    ///
+    /// <para>When #454 lands, this test should go red and be replaced by the real assertion (Head holds
+    /// the committed bytes). That is the intended lifecycle, not a regression.</para>
     /// </summary>
     [Fact]
     public void AnExternallyEditedContainer_IsCorrectAtEffective_ButItsHeadStateIsNotYetReconciled()

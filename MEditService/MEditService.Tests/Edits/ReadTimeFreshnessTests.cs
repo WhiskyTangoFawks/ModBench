@@ -93,6 +93,65 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.Equal("RenamedByHand", Reads().GetRecord(_mod.Npc.ToString())!.EditorId);
     }
 
+    /// <summary>
+    /// #453 review finding 1, the path a user actually walks: the hand edit above, then <b>read
+    /// again</b>.
+    ///
+    /// <para>The first read folds the new EditorID in from the file's content, so the index now says
+    /// "RenamedByHand" while the file on disk is still named after "FixtureNpc" — nothing renames a
+    /// file when its content is edited by a text editor. The second read then computes the source path
+    /// from the <i>indexed</i> EditorID, finds nothing at that name, and — before this was fixed —
+    /// concluded the file had been deleted and marked a live record gone at Effective. One hand edit,
+    /// two reads, and the record vanishes.</para>
+    ///
+    /// <para>Resolution leans on the FormKey suffix instead, which the rename never touches, so
+    /// "genuinely absent" stays distinguishable from "present under a different name".</para>
+    /// </summary>
+    [Fact]
+    public void AHandEditToEditorId_SurvivesASecondRead_RatherThanReadingAsDeleted()
+    {
+        var text = File.ReadAllText(_mod.NpcSourceFile);
+        File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+
+        // First read: the index still holds the old EditorID, so the computed path is the file's own
+        // name and the new content is folded in. This much always worked.
+        Assert.Equal("RenamedByHand", Reads().GetRecord(_mod.Npc.ToString())!.EditorId);
+
+        // Second read: the index now holds the *new* EditorID and the file is still under the old one.
+        var again = Reads().GetRecord(_mod.Npc.ToString());
+
+        Assert.NotNull(again);
+        Assert.Equal("RenamedByHand", again!.EditorId);
+        // Still live at Effective, and still resolvable — a record marked deleted loses both.
+        Assert.NotNull(_mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Sessions.Index!.Resolve(_mod.Npc.ToString()));
+    }
+
+    /// <summary>
+    /// The same divergence reached the other way — a file renamed on disk with its content left alone,
+    /// which is what an interrupted <c>RecordEditService</c> rename leaves behind (it moves the file
+    /// before writing the new bytes, deliberately). The record must still be found and editable, not
+    /// read as deleted and not duplicated by a second file written at the stale path.
+    /// </summary>
+    [Fact]
+    public void AFileRenamedOnDiskWithItsContentUnchanged_IsStillFoundAndEditable()
+    {
+        var renamed = Path.Combine(
+            Path.GetDirectoryName(_mod.NpcSourceFile)!,
+            $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
+        File.Move(_mod.NpcSourceFile, renamed);
+
+        var result = EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.6"));
+
+        Assert.True(result.Applied, result.Message);
+        // Written into the file that actually holds the record, not recreated at the stale computed
+        // path — two files claiming one FormKey is the corruption AmbiguousSourceUnitException exists
+        // for, and the flat path is the one that used never to look.
+        Assert.False(File.Exists(_mod.NpcSourceFile));
+        Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
+        Assert.NotNull(_mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+    }
+
     // #422: the self-heal above folds an externally-changed source file into the read model as a
     // side effect of a *read* — still a mutation as far as _filter's one-shot snapshot is concerned,
     // so a record that only now matches an active filter must not stay hidden just because nothing

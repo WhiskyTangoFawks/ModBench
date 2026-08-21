@@ -43,6 +43,9 @@ internal static class RecordFieldWriter
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         GameRelease release)
     {
+        if (fieldPath.Equals(EditorIdFieldPath, StringComparison.Ordinal))
+            return ApplyEditorId(record, value);
+
         if (VmadPath.IsVmadPath(fieldPath))
             return ApplyVmadField(record, fieldPath, value);
 
@@ -76,6 +79,49 @@ internal static class RecordFieldWriter
 
         col.Apply(record, value);
         return FieldApplyOutcome.Applied;
+    }
+
+    /// <summary>
+    /// The field path an EditorID edit arrives under — the same snake_case spelling every reflected
+    /// column uses, and the same one the read model already publishes the value under
+    /// (<c>form_lookup.editor_id</c>, <c>RecordViewBuilder</c>'s own <c>editor_id</c>).
+    /// </summary>
+    private const string EditorIdFieldPath = "editor_id";
+
+    /// <summary>
+    /// EditorID, dispatched ahead of the reflected columns because it is not one of them:
+    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>BaseSkip</c> excludes it alongside
+    /// <c>FormKey</c>, since both are the row's own identity columns carried separately rather than
+    /// record data. That exclusion is right for the schema and is left alone — but it also meant no
+    /// write path could reach EditorID at all, so <see cref="TryApply"/> answered
+    /// <see cref="FieldApplyOutcome.NotFound"/> for it and the edit refused before any file was
+    /// touched. #453's scope 3 needs the edit to exist before its rename can mean anything, so it is
+    /// dispatched here rather than by widening the reflected schema.
+    ///
+    /// <para>Unlike <c>FormKey</c> — which is genuinely read-only here, because moving one is a
+    /// renumber with a reference cascade (<c>RecordEditService.RenumberRecord</c>) — an EditorID is
+    /// ordinary editable data that xEdit has always let you change. What makes it special is only that
+    /// the source unit's <i>file name</i> carries it, which is <c>RecordEditService</c>'s problem and
+    /// not this method's: the field lands here, and the rename follows from it there.</para>
+    ///
+    /// <para>A JSON null clears the EditorID, which is legal (the layout has a bare-FormKey file name
+    /// for exactly that case). Anything that is not a string or null is not an EditorID and is refused
+    /// as <see cref="FieldApplyOutcome.NotFound"/>, matching how every other mistyped value fails
+    /// rather than throwing out of the write path.</para>
+    /// </summary>
+    private static FieldApplyOutcome ApplyEditorId(IMajorRecord record, JsonElement value)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.String:
+                record.EditorID = value.GetString();
+                return FieldApplyOutcome.Applied;
+            case JsonValueKind.Null:
+                record.EditorID = null;
+                return FieldApplyOutcome.Applied;
+            default:
+                return FieldApplyOutcome.NotFound;
+        }
     }
 
     // #426: a VMAD path carries either a plain scalar property value (the #415 shape, unchanged)

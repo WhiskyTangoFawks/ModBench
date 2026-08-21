@@ -29,6 +29,16 @@ namespace MEditService.Core.Records;
 /// footing than "they are not there". A gesture that does — or a hand edit to a cell's source file —
 /// must make this read ref-aware or move containment into the source outright, which is what
 /// ADR-0041's #444 amendment already points at ("containment is the path").</para>
+///
+/// <para><b>#453 is the gesture that paragraph anticipated, and the footing held — deliberately.</b>
+/// A field edit can now reach a container's own document and an embedded child's fields, so a cell's
+/// source text really is edited in a live session. This table survives because that gesture never
+/// changes the <i>set</i> of children: <c>Edits.RecordEditService</c>'s own containment guard refuses
+/// the child-slot columns outright (<c>Cell.{Landscape,NavigationMeshes}</c> and
+/// <c>Worldspace.{TopCell,SubCells}</c> all reflect as ordinary writable columns, and writing one
+/// would swap a container's children through a JSON blob), so parentage and slot order stay untouched
+/// by anything on the write path. The next gesture to widen this — #461's delete and renumber, which
+/// do change the set — is the one that has to make this read ref-aware for real.</para>
 /// </summary>
 public readonly record struct ContainerChildRow(
     string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);

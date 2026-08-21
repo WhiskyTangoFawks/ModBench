@@ -93,4 +93,17 @@ public interface IRecordReads
     /// would have to change about it.</para>
     /// </summary>
     IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey);
+
+    /// <summary>
+    /// The inverse of <see cref="GetContainerChildren"/>: the one parent slot
+    /// <paramref name="childFormKey"/> sits in, or null when it sits in none. #453's
+    /// record→source-unit resolution needs the child→parent direction, because an embedded child has
+    /// no file of its own and the only route to its bytes is through whichever container's document
+    /// carries it inline.
+    ///
+    /// <para>Scoped to the same six relationships <see cref="GetContainerChildren"/> is, so a placed
+    /// reference answers null here and through <see cref="GetPlacement"/> instead — the two tables
+    /// stay additive rather than becoming two competing copies of one relationship (#416 S1b).</para>
+    /// </summary>
+    ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey);
 }

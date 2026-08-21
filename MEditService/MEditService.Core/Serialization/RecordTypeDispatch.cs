@@ -52,8 +52,16 @@ internal sealed class RecordTypeDispatch
     // #453/#454's job ("compile/ingest reads structure from the tree"). Named explicitly, not inferred
     // structurally: inferring it would silently start covering a fourth type the day Mutagen's
     // generator picks a directory for one, with nothing here to notice.
-    private static readonly HashSet<string> DirectoryPerRecordTypeNames =
-        new(StringComparer.Ordinal) { "Cell", "Worldspace", "Quest" };
+    //
+    // #453: now valued by the top-level group folder each one's directory sits under, because
+    // SourceUnitResolver has to know *where to look* for a container even though there is no flat
+    // path to compute. Reflection could supply two of the three (Worldspace/Quest do have an
+    // ordinary Group<T>) but not Cell — a mod's `Cells` is a list group of `CellBlock`, which is not
+    // a major record, so it never enters `groupProperties` at all (see this class's own doc comment
+    // above). Deriving two and hardcoding the third would be the worse shape; all three are named
+    // here, for the same "named explicitly, not inferred" reason the type names already are.
+    private static readonly Dictionary<string, string> DirectoryPerRecordFolders =
+        new(StringComparer.Ordinal) { ["Cell"] = "Cells", ["Worldspace"] = "Worldspaces", ["Quest"] = "Quests" };
 
     private readonly IReadOnlyDictionary<string, Type?> _byName;
     private readonly IReadOnlySet<Type> _ambiguous;
@@ -109,7 +117,7 @@ internal sealed class RecordTypeDispatch
     /// <c>references/mutagen-serialization</c>). Null for three reasons a caller must treat alike —
     /// "this flat helper cannot answer, ask #453/#454's structure-aware reader instead": the type has
     /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous"/>'s
-    /// doc comment already names), the type is one of <see cref="DirectoryPerRecordTypeNames"/> (its
+    /// doc comment already names), the type is one of <see cref="DirectoryPerRecordFolders"/> (its
     /// own directory holds a <c>RecordData.json</c>, not a flat file), or <paramref name="recordType"/>
     /// does not resolve to a concrete type at all.
     /// </summary>
@@ -117,6 +125,26 @@ internal sealed class RecordTypeDispatch
         ConcreteFor(recordType) is { } concrete && _folderByType.TryGetValue(concrete, out var folder)
             ? folder
             : null;
+
+    /// <summary>
+    /// The top-level group folder a record of this type lives <i>somewhere under</i> — the same answer
+    /// as <see cref="FolderNameFor"/> for a flat type, plus the three directory-per-record types it
+    /// deliberately refuses (<c>Cell</c> → <c>"Cells"</c>, <c>Worldspace</c> → <c>"Worldspaces"</c>,
+    /// <c>Quest</c> → <c>"Quests"</c>). Null for a type with no top-level group at all — a placed ref,
+    /// a landscape, a navmesh, a dialog topic, a scene.
+    ///
+    /// <para><b>This is a search hint, never a path.</b> <see cref="FolderNameFor"/> answers "where
+    /// exactly is this record's file"; this answers only "which subtree is it somewhere inside", which
+    /// is all <c>SourceUnitResolver</c>'s scan needs and all that can honestly be said about a
+    /// container whose block/sub-block nesting lives in the tree rather than in the index. A wrong
+    /// answer here costs a miss (a typed refusal), never a wrong write — which is what makes narrowing
+    /// the scan safe: measured 0.02 s (<c>Cells</c>) / 0.06 s (<c>Worldspaces</c>) against 0.39 s
+    /// unnarrowed on a tree the size of the #444 spike's mega-plugin.</para>
+    /// </summary>
+    internal string? GroupFolderNameFor(string recordType) =>
+        FolderNameFor(recordType)
+        ?? (ConcreteFor(recordType) is { } concrete
+            && DirectoryPerRecordFolders.TryGetValue(concrete.Name, out var folder) ? folder : null);
 
     /// <summary>
     /// The inverse of <see cref="FolderNameFor"/>: which <c>record_type</c> a flat folder's own name
@@ -196,9 +224,9 @@ internal sealed class RecordTypeDispatch
 
             // #451: the folder half, keyed off the same discovery pass — every concrete major-record
             // type gets mapped to its owning top-level group property's own name, unless it is one of
-            // the directory-per-record types (see DirectoryPerRecordTypeNames) or has no top-level
+            // the directory-per-record types (see DirectoryPerRecordFolders) or has no top-level
             // group at all (a placed ref, a landscape — FolderNameFor's own doc comment).
-            if (DirectoryPerRecordTypeNames.Contains(type.Name)) continue;
+            if (DirectoryPerRecordFolders.ContainsKey(type.Name)) continue;
             var owningFolder = groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;
             if (owningFolder is null) continue;
 
