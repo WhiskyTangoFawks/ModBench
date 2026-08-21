@@ -13,10 +13,8 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
 
 /** ADR-0040/#374: MEditService's per-plugin source text tree (`<pluginFileName>.source/...`,
  *  `SourceRecordPath.For` in `MEditService.Core/Source/`) is internal Modbench state that lands
- *  inside the mod folder itself — unlike the source's gitdir, which lives entirely outside
- *  `mods/` (`SourceOptions`, `%LOCALAPPDATA%/mEdit/sources/`) and is therefore already invisible
- *  to this walk by construction, needing no exclusion here. The text tree genuinely is walked and
- *  must be excluded explicitly.
+ *  inside the mod folder itself. The text tree genuinely is walked and must be excluded
+ *  explicitly.
  *
  *  Matched at the mod root only — the layout is never nested (`SourceRecordPath.For` always
  *  builds root-relative paths) — and only when a sibling *file* of the exact stripped name also
@@ -41,6 +39,9 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
  *  symlink (only `Directory.CreateDirectory`, a real directory), so unlike the plugin side, there
  *  is no genuine shape here to support. */
 const SOURCE_TREE_SUFFIX = '.source';
+/** Pre-#437 name of the same tree, still on disk wherever a mod was tracked before the
+ *  rename (no migration shipped — never assume exclusive ownership, root CLAUDE.md). */
+const LEGACY_SOURCE_TREE_SUFFIX = '.ledger';
 
 function sourceTreeDirNames(dirents: Dirent[]): Set<string> {
   const fileNames = new Set(
@@ -48,8 +49,10 @@ function sourceTreeDirNames(dirents: Dirent[]): Set<string> {
   );
   const names = new Set<string>();
   for (const dirent of dirents) {
-    if (!dirent.isDirectory() || !dirent.name.endsWith(SOURCE_TREE_SUFFIX)) continue;
-    const pluginFileName = dirent.name.slice(0, -SOURCE_TREE_SUFFIX.length);
+    if (!dirent.isDirectory()) continue;
+    const suffix = [SOURCE_TREE_SUFFIX, LEGACY_SOURCE_TREE_SUFFIX].find((s) => dirent.name.endsWith(s));
+    if (suffix === undefined) continue;
+    const pluginFileName = dirent.name.slice(0, -suffix.length);
     if (fileNames.has(foldPath(pluginFileName))) names.add(dirent.name);
   }
   return names;

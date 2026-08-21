@@ -239,9 +239,8 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
 });
 
 // #374: MEditService's per-plugin source text tree lands inside the mod folder itself
-// (`<pluginFileName>.source/...`, ADR-0040) and must not deploy or appear as mod content. The
-// gitdir itself needs no test here — it lives entirely outside mods/ (SourceOptions,
-// %LOCALAPPDATA%/mEdit/sources/) and is invisible to this walk by construction. Three-outcome
+// (`<pluginFileName>.source/...`, ADR-0040) and must not deploy or appear as mod content.
+// Three-outcome
 // shape mirrors the #324 hazard-class pattern: the real thing is excluded, a look-alike with no
 // sibling plugin is not (over-match guard), and a plain file sharing the name is not
 // (directory-only guard).
@@ -279,6 +278,32 @@ describe('buildFileConflictIndex — source text tree exclusion (#374)', () => {
     expect(index.files.has(PLUGIN)).toBe(true);
     expect([...index.files].map((e) => e.relativePath)).toEqual([PLUGIN]);
     expect(index.filesByMod.get('ModA')?.map((f) => f.relativePath)).toEqual([PLUGIN]);
+  });
+
+  // #437 renamed the on-disk suffix .ledger → .source with no migration: a tree written by
+  // pre-rename Modbench is still on disk (never assume exclusive ownership — root CLAUDE.md),
+  // and un-excluding it would deploy internal text state straight into Data/. Same sibling
+  // guard applies; only the suffix differs.
+  it('excludes a pre-#437 legacy .ledger text tree of a plugin actually present in the mod', async () => {
+    await writeFile(join(modARoot, PLUGIN), 'PLUGINBYTES');
+    const legacyRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
+    await mkdir(legacyRecordDir, { recursive: true });
+    await writeFile(join(legacyRecordDir, '00001E.yaml'), 'record: text');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has(PLUGIN)).toBe(true);
+    expect([...index.files].map((e) => e.relativePath)).toEqual([PLUGIN]);
+  });
+
+  it('keeps a .ledger-suffixed folder with no sibling plugin visible — ordinary mod content', async () => {
+    const legacyRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
+    await mkdir(legacyRecordDir, { recursive: true });
+    await writeFile(join(legacyRecordDir, '00001E.yaml'), 'record: text');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has(`${PLUGIN}.ledger/records/${PLUGIN}/00001E.yaml`)).toBe(true);
   });
 
   it('matches the sibling plugin case-insensitively (Bethesda plugin casing is inconsistent)', async () => {

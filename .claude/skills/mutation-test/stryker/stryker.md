@@ -176,7 +176,7 @@ annotations.
 plugin data** on a Mutagen-facing seam you cannot synthesize (the error requires bad binary
 data). The code is likely genuinely needed — do **not** delete or blind-accept. Ask the
 developer for a plugin exhibiting the condition, then write a real behavioral test against it.
-Ledger entry `request-fixture:<condition>`; the survivor is paused until the fixture arrives.
+Log entry `request-fixture:<condition>`; the survivor is paused until the fixture arrives.
 
 ## testing-the-framework here
 

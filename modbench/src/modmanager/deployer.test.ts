@@ -62,10 +62,9 @@ describe('deploy', () => {
   );
 
   // #374 (AC1): a tracked mod deploys byte-identically to the untracked equivalent — no vcs
-  // state, no source text tree in the game directory. The gitdir needs no test here — it lives
-  // outside mods/ entirely (SourceOptions) and this walk never reaches it; the source text tree
-  // does land inside the mod folder and is what fileConflictIndex.ts's exclusion (#374) keeps
-  // out of the index deploy() consumes.
+  // state, no source text tree in the game directory. The source text tree lands inside the
+  // mod folder and is what fileConflictIndex.ts's exclusion (#374) keeps out of the index
+  // deploy() consumes.
   it('deploys only the plugin, never its source text tree, when a mod has acquired a repo', async () => {
     fx = await makeDeployerFixture();
     // "MyMod.esp" (9 chars), deliberately not 7 — see fileConflictIndex.test.ts's #374 source
@@ -100,9 +99,9 @@ describe('deploy', () => {
     const pluginBytesBefore = await readFile(pluginPath, 'utf8');
     await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
 
-    // Simulate the mod acquiring a repo: RecordVendor never rewrites the plugin binary (traced
-    // in MEditService.Core/Source/RecordVendor.cs — it serializes only to the source text path),
-    // it only adds the text tree alongside the untouched plugin.
+    // Simulate the mod acquiring a repo: serialization never rewrites the plugin binary (Track
+    // writes only to the source text path — MEditService.Core/Source/TrackService.cs), it only
+    // adds the text tree alongside the untouched plugin.
     await fx.writeModFile('ModA', 'MyMod.esp.source/records/MyMod.esp/00001E.yaml', 'record: text');
     const afterIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
     await deploy(fx.instanceRoot, fx.gameDirectory, afterIndex, fakeReporter());
