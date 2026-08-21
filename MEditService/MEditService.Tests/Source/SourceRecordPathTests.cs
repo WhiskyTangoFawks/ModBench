@@ -68,7 +68,7 @@ public sealed class SourceRecordPathTests
     public void For_ForATypeWithNoTopLevelGroup_ThrowsNamedException()
     {
         // A placed reference lives inside a cell's own document, never under a top-level group of its
-        // own (RecordTypeDispatch.FolderNameFor's own doc comment) — the same "ask #453/#454 instead"
+        // own (RecordTypeDispatch.FolderNameFor's own doc comment) — the same "ask SourceUnitResolver"
         // refusal as a directory-per-record type, for a structurally different reason.
         Assert.Throws<NotSupportedException>(
             () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));

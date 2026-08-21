@@ -77,7 +77,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
-            _mod.Sessions, watcher, SharedSchemaReflector.Instance, loggerFactory);
+            _mod.Sessions, watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.True(ok.Value!.Succeeded);
@@ -92,7 +92,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Sessions, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
+            _mod.Sessions, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);

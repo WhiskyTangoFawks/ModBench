@@ -525,7 +525,7 @@ public static class PluginEndpoints
 
     // #417: Absorb Upstream Update. The plugin name and origin resolve the target the same way
     // Compile does; GameRelease comes off the loaded session, never guessed.
-    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
+    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -539,18 +539,10 @@ public static class PluginEndpoints
 
         try
         {
-            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!.GameRelease, reflector);
+            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!);
             watcher.ClearPending(modFolder, decoded);
             watcher.Watch(modFolder, decoded, pluginPath!);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
-        }
-        // #451 review: a container record (Cell/Worldspace/Quest) in the plugin — #453's own
-        // territory, not a server fault, so it gets the same 409 shape SourceAlreadyTrackedException
-        // does elsewhere in this file, not a bare 500.
-        catch (ContainerRecordsNotYetSupportedException ex)
-        {
-            logger.LogWarning(ex, "Could not absorb upstream update for {Plugin}: container records not yet supported", decoded);
-            return Results.Problem(ex.Message, statusCode: 409);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

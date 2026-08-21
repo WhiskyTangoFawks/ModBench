@@ -207,6 +207,85 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
+    /// Which of <paramref name="formKeys"/> more than one source unit in the tree claims — #454's
+    /// FormKey-collision refusal, which compile cannot ask the deserialized mod because by then the
+    /// answer is already gone.
+    ///
+    /// <para><b>Why this cannot be a duplicate scan over the compiled mod.</b> The whole-mod reader
+    /// ends every group with <c>group.RecordCache.SetTo(x =&gt; x.FormKey, records)</c>
+    /// (<c>GroupParallelHelper.ReadFilePerRecord</c> in <c>references/mutagen-serialization</c>), a
+    /// FormKey-keyed cache: two files in <i>one</i> group folder claiming one FormKey collapse to the
+    /// last one read, silently, before compile ever sees the mod. That is data loss in the user's
+    /// binary — a record they can see in their tree and cannot find in the plugin — so the question has
+    /// to be asked of the <i>tree</i>. Two files in <i>different</i> group folders survive as two
+    /// records and would be catchable either way; this covers both with one mechanism.</para>
+    ///
+    /// <para>Reachable, not theoretical: #453 fixed Modbench's own half-completed rename, but nothing
+    /// stops another tool duplicating a file, a partially restored backup, or a user copying a record
+    /// file to experiment (root CLAUDE.md's never-assume-exclusive-ownership rule).
+    /// <see cref="Resolve"/>'s own <see cref="AmbiguousSourceUnitException"/> exists for exactly this
+    /// state on the write path.</para>
+    ///
+    /// <para><b>One tree walk, not one per record.</b> <see cref="NameCarries"/> answers "does this leaf
+    /// carry this FormKey" for a leaf/FormKey pair; asking it for every record against every leaf is
+    /// quadratic on a tree with thousands of both. <see cref="TailsCarriedBy"/> inverts it — enumerating
+    /// the tails a leaf carries, by exactly <see cref="NameCarries"/>' own two rules — so the walk builds
+    /// a count per tail once and each record becomes a dictionary lookup.</para>
+    /// </summary>
+    internal static IReadOnlyList<string> FormKeysWithMoreThanOneSourceUnit(
+        string sourceRoot, IEnumerable<FormKey> formKeys)
+    {
+        if (!Directory.Exists(sourceRoot)) return [];
+
+        var unitsByTail = new Dictionary<string, int>(StringComparer.Ordinal);
+        void Count(string leaf)
+        {
+            foreach (var tail in TailsCarriedBy(leaf))
+            {
+                unitsByTail[tail] = unitsByTail.GetValueOrDefault(tail) + 1;
+            }
+        }
+
+        // A directory-per-record container is named for its record; a flat record is a .json file named
+        // for its record. The group-level files (RecordData.json, GroupRecordData.json) and the
+        // block/sub-block directories ("0", "3, -4") carry no FormKey, so they simply never match a tail
+        // below and need no exclusion of their own.
+        foreach (var directory in Directory.EnumerateDirectories(sourceRoot, "*", SearchOption.AllDirectories))
+            Count(Path.GetFileName(directory));
+        foreach (var file in Directory.EnumerateFiles(sourceRoot, $"*{JsonSuffix}", SearchOption.AllDirectories))
+            Count(Path.GetFileName(file));
+
+        var colliding = new List<string>();
+        foreach (var formKey in formKeys)
+        {
+            var filesafe = LeafNameFor(formKey, editorId: null, isDirectory: true);
+            var units = unitsByTail.GetValueOrDefault(filesafe)
+                        + unitsByTail.GetValueOrDefault(filesafe + JsonSuffix);
+            if (units > 1) colliding.Add(formKey.ToString());
+        }
+        return colliding;
+    }
+
+    /// <summary>The tails <paramref name="leaf"/> carries under <see cref="NameCarries"/> — the whole
+    /// name, plus whatever follows each <c>" - "</c> in it. More than one candidate arises only when an
+    /// EditorID itself contains <c>" - "</c>, which is legal and is precisely why a file name cannot be
+    /// split into EditorID and FormKey unambiguously (<see cref="SourceRecordIdentity"/>'s own doc
+    /// comment); counting every candidate costs nothing, because a candidate that is not a real filesafe
+    /// FormKey is never looked up.</summary>
+    private static IEnumerable<string> TailsCarriedBy(string leaf)
+    {
+        yield return leaf;
+
+        const string separator = " - ";
+        var at = leaf.IndexOf(separator, StringComparison.Ordinal);
+        while (at >= 0)
+        {
+            yield return leaf[(at + separator.Length)..];
+            at = leaf.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// The record's own file, found by its FormKey suffix under the narrowest subtree that can hold
     /// it. Matching is on the FormKey alone — never the EditorID, which the index's copy of may be
     /// stale relative to the tree, and which is exactly the disagreement an EditorID edit creates

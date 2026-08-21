@@ -139,7 +139,8 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "SourceIngest.cs", // #452: ingest-from-source
+            "SourceIngest.cs",         // #452: ingest-from-source
+            "PluginCompileService.cs", // #454: compile from the tree — the third and last door
         };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
@@ -199,11 +200,15 @@ public class RecordTextCodecGeneratorSeedTests
     // #452: SourceIngest.cs joins the list. The race is in the write-side helpers, but the read side
     // drives the same folder-split machinery over the same nested containers, so it names the same
     // sequential dropoff and is held to the same rule rather than being trusted to the library default.
+    //
+    // #454: PluginCompileService.cs joins it too, for the same reason as SourceIngest — it reads the
+    // same trees through the same gateway. That completes the whitelist: all three doors ADR-0041's
+    // #444 amendment names are now open, and this list is not expected to grow again.
     [Fact]
     public void DoorFiles_NeverNameAParallelWorkDropoff()
     {
         const string parallelDropoffName = "ParallelWorkDropoff";
-        var doorFiles = new[] { "TrackService.cs", "SourceIngest.cs" };
+        var doorFiles = new[] { "TrackService.cs", "SourceIngest.cs", "PluginCompileService.cs" };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
             .Where(f => doorFiles.Contains(Path.GetFileName(f)))

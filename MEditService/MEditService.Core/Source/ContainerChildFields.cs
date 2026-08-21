@@ -5,9 +5,11 @@ namespace MEditService.Core.Source;
 /// <summary>
 /// Which fields of a container record hold <b>child major records</b> — a Cell's placed refs,
 /// landscape and navmeshes, a Worldspace's top cell, a Quest's dialog topics/branches/scenes, a
-/// DialogTopic's responses. One table, read by the two things that still need to know a parent-child
-/// relationship exists: the index's <c>container_child</c> rows (#416 S1b) and compile's
-/// <see cref="MEditService.Core.Edits.ContainerAssembler"/>.
+/// DialogTopic's responses. One table, read by the thing that still needs to know a parent-child
+/// relationship exists: the index's <c>container_child</c> rows (#416 S1b), which
+/// <see cref="SourceUnitResolver"/> in turn reads to place an embedded child in its owner's file.
+/// Compile no longer reads it at all — #454 retired <c>ContainerAssembler</c>, because the tree's own
+/// directory nesting <i>is</i> the containment.
 ///
 /// <para><b>This used to be <c>ContainerStripFields</c>, and it no longer strips anything</b> (#450 /
 /// ADR-0041's #444 amendment). The shallow-strip posture existed because driving the un-customized
@@ -42,9 +44,14 @@ namespace MEditService.Core.Source;
 /// landing, not merely inspected — and is the standing defence against the next gap (a future Mutagen
 /// bump or game module adding a child-major field nobody hand-adds here). Given a real,
 /// previously-undetected gap once already (Quest.Scenes), the hand-maintained table is still what
-/// ships, now backed by that sweep rather than by the original investigation's own say-so; a source
-/// record this table still misses refuses at compile time (<c>ContainerAssembler</c>'s completeness
-/// guard) rather than corrupting silently, which is the second, independent line of defence.</para>
+/// ships, now backed by that sweep rather than by the original investigation's own say-so.
+///
+/// <para>That sweep is now the <i>only</i> line of defence, and deliberately so (#454). There used to
+/// be a second one at compile time — <c>ContainerAssembler</c> refused a source record it could find
+/// no parent slot for — but compile no longer places anything: the deserializer reads a record from
+/// wherever the tree already puts it, so "unplaceable" is not a state it can reach. A gap in this
+/// table now costs an index row (<c>container_child</c>), never a record missing from the compiled
+/// binary.</para>
 /// </summary>
 internal static class ContainerChildFields
 {

@@ -258,7 +258,7 @@ public sealed class SourceIngestTests
     /// <para>Flat record on the shared fixture deliberately: this is a property of the reconciliation
     /// pass, not of containers, and the ~24 files built on this fixture should see it. The container
     /// half of the same rename is <b>not</b> reachable — <see cref="SourceRecordPath.TryParse"/> fails
-    /// closed on container paths, which is the gap <c>SourceIngestContainerTests</c> pins for #454 —
+    /// closed on container paths, which is the gap <c>SourceIngestContainerTests</c> pins for #463 —
     /// so a renamed <i>container</i> still reads clean at Head after a reload.</para>
     /// </summary>
     [Fact]

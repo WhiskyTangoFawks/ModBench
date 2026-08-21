@@ -48,8 +48,8 @@ internal sealed class RecordTypeDispatch
     // embedded slots) or directory-per-record (Quest — DialogTopics/Scenes/DialogBranches) even though
     // each has an ordinary top-level Group<T> a reflection walk would otherwise map to a flat
     // "<Folder>/<name>.json". Each of these gets its own "<Folder>/<name>/RecordData.json" directory
-    // instead, which SourceRecordPath's flat layout does not cover — reading that structure is
-    // #453/#454's job ("compile/ingest reads structure from the tree"). Named explicitly, not inferred
+    // instead, which SourceRecordPath's flat layout does not cover — SourceUnitResolver (#453) finds
+    // one on disk, and compile reads the whole tree at once (#454). Named explicitly, not inferred
     // structurally: inferring it would silently start covering a fourth type the day Mutagen's
     // generator picks a directory for one, with nothing here to notice.
     //
@@ -115,7 +115,7 @@ internal sealed class RecordTypeDispatch
     /// verbatim as the directory a record's file sits in (traced to
     /// <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c> in
     /// <c>references/mutagen-serialization</c>). Null for three reasons a caller must treat alike —
-    /// "this flat helper cannot answer, ask #453/#454's structure-aware reader instead": the type has
+    /// "this flat helper cannot answer, ask SourceUnitResolver (#453) instead": the type has
     /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous"/>'s
     /// doc comment already names), the type is one of <see cref="DirectoryPerRecordFolders"/> (its
     /// own directory holds a <c>RecordData.json</c>, not a flat file), or <paramref name="recordType"/>

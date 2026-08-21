@@ -177,8 +177,10 @@ public sealed class RecordEditService(
     /// <para><c>Cell.Grid</c> is refused for the neighbouring reason: an exterior cell's grid
     /// coordinates <i>are</i> its directory (<c>Worldspaces/&lt;ws&gt;/&lt;X, Y&gt;/&lt;X, Y&gt;/…</c>),
     /// so moving it is a tree restructure and not a rewrite of one file, and the same two numbers are
-    /// mirrored in <c>cell_location</c>, which nothing on this path re-derives. Reading structure from
-    /// the tree is <b>#454</b>'s, so the refusal names it.</para>
+    /// mirrored in <c>cell_location</c>, which nothing on this path re-derives. #454 made compile
+    /// <i>read</i> that structure and deliberately did not make anything <i>move</i> a record within it,
+    /// so this stays a refusal and gives the same structural-gesture reason as the slot columns above,
+    /// rather than naming a ticket that has since landed without changing the answer.</para>
     ///
     /// <para><b>This is what closes the side-table question, and it closes it completely rather than
     /// per-table.</b> <c>placement</c>'s only non-containment columns come from <c>Position</c>, a
@@ -217,7 +219,7 @@ public sealed class RecordEditService(
                 RecordEditRefusal.FieldReadOnly,
                 "'grid' is an exterior cell's own place in the world — its source directory is named " +
                 "after these coordinates, so moving it restructures the tree rather than rewriting one " +
-                "file. Reading and writing that structure is #454's.");
+                "file. That is a structural gesture, not a field edit.");
         }
 
         return null;

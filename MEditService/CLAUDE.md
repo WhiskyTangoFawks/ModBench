@@ -70,9 +70,12 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     the two cannot drift apart. **Spriggit's layout carries no ordering for folder-split children**
     (its `[N] ` file-name prefix is gated on `Overall.EnforceRecordOrder`, which neither this project
     nor Spriggit enables), so `container_child.SlotIndex` is the *tree's* order for a tracked plugin,
-    not the binary's — stable, not canonical. Pinned as a named allowlist entry by
-    `SourceIngestParityTests`; see `ContainerAssembler.AttachBufferedChildren` before treating a
-    reordering as a bug.
+    not the binary's — stable, not canonical. **Compile does not restore it either** (#454 retired
+    `ContainerAssembler`, the last thing that tried): a compiled binary's folder-split children come
+    back in the tree's order, so never write prose claiming compile preserves child order. Pinned as a
+    named allowlist entry with exact counts by `SourceIngestParityTests`; for FO4
+    `DialogTopic.Responses` the lost order is real semantic data loss, tracked as **#459** — read it
+    before treating a reordering as a bug or as acceptable.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
@@ -163,7 +166,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
-| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `ContainerAssembler` |
+| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `SourceCheckout` |
 | `Serialization/` | Per-record text source codec (ADR-0041, née ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
 | `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
