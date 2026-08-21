@@ -1,7 +1,7 @@
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -9,17 +9,17 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Edits;
 
 /// <summary>
-/// ADR-0041's Save &amp; Compile, end to end (#416 pinned contract): serializes a plugin's ledger
+/// ADR-0041's Save &amp; Compile, end to end (#416 pinned contract): serializes a plugin's source
 /// (working tree, or a named git ref) to its binary through the journaled write pipeline. Compile
 /// derives what the format forces (masters, container structure) and refuses only what it
 /// structurally cannot emit; everything else it can still write becomes a diagnostic, not a refusal.
 ///
-/// <para>The single write path's other half: <see cref="RecordEditService"/> is ledger text ←
-/// working tree; this is ledger text → binary. Both read the ledger's own bytes, never the DB index,
-/// for the same reason — the index and the ledger are not always structurally identical (#369's
+/// <para>The single write path's other half: <see cref="RecordEditService"/> is source text ←
+/// working tree; this is source text → binary. Both read the source's own bytes, never the DB index,
+/// for the same reason — the index and the source are not always structurally identical (#369's
 /// measured hole) — except for <b>containment</b>, which this class deliberately reads from the
 /// index (<see cref="ContainerAssembler"/>), because nothing in this arc lets a user edit it and the
-/// ledger was never asked to carry it (#416 S1b / Q1).</para>
+/// source was never asked to carry it (#416 S1b / Q1).</para>
 /// </summary>
 public sealed class PluginCompileService(
     ISessionManager sessions,
@@ -37,7 +37,7 @@ public sealed class PluginCompileService(
 
         var modFolder = ModFolders.TrackedOf(session, plugin);
         if (modFolder == null)
-            return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no ledger to compile.");
+            return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
 
         var metadata = session.Plugins.FirstOrDefault(p =>
             p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
@@ -45,15 +45,15 @@ public sealed class PluginCompileService(
         if (metadata == null)
             return CompileResult.Refused($"{plugin.Name} is not part of the loaded session.");
 
-        var ledgerFiles = EnumerateLedger(modFolder, plugin.Name, source);
+        var sourceFiles = EnumerateSource(modFolder, plugin.Name, source);
         var recordsByFormKey = new Dictionary<string, IMajorRecord>(StringComparer.Ordinal);
         var pathsByFormKey = new Dictionary<string, string>(StringComparer.Ordinal);
         var collidingFormKeys = new List<string>();
-        foreach (var (relativePath, bytes) in ledgerFiles)
+        foreach (var (relativePath, bytes) in sourceFiles)
         {
             var record = _codec.DeserializeFromBytesAsync(bytes, session.GameRelease).GetAwaiter().GetResult();
             var formKey = record.FormKey.ToString();
-            // Structurally impossible to emit: two distinct ledger files both claiming the same
+            // Structurally impossible to emit: two distinct source files both claiming the same
             // FormKey (a hand-edit, a corrupted rename, a renumber that collided) would collapse to
             // one binary record, silently discarding whichever this dictionary assignment overwrites
             // — refuse rather than pick a winner (#416 comment 2 on the issue: compile refuses states
@@ -65,7 +65,7 @@ public sealed class PluginCompileService(
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
-                $"{plugin.Name} cannot be compiled: more than one ledger file claims the same FormKey — " +
+                $"{plugin.Name} cannot be compiled: more than one source file claims the same FormKey — " +
                 $"{string.Join(", ", collidingFormKeys.Distinct(StringComparer.Ordinal))}.");
         }
 
@@ -119,41 +119,41 @@ public sealed class PluginCompileService(
             // the binary changes to the ref's bytes while the parked trailer still names the old
             // working-tree hash, so Modbench's own write would read as an external change.
             var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(metadata.Path)));
-            LedgerRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
+            SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
             return true;
         });
 
         var masters = index.GetEffectiveMasters(plugin);
-        logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} ledger records",
+        logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
             plugin.Name, plugin.Origin, recordsByFormKey.Count);
         return CompileResult.Success(diagnostics, masters);
     }
 
-    // Working tree: the plain files on disk under "<plugin>.ledger/**" — no git involved, the same
-    // way RecordEditService reads a single record's ledger file. #416 S8 adds the AtRef case: a git
-    // ref's tree read through LedgerRepository, no checkout.
-    private static IReadOnlyList<(string RelativePath, byte[] Bytes)> EnumerateLedger(
+    // Working tree: the plain files on disk under "<plugin>.source/**" — no git involved, the same
+    // way RecordEditService reads a single record's source file. #416 S8 adds the AtRef case: a git
+    // ref's tree read through SourceRepository, no checkout.
+    private static IReadOnlyList<(string RelativePath, byte[] Bytes)> EnumerateSource(
         string modFolder, string pluginName, CompileSource source)
     {
         return source switch
         {
-            CompileSource.WorkingTree => EnumerateWorkingTreeLedger(modFolder, pluginName),
-            CompileSource.AtRef atRef => LedgerRepository.EnumerateLedgerAtRef(modFolder, pluginName, atRef.Ref),
+            CompileSource.WorkingTree => EnumerateWorkingTreeSource(modFolder, pluginName),
+            CompileSource.AtRef atRef => SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, atRef.Ref),
             _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unknown compile source."),
         };
     }
 
-    private static List<(string RelativePath, byte[] Bytes)> EnumerateWorkingTreeLedger(
+    private static List<(string RelativePath, byte[] Bytes)> EnumerateWorkingTreeSource(
         string modFolder, string pluginName)
     {
-        var ledgerDir = Path.Combine(modFolder, $"{pluginName}{LedgerRecordPath.LedgerSuffix}");
-        if (!Directory.Exists(ledgerDir)) return [];
+        var sourceDir = Path.Combine(modFolder, $"{pluginName}{SourceRecordPath.SourceSuffix}");
+        if (!Directory.Exists(sourceDir)) return [];
 
-        // Relative to modFolder, matching EnumerateLedgerAtRef's own shape — CompileDiagnostic.
-        // LedgerRelativePath is a path the extension joins against the mod folder to build a
+        // Relative to modFolder, matching EnumerateSourceAtRef's own shape — CompileDiagnostic.
+        // SourceRelativePath is a path the extension joins against the mod folder to build a
         // Problems-panel URI, in both CompileSource cases alike, never an absolute path from one and
         // relative from the other.
-        return Directory.EnumerateFiles(ledgerDir, "*.json", SearchOption.AllDirectories)
+        return Directory.EnumerateFiles(sourceDir, "*.json", SearchOption.AllDirectories)
             .Select(path => (Path.GetRelativePath(modFolder, path), File.ReadAllBytes(path)))
             .ToList();
     }

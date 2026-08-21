@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
@@ -45,7 +45,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("TrackedMod", body.GetProperty("origin").GetString());
-        Assert.True(LedgerRepository.IsTracked(modFolder));
+        Assert.True(SourceRepository.IsTracked(modFolder));
     }
 
     [Fact]

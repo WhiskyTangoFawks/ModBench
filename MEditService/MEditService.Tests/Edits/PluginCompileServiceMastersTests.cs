@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -79,7 +79,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             GameRelease.Fallout4);
 
         new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, _plugin.Origin!, LedgerPreset.Edits)
+            .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 

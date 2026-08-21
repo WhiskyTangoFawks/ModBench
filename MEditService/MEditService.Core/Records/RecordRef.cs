@@ -2,7 +2,7 @@ namespace MEditService.Core.Records;
 
 /// <summary>
 /// Which state of a record's text a read answers from. Maps onto the single
-/// <see cref="Ledger.LedgerRef.Committed"/> value the <c>records.ref</c> column carries today
+/// <see cref="Source.SourceRef.Committed"/> value the <c>records.ref</c> column carries today
 /// (ADR-0041) — <see cref="Head"/> answers identically to <see cref="Effective"/> until #415 gives
 /// the working tree its own divergent state.
 /// </summary>

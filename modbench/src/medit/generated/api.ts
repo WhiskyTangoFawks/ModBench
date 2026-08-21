@@ -176,7 +176,7 @@ export interface paths {
         put?: never;
         /**
          * Create a new record as a working-tree change (#427).
-         * @description Mints a new record and writes it as a new ledger file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled. Not the retired pending-change-era create this same route once served; that mechanism (staged rows, no ledger text) was removed with ADR-0041/#410.
+         * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled. Not the retired pending-change-era create this same route once served; that mechanism (staged rows, no source text) was removed with ADR-0041/#410.
          */
         post: operations["CreateRecord"];
         delete?: never;
@@ -420,7 +420,7 @@ export interface paths {
         put?: never;
         /**
          * Delete a record as a working-tree change (#415/#427).
-         * @description Deletes the record's ledger file — a git-native, null-Body working-tree change (#415's mechanism): gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other dangling link.
+         * @description Deletes the record's source file — a git-native, null-Body working-tree change (#415's mechanism): gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other dangling link.
          */
         post: operations["DeleteRecord"];
         delete?: never;
@@ -440,7 +440,7 @@ export interface paths {
         put?: never;
         /**
          * Renumber a native record's FormKey as a delete+create pair (#427).
-         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old ledger file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it. Not the retired pending-change-era renumber this same route once served; that mechanism (staged rows, no ledger text, no reference cascade) was removed with ADR-0041/#410.
+         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it. Not the retired pending-change-era renumber this same route once served; that mechanism (staged rows, no source text, no reference cascade) was removed with ADR-0041/#410.
          */
         post: operations["RenumberRecord"];
         delete?: never;
@@ -620,7 +620,7 @@ export interface components {
         };
         CompileDiagnostic: {
             formKey?: string | null;
-            ledgerRelativePath?: string | null;
+            sourceRelativePath?: string | null;
             message?: string | null;
         };
         CompileRequest: {

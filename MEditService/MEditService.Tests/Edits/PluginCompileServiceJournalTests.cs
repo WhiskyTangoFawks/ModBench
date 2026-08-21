@@ -1,5 +1,5 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;

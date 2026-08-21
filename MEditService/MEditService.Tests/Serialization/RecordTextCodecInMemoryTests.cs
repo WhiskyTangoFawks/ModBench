@@ -15,8 +15,8 @@ namespace MEditService.Tests.Serialization;
 /// load order — millions of them — so it needs the codec's bytes without a filesystem round trip;
 /// #411's probe had to duplicate this path privately to measure at all.
 ///
-/// The bytes must be <b>the ledger file's bytes</b>, not merely similar: ADR-0041 makes the stored
-/// document byte-identical to what the ledger holds, which is what lets a byte compare stand in for
+/// The bytes must be <b>the source file's bytes</b>, not merely similar: ADR-0041 makes the stored
+/// document byte-identical to what the source holds, which is what lets a byte compare stand in for
 /// dirty/ITM/revert-convergence detection later in the arc. So the in-memory path is asserted
 /// against the committed golden text — an independent, reviewed artifact — and against what
 /// <see cref="RecordTextCodec.SerializeAsync"/> actually writes for a dense real record, rather than

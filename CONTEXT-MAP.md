@@ -24,12 +24,12 @@ Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface 
   ADR-0040's provenance-payload amendment): a tracked mod is one whose folder contains
   a `.git` repository, created by an explicit user Track gesture and operated entirely
   by Editing (repos, branches, commits, compile — Mod Management never touches git,
-  never calls the backend, and never learns the ledger exists). The boundary object
+  never calls the backend, and never learns the source exists). The boundary object
   remains exactly origin + physical plugin path (ADR-0036); no provenance payload, repo,
   or ref identifier crosses. Everything the backend knows about external change it
   learns by *observation* at its own touch points (load-time hash check, the bridge
   watcher) — required by the never-assume-exclusive-ownership rule, since MO2, xEdit,
-  or the user can install, update, or delete any mod outside Modbench. Ledger-derived
+  or the user can install, update, or delete any mod outside Modbench. Source-derived
   state reaches Loadout surfaces only as data through composition roots (the
   `PluginsTreeComposite` pattern), never via a Mod Management→backend call.
 - **Shared vocabulary — override order, winning vs losing.** Every conflict is decided by an **override order**, whose ends are the **winning** and **losing** ends — never by position in a file or a view (that is *view order*, a separate configurable presentation choice). There are two distinct override orders: Mod Management's **Mod override order** (Modlist priority, `modlist.txt`, file-level winner) and Editing's **Plugin override order** / Plugin load order (`plugins.txt`, record-level winner). Say which one you mean, and never say "higher/lower priority" — say winning/losing. Anchor invariant: **vanilla content is losing-most on both axes** (`Fallout4.esm` records, vanilla `Data/` files lose to everything). `plugins.txt` itself is owned and written by Mod Management's Plugins tab even though the ordering concept it encodes is consumed by Editing — see each context's `CONTEXT.md`.

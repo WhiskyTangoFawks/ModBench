@@ -128,7 +128,7 @@ public interface ISessionManager
     /// <summary>
     /// #422: re-materializes <c>_filter</c> from the session's own <c>FilterSql</c> — every mutation
     /// path that can change which records match (a re-index, a working-tree edit, a create, a
-    /// renumber, a read-time ledger self-heal) must call this afterward, or the table
+    /// renumber, a read-time source self-heal) must call this afterward, or the table
     /// <see cref="SetFilter"/> built stays a snapshot of a matching set that no longer exists: a record
     /// that newly matches stays hidden, one that stopped matching stays listed.
     /// <para>
@@ -136,13 +136,13 @@ public interface ISessionManager
     /// <see cref="ClearFilter"/>'s throw — every caller is a mutation (or a read-time self-heal) where
     /// "no filter is active" is the ordinary case, not a caller mistake, and a throwing dependency here
     /// would make every one of those call sites carry its own guard clause, or worse would turn
-    /// <c>Ledger.LedgerFreshness</c>'s "a read must never throw" posture into a lie.
+    /// <c>Source.SourceFreshness</c>'s "a read must never throw" posture into a lie.
     /// </para>
     /// <para>
     /// <b>Never throws.</b> A re-materialization fault (the filter SQL itself faulting against the
     /// index's new state) is logged as a warning naming the exception and degrades to serving the
     /// stale <c>_filter</c> table rather than propagating — by the time this runs on every mutation
-    /// call site, the write it followed (a ledger file, a binary re-index) is already durable, so
+    /// call site, the write it followed (a source file, a binary re-index) is already durable, so
     /// letting the fault escape here would 500 a gesture that actually succeeded. Same posture as the
     /// no-op branch above, extended to a failure that only surfaces once the filter is re-run, not at
     /// <see cref="SetFilter"/>'s own validation time.

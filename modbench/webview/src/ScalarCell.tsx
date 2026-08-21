@@ -172,7 +172,7 @@ export function ScalarCell({
 
   // Issue #111, and more so now that a commit writes a file: click-to-activate puts every cell one
   // mis-click away from a working-tree change. A value equal to the one already there is not an
-  // edit — committing it would rewrite the ledger file, produce a diff of nothing, and show the
+  // edit — committing it would rewrite the source file, produce a diff of nothing, and show the
   // record as dirty in the Source Control panel for a keystroke the user never made. Compared as
   // rendered strings, so 5 typed over 5 is a no-op like any other.
   const commit = onCommit;

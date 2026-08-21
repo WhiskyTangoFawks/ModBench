@@ -238,19 +238,19 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
   });
 });
 
-// #374: MEditService's per-plugin ledger text tree lands inside the mod folder itself
-// (`<pluginFileName>.ledger/...`, ADR-0040) and must not deploy or appear as mod content. The
-// gitdir itself needs no test here — it lives entirely outside mods/ (LedgerOptions,
-// %LOCALAPPDATA%/mEdit/ledgers/) and is invisible to this walk by construction. Three-outcome
+// #374: MEditService's per-plugin source text tree lands inside the mod folder itself
+// (`<pluginFileName>.source/...`, ADR-0040) and must not deploy or appear as mod content. The
+// gitdir itself needs no test here — it lives entirely outside mods/ (SourceOptions,
+// %LOCALAPPDATA%/mEdit/sources/) and is invisible to this walk by construction. Three-outcome
 // shape mirrors the #324 hazard-class pattern: the real thing is excluded, a look-alike with no
 // sibling plugin is not (over-match guard), and a plain file sharing the name is not
 // (directory-only guard).
-describe('buildFileConflictIndex — ledger text tree exclusion (#374)', () => {
+describe('buildFileConflictIndex — source text tree exclusion (#374)', () => {
   let instanceRoot: string;
   let modARoot: string;
 
   beforeEach(async () => {
-    instanceRoot = await mkdtemp(join(tmpdir(), 'medit-conflict-ledger-'));
+    instanceRoot = await mkdtemp(join(tmpdir(), 'medit-conflict-source-'));
     modARoot = join(instanceRoot, 'mods', 'ModA');
     await mkdir(modARoot, { recursive: true });
   });
@@ -259,20 +259,20 @@ describe('buildFileConflictIndex — ledger text tree exclusion (#374)', () => {
     await rm(instanceRoot, { recursive: true, force: true });
   });
 
-  // Plugin base name is deliberately NOT 7 characters (mutation review, #374): ".ledger" is also
-  // 7 characters, so a fixture named e.g. "Foo.esp" makes `slice(0, -LEDGER_TREE_SUFFIX.length)`
-  // (strip the last 7 chars) and a mutated `slice(0, LEDGER_TREE_SUFFIX.length)` (keep the first
+  // Plugin base name is deliberately NOT 7 characters (mutation review, #374): ".source" is also
+  // 7 characters, so a fixture named e.g. "Foo.esp" makes `slice(0, -SOURCE_TREE_SUFFIX.length)`
+  // (strip the last 7 chars) and a mutated `slice(0, SOURCE_TREE_SUFFIX.length)` (keep the first
   // 7 chars) produce the identical string by coincidence, hiding a real off-by-construction bug.
   // "MyMod.esp" (9 chars) makes the two diverge. Every exclusion-asserting test below uses it for
   // that reason — the tests that assert something stays *visible* aren't sensitive to this
   // (nothing distinguishes front-slice from back-slice when no exclusion is expected either way).
   const PLUGIN = 'MyMod.esp';
 
-  it('excludes the ledger text tree of a plugin actually present in the mod', async () => {
+  it('excludes the source text tree of a plugin actually present in the mod', async () => {
     await writeFile(join(modARoot, PLUGIN), 'PLUGINBYTES');
-    const ledgerRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
-    await mkdir(ledgerRecordDir, { recursive: true });
-    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+    const sourceRecordDir = join(modARoot, `${PLUGIN}.source`, 'records', PLUGIN);
+    await mkdir(sourceRecordDir, { recursive: true });
+    await writeFile(join(sourceRecordDir, '00001E.yaml'), 'record: text');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
@@ -284,9 +284,9 @@ describe('buildFileConflictIndex — ledger text tree exclusion (#374)', () => {
   it('matches the sibling plugin case-insensitively (Bethesda plugin casing is inconsistent)', async () => {
     const upper = PLUGIN.toUpperCase();
     await writeFile(join(modARoot, upper), 'PLUGINBYTES');
-    const ledgerRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
-    await mkdir(ledgerRecordDir, { recursive: true });
-    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+    const sourceRecordDir = join(modARoot, `${PLUGIN}.source`, 'records', PLUGIN);
+    await mkdir(sourceRecordDir, { recursive: true });
+    await writeFile(join(sourceRecordDir, '00001E.yaml'), 'record: text');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
@@ -296,78 +296,78 @@ describe('buildFileConflictIndex — ledger text tree exclusion (#374)', () => {
   // Same shape as the existing #322 symlinked-file test above ("a symlinked file participates in
   // the index like a regular file"): this walker treats a symlinked plugin as equivalent to a
   // real one everywhere else, so the sibling check must too, or an MO2-style symlinked-plugin mod
-  // would acquire a ledger tree the exclusion never recognizes and it would deploy straight into
+  // would acquire a source tree the exclusion never recognizes and it would deploy straight into
   // Data/ (review finding, #374).
-  it('excludes the ledger text tree when the sibling plugin is a symlink, mirroring the #322 walk policy', async () => {
+  it('excludes the source text tree when the sibling plugin is a symlink, mirroring the #322 walk policy', async () => {
     const targetDir = join(instanceRoot, 'shared');
     await mkdir(targetDir, { recursive: true });
     await writeFile(join(targetDir, 'real.esp'), 'PLUGINBYTES');
     await symlink(join(targetDir, 'real.esp'), join(modARoot, PLUGIN));
-    const ledgerRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
-    await mkdir(ledgerRecordDir, { recursive: true });
-    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+    const sourceRecordDir = join(modARoot, `${PLUGIN}.source`, 'records', PLUGIN);
+    await mkdir(sourceRecordDir, { recursive: true });
+    await writeFile(join(sourceRecordDir, '00001E.yaml'), 'record: text');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
     expect([...index.files].map((e) => e.relativePath)).toEqual([PLUGIN]);
   });
 
-  it('also excludes the ledger text tree when the sibling plugin symlink is dangling — accepted, not guarded against', async () => {
+  it('also excludes the source text tree when the sibling plugin symlink is dangling — accepted, not guarded against', async () => {
     await symlink(join(instanceRoot, 'does-not-exist.esp'), join(modARoot, PLUGIN));
-    const ledgerRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
-    await mkdir(ledgerRecordDir, { recursive: true });
-    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+    const sourceRecordDir = join(modARoot, `${PLUGIN}.source`, 'records', PLUGIN);
+    await mkdir(sourceRecordDir, { recursive: true });
+    await writeFile(join(sourceRecordDir, '00001E.yaml'), 'record: text');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
     // The dangling link itself is skipped by the walker's own broken-symlink policy (#322) — the
-    // ledger tree exclusion is what's under test, and it must not surface despite that.
-    expect(index.files.has(`${PLUGIN}.ledger/records/${PLUGIN}/00001E.yaml`)).toBe(false);
+    // source tree exclusion is what's under test, and it must not surface despite that.
+    expect(index.files.has(`${PLUGIN}.source/records/${PLUGIN}/00001E.yaml`)).toBe(false);
   });
 
   // Mutation review (#374): nothing constrained the sibling check to files/symlinks specifically
   // — a directory sharing the plugin's exact name must NOT count as "the plugin", or a mod
-  // shipping both a folder and a same-named-plus-".ledger" folder would have real content swept
-  // away as if it were ledger state.
+  // shipping both a folder and a same-named-plus-".source" folder would have real content swept
+  // away as if it were source state.
   it('does not treat a directory sharing the plugin\'s name as a valid sibling — only a file or symlink counts', async () => {
     await mkdir(join(modARoot, PLUGIN), { recursive: true }); // a directory, not the plugin file
-    const ledgerRecordDir = join(modARoot, `${PLUGIN}.ledger`, 'records', PLUGIN);
-    await mkdir(ledgerRecordDir, { recursive: true });
-    await writeFile(join(ledgerRecordDir, '00001E.yaml'), 'record: text');
+    const sourceRecordDir = join(modARoot, `${PLUGIN}.source`, 'records', PLUGIN);
+    await mkdir(sourceRecordDir, { recursive: true });
+    await writeFile(join(sourceRecordDir, '00001E.yaml'), 'record: text');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
-    expect(index.files.has(`${PLUGIN}.ledger/records/${PLUGIN}/00001E.yaml`)).toBe(true);
+    expect(index.files.has(`${PLUGIN}.source/records/${PLUGIN}/00001E.yaml`)).toBe(true);
   });
 
-  it('does NOT exclude a "*.ledger" folder with no matching plugin file — an author-named folder is ordinary content (#324 over-match guard)', async () => {
-    const lookalikeDir = join(modARoot, 'Bar.ledger');
+  it('does NOT exclude a "*.source" folder with no matching plugin file — an author-named folder is ordinary content (#324 over-match guard)', async () => {
+    const lookalikeDir = join(modARoot, 'Bar.source');
     await mkdir(lookalikeDir, { recursive: true });
-    await writeFile(join(lookalikeDir, 'notes.txt'), 'not ledger state');
+    await writeFile(join(lookalikeDir, 'notes.txt'), 'not source state');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
-    expect(index.files.has('Bar.ledger/notes.txt')).toBe(true);
+    expect(index.files.has('Bar.source/notes.txt')).toBe(true);
   });
 
-  it('does NOT exclude a plain file (not a directory) literally named "<plugin>.ledger" (directory-only guard)', async () => {
+  it('does NOT exclude a plain file (not a directory) literally named "<plugin>.source" (directory-only guard)', async () => {
     await writeFile(join(modARoot, PLUGIN), 'PLUGINBYTES');
-    await writeFile(join(modARoot, `${PLUGIN}.ledger`), 'just a file, not a ledger tree');
+    await writeFile(join(modARoot, `${PLUGIN}.source`), 'just a file, not a source tree');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
-    expect(index.files.has(`${PLUGIN}.ledger`)).toBe(true);
+    expect(index.files.has(`${PLUGIN}.source`)).toBe(true);
   });
 
   // Mutation review (#374): the guard that limits the loop to directories actually ending in
-  // ".ledger" was unproven — nothing exercised an ordinary directory whose name would spuriously
+  // ".source" was unproven — nothing exercised an ordinary directory whose name would spuriously
   // match a sibling file if that guard's suffix check were skipped. "BarABCDEFG" (a real sibling
-  // "Bar" plus 7 arbitrary, non-".ledger" characters) would incorrectly resolve to "Bar" if the
-  // code sliced its last 7 characters unconditionally instead of first confirming the ".ledger"
+  // "Bar" plus 7 arbitrary, non-".source" characters) would incorrectly resolve to "Bar" if the
+  // code sliced its last 7 characters unconditionally instead of first confirming the ".source"
   // suffix — this pins that the suffix check, not just the slice arithmetic, is load-bearing.
-  it('never treats an ordinary non-".ledger" directory as ledger state, even when slicing its last 7 characters would spuriously match a sibling file', async () => {
+  it('never treats an ordinary non-".source" directory as source state, even when slicing its last 7 characters would spuriously match a sibling file', async () => {
     await writeFile(join(modARoot, 'Bar'), 'PLUGINBYTES');
-    await mkdir(join(modARoot, 'BarABCDEFG'), { recursive: true }); // "Bar" + 7 chars, not ".ledger"
+    await mkdir(join(modARoot, 'BarABCDEFG'), { recursive: true }); // "Bar" + 7 chars, not ".source"
     await writeFile(join(modARoot, 'BarABCDEFG', 'note.txt'), 'ordinary mod content');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
@@ -375,21 +375,21 @@ describe('buildFileConflictIndex — ledger text tree exclusion (#374)', () => {
     expect(index.files.has('BarABCDEFG/note.txt')).toBe(true);
   });
 
-  // Mutation review (#374): root-only scoping (LedgerRecordPath.For is always root-relative,
-  // per the doc comment above) was unproven — every prior test placed its ".ledger" folder at
-  // the mod root. A folder below the root sharing the exact same shape (plugin + ".ledger"
+  // Mutation review (#374): root-only scoping (SourceRecordPath.For is always root-relative,
+  // per the doc comment above) was unproven — every prior test placed its ".source" folder at
+  // the mod root. A folder below the root sharing the exact same shape (plugin + ".source"
   // sibling, both at that nested level) must stay visible; the exclusion only ever applies at
   // the top of the mod tree.
-  it('does not apply the ledger exclusion below the mod root — a nested "<plugin>.ledger" folder is not ledger state', async () => {
+  it('does not apply the source exclusion below the mod root — a nested "<plugin>.source" folder is not source state', async () => {
     const nestedDir = join(modARoot, 'nested');
     await mkdir(nestedDir, { recursive: true });
     await writeFile(join(nestedDir, PLUGIN), 'PLUGINBYTES');
-    const nestedLedgerDir = join(nestedDir, `${PLUGIN}.ledger`);
-    await mkdir(nestedLedgerDir, { recursive: true });
-    await writeFile(join(nestedLedgerDir, 'note.txt'), 'not real ledger state at this depth');
+    const nestedSourceDir = join(nestedDir, `${PLUGIN}.source`);
+    await mkdir(nestedSourceDir, { recursive: true });
+    await writeFile(join(nestedSourceDir, 'note.txt'), 'not real source state at this depth');
 
     const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
 
-    expect(index.files.has(`nested/${PLUGIN}.ledger/note.txt`)).toBe(true);
+    expect(index.files.has(`nested/${PLUGIN}.source/note.txt`)).toBe(true);
   });
 });

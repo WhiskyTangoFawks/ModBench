@@ -373,7 +373,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   context.subscriptions.push(statusBarItem);
-  // #416: Save & Compile's diagnostics — one collection for every tracked mod's ledger files, kept
+  // #416: Save & Compile's diagnostics — one collection for every tracked mod's source files, kept
   // current per compile (publishCompileDiagnostics replaces a mod's own entries wholesale each run).
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
@@ -1182,8 +1182,8 @@ function registerTrackCommand(
 
     const choice = await vscode.window.showQuickPick(
       [
-        { label: 'Edits', description: 'Ledger only — recommended for downloaded mods' },
-        { label: 'Everything', description: 'Ledger + assets — for authoring a mod from scratch' },
+        { label: 'Edits', description: 'Source only — recommended for downloaded mods' },
+        { label: 'Everything', description: 'Source + assets — for authoring a mod from scratch' },
       ],
       { placeHolder: `Track "${name}" — what should its .gitignore include?` },
     );
@@ -1432,7 +1432,7 @@ function makeCrashRepairOffersPresenter(
 
 /** #417: `Modbench: Rebase onto Updated Baseline` — origin-scoped (the repo, not any one plugin,
  *  is the unit of baselines and rebase), resolved from a tracked plugin row the same way Track
- *  resolves origin. Also the *re-runnable* form: {@link LedgerRepository.RebaseEditBranch}'s own
+ *  resolves origin. Also the *re-runnable* form: {@link SourceRepository.RebaseEditBranch}'s own
  *  resumption-aware design means this same command both starts a rebase and resumes one left
  *  conflicted after the user resolves it in the native merge editor. */
 function registerRebaseCommand(
@@ -1593,8 +1593,8 @@ async function compileAndReport(
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
- *  ledger files held from its last compile — never additive, or a fixed diagnostic would survive
- *  forever once its record stopped reappearing in a later compile's own report. Grouped by ledger
+ *  source files held from its last compile — never additive, or a fixed diagnostic would survive
+ *  forever once its record stopped reappearing in a later compile's own report. Grouped by source
  *  file (one `Uri` can carry several diagnostics) since `CompileDiagnostic` names its record's
  *  field, not a line/column this text format doesn't define. */
 function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, origin: string, result: CompileResult): void {
@@ -1610,7 +1610,7 @@ function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, orig
 
   const byUri = new Map<string, vscode.Diagnostic[]>();
   for (const d of result.diagnostics) {
-    const fsPath = path.join(modFolder, d.ledgerRelativePath);
+    const fsPath = path.join(modFolder, d.sourceRelativePath);
     const list = byUri.get(fsPath) ?? [];
     list.push(new vscode.Diagnostic(new vscode.Range(0, 0, 0, 0), d.message, vscode.DiagnosticSeverity.Warning));
     byUri.set(fsPath, list);

@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -143,7 +143,7 @@ public sealed class RecordEditServiceRenumberRecordTests
             $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
         Assert.Equal(0, two.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-        Chmod(two.TargetModFolder, "500"); // read+execute only — the new race ledger file can't be created
+        Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
         try
         {
             var ex = Assert.Throws<IOException>(() =>
@@ -181,7 +181,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void RenumberRecord_Refuses_WhenAReferencerIsUntracked_NamingIt_AndWritesNothing()
     {
         using var two = TwoModFixture.Create(trackReferencer: false);
-        var oldRaceLedgerFile = two.LedgerFileFor(two.TargetPlugin, two.TargetRace, "race");
+        var oldRaceSourceFile = two.SourceFileFor(two.TargetPlugin, two.TargetRace, "race");
 
         var result = ServiceFor(two.Sessions).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
@@ -190,7 +190,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Contains(TwoModFixture.ReferencerPluginName, result.Message, StringComparison.Ordinal);
 
         // Q5(a)/AC "no half-applied state": refused before any write, on either side of the cascade.
-        Assert.True(File.Exists(oldRaceLedgerFile));
+        Assert.True(File.Exists(oldRaceSourceFile));
         Assert.NotNull(two.Sessions.Index!.GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
         var referencerBody = two.Sessions.Index!.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
@@ -318,19 +318,19 @@ public sealed class RecordEditServiceRenumberRecordTests
                 GameRelease.Fallout4);
 
             new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
-                .TrackAsync(Sessions.Session!, TargetOrigin, LedgerPreset.Edits).GetAwaiter().GetResult();
+                .TrackAsync(Sessions.Session!, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
             if (trackReferencer)
             {
                 new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
-                    .TrackAsync(Sessions.Session!, ReferencerOrigin, LedgerPreset.Edits).GetAwaiter().GetResult();
+                    .TrackAsync(Sessions.Session!, ReferencerOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
             }
         }
 
         public static TwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
-        public string LedgerFileFor(PluginKey plugin, FormKey formKey, string recordType) =>
+        public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType) =>
             Path.Combine(plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,
-                LedgerRecordPath.For(plugin.Name, recordType, formKey.ToString()));
+                SourceRecordPath.For(plugin.Name, recordType, formKey.ToString()));
 
         public void Dispose()
         {

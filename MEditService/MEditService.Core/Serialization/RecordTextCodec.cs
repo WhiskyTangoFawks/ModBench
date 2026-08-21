@@ -49,9 +49,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     private static readonly ConcurrentDictionary<(Type Record, Type Reader), MethodInfo> DeserializeMethods = new();
 
     /// <summary>
-    /// The record's ledger text as bytes, without touching the filesystem — the same bytes
+    /// The record's source text as bytes, without touching the filesystem — the same bytes
     /// <see cref="SerializeAsync"/> writes, which is what lets the index store a document that is
-    /// byte-identical to the ledger file (ADR-0041) and lets a byte compare stand in for
+    /// byte-identical to the source file (ADR-0041) and lets a byte compare stand in for
     /// dirty/ITM detection. Indexing a load order produces one of these per record, millions of
     /// times, so a temp-file round trip per record is not an option.
     /// </summary>
@@ -75,7 +75,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
         // Write-then-rename, not a direct write to filePath: File.Create truncates its target
         // immediately, before any new byte lands, so a direct write leaves a previously-valid
-        // ledger record 0-byte or partial if cancellation or an IO failure lands in the window
+        // source record 0-byte or partial if cancellation or an IO failure lands in the window
         // between that truncation and the write completing — exactly the state #413's byte-compare
         // dirty/ITM detection, #414's commits, and #417's rebases would then all read as a
         // legitimate content change rather than damage (CLAUDE.md's never-assume-exclusive-
@@ -157,12 +157,12 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     }
 
     /// <summary>
-    /// Reads a record back from ledger text already in hand — the inverse of
+    /// Reads a record back from source text already in hand — the inverse of
     /// <see cref="SerializeToBytesAsync"/>. This is how a typed read reconstitutes a record from
     /// its stored document: the index holds the bytes, never a parsed object graph, and the
     /// reflected <c>ColumnSpec</c> extractors run against the record this returns, so a field's
     /// value is produced by exactly the same delegate whether it came from a plugin binary or from
-    /// its own ledger text.
+    /// its own source text.
     /// </summary>
     /// <param name="bytes">The record's JSON text.</param>
     /// <param name="gameRelease">Game release the text was serialized under.</param>
@@ -192,7 +192,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         catch (Exception ex) when (ex is NotImplementedException or NullReferenceException)
         {
             // Text whose MutagenObjectType this game's dispatch cannot resolve — corrupt text, a
-            // hand-edited ledger file, or text from a future schema. Both exception types are the
+            // hand-edited source file, or text from a future schema. Both exception types are the
             // same failure arriving by two upstream routes, and neither is actionable as-is:
             //
             //   NotImplementedException — the generated dispatch's own "Unknown object name X",
@@ -317,7 +317,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// and directories — measured: serializing a populated Cell with no destination folder created
     /// <c>Persistent/</c> and <c>Temporary/</c> directories in the process's working directory.
     ///
-    /// Discarding them is the correct outcome, not a workaround: a child record is its own ledger
+    /// Discarding them is the correct outcome, not a workaround: a child record is its own source
     /// entry and its own indexed row (ADR-0041/#387 — the parent's file carries only the parent's
     /// fields, which is exactly what the parent's own stream already receives), so anything written
     /// here would be a duplicate of a record handled in its own right.

@@ -16,10 +16,10 @@ public class RecordTextCodecGeneratorSeedTests
     // Scoped to this ticket's own code (MEditService.Core.Serialization), not the whole assembly:
     // an unscoped version also flags DuckDbRecordIndex.Index/IRecordIndex.Index/
     // PlacementWalker.Walk, which legitimately take a mod for indexing and have nothing to do with
-    // this ledger codec. That check holds today and goes red if this namespace's own public surface
+    // this source codec. That check holds today and goes red if this namespace's own public surface
     // ever grows a whole-mod-accepting method — including a constructor, not just a method: checked
     // separately below (GetMethods alone does not see constructors, and a later
-    // `LedgerWriter(IFallout4ModGetter)` is exactly the surface AC2 forbids).
+    // `SourceWriter(IFallout4ModGetter)` is exactly the surface AC2 forbids).
     [Fact]
     public void SerializationNamespace_ExposesNoPublicApiAcceptingAWholeModType()
     {
@@ -45,7 +45,7 @@ public class RecordTextCodecGeneratorSeedTests
 
     // The reflection check above cannot see a *call* to the generated whole-mod mixin — only a
     // public signature naming a mod type. #381's crash-repair path adding
-    // `RebuildAsync(string ledgerDir, string outputPath)` over
+    // `RebuildAsync(string sourceDir, string outputPath)` over
     // `MutagenJsonConverterFallout4ModMixIns.DeserializeInto` would have an all-string signature and
     // stay invisible to it, while shipping exactly the 21 s / 132,787-file / 106 MB path ADR-0040
     // rejected. So this scans source text directly: the mixin's type name may appear in

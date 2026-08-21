@@ -1,6 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 
 namespace MEditService.Tests.Api;
 
@@ -85,10 +85,10 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         var resp = await _client.PostAsJsonAsync("/plugins/create", new { name = "Tracked.esp", path = modFolder, origin = "FreshlyTrackedMod" });
 
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-        Assert.True(LedgerRepository.IsTracked(modFolder));
+        Assert.True(SourceRepository.IsTracked(modFolder));
     }
 
-    // The rival here is Track's own refusal to re-track (LedgerAlreadyTrackedException): a naive
+    // The rival here is Track's own refusal to re-track (SourceAlreadyTrackedException): a naive
     // "always Track on create" would 409 on this second plugin rather than silently reusing the
     // existing repo.
     [Fact]
@@ -97,7 +97,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         var modFolder = ModFolder("AlreadyTrackedMod");
         var first = await _client.PostAsJsonAsync("/plugins/create", new { name = "First.esp", path = modFolder, origin = "AlreadyTrackedMod" });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        Assert.True(LedgerRepository.IsTracked(modFolder));
+        Assert.True(SourceRepository.IsTracked(modFolder));
 
         var gitDir = Path.Combine(modFolder, ".git");
         var commitsBefore = GitCli.Run(gitDir, modFolder, "rev-list", "--count", "main");

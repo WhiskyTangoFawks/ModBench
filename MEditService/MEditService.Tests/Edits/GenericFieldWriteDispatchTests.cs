@@ -1,9 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -108,7 +108,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
                 GameRelease.Fallout4);
 
             new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
-                .TrackAsync(Sessions.Session!, Origin, LedgerPreset.Edits)
+                .TrackAsync(Sessions.Session!, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 

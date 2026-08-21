@@ -1,7 +1,7 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
+using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -31,7 +31,7 @@ public sealed class SessionEndpointsTests : IDisposable
     {
         Assert.ThrowsAny<Exception>(() =>
             CompileJournal.RunBatch(_mod.ModFolder, [TrackedModFixture.PluginName],
-                _ => throw new InvalidOperationException("simulated crash between ledger and binary write")));
+                _ => throw new InvalidOperationException("simulated crash between source and binary write")));
 
         var result = SessionEndpoints.LoadExplicitSession(
             ReloadRequest(), _mod.Sessions, new ExternalChangeWatcher(), NullLoggerFactory.Instance);

@@ -152,15 +152,15 @@ describe('startExternalChangePolling', () => {
 
 describe('runRebase', () => {
   it('opens the native merge editor on every conflicted path', async () => {
-    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['A.ledger/x.json', 'A.ledger/y.json'] }) } as any;
+    const controller = { rebaseOntoMain: vi.fn().mockResolvedValue({ outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['A.source/x.json', 'A.source/y.json'] }) } as any;
     const openMergeEditor = vi.fn().mockResolvedValue(undefined);
 
     const result = await runRebase({ controller, openMergeEditor }, 'ModA');
 
     expect(result?.outcome).toBe('Conflicted');
     expect(openMergeEditor).toHaveBeenCalledTimes(2);
-    expect(openMergeEditor).toHaveBeenCalledWith('ModA', 'A.ledger/x.json');
-    expect(openMergeEditor).toHaveBeenCalledWith('ModA', 'A.ledger/y.json');
+    expect(openMergeEditor).toHaveBeenCalledWith('ModA', 'A.source/x.json');
+    expect(openMergeEditor).toHaveBeenCalledWith('ModA', 'A.source/y.json');
   });
 
   it('opens nothing on a clean rebase', async () => {

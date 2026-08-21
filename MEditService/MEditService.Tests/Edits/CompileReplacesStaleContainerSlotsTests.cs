@@ -16,15 +16,15 @@ namespace MEditService.Tests.Edits;
 ///
 /// <para><b>Not reachable through the real codec round trip today</b> — checked directly, not
 /// assumed: <see cref="MEditService.Core.Serialization.RecordTextCodec"/>'s deserializer produces an
-/// empty list for a child-major-group field regardless of what a parent's own ledger JSON prose says
+/// empty list for a child-major-group field regardless of what a parent's own source JSON prose says
 /// (its <c>DiscardChildRecordStreams</c>/<c>NoRecordFolders</c> suppression is symmetric — write side
 /// never inlines a child, read side never reads one back inline either), and Track's write never
 /// inlined one — confirmed against real Track output both with and against the pre-#416
 /// <c>ContainerStripFields</c> table. So today, nothing can hand <see cref="ContainerAssembler"/> a
-/// Quest whose <c>Scenes</c> is already stale content from ledger text. This test exercises the
+/// Quest whose <c>Scenes</c> is already stale content from source text. This test exercises the
 /// assembler's own replace behaviour directly at its own seam instead — insurance against whatever
 /// *does* someday hand it a pre-populated slot (a future codec change, a hand-edited or third-party
-/// tool's ledger write, root CLAUDE.md's never-assume-exclusive-ownership applied to this seam's own
+/// tool's source write, root CLAUDE.md's never-assume-exclusive-ownership applied to this seam's own
 /// caller, not only to the codec) — rather than a codec-round-trip test that would be vacuous by
 /// construction against the current, verified-empty-on-read behaviour.</para>
 /// </summary>

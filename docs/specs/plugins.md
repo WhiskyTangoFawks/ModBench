@@ -347,8 +347,8 @@ without saying what is not yet known would make that worse, not better.
   listing every selected record, deleting the whole selection as one batch; the Delete key also
   triggers it) and Change FormID… (renumber), with xEdit's own captions, per
   [medit-version-control.md](medit-version-control.md) — Add lives on the record-type row above
-  a plugin's records. Removing a record deletes its ledger file as an ordinary working-tree
-  change (#427); an uncommitted create has no special-cased handling — its ledger file is simply
+  a plugin's records. Removing a record deletes its source file as an ordinary working-tree
+  change (#427); an uncommitted create has no special-cased handling — its source file is simply
   removed the same way, since it was never committed to begin with.
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
@@ -524,7 +524,7 @@ that one plugin from the new origin (`POST /plugins/reread` → unindex the old 
 open and index the new copy in the same load-order slot, re-sweep winners so conflict badges
 describe the new file). **No confirmation** (ADR-0041/#410): the confirm this gesture once needed
 warned that a re-read would discard staged edits against the replaced copy, a fact that stopped
-being true once editing moved to working-tree ledger text — a tracked mod's ledger lives in its
+being true once editing moved to working-tree source text — a tracked mod's source lives in its
 own git repository, independent of the DuckDB read-model a re-read rebuilds, so a re-read destroys
 no uncommitted work; it is git's own concern to report, not this command's. A re-read arriving
 while a session load is in flight is refused with 409 — nothing is touched, and it works on retry.

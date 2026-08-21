@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415 AC1: editing a field on a tracked plugin produces working-tree dirt on that record's ledger
+/// #415 AC1: editing a field on a tracked plugin produces working-tree dirt on that record's source
 /// file — the single write path (ADR-0041). Asserted against a real git repo through the real CLI,
 /// because "visible and diffable in the native Source Control panel" is a claim about what
 /// <c>git status</c> says, and nothing else can answer it.
@@ -25,7 +25,7 @@ public sealed class RecordEditServiceTests : IDisposable
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void EditField_OnATrackedPlugin_LeavesTheRecordsLedgerFileDirtyInTheSourceControlPanel()
+    public void EditField_OnATrackedPlugin_LeavesTheRecordsSourceFileDirtyInTheSourceControlPanel()
     {
         // Track has just committed the complete pristine state, so anything git reports afterwards
         // is this edit's own doing — the positive control for every status assertion below.
@@ -34,19 +34,19 @@ public sealed class RecordEditServiceTests : IDisposable
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
-        var relative = TrackedModFixture.RelativeLedgerPath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
     }
 
     [Fact]
-    public async Task EditField_WritesTheNewValueIntoTheLedgerFile_AsRealCodecText()
+    public async Task EditField_WritesTheNewValueIntoTheSourceFile_AsRealCodecText()
     {
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
         // Re-parsed through the codec rather than string-matched: the file has to remain a document
-        // the ledger can round-trip, not merely text that happens to contain the right number.
+        // the source can round-trip, not merely text that happens to contain the right number.
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var reparsed = await codec.DeserializeAsync(_mod.NpcLedgerFile, GameRelease.Fallout4);
+        var reparsed = await codec.DeserializeAsync(_mod.NpcSourceFile, GameRelease.Fallout4);
         Assert.Equal(_mod.Npc, reparsed.FormKey);
 
         // ...and the value is read back through the same typed extraction the record editor renders
@@ -63,7 +63,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var status = _mod.GitStatus();
         Assert.Single(status);
-        Assert.DoesNotContain(TrackedModFixture.RelativeLedgerPath(_mod.OtherNpc, "npc_").Replace('\\', '/'), status[0], StringComparison.Ordinal);
+        Assert.DoesNotContain(TrackedModFixture.RelativeSourcePath(_mod.OtherNpc, "npc_").Replace('\\', '/'), status[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
         Assert.DoesNotContain("0.75", head.Body!, StringComparison.Ordinal);
-        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeLedgerPath(_mod.Npc, "npc_")), head.Body);
+        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_")), head.Body);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var index = _mod.Sessions.Index!;
         Assert.Contains("0.5", index.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!, StringComparison.Ordinal);
         Assert.Equal(
-            _mod.GitShowHead(TrackedModFixture.RelativeLedgerPath(_mod.Npc, "npc_")),
+            _mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_")),
             index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body);
     }
 

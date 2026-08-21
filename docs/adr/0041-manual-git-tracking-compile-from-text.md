@@ -4,6 +4,12 @@ status: accepted
 
 # Tracking is manual, the repo lives in the mod folder, and save compiles from text
 
+> **Amendment (2026-08-21, #437):** the term **ledger** is renamed to **source** — the
+> per-record text tree is the plugin's source and the binary its compiled artifact; a
+> ledger's append-only/transactional connotations never fit. Code, disk suffix
+> (`<plugin>.source/`), wire surface, and living docs are renamed; this ADR keeps its
+> original vocabulary as a historical record — read every "ledger" below as "source".
+
 Supersedes [ADR-0040](0040-git-native-pending-changes.md) and both of its 2026-08
 amendments. Decided in the 2026-08-19 design conversation (grilled to closure); the
 migration epic is the rebuilt milestone "5 — Git-native editing".

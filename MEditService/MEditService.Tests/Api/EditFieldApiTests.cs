@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
@@ -121,7 +121,7 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
     }
 
     [Fact]
-    public async Task EditField_WhenTheLedgerFileCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
+    public async Task EditField_WhenTheSourceFileCannotBeWritten_IsAShapedProblem_NotAnUnhandled500()
     {
         using var fx = BuildOneModOnePlugin();
         await LoadOnly(fx);
@@ -130,19 +130,19 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var formKey = await FirstNpcFormKey();
 
         // Never-assume-exclusive-ownership (root CLAUDE.md), made concrete: something outside
-        // Modbench replaced this record's ledger file with a directory. Any I/O failure would do —
+        // Modbench replaced this record's source file with a directory. Any I/O failure would do —
         // a lock, a permissions change, a vanished mount — but this one needs no privileges and is
         // deterministic, so it is the one the suite can actually run.
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
         var recordType = "npc_";
-        var ledgerPath = Path.Combine(
-            modFolder, $"{Plugin}.ledger", recordType,
+        var sourcePath = Path.Combine(
+            modFolder, $"{Plugin}.source", recordType,
             formKey[(formKey.IndexOf(':', StringComparison.Ordinal) + 1)..],
             $"{formKey[..formKey.IndexOf(':', StringComparison.Ordinal)]}.json");
-        Assert.True(File.Exists(ledgerPath), $"expected a ledger file at {ledgerPath}");
+        Assert.True(File.Exists(sourcePath), $"expected a source file at {sourcePath}");
         Assert.NotEqual(0, records.GetProperty("total").GetInt32());
-        File.Delete(ledgerPath);
-        Directory.CreateDirectory(ledgerPath);
+        File.Delete(sourcePath);
+        Directory.CreateDirectory(sourcePath);
 
         var response = await PostEdit(formKey, "height_max", 0.75);
 

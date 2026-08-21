@@ -13,7 +13,7 @@ ADR-0040 are the deliverables. All measurements from 2026-08-17 on the dev machi
 survived contact:
 
 - Per-record text serialization is cheap, symmetric, and reachable today — no upstream PR.
-- The text ledger is deterministic on the Mutagen version we already pin.
+- The text source is deterministic on the Mutagen version we already pin.
 - The read model already holds multiple versions of a record without schema surgery.
 - Cross-repo atomicity works as journal + prepare-then-advance, recoverable and loud.
 - Merge staleness is one anti-join.
@@ -40,9 +40,9 @@ adopting current Spriggit pins, not the architecture.
   Mutagen. On 0.53.1 we are safe; a routine bump to 0.54.x would have made every save of
   a plugin containing such weapons silently grow it. A binary round-trip stability test
   should join the suite regardless of this spike's outcome.
-- **Text stability (the property the ledger actually needs).** On 0.53.1 + 1.37.1:
+- **Text stability (the property the source actually needs).** On 0.53.1 + 1.37.1:
   serialize → deserialize → write binary → re-serialize produced a text tree
-  **identical in all 3,943 files** to pass 1. The ledger is deterministic.
+  **identical in all 3,943 files** to pass 1. The source is deterministic.
 - **Binary fidelity.** Rebuilt binary is the same size, semantically identical (proven
   by text stability), but not byte-identical: (a) Spriggit's deliberate omissions
   (timestamps, last-modified); (b) **record order within groups is permuted** —
@@ -175,7 +175,7 @@ Surface it in the SCM view (the resource appears in both groups) and at merge ti
 
 ## Q10 — Spriggit integration depth
 
-**Result: use the layer under Spriggit, at the library level; confinement to the ledger
+**Result: use the layer under Spriggit, at the library level; confinement to the source
 boundary is confirmed.**
 
 - Spriggit is a thin versioning/packaging shell: its translation packages are
@@ -201,7 +201,7 @@ boundary is confirmed.**
   story therefore needs nothing from Spriggit beyond per-record state text, which we
   have. **The binary-diff fallback for Modified mods is unnecessary** — agentic diff
   analysis works on Modified and Authored mods alike.
-- Call-site confinement (codec at the ledger boundary only) stands: nothing in the
+- Call-site confinement (codec at the source boundary only) stands: nothing in the
   probes wanted Spriggit text on the wire, in queries, or in the load path.
 
 ## Recommendation — go, in stages

@@ -43,15 +43,15 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void SetPluginParticipation(PluginKey key, bool participates);
 
     /// <summary>
-    /// #415: folds a plugin's working-tree ledger changes into the read model, which is what makes
+    /// #415: folds a plugin's working-tree source changes into the read model, which is what makes
     /// <see cref="RecordRef.Effective"/> and <see cref="RecordRef.Head"/> diverge. Each delta is a
-    /// record's ledger file as it now stands: <paramref name="deltas"/>' <c>Body</c> is the file's
+    /// record's source file as it now stands: <paramref name="deltas"/>' <c>Body</c> is the file's
     /// exact bytes, and a <see langword="null"/> <c>Body</c> is that record's <i>deletion</i> from
     /// the working tree — the record keeps answering at Head, and stops existing at Effective.
     ///
     /// <para>A body that is byte-equal to the committed one is not a change at all but a
     /// <i>convergence</i>: the record goes clean again, exactly as if it had never been edited. That
-    /// is what makes reverting a ledger file through git (or editing a value back by hand) restore
+    /// is what makes reverting a source file through git (or editing a value back by hand) restore
     /// the committed state rather than leave a permanently "dirty" record holding identical bytes —
     /// byte compare is the detection, per #413's contract, never a <c>content_hash</c> mismatch on
     /// its own.</para>
@@ -65,14 +65,14 @@ public interface IRecordIndex : IRecordReads, IDisposable
     ///
     /// <para><b>No #417 external-change deferral check lives here, deliberately.</b> This method has
     /// two legitimate callers: <c>Edits.RecordEditService</c> (an actual write gesture) and
-    /// <c>Ledger.LedgerFreshness</c>'s read-time self-heal, which must keep folding in whatever the
-    /// ledger file already says even while a plugin's external-change question is unanswered — exit
+    /// <c>Source.SourceFreshness</c>'s read-time self-heal, which must keep folding in whatever the
+    /// source file already says even while a plugin's external-change question is unanswered — exit
     /// path 3's contract is "reads continue serving last-known state" while deferred, and a guard
     /// here would block reads, which are not editing. The deferral refusal is enforced at
     /// <c>RecordEditService</c>'s own entry points instead (see its doc comment); every new write
     /// gesture must enter through <c>RecordEditService</c>, never call this method (or
     /// <see cref="CreateWorkingTreeRecord"/>) directly, to inherit that refusal — this namespace must
-    /// not learn Ledger's vocabulary (deferral, tracked, external change) either way. Both methods
+    /// not learn Source's vocabulary (deferral, tracked, external change) either way. Both methods
     /// carry this same signpost so a caller reading either one learns the rule.</para>
     /// </summary>
     void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
@@ -99,12 +99,12 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// actual write gesture, and every new write gesture must enter through
     /// <c>Edits.RecordEditService</c> to inherit the deferral/untracked refusals — never call this
     /// method directly for a gesture. The second is
-    /// <c>Ledger.WorkingTreeCreateRediscovery</c>'s session-load sweep, which is recovery, not
+    /// <c>Source.WorkingTreeCreateRediscovery</c>'s session-load sweep, which is recovery, not
     /// editing: a record a prior, uncompiled session created has no binary row for ordinary
     /// <see cref="Index"/> ingest to seed, so without this second caller it would silently vanish from
-    /// the read model on every restart while compile (which assembles from ledger files on disk) still
-    /// emits it — the same "reads must keep serving what the ledger actually says" posture that makes
-    /// <c>LedgerFreshness</c> <see cref="ApplyWorkingTreeChanges"/>'s own second caller. Neither
+    /// the read model on every restart while compile (which assembles from source files on disk) still
+    /// emits it — the same "reads must keep serving what the source actually says" posture that makes
+    /// <c>SourceFreshness</c> <see cref="ApplyWorkingTreeChanges"/>'s own second caller. Neither
     /// second caller is a user-facing edit, so gesture-only guards (deferral, untracked signposting)
     /// are intentionally not applicable to it — enforcing them here would be blocking a read/recovery
     /// path with a check that means something only for the write path.</para>

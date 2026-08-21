@@ -14,7 +14,7 @@ namespace MEditService.Tests.RealData;
 /// worldspace/cell/placement tree).
 ///
 /// This is the fixture that makes "identical results to before the swap" a testable claim. The
-/// documents read model reconstitutes each record from its own ledger JSON and runs the <i>same</i>
+/// documents read model reconstitutes each record from its own source JSON and runs the <i>same</i>
 /// <c>ColumnSpec.Extract</c> delegates the wide tables were filled from, so every value below must
 /// survive the swap unchanged — and where one does not, this test names the field rather than
 /// leaving it to be discovered in the compare grid.

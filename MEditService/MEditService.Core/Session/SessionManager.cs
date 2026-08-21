@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -254,16 +254,16 @@ public sealed class SessionManager(
                 continue;
             }
 
-            // #427 Epic B′: rediscover any working-tree-only create this plugin's ledger tree already
+            // #427 Epic B′: rediscover any working-tree-only create this plugin's source tree already
             // holds — Index() above only knows the binary, so a record created in a prior, uncompiled
             // session would otherwise vanish from the read model here. A separate try/catch from
-            // Index() above: the plugin's binary content indexed fine, so a sweep failure (the ledger
+            // Index() above: the plugin's binary content indexed fine, so a sweep failure (the source
             // folder locked, vanished, or otherwise unreadable — never-assume-exclusive-ownership)
             // degrades to "this session doesn't see that pending create yet", not to dropping the
             // whole plugin the way a real indexing failure does.
             try
             {
-                if (ModFolders.Of(plugin.Origin, plugin.Path) is { } modFolder && LedgerRepository.IsTracked(modFolder))
+                if (ModFolders.Of(plugin.Origin, plugin.Path) is { } modFolder && SourceRepository.IsTracked(modFolder))
                     WorkingTreeCreateRediscovery.Sweep(repository, modFolder, key);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -560,7 +560,7 @@ public sealed class SessionManager(
             }
             catch (System.Data.Common.DbException ex)
             {
-                // The write this followed (a ledger file, a re-indexed binary) is already durable by
+                // The write this followed (a source file, a re-indexed binary) is already durable by
                 // the time every one of this method's 8 call sites reaches it — propagating here would
                 // 500 a gesture that actually succeeded, over a table that is only ever a filtered
                 // *view* of otherwise-correct data. Degrades to serving the stale `_filter` rather

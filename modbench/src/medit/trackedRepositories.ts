@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import type { PluginMetadata } from './ApiClient';
 
 /** #414/ADR-0041: tracked *is* the presence of `.git` in the mod folder — a plain filesystem
- *  check, no backend call and no registry, mirroring `LedgerRepository.IsTracked` on the backend
+ *  check, no backend call and no registry, mirroring `SourceRepository.IsTracked` on the backend
  *  side of the same claim. Deliberately no `vscode` import: this stays a pure Node function so it
  *  is testable under Vitest without a VS Code host (modbench/CLAUDE.md's "vscode types stay out of
  *  SessionController/repositories" applies the same way here). */

@@ -4,8 +4,8 @@ namespace MEditService.Tests.Bridge;
 /// #417/B0: <c>MEditService.Bridge</c> exists so "knowing nothing of sessions or the DB" (ADR-0041)
 /// is a fact this test can catch, not a discipline a reviewer has to remember. Every mechanic the
 /// bridge needs (classification, plumbing commit, rebase, the deferral marker) lives in
-/// <c>MEditService.Core.Ledger</c> instead — already session/DB-free by the same construction as
-/// <c>LedgerRepository</c>/<c>CompileJournal</c>/<c>LedgerFreshness</c> — so the bridge project
+/// <c>MEditService.Core.Source</c> instead — already session/DB-free by the same construction as
+/// <c>SourceRepository</c>/<c>CompileJournal</c>/<c>SourceFreshness</c> — so the bridge project
 /// itself should never need to reference <c>MEditService.Core.Session</c> or
 /// <c>MEditService.Core.Records</c> at all.
 ///

@@ -1,14 +1,14 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415 AC2, and the mechanism the issue comment pinned for it: git-mediated ledger changes are
+/// #415 AC2, and the mechanism the issue comment pinned for it: git-mediated source changes are
 /// caught at <b>read time</b> by comparing what the file holds against what the index stored — no
 /// watcher, because Modbench owns the <c>.git</c> folder and cannot be told when git moves under it.
 ///
@@ -34,7 +34,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcRelativePath => TrackedModFixture.RelativeLedgerPath(_mod.Npc, "npc_");
+    private string NpcRelativePath => TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_");
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
@@ -47,7 +47,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
             .Fields.Single(f => f.Metadata.Name == "height_max").Value;
 
     [Fact]
-    public void RestoringALedgerFileThroughGit_PutsTheCommittedValueBackInTheRecordEditor()
+    public void RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheRecordEditor()
     {
         EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
         Assert.Equal(0.75f, HeightMaxFromRecordEditor());
@@ -60,7 +60,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     }
 
     [Fact]
-    public void RestoringALedgerFileThroughGit_PutsTheCommittedValueBackInTheCompareGrid()
+    public void RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheCompareGrid()
     {
         EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
         Assert.Equal(0.75f, HeightMaxFromCompareGrid());
@@ -71,7 +71,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     }
 
     [Fact]
-    public void RestoringALedgerFileThroughGit_LeavesTheRecordCleanAgain_NotDirtyWithIdenticalBytes()
+    public void RestoringASourceFileThroughGit_LeavesTheRecordCleanAgain_NotDirtyWithIdenticalBytes()
     {
         EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
         Git("restore", "--", NpcRelativePath.Replace('\\', '/'));
@@ -84,29 +84,29 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     }
 
     [Fact]
-    public void AHandEditToALedgerFileOutsideModbench_IsPickedUpAtTheNextRead()
+    public void AHandEditToASourceFileOutsideModbench_IsPickedUpAtTheNextRead()
     {
         // Not through the edit path at all — a text editor, an agent's `sed`, another git client.
-        var text = File.ReadAllText(_mod.NpcLedgerFile);
-        File.WriteAllText(_mod.NpcLedgerFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+        var text = File.ReadAllText(_mod.NpcSourceFile);
+        File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
         Assert.Equal("RenamedByHand", Reads().GetRecord(_mod.Npc.ToString())!.EditorId);
     }
 
-    // #422: the self-heal above folds an externally-changed ledger file into the read model as a
+    // #422: the self-heal above folds an externally-changed source file into the read model as a
     // side effect of a *read* — still a mutation as far as _filter's one-shot snapshot is concerned,
     // so a record that only now matches an active filter must not stay hidden just because nothing
     // went through the explicit edit path.
     [Fact]
-    public void AHandEditToALedgerFileOutsideModbench_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
+    public void AHandEditToASourceFileOutsideModbench_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
     {
         _mod.Sessions.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
         Assert.Equal(0, _mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-        var text = File.ReadAllText(_mod.NpcLedgerFile);
-        File.WriteAllText(_mod.NpcLedgerFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
+        var text = File.ReadAllText(_mod.NpcSourceFile);
+        File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
-        Reads().GetRecord(_mod.Npc.ToString()); // triggers LedgerFreshness.Validate's self-heal
+        Reads().GetRecord(_mod.Npc.ToString()); // triggers SourceFreshness.Validate's self-heal
 
         var result = _mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
@@ -159,7 +159,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     public void AnUntrackedPluginIsNeverValidated_SoOrdinaryReadsStayUntouched()
     {
         // Positive control for the whole mechanism: freshness is a tracked-mod concern, and an
-        // untracked plugin has no ledger text to be fresh against. The read must still work.
+        // untracked plugin has no source text to be fresh against. The read must still work.
         using var untracked = TrackedModFixture.Untracked();
         var reads = new RecordQueryService(untracked.Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
 

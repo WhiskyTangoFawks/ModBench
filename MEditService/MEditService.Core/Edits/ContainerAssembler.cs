@@ -1,30 +1,30 @@
 using System.Globalization;
 using System.Reflection;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
+using MEditService.Core.Source;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
 
 /// <summary>
-/// Wires a flat set of deserialized ledger records into a freshly-created, otherwise-empty
+/// Wires a flat set of deserialized source records into a freshly-created, otherwise-empty
 /// <see cref="IMod"/>'s real containment structure (#416 S1b) — the inverse of the split
-/// <see cref="Ledger.ContainerStripFields"/> makes at ingest and Track time. Nothing here is
+/// <see cref="Source.ContainerStripFields"/> makes at ingest and Track time. Nothing here is
 /// game-specific: every structural fact (which cell holds which placed ref, which worldspace holds
 /// which cell, which quest holds which dialog topic) comes from the index
 /// (<see cref="IRecordReads.GetPlacement"/>/<see cref="IRecordReads.GetCellLocation"/>/
 /// <see cref="IRecordReads.GetContainerChildren"/>), never from a hardcoded type name beyond the
-/// handful <see cref="Ledger.ContainerStripFields"/> itself already names.
+/// handful <see cref="Source.ContainerStripFields"/> itself already names.
 ///
 /// <para><b>Ref-invariant reads, deliberately</b> (Q1's #416 ruling): containment is carried
-/// structure, not ledger content — no gesture in this arc lets a user move a record between
+/// structure, not source content — no gesture in this arc lets a user move a record between
 /// containers or reorder a container's children, so every read this class makes answers the same
 /// regardless of which <see cref="RecordRef"/> the caller is positioned on. A future gesture that
-/// *does* mutate containment must either make these reads ref-aware or move containment into ledger
+/// *does* mutate containment must either make these reads ref-aware or move containment into source
 /// text; ADR-0041's 2026-08-19 amendment already defers exactly that class of design question to the
 /// moment compile actually needs it.</para>
 ///
-/// <para><b>Completeness, not silence</b>: a ledger record this class cannot place anywhere — no
+/// <para><b>Completeness, not silence</b>: a source record this class cannot place anywhere — no
 /// top-level group, and no containment index entry names a parent for it — is reported as
 /// <see cref="AssembleResult.UnplaceableFormKeys"/> rather than dropped. <see cref="PluginCompileService"/>
 /// turns a non-empty list into a typed structurally-cannot-emit refusal; nothing here writes a binary
@@ -66,9 +66,9 @@ internal static class ContainerAssembler
         // #416 review: a slot this pass is about to populate is cleared exactly once, the first time
         // anything tries to attach to it — never assume a freshly-deserialized parent's slot is empty.
         // A repo tracked before a ContainerStripFields fix landed (Quest.Scenes, until this same
-        // ticket) has committed baselines whose Quest ledger still inlines its old, unstripped
-        // content while the same Scene also has its own separate ledger file; replacing beats
-        // appending onto whatever the parent's ledger text happened to carry (never-assume-exclusive-
+        // ticket) has committed baselines whose Quest source still inlines its old, unstripped
+        // content while the same Scene also has its own separate source file; replacing beats
+        // appending onto whatever the parent's source text happened to carry (never-assume-exclusive-
         // ownership, root CLAUDE.md — that applies to committed text this process didn't just write,
         // not only to files on disk).
         var clearedSlots = new HashSet<(object Parent, string Slot)>(new ParentSlotComparer());
@@ -86,7 +86,7 @@ internal static class ContainerAssembler
         // CellBlock/CellSubBlock numbering Bethesda's own tools assigned interior cells, and nothing
         // in this arc lets a user move a cell between buckets, so one deterministic bucket per
         // compile is both correct — the game does not read interior BlockNumber — and stable under
-        // repeated compiles of the same ledger, which is the property #416's round-trip gate needs).
+        // repeated compiles of the same source, which is the property #416's round-trip gate needs).
         object? interiorSubBlock = null;
         foreach (var (formKey, record) in recordsByFormKey)
         {
@@ -106,7 +106,7 @@ internal static class ContainerAssembler
             if (loc.Value.ParentWorldspace is not { } worldspaceFormKey
                 || !recordsByFormKey.TryGetValue(worldspaceFormKey, out var worldspace))
             {
-                // The worldspace this cell belongs to isn't in this plugin's own ledger (a foreign
+                // The worldspace this cell belongs to isn't in this plugin's own source (a foreign
                 // master's worldspace) — reconstructing the stub GRUP nesting an override needs in
                 // that case is deliberately out of this ticket's scope (#416); refuse rather than
                 // guess at a shape nothing here has verified.
@@ -121,7 +121,7 @@ internal static class ContainerAssembler
         // Pass 3: placed refs — into their cell's Persistent/Temporary list. Ordered by FormKey
         // (not original file order — placement carries no ordering column today; #416 measures
         // whether that matters against the real round-trip fixture and files it separately if so)
-        // purely so the same ledger set always assembles in the same order.
+        // purely so the same source set always assembles in the same order.
         foreach (var formKey in recordsByFormKey.Keys.OrderBy(k => k, StringComparer.Ordinal))
         {
             if (placed.Contains(formKey)) continue;
@@ -256,9 +256,9 @@ internal static class ContainerAssembler
     /// it this <see cref="Assemble"/> call — a no-op every subsequent time (tracked in
     /// <paramref name="clearedSlots"/>), so a slot with N children is cleared once and then filled,
     /// never cleared between siblings. Same dual-mode shape as
-    /// <see cref="Ledger.ContainerStripFields.StripInPlace"/> (<c>Clear()</c> for a list, null for a
+    /// <see cref="Source.ContainerStripFields.StripInPlace"/> (<c>Clear()</c> for a list, null for a
     /// single reference) — deliberately, since this is that method's own inverse: replacing whatever
-    /// a freshly-deserialized parent's ledger text happened to carry in this slot, never trusting it
+    /// a freshly-deserialized parent's source text happened to carry in this slot, never trusting it
     /// to already be empty.
     /// </summary>
     private static void ClearSlotOnce(object parent, string slotName, HashSet<(object Parent, string Slot)> clearedSlots)
@@ -276,7 +276,7 @@ internal static class ContainerAssembler
 
     /// <summary>Attaches <paramref name="child"/> to <paramref name="parent"/>'s named slot — a list
     /// property (<c>Add</c>) or a still-null single-reference property (direct assignment), matching
-    /// <see cref="Ledger.ContainerStripFields.StripInPlace"/>'s own dual-mode shape inverted.</summary>
+    /// <see cref="Source.ContainerStripFields.StripInPlace"/>'s own dual-mode shape inverted.</summary>
     private static void AttachChild(object parent, string slotName, IMajorRecord child)
     {
         var property = RequireProperty(parent, slotName);

@@ -16,8 +16,8 @@ namespace MEditService.Tests.Records;
 /// still inline its children — suppressing the serializer's per-child streams and folders stops the
 /// filesystem writes, not the parent's own stream (that distinction is measured and recorded on
 /// <c>RecordTextCodec.DiscardChildRecordStreams</c>). Children are their own records, their own
-/// documents and their own ledger entries (ADR-0040/#387); a parent that carried them would store
-/// the same data twice and give the parent a body that no ledger file will ever match.
+/// documents and their own source entries (ADR-0040/#387); a parent that carried them would store
+/// the same data twice and give the parent a body that no source file will ever match.
 ///
 /// The subject is found by measurement rather than pinned by FormKey: the curated plugin is
 /// regenerable, so a hardcoded FormKey would silently decay into testing nothing. Every assertion
@@ -79,11 +79,11 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
 
     /// <summary>
     /// Stripping must not become "store less of everything". The container's own fields survive
-    /// intact — asserted against the same codec output the ledger path produces, so this pins
-    /// equality with the ledger's bytes rather than merely the absence of children.
+    /// intact — asserted against the same codec output the source path produces, so this pins
+    /// equality with the source's bytes rather than merely the absence of children.
     /// </summary>
     [Fact]
-    public async Task Index_ForAContainer_StoresTheSameBytesTheLedgerPathWould()
+    public async Task Index_ForAContainer_StoresTheSameBytesTheSourcePathWould()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var setterMod = ModFactory.ImportSetter(
@@ -93,14 +93,14 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         var quest = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
         var formKey = quest.FormKey.ToString();
 
-        // Exactly what TrackService does before writing a ledger file.
-        MEditService.Core.Ledger.ContainerStripFields.StripInPlace(quest);
-        var ledgerBytes = await codec.SerializeToBytesAsync(quest, GameRelease.Fallout4);
+        // Exactly what TrackService does before writing a source file.
+        MEditService.Core.Source.ContainerStripFields.StripInPlace(quest);
+        var sourceBytes = await codec.SerializeToBytesAsync(quest, GameRelease.Fallout4);
 
         var body = StoredBody(formKey);
 
         Assert.NotNull(body);
-        Assert.Equal(System.Text.Encoding.UTF8.GetString(ledgerBytes), body);
+        Assert.Equal(System.Text.Encoding.UTF8.GetString(sourceBytes), body);
     }
 
     /// <summary>

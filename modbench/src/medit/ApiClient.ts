@@ -82,7 +82,7 @@ export interface CompileResult {
 
 export interface CompileDiagnostic {
   formKey: string;
-  ledgerRelativePath: string;
+  sourceRelativePath: string;
   message: string;
 }
 

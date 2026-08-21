@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 
 namespace MEditService.Core.Queries;
 
@@ -53,7 +53,7 @@ public record PluginResponse(
             // Computed here rather than passed in by each of the several call sites: a default would
             // be a *wrong* value (an editable plugin reported as read-only), not a missing one, and
             // the metadata already carries both facts the rule needs.
-            Ledger.ModFolders.IsEditable(m.Origin, m.Path));
+            Source.ModFolders.IsEditable(m.Origin, m.Path));
 }
 
 // #428: the Plugins-tree listing's own working-tree fact — a tri-state rather than a pair of

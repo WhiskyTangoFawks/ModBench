@@ -11,20 +11,20 @@ import type { ModlistEntry } from './model';
  *  which have one) doesn't spuriously "conflict" with every other mod on it. */
 const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
 
-/** ADR-0040/#374: MEditService's per-plugin ledger text tree (`<pluginFileName>.ledger/...`,
- *  `LedgerRecordPath.For` in `MEditService.Core/Ledger/`) is internal Modbench state that lands
- *  inside the mod folder itself — unlike the ledger's gitdir, which lives entirely outside
- *  `mods/` (`LedgerOptions`, `%LOCALAPPDATA%/mEdit/ledgers/`) and is therefore already invisible
+/** ADR-0040/#374: MEditService's per-plugin source text tree (`<pluginFileName>.source/...`,
+ *  `SourceRecordPath.For` in `MEditService.Core/Source/`) is internal Modbench state that lands
+ *  inside the mod folder itself — unlike the source's gitdir, which lives entirely outside
+ *  `mods/` (`SourceOptions`, `%LOCALAPPDATA%/mEdit/sources/`) and is therefore already invisible
  *  to this walk by construction, needing no exclusion here. The text tree genuinely is walked and
  *  must be excluded explicitly.
  *
- *  Matched at the mod root only — the layout is never nested (`LedgerRecordPath.For` always
+ *  Matched at the mod root only — the layout is never nested (`SourceRecordPath.For` always
  *  builds root-relative paths) — and only when a sibling *file* of the exact stripped name also
- *  exists at that same root: a `.ledger`-suffixed folder with no matching plugin alongside it is
- *  ordinary mod content an author happened to name that way, not ledger state. An exclusion that
+ *  exists at that same root: a `.source`-suffixed folder with no matching plugin alongside it is
+ *  ordinary mod content an author happened to name that way, not source state. An exclusion that
  *  fired on the bare suffix alone would over-match exactly that folder — the #324 hazard-class
  *  pattern this guards against: a match must mean "this is the thing", not "this looks like the
- *  thing". Directory-only: a plain *file* sharing the same name (`Foo.esp.ledger` as a file, not
+ *  thing". Directory-only: a plain *file* sharing the same name (`Foo.esp.source` as a file, not
  *  a folder) is never touched by this rule — MEditService never creates one. Sibling comparison
  *  is case-folded (`foldPath`) like the rest of this module, since Bethesda plugin filenames are
  *  inconsistently cased and Proton/ext4 casing must not defeat the match.
@@ -34,22 +34,22 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
  *  plugin as equivalent to a real one everywhere else — an MO2-style layout that shares a plugin
  *  into a mod folder via symlink is a supported, not exotic, shape. Matching without resolving
  *  the link (no `stat`) is deliberate, not a missed case: a *dangling* symlink named `X` then
- *  also satisfies the sibling check for `X.ledger`, which is accepted rather than guarded
- *  against — the ledger belongs to that plugin whether or not the link currently resolves, and
- *  excluding it is the safer error. By contrast, a symlinked *directory* named `<plugin>.ledger`
- *  is not handled here — deliberately: nothing in MEditService ever creates the ledger tree as a
+ *  also satisfies the sibling check for `X.source`, which is accepted rather than guarded
+ *  against — the source belongs to that plugin whether or not the link currently resolves, and
+ *  excluding it is the safer error. By contrast, a symlinked *directory* named `<plugin>.source`
+ *  is not handled here — deliberately: nothing in MEditService ever creates the source tree as a
  *  symlink (only `Directory.CreateDirectory`, a real directory), so unlike the plugin side, there
  *  is no genuine shape here to support. */
-const LEDGER_TREE_SUFFIX = '.ledger';
+const SOURCE_TREE_SUFFIX = '.source';
 
-function ledgerTreeDirNames(dirents: Dirent[]): Set<string> {
+function sourceTreeDirNames(dirents: Dirent[]): Set<string> {
   const fileNames = new Set(
     dirents.filter((d) => d.isFile() || d.isSymbolicLink()).map((d) => foldPath(d.name)),
   );
   const names = new Set<string>();
   for (const dirent of dirents) {
-    if (!dirent.isDirectory() || !dirent.name.endsWith(LEDGER_TREE_SUFFIX)) continue;
-    const pluginFileName = dirent.name.slice(0, -LEDGER_TREE_SUFFIX.length);
+    if (!dirent.isDirectory() || !dirent.name.endsWith(SOURCE_TREE_SUFFIX)) continue;
+    const pluginFileName = dirent.name.slice(0, -SOURCE_TREE_SUFFIX.length);
     if (fileNames.has(foldPath(pluginFileName))) names.add(dirent.name);
   }
   return names;
@@ -179,12 +179,12 @@ async function walk(
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];
-  // Ledger-tree exclusion only ever applies at the mod root — see ledgerTreeDirNames' own doc.
-  const ledgerDirNames = dir === root ? ledgerTreeDirNames(dirents) : null;
+  // Source-tree exclusion only ever applies at the mod root — see sourceTreeDirNames' own doc.
+  const sourceDirNames = dir === root ? sourceTreeDirNames(dirents) : null;
   for (const dirent of dirents) {
     const absolutePath = join(dir, dirent.name);
     if (dirent.isDirectory()) {
-      if (ledgerDirNames?.has(dirent.name)) continue;
+      if (sourceDirNames?.has(dirent.name)) continue;
       results.push(...(await descend(absolutePath, root, ancestors, log)));
     } else if (dirent.isFile()) {
       pushEntry(results, root, absolutePath);

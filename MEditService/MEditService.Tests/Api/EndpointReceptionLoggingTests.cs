@@ -1,11 +1,11 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -84,7 +84,7 @@ public sealed class EndpointReceptionLoggingTests
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        // Already-tracked destination (a bare .git dir is enough for LedgerRepository.IsTracked):
+        // Already-tracked destination (a bare .git dir is enough for SourceRepository.IsTracked):
         // this test is only about the "received" log line, so it must not fall into the Track
         // branch, which needs a real loaded session the stub doesn't provide.
         var destination = Path.Combine(Path.GetTempPath(), $"medit-createplugin-log-{Guid.NewGuid():N}");

@@ -68,7 +68,7 @@ namespace MEditService.Core.Serialization;
 ///    <c>RecordTextCodecGeneratorSeedTests</c>, including a source scan pinning that this mixin's
 ///    namespace appears nowhere in this project's own source outside this file), not a claim that the
 ///    generated mixin doesn't exist — it does, it is simply never on a path anything reaches. The
-///    concrete temptation this is warning about: rebuilding a plugin from its text ledger (crash
+///    concrete temptation this is warning about: rebuilding a plugin from its text source (crash
 ///    repair, #381) is a real user path, and <c>MutagenJsonConverterFallout4ModMixIns.DeserializeInto</c>
 ///    will look like the obvious tool for it. It is exactly the wrong one — it re-imports the
 ///    equivalent of a whole-mod export, the thing ADR-0040 measured and rejected. The right tool for
