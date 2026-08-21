@@ -58,6 +58,7 @@ public class WorldspaceQueryServiceTests
         public PlacementRow? GetPlacement(string formKey, PluginKey plugin) => null;
         public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) => null;
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) => [];
+        public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
     private sealed class StubSession(IRecordReads repo, IGameSession? session = null) : ISessionManager

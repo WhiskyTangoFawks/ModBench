@@ -921,6 +921,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             owner.GetCellLocation(cellFormKey, plugin.Name, plugin.Origin!);
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
             owner.GetContainerChildren(plugin.Name, plugin.Origin!, parentFormKey);
+        public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
+            owner.GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
     }
 
     public RecordDocument? GetDocument(string formKey) => GetWinningDocument(EffectiveRelation, formKey);
@@ -2018,6 +2020,28 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 reader.GetString(0), parentFormKey, reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
         }
         return result;
+    }
+
+    /// <summary>See <see cref="IRecordReads.GetContainerParent"/>. Ref-invariant for the same reason
+    /// its inverse is, so it likewise ignores which relation the caller is positioned on.</summary>
+    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
+        GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
+
+    private ContainerChildRow? GetContainerParent(string plugin, string origin, string childFormKey)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT parent_form_key, parent_record_type, slot_name, slot_index
+            FROM container_child
+            WHERE child_form_key = $1 AND plugin = $2 AND origin = $3
+            """;
+        AddParams(cmd, [childFormKey, plugin, origin]);
+        using var reader = cmd.ExecuteReader();
+
+        return reader.Read()
+            ? new ContainerChildRow(
+                childFormKey, reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3))
+            : null;
     }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>

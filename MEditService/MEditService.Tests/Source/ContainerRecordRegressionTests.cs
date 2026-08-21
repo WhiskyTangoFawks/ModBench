@@ -2,6 +2,7 @@ using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -48,7 +49,11 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var pluginPath = Path.Combine(ModFolder, PluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
 
-        var cell = new Cell(mod) { EditorID = "FixtureCell" };
+        // WaterHeight: a plain nullable float, given a value at Track time so the point-write tests
+        // below have a field whose textual before/after they can compare byte for byte (#453 AC1).
+        // Left null it would serialize as a null literal, and the substitution assertion would be
+        // measuring the serializer's null handling rather than the edit.
+        var cell = new Cell(mod) { EditorID = "FixtureCell", WaterHeight = 100f };
         var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
         subBlock.Cells.Add(cell);
         var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
@@ -112,15 +117,89 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
     // ---- Point writes refuse (RecordEditService) ----
 
-    [Fact]
-    public void EditingACellsField_RefusesWithTheContainerRefusal_NotAnException()
-    {
-        var result = EditService().EditField(Plugin, Cell.ToString(), "editorID", System.Text.Json.JsonDocument.Parse("\"Renamed\"").RootElement);
+    /// <summary>The Cell's own source file, found by walking the tree rather than by
+    /// <see cref="SourceRecordPath.For"/> (which has no flat path for a container and throws by
+    /// design) — the test's own independent locator, deliberately <b>not</b> <c>SourceUnitResolver</c>,
+    /// so it cannot agree with the code under test by construction.</summary>
+    private string CellSourceFile =>
+        Directory.EnumerateFiles(
+                Path.Combine(ModFolder, $"{PluginName}{SourceRecordPath.SourceSuffix}"),
+                "RecordData.json", SearchOption.AllDirectories)
+            .Single(f => File.ReadAllText(f).Contains("\"FixtureCell\"", StringComparison.Ordinal));
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
-        Assert.Contains("453", result.Message, StringComparison.Ordinal);
+    [Fact]
+    public void EditingACellsOwnField_WritesItsRecordDataJson_AndChangesNothingElseInTheFile()
+    {
+        var file = CellSourceFile;
+        var before = File.ReadAllText(file);
+        Assert.Contains("100.0", before, StringComparison.Ordinal);
+
+        var result = EditService().EditField(Plugin, Cell.ToString(), "water_height", Json("250.0"));
+
+        Assert.True(result.Applied, result.Message);
+        // AC1, in its strongest form: the whole file is byte-identical outside the one field's own
+        // text. Not a diff-line count — every untouched byte is compared, which is what makes
+        // "only that field's line(s) diff" a measurement rather than an assertion.
+        Assert.Equal(before.Replace("100.0", "250.0", StringComparison.Ordinal), File.ReadAllText(file));
+        // Scope 4: the source unit's own indexed document moved with the file.
+        Assert.Contains("250.0", Sessions.Index!.GetDocument(Cell.ToString(), Plugin)!.Body!, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task ACellsSourceFile_RoundTripsThroughThePerRecordCodecByteIdentically()
+    {
+        // The property AC1 rests on: a container's file read and rewritten with no edit at all comes
+        // back byte for byte, so any difference the test above sees is the edit and nothing else.
+        // DocumentShapeParityTests pins the *serialize* half against the whole-mod door; this pins
+        // the deserialize→serialize round trip on a file that door actually wrote.
+        var file = CellSourceFile;
+        var before = File.ReadAllBytes(file);
+        var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
+
+        var record = await codec.DeserializeAsync(file, GameRelease.Fallout4, "cell");
+        var reserialized = await codec.SerializeToBytesAsync(record, GameRelease.Fallout4);
+
+        Assert.Equal(before, reserialized);
+    }
+
+    /// <summary>#453 scope 3 / AC2, container half: a container's EditorID is carried by its
+    /// <i>directory</i> name, not a file name, so the rename is a directory move — which also carries
+    /// whatever folder-split children live inside it (a Quest's dialog topics) rather than orphaning
+    /// them. See <c>RecordEditServiceTests.EditingEditorId_ShowsAsARenameOnceStaged_NotADeleteAndAdd</c>
+    /// for why the staged form is what AC2 can be asserted against at all.</summary>
+    [Fact]
+    public void EditingACellsEditorId_MovesItsSourceDirectory_AndStagesAsARename()
+    {
+        var oldDirectory = Path.GetDirectoryName(CellSourceFile)!;
+        Assert.EndsWith("FixtureCell - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
+
+        var result = EditService().EditField(Plugin, Cell.ToString(), "editor_id", Json("\"RenamedCell\""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.False(Directory.Exists(oldDirectory));
+        var newDirectory = Path.Combine(Path.GetDirectoryName(oldDirectory)!, "RenamedCell - " + FilesafeCellKey);
+        Assert.True(Directory.Exists(newDirectory));
+        Assert.Contains(
+            "\"EditorID\": \"RenamedCell\"",
+            File.ReadAllText(Path.Combine(newDirectory, "RecordData.json")),
+            StringComparison.Ordinal);
+
+        var git = Path.Combine(ModFolder, ".git");
+        GitCli.Run(git, ModFolder, "add", "-A");
+        var staged = GitCli.Run(git, ModFolder, "diff", "--cached", "-M", "--name-status")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .ToList();
+
+        var rename = Assert.Single(staged, l => l.StartsWith('R'));
+        Assert.Contains("FixtureCell", rename, StringComparison.Ordinal);
+        Assert.Contains("RenamedCell", rename, StringComparison.Ordinal);
+    }
+
+    private string FilesafeCellKey => $"{Cell.ID:X6}_{Cell.ModKey.FileName}";
+
+    private static System.Text.Json.JsonElement Json(string raw) =>
+        System.Text.Json.JsonDocument.Parse(raw).RootElement;
 
     [Fact]
     public void DeletingACell_RefusesWithTheContainerRefusal()

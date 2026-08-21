@@ -1,9 +1,12 @@
+using System.Text.Json;
+using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Source;
@@ -238,6 +241,69 @@ public sealed class SourceIngestTests
         var atHead = reloaded.Index!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Keyword.ToString(), StringComparison.Ordinal));
+
+        Assert.Equal(1, atHead);
+    }
+
+    // ---- #453 slice 4: a renamed source unit is one dirty record, not two half-records ----
+
+    /// <summary>
+    /// An EditorID edit moves the source unit's file, so the next session load sees the same FormKey
+    /// twice in the dirty set: the old path, gone from the working tree but present in <c>HEAD</c>, and
+    /// the new path, present in the working tree and in no commit. Reconciled naively those are a
+    /// delete and a create — which would put one FormKey in <b>both</b> halves of <c>records_head</c>,
+    /// the disjointness #452's own review landed to protect. Paired, they are what they actually are:
+    /// one record, dirty, whose committed bytes are the ones at its old path.
+    ///
+    /// <para>Flat record on the shared fixture deliberately: this is a property of the reconciliation
+    /// pass, not of containers, and the ~24 files built on this fixture should see it. The container
+    /// half of the same rename is <b>not</b> reachable — <see cref="SourceRecordPath.TryParse"/> fails
+    /// closed on container paths, which is the gap <c>SourceIngestContainerTests</c> pins for #454 —
+    /// so a renamed <i>container</i> still reads clean at Head after a reload.</para>
+    /// </summary>
+    [Fact]
+    public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()
+    {
+        using var mod = TrackedModFixture.Tracked();
+
+        var edit = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(mod.Plugin, mod.Npc.ToString(), "editor_id",
+                JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
+        Assert.True(edit.Applied, edit.Message);
+
+        using var reloaded = Reload(mod);
+
+        // Effective is the working tree: the new name.
+        var effective = reloaded.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(effective);
+        Assert.Equal("RenamedAcrossReload", effective!.EditorId);
+
+        // Head is HEAD: the old name, served from the blob at the record's *former* path. Before the
+        // pairing this was null — the new path marked the record working-tree-only, which removes it
+        // from Head entirely — while the old path simultaneously seeded it as committed-only.
+        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
+        Assert.NotNull(head);
+        Assert.Equal(TrackedModFixture.NpcEditorId, head!.EditorId);
+    }
+
+    /// <summary>The disjointness invariant itself, stated directly rather than inferred from the two
+    /// reads above: <c>records_head</c> must answer for a FormKey exactly once. A rename that landed in
+    /// both halves would return two rows here, which is the shape
+    /// <c>HeadRelationDisjointnessTests</c> exists to forbid in general.</summary>
+    [Fact]
+    public void AnEditorIdRename_LeavesExactlyOneRowAtHead()
+    {
+        using var mod = TrackedModFixture.Tracked();
+
+        new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(mod.Plugin, mod.Npc.ToString(), "editor_id",
+                JsonDocument.Parse("\"RenamedOnce\"").RootElement);
+
+        using var reloaded = Reload(mod);
+
+        var atHead = reloaded.Index!.At(RecordRef.Head)
+            .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
+            .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
 
         Assert.Equal(1, atHead);
     }

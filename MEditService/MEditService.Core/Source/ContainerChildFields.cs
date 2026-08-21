@@ -94,6 +94,41 @@ internal static class ContainerChildFields
     /// single-reference field like <c>Landscape</c>) — preserved so a compile can reproduce a list's
     /// original order rather than an ingest-arbitrary one.</para>
     /// </summary>
+    /// <summary>One child located inside a parent's live object graph — the slot it sits in, and the
+    /// child itself as a <i>settable</i> record. <see cref="Child"/> is the real object hanging off
+    /// the parent, not a copy, which is the whole point: mutating it and reserializing the parent is
+    /// how #453 writes an embedded child without a JSON path
+    /// (<c>Edits.RecordEditService.EditField</c>).</summary>
+    internal readonly record struct EmbeddedChild(string SlotName, int SlotIndex, IMajorRecord Child);
+
+    /// <summary>
+    /// <paramref name="formKey"/>'s child record inside <paramref name="parent"/>, or null when
+    /// <paramref name="parent"/> does not carry it. This is the answer to #453 scope 1's "at which
+    /// JSON path inside the file", given through Mutagen's own object model instead of a JSON
+    /// pointer: the child is a real record in the parent's graph, so every existing write mechanism —
+    /// <c>RecordFieldWriter</c>, the codecs it dispatches to, the refusal set around it — applies to
+    /// it completely unchanged, and there is no second copy of the document's structure to keep in
+    /// step with the serializer.
+    ///
+    /// <para>Walks only <paramref name="parent"/>'s own declared child slots (this class's table),
+    /// never recursively: a source unit's embedded children are exactly one level deep, because
+    /// anything deeper is its own source unit with its own file.</para>
+    /// </summary>
+    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
+    {
+        foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
+        {
+            if (!child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal)) continue;
+
+            // A deserialized parent's children are settable records, so this cast holds for every
+            // caller on the write path. Guarded rather than assumed so a read-only graph (a binary
+            // overlay, which no write-path caller holds) declines instead of throwing.
+            return child is IMajorRecord settable ? new EmbeddedChild(slotName, slotIndex, settable) : null;
+        }
+
+        return null;
+    }
+
     internal static IEnumerable<(string SlotName, int SlotIndex, IMajorRecordGetter Child)> EnumerateChildren(
         IMajorRecordGetter record)
     {
