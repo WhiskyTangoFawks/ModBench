@@ -72,6 +72,59 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
         Assert.Contains($"Binary-SHA256: {Sha256Of(pluginPath)}", message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A compile at a ref whose tree cannot be written to disk leaves no scratch directory behind.
+    ///
+    /// <para>An <c>AtRef</c> compile materialises the ref's blobs into a temp directory, because the
+    /// whole-mod reader takes a folder rather than a byte stream. Populating that directory is real
+    /// I/O against paths this process did not choose, so it can fail — disk full, permissions, a name
+    /// the filesystem rejects, or another tool touching the path mid-write (root CLAUDE.md's
+    /// never-assume-exclusive-ownership rule). The scratch must go with it.</para>
+    ///
+    /// <para><b>The window is narrow and easy to get wrong</b>: if the directory is created and
+    /// populated before the owning <see cref="IDisposable"/> exists, a throw during population happens
+    /// before <c>using</c> has anything to bind, so <c>Dispose</c> never runs and the directory leaks
+    /// permanently. Every compile against that ref then leaks another. The fix is to construct the
+    /// owner first and dispose it on the way out of a failed populate; this is the test that says so.</para>
+    ///
+    /// <para>An over-long file name is the trigger because it is reachable through git alone — the ref
+    /// is built with plumbing, never checked out, so git happily stores a path the filesystem will
+    /// refuse. Asserting the throw as well as the cleanup keeps the test honest: on a filesystem that
+    /// accepted the name, it fails loudly rather than passing vacuously.</para>
+    /// </summary>
+    [Fact]
+    public void Compile_AtARefWhoseTreeCannotBeWritten_LeavesNoScratchDirectoryBehind()
+    {
+        const string scratchPrefix = "medit-compile-ref-";
+        var sourceRoot = $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}";
+
+        // A file name past NAME_MAX, committed by plumbing onto a ref of its own. No checkout ever
+        // happens, so git stores it without complaint and only the materialise step meets the OS.
+        var blob = RunGit("hash-object", "-w", "--stdin", "--path", "x.json").Trim();
+        var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-test-index-{Guid.NewGuid():N}");
+        try
+        {
+            GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "read-tree", "main");
+            GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex,
+                "update-index", "--add", "--cacheinfo", $"100644,{blob},{sourceRoot}/Npcs/{new string('n', 300)}.json");
+            var tree = GitCli.RunWithIndex(GitDir, _mod.ModFolder, scratchIndex, "write-tree").Trim();
+            var commit = RunGit("commit-tree", tree, "-p", "main", "-m", "unwritable path").Trim();
+            RunGit("update-ref", "refs/heads/unwritable", commit);
+        }
+        finally
+        {
+            if (File.Exists(scratchIndex)) File.Delete(scratchIndex);
+        }
+
+        var before = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
+
+        Assert.ThrowsAny<IOException>(
+            () => CompileService().Compile(_mod.Plugin, new CompileSource.AtRef("unwritable")));
+
+        var after = Directory.GetDirectories(Path.GetTempPath(), $"{scratchPrefix}*").ToHashSet(StringComparer.Ordinal);
+        Assert.Empty(after.Except(before, StringComparer.Ordinal));
+    }
+
     [Fact]
     public void Compile_ThatRefuses_LeavesTheParkedRefUntouched()
     {

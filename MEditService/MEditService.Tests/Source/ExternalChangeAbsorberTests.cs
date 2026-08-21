@@ -89,7 +89,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     /// breaks compile <i>and</i> ingest-from-source the moment that baseline reaches a working tree.</para>
     ///
     /// <para>Fixed at the root by sharing Track's own serialization
-    /// (<c>TrackService.SerializePluginToPristineFiles</c>) instead of hand-rolling a second one. This
+    /// (<c>TrackService.SerializeToPristineFiles</c>) instead of hand-rolling a second one. This
     /// asserts the property directly, so the next hand-rolled tree writer fails here rather than three
     /// operations downstream.</para>
     /// </summary>

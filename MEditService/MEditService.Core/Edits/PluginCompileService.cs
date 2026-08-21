@@ -65,7 +65,9 @@ public sealed class PluginCompileService(
             return CompileResult.Refused($"{plugin.Name} is not part of the loaded session.");
 
         // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
-        // same "read this directory" call. Disposed on every path out, refusal and throw alike.
+        // same "read this directory" call. Once this returns, `using` disposes the scratch on every
+        // path out — refusal and throw alike; a failure *during* the read cleans up on its own way out
+        // (SourceCheckout.Of), which is a separate window and was not free.
         using var checkout = SourceCheckout.Of(modFolder, plugin.Name, source);
         if (!Directory.Exists(checkout.TreeRoot))
         {
@@ -89,13 +91,23 @@ public sealed class PluginCompileService(
         {
             return CompileResult.Refused(
                 $"{plugin.Name} cannot be compiled: more than one source file claims the same FormKey — " +
-                $"{string.Join(", ", collidingFormKeys.Distinct(StringComparer.Ordinal))}.");
+                $"{string.Join(", ", collidingFormKeys)}.");
         }
 
         // Semantic breakage compiles successfully with diagnostics (dangling/type-mismatched
         // FormLinks and kin) — the same CheckErrorBuilder-driven CheckError the editor already shows
         // per field (DuckDbRecordIndex.GetDocument), read here rather than re-derived, so "what the
         // editor flags" and "what compile reports" can't drift.
+        //
+        // #454's scope said "diagnostics unchanged", and this one place they are not — flagged here
+        // rather than left for a reader to notice the discrepancy on their own. The old loop walked the
+        // source *files* it had just read, so a record with no file of its own could not be diagnosed at
+        // all; this walks the mod, so embedded children (placed refs, navmeshes, landscape, a
+        // worldspace's TopCell) now report too, against the container document that holds them. It is a
+        // widening with nothing withdrawn — every record diagnosed before is still diagnosed, with the
+        // same message from the same builder — and it falls out of reading the tree whole rather than
+        // being sought; suppressing it back to the old set would mean re-deriving "does this record have
+        // a file", which is exactly the path-shaped reasoning this ticket removed.
         var diagnostics = new List<CompileDiagnostic>();
         foreach (var record in mod.EnumerateMajorRecords())
         {
@@ -191,15 +203,32 @@ internal sealed class SourceCheckout : IDisposable
 
         if (source is CompileSource.AtRef atRef)
         {
+            // The owner is constructed *before* a single byte is written, and populating happens under
+            // its own disposal. Ordering, not style: materialising first and constructing afterwards
+            // would mean a throw mid-populate happens before the caller's `using` has anything to bind,
+            // so Dispose never runs and the scratch directory leaks — permanently, and again on every
+            // retry. Real failures live in that window (disk full, permissions, a path the filesystem
+            // rejects, another tool touching it mid-write — root CLAUDE.md's
+            // never-assume-exclusive-ownership rule applied to paths this process did not choose), and
+            // PluginCompileServiceParkedRefTests pins the cleanup with one of them.
             var scratchRoot = Directory.CreateTempSubdirectory("medit-compile-ref-").FullName;
-            foreach (var (relativePath, bytes) in SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, atRef.Ref))
-            {
-                var destination = Path.Combine(scratchRoot, relativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                File.WriteAllBytes(destination, bytes);
-            }
-            return new SourceCheckout(
+            var checkout = new SourceCheckout(
                 Path.Combine(scratchRoot, treeName), scratchRoot, atRef.Ref, scratchRoot);
+            try
+            {
+                foreach (var (relativePath, bytes) in SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, atRef.Ref))
+                {
+                    var destination = Path.Combine(scratchRoot, relativePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.WriteAllBytes(destination, bytes);
+                }
+            }
+            catch
+            {
+                checkout.Dispose();
+                throw;
+            }
+            return checkout;
         }
 
         return new SourceCheckout(

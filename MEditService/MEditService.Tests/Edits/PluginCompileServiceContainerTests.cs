@@ -249,12 +249,6 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     /// <summary>
-    /// The mod header is a source file now (the root <c>RecordData.json</c>, ADR-0041's #444 amendment
-    /// closing the "no source file" gap), so compile emits the header the tree holds. Before #454 the
-    /// mod was built by <c>ModFactory.Activator</c> and the root document skipped outright, which
-    /// silently dropped author, description and version on every compile.
-    /// </summary>
-    /// <summary>
     /// A diagnostic names the source unit the record actually lives in — #454's replacement for the
     /// per-file <c>pathsByFormKey</c> map the old per-record read built as a side effect.
     ///
@@ -283,6 +277,12 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         Assert.Contains("\"CellA\"", File.ReadAllText(full), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The mod header is a source file now (the root <c>RecordData.json</c>, ADR-0041's #444 amendment
+    /// closing the "no source file" gap), so compile emits the header the tree holds. Before #454 the
+    /// mod was built by <c>ModFactory.Activator</c> and the root document skipped outright, which
+    /// silently dropped author, description and version on every compile.
+    /// </summary>
     [Fact]
     public void Compile_CarriesTheModHeaderFromTheTree_RatherThanEmittingAFreshOne()
     {
