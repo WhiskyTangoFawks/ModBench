@@ -26,7 +26,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// <see cref="RecordTypeDispatch.FolderNameFor"/>'s own doc comment for why exactly these three) get
 /// their own directory (<c>&lt;GroupFolder&gt;/&lt;name&gt;/RecordData.json</c>, with block/sub-block or
 /// XY nesting ahead of it for Cell/Worldspace) instead of a flat file — reading and writing that
-/// structure is #453/#454's job ("compile/ingest reads structure from the tree"), not this helper's.
+/// structure is <see cref="SourceUnitResolver"/>'s job (#453), not this helper's.
 /// <see cref="For"/> refuses (a named exception, never a silently wrong flat path) for any record type
 /// that resolves to one of those three or to no top-level group at all; <see cref="TryParse"/> simply
 /// answers false for any path deeper or shallower than the flat shape.</para>
@@ -69,7 +69,7 @@ internal static class SourceRecordPath
             ?? throw new NotSupportedException(
                 $"'{recordType}' has no flat source path under the Spriggit layout — it is a " +
                 "directory-per-record container type (Cell/Worldspace/Quest), or has no top-level " +
-                "group at all, and #453/#454's structure-aware reader owns it, not this helper.");
+                "group at all, and SourceUnitResolver owns it, not this helper.");
 
         var fileName = string.IsNullOrEmpty(editorId)
             ? $"{FilesafeFormKey(formKey)}{JsonSuffix}"

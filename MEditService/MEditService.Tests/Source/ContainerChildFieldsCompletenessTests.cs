@@ -17,9 +17,11 @@ namespace MEditService.Tests.Source;
 ///
 /// <para>Permanent, not a one-off probe: this is the standing defence against the <i>next</i> Scenes
 /// — a future Mutagen bump or new game module introducing a child-major field nobody added to the
-/// hand-maintained table. <see cref="MEditService.Core.Edits.ContainerAssembler"/>'s completeness
-/// guard is the standing defence at compile time (an unplaceable record refuses rather than
-/// vanishing); this is the standing defence at review time (a red test before anything ships).</para>
+/// hand-maintained table. It is also the <i>only</i> standing defence since #454: compile used to
+/// carry a second one (<c>ContainerAssembler</c> refused a record it could place nowhere), but compile
+/// no longer places anything — the deserializer reads a record from wherever the tree already puts it,
+/// so "unplaceable" is not a reachable state. A gap here now costs an index row, not a record missing
+/// from a compiled binary, which makes this red-at-review-time test the whole of the defence.</para>
 /// </summary>
 public sealed class ContainerChildFieldsCompletenessTests
 {

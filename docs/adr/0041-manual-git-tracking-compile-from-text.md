@@ -321,6 +321,35 @@ door and the whole-mod door once two codec-side deltas are removed (below).
 > normalization, for a populated Cell (embedded) and a populated Quest (folder-split) alike —
 > check the claim there rather than taking this paragraph's word for it.
 
+> **Erratum (2026-08-21, #454 — implementation).** `ContainerAssembler`'s retirement above
+> has **landed**. Save & Compile deserializes `<plugin>.source/` whole through the same
+> generated door `TrackService` (#451) and `SourceIngest` (#452) use — the third and last of
+> the three point 4 names — and the class, its DB-driven reassembly and its tests are deleted.
+> Containment is the path in fact, not only in principle. Reading the root `RecordData.json`
+> comes free with the whole-tree read, so the compiled binary now carries the source's own mod
+> header rather than a freshly minted empty one; that is the header-only-in-binary gap above,
+> closed on the write side too.
+>
+> **One thing the retirement did not take with it, and the reason is not obvious.** The
+> whole-mod reader ends every group with `RecordCache.SetTo(x => x.FormKey, records)`, so two
+> source files in one group folder claiming one FormKey silently collapse to whichever was read
+> last — a record the user can see in their tree and cannot find in the compiled plugin, with no
+> diagnostic. That last-wins behaviour was **not** adopted. Compile's FormKey-collision refusal
+> is kept, and because the answer is already gone by the time the mod exists, it is asked of the
+> **tree** instead: `SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit` counts source units
+> per FormKey in one walk, covering same-folder and cross-folder collisions alike. The state is
+> reachable without Modbench's help (another tool duplicating a file, a partially restored
+> backup, an interrupted rename), which is why it is refused rather than accepted as a property
+> of the reader.
+>
+> Also settled here, having been left in the future tense by #450's own note: compile does **not**
+> restore folder-split child order and nothing should claim it does. Spriggit's layout carries
+> none — the `"[N] "` file-name prefix its reader sorts on is written only under
+> `Overall.EnforceRecordOrder`, which neither this project nor Spriggit enables — so a compiled
+> binary's children come back in the tree's order, stable but not canonical against the pre-Track
+> binary. For FO4 `DialogTopic.Responses` that is genuine semantic loss (GRUP order is the sole
+> carrier of dialogue evaluation order), tracked as **#459** pending a strategy decision.
+
 **2. Tracked plugins ingest from source.** Working tree → Effective, git `HEAD` → Head;
 the binary is never consulted for a tracked plugin's content. By construction this
 deletes the reconciliation-sweep class (`WorkingTreeCreateRediscovery`, the

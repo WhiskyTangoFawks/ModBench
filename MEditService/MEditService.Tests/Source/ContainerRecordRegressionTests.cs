@@ -245,20 +245,34 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.True(result.Applied, result.Message);
     }
 
-    // ---- External-change exits (Absorb refuses wholesale, Keep skips) ----
+    // ---- External-change exits ----
 
+    /// <summary>
+    /// Absorb used to refuse outright on any plugin holding a Cell/Worldspace/Quest — i.e. most real
+    /// plugins (#460). #454 removed the refusal by removing its cause: Absorb no longer rebuilds the
+    /// tree one record at a time (which had no flat path for a container), it shares Track's own
+    /// whole-mod serialization, and that has never had the limitation. The assertion that replaced the
+    /// old <c>Assert.Throws</c> is this one — it works, and the baseline it writes is complete.
+    /// </summary>
     [Fact]
-    public void AbsorbingAnExternalChange_OnAPluginWithACell_ThrowsNamedException_AndWritesNothing()
+    public void AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
         var pluginPath = Path.Combine(ModFolder, PluginName);
         var beforeMain = GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "rev-parse", "main").Trim();
 
-        var ex = Assert.Throws<ContainerRecordsNotYetSupportedException>(() =>
-            ExternalChangeAbsorber.Absorb(ModFolder, PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance));
+        ExternalChangeAbsorber.Absorb(ModFolder, PluginName, pluginPath, Sessions.Session!);
 
-        Assert.Contains("453", ex.Message, StringComparison.Ordinal);
         var afterMain = GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "rev-parse", "main").Trim();
-        Assert.Equal(beforeMain, afterMain);
+        Assert.NotEqual(beforeMain, afterMain);
+
+        var tree = GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "ls-tree", "-r", "--name-only", "main")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .ToList();
+        var root = $"{PluginName}{SourceRecordPath.SourceSuffix}";
+        Assert.Contains($"{root}/RecordData.json", tree);
+        // The Cell that used to make this refuse, now written as its own directory-per-record unit.
+        Assert.Contains(tree, f => f.StartsWith($"{root}/Cells/", StringComparison.Ordinal));
     }
 
     [Fact]

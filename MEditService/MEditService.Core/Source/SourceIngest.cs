@@ -130,9 +130,9 @@ internal static class SourceIngest
                 // the Spriggit sidecars, .gitignore — and every *container* path
                 // (Cells/<b>/<sb>/<name>/RecordData.json, Quests/<name>/...). A container's Head
                 // divergence is genuinely out of reach here: recovering a record type from a container
-                // path needs the structure-aware reader #453/#454 own, since a Quest's own directory
-                // and its DialogTopics children share a group-folder segment and position alone cannot
-                // tell them apart. Logged rather than silently dropped, so the gap stays observable.
+                // path needs a reader nothing has built: #454 declined the grammar (compile hands the
+                // whole tree to the deserializer instead), so this gap is #463's, not a leftover of the
+                // arc. Logged rather than silently dropped, so it stays observable.
                 logger.LogDebug(
                     "Not a flat source record, so its Head state is not reconciled at load: {Path}", gitPath);
                 continue;
@@ -208,7 +208,7 @@ internal static class SourceIngest
     /// <para><b>Only flat records reach this</b>, because only flat paths parse
     /// (<see cref="SourceRecordPath.TryParse"/> fails closed on container paths). A renamed container's
     /// Head therefore still goes unreconciled — the same bounded gap
-    /// <c>SourceIngestContainerTests</c> pins for #454, not a new one this introduces.</para>
+    /// <c>SourceIngestContainerTests</c> pins for #463, not a new one this introduces.</para>
     /// </summary>
     private static void PairRenamedSourceUnits(
         List<(string FormKey, string Body)> baselines,

@@ -3,31 +3,50 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog.WorkEngine;
 
 namespace MEditService.Core.Edits;
 
 /// <summary>
 /// ADR-0041's Save &amp; Compile, end to end (#416 pinned contract): serializes a plugin's source
 /// (working tree, or a named git ref) to its binary through the journaled write pipeline. Compile
-/// derives what the format forces (masters, container structure) and refuses only what it
-/// structurally cannot emit; everything else it can still write becomes a diagnostic, not a refusal.
+/// derives what the format forces (masters) and refuses only what it structurally cannot emit;
+/// everything else it can still write becomes a diagnostic, not a refusal.
 ///
 /// <para>The single write path's other half: <see cref="RecordEditService"/> is source text ←
-/// working tree; this is source text → binary. Both read the source's own bytes, never the DB index,
-/// for the same reason — the index and the source are not always structurally identical (#369's
-/// measured hole) — except for <b>containment</b>, which this class deliberately reads from the
-/// index (<see cref="ContainerAssembler"/>), because nothing in this arc lets a user edit it and the
-/// source was never asked to carry it (#416 S1b / Q1).</para>
+/// working tree; this is source text → binary. Both read the source's own bytes, never the DB index —
+/// the index and the source are not always structurally identical (#369's measured hole).</para>
+///
+/// <para><b>Containment is the path (#454, ADR-0041's #444 amendment).</b> This used to read every
+/// source file one at a time and hand the flat result to <c>ContainerAssembler</c>, which rebuilt the
+/// mod's real containment from the DB's own <c>placement</c>/<c>cell_location</c>/<c>container_child</c>
+/// rows. It no longer does, and the assembler is gone: the tree's own directory nesting
+/// (<c>Cells/&lt;b&gt;/&lt;sb&gt;/…</c>, <c>Worldspaces/&lt;ws&gt;/&lt;X, Y&gt;/&lt;X, Y&gt;/…</c>,
+/// <c>Quests/&lt;q&gt;/DialogTopics/…</c>) already <i>is</i> the containment, and the generated
+/// whole-mod reader walks it. The root <c>RecordData.json</c> comes with it, so the compiled binary
+/// carries the source's own mod header rather than a freshly minted empty one.</para>
+///
+/// <para><b>This is a designated door</b> for the generated whole-mod mixin, alongside
+/// <see cref="TrackService"/> (write) and <see cref="SourceIngest"/> (read) —
+/// <see cref="RecordTextCodecGeneratorSeed"/>'s AC2 whitelist, enforced by
+/// <c>RecordTextCodecGeneratorSeedTests</c>. It shares <see cref="SourceIngest"/>'s reader rather than
+/// having one of its own: both go through the same gateway, over the same tree, with the same
+/// sequential dropoff, so there is no second reader to drift from the first.</para>
+///
+/// <para><b>Child order is not preserved and must not be claimed.</b> Spriggit's layout carries none —
+/// its reader sorts on a <c>"[N] "</c> file-name prefix written only under
+/// <c>Overall.EnforceRecordOrder</c>, which neither this project nor Spriggit enables — so a compiled
+/// binary's folder-split children come back in filesystem order, not the original binary's GRUP order.
+/// #454's scope item 4 accepts that (the gate is compile→re-serialize text stability, not byte identity
+/// with the pre-Track binary); for FO4 <c>DialogTopic.Responses</c> it is real semantic loss, tracked
+/// as #459.</para>
 /// </summary>
 public sealed class PluginCompileService(
     ISessionManager sessions,
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
-    private readonly RecordTextCodec _codec = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
-
     public CompileResult Compile(PluginKey plugin, CompileSource source)
     {
         var session = sessions.Session;
@@ -45,71 +64,71 @@ public sealed class PluginCompileService(
         if (metadata == null)
             return CompileResult.Refused($"{plugin.Name} is not part of the loaded session.");
 
-        var sourceFiles = EnumerateSource(modFolder, plugin.Name, source);
-        var recordsByFormKey = new Dictionary<string, IMajorRecord>(StringComparer.Ordinal);
-        var pathsByFormKey = new Dictionary<string, string>(StringComparer.Ordinal);
-        var collidingFormKeys = new List<string>();
-        foreach (var (relativePath, bytes) in sourceFiles)
+        // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
+        // same "read this directory" call. Once this returns, `using` disposes the scratch on every
+        // path out — refusal and throw alike; a failure *during* the read cleans up on its own way out
+        // (SourceCheckout.Of), which is a separate window and was not free.
+        using var checkout = SourceCheckout.Of(modFolder, plugin.Name, source);
+        if (!Directory.Exists(checkout.TreeRoot))
         {
-            // #451: the root header (Track's own free "no source file" fix, ADR-0041's #444 amendment)
-            // and the auto-persisted spriggit-meta.json sidecar are real files directly under
-            // "<plugin>.source/", not records — feeding either to the codec below is not "an
-            // unresolvable type" (the loud, attributable #454 case immediately after this), it is not
-            // a record at all, and asking it to self-describe crashes the generated dispatch outright
-            // (NullReferenceException from GetSimpleName on a document with no MutagenObjectType field
-            // to read). Skipped explicitly, by the same two names Track itself writes — not a general
-            // "ignore anything that fails to parse" rule, so a genuine container path still reaches the
-            // codec and fails loudly two lines down.
-            if (IsRootSidecarOrHeader(relativePath)) continue;
-
-            // #450/#451: a source document only names its own type when its path could not, so the
-            // type comes from the path — the group-folder segment SourceRecordPath.For itself wrote,
-            // which resolves to the same string the index's record_type column carries. A path this
-            // *flat* layout could not have produced (any container path — Cells/Worldspaces/Quests)
-            // also yields null here; that is #453/#454's structure to read, not this loop's, and it
-            // fails loudly below (the codec's own named exception) rather than silently guessing.
-            var recordType = SourceRecordPath.TryParse(relativePath, session.GameRelease, out var identity) ? identity.RecordType : null;
-            var record = _codec.DeserializeFromBytesAsync(bytes, session.GameRelease, recordType).GetAwaiter().GetResult();
-            var formKey = record.FormKey.ToString();
-            // Structurally impossible to emit: two distinct source files both claiming the same
-            // FormKey (a hand-edit, a corrupted rename, a renumber that collided) would collapse to
-            // one binary record, silently discarding whichever this dictionary assignment overwrites
-            // — refuse rather than pick a winner (#416 comment 2 on the issue: compile refuses states
-            // it cannot emit without changing FormKeys, naming the collision).
-            if (recordsByFormKey.ContainsKey(formKey)) collidingFormKeys.Add(formKey);
-            recordsByFormKey[formKey] = record;
-            pathsByFormKey[formKey] = relativePath;
+            return CompileResult.Refused(
+                $"{plugin.Name} has no source tree at {checkout.Description}, so there is nothing to compile.");
         }
+
+        var mod = RecordTextCodecGeneratorSeed
+            .DeserializeWholeMod(checkout.TreeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        // Structurally impossible to emit: two source units both claiming one FormKey (a hand-edit, an
+        // interrupted rename, a third-party tool's copy) can only become one binary record, silently
+        // discarding the other — refuse rather than pick a winner (#416 comment 2 on the issue: compile
+        // refuses states it cannot emit without changing FormKeys, naming the collision). Asked of the
+        // tree, not of `mod`: the reader's own FormKey-keyed group cache has already resolved a
+        // same-folder collision by the time `mod` exists (SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit).
+        var collidingFormKeys = SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit(
+            checkout.TreeRoot, mod.EnumerateMajorRecords().Select(r => r.FormKey));
         if (collidingFormKeys.Count > 0)
         {
             return CompileResult.Refused(
                 $"{plugin.Name} cannot be compiled: more than one source file claims the same FormKey — " +
-                $"{string.Join(", ", collidingFormKeys.Distinct(StringComparer.Ordinal))}.");
-        }
-
-        var mod = ModFactory.Activator(ModKey.FromFileName(plugin.Name), session.GameRelease);
-        var assembled = ContainerAssembler.Assemble(mod, recordsByFormKey, index, plugin);
-        if (assembled.UnplaceableFormKeys.Count > 0)
-        {
-            return CompileResult.Refused(
-                $"{plugin.Name} cannot be compiled: no parent slot found for " +
-                $"{string.Join(", ", assembled.UnplaceableFormKeys)}.");
+                $"{string.Join(", ", collidingFormKeys)}.");
         }
 
         // Semantic breakage compiles successfully with diagnostics (dangling/type-mismatched
         // FormLinks and kin) — the same CheckErrorBuilder-driven CheckError the editor already shows
         // per field (DuckDbRecordIndex.GetDocument), read here rather than re-derived, so "what the
         // editor flags" and "what compile reports" can't drift.
+        //
+        // #454's scope said "diagnostics unchanged", and this one place they are not — flagged here
+        // rather than left for a reader to notice the discrepancy on their own. The old loop walked the
+        // source *files* it had just read, so a record with no file of its own could not be diagnosed at
+        // all; this walks the mod, so embedded children (placed refs, navmeshes, landscape, a
+        // worldspace's TopCell) now report too, against the container document that holds them. It is a
+        // widening with nothing withdrawn — every record diagnosed before is still diagnosed, with the
+        // same message from the same builder — and it falls out of reading the tree whole rather than
+        // being sought; suppressing it back to the old set would mean re-deriving "does this record have
+        // a file", which is exactly the path-shaped reasoning this ticket removed.
         var diagnostics = new List<CompileDiagnostic>();
-        foreach (var formKey in recordsByFormKey.Keys)
+        foreach (var record in mod.EnumerateMajorRecords())
         {
+            var formKey = record.FormKey.ToString();
             var document = index.GetDocument(formKey, plugin);
             if (document == null) continue;
-            foreach (var field in document.Fields)
-            {
-                if (field.CheckError is { } error)
-                    diagnostics.Add(new CompileDiagnostic(formKey, pathsByFormKey[formKey], $"{field.Metadata.Name}: {error}"));
-            }
+
+            var errors = document.Fields
+                .Where(f => f.CheckError != null)
+                .Select(f => $"{f.Metadata.Name}: {f.CheckError}")
+                .ToList();
+            if (errors.Count == 0) continue;
+
+            // The record's own source unit, resolved the one way this codebase resolves one (#453) —
+            // a flat record's computed path, a container's own directory, or, for an embedded child,
+            // the parent document that actually holds it. Only records that have something to report
+            // pay for it, which is what keeps a container's subtree scan off the common path.
+            var relativePath = SourceUnitResolver
+                .Resolve(index, plugin, checkout.ResolverRoot, formKey, document.RecordType, document.EditorId, session.GameRelease)
+                ?.RelativePath ?? string.Empty;
+            diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
         }
 
         var loadOrder = session.Plugins
@@ -143,59 +162,84 @@ public sealed class PluginCompileService(
 
         var masters = index.GetEffectiveMasters(plugin);
         logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
-            plugin.Name, plugin.Origin, recordsByFormKey.Count);
+            plugin.Name, plugin.Origin, mod.EnumerateMajorRecords().Count());
         return CompileResult.Success(diagnostics, masters);
     }
+}
 
-    // Working tree: the plain files on disk under "<plugin>.source/**" — no git involved, the same
-    // way RecordEditService reads a single record's source file. #416 S8 adds the AtRef case: a git
-    // ref's tree read through SourceRepository, no checkout.
-    private static IReadOnlyList<(string RelativePath, byte[] Bytes)> EnumerateSource(
-        string modFolder, string pluginName, CompileSource source)
+/// <summary>
+/// The directory <see cref="PluginCompileService"/> reads a plugin's source tree from, for either
+/// <see cref="CompileSource"/>.
+///
+/// <para>The working tree is the plain files on disk under <c>&lt;plugin&gt;.source/</c> — no git
+/// involved, the same way <see cref="RecordEditService"/> reads a single record's source file. A named
+/// ref (#416 S8) is that ref's blobs written into a scratch directory laid out identically, so the
+/// whole-mod reader — which takes a folder, not a byte stream — can read it without a checkout: HEAD,
+/// the current branch and the edit branch's own working tree all stay exactly where they were, which is
+/// what <c>PluginCompileServiceParkedRefTests</c> pins.</para>
+/// </summary>
+internal sealed class SourceCheckout : IDisposable
+{
+    private readonly string? _scratchRoot;
+
+    private SourceCheckout(string treeRoot, string resolverRoot, string description, string? scratchRoot) =>
+        (TreeRoot, ResolverRoot, Description, _scratchRoot) = (treeRoot, resolverRoot, description, scratchRoot);
+
+    /// <summary>The <c>&lt;plugin&gt;.source/</c> directory itself — what the whole-mod reader takes.</summary>
+    internal string TreeRoot { get; }
+
+    /// <summary>Its parent — the mod folder for a working-tree compile, the scratch root for a ref.
+    /// <see cref="SourceUnitResolver"/> and <c>CompileDiagnostic.SourceRelativePath</c> are both stated
+    /// relative to this, so a diagnostic's path is the same mod-folder-relative text either way, which
+    /// is what the extension joins against the mod folder to build a Problems-panel URI.</summary>
+    internal string ResolverRoot { get; }
+
+    /// <summary>What to call this source in a refusal message.</summary>
+    internal string Description { get; }
+
+    internal static SourceCheckout Of(string modFolder, string pluginName, CompileSource source)
     {
-        return source switch
+        var treeName = $"{pluginName}{SourceRecordPath.SourceSuffix}";
+
+        if (source is CompileSource.AtRef atRef)
         {
-            CompileSource.WorkingTree => EnumerateWorkingTreeSource(modFolder, pluginName),
-            CompileSource.AtRef atRef => SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, atRef.Ref),
-            _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unknown compile source."),
-        };
+            // The owner is constructed *before* a single byte is written, and populating happens under
+            // its own disposal. Ordering, not style: materialising first and constructing afterwards
+            // would mean a throw mid-populate happens before the caller's `using` has anything to bind,
+            // so Dispose never runs and the scratch directory leaks — permanently, and again on every
+            // retry. Real failures live in that window (disk full, permissions, a path the filesystem
+            // rejects, another tool touching it mid-write — root CLAUDE.md's
+            // never-assume-exclusive-ownership rule applied to paths this process did not choose), and
+            // PluginCompileServiceParkedRefTests pins the cleanup with one of them.
+            var scratchRoot = Directory.CreateTempSubdirectory("medit-compile-ref-").FullName;
+            var checkout = new SourceCheckout(
+                Path.Combine(scratchRoot, treeName), scratchRoot, atRef.Ref, scratchRoot);
+            try
+            {
+                foreach (var (relativePath, bytes) in SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, atRef.Ref))
+                {
+                    var destination = Path.Combine(scratchRoot, relativePath);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    File.WriteAllBytes(destination, bytes);
+                }
+            }
+            catch
+            {
+                checkout.Dispose();
+                throw;
+            }
+            return checkout;
+        }
+
+        return new SourceCheckout(
+            Path.Combine(modFolder, treeName), modFolder, "the working tree", scratchRoot: null);
     }
 
-    private static List<(string RelativePath, byte[] Bytes)> EnumerateWorkingTreeSource(
-        string modFolder, string pluginName)
+    public void Dispose()
     {
-        var sourceDir = Path.Combine(modFolder, $"{pluginName}{SourceRecordPath.SourceSuffix}");
-        if (!Directory.Exists(sourceDir)) return [];
-
-        // Relative to modFolder, matching EnumerateSourceAtRef's own shape — CompileDiagnostic.
-        // SourceRelativePath is a path the extension joins against the mod folder to build a
-        // Problems-panel URI, in both CompileSource cases alike, never an absolute path from one and
-        // relative from the other.
-        return Directory.EnumerateFiles(sourceDir, "*.json", SearchOption.AllDirectories)
-            .Select(path => (Path.GetRelativePath(modFolder, path), File.ReadAllBytes(path)))
-            .ToList();
-    }
-
-    // "<plugin>.source/RecordData.json" (the mod header), "<plugin>.source/spriggit-meta.json" (the
-    // auto-persisted sidecar) or "<plugin>.source/.spriggit" (the CLI pin file) — exactly two segments,
-    // all three names Track itself writes at the tree root (TrackService.cs,
-    // SpriggitRootHeader/SpriggitMetaSidecar/SpriggitConfigSidecar). Deliberately name-based, not
-    // "anything TryParse rejects": a nested RecordData.json (a Cell/Quest's own document) must still
-    // reach the codec and fail loudly, not be silently swept up by a broader rule.
-    //
-    // ".spriggit" only ever reaches this loop via CompileSource.AtRef — EnumerateWorkingTreeSource's
-    // own "*.json" glob already excludes it (its name has no .json extension at all), but
-    // SourceRepository.EnumerateSourceAtRef's `git ls-tree -r` walks every blob under the source
-    // prefix with no extension filter, so the two CompileSource cases are not otherwise symmetric here
-    // — caught running PluginCompileServiceParkedRefTests' own AtRef case.
-    private static bool IsRootSidecarOrHeader(string relativePath)
-    {
-        var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 2) return false;
-
-        var fileName = segments[1];
-        return fileName.Equals("RecordData.json", StringComparison.Ordinal)
-            || fileName.Equals(SpriggitMetaSidecar.FileName, StringComparison.Ordinal)
-            || fileName.Equals(SpriggitConfigSidecar.FileName, StringComparison.Ordinal);
+        if (_scratchRoot == null) return;
+        try { Directory.Delete(_scratchRoot, recursive: true); }
+        catch (IOException) { /* scratch, best-effort */ }
+        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
     }
 }

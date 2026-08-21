@@ -151,7 +151,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Contains("IngestRef", cell.Body, StringComparison.Ordinal);
     }
 
-    // ---- The pinned #453/#454 limitation ----
+    // ---- The pinned #463 limitation ----
 
     /// <summary>
     /// A container edited in the working tree is read correctly at Effective, but its <b>Head</b> state
@@ -166,19 +166,24 @@ public sealed class SourceIngestContainerTests : IDisposable
     /// alone cannot tell them apart. It degrades and logs; it never throws, which is the part that
     /// matters for a session load.</para>
     ///
-    /// <para><b>#454's, not #453's</b> — narrowed when #453 landed, which had said "#453/#454". #453
-    /// needed only the forward direction, FormKey → path, which <c>SourceUnitResolver</c> answers by
-    /// finding the file on disk with no path grammar at all. What is missing here is the <i>reverse</i>:
-    /// path → record identity for an arbitrary container path. That is precisely "compile reads
-    /// structure from the tree", #454's own charter, and building it early here would mean building it
-    /// twice.</para>
+    /// <para><b>#463's, and it has been misattributed twice — do not move it again without reading
+    /// this.</b> #453 said "#453/#454"; #453's own landing narrowed that to "#454's", on the premise
+    /// that compile-reads-structure-from-the-tree would have to build a path → record-identity reader
+    /// this could reuse. #454 landed and built no such thing: compile hands the whole tree to the
+    /// generated whole-mod deserializer, which walks the directory structure itself, so there is no
+    /// path grammar anywhere in it to borrow. Neither resolver direction produced one — #453 needed
+    /// only FormKey → path, which <c>SourceUnitResolver</c> answers by finding the file on disk. The
+    /// gap therefore survived #454 untouched and now has a ticket of its own, <b>#463</b>, carrying
+    /// both candidate directions — including reconciling Head <i>structurally</i> (deserialize the
+    /// <c>HEAD</c> tree and diff mod objects), which needs no grammar at all and is affordable on
+    /// #452's own measurements.</para>
     ///
     /// <para>Note what #453 did change about the neighbouring case: a <i>flat</i> record renamed by an
     /// EditorID edit now reconciles correctly across a reload rather than landing in both halves of
     /// <c>records_head</c> (<c>SourceIngestTests.AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete</c>).
     /// A renamed <i>container</i> still does not, for the reason above.</para>
     ///
-    /// <para>When #454 lands, this test should go red and be replaced by the real assertion (Head holds
+    /// <para>When #463 lands, this test should go red and be replaced by the real assertion (Head holds
     /// the committed bytes). That is the intended lifecycle, not a regression.</para>
     /// </summary>
     [Fact]

@@ -12,12 +12,17 @@ namespace MEditService.Core.Records;
 /// <c>ContainerChildFields.ByTypeName</c> holds minus
 /// <c>DuckDbRecordIndex.CoveredByPlacementTables</c> — six today.)
 ///
-/// <para><b><see cref="SlotIndex"/> is load-bearing, not bookkeeping.</b> For the folder-split
-/// relationships it is the <i>only</i> surviving record of a child's position in its parent's list:
-/// those children are written to their own files and read back with the parent's slot empty, so
-/// <c>ContainerAssembler</c> has nothing else to reconstruct the order from at compile. Dropping it
-/// there reorders a quest's dialog topics in the compiled plugin, silently
-/// (<c>ContainerAssemblerOrderingTests</c>).</para>
+/// <para><b><see cref="SlotIndex"/> no longer feeds compile, and nothing else records child order
+/// either</b> (#454). It used to be the ordering source <c>ContainerAssembler</c> rebuilt a
+/// folder-split slot from; that class is gone, because containment — and with it the child set — is
+/// now the tree's own directory nesting, read by the whole-mod deserializer. What did <i>not</i>
+/// survive the move is child <b>order</b>: Spriggit's layout carries none (its reader sorts on a
+/// <c>"[N] "</c> file-name prefix written only under <c>Overall.EnforceRecordOrder</c>, which neither
+/// this project nor Spriggit enables), so this column now holds whatever order the tree was read in —
+/// stable for a given tree, not canonical against the original binary. Pinned as a named allowlist
+/// entry with exact counts by <c>SourceIngestParityTests</c>. For FO4 <c>DialogTopic.Responses</c>
+/// that lost order is real semantic loss, tracked as #459; do not treat a reordering as a bug here
+/// without reading it.</para>
 ///
 /// <para><b>Ref-invariant, though less by construction than it was</b>: no gesture in this arc moves
 /// a record between containers or reorders a container's children, so this answers identically at

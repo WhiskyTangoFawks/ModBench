@@ -53,7 +53,6 @@ public sealed class TrackService(ILogger<TrackService> logger)
             throw new SourceAlreadyTrackedException($"'{modFolder}' is already tracked.");
         GitCli.EnsureOnPath();
 
-        var scratchRoot = Directory.CreateTempSubdirectory("medit-track-").FullName;
         try
         {
             var pristineFiles = new List<PristineFile>();
@@ -74,48 +73,9 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 parsedDone++;
                 SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
 
-                var pluginScratchDir = Path.Combine(scratchRoot, plugin.Name);
-                Directory.CreateDirectory(pluginScratchDir);
-
                 SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
-                // The whole-mod door — this class is one of the designated callers (AC2 re-scope,
-                // #451). Always a sequential/inline dropoff, explicitly, even though it is already
-                // the library's own default (SerializationMetaData falls back to InlineWorkDropoff
-                // when handed null): the #444 spike's own finding 4 is a real upstream race in
-                // MajorRecordListParallelHelper under a genuinely parallel dropoff (nested-list
-                // containers writing into each other's folders), so this is named rather than relied
-                // on implicitly — RecordTextCodecGeneratorSeedTests' companion guard fails loudly if
-                // this ever gets quietly swapped for a genuinely parallel one.
-                await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                    // FO4-typed, matching RecordTextCodecGeneratorSeed's own seed type — the generated
-                    // whole-mod mixin is itself FO4-specific (seeded from an FO4 mod type), so this is
-                    // the existing generalization boundary, not a new one.
-                    (IFallout4ModGetter)deepParsed,
-                    pluginScratchDir,
-                    InlineWorkDropoff.Instance,
-                    cancel);
-
-                // SpriggitSource as extraMeta in the root document (ADR-0041's #444 amendment) —
-                // merged into the header file the mixin just wrote, not passed through the mixin's own
-                // extraMeta parameter (RecordTextCodecGeneratorSeed.SerializeWholeMod's own doc comment:
-                // a second generator defect, reproduced implementing #451).
-                SpriggitRootHeader.MergeSpriggitSource(Path.Combine(pluginScratchDir, SpriggitRootHeader.RecordDataFileName));
-
-                SpriggitSidecarWriter.Write(pluginScratchDir, plugin.Name, session);
-
-                // #451 AC4: canonicalization at the door. The whole-mod door's writer goes through the
-                // same JSON kernel the per-record codec does, whose own doc comment already established
-                // (RecordTextCodec.SerializeCoreAsync) that Newtonsoft's JsonTextWriter has no reachable
-                // NewLine to pin — the per-record codec answers this with its own post-write \r-strip,
-                // and this mirrors that precedent for the whole-mod door rather than assuming Linux's
-                // own \n-native Environment.NewLine generalizes to every platform this ships on.
-                foreach (var file in Directory.EnumerateFiles(pluginScratchDir, "*", SearchOption.AllDirectories))
-                {
-                    cancel.ThrowIfCancellationRequested();
-                    var relativePath = Path.Combine($"{plugin.Name}{SourceRecordPath.SourceSuffix}", Path.GetRelativePath(pluginScratchDir, file));
-                    var bytes = StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel));
-                    pristineFiles.Add(new PristineFile(relativePath, bytes));
-                }
+                pristineFiles.AddRange(
+                    await SerializeToPristineFiles(deepParsed, plugin.Name, session, cancel));
 
                 binaryHashesByPlugin[plugin.Name] = ComputeSha256(plugin.Path);
                 SetProgress(origin, TrackPhase.Serializing, parsedDone, plugins.Count);
@@ -129,10 +89,87 @@ public sealed class TrackService(ILogger<TrackService> logger)
         }
         finally
         {
-            Directory.Delete(scratchRoot, recursive: true);
             // Idle at rest, success or failure alike — a poller reading after this call returns
             // (or throws) must never keep reporting a track that is no longer actually running.
             SetProgress(null, TrackPhase.Idle, 0, 0);
+        }
+    }
+
+    /// <summary>
+    /// One plugin's complete source tree as a list of <see cref="PristineFile"/>s, ready to commit —
+    /// the whole-mod door's own write operation, start to finish: serialize, merge the
+    /// <c>SpriggitSource</c> <c>extraMeta</c> into the root document, write both sidecars, canonicalize
+    /// line endings.
+    ///
+    /// <para><b>Why this lives in the door file, and why that is not a whitelist dodge.</b> It is the
+    /// door's own operation, factored out so there is exactly one implementation of it — not a routing
+    /// convenience that lets another class reach the mixin. The guard
+    /// (<c>RecordTextCodecGeneratorSeedTests</c>) exists to keep whole-mod serialization in few enough
+    /// places that the sequential dropoff, the <c>\r</c> canonicalization and the sidecars happen the
+    /// same way everywhere; a second hand-rolled implementation elsewhere would satisfy the guard's
+    /// letter while defeating its purpose. That is not hypothetical — it is exactly what happened.
+    /// <see cref="ExternalChangeAbsorber"/> rebuilt the tree one record at a time and omitted all three
+    /// non-record files, including the root <c>RecordData.json</c> that ADR-0041's #444 amendment makes
+    /// the mod header's source file. Since <see cref="SourceRepository.CommitPristineToMain"/> writes
+    /// only what it is handed, with no merge against the previous tree, that <i>deleted</i> the header
+    /// from the baseline, and the resulting tree could not be read back at all — the whole-mod door
+    /// takes ModKey and GameRelease from that file. Found by #454, which is the first thing to read a
+    /// whole tree back; latent for ingest-from-source (#452) on the same call for just as long.</para>
+    ///
+    /// <para>The caller supplies the already-parsed mod rather than a path: both callers parse for
+    /// their own reasons (Track reports progress around it; Absorb parses the binary that changed
+    /// underneath it), and the parse was never the part that differed.</para>
+    /// </summary>
+    internal static async Task<IReadOnlyList<PristineFile>> SerializeToPristineFiles(
+        IModGetter mod, string pluginName, IGameSession session, CancellationToken cancel = default)
+    {
+        var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
+        try
+        {
+            // The whole-mod door — this class is one of the designated callers (AC2 re-scope, #451).
+            // Always a sequential/inline dropoff, explicitly, even though it is already the library's
+            // own default (SerializationMetaData falls back to InlineWorkDropoff when handed null):
+            // the #444 spike's own finding 4 is a real upstream race in MajorRecordListParallelHelper
+            // under a genuinely parallel dropoff (nested-list containers writing into each other's
+            // folders), so this is named rather than relied on implicitly —
+            // RecordTextCodecGeneratorSeedTests' companion guard fails loudly if this ever gets
+            // quietly swapped for a genuinely parallel one.
+            await RecordTextCodecGeneratorSeed.SerializeWholeMod(
+                // FO4-typed, matching RecordTextCodecGeneratorSeed's own seed type — the generated
+                // whole-mod mixin is itself FO4-specific (seeded from an FO4 mod type), so this is
+                // the existing generalization boundary, not a new one.
+                (IFallout4ModGetter)mod,
+                scratchDir,
+                InlineWorkDropoff.Instance,
+                cancel);
+
+            // SpriggitSource as extraMeta in the root document (ADR-0041's #444 amendment) — merged
+            // into the header file the mixin just wrote, not passed through the mixin's own extraMeta
+            // parameter (RecordTextCodecGeneratorSeed.SerializeWholeMod's own doc comment: a second
+            // generator defect, reproduced implementing #451).
+            SpriggitRootHeader.MergeSpriggitSource(Path.Combine(scratchDir, SpriggitRootHeader.RecordDataFileName));
+
+            SpriggitSidecarWriter.Write(scratchDir, pluginName, session);
+
+            // #451 AC4: canonicalization at the door. The whole-mod door's writer goes through the
+            // same JSON kernel the per-record codec does, whose own doc comment already established
+            // (RecordTextCodec.SerializeCoreAsync) that Newtonsoft's JsonTextWriter has no reachable
+            // NewLine to pin — the per-record codec answers this with its own post-write \r-strip,
+            // and this mirrors that precedent for the whole-mod door rather than assuming Linux's
+            // own \n-native Environment.NewLine generalizes to every platform this ships on.
+            var pristineFiles = new List<PristineFile>();
+            foreach (var file in Directory.EnumerateFiles(scratchDir, "*", SearchOption.AllDirectories))
+            {
+                cancel.ThrowIfCancellationRequested();
+                var relativePath = Path.Combine(
+                    $"{pluginName}{SourceRecordPath.SourceSuffix}", Path.GetRelativePath(scratchDir, file));
+                pristineFiles.Add(new PristineFile(relativePath, StripCarriageReturns(await File.ReadAllBytesAsync(file, cancel))));
+            }
+            return pristineFiles;
+        }
+        finally
+        {
+            Directory.Delete(scratchDir, recursive: true);
         }
     }
 

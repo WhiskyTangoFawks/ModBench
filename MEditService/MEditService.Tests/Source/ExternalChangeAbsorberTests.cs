@@ -39,7 +39,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
 
         var relativePath = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
@@ -57,7 +57,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
 
         Assert.Equal(branchBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Equal(headBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
@@ -71,9 +71,46 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
 
         Assert.Null(ExternalChangeDeferral.Pending(_mod.ModFolder, TrackedModFixture.PluginName));
+    }
+
+    /// <summary>
+    /// Absorb's baseline is a <b>complete</b> source tree, not just the record files — the invariant
+    /// that had quietly lapsed since #451 and that #454 turned into a crash.
+    ///
+    /// <para>Absorb rebuilds the whole tree and <c>CommitPristineToMain</c> writes only what it is
+    /// handed, with no merge against the previous tree, so anything Absorb forgets is <i>deleted</i>
+    /// from the baseline. It used to be built one record at a time and so forgot all three non-record
+    /// files: the root <c>RecordData.json</c> that is the mod header's own source file (ADR-0041's #444
+    /// amendment, point 1) and both Spriggit sidecars. A tree with no root document cannot be read back
+    /// at all — the whole-mod door's <c>ExtractMeta</c> takes ModKey and GameRelease from it — which
+    /// breaks compile <i>and</i> ingest-from-source the moment that baseline reaches a working tree.</para>
+    ///
+    /// <para>Fixed at the root by sharing Track's own serialization
+    /// (<c>TrackService.SerializeToPristineFiles</c>) instead of hand-rolling a second one. This
+    /// asserts the property directly, so the next hand-rolled tree writer fails here rather than three
+    /// operations downstream.</para>
+    /// </summary>
+    [Fact]
+    public void Absorb_WritesACompleteSourceTree_IncludingTheModHeaderAndBothSidecars()
+    {
+        WriteExternalBinaryChange(0.9f);
+        var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
+
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+
+        var gitDir = Path.Combine(_mod.ModFolder, ".git");
+        var tree = GitCli.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .ToList();
+
+        var root = $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}";
+        Assert.Contains($"{root}/RecordData.json", tree);
+        Assert.Contains($"{root}/spriggit-meta.json", tree);
+        Assert.Contains($"{root}/.spriggit", tree);
     }
 
     [Fact]
@@ -82,7 +119,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();

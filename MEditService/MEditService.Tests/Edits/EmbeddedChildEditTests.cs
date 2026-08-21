@@ -288,7 +288,10 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("454", result.Message, StringComparison.Ordinal);
+        // Asserted on the durable reason, not on a ticket number: #454 landed compile-from-tree and
+        // deliberately did not make anything *move* a record within that structure, so the refusal
+        // stands and the message no longer forward-references a ticket.
+        Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
         Assert.Empty(GitStatus());
     }
 

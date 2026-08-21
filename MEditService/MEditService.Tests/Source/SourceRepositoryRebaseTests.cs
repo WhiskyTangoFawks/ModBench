@@ -1,5 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
+using MEditService.Core.Session;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -50,7 +53,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
     }
 
     /// <summary>An upstream update that adds a brand-new NPC — a path the edit branch's own commit
@@ -67,7 +70,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
     }
 
     [Fact]
@@ -103,6 +106,50 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Contains("\"HeightMax\": 0.3", File.ReadAllText(Path.Combine(_mod.ModFolder, relative)), StringComparison.Ordinal);
         var mainSha = RunGit("rev-parse", "refs/heads/main").Trim();
         Assert.Equal(mainSha, RunGit("merge-base", "refs/heads/main", "edit").Trim());
+    }
+
+    /// <summary>
+    /// The whole #417 flow through to the next session load: absorb an upstream update, take the
+    /// rebase it offers, then reload — and the plugin still ingests <b>from its source tree</b>.
+    ///
+    /// <para><b>This is the test whose absence hid a shipping bug</b> (#454). Nothing in the suite
+    /// reloaded a session after an Absorb, and Absorb's own tests could not have caught it: Absorb
+    /// commits to <c>main</c> without a checkout, so the edit branch's working tree — the one both
+    /// ingest and compile read — is still Track's own complete tree until a rebase replays onto the new
+    /// baseline. Only then does the incomplete baseline become the working tree, and only then does the
+    /// missing root <c>RecordData.json</c> bite. It bit compile first, in
+    /// <see cref="RebaseEditBranch_Conflicts_OnOverlappingRecordEdits_AndTheResolvedResultCompiles"/>,
+    /// but ingest-from-source calls the same whole-mod door on the same directory (#452), so a session
+    /// load would have thrown identically the moment a user took the offered rebase.</para>
+    ///
+    /// <para>The conflict-free upstream update on purpose: this is about the tree being <i>complete</i>
+    /// after a replay, not about conflict handling, which its sibling above covers.</para>
+    /// </summary>
+    [Fact]
+    public void RebaseEditBranch_ThenAReload_StillIngestsThePluginFromItsSourceTree()
+    {
+        EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.3"));
+        CommitOnEditBranch("my own edit");
+        AbsorbUpstreamNewRecord();
+
+        Assert.Equal(RebaseOutcome.Clean, SourceRepository.RebaseEditBranch(_mod.ModFolder).Outcome);
+
+        using var reloaded = new SessionManager(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ISessionManager)reloaded).LoadExplicit(
+            _mod.GameDirectory,
+            [new ExplicitPluginInput(
+                TrackedModFixture.PluginName,
+                Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName),
+                TrackedModFixture.ModFolderOrigin,
+                true)],
+            GameRelease.Fallout4);
+
+        // No degraded load, and the record reads with the edit that survived the replay — which it can
+        // only do if the source tree was read, since the binary on disk is upstream's and has 1.0.
+        Assert.Empty(reloaded.Status.Failures);
+        Assert.Equal(0.3f, reloaded.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Fields
+            .Single(f => f.Metadata.Name == "height_max").Value as float?);
     }
 
     [Fact]

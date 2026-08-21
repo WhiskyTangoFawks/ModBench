@@ -279,13 +279,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // one document shape (ADR-0041's #444 amendment). The deep copy that made stripping possible
         // was the only per-container cost on this path (~5% of a real corpus) and goes with it.
         //
-        // Known and deliberate for now: an embedded child is represented twice — inline in this
-        // parent's document, and again as its own `records` row with its own source file — so an
-        // edit to the child's own file leaves the parent's inline copy stale until the next ingest.
-        // Compile is unaffected (ContainerAssembler replaces each slot from the children's own
-        // files). The window closes at **#452**, which makes a tracked plugin ingest from its source
-        // tree, where an embedded child has no separate file to diverge from; #454 retires the
-        // assembler with it. Do not paper over this with a reconciliation pass — that is the shape
+        // The divergence window this used to warn about is closed. #452 made a tracked plugin ingest
+        // from its source tree, where an embedded child has no separate file to diverge from, and #454
+        // retired ContainerAssembler along with the last consumer that could have read a stale inline
+        // copy — compile now deserializes the tree whole, so a container's children come from the one
+        // document that holds them. Do not reopen it with a reconciliation pass; that is the shape
         // ADR-0041's amendment exists to delete.
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
 

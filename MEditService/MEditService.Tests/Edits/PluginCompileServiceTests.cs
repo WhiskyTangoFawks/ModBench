@@ -13,9 +13,10 @@ namespace MEditService.Tests.Edits;
 /// #416 S1: Save &amp; Compile's core promise — editing a plain (non-container) record's field and
 /// compiling writes a binary that re-parses with the edit landed, and every untouched record
 /// unchanged. <see cref="TrackedModFixture"/>'s three records (Npc/Race/Keyword/OtherNpc) are all
-/// top-level, non-container types, so this exercises pass 1 of <see cref="ContainerAssembler"/> only —
-/// container reconstruction (cells, worldspaces, quests, dialogue) is <c>RealData/CompileRoundTripGateTests</c>'s
-/// job, against the real #369 fixture.
+/// top-level, non-container types, so this exercises the flat half of the tree only — containers
+/// (cells, worldspaces, quests, dialogue) are <see cref="PluginCompileServiceContainerTests"/>' job on
+/// a small readable fixture, and <c>RealData/CompileRoundTripGateTests</c>' at scale against the real
+/// #369 fixture.
 /// </summary>
 public sealed class PluginCompileServiceTests : IDisposable
 {
