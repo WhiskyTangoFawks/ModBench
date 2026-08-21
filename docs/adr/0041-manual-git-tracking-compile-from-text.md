@@ -304,6 +304,23 @@ embedded child records are index rows extracted from the parent document, and th
 **one document shape everywhere** — probe-pinned byte-identical between the per-record
 door and the whole-mod door once two codec-side deltas are removed (below).
 
+> **Erratum (2026-08-21, #450 — implementation).** The sentence above is wrong about the
+> two codec suppressions: `NoRecordFolders` and `DiscardChildRecordStreams` are **retained**.
+> `ContainerStripFields` did retire as stated (it survives as `ContainerChildFields`, a
+> child-slot table with no stripping surface), and so does the shallow-strip posture — but
+> the suppressions were never part of it. Spriggit embeds five slots, not all containment:
+> `Cell.{Temporary,Persistent,Landscape,NavigationMeshes}` and `Worldspace.TopCell` only.
+> `Quest.{DialogBranches,DialogTopics,Scenes}` and `DialogTopic.Responses` stay folder-split
+> on both doors, and the per-record codec passes `directory: string.Empty`, so without the
+> suppressions one real Quest writes ~1,057 directories — one per dialogue topic — into the
+> process's working directory, for every container in every indexed plugin.
+>
+> This costs the decision nothing: byte parity is what the retained suppressions **deliver**,
+> not a compromise against it. They redirect the child *streams and folders*; the parent's own
+> bytes are untouched either way. `DocumentShapeParityTests` pins that with zero
+> normalization, for a populated Cell (embedded) and a populated Quest (folder-split) alike —
+> check the claim there rather than taking this paragraph's word for it.
+
 **2. Tracked plugins ingest from source.** Working tree → Effective, git `HEAD` → Head;
 the binary is never consulted for a tracked plugin's content. By construction this
 deletes the reconciliation-sweep class (`WorkingTreeCreateRediscovery`, the

@@ -72,13 +72,12 @@ internal static class ContainerAssembler
         //     one attached from the child's own source file. Buffering makes "clear once, then fill"
         //     structural rather than something a HashSet has to remember (#416 review's original
         //     point, which also covered committed baselines carrying pre-fix inlined content).
-        //   Ordering. The order to restore is the parent's own — placement carries no ordering
-        //     column, so attaching in FormKey order rewrote every populated cell's Persistent and
-        //     Temporary lists into a different order than the source held, which the #369 compile
-        //     round-trip gate reads as a content change (measured on cell 018AA2). The parent's
-        //     document is now the authority on that order, so the flush reads it off the slot before
-        //     clearing it.
-        var pendingChildren = new List<(object Parent, string Slot, IMajorRecord Child)>();
+        //   Ordering. Compile writes the binary from what this produces, so a slot rebuilt in the
+        //     wrong order is a silent content change in the user's plugin. There are two ordering
+        //     sources because there are two kinds of slot, and each is the only one available for
+        //     its own kind — see AttachBufferedChildren. Buffering is what lets a slot be ordered as
+        //     a whole rather than one child at a time in discovery order.
+        var pendingChildren = new List<(object Parent, string Slot, IMajorRecord Child, int? SlotIndex)>();
 
         // Pass 1: every record that has a genuine top-level group (the ~95% non-container case, plus
         // Worldspace and Quest — top-level records that are *themselves* containers of stripped
@@ -125,10 +124,11 @@ internal static class ContainerAssembler
             placed.Add(formKey);
         }
 
-        // Pass 3: placed refs — into their cell's Persistent/Temporary list. Ordered by FormKey
-        // (not original file order — placement carries no ordering column today; #416 measures
-        // whether that matters against the real round-trip fixture and files it separately if so)
-        // purely so the same source set always assembles in the same order.
+        // Pass 3: placed refs — into their cell's Persistent/Temporary list. `placement` carries no
+        // ordering column, so these are buffered with no slot index and take their order from the
+        // parent cell's own document, which since #450 embeds them (AttachBufferedChildren). The
+        // FormKey iteration order here only makes the buffer's own contents deterministic; it is not
+        // the order anything is attached in.
         foreach (var formKey in recordsByFormKey.Keys.OrderBy(k => k, StringComparer.Ordinal))
         {
             if (placed.Contains(formKey)) continue;
@@ -142,16 +142,20 @@ internal static class ContainerAssembler
             }
 
             var slotName = placement.Value.PlacementGroup == "persistent" ? "Persistent" : "Temporary";
-            pendingChildren.Add((cell, slotName, recordsByFormKey[formKey]));
+            pendingChildren.Add((cell, slotName, recordsByFormKey[formKey], null));
             placed.Add(formKey);
         }
 
-        // Pass 4: the five container_child relationships (#416 S1b) — Cell.NavigationMeshes/Landscape,
-        // Quest.DialogBranches/DialogTopics, DialogTopic.Responses. Runs over every Cell/Quest/
+        // Pass 4: the container_child relationships (#416 S1b) — Cell.NavigationMeshes/Landscape,
+        // Quest.DialogBranches/DialogTopics/Scenes, DialogTopic.Responses. Runs over every Cell/Quest/
         // DialogTopic regardless of whether *it* has been placed yet (attaching a child mutates the
         // parent object directly; it needs the parent object to exist, not to already be reachable
         // from the mod root) — which is what lets a DialogTopic's own Responses attach in the same
         // pass that attaches the DialogTopic to its Quest, in either order.
+        //
+        // SlotIndex rides along into the buffer and is the ordering source for these. It is the only
+        // one they have: the slots Spriggit does not embed are written folder-split and read back
+        // empty, so the parent record handed to this pass carries no order to recover.
         foreach (var (formKey, record) in recordsByFormKey)
         {
             var parentType = ContainerChildFields.NormalizedTypeName(record.GetType());
@@ -164,7 +168,7 @@ internal static class ContainerAssembler
                     unplaceable.Add(child.ChildFormKey);
                     continue;
                 }
-                pendingChildren.Add((record, child.SlotName, childRecord));
+                pendingChildren.Add((record, child.SlotName, childRecord, child.SlotIndex));
                 placed.Add(child.ChildFormKey);
             }
         }
@@ -259,28 +263,48 @@ internal static class ContainerAssembler
     // ── generic reflection plumbing ──────────────────────────────────────────────
 
     /// <summary>
-    /// Applies every buffered attachment, one (parent, slot) at a time: read the order the parent's
-    /// own source text has for that slot, clear it, then re-fill it in that order.
+    /// Applies every buffered attachment, one (parent, slot) at a time: work out the order that slot
+    /// is supposed to end up in, clear it, then re-fill it in that order.
     ///
-    /// <para>Reading the order before clearing is the whole point. Nothing in the index records a
-    /// child's position within its parent's list — <c>placement</c> has no ordering column, and
-    /// <c>container_child</c>'s <c>SlotIndex</c> only covers the five relationships it carries — but
-    /// since #450 the parent's document embeds its children, so the order is right there in the
-    /// record this pass was handed. A child with no position in it (added since, or attached through
-    /// a relationship the parent's document does not inline) sorts last, by FormKey, so the result is
-    /// deterministic either way — which is what
-    /// <c>CompileRoundTripGateTests.Compile_OfTheRealFixture_IsDeterministic</c> requires.</para>
+    /// <para><b>Two ordering sources, one per kind of slot, because neither covers both.</b></para>
+    /// <list type="bullet">
+    /// <item><b><c>container_child</c> slots</b> — the ones Spriggit does not embed
+    /// (<c>Quest.DialogBranches</c>/<c>DialogTopics</c>/<c>Scenes</c>,
+    /// <c>DialogTopic.Responses</c>, plus <c>Cell.NavigationMeshes</c>/<c>Landscape</c>) — order by
+    /// the <c>SlotIndex</c> captured at ingest. Those children are written folder-split and read back
+    /// empty (the codec's child-stream suppressions), so the parent record this is handed carries no
+    /// order of its own to recover; <c>SlotIndex</c> is the only record of it that exists.</item>
+    /// <item><b>Embedded slots</b> — <c>Cell.Persistent</c>/<c>Temporary</c>, attached from
+    /// <c>placement</c>, which has no ordering column — order by the child's position in the
+    /// <i>parent document's own</i> list, read off the slot before it is cleared. Since #450 the
+    /// parent embeds them, so that position is right there in the record.</item>
+    /// </list>
+    ///
+    /// <para>No slot draws on both: a relationship <c>placement</c> covers is excluded from
+    /// <c>container_child</c> by construction (<c>DuckDbRecordIndex.CoveredByPlacementTables</c>).
+    /// The two are combined into one key anyway, rather than branched on, so a future relationship
+    /// that did carry both would order sensibly instead of picking a winner by accident. A child with
+    /// neither — added since ingest, or reaching a slot its parent does not inline — sorts last by
+    /// FormKey, keeping the result deterministic
+    /// (<c>CompileRoundTripGateTests.Compile_OfTheRealFixture_IsDeterministic</c>) even where it
+    /// cannot be faithful.</para>
+    ///
+    /// <para>Getting this wrong is silent: the compiled plugin still holds every child, just in a
+    /// different order, and it reaches the user's source text through the next ingest.
+    /// <c>ContainerAssemblerOrderingTests</c> covers the <c>container_child</c> half; the #369
+    /// real-fixture compile gate covers the embedded half (it caught cell <c>018AA2</c>).</para>
     /// </summary>
-    private static void AttachBufferedChildren(List<(object Parent, string Slot, IMajorRecord Child)> pending)
+    private static void AttachBufferedChildren(
+        List<(object Parent, string Slot, IMajorRecord Child, int? SlotIndex)> pending)
     {
         foreach (var group in pending.GroupBy(p => (p.Parent, p.Slot), new ParentSlotComparer()))
         {
             var (parent, slotName) = group.Key;
-            var sourceOrder = SlotChildFormKeys(parent, slotName);
+            var documentOrder = SlotChildFormKeys(parent, slotName);
             ClearSlot(parent, slotName);
 
             foreach (var item in group
-                         .OrderBy(i => SourcePosition(sourceOrder, i.Child))
+                         .OrderBy(i => i.SlotIndex ?? DocumentPosition(documentOrder, i.Child))
                          .ThenBy(i => i.Child.FormKey.ToString(), StringComparer.Ordinal))
             {
                 AttachChild(parent, slotName, item.Child);
@@ -300,8 +324,8 @@ internal static class ContainerAssembler
             _ => [],
         };
 
-    private static int SourcePosition(List<string> sourceOrder, IMajorRecord child) =>
-        sourceOrder.IndexOf(child.FormKey.ToString()) is var i && i >= 0 ? i : int.MaxValue;
+    private static int DocumentPosition(List<string> documentOrder, IMajorRecord child) =>
+        documentOrder.IndexOf(child.FormKey.ToString()) is var i && i >= 0 ? i : int.MaxValue;
 
     /// <summary>Empties <paramref name="parent"/>'s named slot. Dual-mode (<c>Clear()</c> for a list,
     /// null for a single reference) because the slots are.</summary>
