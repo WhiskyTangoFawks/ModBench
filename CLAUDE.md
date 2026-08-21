@@ -21,6 +21,11 @@ npm run test:unit         # Vitest, no backend
 npm run test:integration  # real VS Code process (~10s), no backend; bundles extension.js first (pretest hook)
 npm run generate-api      # regen typed API client — needs fresh backend; see /regenerate-api
 npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx/global install
+
+# Spriggit parity gate (#455) — skipped unless the oracle is installed. Out-of-process on
+# purpose: the tool bundles Mutagen 0.54, and the 0.53.1 pin is inviolate (#385).
+dotnet tool install --tool-path ~/.spriggit-oracle Spriggit.Json.Fallout4 --version 0.40.1
+export MEDIT_SPRIGGIT_TOOL=~/.spriggit-oracle/Spriggit.Json.Fallout4
 ```
 
 - `/validate` — end of every coding task: gates, then self-review; wraps gates above.
