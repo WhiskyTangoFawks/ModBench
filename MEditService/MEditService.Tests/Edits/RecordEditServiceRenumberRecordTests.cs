@@ -181,7 +181,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void RenumberRecord_Refuses_WhenAReferencerIsUntracked_NamingIt_AndWritesNothing()
     {
         using var two = TwoModFixture.Create(trackReferencer: false);
-        var oldRaceSourceFile = two.SourceFileFor(two.TargetPlugin, two.TargetRace, "race");
+        var oldRaceSourceFile = two.SourceFileFor(two.TargetPlugin, two.TargetRace, "race", "TargetRace");
 
         var result = ServiceFor(two.Sessions).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
@@ -317,20 +317,20 @@ public sealed class RecordEditServiceRenumberRecordTests
                 ],
                 GameRelease.Fallout4);
 
-            new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+            new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(Sessions.Session!, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
             if (trackReferencer)
             {
-                new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+                new TrackService(NullLogger<TrackService>.Instance)
                     .TrackAsync(Sessions.Session!, ReferencerOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
             }
         }
 
         public static TwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
-        public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType) =>
+        public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
             Path.Combine(plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,
-                SourceRecordPath.For(plugin.Name, recordType, formKey.ToString()));
+                SourceRecordPath.For(plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
 
         public void Dispose()
         {

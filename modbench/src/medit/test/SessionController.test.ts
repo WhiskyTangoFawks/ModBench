@@ -104,7 +104,7 @@ function makeRepository({
     getPlugins: vi.fn().mockResolvedValue(plugins),
     getSessionStatus: vi.fn().mockResolvedValue(makeStatus()),
     // #414 review F2.
-    getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', recordsDone: 0, recordsTotal: 0 }),
+    getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
@@ -1035,8 +1035,8 @@ describe('SessionController.track progress polling', () => {
     const { POST, finish } = heldTrack();
     const repository = makeRepository();
     repository.getTrackStatus
-      .mockResolvedValueOnce({ phase: 'Serializing', recordsDone: 10, recordsTotal: 100 })
-      .mockResolvedValueOnce({ phase: 'Serializing', recordsDone: 50, recordsTotal: 100 });
+      .mockResolvedValueOnce({ phase: 'Serializing', pluginsDone: 10, pluginsTotal: 100 })
+      .mockResolvedValueOnce({ phase: 'Serializing', pluginsDone: 50, pluginsTotal: 100 });
     const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
@@ -1044,11 +1044,11 @@ describe('SessionController.track progress polling', () => {
 
     await vi.advanceTimersByTimeAsync(500);
     expect(onProgress).toHaveBeenLastCalledWith(
-      expect.objectContaining({ phase: 'Serializing', recordsDone: 10, recordsTotal: 100 }),
+      expect.objectContaining({ phase: 'Serializing', pluginsDone: 10, pluginsTotal: 100 }),
     );
     await vi.advanceTimersByTimeAsync(500);
     expect(onProgress).toHaveBeenLastCalledWith(
-      expect.objectContaining({ phase: 'Serializing', recordsDone: 50, recordsTotal: 100 }),
+      expect.objectContaining({ phase: 'Serializing', pluginsDone: 50, pluginsTotal: 100 }),
     );
     expect(onProgress).toHaveBeenCalledTimes(2);
 

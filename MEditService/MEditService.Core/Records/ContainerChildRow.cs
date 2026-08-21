@@ -12,12 +12,17 @@ namespace MEditService.Core.Records;
 /// <c>ContainerChildFields.ByTypeName</c> holds minus
 /// <c>DuckDbRecordIndex.CoveredByPlacementTables</c> — six today.)
 ///
-/// <para><b><see cref="SlotIndex"/> is load-bearing, not bookkeeping.</b> For the folder-split
-/// relationships it is the <i>only</i> surviving record of a child's position in its parent's list:
-/// those children are written to their own files and read back with the parent's slot empty, so
-/// <c>ContainerAssembler</c> has nothing else to reconstruct the order from at compile. Dropping it
-/// there reorders a quest's dialog topics in the compiled plugin, silently
-/// (<c>ContainerAssemblerOrderingTests</c>).</para>
+/// <para><b><see cref="SlotIndex"/> no longer feeds compile, and nothing else records child order
+/// either</b> (#454). It used to be the ordering source <c>ContainerAssembler</c> rebuilt a
+/// folder-split slot from; that class is gone, because containment — and with it the child set — is
+/// now the tree's own directory nesting, read by the whole-mod deserializer. What did <i>not</i>
+/// survive the move is child <b>order</b>: Spriggit's layout carries none (its reader sorts on a
+/// <c>"[N] "</c> file-name prefix written only under <c>Overall.EnforceRecordOrder</c>, which neither
+/// this project nor Spriggit enables), so this column now holds whatever order the tree was read in —
+/// stable for a given tree, not canonical against the original binary. Pinned as a named allowlist
+/// entry with exact counts by <c>SourceIngestParityTests</c>. For FO4 <c>DialogTopic.Responses</c>
+/// that lost order is real semantic loss, tracked as #459; do not treat a reordering as a bug here
+/// without reading it.</para>
 ///
 /// <para><b>Ref-invariant, though less by construction than it was</b>: no gesture in this arc moves
 /// a record between containers or reorders a container's children, so this answers identically at
@@ -29,6 +34,16 @@ namespace MEditService.Core.Records;
 /// footing than "they are not there". A gesture that does — or a hand edit to a cell's source file —
 /// must make this read ref-aware or move containment into the source outright, which is what
 /// ADR-0041's #444 amendment already points at ("containment is the path").</para>
+///
+/// <para><b>#453 is the gesture that paragraph anticipated, and the footing held — deliberately.</b>
+/// A field edit can now reach a container's own document and an embedded child's fields, so a cell's
+/// source text really is edited in a live session. This table survives because that gesture never
+/// changes the <i>set</i> of children: <c>Edits.RecordEditService</c>'s own containment guard refuses
+/// the child-slot columns outright (<c>Cell.{Landscape,NavigationMeshes}</c> and
+/// <c>Worldspace.{TopCell,SubCells}</c> all reflect as ordinary writable columns, and writing one
+/// would swap a container's children through a JSON blob), so parentage and slot order stay untouched
+/// by anything on the write path. The next gesture to widen this — #461's delete and renumber, which
+/// do change the set — is the one that has to make this read ref-aware for real.</para>
 /// </summary>
 public readonly record struct ContainerChildRow(
     string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);

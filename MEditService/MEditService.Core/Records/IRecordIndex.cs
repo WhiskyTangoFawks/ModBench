@@ -94,20 +94,19 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// overwrite one that does.</para>
     ///
     /// <para><b>No #417 external-change deferral check lives here, deliberately</b> — the same
-    /// signpost <see cref="ApplyWorkingTreeChanges"/> carries, and for the identical reason: this
-    /// method has two legitimate callers, not one. <c>Edits.RecordEditService.CreateRecord</c> is the
-    /// actual write gesture, and every new write gesture must enter through
+    /// signpost <see cref="ApplyWorkingTreeChanges"/> carries. <c>Edits.RecordEditService.CreateRecord</c>
+    /// is the write gesture, and every new write gesture must enter through
     /// <c>Edits.RecordEditService</c> to inherit the deferral/untracked refusals — never call this
-    /// method directly for a gesture. The second is
-    /// <c>Source.WorkingTreeCreateRediscovery</c>'s session-load sweep, which is recovery, not
-    /// editing: a record a prior, uncompiled session created has no binary row for ordinary
-    /// <see cref="Index"/> ingest to seed, so without this second caller it would silently vanish from
-    /// the read model on every restart while compile (which assembles from source files on disk) still
-    /// emits it — the same "reads must keep serving what the source actually says" posture that makes
-    /// <c>SourceFreshness</c> <see cref="ApplyWorkingTreeChanges"/>'s own second caller. Neither
-    /// second caller is a user-facing edit, so gesture-only guards (deferral, untracked signposting)
-    /// are intentionally not applicable to it — enforcing them here would be blocking a read/recovery
-    /// path with a check that means something only for the write path.</para>
+    /// method directly for a gesture. Enforcing those guards here would block a path where they mean
+    /// nothing.</para>
+    ///
+    /// <para><b>#452 removed this method's second caller</b>, and it is worth saying why rather than
+    /// leaving the singular surprising. <c>Source.WorkingTreeCreateRediscovery</c>'s session-load sweep
+    /// used to call this to rediscover a record a prior, uncompiled session had created: ordinary
+    /// <see cref="Index"/> ingest knew only the binary, which has no row for it. Ingest-from-source
+    /// reads the working tree, where that record is simply present, so the sweep had nothing left to
+    /// discover and was deleted. Reaching the same end state from the other direction — a record the
+    /// ingest already saw, which no commit holds — is <see cref="MarkWorkingTreeOnly"/>.</para>
     /// </summary>
     void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body);
 
@@ -125,6 +124,49 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// <para>Records the plugin does not hold are skipped, not thrown on.</para>
     /// </summary>
     void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines);
+
+    /// <summary>
+    /// #452: says that these already-ingested records exist in the working tree but at <b>no</b>
+    /// committed ref — they stop answering at <see cref="RecordRef.Head"/> and keep answering at
+    /// <see cref="RecordRef.Effective"/>, which is <see cref="CreateWorkingTreeRecord"/>'s end state
+    /// reached from the other direction.
+    ///
+    /// <para>Needed because ingest-from-source seeds both refs from one whole-tree read, so a record
+    /// the user created and never committed arrives looking committed. Neither existing verb can say
+    /// this: <see cref="SetCommittedBaseline"/> moves <i>which bytes</i> Head holds and cannot say Head
+    /// holds none, and <see cref="CreateWorkingTreeRecord"/> refuses outright for a FormKey some ref
+    /// already answers to — which, after that whole-tree read, is every record in the plugin.</para>
+    ///
+    /// <para>Records the plugin does not hold are skipped, not thrown on — the seam's missing-data
+    /// rule, same as <see cref="SetCommittedBaseline"/>. Idempotent: a record already answering at
+    /// Effective only is left exactly as it is.</para>
+    /// </summary>
+    void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys);
+
+    /// <summary>
+    /// #452: seeds a record that exists at <c>HEAD</c> but <b>not</b> in the working tree — the mirror
+    /// of <see cref="MarkWorkingTreeOnly"/>, and the deletion half of the ref dimension. It answers at
+    /// <see cref="RecordRef.Head"/> and is absent at <see cref="RecordRef.Effective"/>, so a user can
+    /// still see, diff and revert what they deleted rather than having it vanish from both refs at the
+    /// next session load (ADR-0041's git-native working-tree model).
+    ///
+    /// <para>Needed for the same reason as its mirror: a whole-tree read of the working tree cannot
+    /// produce a row for a file that is not in it, and <see cref="ApplyWorkingTreeChanges"/>' deletion
+    /// delta presupposes an Effective row to snapshot aside, which a fresh ingest never created.</para>
+    ///
+    /// <para>Writes no <c>form_lookup</c>, <c>form_references</c> or other extracted rows,
+    /// deliberately: those tables carry no ref dimension and track Effective (a FormKey resolves to
+    /// what the link points at <i>now</i>) — the same rule <c>records_head</c>'s own definition already
+    /// states for the reads that answer from them.</para>
+    ///
+    /// <para>Skipped rather than thrown on when the plugin already holds a listed FormKey at either
+    /// ref: this is only ever for a record the working tree genuinely does not have.</para>
+    ///
+    /// <para>Batched, like <see cref="SetCommittedBaseline"/> and <see cref="MarkWorkingTreeOnly"/>: the
+    /// three head-state writes are the reconciliation pass's whole output, and applying them
+    /// all-or-nothing is what keeps a pass that throws partway from leaving Head half-moved.</para>
+    /// </summary>
+    void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one

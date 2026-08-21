@@ -5,32 +5,44 @@ import type { TrackStatus } from '../ApiClient';
 // #414 review F2 (AC4 "reports progress"): the text withPluginsViewProgress/say show over a
 // mega-plugin's worst-case tens-of-seconds Track — must genuinely name the phase and counts, not
 // stay a static, unchanging message.
+//
+// #451 review: renamed from recordsDone/recordsTotal — Track's own #451 slice A rewrite
+// serializes each plugin through the whole-mod door in one call, so the wire status counts
+// plugins, not records, and these tests (and the fixture values below) follow that.
 describe('trackProgressMessage', () => {
   const status = (over: Partial<TrackStatus> = {}): TrackStatus =>
-    ({ phase: 'Idle', recordsDone: 0, recordsTotal: 0, ...over });
+    ({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0, ...over });
 
-  it('names the parsing phase and the record total once it is known', () => {
-    const message = trackProgressMessage('ModA', status({ phase: 'Parsing', recordsTotal: 400 }));
+  it('names the parsing phase and the plugin total once it is known', () => {
+    const message = trackProgressMessage('ModA', status({ phase: 'Parsing', pluginsTotal: 3 }));
 
     expect(message).toContain('parsing');
-    expect(message).toContain('400');
+    expect(message).toContain('3');
+    expect(message).toContain('plugins');
   });
 
-  it('says work is under way, not a bare zero, while the record total is not known yet', () => {
-    const message = trackProgressMessage('ModA', status({ phase: 'Parsing', recordsTotal: 0 }));
+  it('uses the singular for exactly one plugin', () => {
+    const message = trackProgressMessage('ModA', status({ phase: 'Parsing', pluginsTotal: 1 }));
+
+    expect(message).toContain('1 plugin');
+    expect(message).not.toContain('1 plugins');
+  });
+
+  it('says work is under way, not a bare zero, while the plugin total is not known yet', () => {
+    const message = trackProgressMessage('ModA', status({ phase: 'Parsing', pluginsTotal: 0 }));
 
     expect(message).not.toContain('0');
     expect(message).toContain('parsing');
   });
 
-  it('names how many of how many records have been serialized so far', () => {
-    const message = trackProgressMessage('ModA', status({ phase: 'Serializing', recordsDone: 50, recordsTotal: 400 }));
+  it('names how many of how many plugins have been serialized so far', () => {
+    const message = trackProgressMessage('ModA', status({ phase: 'Serializing', pluginsDone: 1, pluginsTotal: 3 }));
 
-    expect(message).toContain('50 of 400');
+    expect(message).toContain('1 of 3 plugins');
   });
 
   it('says committing during the git phase', () => {
-    const message = trackProgressMessage('ModA', status({ phase: 'Committing', recordsDone: 400, recordsTotal: 400 }));
+    const message = trackProgressMessage('ModA', status({ phase: 'Committing', pluginsDone: 3, pluginsTotal: 3 }));
 
     expect(message).toContain('committing');
   });

@@ -103,6 +103,20 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
         // so it has no codec document at all, and stays a purely extracted index table (D8).
         DeleteExistingForOrigin("records", plugin, origin);
+        // #452: and the Head snapshots with them. `records_head` is records_committed UNION ALL the
+        // still-clean `records` rows, and those halves must stay disjoint (TableDdlBuilder says so "by
+        // construction" and its UNION ALL — not UNION — depends on it exactly). Re-seeding `records`
+        // while leaving a snapshot behind puts two rows under one (form_key, plugin, origin) at Head.
+        //
+        // This is a genuine part of Index()'s own stated contract — "replacing whatever `key`
+        // previously held" — that was simply never reachable before: nothing used to call Index() and
+        // write records_committed for the same key in one operation, with a failure path that calls
+        // Index() on that key again. SourceIngest.Ingest is the first (its binary fallback), and
+        // SessionManager.ReindexPlugin re-reading a binary under a dirty tracked plugin is a second.
+        // Fixing it here rather than at either call site is what makes every present and future caller
+        // inherit it. Never removes a *correct* snapshot: after a full re-index from one source, a
+        // prior divergence describes bytes that no longer relate to what was just ingested.
+        DeleteExistingForOrigin("records_committed", plugin, origin);
         using var documentAppender = Connection.CreateAppender("records");
 
         foreach (var (tableName, schema) in schemas)
@@ -207,6 +221,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // #420: VMAD and conditions have no side tables of their own any more — deleting this
         // plugin's `records` rows above already removes the one thing GetVmad/GetConditions read.
         DeleteExistingForOrigin("records", plugin, origin);
+        // #452: "removes every trace of key" has to include the Head side. A leftover snapshot would
+        // keep answering at Head for a plugin the session no longer holds — the exact opposite of
+        // #34/ADR-0035's "hidden means absent".
+        DeleteExistingForOrigin("records_committed", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -261,13 +279,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // one document shape (ADR-0041's #444 amendment). The deep copy that made stripping possible
         // was the only per-container cost on this path (~5% of a real corpus) and goes with it.
         //
-        // Known and deliberate for now: an embedded child is represented twice — inline in this
-        // parent's document, and again as its own `records` row with its own source file — so an
-        // edit to the child's own file leaves the parent's inline copy stale until the next ingest.
-        // Compile is unaffected (ContainerAssembler replaces each slot from the children's own
-        // files). The window closes at **#452**, which makes a tracked plugin ingest from its source
-        // tree, where an embedded child has no separate file to diverge from; #454 retires the
-        // assembler with it. Do not paper over this with a reconciliation pass — that is the shape
+        // The divergence window this used to warn about is closed. #452 made a tracked plugin ingest
+        // from its source tree, where an embedded child has no separate file to diverge from, and #454
+        // retired ContainerAssembler along with the last consumer that could have read a stale inline
+        // copy — compile now deserializes the tree whole, so a container's children come from the one
+        // document that holds them. Do not reopen it with a reconciliation pass; that is the shape
         // ADR-0041's amendment exists to delete.
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
 
@@ -632,6 +648,75 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             """, formKey, key.Name, key.Origin!);
     }
 
+    /// <summary>See <see cref="IRecordIndex.MarkWorkingTreeOnly"/>.</summary>
+    public void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys)
+    {
+        if (formKeys.Count == 0) return;
+
+        using var tx = Connection.BeginTransaction();
+        foreach (var formKey in formKeys)
+        {
+            // The snapshot delete is not defensive padding: a fresh ingest leaves none behind, but this
+            // is also reachable for a record that diverged earlier in the same session, and a stale
+            // snapshot would keep answering at Head through records_head's own UNION — which is exactly
+            // the state this method exists to end.
+            ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+                formKey, key.Name, key.Origin!);
+            ExecuteFor($"""
+                UPDATE records SET "ref" = '{SourceRef.WorkingTree}'
+                WHERE form_key = $1 AND plugin = $2 AND origin = $3
+                """, formKey, key.Name, key.Origin!);
+        }
+
+        // No UpdateWinners: nothing was added to or removed from Effective, so that stack is untouched,
+        // and records_head derives its own is_winner per ref rather than reading a stored flag (see
+        // TableDdlBuilder's note on that view) — Head's winner answer is already correct for the
+        // smaller set without a sweep.
+        tx.Commit();
+    }
+
+    /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>. One transaction for the whole batch,
+    /// matching <see cref="SetCommittedBaseline"/> and <see cref="MarkWorkingTreeOnly"/> — the three
+    /// head-state writes are all-or-nothing together, so a throw partway through a reconciliation pass
+    /// cannot leave half of one applied.</summary>
+    public void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
+    {
+        if (records.Count == 0) return;
+
+        using var tx = Connection.BeginTransaction();
+        foreach (var (formKey, recordType, body) in records)
+            SeedOneCommittedOnly(key, formKey, recordType, body);
+        tx.Commit();
+    }
+
+    private void SeedOneCommittedOnly(PluginKey key, string formKey, string recordType, string body)
+    {
+        if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
+
+        var loadOrderIdx = ScalarInt32(
+            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
+            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+
+        // Straight into records_committed with no `records` counterpart — the exact inverse of
+        // InsertNewWorkingTreeRow's "records row with no snapshot", and it falls out of records_head's
+        // existing definition (the snapshot table UNION the still-clean rows) with no change to that
+        // view: present in its first half, absent from its second. is_winner is stored FALSE and never
+        // read — the view derives its own, per ref.
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            INSERT INTO records_committed (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.Committed}', $5, $7)
+            """;
+        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
+        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
+        cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
+        cmd.Parameters.Add(new DuckDBParameter { Value = body });
+        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
+        cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
+        cmd.ExecuteNonQuery();
+    }
+
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing
     // on every later edit of the same record — so the snapshot always holds the *committed* bytes,
     // never the previous working-tree ones.
@@ -834,6 +919,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             owner.GetCellLocation(cellFormKey, plugin.Name, plugin.Origin!);
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
             owner.GetContainerChildren(plugin.Name, plugin.Origin!, parentFormKey);
+        public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
+            owner.GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
     }
 
     public RecordDocument? GetDocument(string formKey) => GetWinningDocument(EffectiveRelation, formKey);
@@ -1931,6 +2018,28 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 reader.GetString(0), parentFormKey, reader.GetString(1), reader.GetString(2), reader.GetInt32(3)));
         }
         return result;
+    }
+
+    /// <summary>See <see cref="IRecordReads.GetContainerParent"/>. Ref-invariant for the same reason
+    /// its inverse is, so it likewise ignores which relation the caller is positioned on.</summary>
+    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
+        GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
+
+    private ContainerChildRow? GetContainerParent(string plugin, string origin, string childFormKey)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT parent_form_key, parent_record_type, slot_name, slot_index
+            FROM container_child
+            WHERE child_form_key = $1 AND plugin = $2 AND origin = $3
+            """;
+        AddParams(cmd, [childFormKey, plugin, origin]);
+        using var reader = cmd.ExecuteReader();
+
+        return reader.Read()
+            ? new ContainerChildRow(
+                childFormKey, reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3))
+            : null;
     }
 
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>

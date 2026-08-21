@@ -24,10 +24,18 @@ namespace MEditService.Core.Edits;
 /// <para><b>The source text is the source, not the index.</b> Each edit reads the record's source
 /// file, applies the field to the record that text deserializes to, and writes the file back; the
 /// index is then told what landed. Reading the file rather than the indexed body is deliberate and
-/// measured: ingest serializes from a plugin's <i>binary overlay</i> while the source holds a
+/// measured: ingest used to serialize from a plugin's <i>binary overlay</i> while the source held a
 /// <i>deep parse</i>, and the two are not always structurally identical (#369's 1-in-3,940 hole,
 /// documented on <see cref="GitBlobHash"/>). Editing the file's own bytes means an edit can never
-/// silently rewrite a record's unrelated fields into the overlay's shape.</para>
+/// silently rewrite a record's unrelated fields into the overlay's shape.
+///
+/// <para>#452 dissolved that specific hazard for a <b>tracked</b> plugin — which is every plugin this
+/// class will edit, since editing requires tracking. Its index rows are now seeded from the same
+/// source tree this reads, so there is exactly one parse and the two cannot disagree
+/// (<c>SourceIngestParityTests</c> measures the residue: 2,576 of 2,577 real documents byte-identical,
+/// the one exception being #369 itself, which can only appear on the untracked binary path). Reading
+/// the file nonetheless stays correct and stays the rule: it is the shortest path to the bytes being
+/// edited, and it keeps this class independent of how fresh the index happens to be.</para>
 ///
 /// <para>Every refusal happens <b>before</b> anything is written, so a refused edit leaves the
 /// working tree exactly as it was — there is no half-applied state for the user to discover in the
@@ -65,18 +73,60 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
-        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey);
-        var sourcePath = Path.Combine(modFolder, relativePath);
 
-        var record = ReadRecordFromSource(sourcePath, document, release);
+        // #453 scope 1: which file holds this record. A flat record's own, a container's
+        // RecordData.json, or — for an embedded child (a placed ref, a landscape, a navmesh, a
+        // worldspace's top cell) — its parent container's, since the child has no file of its own.
+        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
+            is not { } unit)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
+                "that would. Something moved or removed it outside Modbench — check the Source Control panel.");
+        }
+
+        var owner = index.GetDocument(unit.OwnerFormKey, plugin)!;
+        var record = ReadRecordFromSource(unit.FullPath, owner, release);
         var schemas = schemaReflector.GetSchemas(release);
+
+        // The record the field lands on is the one the caller named — which is *inside* `record` when
+        // the source unit belongs to a container. Locating it in the parent's own object graph rather
+        // than by a JSON path is what keeps this on the same machinery as every other edit: the child
+        // is a real Mutagen record, so RecordFieldWriter applies to it unchanged, and reserializing
+        // the parent writes it back with every untouched byte intact.
+        var target = record;
+        if (unit.IsEmbedded)
+        {
+            if (ContainerChildFields.FindEmbeddedChild(record, formKey) is not { } found)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.SourceUnitNotFound,
+                    // Deliberately does not blame an external change (#453 review finding 2: it used
+                    // to, and that was a false diagnosis for the one shape that actually reached it —
+                    // a ref two levels inside a worldspace's document, which the search simply did not
+                    // descend to. A wrong explanation is worse than none: it sends the user hunting a
+                    // problem that is not there.) States only what is observed.
+                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
+                    "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
+                    "report it; otherwise reload the session so the index re-reads the tree.");
+            }
+            target = found.Child;
+        }
+
+        if (RefuseIfContainmentField(document.RecordType, fieldPath, schemas, release) is { } containmentRefusal)
+            return containmentRefusal;
 
         if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value) is { } linkError)
             return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
 
-        var outcome = RecordFieldWriter.TryApply(record, document.RecordType, fieldPath, value, schemas, release);
+        var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
         if (outcome != FieldApplyOutcome.Applied)
             return RefuseFieldOutcome(outcome, fieldPath, document.RecordType);
+
+        // #453 scope 3: the file name carries the EditorID, so an EditorID edit is a rename as well as
+        // a content change. Done before the write, deliberately — see RenameSourceUnit.
+        var sourcePath = RenameSourceUnit(unit, target, document);
 
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
 
@@ -85,14 +135,153 @@ public sealed class RecordEditService(
         // git itself, may read at any moment.
         _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
 
-        index.ApplyWorkingTreeChanges(plugin, [(formKey, Encoding.UTF8.GetString(newBody))]);
+        // #453 scope 4: an embedded edit dirties *two* rows — the parent source unit, whose bytes
+        // moved, and the child, whose own document is what the read model serves for it. Both go
+        // through the one ApplyWorkingTreeChanges call, so they land in a single transaction.
+        var deltas = new List<(string FormKey, string? Body)>
+        {
+            (unit.OwnerFormKey, Encoding.UTF8.GetString(newBody)),
+        };
+        if (unit.IsEmbedded)
+        {
+            deltas.Add((formKey, Encoding.UTF8.GetString(
+                _codec.SerializeToBytesAsync(target, release).GetAwaiter().GetResult())));
+        }
+        index.ApplyWorkingTreeChanges(plugin, deltas);
+
         // #422: the new value can flip filter membership either way.
         sessions.ReapplyFilter();
 
         logger.LogInformation(
             "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
-            fieldPath, formKey, plugin.Name, plugin.Origin, relativePath);
+            fieldPath, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
         return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// Refuses the handful of fields on a container whose truth does <b>not</b> live in the document
+    /// alone — #453's own containment guard, and the reason no index side table can go stale through
+    /// a field edit.
+    ///
+    /// <para>Reflection makes a container's child slots ordinary writable columns:
+    /// <c>Cell.{Landscape,NavigationMeshes}</c> and <c>Worldspace.{TopCell,SubCells}</c> all reflect as
+    /// struct/array columns with an <c>Apply</c>. Before #453 that was unreachable, because
+    /// <see cref="EditField"/> refused every container outright. It is reachable now, and writing one
+    /// would replace a container's <i>child set</i> through a JSON blob: the replaced children keep
+    /// their own <c>records</c> rows and their <c>container_child</c> parentage while no longer being
+    /// in any parent, which is silent index corruption rather than an edit. Changing which records a
+    /// container holds is a structural gesture (<b>#461</b>), not a field write, and "containment is
+    /// the path" is ADR-0041's #444 amendment talking — so the path, not a field, is what expresses
+    /// it.</para>
+    ///
+    /// <para><c>Cell.Grid</c> is refused for the neighbouring reason: an exterior cell's grid
+    /// coordinates <i>are</i> its directory (<c>Worldspaces/&lt;ws&gt;/&lt;X, Y&gt;/&lt;X, Y&gt;/…</c>),
+    /// so moving it is a tree restructure and not a rewrite of one file, and the same two numbers are
+    /// mirrored in <c>cell_location</c>, which nothing on this path re-derives. #454 made compile
+    /// <i>read</i> that structure and deliberately did not make anything <i>move</i> a record within it,
+    /// so this stays a refusal and gives the same structural-gesture reason as the slot columns above,
+    /// rather than naming a ticket that has since landed without changing the answer.</para>
+    ///
+    /// <para><b>This is what closes the side-table question, and it closes it completely rather than
+    /// per-table.</b> <c>placement</c>'s only non-containment columns come from <c>Position</c>, a
+    /// <c>P3Float</c> the schema reflector does not map at all — verified, not assumed: it never
+    /// becomes a column, so <see cref="RecordFieldWriter"/> answers <c>FieldNotFound</c> for it and no
+    /// edit can move a placed reference. <c>cell_location</c>'s only non-containment columns are the
+    /// grid, refused here. <c>container_child</c> is containment and slot order throughout, and the
+    /// slots that could change it are refused here too. So after this guard, every side table is
+    /// unreachable from <see cref="EditField"/> by construction — which is a stronger statement than
+    /// re-deriving them would have been, and it is the reason this method exists instead of a
+    /// <c>SetPlacement</c>-style write-back.</para>
+    /// </summary>
+    private static RecordEditResult? RefuseIfContainmentField(
+        string recordType, string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas, GameRelease release)
+    {
+        if (!schemas.TryGetValue(recordType, out var schema)) return null;
+        if (schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath) is not { } column) return null;
+        if (RecordTypeDispatch.For(release).ConcreteFor(recordType) is not { } concrete) return null;
+
+        // The property name from the schema's own column, never a hand-rolled snake_case reversal, so
+        // this guard and the reflector cannot disagree about which CLR property a field path names.
+        if (ContainerChildFields.EnumerateChildFieldsFor(concrete) is { } childSlots
+            && childSlots.Contains(column.PropertyName, StringComparer.Ordinal))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FieldReadOnly,
+                $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
+                "source tree's own structure rather than by a field (ADR-0041). Adding, removing or " +
+                "reordering a container's children is a structural gesture (#461), not a field edit.");
+        }
+
+        if (column.PropertyName.Equals("Grid", StringComparison.Ordinal)
+            && ContainerChildFields.NormalizedTypeName(concrete).Equals("Cell", StringComparison.Ordinal))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FieldReadOnly,
+                "'grid' is an exterior cell's own place in the world — its source directory is named " +
+                "after these coordinates, so moving it restructures the tree rather than rewriting one " +
+                "file. That is a structural gesture, not a field edit.");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Moves the source unit when the edit changed the EditorID its own name carries (#453 scope 3),
+    /// and answers the path to write to either way.
+    ///
+    /// <para><b>Move first, then write</b> — deliberately, and please do not tidy this into the other
+    /// order. A crash between the two leaves the file at its new name holding its old content: valid
+    /// JSON, one re-edit from correct, and still findable — because
+    /// <see cref="SourceUnitResolver.FlatSourcePath"/> falls back to the FormKey suffix when the
+    /// computed name is absent. The reverse order — write the new path, then delete the old — leaves
+    /// two files claiming one FormKey for the duration of the window, which is the corrupt-tree state
+    /// <see cref="AmbiguousSourceUnitException"/> exists to refuse.</para>
+    ///
+    /// <para><b>That "still findable" is load-bearing, and it was not true when this first shipped</b>
+    /// (#453 review finding 1). Resolution computed the flat path from the indexed EditorID and stopped
+    /// there, so a name/content divergence read as an absent file and marked a live record deleted. The
+    /// fallback is what makes this ordering recoverable — and it is not only about crashes: the same
+    /// divergence arrives whenever anything edits <c>EditorID</c> inside a source file directly, which
+    /// is the ordinary never-assume-exclusive-ownership case rather than an exotic one.</para>
+    ///
+    /// <para>Only the leaf moves. A container's directory is moved whole, so the folder-split children
+    /// Spriggit does not embed (a Quest's dialog topics and scenes) travel with their parent rather
+    /// than being orphaned by it.</para>
+    ///
+    /// <para>Nothing here tells git that a rename happened, because git has no rename tracking to
+    /// tell: it infers renames from content similarity at diff time. What that actually produces is
+    /// measured in the AC2 tests rather than assumed here.</para>
+    /// </summary>
+    private string RenameSourceUnit(SourceUnit unit, IMajorRecord edited, RecordDocument document)
+    {
+        // An embedded child's EditorID appears in no path: the file belongs to its parent, whose own
+        // EditorID this edit did not touch. Nothing to move.
+        if (unit.IsEmbedded) return unit.FullPath;
+        if (string.Equals(edited.EditorID, document.EditorId, StringComparison.Ordinal)) return unit.FullPath;
+
+        var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
+            .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+        var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
+        var newLeafPath = Path.Combine(
+            Path.GetDirectoryName(oldLeafPath)!,
+            SourceUnitResolver.LeafNameFor(edited.FormKey, edited.EditorID, isDirectoryPerRecord));
+
+        if (string.Equals(oldLeafPath, newLeafPath, StringComparison.Ordinal)) return unit.FullPath;
+
+        if (isDirectoryPerRecord)
+        {
+            Directory.Move(oldLeafPath, newLeafPath);
+            logger.LogInformation(
+                "EditorID changed on {FormKey}; moved its source directory {Old} to {New}",
+                edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+            return Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
+        }
+
+        File.Move(oldLeafPath, newLeafPath, overwrite: true);
+        logger.LogInformation(
+            "EditorID changed on {FormKey}; moved its source file {Old} to {New}",
+            edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+        return newLeafPath;
     }
 
     /// <summary>
@@ -119,7 +308,10 @@ public sealed class RecordEditService(
                 $"{plugin.Name} does not hold record {formKey}.");
         }
 
-        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey);
+        var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
+        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey, document.EditorId, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Never-assume-exclusive-ownership: the file may already be gone (another tool, a hand
@@ -157,6 +349,7 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(
                 RecordEditRefusal.RecordTypeNotFound, $"'{recordType}' is not a creatable record type.");
         }
+        if (RefuseIfContainerType(recordType, release) is { } containerRefusal) return containerRefusal;
 
         if (ResolveTargetFormKey(index, plugin, requestedFormKey, out var targetFormKey) is { } refusedTarget) return refusedTarget;
 
@@ -167,7 +360,7 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey);
+        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Track's eager serialization only created directories for (record type, origin ModKey)
@@ -226,6 +419,9 @@ public sealed class RecordEditService(
                 RecordEditRefusal.RecordNotFound, $"{plugin.Name} does not hold record {formKey}.");
         }
 
+        var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } targetContainerRefusal) return targetContainerRefusal;
+
         var originatingPlugin = FormKey.Factory(formKey).ModKey.FileName.String;
         if (!originatingPlugin.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
         {
@@ -262,14 +458,29 @@ public sealed class RecordEditService(
                 "so the renumber cannot rewrite their FormLinks. Track them first, then try again.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        // #451 review: a referencer that is itself a container record has no flat source path either
+        // (SourceRecordPath.For would throw mid-cascade, after some referencers already landed) —
+        // refused up front, before any write, same as the untracked-referencer case just above.
+        var containerReferencers = referencers
+            .Select(r => (r.FormKey, r.Plugin, Document: index.GetDocument(r.FormKey, r.Plugin)))
+            .Where(t => t.Document != null && RefuseIfContainerType(t.Document.RecordType, release) != null)
+            .Select(t => $"{t.FormKey} in {t.Plugin.Name}")
+            .ToList();
+        if (containerReferencers.Count > 0)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ContainerRecordNotYetSupported,
+                $"{formKey} is referenced by container record(s) {string.Join(", ", containerReferencers)}, whose " +
+                "own source file this can't yet rewrite (#461). Renumber is not available until then.");
+        }
+
         var writtenRepos = new List<string>();
         try
         {
             foreach (var (referencerFormKey, referencerPlugin) in referencers)
             {
                 var referencerModFolder = ModFolders.TrackedOf(sessions.Session, referencerPlugin)!;
-                RewriteReferenceField(index, referencerPlugin, referencerModFolder, referencerFormKey, formKey, targetFormKey);
+                RewriteReferenceField(index, referencerPlugin, referencerModFolder, referencerFormKey, formKey, targetFormKey, release);
                 writtenRepos.Add($"{referencerPlugin.Name} ({referencerPlugin.Origin})");
             }
 
@@ -320,13 +531,14 @@ public sealed class RecordEditService(
     /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).</summary>
     private static void RewriteReferenceField(
         IRecordIndex index, PluginKey referencerPlugin, string referencerModFolder,
-        string referencerFormKey, string oldFormKey, string newFormKey)
+        string referencerFormKey, string oldFormKey, string newFormKey, GameRelease release)
     {
         var referencerDoc = index.GetDocument(referencerFormKey, referencerPlugin)
             ?? throw new InvalidOperationException(
                 $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
 
-        var relativePath = SourceRecordPath.For(referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey);
+        var relativePath = SourceRecordPath.For(
+            referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey, referencerDoc.EditorId, release);
         var sourcePath = Path.Combine(referencerModFolder, relativePath);
         var body = File.Exists(sourcePath) ? File.ReadAllText(sourcePath) : referencerDoc.Body!;
         var newBody = body.Replace(oldFormKey, newFormKey, StringComparison.Ordinal);
@@ -343,13 +555,14 @@ public sealed class RecordEditService(
     {
         var document = index.GetDocument(oldFormKey, plugin)
             ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
-        var oldRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, oldFormKey);
+        var oldRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, oldFormKey, document.EditorId, release);
         var oldSourcePath = Path.Combine(modFolder, oldRelativePath);
 
         var record = ReadRecordFromSource(oldSourcePath, document, release);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        var newRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, newFormKey);
+        // EditorID does not change across a renumber — only the FormKey half of the file name does.
+        var newRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, newFormKey, document.EditorId, release);
         var newSourcePath = Path.Combine(modFolder, newRelativePath);
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
         _codec.SerializeAsync(record, newSourcePath, release).GetAwaiter().GetResult();
@@ -598,6 +811,34 @@ public sealed class RecordEditService(
         outcome == FieldApplyOutcome.ReadOnly
             ? RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.")
             : RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
+
+    /// <summary>
+    /// The record has no flat source path, so the <b>structural</b> gestures still refuse it —
+    /// <see cref="DeleteRecord"/>, <see cref="CreateRecord"/> and <see cref="RenumberRecord"/>. Checked
+    /// before any write, at every entry point that reaches <c>SourceRecordPath.For</c> unconditionally.
+    ///
+    /// <para><b><see cref="EditField"/> is deliberately not among them any more</b> (#453): a field
+    /// edit resolves through <see cref="SourceUnitResolver"/>, which finds a container's own
+    /// <c>RecordData.json</c> and reaches an embedded child through its parent's document. The three
+    /// gestures here are the ones that change <i>which</i> records a source unit holds rather than one
+    /// record's fields, and that is a different problem — see the two tickets named in the message.</para>
+    ///
+    /// <para>Note the condition is wider than "Cell, Worldspace or Quest", which is what this message
+    /// used to claim (#453 finding): <see cref="RecordTypeDispatch.FolderNameFor"/> is also null for
+    /// every record with no top-level group of its own — placed references, landscapes, navmeshes,
+    /// dialog topics, scenes. The message now names what actually triggers it.</para>
+    /// </summary>
+    private static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
+    {
+        if (RecordTypeDispatch.For(release).FolderNameFor(recordType) is not null) return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.ContainerRecordNotYetSupported,
+            $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace, " +
+            "Quest) or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, " +
+            "scene). Editing its fields works; creating, deleting and renumbering it do not yet " +
+            "(#461 delete/renumber, #462 create).");
+    }
 
     /// <summary>
     /// The record as its source text has it. Falls back to the indexed body only when the file is

@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -24,6 +25,77 @@ public sealed class RecordEditServiceTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
+    // ---- #453 scope 3 / AC2: an editor_id edit is a rename as well as a content change ----
+
+    /// <summary>
+    /// The source unit's file name carries the EditorID, so writing a new one has to move the file as
+    /// well as rewrite it — otherwise path and content disagree, and the tree claims a record still has
+    /// the name it no longer has.
+    ///
+    /// <para><b>Nothing could edit <c>editor_id</c> at all before #453</b>, which is why nothing
+    /// observed the gap: <c>SchemaReflector.BaseSkip</c> excludes <c>EditorID</c> from the reflected
+    /// columns (it is a row identity column, carried separately), so <c>RecordFieldWriter</c> answered
+    /// <c>FieldNotFound</c> and the edit refused before any path was computed.</para>
+    /// </summary>
+    [Fact]
+    public void EditingEditorId_MovesTheSourceFileToItsNewName()
+    {
+        var oldRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
+        var newRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
+        Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
+
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "editor_id", Json("\"RenamedNpc\""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
+        var moved = Path.Combine(_mod.ModFolder, newRelative);
+        Assert.True(File.Exists(moved));
+        Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
+        Assert.Equal("RenamedNpc", _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
+    }
+
+    /// <summary>
+    /// AC2, asserted in the form git can actually produce.
+    ///
+    /// <para><b>Unstaged, git reports a rename as delete + untracked add, always</b> — measured on real
+    /// git during #453's design: <c>git status --porcelain</c> gives <c>" D &lt;old&gt;"</c> plus
+    /// <c>"?? &lt;new&gt;"</c>, and <c>git diff -M</c> agrees, because git does no rename detection
+    /// against untracked paths. That is git's design and not a deficiency in this write path, which is
+    /// why AC2's literal wording ("git status shows a rename") is not satisfiable by any
+    /// implementation. Rename detection is a diff-time inference from content similarity, so it appears
+    /// the moment the change is staged — the gesture that precedes every commit.</para>
+    ///
+    /// <para><b>The similarity margin is real but thin at the bottom end.</b> Measured on the same
+    /// pass: <c>R099</c> for a container's <c>RecordData.json</c>, <c>R067</c> for a four-line flat
+    /// record, and <c>R050</c> for the pathological minimum (a document holding nothing but FormKey and
+    /// EditorID, renamed from a 1-character EditorID to a 10-character one) — exactly git's default 50%
+    /// threshold. If the document shape ever shrinks, R050 is the number that says AC2 is at risk.</para>
+    /// </summary>
+    [Fact]
+    public void EditingEditorId_ShowsAsARenameOnceStaged_NotADeleteAndAdd()
+    {
+        var oldRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)
+            .Replace('\\', '/');
+        var newRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc").Replace('\\', '/');
+
+        Assert.True(Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "editor_id", Json("\"RenamedNpc\"")).Applied);
+
+        // The unstaged reality, asserted rather than glossed, so a future reader does not mistake it
+        // for a bug in the write path.
+        Assert.Contains($"D {oldRelative}", _mod.GitStatus());
+
+        var git = Path.Combine(_mod.ModFolder, ".git");
+        GitCli.Run(git, _mod.ModFolder, "add", "-A");
+        var staged = GitCli.Run(git, _mod.ModFolder, "diff", "--cached", "-M", "--name-status")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .ToList();
+
+        var rename = Assert.Single(staged, l => l.StartsWith('R'));
+        Assert.Contains(oldRelative, rename, StringComparison.Ordinal);
+        Assert.Contains(newRelative, rename, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void EditField_OnATrackedPlugin_LeavesTheRecordsSourceFileDirtyInTheSourceControlPanel()
     {
@@ -34,7 +106,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
     }
 
@@ -63,7 +135,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var status = _mod.GitStatus();
         Assert.Single(status);
-        Assert.DoesNotContain(TrackedModFixture.RelativeSourcePath(_mod.OtherNpc, "npc_").Replace('\\', '/'), status[0], StringComparison.Ordinal);
+        Assert.DoesNotContain(TrackedModFixture.RelativeSourcePath(_mod.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId).Replace('\\', '/'), status[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -79,7 +151,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
         Assert.DoesNotContain("0.75", head.Body!, StringComparison.Ordinal);
-        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_")), head.Body);
+        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
     }
 
     [Fact]
@@ -94,7 +166,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var index = _mod.Sessions.Index!;
         Assert.Contains("0.5", index.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!, StringComparison.Ordinal);
         Assert.Equal(
-            _mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_")),
+            _mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)),
             index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body);
     }
 

@@ -70,6 +70,31 @@ public enum RecordEditRefusal
     /// outcome on this write path, the same doctrine as every other refusal here — never conflated
     /// with "no usable session" by a caller's generic exception handling.</summary>
     FormKeySpaceExhausted,
+
+    /// <summary>
+    /// #451 review: the record (or, for renumber, a referencer of it) has no flat source path — a
+    /// container type whose own directory holds a <c>RecordData.json</c> (Cell, Worldspace, Quest), or
+    /// a record with no top-level group at all whose bytes live inside a container's document (a
+    /// placed reference, a landscape, a navmesh, a dialog topic, a scene). The message used to name
+    /// only the first group, which was narrower than what actually triggers it (#453 finding).
+    ///
+    /// <para><b>Field edits no longer refuse for this reason</b> — #453 gave them
+    /// <c>SourceUnitResolver</c>. What still refuses is delete and renumber (<b>#461</b>: both are
+    /// structural, changing which children a container holds rather than one child's fields) and
+    /// create (<b>#462</b>: a new container has no containment until someone chooses interior-vs-
+    /// worldspace and block coordinates, which no gesture asks yet).</para>
+    /// </summary>
+    ContainerRecordNotYetSupported,
+
+    /// <summary>
+    /// #453: nothing on disk holds this record, and the index names no container that would. Distinct
+    /// from <see cref="RecordNotFound"/>, which is about the index alone: this is the index and the
+    /// working tree disagreeing, i.e. the never-assume-exclusive-ownership case — a file another tool
+    /// moved or removed since the session loaded. Refused rather than recreated at a computed path,
+    /// because for a container there is no path to compute: its directory nesting lives in the tree,
+    /// and inventing one would put the record somewhere the tree does not say it belongs.
+    /// </summary>
+    SourceUnitNotFound,
 }
 
 /// <summary>

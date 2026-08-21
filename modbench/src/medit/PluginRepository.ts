@@ -240,8 +240,8 @@ export class ApiPluginRepository implements PluginRepository {
     this.ensureOk('GET /plugins/track/status', response, error);
     return {
       phase: toTrackPhase(data?.phase),
-      recordsDone: data?.recordsDone ?? 0,
-      recordsTotal: data?.recordsTotal ?? 0,
+      pluginsDone: data?.pluginsDone ?? 0,
+      pluginsTotal: data?.pluginsTotal ?? 0,
     };
   }
 

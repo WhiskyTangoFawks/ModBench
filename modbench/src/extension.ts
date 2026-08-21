@@ -1190,7 +1190,7 @@ function registerTrackCommand(
     if (!choice) return;
 
     await withPluginsViewProgress(async () => {
-      say(trackProgressMessage(origin, { phase: 'Idle', recordsDone: 0, recordsTotal: 0 }));
+      say(trackProgressMessage(origin, { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }));
       const ok = await controller.track(origin, choice.label as 'Edits' | 'Everything', {
         // #414 review F2: "reports progress" (AC4) — narrates the same Plugins-view message this
         // command already showed a static version of, updated on each poll tick.

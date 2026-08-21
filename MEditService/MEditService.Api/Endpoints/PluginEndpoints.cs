@@ -525,7 +525,7 @@ public static class PluginEndpoints
 
     // #417: Absorb Upstream Update. The plugin name and origin resolve the target the same way
     // Compile does; GameRelease comes off the loaded session, never guessed.
-    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
+    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
@@ -539,7 +539,7 @@ public static class PluginEndpoints
 
         try
         {
-            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!.GameRelease, reflector);
+            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!);
             watcher.ClearPending(modFolder, decoded);
             watcher.Watch(modFolder, decoded, pluginPath!);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
@@ -568,7 +568,7 @@ public static class PluginEndpoints
 
         try
         {
-            var result = ExternalChangeEditLander.Keep(modFolder, decoded, pluginPath!, session!.GameRelease, reflector);
+            var result = ExternalChangeEditLander.Keep(modFolder, decoded, pluginPath!, session!.GameRelease, reflector, logger);
             if (result.Applied)
             {
                 watcher.ClearPending(modFolder, decoded);

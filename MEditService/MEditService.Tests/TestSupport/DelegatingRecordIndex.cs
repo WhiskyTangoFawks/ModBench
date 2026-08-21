@@ -30,6 +30,10 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.CreateWorkingTreeRecord(key, formKey, recordType, body);
     public virtual void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines) =>
         Inner.SetCommittedBaseline(key, baselines);
+    public virtual void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys) =>
+        Inner.MarkWorkingTreeOnly(key, formKeys);
+    public virtual void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records) =>
+        Inner.SeedCommittedOnly(key, records);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
@@ -54,4 +58,6 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) => Inner.GetCellLocation(plugin, cellFormKey);
     public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
         Inner.GetContainerChildren(plugin, parentFormKey);
+    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
+        Inner.GetContainerParent(plugin, childFormKey);
 }

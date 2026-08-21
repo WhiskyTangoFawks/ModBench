@@ -98,7 +98,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // record the working tree deleted, the very case Head has to keep answering.
     //
     // Rows are written by DuckDbRecordIndex.ApplyWorkingTreeChanges (on the clean→dirty transition)
-    // and removed by it again on convergence back to the committed bytes.
+    // and removed by it again on convergence back to the committed bytes. Since #452 there are two
+    // more writers, both on the ingest-from-source path: SeedCommittedOnly inserts a row with *no*
+    // `records` counterpart (a record HEAD holds and the working tree deleted — present in this
+    // table's half of records_head, absent from the other), and MarkWorkingTreeOnly deletes one (a
+    // record the working tree holds and no commit does).
     private static void CreateCommittedRecordsTableAndHeadView(DuckDBConnection connection)
     {
         Execute(connection, $"""

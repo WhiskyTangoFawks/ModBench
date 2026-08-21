@@ -31,6 +31,16 @@ namespace MEditService.Core.Source;
 ///
 /// <para>A <c>content_hash</c> mismatch is never treated as proof of a user edit — it routes to a
 /// byte compare, which decides (<see cref="GitBlobHash"/>'s one-directional contract).</para>
+///
+/// <para><b>Narrowed by #452 to mid-session external moves — in meaning, not in code.</b> This class
+/// used to carry a second, unstated job: correcting a read model seeded from the <i>binary</i>, where
+/// the very first read of a record whose source file had changed before the session even started was
+/// doing catch-up work. Ingest-from-source removes that job at the root — <see cref="SourceIngest"/>
+/// seeds both refs from the tree, so at load time there is nothing here to correct. Nothing was
+/// deleted to achieve it, and nothing should be: every method below is still exactly the right
+/// re-check for a file that moves <i>after</i> the session is up (a <c>git restore</c> from the Source
+/// Control panel, a terminal commit, an agent's script), which no ingest can anticipate. What changed
+/// is that on a freshly loaded session the first read now finds the answer already correct.</para>
 /// </summary>
 public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFreshness> logger)
 {
@@ -55,11 +65,14 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
             {
                 ValidateOne(index, session, entry, stack.RecordType, formKey);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
             {
                 // A read must degrade to "serve what we have", never fail, when the source cannot be
                 // consulted — the folder vanished mid-read, the file is locked by another tool, git
-                // is mid-rebase. Logged rather than swallowed (modbench/CLAUDE.md: no silent catch).
+                // is mid-rebase, or (#451 review) the record is a container type SourceRecordPath.For
+                // has no flat path for at all (Cell/Worldspace/Quest — #453's own point-write territory,
+                // not a read failure this class should ever surface as one). Logged rather than
+                // swallowed (modbench/CLAUDE.md: no silent catch).
                 logger.LogWarning(ex,
                     "Could not validate source freshness for {FormKey} in {Plugin}; serving the indexed state",
                     formKey, entry.Plugin.Name);
@@ -72,14 +85,24 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
     {
         if (ModFolders.TrackedOf(session, entry.Plugin) is not { } modFolder) return;
 
-        var relativePath = SourceRecordPath.For(entry.Plugin.Name, recordType, formKey);
-        var fullPath = Path.Combine(modFolder, relativePath);
+        // Through SourceUnitResolver rather than SourceRecordPath directly (#453 review finding 1):
+        // the computed name embeds the *indexed* EditorID, which since #452 is read from the file's
+        // own content, while the file's *name* carries whatever EditorID it was last written under
+        // (#451). When those diverge — someone edits EditorID inside a source file with their own
+        // editor, or a rename is interrupted partway — the computed path is simply absent, and the
+        // null below would then be taken for "the user deleted this record", marking a live record
+        // gone at Effective. The resolver falls back to the FormKey suffix, the stable half of the
+        // name, so "genuinely absent" and "present under a different name" stay distinguishable.
+        var fullPath = SourceUnitResolver.FlatSourcePath(
+            modFolder, entry.Plugin.Name, recordType, formKey, entry.Effective.EditorId, session.GameRelease);
+        var relativePath = Path.GetRelativePath(modFolder, fullPath);
 
         var fileText = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;
         if (!string.Equals(fileText, entry.Effective.Body, StringComparison.Ordinal))
         {
             // The file is the source for a tracked plugin, so whatever it says now is Effective —
-            // including a null, which is the record's file having been deleted. ApplyWorkingTreeChanges
+            // including a null, which now genuinely is the record's file having been deleted rather
+            // than merely not being where its indexed EditorID said it would be. ApplyWorkingTreeChanges
             // decides for itself whether that is a change or a convergence back to committed.
             index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
             // #422: a read-time self-heal is still a mutation — the row it just folded in can newly
