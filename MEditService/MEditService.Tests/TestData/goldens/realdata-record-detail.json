@@ -1226,7 +1226,19 @@
         "image_space": null,
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
         "is_deleted": false,
-        "landscape": null,
+        "landscape": {
+          "editor_id": null,
+          "fallout4_major_record_flags": 262144,
+          "form_version": 130,
+          "is_compressed": true,
+          "is_deleted": false,
+          "major_record_flags_raw": 262144,
+          "version2": 15,
+          "version_control": 8527585,
+          "vertex_height_map": {
+            "offset": 85
+          }
+        },
         "lighting": null,
         "lighting_template": "Null",
         "location": null,
@@ -1237,7 +1249,25 @@
         },
         "music": null,
         "name": null,
-        "navigation_meshes": [],
+        "navigation_meshes": [
+          {
+            "editor_id": null,
+            "fallout4_major_record_flags": 262144,
+            "form_version": 131,
+            "is_compressed": true,
+            "is_deleted": false,
+            "major_flags": 262144,
+            "major_record_flags_raw": 262144,
+            "navmesh_geometry": {
+              "crc_hash": 2783551548,
+              "grid_size": 9,
+              "navmesh_version": 15
+            },
+            "onam": null,
+            "version2": 6,
+            "version_control": 1187602
+          }
+        ],
         "ownership": null,
         "persistent_unknown_group_data": 0,
         "physics_references": [
@@ -1934,7 +1964,19 @@
         "image_space": null,
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
         "is_deleted": false,
-        "landscape": null,
+        "landscape": {
+          "editor_id": null,
+          "fallout4_major_record_flags": 262144,
+          "form_version": 130,
+          "is_compressed": true,
+          "is_deleted": false,
+          "major_record_flags_raw": 262144,
+          "version2": 2,
+          "version_control": 8527585,
+          "vertex_height_map": {
+            "offset": 36
+          }
+        },
         "lighting": null,
         "lighting_template": "Null",
         "location": null,
@@ -1945,7 +1987,25 @@
         },
         "music": null,
         "name": null,
-        "navigation_meshes": [],
+        "navigation_meshes": [
+          {
+            "editor_id": null,
+            "fallout4_major_record_flags": 262144,
+            "form_version": 131,
+            "is_compressed": true,
+            "is_deleted": false,
+            "major_flags": 262144,
+            "major_record_flags_raw": 262144,
+            "navmesh_geometry": {
+              "crc_hash": 2783551548,
+              "grid_size": 12,
+              "navmesh_version": 15
+            },
+            "onam": null,
+            "version2": 8,
+            "version_control": 1187602
+          }
+        ],
         "ownership": null,
         "persistent_unknown_group_data": 0,
         "physics_references": [
@@ -2596,7 +2656,19 @@
         "image_space": null,
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
         "is_deleted": false,
-        "landscape": null,
+        "landscape": {
+          "editor_id": null,
+          "fallout4_major_record_flags": 262144,
+          "form_version": 128,
+          "is_compressed": true,
+          "is_deleted": false,
+          "major_record_flags_raw": 262144,
+          "version2": 2,
+          "version_control": 8593082,
+          "vertex_height_map": {
+            "offset": 85
+          }
+        },
         "lighting": null,
         "lighting_template": "Null",
         "location": null,
@@ -2607,7 +2679,25 @@
         },
         "music": null,
         "name": null,
-        "navigation_meshes": [],
+        "navigation_meshes": [
+          {
+            "editor_id": null,
+            "fallout4_major_record_flags": 262144,
+            "form_version": 131,
+            "is_compressed": true,
+            "is_deleted": false,
+            "major_flags": 262144,
+            "major_record_flags_raw": 262144,
+            "navmesh_geometry": {
+              "crc_hash": 2783551548,
+              "grid_size": 12,
+              "navmesh_version": 15
+            },
+            "onam": null,
+            "version2": 6,
+            "version_control": 1187602
+          }
+        ],
         "ownership": null,
         "persistent_unknown_group_data": 0,
         "physics_references": [
@@ -8992,7 +9082,9 @@
   ],
   "wrld": [
     {
-      "CheckErrors": {},
+      "CheckErrors": {
+        "top_cell": "lighting_template: Found a NULL reference, expected: lgtm"
+      },
       "EditorId": "Commonwealth",
       "Fields": {
         "canopy_shadow": null,
@@ -9018,7 +9110,52 @@
         "sub_cells": [],
         "sub_cells_timestamp": 0,
         "sub_cells_unknown": 0,
-        "top_cell": null,
+        "top_cell": {
+          "acoustic_space": null,
+          "editor_id": null,
+          "encounter_zone": null,
+          "exterior_lod": null,
+          "faction_rank": null,
+          "fallout4_major_record_flags": 263168,
+          "flags": 2,
+          "form_version": 131,
+          "god_rays": null,
+          "grid": {
+            "flags": "Quad1"
+          },
+          "image_space": null,
+          "in_pre_vis_file_of": null,
+          "is_compressed": true,
+          "is_deleted": false,
+          "landscape": null,
+          "lighting": null,
+          "lighting_template": "Null",
+          "location": null,
+          "lock_list": null,
+          "major_flags": 263168,
+          "major_record_flags_raw": 263168,
+          "max_height_data": null,
+          "music": null,
+          "name": null,
+          "ownership": null,
+          "persistent_timestamp": 0,
+          "persistent_unknown_group_data": 0,
+          "pre_combined_files_timestamp": null,
+          "pre_vis_files_timestamp": null,
+          "precombined_object_level_xy": null,
+          "precombined_object_level_z": null,
+          "sky_and_weather_from_region": null,
+          "temporary_timestamp": 0,
+          "temporary_unknown_group_data": 0,
+          "timestamp": 0,
+          "unknown_group_data": 0,
+          "version2": 7,
+          "version_control": 5578510,
+          "water": null,
+          "water_environment_map": null,
+          "water_height": 3.4028235E+38,
+          "water_velocity": null
+        },
         "version2": 0,
         "water": null,
         "water_environment_map": null,

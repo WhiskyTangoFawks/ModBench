@@ -123,34 +123,48 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var metaData = new SerializationMetaData(
             gameRelease, null, NoRecordFolders.Instance, DiscardChildRecordStreams.Instance, cancel);
 
-        // Dispatched through the game's *abstract* major-record serializer rather than the concrete
-        // one, so the kernel writes its own type discriminator ahead of the fields — see
-        // ResolveSerializeMethod. The concrete type is still resolved first, purely as a guard, so an
-        // unsupported record type keeps failing with this class's named exception rather than the
-        // generated code's bare NotImplementedException.
-        EnsureRecordTypeIsSupported(record.GetType());
-        var serialize = ResolveSerializeMethod(gameRelease);
+        // The whole-mod door's own discriminator policy (#450 / ADR-0041's #444 amendment): a
+        // path-ambiguous record dispatches through the game's *abstract* major-record serializer,
+        // whose SerializeWithCheck writes the MutagenObjectType discriminator ahead of the fields.
+        // Every other record dispatches its own concrete <Type>_Serialization.Serialize and carries
+        // none — see RecordTypeDispatch for where "ambiguous" is read from, and
+        // ResolveCheckedSerializeMethod for what the checked path emits. The concrete generated type
+        // is resolved first on both branches, so an unsupported record type keeps failing with this
+        // class's named exception rather than the generated code's bare NotImplementedException.
+        var generated = FindGeneratedSerializationType(record.GetType());
+        var serialize = RecordTypeDispatch.For(gameRelease).IsPathAmbiguous(record.GetType())
+            ? ResolveCheckedSerializeMethod(gameRelease)
+            : ResolveConcreteSerializeMethod(generated);
         var task = (Task)serialize.Invoke(null, [writer, record, WriterKernel, metaData])!;
         await task.ConfigureAwait(false);
         WriterKernel.Finalize(streamPackage, writer);
 
-        // Two canonical-formatting guarantees the kernel itself doesn't make (AC4): no \r anywhere
-        // (normalizes whatever the platform's Environment.NewLine produced for the kernel's own
-        // indentation to bare \n — see the buffering note above) and exactly one trailing \n (the
-        // kernel's own Finalize writes the closing brace and nothing after it).
-        return [.. buffer.ToArray().Where(b => b != (byte)'\r'), (byte)'\n'];
+        // The one canonical-formatting guarantee the kernel itself doesn't make: no \r anywhere,
+        // normalizing whatever the platform's Environment.NewLine produced for the kernel's own
+        // indentation down to bare \n (see the buffering note above).
+        //
+        // Deliberately *no* trailing newline (#450, reversing #367's own addition): the kernel's
+        // Finalize writes the closing brace and nothing after it, and so do Spriggit trees, so a
+        // trailing \n here was this codec's own divergence from the document shape it is supposed to
+        // share with the whole-mod door — one of exactly two the #444 spike found. Canonical form is
+        // now bare \n newlines with nothing after the closing brace, on every platform, and
+        // DocumentShapeParityTests holds both doors to it byte for byte.
+        return [.. buffer.ToArray().Where(b => b != (byte)'\r')];
     }
 
-    /// <summary>Reads a record back from its JSON text on disk. The text names its own concrete
-    /// type, so no caller has to.</summary>
+    /// <summary>Reads a record back from its JSON text on disk.</summary>
     /// <param name="filePath">Path to read the record's JSON text from.</param>
     /// <param name="gameRelease">Game release the text was serialized under.</param>
+    /// <param name="recordType">The index's own <c>record_type</c> for this record — see
+    /// <see cref="DeserializeFromBytesAsync"/> for why it is needed and what it may hold. Null means
+    /// "this document names its own type", which is true only of the path-ambiguous types.</param>
     /// <param name="cancel">Cancellation token.</param>
-    public async Task<IMajorRecord> DeserializeAsync(string filePath, GameRelease gameRelease, CancellationToken cancel = default)
+    public async Task<IMajorRecord> DeserializeAsync(
+        string filePath, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
     {
         using var stream = File.OpenRead(filePath);
         var record = await DeserializeCoreAsync(
-            stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, cancel).ConfigureAwait(false);
+            stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, recordType, cancel).ConfigureAwait(false);
 
         logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
         return record;
@@ -163,27 +177,48 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// reflected <c>ColumnSpec</c> extractors run against the record this returns, so a field's
     /// value is produced by exactly the same delegate whether it came from a plugin binary or from
     /// its own source text.
+    ///
+    /// <para>Since #450 a document only names its own type when its <i>path</i> could not — so the
+    /// caller states the type it already knows, which at every call site is the index's
+    /// <c>record_type</c> column (or, for compile, the record-type segment of the source path, which
+    /// is the same string). Two spellings ride on that column and both are accepted:
+    /// the schema table name (a GRUP signature, <c>"weap"</c>) and the lowercased CLR type name
+    /// (<c>"landscape"</c>) — see <see cref="RecordTypeDispatch"/>. Null means "the document names
+    /// its own type"; for an unambiguous type that is a failure, and it surfaces as
+    /// <see cref="RecordTypeSerializationUnsupportedException"/> rather than a wrong record.</para>
     /// </summary>
     /// <param name="bytes">The record's JSON text.</param>
     /// <param name="gameRelease">Game release the text was serialized under.</param>
+    /// <param name="recordType">The index's own <c>record_type</c> for this record, or null when the
+    /// document is known to be self-describing.</param>
     /// <param name="cancel">Cancellation token.</param>
-    public async Task<IMajorRecord> DeserializeFromBytesAsync(byte[] bytes, GameRelease gameRelease, CancellationToken cancel = default)
+    public async Task<IMajorRecord> DeserializeFromBytesAsync(
+        byte[] bytes, GameRelease gameRelease, string? recordType, CancellationToken cancel = default)
     {
         using var stream = new MemoryStream(bytes, writable: false);
-        var record = await DeserializeCoreAsync(stream, string.Empty, gameRelease, cancel).ConfigureAwait(false);
+        var record = await DeserializeCoreAsync(stream, string.Empty, gameRelease, recordType, cancel).ConfigureAwait(false);
 
         logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
         return record;
     }
 
     private static async Task<IMajorRecord> DeserializeCoreAsync(
-        Stream stream, string directory, GameRelease gameRelease, CancellationToken cancel)
+        Stream stream, string directory, GameRelease gameRelease, string? recordType, CancellationToken cancel)
     {
         var streamPackage = new StreamPackage(stream, directory);
         var reader = ReaderKernel.GetNewObject(streamPackage);
         var metaData = new SerializationMetaData(gameRelease, null, null, null, cancel);
 
-        var deserialize = ResolveDeserializeMethod(gameRelease, reader.GetType());
+        // The mirror of SerializeCoreAsync's dispatch, driven by the same RecordTypeDispatch fact, so
+        // the two directions cannot disagree about which documents self-describe: a discriminated
+        // document is read by the game's DeserializeWithCheck, an undiscriminated one by its own
+        // concrete <Type>_Serialization.Deserialize. A recordType this game's schema does not know
+        // reads as ambiguous, so it takes the self-describing path and fails loudly there rather than
+        // constructing whatever type happened to be guessed.
+        var dispatch = RecordTypeDispatch.For(gameRelease);
+        var deserialize = recordType is null || dispatch.IsPathAmbiguous(recordType)
+            ? ResolveCheckedDeserializeMethod(gameRelease, reader.GetType())
+            : ResolveConcreteDeserializeMethod(dispatch.ConcreteFor(recordType)!, reader.GetType());
         var task = (Task)deserialize.Invoke(null, [reader, ReaderKernel, metaData])!;
         try
         {
@@ -215,7 +250,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
 
     /// <summary>
     /// The game's <i>abstract</i> major-record serializer — <c>&lt;Game&gt;MajorRecord_Serialization</c>
-    /// — not the concrete <c>&lt;Type&gt;_Serialization</c> this used to call.
+    /// — used for the path-ambiguous types only (<see cref="RecordTypeDispatch"/>).
     ///
     /// <para>That one choice is what makes a document self-describing. The generated
     /// <c>SerializeWithCheck</c> writes <c>kernel.WriteType(writer, item.GetType())</c> — emitted by
@@ -227,13 +262,13 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <c>GameSetting_Serialization.SerializeWithCheck</c>), so this is the kernel's own answer
     /// adopted wholesale rather than a discriminator of our invention.</para>
     ///
-    /// <para>Without it, a record whose GRUP signature has several concrete subclasses could not be
-    /// read back at all: the text alone cannot say whether a GLOB is a GlobalFloat or a GlobalBool,
-    /// and guessing wrong throws (measured: deserializing a real GlobalFloat's document as the
-    /// schema's discovery-winner GlobalBool fails with "Unable to cast object of type
-    /// 'System.Double' to type 'System.Boolean'"). It also removes the need for any caller to say
-    /// what type it expects — the reason both Deserialize entry points lost their <c>Type</c>
-    /// parameter.</para>
+    /// <para>Without it those types could not be read back at all: the text alone cannot say whether
+    /// a GLOB is a GlobalFloat or a GlobalBool, and guessing wrong throws (measured: deserializing a
+    /// real GlobalFloat's document as the schema's discovery-winner GlobalBool fails with "Unable to
+    /// cast object of type 'System.Double' to type 'System.Boolean'"). #450 narrowed it from every
+    /// document to exactly those, which is what the whole-mod door does — a Weapon's file there has
+    /// no discriminator, and now neither does this codec's — but the guarantee for GLOB is untouched,
+    /// because the ambiguous types are precisely the ones that keep it.</para>
     ///
     /// <para>The kernel normalizes the runtime type for us: a <c>NpcBinaryOverlay</c> is written as
     /// <c>"Npc"</c>, so an overlay-read record and a deep-parsed one produce identical text.</para>
@@ -241,7 +276,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <para>Keyed by game, and resolved from the game's own namespace rather than a named one, for
     /// the same reason the concrete lookup is (#413 D5).</para>
     /// </summary>
-    private static MethodInfo ResolveSerializeMethod(GameRelease gameRelease) =>
+    private static MethodInfo ResolveCheckedSerializeMethod(GameRelease gameRelease) =>
         SerializeMethods.GetOrAdd(GameMajorRecordSerializationType(gameRelease), static t =>
         {
             var open = t.GetMethod("SerializeWithCheck", BindingFlags.Public | BindingFlags.Static)
@@ -249,11 +284,32 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
             return open.MakeGenericMethod(typeof(NewtonsoftJsonSerializationWriterKernel), typeof(JsonWritingUnit));
         });
 
-    private static MethodInfo ResolveDeserializeMethod(GameRelease gameRelease, Type readerType) =>
+    private static MethodInfo ResolveCheckedDeserializeMethod(GameRelease gameRelease, Type readerType) =>
         DeserializeMethods.GetOrAdd((GameMajorRecordSerializationType(gameRelease), readerType), static key =>
         {
             var open = key.Record.GetMethod("DeserializeWithCheck", BindingFlags.Public | BindingFlags.Static)
                 ?? throw new RecordTypeSerializationUnsupportedException(key.Record, key.Record, "DeserializeWithCheck");
+            return open.MakeGenericMethod(key.Reader);
+        });
+
+    // The unambiguous majority: the record's own generated <Type>_Serialization, which writes and
+    // reads the fields with no discriminator around them — the same methods the whole-mod group
+    // writer calls for a concrete-element group. Cached in the same two dictionaries as the checked
+    // pair above; the key spaces cannot collide, because a generated *_Serialization class is never
+    // itself a record type.
+    private static MethodInfo ResolveConcreteSerializeMethod(Type generatedType) =>
+        SerializeMethods.GetOrAdd(generatedType, static t =>
+        {
+            var open = t.GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new RecordTypeSerializationUnsupportedException(t, t, "Serialize");
+            return open.MakeGenericMethod(typeof(NewtonsoftJsonSerializationWriterKernel), typeof(JsonWritingUnit));
+        });
+
+    private static MethodInfo ResolveConcreteDeserializeMethod(Type recordType, Type readerType) =>
+        DeserializeMethods.GetOrAdd((FindGeneratedSerializationType(recordType), readerType), static key =>
+        {
+            var open = key.Record.GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new RecordTypeSerializationUnsupportedException(key.Record, key.Record, "Deserialize");
             return open.MakeGenericMethod(key.Reader);
         });
 
@@ -296,42 +352,50 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // known suffix and retrying the direct lookup resolves overlay readers unambiguously, with no
     // risk of matching an unrelated sibling or ancestor interface.
     /// <summary>
-    /// Guard only, since serialization itself now dispatches through the game's abstract base (see
-    /// <see cref="ResolveSerializeMethod"/>): a record type with no generated serializer of its own
-    /// would otherwise reach the base's <c>switch</c> and fail with the generated code's bare
-    /// "Unknown object" <see cref="NotImplementedException"/>, losing the named, actionable error
-    /// this class has always raised for that case.
+    /// The record type's own generated <c>&lt;Type&gt;_Serialization</c> class. It is what the
+    /// unambiguous majority dispatches straight through, and on the ambiguous branch it is still
+    /// resolved first as a guard: a record type with no generated serializer would otherwise reach
+    /// the game base's <c>switch</c> and fail with the generated code's bare "Unknown object"
+    /// <see cref="NotImplementedException"/>, losing the named, actionable error this class has
+    /// always raised for that case.
     /// </summary>
-    private static void EnsureRecordTypeIsSupported(Type recordType)
-    {
-        if (!TryFindGeneratedSerializationType(recordType, out _))
-            throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
-    }
+    private static Type FindGeneratedSerializationType(Type recordType) =>
+        TryFindGeneratedSerializationType(recordType, out var found)
+            ? found
+            : throw new RecordTypeSerializationUnsupportedException(recordType, null, null);
 
     private const string OverlaySuffix = "BinaryOverlay";
 
     /// <summary>
-    /// Sends every <i>child</i> record's bytes nowhere. Under <c>.FilePerRecord()</c> a container
-    /// (Cell/Worldspace/Quest/DialogTopic) writes each child major record to its own file through
-    /// <c>SerializationMetaData.StreamCreator</c>, which defaults to one that creates real files
-    /// and directories — measured: serializing a populated Cell with no destination folder created
-    /// <c>Persistent/</c> and <c>Temporary/</c> directories in the process's working directory.
+    /// Sends every <i>folder-split</i> child record's bytes nowhere. Under <c>.FilePerRecord()</c> a
+    /// container writes each child major record it does not embed to its own file through
+    /// <c>SerializationMetaData.StreamCreator</c>, which defaults to one that creates real files and
+    /// directories — and this codec's callers hand it no directory to spill into (ingest passes none
+    /// at all, so the destination is the process's working directory).
     ///
-    /// Discarding them is the correct outcome, not a workaround: a child record is its own source
-    /// entry and its own indexed row (ADR-0041/#387 — the parent's file carries only the parent's
-    /// fields, which is exactly what the parent's own stream already receives), so anything written
-    /// here would be a duplicate of a record handled in its own right.
+    /// <para><b>Which children this still applies to, since #450.</b> Spriggit embeds
+    /// <c>Cell.{Persistent,Temporary,Landscape,NavigationMeshes}</c> and <c>Worldspace.TopCell</c>
+    /// (<see cref="SpriggitCellEmbedCustomization"/>), and an embedded child is written inline into
+    /// the parent's own stream — it never reaches a stream creator, so this class never sees it.
+    /// What is left is the containers Spriggit does <i>not</i> embed:
+    /// <c>Quest.{DialogBranches,DialogTopics,Scenes}</c> and <c>DialogTopic.Responses</c>, which stay
+    /// folder-split on both doors. Measured before this existed: one real Quest created 1,057
+    /// directories, one per dialogue topic, and a load-order-wide index would do that for every
+    /// container it read. So this is <b>not</b> shallow-strip machinery and did not retire with it —
+    /// the issue's own scope note ("containers now serialize embedded, which is the point") holds
+    /// only for the five slots above.</para>
     ///
-    /// <b>This does NOT make the parent shallow.</b> An earlier revision of this comment claimed it
-    /// did — that a getter straight off a binary overlay needed no mutable copy to strip — and the
-    /// claim is measurably false. Serializing every container in the committed cut-down plugin both
-    /// ways (overlay getter, vs. deep-parsed setter + <c>ContainerStripFields.StripInPlace</c>)
-    /// found three populated exterior Cells whose overlay bytes still inline their children:
-    /// <c>00DB41:Fallout4.esm</c> at 58,419 B against 12,959 B stripped, <c>00DB42</c> at
-    /// 59,070/16,912, <c>00DB43</c> at 63,281/15,889. Suppressing the child <i>streams and
-    /// folders</i> stops the filesystem writes; it does not stop the parent's own stream from
-    /// carrying the children. Ingest therefore still deep-copies and strips a container before
-    /// serializing it (#413 D8); this class is responsible only for the disk side.
+    /// <para>Discarding is the correct outcome, not a workaround: a folder-split child is its own
+    /// source unit and its own indexed row, so anything written here would duplicate a record handled
+    /// in its own right — and it costs nothing at the byte level, because the parent's own stream is
+    /// unaffected either way. <c>DocumentShapeParityTests</c> pins that directly, on a populated
+    /// Quest: same bytes as the whole-mod door's file for it, with these suppressions active.</para>
+    ///
+    /// <para>Note the historical claim this comment used to carry — that suppressing child streams
+    /// does not stop the parent's own stream from inlining children, measured on three exterior Cells
+    /// at 58,419 / 59,070 / 63,281 B against 12,959 / 16,912 / 15,889 stripped. That was true and is
+    /// now beside the point: for a Cell, inlining the children is the intended output, and the strip
+    /// those numbers justified (#413 D8) is gone.</para>
     /// </summary>
     private sealed class DiscardChildRecordStreams : ICreateStream
     {
@@ -344,10 +408,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// The other half of the same suppression: a container's child folders are created directly
     /// through <c>SerializationMetaData.FileSystem.Directory.CreateDirectory</c> (see Mutagen
     /// Serialization's MajorRecordListParallelHelper / BlockParallelHelper / XYBlockParallelHelper),
-    /// not through the stream creator above, so redirecting streams alone does not stop them.
-    /// Measured before this existed: serializing one real Quest created 1,057 directories — one per
-    /// dialogue topic — in the process's working directory, and a load-order-wide index would do
-    /// that for every container record it reads.
+    /// not through the stream creator above, so redirecting streams alone does not stop them. Same
+    /// scope as <see cref="DiscardChildRecordStreams"/> since #450 — the embedded slots never reach
+    /// either of these, so what both are guarding is Quest/DialogTopic, which is exactly the Quest
+    /// measurement that motivated this one.
     ///
     /// Only <see cref="IDirectory.CreateDirectory(string)"/> is neutralized, and only to the extent
     /// of not touching the disk: it still returns a real <see cref="IDirectoryInfo"/> for the path

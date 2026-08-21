@@ -20,7 +20,7 @@ namespace MEditService.Tests.Edits;
 /// (its <c>DiscardChildRecordStreams</c>/<c>NoRecordFolders</c> suppression is symmetric — write side
 /// never inlines a child, read side never reads one back inline either), and Track's write never
 /// inlined one — confirmed against real Track output both with and against the pre-#416
-/// <c>ContainerStripFields</c> table. So today, nothing can hand <see cref="ContainerAssembler"/> a
+/// <c>ContainerChildFields</c> table. So today, nothing can hand <see cref="ContainerAssembler"/> a
 /// Quest whose <c>Scenes</c> is already stale content from source text. This test exercises the
 /// assembler's own replace behaviour directly at its own seam instead — insurance against whatever
 /// *does* someday hand it a pre-populated slot (a future codec change, a hand-edited or third-party

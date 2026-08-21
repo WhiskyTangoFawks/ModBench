@@ -66,13 +66,13 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
             {
                 cancel.ThrowIfCancellationRequested();
 
-                // A fresh deep parse, deliberately — not the session's own already-open overlay: the
-                // overlay is read-only, so nothing here could strip a container's child-major fields
-                // on it even if it were otherwise safe to reuse (ContainerStripFields.StripInPlace
-                // needs a mutable IMajorRecord). Reader-agnosticism between the two is exactly what
-                // RecordTextCodecRealDataTests exists to protect at the codec seam; Track pays a
-                // second parse to get a graph it can mutate safely, never touching the session's own
-                // state.
+                // A fresh deep parse, deliberately — not the session's own already-open overlay,
+                // which belongs to the session and whose lifetime Track does not control. The
+                // original reason was stronger (the strip needed a mutable IMajorRecord, and an
+                // overlay is read-only) and is gone with the strip itself (#450); a second parse is
+                // still what keeps Track off the session's own state. Reader-agnosticism between the
+                // two — that a deep-parsed record and an overlay serialize to the same bytes — is
+                // what RecordTextCodecRealDataTests protects at the codec seam.
                 var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease);
                 var records = deepParsed.EnumerateMajorRecords().ToList();
                 perPluginRecords.Add((plugin, records));
@@ -88,7 +88,6 @@ public sealed class TrackService(ISchemaReflector reflector, ILogger<TrackServic
                 foreach (var record in records)
                 {
                     cancel.ThrowIfCancellationRequested();
-                    ContainerStripFields.StripInPlace(record);
 
                     var recordType = SourceRecordType.Resolve(record, schemas);
                     var relativePath = SourceRecordPath.For(plugin.Name, recordType, record.FormKey.ToString());

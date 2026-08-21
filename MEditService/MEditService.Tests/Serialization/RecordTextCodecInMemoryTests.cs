@@ -94,7 +94,7 @@ public class RecordTextCodecInMemoryTests
         var original = MakeWeapon();
 
         var bytes = await codec.SerializeToBytesAsync(original, GameRelease.Fallout4);
-        var roundTripped = (Weapon)await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4);
+        var roundTripped = (Weapon)await codec.DeserializeFromBytesAsync(bytes, GameRelease.Fallout4, "weap");
 
         var mask = original.GetEqualsMask(roundTripped);
         var leaves = MaskInspector.CountLeaves(mask).ToList();

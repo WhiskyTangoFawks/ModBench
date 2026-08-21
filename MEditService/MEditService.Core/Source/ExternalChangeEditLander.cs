@@ -40,7 +40,6 @@ public static class ExternalChangeEditLander
         var touched = new List<TouchedRecord>();
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
-            ContainerStripFields.StripInPlace(record);
             var recordType = SourceRecordType.Resolve(record, schemas);
             var formKey = record.FormKey.ToString();
             var relativePath = SourceRecordPath.For(pluginName, recordType, formKey);

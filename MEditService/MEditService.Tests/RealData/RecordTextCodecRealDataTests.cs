@@ -91,7 +91,7 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
             swSerializeDeep.Stop();
 
             var swDeserialize = Stopwatch.StartNew();
-            var roundTripped = (Weapon)await codec.DeserializeAsync(deepParsedPath, GameRelease.Fallout4);
+            var roundTripped = (Weapon)await codec.DeserializeAsync(deepParsedPath, GameRelease.Fallout4, "weap");
             swDeserialize.Stop();
 
             output.WriteLine($"AC4: serialize (overlay) {swSerializeOverlay.ElapsedMilliseconds} ms, " +

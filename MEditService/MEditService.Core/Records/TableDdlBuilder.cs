@@ -278,7 +278,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
     }
 
-    // #416 S1b: the five ContainerStripFields relationships placement/cell_location don't already
+    // #416 S1b: the five ContainerChildFields relationships placement/cell_location don't already
     // carry (Cell.NavigationMeshes/Landscape, Quest.DialogBranches/DialogTopics,
     // DialogTopic.Responses) — additive to the tables above, never a replacement for what they
     // already cover.

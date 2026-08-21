@@ -30,6 +30,13 @@ public class RecordTypeDispatchTests
             Name = "Test NPC Name",
         };
 
+    private static GlobalFloat MakeGlobalFloat() =>
+        new(new FormKey(ModKey.FromFileName("Test.esp"), 0x902), Fallout4Release.Fallout4)
+        {
+            EditorID = "TestGlobal",
+            Data = 1.5f,
+        };
+
     private static Cell MakeCell() =>
         new(new FormKey(ModKey.FromFileName("Test.esp"), 0x901), Fallout4Release.Fallout4)
         {
@@ -49,7 +56,7 @@ public class RecordTypeDispatchTests
             // The public seam takes IMajorRecordGetter, not INpcGetter — proves the caller never
             // has to name the concrete type to serialize, only to deserialize back into one.
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Npc)await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
+            var roundTripped = (Npc)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "npc_");
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -75,7 +82,7 @@ public class RecordTypeDispatchTests
             var filePath = Path.Combine(dir.FullName, "cell.json");
 
             await codec.SerializeAsync(original, filePath, GameRelease.Fallout4);
-            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4);
+            var roundTripped = (Cell)await codec.DeserializeAsync(filePath, GameRelease.Fallout4, "cell");
 
             var mask = original.GetEqualsMask(roundTripped);
             var leaves = MaskInspector.CountLeaves(mask).ToList();
@@ -98,11 +105,14 @@ public class RecordTypeDispatchTests
     // generated dispatch's own anonymous NotImplementedException.
     //
     // This used to be asserted by handing DeserializeAsync a Type with no generated serializer. That
-    // route is gone: the text names its own concrete type now (MutagenObjectType), so no caller
-    // supplies one and there is nothing to get wrong at the call site. The equivalent failure is a
-    // *document* naming a type the dispatch has no case for — corrupt text, a hand-edited source
-    // file, or text written by a future schema — which is the real-world shape of this failure and
-    // was previously untested.
+    // route is gone: a caller states record_type, not a CLR Type, and a record_type this game's
+    // schema does not know is treated as "expect the document to name itself" rather than as a
+    // dispatch target. The equivalent failure is therefore a *document* naming a type the dispatch
+    // has no case for — corrupt text, a hand-edited source file, or text written by a future schema.
+    //
+    // The subject is a GlobalFloat rather than #370's original Npc because since #450 only the
+    // path-ambiguous types self-describe at all: an Npc document has no discriminator left to
+    // corrupt, and GLOB — the type the discriminator exists for — does.
     [Fact]
     public async Task DeserializeAsync_ForTextNamingAnUnknownType_ThrowsNamedException()
     {
@@ -111,17 +121,17 @@ public class RecordTypeDispatchTests
         try
         {
             var filePath = Path.Combine(dir.FullName, "unsupported.json");
-            await codec.SerializeAsync(MakeNpc(), filePath, GameRelease.Fallout4);
+            await codec.SerializeAsync(MakeGlobalFloat(), filePath, GameRelease.Fallout4);
 
-            // Rewrite only the discriminator, leaving a structurally valid Npc document behind it —
-            // so what fails is the type resolution and nothing else.
+            // Rewrite only the discriminator, leaving a structurally valid GlobalFloat document
+            // behind it — so what fails is the type resolution and nothing else.
             var text = await File.ReadAllTextAsync(filePath);
-            Assert.Contains("\"MutagenObjectType\": \"Npc\"", text, StringComparison.Ordinal);
+            Assert.Contains("\"MutagenObjectType\": \"GlobalFloat\"", text, StringComparison.Ordinal);
             await File.WriteAllTextAsync(filePath,
-                text.Replace("\"MutagenObjectType\": \"Npc\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
+                text.Replace("\"MutagenObjectType\": \"GlobalFloat\"", "\"MutagenObjectType\": \"NotARecordType\"", StringComparison.Ordinal));
 
             var ex = await Assert.ThrowsAsync<RecordTypeSerializationUnsupportedException>(
-                () => codec.DeserializeAsync(filePath, GameRelease.Fallout4));
+                () => codec.DeserializeAsync(filePath, GameRelease.Fallout4, "glob"));
 
             // The message says what went wrong, not merely that something did. The offending name
             // is deliberately not asserted: the kernel discards it on the route this case takes

@@ -46,7 +46,7 @@ public sealed class RecordEditServiceTests : IDisposable
         // Re-parsed through the codec rather than string-matched: the file has to remain a document
         // the source can round-trip, not merely text that happens to contain the right number.
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
-        var reparsed = await codec.DeserializeAsync(_mod.NpcSourceFile, GameRelease.Fallout4);
+        var reparsed = await codec.DeserializeAsync(_mod.NpcSourceFile, GameRelease.Fallout4, "npc_");
         Assert.Equal(_mod.Npc, reparsed.FormKey);
 
         // ...and the value is read back through the same typed extraction the record editor renders

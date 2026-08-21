@@ -7,13 +7,13 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #416: the mechanical sweep <see cref="ContainerStripFields"/>' own doc comment claims was already
+/// #416: the mechanical sweep <see cref="ContainerChildFields"/>' own doc comment claims was already
 /// done (#370 Q5) — and which <c>Quest.Scenes</c> proved wasn't exhaustive. Verified here by
 /// enumeration rather than trusted by assertion: every schema-registered major record type's own
 /// direct properties are walked for a reference (single or list) to another major record type that
 /// has no top-level group of its own (the generic "child-major" rule the original investigation used
 /// but evidently didn't apply completely) — every one found must be in
-/// <see cref="ContainerStripFields"/>' table, or this test names the gap.
+/// <see cref="ContainerChildFields"/>' table, or this test names the gap.
 ///
 /// <para>Permanent, not a one-off probe: this is the standing defence against the <i>next</i> Scenes
 /// — a future Mutagen bump or new game module introducing a child-major field nobody added to the
@@ -21,10 +21,10 @@ namespace MEditService.Tests.Source;
 /// guard is the standing defence at compile time (an unplaceable record refuses rather than
 /// vanishing); this is the standing defence at review time (a red test before anything ships).</para>
 /// </summary>
-public sealed class ContainerStripFieldsCompletenessTests
+public sealed class ContainerChildFieldsCompletenessTests
 {
     [Fact]
-    public void EveryChildMajorRecordField_IsRepresentedInContainerStripFieldsTable()
+    public void EveryChildMajorRecordField_IsRepresentedInContainerChildFieldsTable()
     {
         var release = GameRelease.Fallout4;
         var schemas = SharedSchemaReflector.Instance.GetSchemas(release);
@@ -32,7 +32,7 @@ public sealed class ContainerStripFieldsCompletenessTests
 
         // Every schema-registered getter type resolved to its concrete setter class (Mutagen's own
         // "I<Name>Getter" -> "<Name>" naming convention — the same one RecordTextCodec's dispatch and
-        // ContainerStripFields' DeepCopy resolution both already rely on).
+        // ContainerChildFields' DeepCopy resolution both already rely on).
         var majorRecordTypes = schemas.Values
             .Select(s => ConcreteTypeFor(s.RecordType))
             .Where(t => t != null)
@@ -55,7 +55,7 @@ public sealed class ContainerStripFieldsCompletenessTests
                 var elementType = ElementTypeIfChildMajor(property.PropertyType, childMajorTypes);
                 if (elementType == null) continue;
 
-                var covered = ContainerStripFields.EnumerateStripFieldsFor(parentType) is { } fields
+                var covered = ContainerChildFields.EnumerateChildFieldsFor(parentType) is { } fields
                     && fields.Contains(property.Name);
                 if (!covered)
                     gaps.Add($"{parentType.Name}.{property.Name} (-> {elementType.Name})");
@@ -63,7 +63,7 @@ public sealed class ContainerStripFieldsCompletenessTests
         }
 
         Assert.True(gaps.Count == 0,
-            $"ContainerStripFields' table is missing: {string.Join(", ", gaps)}. " +
+            $"ContainerChildFields' table is missing: {string.Join(", ", gaps)}. " +
             "Add the field to ByTypeName (and container_child will pick up parentage automatically).");
     }
 
@@ -88,7 +88,7 @@ public sealed class ContainerStripFieldsCompletenessTests
         }
     }
 
-    // The same shape-only rule ContainerStripFields' own doc comment describes: a property is
+    // The same shape-only rule ContainerChildFields' own doc comment describes: a property is
     // child-major if its type, or the element type of a collection it declares, is itself a
     // known child-major type.
     private static Type? ElementTypeIfChildMajor(Type propertyType, HashSet<Type> childMajorTypes)

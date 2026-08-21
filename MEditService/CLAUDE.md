@@ -33,9 +33,30 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - **Views carry scalar leaves only** — arrays, structs and the #263 widened columns are omitted
     (`ColumnSpec.IsViewable`): no column beats a column with broken semantics. A view never carries
     an always-NULL column.
-  - **Documents name their own type.** The codec dispatches through the game's abstract
-    major-record serializer, so the kernel writes its own `MutagenObjectType` discriminator — which
-    is how a GLOB is read back as `GlobalFloat` rather than the schema's discovery winner.
+  - **Documents name their own type exactly when their path can't** (#450, adopting the whole-mod
+    door's own policy). `RecordTypeDispatch` derives path-ambiguity by reflection over the game mod
+    type's group structure: a group whose element type is abstract (GLOB → GlobalFloat/GlobalBool/…)
+    dispatches the abstract `<Game>MajorRecord_Serialization.SerializeWithCheck`, so the kernel
+    writes its own `MutagenObjectType` discriminator; every other type dispatches its concrete
+    `<Type>_Serialization.Serialize` and writes none — which is what makes a document byte-identical
+    to the whole-mod folder-split path's file for the same record (`DocumentShapeParityTests`).
+    Reading a GLOB back as `GlobalFloat` rather than the schema's discovery winner is preserved
+    *because* the ambiguous types are precisely the ones that keep the discriminator. Every other
+    document is told its type on the way in: `Deserialize*` take the index's own `record_type`, which
+    is the schema table name (a GRUP signature, `"weap"`) for a schema-known type and the lowercased
+    CLR type name (`"landscape"`) for the handful `SchemaReflector` excludes. Embedded child records
+    keep their discriminators regardless — that is the kernel's own abstract-*field* rule
+    (`ExtendedList<IPlaced>`), nothing to do with this policy.
+  - **A container's document carries its embedded children** (#450 / ADR-0041's #444 amendment,
+    retiring #413 D8's deep-copy-and-strip and the `ContainerStripFields` posture with it). Scope is
+    Spriggit's, replicated verbatim in `SpriggitEmbedCustomizations`:
+    `Cell.{Persistent,Temporary,Landscape,NavigationMeshes}` and `Worldspace.TopCell` inline;
+    `Quest.{DialogBranches,DialogTopics,Scenes}` and `DialogTopic.Responses` stay folder-split on
+    both doors, which is why the codec keeps its child-stream/child-folder suppressions — deleting
+    them puts 1,057 directories per real Quest back in the process's working directory. Canonical
+    document form is bare `\n` newlines with **nothing after the closing brace**: no trailing
+    newline, on every platform. Until #452 lands ingest-from-source, an embedded child is
+    represented twice — inline in its parent's document and again as its own row and source file.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
@@ -126,7 +147,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `ContainerAssembler` |
 | `Serialization/` | Per-record text source codec (ADR-0041, née ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
-| `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerStripFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
+| `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
 `MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
 lifecycle plus the pending-external-change queue, nothing else — it references only
