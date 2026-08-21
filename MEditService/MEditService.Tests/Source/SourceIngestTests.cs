@@ -190,4 +190,55 @@ public sealed class SourceIngestTests
         Assert.Equal(TrackedModFixture.PluginName, failure.Name);
         Assert.Contains("source tree", failure.Reason, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// <b>The invariant: <c>records_head</c>'s two halves are disjoint</b> — a FormKey answers at Head
+    /// either from a <c>records_committed</c> snapshot or from a still-clean <c>records</c> row, never
+    /// both. <c>TableDdlBuilder</c> states it as true "by construction", and its <c>UNION ALL</c>
+    /// (deliberately not <c>UNION</c>) depends on exactly that.
+    ///
+    /// <para>Ingest-from-source is the first thing able to break it, because it is the first operation
+    /// that calls <see cref="IRecordIndex.Index"/> and writes <c>records_committed</c> for one key,
+    /// with a failure path that calls <c>Index</c> on that same key <i>again</i>. A working-tree
+    /// deletion early in the dirty set commits a snapshot row; a later dirty path throws; the binary
+    /// fallback rebuilds <c>records</c> — and <c>Index</c>/<c>Unindex</c> have never cleared
+    /// <c>records_committed</c> (that half predates this ticket). Two rows, one FormKey.</para>
+    ///
+    /// <para>Deliberately a different failure from the test above: corrupting the root
+    /// <c>RecordData.json</c> makes the whole-mod read throw <i>before</i> any snapshot can be written,
+    /// so it cannot reach this at all. The failure here is a path whose <c>HEAD</c> blob is unreadable
+    /// and whose working-tree copy is gone — an ordinary never-assume-exclusive-ownership state that
+    /// lands after the deletion branch has already committed.</para>
+    /// </summary>
+    [Fact]
+    public void APartialReconcileThenBinaryFallback_LeavesExactlyOneRowAtHead_NotTwo()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var gitDir = Path.Combine(mod.ModFolder, ".git");
+        var sourceRoot = Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}");
+
+        // A committed file the per-record codec cannot read back. "Npcs" sorts after "Keywords" and git
+        // orders porcelain output by path, so the good deletion below is processed first.
+        var poison = Path.Combine(sourceRoot, "Npcs", "zzbroken.json");
+        File.WriteAllText(poison, "{ not a record");
+        GitCli.Run(gitDir, mod.ModFolder, "add", "-A");
+        GitCli.Run(gitDir, mod.ModFolder, "commit", "-q", "-m", "commit an unreadable record");
+
+        // Two working-tree deletions. The first re-seeds Head and commits; the second throws when its
+        // HEAD blob is parsed, aborting the ingest partway through the dirty set.
+        File.Delete(Path.Combine(mod.ModFolder, TrackedModFixture.RelativeSourcePath(
+            mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
+        File.Delete(poison);
+
+        using var reloaded = Reload(mod);
+
+        // Precondition: the ingest really did fail partway and fall back, or this proves nothing.
+        Assert.NotEmpty(reloaded.Status.Failures);
+
+        var atHead = reloaded.Index!.At(RecordRef.Head)
+            .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
+            .Items.Count(r => string.Equals(r.FormKey, mod.Keyword.ToString(), StringComparison.Ordinal));
+
+        Assert.Equal(1, atHead);
+    }
 }

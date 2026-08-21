@@ -103,6 +103,20 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
         // so it has no codec document at all, and stays a purely extracted index table (D8).
         DeleteExistingForOrigin("records", plugin, origin);
+        // #452: and the Head snapshots with them. `records_head` is records_committed UNION ALL the
+        // still-clean `records` rows, and those halves must stay disjoint (TableDdlBuilder says so "by
+        // construction" and its UNION ALL — not UNION — depends on it exactly). Re-seeding `records`
+        // while leaving a snapshot behind puts two rows under one (form_key, plugin, origin) at Head.
+        //
+        // This is a genuine part of Index()'s own stated contract — "replacing whatever `key`
+        // previously held" — that was simply never reachable before: nothing used to call Index() and
+        // write records_committed for the same key in one operation, with a failure path that calls
+        // Index() on that key again. SourceIngest.Ingest is the first (its binary fallback), and
+        // SessionManager.ReindexPlugin re-reading a binary under a dirty tracked plugin is a second.
+        // Fixing it here rather than at either call site is what makes every present and future caller
+        // inherit it. Never removes a *correct* snapshot: after a full re-index from one source, a
+        // prior divergence describes bytes that no longer relate to what was just ingested.
+        DeleteExistingForOrigin("records_committed", plugin, origin);
         using var documentAppender = Connection.CreateAppender("records");
 
         foreach (var (tableName, schema) in schemas)
@@ -207,6 +221,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // #420: VMAD and conditions have no side tables of their own any more — deleting this
         // plugin's `records` rows above already removes the one thing GetVmad/GetConditions read.
         DeleteExistingForOrigin("records", plugin, origin);
+        // #452: "removes every trace of key" has to include the Head side. A leftover snapshot would
+        // keep answering at Head for a plugin the session no longer holds — the exact opposite of
+        // #34/ADR-0035's "hidden means absent".
+        DeleteExistingForOrigin("records_committed", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -659,8 +677,21 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>.</summary>
-    public void SeedCommittedOnly(PluginKey key, string formKey, string recordType, string body)
+    /// <summary>See <see cref="IRecordIndex.SeedCommittedOnly"/>. One transaction for the whole batch,
+    /// matching <see cref="SetCommittedBaseline"/> and <see cref="MarkWorkingTreeOnly"/> — the three
+    /// head-state writes are all-or-nothing together, so a throw partway through a reconciliation pass
+    /// cannot leave half of one applied.</summary>
+    public void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records)
+    {
+        if (records.Count == 0) return;
+
+        using var tx = Connection.BeginTransaction();
+        foreach (var (formKey, recordType, body) in records)
+            SeedOneCommittedOnly(key, formKey, recordType, body);
+        tx.Commit();
+    }
+
+    private void SeedOneCommittedOnly(PluginKey key, string formKey, string recordType, string body)
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 

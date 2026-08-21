@@ -159,10 +159,14 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// what the link points at <i>now</i>) — the same rule <c>records_head</c>'s own definition already
     /// states for the reads that answer from them.</para>
     ///
-    /// <para>Skipped rather than thrown on when the plugin already holds <paramref name="formKey"/> at
-    /// either ref: this is only ever for a record the working tree genuinely does not have.</para>
+    /// <para>Skipped rather than thrown on when the plugin already holds a listed FormKey at either
+    /// ref: this is only ever for a record the working tree genuinely does not have.</para>
+    ///
+    /// <para>Batched, like <see cref="SetCommittedBaseline"/> and <see cref="MarkWorkingTreeOnly"/>: the
+    /// three head-state writes are the reconciliation pass's whole output, and applying them
+    /// all-or-nothing is what keeps a pass that throws partway from leaving Head half-moved.</para>
     /// </summary>
-    void SeedCommittedOnly(PluginKey key, string formKey, string recordType, string body);
+    void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one

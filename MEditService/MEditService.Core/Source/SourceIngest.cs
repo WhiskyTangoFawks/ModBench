@@ -116,6 +116,7 @@ internal static class SourceIngest
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var baselines = new List<(string FormKey, string Body)>();
         var workingTreeOnly = new List<string>();
+        var deletedInWorkingTree = new List<(string FormKey, string RecordType, string Body)>();
 
         foreach (var gitPath in dirty)
         {
@@ -151,7 +152,8 @@ internal static class SourceIngest
                 // never saw it — but it must keep answering at Head, or the user could no longer see,
                 // diff or revert what they deleted, which is the centre of the git-native working-tree
                 // model rather than an edge case (ADR-0041).
-                if (headText != null) DeletedInWorkingTree(index, codec, key, gameRelease, identity, headText);
+                if (headText != null)
+                    deletedInWorkingTree.Add(DeletedInWorkingTree(codec, gameRelease, identity, headText));
                 continue;
             }
 
@@ -172,22 +174,29 @@ internal static class SourceIngest
             baselines.Add((record.FormKey.ToString(), headText));
         }
 
+        // Applied only once the whole dirty set has been read, never per iteration. A path that throws
+        // mid-loop therefore leaves Head untouched rather than half-moved — which matters because the
+        // caller's response to that throw is to re-ingest this same key from the binary, and a Head
+        // snapshot surviving that rebuild would put two rows under one FormKey in `records_head`.
+        // Index() clears the snapshot table for the key as well, which is the robust half of that
+        // guarantee; this is the half that keeps the three head-state writes symmetrical, so the next
+        // person adding a fourth does not inherit a per-iteration commit as the local idiom.
         index.SetCommittedBaseline(key, baselines);
         index.MarkWorkingTreeOnly(key, workingTreeOnly);
+        index.SeedCommittedOnly(key, deletedInWorkingTree);
     }
 
     /// <summary>Re-seeds a working-tree-deleted record's committed side from <c>HEAD</c>'s own bytes,
     /// so it answers at Head and nowhere else. The record type comes from the path (the file is gone,
     /// so there is nothing in the working tree to read it off) and the FormKey from <c>HEAD</c>'s
     /// document, which is the same "identity comes from the document" rule the live branch follows.</summary>
-    private static void DeletedInWorkingTree(
-        IRecordIndex index, RecordTextCodec codec, PluginKey key, GameRelease gameRelease,
-        SourceRecordIdentity identity, string headText)
+    private static (string FormKey, string RecordType, string Body) DeletedInWorkingTree(
+        RecordTextCodec codec, GameRelease gameRelease, SourceRecordIdentity identity, string headText)
     {
         var record = codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(headText), gameRelease, identity.RecordType)
             .GetAwaiter().GetResult();
 
-        index.SeedCommittedOnly(key, record.FormKey.ToString(), identity.RecordType, headText);
+        return (record.FormKey.ToString(), identity.RecordType, headText);
     }
 }
