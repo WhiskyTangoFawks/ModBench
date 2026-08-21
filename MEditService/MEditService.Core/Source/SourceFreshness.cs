@@ -72,7 +72,7 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
     {
         if (ModFolders.TrackedOf(session, entry.Plugin) is not { } modFolder) return;
 
-        var relativePath = SourceRecordPath.For(entry.Plugin.Name, recordType, formKey);
+        var relativePath = SourceRecordPath.For(entry.Plugin.Name, recordType, formKey, entry.Effective.EditorId, session.GameRelease);
         var fullPath = Path.Combine(modFolder, relativePath);
 
         var fileText = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;

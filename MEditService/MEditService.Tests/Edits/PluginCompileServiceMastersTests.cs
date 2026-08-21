@@ -78,7 +78,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
             ],
             GameRelease.Fallout4);
 
-        new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }

@@ -39,7 +39,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\NewScript", Json("""{"op":"add_script","flags":"Local"}"""));
 
         Assert.True(result.Applied, result.Message);
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
 
         var body = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;

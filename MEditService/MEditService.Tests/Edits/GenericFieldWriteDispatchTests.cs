@@ -107,7 +107,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
                 [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)],
                 GameRelease.Fallout4);
 
-            new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+            new TrackService(NullLogger<TrackService>.Instance)
                 .TrackAsync(Sessions.Session!, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }

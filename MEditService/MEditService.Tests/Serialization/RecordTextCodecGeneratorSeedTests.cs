@@ -47,10 +47,14 @@ public class RecordTextCodecGeneratorSeedTests
     // public signature naming a mod type. #381's crash-repair path adding
     // `RebuildAsync(string sourceDir, string outputPath)` over
     // `MutagenJsonConverterFallout4ModMixIns.DeserializeInto` would have an all-string signature and
-    // stay invisible to it, while shipping exactly the 21 s / 132,787-file / 106 MB path ADR-0040
-    // rejected. So this scans source text directly: the mixin's type name may appear in
-    // MEditService.Core's own .cs files only inside RecordTextCodecGeneratorSeed.cs, which is
-    // documented and expected to name it.
+    // stay invisible to it. So this scans source text directly: the mixin's type name may appear in
+    // MEditService.Core's own .cs files only inside this whitelist of designated doors (#451, AC2
+    // re-scope: "no caller, ever" to "only the designated doors" — ADR-0041's #444 amendment point 4).
+    // The scan itself survives unchanged from the original blanket-ban version — only the allowed set
+    // widens, one file per door as each door ships: RecordTextCodecGeneratorSeed.cs (the seed itself,
+    // #367), TrackService.cs (Track, #451). Ingest-from-source (#452) and compile (#454) add their own
+    // door files here when they land; a call from any other file is still exactly what this test
+    // exists to catch.
     //
     // Deliberately checking the type name only, not the containing namespace
     // (Mutagen.Bethesda.Serialization.Newtonsoft) as originally proposed: that namespace also holds
@@ -64,17 +68,77 @@ public class RecordTextCodecGeneratorSeedTests
     // pattern for this test project: a source scan, not a build-output read. Flagged as such rather
     // than silently introduced.
     [Fact]
-    public void CoreSources_NameTheWholeModMixinOnlyInTheSeedFile()
+    public void CoreSources_NameTheWholeModMixinOnlyInTheDesignatedDoorFiles()
     {
         const string mixinTypeName = "MutagenJsonConverterFallout4ModMixIns";
-        const string expectedFile = "RecordTextCodecGeneratorSeed.cs";
+        var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "RecordTextCodecGeneratorSeed.cs", // #367: the compile-time seed, never invoked
+            "TrackService.cs",                 // #451: Track
+        };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
         Assert.NotEmpty(sourceFiles);
 
         var offendingFiles = sourceFiles
-            .Where(f => Path.GetFileName(f) != expectedFile)
+            .Where(f => !designatedDoors.Contains(Path.GetFileName(f)))
             .Where(f => File.ReadAllText(f).Contains(mixinTypeName, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.Empty(offendingFiles);
+    }
+
+    // Companion to the check above, at the *gateway* rather than the mixin's own type name: #451
+    // review found that a friendly extension-method call (`MutagenJsonConverter.Instance.Serialize(...)`)
+    // never actually names `MutagenJsonConverterFallout4ModMixIns` in caller source at all (C# extension
+    // syntax doesn't spell the containing static class), so the scan above alone would stay silent
+    // for exactly the call shape a real caller would write. RecordTextCodecGeneratorSeed's own doc
+    // comment already forces every real caller through `SerializeWholeMod` instead (a second direct
+    // bootstrap call site does not even compile — CS8785, reproduced implementing #451) — this scans
+    // for *that* method name instead, which every real call site's source text does spell out.
+    [Fact]
+    public void CoreSources_CallSerializeWholeModOnlyFromDesignatedDoorFiles()
+    {
+        const string gatewayMethodName = "SerializeWholeMod";
+        const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
+        var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "TrackService.cs", // #451: Track
+        };
+
+        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);
+        Assert.NotEmpty(sourceFiles);
+
+        var offendingFiles = sourceFiles
+            .Where(f => Path.GetFileName(f) != gatewayFile && !designatedDoors.Contains(Path.GetFileName(f)))
+            .Where(f => File.ReadAllText(f).Contains(gatewayMethodName, StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+
+        Assert.Empty(offendingFiles);
+    }
+
+    // #451: the sequential-dropoff guard. The #444 spike's own finding 4 is a real upstream race in
+    // MajorRecordListParallelHelper under a genuinely parallel IWorkDropoff (nested-list containers
+    // writing into each other's folders) — TrackService passes Noggog.WorkEngine.InlineWorkDropoff.Instance
+    // explicitly at its one whole-mod call site, even though it is already the library's own default,
+    // precisely so a future edit swapping it for ParallelWorkDropoff is a visible, reviewable diff, not
+    // a silent behavior change. This is the test that makes "visible" also mean "caught": the door file
+    // may never name ParallelWorkDropoff at all.
+    [Fact]
+    public void DoorFiles_NeverNameAParallelWorkDropoff()
+    {
+        const string parallelDropoffName = "ParallelWorkDropoff";
+        var doorFiles = new[] { "TrackService.cs" };
+
+        var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => doorFiles.Contains(Path.GetFileName(f)))
+            .ToList();
+        Assert.NotEmpty(sourceFiles);
+
+        var offendingFiles = sourceFiles
+            .Where(f => File.ReadAllText(f).Contains(parallelDropoffName, StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToList();
 

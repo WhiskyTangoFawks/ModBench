@@ -60,31 +60,43 @@ namespace MEditService.Core.Serialization;
 ///    <c>Serialize(IFallout4ModGetter, ...)</c>
 ///    and <c>DeserializeInto(...)</c> methods — a structurally unavoidable side effect of point 1,
 ///    confirmed to have no generator option that suppresses it while still producing the per-record
-///    classes. <b>Nothing in this codebase may ever call it.</b> ADR-0040 rejected whole-mod text
-///    export as the vendoring mechanism on measured grounds (spike #359, Q2): 21 s / 132,787 files /
-///    106 MB for a 20 MB plugin, versus 160 ms for a single record. AC2 exists to keep that decision
-///    real, not just documented — "no whole-mod serialization API is exposed to callers" is a
-///    statement about this codebase's own designed surface (enforced by
-///    <c>RecordTextCodecGeneratorSeedTests</c>, including a source scan pinning that this mixin's
-///    namespace appears nowhere in this project's own source outside this file), not a claim that the
-///    generated mixin doesn't exist — it does, it is simply never on a path anything reaches. The
-///    concrete temptation this is warning about: rebuilding a plugin from its text source (crash
-///    repair, #381) is a real user path, and <c>MutagenJsonConverterFallout4ModMixIns.DeserializeInto</c>
-///    will look like the obvious tool for it. It is exactly the wrong one — it re-imports the
-///    equivalent of a whole-mod export, the thing ADR-0040 measured and rejected. The right tool for
-///    that job is per-record deserialize (<see cref="RecordTextCodec.DeserializeAsync"/>) applied one
-///    record at a time.
+///    classes.
 ///
-/// <see cref="Touch"/> is deliberately unreachable and, just as deliberately, uncalled: it only
-/// invokes <c>MutagenJsonConverter.Instance.Serialize</c> when handed a non-null mod, and nothing in
-/// this codebase ever calls <see cref="Touch"/> at all — seeding is syntax-driven (see above), so
-/// nothing has to. <see cref="Touch"/> must stay <c>internal</c>, not <c>private</c>: this repo's
-/// <c>SonarAnalyzer</c> rule <c>S1144</c> ("remove the unused private method") fires on unreferenced
-/// <i>private</i> members but not <i>internal</i> ones (internal is a legitimate cross-assembly
-/// surface via <c>InternalsVisibleTo(MEditService.Tests)</c>, so the analyzer doesn't treat an
-/// unreferenced internal method the same way) — confirmed by deleting every call site and rebuilding:
-/// 0 warnings, 0 errors, full suite green. Do not "clean up" this method by making it private or by
-/// adding a call to it; either change is a regression even though both look like tidying.
+///    <b>AC2 re-scope (#451, ADR-0041's #444 amendment, point 4): "no caller, ever" is now "only the
+///    designated doors, always with a sequential dropoff."</b> ADR-0040 rejected whole-mod text export
+///    as the vendoring mechanism on measured grounds (spike #359, Q2): 21 s / 132,787 files / 106 MB
+///    for a 20 MB plugin, versus 160 ms for a single record, driven by ADR-0040's lazy per-edit,
+///    redistribution-on-touch design. That design is superseded — Track (<see cref="Source.TrackService"/>)
+///    is eager and one-time, ingest-from-source and compile are the same order of cost — so the
+///    original rationale for a blanket ban no longer holds, and the ban re-scopes to a whitelist of
+///    the doors that pay that cost deliberately, once, in their own designated place: Track (#451),
+///    ingest-from-source (#452), compile (#454). <c>RecordTextCodecGeneratorSeedTests</c>' source scan
+///    enforces the whitelist (which files may name the mixin), not a blanket absence, and its own
+///    companion test still enforces that <b>no public API in this namespace</b>
+///    (<see cref="RecordTextCodec"/>'s own) ever accepts a whole-mod type — the per-record codec stays
+///    per-record. The concrete temptation the original ban was warning about stands for every file
+///    <i>not</i> on the whitelist: rebuilding a plugin from its text source outside a designated door
+///    is exactly the wrong tool, still — the right one there remains per-record deserialize
+///    (<see cref="RecordTextCodec.DeserializeAsync"/>) applied one record at a time.
+///
+/// <see cref="SerializeWholeMod"/> is now the seed (#451, superseding the prior <c>Touch</c> method
+/// this doc comment used to describe): a real method, really called by
+/// <see cref="Source.TrackService"/>, rather than a deliberately-unreachable one. That change was
+/// forced, not stylistic — <b>the generator's bootstrap detector fires on syntax, not on runtime
+/// reachability, and it fires once per <c>MutagenJsonConverter.Instance.X(mod, ...)</c> call site it
+/// finds</b>. Track originally called <c>MutagenJsonConverter.Instance.Serialize</c> directly from
+/// <c>TrackService.cs</c> itself, alongside the old <c>Touch</c>'s own (dead but still
+/// <i>syntactically present</i>) call here — two independent bootstrap-shaped call sites for the
+/// identical <c>IFallout4ModGetter</c> seed type, which the generator cannot handle: it names the
+/// generated mixin file after the seeded type, not the call site, so a second seed of the same type
+/// collided on that name (<c>CS8785: "the hintName 'MutagenJsonConverter_Fallout4Mod_MixIns.g.cs' ...
+/// must be unique within a generator"</c>, reproduced while implementing #451 — not a hypothetical).
+/// The fix is structural: exactly <b>one</b> textual <c>MutagenJsonConverter.Instance.X(...)</c> call
+/// site may exist in this assembly, ever, here — every real caller goes through this method, never
+/// through the mixin directly. <see cref="RecordTextCodecGeneratorSeedTests"/>' whitelist scan still
+/// enforces that the mixin's own generated type name never appears outside this file; the deeper
+/// constraint this paragraph adds — one bootstrap call site total — has no test of its own beyond "the
+/// build fails" if it is ever violated, which is what caught it here.
 ///
 /// <b>If this file is deleted:</b> the failure is a <i>compile</i> error in a different file, not a
 /// test failure, and it will look unrelated — <see cref="RecordTextCodec"/>'s own calls to
@@ -94,6 +106,25 @@ namespace MEditService.Core.Serialization;
 /// </summary>
 internal static class RecordTextCodecGeneratorSeed
 {
-    internal static Task Touch(IFallout4ModGetter? mod = null, string folder = "")
-        => mod is null ? Task.CompletedTask : MutagenJsonConverter.Instance.Serialize(mod, folder);
+    /// <summary>The one seed/gateway: every real whole-mod-door caller (Track today; ingest-from-source
+    /// #452 and compile #454 as they land) calls this, never <c>MutagenJsonConverter.Instance</c>
+    /// directly — see the class doc comment for why a second direct call site does not compile.
+    ///
+    /// <para><b>No <c>extraMeta</c> parameter, deliberately — a second, independent generator defect
+    /// found implementing #451, not a design choice.</b> The generated mixin always emits an
+    /// <c>extraMeta = null</c> convenience overload; the moment any call site anywhere in the assembly
+    /// passes a non-null <c>extraMeta</c> value, it <i>also</i> emits a second, <c>extraMeta</c>-required
+    /// overload — and because both erase to a bare <c>object</c> parameter (nullability annotations
+    /// aren't part of a CLR signature), the two collide: <c>CS0111: Type
+    /// 'MutagenJsonConverterFallout4ModMixIns' already defines a member called 'Serialize'/'Deserialize'
+    /// with the same parameter types</c>, reproduced on this project's 1.37.1 pin by trying exactly
+    /// that. <see cref="Source.TrackService"/> writes the <c>SpriggitSource</c> extraMeta object into
+    /// the root <c>RecordData.json</c> itself, as a post-write JSON merge — the same on-disk property
+    /// the generator's own <c>extraMeta</c> hook would have written (<c>WriteLoqui</c> keys the
+    /// property name off the object's own <c>GetType().Name</c>, which is exactly what the merge
+    /// reproduces), without exercising the broken overload pair. Revisit if the Serialization pin ever
+    /// bumps past 1.37.1 and this is confirmed fixed upstream.</para>
+    /// </summary>
+    internal static Task SerializeWholeMod(IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
+        => MutagenJsonConverter.Instance.Serialize(mod, folder, workDropoff: workDropoff, cancel: cancel);
 }

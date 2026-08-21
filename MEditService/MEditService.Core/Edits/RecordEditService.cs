@@ -65,7 +65,7 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
-        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey);
+        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey, document.EditorId, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         var record = ReadRecordFromSource(sourcePath, document, release);
@@ -119,7 +119,8 @@ public sealed class RecordEditService(
                 $"{plugin.Name} does not hold record {formKey}.");
         }
 
-        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey);
+        var release = sessions.Session!.GameRelease;
+        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey, document.EditorId, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Never-assume-exclusive-ownership: the file may already be gone (another tool, a hand
@@ -167,7 +168,7 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey);
+        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Track's eager serialization only created directories for (record type, origin ModKey)
@@ -269,7 +270,7 @@ public sealed class RecordEditService(
             foreach (var (referencerFormKey, referencerPlugin) in referencers)
             {
                 var referencerModFolder = ModFolders.TrackedOf(sessions.Session, referencerPlugin)!;
-                RewriteReferenceField(index, referencerPlugin, referencerModFolder, referencerFormKey, formKey, targetFormKey);
+                RewriteReferenceField(index, referencerPlugin, referencerModFolder, referencerFormKey, formKey, targetFormKey, release);
                 writtenRepos.Add($"{referencerPlugin.Name} ({referencerPlugin.Origin})");
             }
 
@@ -320,13 +321,14 @@ public sealed class RecordEditService(
     /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).</summary>
     private static void RewriteReferenceField(
         IRecordIndex index, PluginKey referencerPlugin, string referencerModFolder,
-        string referencerFormKey, string oldFormKey, string newFormKey)
+        string referencerFormKey, string oldFormKey, string newFormKey, GameRelease release)
     {
         var referencerDoc = index.GetDocument(referencerFormKey, referencerPlugin)
             ?? throw new InvalidOperationException(
                 $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
 
-        var relativePath = SourceRecordPath.For(referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey);
+        var relativePath = SourceRecordPath.For(
+            referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey, referencerDoc.EditorId, release);
         var sourcePath = Path.Combine(referencerModFolder, relativePath);
         var body = File.Exists(sourcePath) ? File.ReadAllText(sourcePath) : referencerDoc.Body!;
         var newBody = body.Replace(oldFormKey, newFormKey, StringComparison.Ordinal);
@@ -343,13 +345,14 @@ public sealed class RecordEditService(
     {
         var document = index.GetDocument(oldFormKey, plugin)
             ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
-        var oldRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, oldFormKey);
+        var oldRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, oldFormKey, document.EditorId, release);
         var oldSourcePath = Path.Combine(modFolder, oldRelativePath);
 
         var record = ReadRecordFromSource(oldSourcePath, document, release);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        var newRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, newFormKey);
+        // EditorID does not change across a renumber — only the FormKey half of the file name does.
+        var newRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, newFormKey, document.EditorId, release);
         var newSourcePath = Path.Combine(modFolder, newRelativePath);
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
         _codec.SerializeAsync(record, newSourcePath, release).GetAwaiter().GetResult();

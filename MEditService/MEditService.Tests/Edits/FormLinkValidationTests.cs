@@ -72,10 +72,10 @@ public sealed class FormLinkValidationTests : IDisposable
         // The record still exists at Head — it is in the last commit, and `git show` would print it.
         // What it no longer is, is somewhere a link can point: this is exactly the divergence AC3
         // means by "checks read effective state".
-        File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd"));
+        File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
         _mod.Sessions.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
 
-        Assert.NotEmpty(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Keyword, "kywd")));
+        Assert.NotEmpty(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
 
         var result = SetKeywords(_mod.Keyword.ToString());
 

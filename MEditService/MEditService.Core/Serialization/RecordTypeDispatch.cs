@@ -44,13 +44,32 @@ internal sealed class RecordTypeDispatch
 {
     private static readonly ConcurrentDictionary<GameCategory, RecordTypeDispatch> Models = new();
 
+    // #451: the record types the #444 erratum names as staying folder-split (Cell, Worldspace — their
+    // embedded slots) or directory-per-record (Quest — DialogTopics/Scenes/DialogBranches) even though
+    // each has an ordinary top-level Group<T> a reflection walk would otherwise map to a flat
+    // "<Folder>/<name>.json". Each of these gets its own "<Folder>/<name>/RecordData.json" directory
+    // instead, which SourceRecordPath's flat layout does not cover — reading that structure is
+    // #453/#454's job ("compile/ingest reads structure from the tree"). Named explicitly, not inferred
+    // structurally: inferring it would silently start covering a fourth type the day Mutagen's
+    // generator picks a directory for one, with nothing here to notice.
+    private static readonly HashSet<string> DirectoryPerRecordTypeNames =
+        new(StringComparer.Ordinal) { "Cell", "Worldspace", "Quest" };
+
     private readonly IReadOnlyDictionary<string, Type?> _byName;
     private readonly IReadOnlySet<Type> _ambiguous;
+    private readonly IReadOnlyDictionary<Type, string> _folderByType;
+    private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _typesByFolder;
 
-    private RecordTypeDispatch(IReadOnlyDictionary<string, Type?> byName, IReadOnlySet<Type> ambiguous)
+    private RecordTypeDispatch(
+        IReadOnlyDictionary<string, Type?> byName,
+        IReadOnlySet<Type> ambiguous,
+        IReadOnlyDictionary<Type, string> folderByType,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> typesByFolder)
     {
         _byName = byName;
         _ambiguous = ambiguous;
+        _folderByType = folderByType;
+        _typesByFolder = typesByFolder;
     }
 
     internal static RecordTypeDispatch For(GameRelease release) =>
@@ -82,6 +101,34 @@ internal sealed class RecordTypeDispatch
     internal Type? ConcreteFor(string recordType) =>
         _byName.TryGetValue(NormalizeOverlayName(recordType), out var type) ? type : null;
 
+    /// <summary>
+    /// The whole-mod door's own folder name for a flat (single-file) record of this <c>record_type</c>
+    /// — the C# group-property name (<c>"Npcs"</c>, <c>"Weapons"</c>) the source generator writes
+    /// verbatim as the directory a record's file sits in (traced to
+    /// <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c> in
+    /// <c>references/mutagen-serialization</c>). Null for three reasons a caller must treat alike —
+    /// "this flat helper cannot answer, ask #453/#454's structure-aware reader instead": the type has
+    /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous"/>'s
+    /// doc comment already names), the type is one of <see cref="DirectoryPerRecordTypeNames"/> (its
+    /// own directory holds a <c>RecordData.json</c>, not a flat file), or <paramref name="recordType"/>
+    /// does not resolve to a concrete type at all.
+    /// </summary>
+    internal string? FolderNameFor(string recordType) =>
+        ConcreteFor(recordType) is { } concrete && _folderByType.TryGetValue(concrete, out var folder)
+            ? folder
+            : null;
+
+    /// <summary>
+    /// The inverse of <see cref="FolderNameFor"/>: which <c>record_type</c> a flat folder's own name
+    /// names, for <c>SourceRecordPath.TryParse</c>'s reverse direction. Null when the folder maps to
+    /// more than one concrete type (an ambiguous group — e.g. <c>Globals</c> holds
+    /// GlobalFloat/GlobalBool/…) exactly as <see cref="IsPathAmbiguous(string)"/> already reads that
+    /// case: the document is asked to self-describe rather than a wrong concrete type being assumed
+    /// from the folder alone. Also null for a folder this game has no group for at all.
+    /// </summary>
+    internal string? RecordTypeForFolder(string folderName) =>
+        _typesByFolder.TryGetValue(folderName, out var schemaNames) && schemaNames.Count == 1 ? schemaNames[0] : null;
+
     private const string OverlaySuffix = "BinaryOverlay";
 
     private static string NormalizeOverlayName(string name) =>
@@ -95,9 +142,14 @@ internal sealed class RecordTypeDispatch
         // "which groups does this game's mod have", with no game named here (root CLAUDE.md).
         var modType = ModFactory.Activator(ModKey.Null, release).GetType();
 
-        var abstractElements = modType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Select(p => GroupElementType(p.PropertyType))
-            .OfType<Type>()
+        var groupProperties = modType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(p => (Property: p, ElementType: GroupElementType(p.PropertyType)))
+            .Where(t => t.ElementType != null)
+            .Select(t => (t.Property, ElementType: t.ElementType!))
+            .ToList();
+
+        var abstractElements = groupProperties
+            .Select(t => t.ElementType)
             .Where(t => t.IsAbstract && !t.IsInterface)
             .Distinct()
             .ToHashSet();
@@ -108,6 +160,15 @@ internal sealed class RecordTypeDispatch
         // types (land/navm/navi and the REFR-flavour placements), and those records still have
         // documents this codec has to read back.
         var byName = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
+        var folderByType = new Dictionary<Type, string>();
+        // #451 review: keyed by folder, valued by the *schema table name* spelling (the lowercased
+        // GRUP signature — matching SchemaReflector.cs's own `recordType.Type.ToLowerInvariant()`),
+        // never the bare CLR type name. DuckDbRecordIndex's own record-type dictionary is keyed by
+        // that schema spelling only, case-sensitively — WorkingTreeCreateRediscovery.Sweep handing it
+        // "Npc" instead of "npc_" threw KeyNotFoundException, caught running the suite. The codec's own
+        // dispatch (RecordTextCodec) tolerates either spelling (ConcreteFor's dual keys), so this
+        // narrower, correct spelling costs that caller nothing.
+        var typesByFolder = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var type in modType.Assembly.GetTypes())
         {
             if (type.IsAbstract || type.IsInterface) continue;
@@ -130,6 +191,19 @@ internal sealed class RecordTypeDispatch
             {
                 byName[signature] = type;
             }
+
+            // #451: the folder half, keyed off the same discovery pass — every concrete major-record
+            // type gets mapped to its owning top-level group property's own name, unless it is one of
+            // the directory-per-record types (see DirectoryPerRecordTypeNames) or has no top-level
+            // group at all (a placed ref, a landscape — FolderNameFor's own doc comment).
+            if (DirectoryPerRecordTypeNames.Contains(type.Name)) continue;
+            var owningFolder = groupProperties.FirstOrDefault(gp => gp.ElementType.IsAssignableFrom(type)).Property?.Name;
+            if (owningFolder is null) continue;
+
+            folderByType[type] = owningFolder;
+            if (!typesByFolder.TryGetValue(owningFolder, out var schemaNamesHere))
+                typesByFolder[owningFolder] = schemaNamesHere = [];
+            schemaNamesHere.Add(signature.ToLowerInvariant());
         }
 
         var ambiguous = byName.Values
@@ -137,7 +211,11 @@ internal sealed class RecordTypeDispatch
             .Where(t => IsAmbiguous(t, abstractElements))
             .ToHashSet();
 
-        return new RecordTypeDispatch(byName, ambiguous);
+        return new RecordTypeDispatch(
+            byName,
+            ambiguous,
+            folderByType,
+            typesByFolder.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value));
     }
 
     private static bool IsAmbiguous(Type concrete, HashSet<Type> abstractElements) =>

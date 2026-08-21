@@ -34,7 +34,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcRelativePath => TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_");
+    private string NpcRelativePath => TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);

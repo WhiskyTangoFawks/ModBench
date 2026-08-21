@@ -12,15 +12,18 @@ namespace MEditService.Tests.Source;
 
 /// <summary>
 /// #414's orchestration seam end to end: a real loaded session, a real (small) plugin with real
-/// records, tracked through <see cref="TrackService"/> — the first production caller of
-/// <see cref="RecordTextCodec"/> (its own doc comment: "zero production callers" until this
-/// ticket). Deliberately a small synthetic fixture, not the mega-plugin — mega-scale timing is a
-/// measured, reported number, not a suite-gating assertion.
+/// records, tracked through <see cref="TrackService"/>. #451 slice A rewrote Track's own write path
+/// to serialize through the whole-mod door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>)
+/// instead of the per-record codec, so these assertions now check the Spriggit layout — group folders,
+/// root <c>RecordData.json</c>, sidecars — rather than the pre-#451 flat
+/// <c>&lt;recordType&gt;/&lt;originModKey&gt;/&lt;hex6&gt;.json</c> shape. Deliberately a small synthetic
+/// fixture, not the mega-plugin — mega-scale timing is a measured, reported number, not a
+/// suite-gating assertion.
 /// </summary>
 public sealed class TrackServiceTests
 {
     [Fact]
-    public async Task TrackAsync_RealSession_WritesOneSourceFilePerRecord_AndTracksTheModFolder()
+    public async Task TrackAsync_RealSession_WritesTheSpriggitTree_AndTracksTheModFolder()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-game-").FullName;
@@ -39,13 +42,19 @@ public sealed class TrackServiceTests
                 [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
                 GameRelease.Fallout4);
 
-            var service = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance);
             await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
-            var relativePath1 = SourceRecordPath.For("Fixture.esp", "npc_", npc1.FormKey.ToString());
-            var relativePath2 = SourceRecordPath.For("Fixture.esp", "npc_", npc2.FormKey.ToString());
+            // AC1: key paths from the spike doc's own layout sketch — root header, and each flat NPC
+            // under its own group folder.
+            var sourceRoot = Path.Combine(modFolder, "Fixture.esp.source");
+            var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
+            Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
+
+            var relativePath1 = SourceRecordPath.For("Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
+            var relativePath2 = SourceRecordPath.For("Fixture.esp", "npc_", npc2.FormKey.ToString(), "SecondNpc", GameRelease.Fallout4);
             var sourceFile1 = Path.Combine(modFolder, relativePath1);
             var sourceFile2 = Path.Combine(modFolder, relativePath2);
             Assert.True(File.Exists(sourceFile1), $"expected {sourceFile1}");
@@ -54,6 +63,17 @@ public sealed class TrackServiceTests
             var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
             var roundTripped = await codec.DeserializeAsync(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
+
+            // AC2: both sidecars present, and the root document carries SpriggitSource.
+            Assert.True(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
+            Assert.True(File.Exists(Path.Combine(sourceRoot, "spriggit-meta.json")));
+            var rootText = await File.ReadAllTextAsync(rootHeader);
+            Assert.Contains("\"SpriggitSource\"", rootText, StringComparison.Ordinal);
+            Assert.Contains($"\"PackageName\": \"{SpriggitSource.CurrentPackageName}\"", rootText, StringComparison.Ordinal);
+
+            // AC4: no \r anywhere in the tracked tree.
+            foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
+                Assert.DoesNotContain((byte)'\r', await File.ReadAllBytesAsync(file));
 
             var gitDir = Path.Combine(modFolder, ".git");
             var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
@@ -93,7 +113,7 @@ public sealed class TrackServiceTests
                 [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
                 GameRelease.Fallout4);
 
-            var service = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance);
             await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
@@ -129,7 +149,7 @@ public sealed class TrackServiceTests
                 [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
                 GameRelease.Fallout4);
 
-            var service = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance);
             await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
@@ -170,10 +190,12 @@ public sealed class TrackServiceTests
                 [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
                 GameRelease.Fallout4);
 
-            // Track the mod folder once, for real, before corrupting anything.
+            // Track the mod folder once, for real, before corrupting anything — a Spriggit-flat-shaped
+            // dummy path (#451), matching what TrackAsync would actually have written, though the
+            // content doesn't matter for this test: only IsTracked's answer does.
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
-                [new PristineFile("Fixture.esp.source/npc_/Fixture.esp/000001.json", "{}"u8.ToArray())],
+                [new PristineFile("Fixture.esp.source/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             // The session already parsed a good copy; the file on disk is corrupted afterward —
@@ -181,7 +203,7 @@ public sealed class TrackServiceTests
             // ever reached.
             File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
-            var service = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance);
             await Assert.ThrowsAsync<SourceAlreadyTrackedException>(
                 () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits));
         }
@@ -194,10 +216,14 @@ public sealed class TrackServiceTests
 
     // #414 review finding F2: "reports progress" — TrackService.Progress must genuinely advance
     // while a track is in flight, not just report Idle before and Idle-again-with-nothing-in-
-    // between after. 400 records (real per-record temp-file serialize I/O, not an artificial
-    // delay hook) gives a concurrent poll on the calling thread a real window to observe a
-    // Serializing tick strictly between 0 and the total — TrackAsync's own first real `await`
-    // (inside SerializeToPristineFileAsync) is what yields control back to this thread at all.
+    // between after. #451 slice A coarsened Serializing's own granularity from per-record to
+    // per-plugin (TrackProgress.cs's own doc comment: the whole-mod door serializes a whole plugin in
+    // one call, with no per-record progress callback to observe) — so a genuine 0 < done < total tick
+    // now needs *two plugins* under one origin, not one plugin with many records: the mid-flight
+    // observation point is between the first plugin's whole-mod door call finishing and the second's
+    // starting, which TrackAsync's own SetProgress(Serializing, parsedDone - 1, plugins.Count) call
+    // (right before the second plugin's await) makes real, given a second plugin large enough to hold
+    // that window open for a concurrent poll to land in.
     [Fact]
     public async Task TrackAsync_ProgressAdvancesDuringATrack_ObservableMidFlight()
     {
@@ -205,19 +231,27 @@ public sealed class TrackServiceTests
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-progress-game-").FullName;
         try
         {
-            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
-            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-            for (var i = 0; i < 400; i++) mod.Npcs.AddNew($"Npc{i}");
-            mod.WriteToBinary(pluginPath);
+            var firstPluginPath = Path.Combine(modFolder, "First.esp");
+            var firstMod = new Fallout4Mod(ModKey.FromFileName("First.esp"), Fallout4Release.Fallout4);
+            firstMod.Npcs.AddNew("OnlyNpc");
+            firstMod.WriteToBinary(firstPluginPath);
+
+            var secondPluginPath = Path.Combine(modFolder, "Second.esp");
+            var secondMod = new Fallout4Mod(ModKey.FromFileName("Second.esp"), Fallout4Release.Fallout4);
+            for (var i = 0; i < 400; i++) secondMod.Npcs.AddNew($"Npc{i}");
+            secondMod.WriteToBinary(secondPluginPath);
 
             using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             ISessionManager sessionManager = manager;
             sessionManager.LoadExplicit(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [
+                    new ExplicitPluginInput("First.esp", firstPluginPath, "FixtureMod", true),
+                    new ExplicitPluginInput("Second.esp", secondPluginPath, "FixtureMod", true),
+                ],
                 GameRelease.Fallout4);
 
-            var service = new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance);
+            var service = new TrackService(NullLogger<TrackService>.Instance);
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
 
             var observed = new List<TrackProgress>();

@@ -36,7 +36,7 @@ public static class ExternalChangeAbsorber
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
             var recordType = SourceRecordType.Resolve(record, schemas);
-            var relativePath = SourceRecordPath.For(pluginName, recordType, record.FormKey.ToString());
+            var relativePath = SourceRecordPath.For(pluginName, recordType, record.FormKey.ToString(), record.EditorID, gameRelease);
             var bytes = codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
             pristineFiles.Add(new PristineFile(relativePath, bytes));
         }

@@ -42,7 +42,7 @@ public static class ExternalChangeEditLander
         {
             var recordType = SourceRecordType.Resolve(record, schemas);
             var formKey = record.FormKey.ToString();
-            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey);
+            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease);
             var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
 
             baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);

@@ -1,4 +1,6 @@
 using MEditService.Core.Records;
+using MEditService.Core.Serialization;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Source;
 
@@ -36,16 +38,25 @@ public static class WorkingTreeCreateRediscovery
     /// <summary>Sweeps one just-indexed plugin's tracked mod folder. Safe to call for an untracked
     /// folder's caller (the caller gates on <see cref="SourceRepository.IsTracked"/> already) and
     /// does nothing when there is no dirt at all — the common case, and the reason this costs nothing
-    /// for an unedited session, the same bound <see cref="SourceFreshness"/> holds itself to.</summary>
-    public static void Sweep(IRecordIndex index, string modFolder, PluginKey plugin)
+    /// for an unedited session, the same bound <see cref="SourceFreshness"/> holds itself to.
+    ///
+    /// <para><b>#451 slice E note, not a permanent design:</b> #452 deletes this whole class ("Delete
+    /// the reconciliation-sweep class... and the delete-at-load correction path"). The FormKey used to
+    /// come straight from <see cref="SourceRecordPath.TryParse"/>'s own path parse, with no file read,
+    /// for every dirty path already known to either ref; under the Spriggit flat layout a path alone
+    /// no longer carries a recoverable FormKey (<see cref="SourceRecordIdentity"/>'s own doc comment),
+    /// so this now reads+deserializes every dirty flat path to learn it, losing that short-circuit.
+    /// That cost is bounded by dirt, not load order (this method's own doc comment already priced
+    /// that shape) — the minimum change that keeps this correct until #452 removes it outright, not a
+    /// restoration of the old short-circuit by another route.</para>
+    /// </summary>
+    public static void Sweep(IRecordIndex index, string modFolder, PluginKey plugin, GameRelease gameRelease)
     {
+        var codec = new RecordTextCodec(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
         foreach (var relativePath in SourceRepository.WorkingTreeStatus(modFolder))
         {
-            if (!SourceRecordPath.TryParse(relativePath, out var identity)) continue;
+            if (!SourceRecordPath.TryParse(relativePath, gameRelease, out var identity)) continue;
             if (!identity.PluginFileName.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)) continue;
-
-            if (index.GetDocument(identity.FormKey, plugin) != null) continue;
-            if (index.At(RecordRef.Head).GetDocument(identity.FormKey, plugin) != null) continue;
 
             // A working-tree deletion of a record that was never committed leaves a git status entry
             // with no file behind it — nothing to rediscover there, since it already answers gone at
@@ -54,7 +65,13 @@ public static class WorkingTreeCreateRediscovery
             if (!File.Exists(fullPath)) continue;
 
             var body = File.ReadAllText(fullPath);
-            index.CreateWorkingTreeRecord(plugin, identity.FormKey, identity.RecordType, body);
+            var record = codec.DeserializeAsync(fullPath, gameRelease, identity.RecordType).GetAwaiter().GetResult();
+            var formKey = record.FormKey.ToString();
+
+            if (index.GetDocument(formKey, plugin) != null) continue;
+            if (index.At(RecordRef.Head).GetDocument(formKey, plugin) != null) continue;
+
+            index.CreateWorkingTreeRecord(plugin, formKey, identity.RecordType, body);
         }
     }
 }

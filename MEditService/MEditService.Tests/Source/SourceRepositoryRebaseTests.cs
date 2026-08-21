@@ -80,7 +80,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var result = SourceRepository.RebaseEditBranch(_mod.ModFolder);
 
         Assert.Equal(RebaseOutcome.Refused, result.Outcome);
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Contains(relative, result.RefusalReason, StringComparison.Ordinal);
         // Refused before touching anything: still on edit, still dirty exactly as before.
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
@@ -99,7 +99,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Equal(RebaseOutcome.Clean, result.Outcome);
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         // Both sides survived the replay: my own edit's content, and upstream's new record.
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Contains("\"HeightMax\": 0.3", File.ReadAllText(Path.Combine(_mod.ModFolder, relative)), StringComparison.Ordinal);
         var mainSha = RunGit("rev-parse", "refs/heads/main").Trim();
         Assert.Equal(mainSha, RunGit("merge-base", "refs/heads/main", "edit").Trim());
@@ -114,7 +114,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var conflictResult = SourceRepository.RebaseEditBranch(_mod.ModFolder);
 
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal(RebaseOutcome.Conflicted, conflictResult.Outcome);
         Assert.Contains(relative, conflictResult.ConflictedPaths);
         var conflictedText = File.ReadAllText(Path.Combine(_mod.ModFolder, relative));
@@ -152,7 +152,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         var conflictResult = SourceRepository.RebaseEditBranch(_mod.ModFolder);
         Assert.Equal(RebaseOutcome.Conflicted, conflictResult.Outcome);
 
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_").Replace('\\', '/');
+        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         var theirs = RunGit("show", $":3:{relative}");
         File.WriteAllText(Path.Combine(_mod.ModFolder, relative), theirs);
 

@@ -264,7 +264,7 @@ public sealed class SessionManager(
             try
             {
                 if (ModFolders.Of(plugin.Origin, plugin.Path) is { } modFolder && SourceRepository.IsTracked(modFolder))
-                    WorkingTreeCreateRediscovery.Sweep(repository, modFolder, key);
+                    WorkingTreeCreateRediscovery.Sweep(repository, modFolder, key, session.GameRelease);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {

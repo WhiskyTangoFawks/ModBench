@@ -52,7 +52,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
             [new ExplicitPluginInput(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, true)],
             GameRelease.Fallout4);
 
-        new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
+        new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
@@ -95,7 +95,12 @@ public sealed class CompileRoundTripGateTests : IDisposable
         foreach (var record in mod.EnumerateMajorRecords())
         {
             var recordType = ResolveRecordType(record);
-            var relativePath = SourceRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString());
+            // #451: this per-record reconstruction is the *old* Track model. SourceRecordPath.For now
+            // covers flat records only (#453/#454 own the container/embedded-child structure a real
+            // Cell/Worldspace/Quest in this fixture needs) and throws for the rest — an expected,
+            // attributable failure this permanent gate now surfaces until #454 lands, not a defect in
+            // this helper.
+            var relativePath = SourceRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString(), record.EditorID, release);
             var bytes = codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
             result[relativePath] = bytes;
         }
