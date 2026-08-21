@@ -569,6 +569,8 @@ describe('package.json per-plugin Track (#414)', () => {
 // pairs with a positive control drawn from the same collection — a surviving contribution that must
 // be found by the identical lookup.
 describe('package.json contributes nothing for the retired pending-change model (#410)', () => {
+  // "ledger" is the retired surface's historical name (#437 renamed the live concept to
+  // "source", which is legitimate vocabulary and deliberately not guarded here).
   const RETIRED = /pending|changegroup|change-group|saveGroup|revertGroup|saveAllGroups|revertAllGroups|ledger/i;
 
   it('contributes no command for a pending change, change group or the ledger SCM surface', () => {

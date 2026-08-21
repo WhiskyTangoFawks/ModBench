@@ -1,9 +1,9 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -20,17 +20,17 @@ namespace MEditService.Tests.RealData;
 ///
 /// <b>What "round trip" means for compile, and why it isn't <see cref="BinaryRoundTripGateTests"/>'s
 /// original-vs-write1 shape</b>: compile's whole premise (ADR-0041) is that it builds a binary from
-/// ledger text alone, never from an existing binary's own structure — there is no "original binary"
+/// source text alone, never from an existing binary's own structure — there is no "original binary"
 /// in that flow to byte-match, and container grouping details a game engine doesn't read (which
 /// bucket an interior cell's GRUP sits in) have no canonical "correct" value to reproduce, only a
 /// stable one. What compile promises instead, and what these tests measure:
 /// <list type="bullet">
-/// <item><b>Content fidelity</b>: every record's ledger text, deep-parsed back out of the compiled
-/// binary through the exact same codec Track uses, is byte-identical to the ledger text Track itself
+/// <item><b>Content fidelity</b>: every record's source text, deep-parsed back out of the compiled
+/// binary through the exact same codec Track uses, is byte-identical to the source text Track itself
 /// wrote before compile ever ran. A record's *content* survived the round trip even where its
 /// container's internal bucketing did not.</item>
 /// <item><b>Determinism</b> (<see cref="BinaryRoundTripGateTests"/>'s write1==write2 shape, applied
-/// to this path): compiling the same ledger tree twice produces byte-identical binaries.</item>
+/// to this path): compiling the same source tree twice produces byte-identical binaries.</item>
 /// </list>
 /// </summary>
 public sealed class CompileRoundTripGateTests : IDisposable
@@ -53,7 +53,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
             GameRelease.Fallout4);
 
         new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, _plugin.Origin!, LedgerPreset.Edits)
+            .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -74,17 +74,17 @@ public sealed class CompileRoundTripGateTests : IDisposable
     private PluginCompileService CompileService() =>
         new(_sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
-    private string LedgerRoot => Path.Combine(_modFolder, $"{CutDownPluginFixture.PluginFileName}{LedgerRecordPath.LedgerSuffix}");
+    private string SourceRoot => Path.Combine(_modFolder, $"{CutDownPluginFixture.PluginFileName}{SourceRecordPath.SourceSuffix}");
 
-    private Dictionary<string, byte[]> ReadLedgerTree() =>
-        Directory.EnumerateFiles(LedgerRoot, "*.json", SearchOption.AllDirectories)
+    private Dictionary<string, byte[]> ReadSourceTree() =>
+        Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
             .ToDictionary(f => Path.GetRelativePath(_modFolder, f), File.ReadAllBytes);
 
     // Deep-parses `pluginPath` and re-derives what Track would have written for every record — the
     // same codec, the same container stripping, no shortcuts — so this dict is directly comparable
-    // to ReadLedgerTree()'s (same relative-path keys, since LedgerRecordPath.For is the one path
+    // to ReadSourceTree()'s (same relative-path keys, since SourceRecordPath.For is the one path
     // rule both Track and this call use).
-    private static Dictionary<string, byte[]> DeriveLedgerTreeFromBinary(string pluginPath, GameRelease release)
+    private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var mod = ModFactory.ImportSetter(
@@ -94,7 +94,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
         foreach (var record in mod.EnumerateMajorRecords())
         {
             var recordType = ResolveRecordType(record);
-            var relativePath = LedgerRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString());
+            var relativePath = SourceRecordPath.For(Path.GetFileName(pluginPath), recordType, record.FormKey.ToString());
             var stripped = ContainerStripFields.StrippedForSerialization(record);
             var bytes = codec.SerializeToBytesAsync(stripped, release).GetAwaiter().GetResult();
             result[relativePath] = bytes;
@@ -121,16 +121,16 @@ public sealed class CompileRoundTripGateTests : IDisposable
     }
 
     [Fact]
-    public void Compile_OfTheRealFixture_PreservesEveryRecordsLedgerContent()
+    public void Compile_OfTheRealFixture_PreservesEveryRecordsSourceContent()
     {
-        var before = ReadLedgerTree();
+        var before = ReadSourceTree();
         Assert.NotEmpty(before);
 
         var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
-        var after = DeriveLedgerTreeFromBinary(pluginPath, GameRelease.Fallout4);
+        var after = DeriveSourceTreeFromBinary(pluginPath, GameRelease.Fallout4);
 
         Assert.Equal(before.Count, after.Count);
         foreach (var (relativePath, beforeBytes) in before)

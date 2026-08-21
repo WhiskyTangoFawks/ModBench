@@ -12,7 +12,7 @@ namespace MEditService.Tests.Session;
 /// #427 Epic B′: a working-tree-only create must survive a backend restart before the record is ever
 /// compiled — <c>IRecordIndex.Index()</c> only knows the binary, so without a session-load sweep the
 /// record would answer at Effective during the session that created it and then silently vanish from
-/// the next session's read model while compile (which assembles from ledger files on disk) still
+/// the next session's read model while compile (which assembles from source files on disk) still
 /// emits it. Reloads the same mod folder in a brand-new <see cref="SessionManager"/> — the honest way
 /// to prove "survives a restart" rather than asserting anything about the first session's own state.
 /// </summary>

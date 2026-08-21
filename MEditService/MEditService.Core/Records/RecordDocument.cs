@@ -4,7 +4,7 @@ namespace MEditService.Core.Records;
 
 /// <summary>
 /// One plugin's copy of one record, reconstituted from its stored document (ADR-0041 / #413 D1).
-/// <see cref="Body"/> is exactly the bytes the record's ledger file would hold — the same document
+/// <see cref="Body"/> is exactly the bytes the record's source file would hold — the same document
 /// <c>records.body</c> stores — null for the header (D8: a ModHeader is not an
 /// <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>, so it has no document at
 /// all). <see cref="Fields"/> is the same typed, schema-driven extraction <c>RecordDetail</c>

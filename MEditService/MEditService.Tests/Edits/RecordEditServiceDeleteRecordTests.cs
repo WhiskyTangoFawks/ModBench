@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -10,7 +10,7 @@ namespace MEditService.Tests.Edits;
 /// <summary>
 /// #427: delete-record, the user-facing gesture over the null-Body mechanism #415 already landed and
 /// tested at the index layer (<c>WorkingTreeDeletionTests</c>). This suite is about the entry point's
-/// own contract — the ledger file, and the two refusals every gesture on this write path must
+/// own contract — the source file, and the two refusals every gesture on this write path must
 /// inherit (#417's carried requirement) — not about winner/reference derivation, which is already
 /// covered where the mechanism itself lives.
 /// </summary>
@@ -20,14 +20,14 @@ public sealed class RecordEditServiceDeleteRecordTests
         new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
-    public void DeleteRecord_RemovesTheLedgerFile_GoneAtEffective_StillAtHead()
+    public void DeleteRecord_RemovesTheSourceFile_GoneAtEffective_StillAtHead()
     {
         using var mod = TrackedModFixture.Tracked();
 
         var result = ServiceFor(mod.Sessions).DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.False(File.Exists(mod.NpcLedgerFile));
+        Assert.False(File.Exists(mod.NpcSourceFile));
         Assert.Null(mod.Sessions.Index!.GetDocument(mod.Npc.ToString(), mod.Plugin));
         Assert.NotNull(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
     }
@@ -64,7 +64,7 @@ public sealed class RecordEditServiceDeleteRecordTests
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
-        Assert.True(File.Exists(mod.NpcLedgerFile)); // refused before the first door — nothing written
+        Assert.True(File.Exists(mod.NpcSourceFile)); // refused before the first door — nothing written
     }
 
     [Fact]

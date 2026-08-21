@@ -45,7 +45,7 @@ session over the active loadout:
 | Surface | What it is | Spec |
 | --- | --- | --- |
 | **Plugins tree** | Sidebar tree; the entry point for all navigation — records by type, a spatial worldspace/cell tree, and the SQL record filter, once a session is running | [plugins.md](plugins.md) |
-| **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that writes working-tree ledger text | [medit-record-editor.md](medit-record-editor.md) |
+| **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that writes working-tree source text | [medit-record-editor.md](medit-record-editor.md) |
 | **Referenced By tree** | Panel-container tree that follows the active record editor; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
 | **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
 | **Status bar item** | Backend/session state | This document |
@@ -56,7 +56,7 @@ participation (#270 / ADR-0035) — plus vanilla masters (`load-explicit`); **Cl
 the session down. The Plugins tree's rows gain chevrons once the session is ready — no other
 surface swap happens: the Loadout views (Mods, Plugins, Downloads) are always visible regardless
 of session state, and Referenced By is always-present-and-following rather than gated on a mode.
-Editing writes records to the working-tree ledger text of tracked plugins (ADR-0041); writing the
+Editing writes records to the working-tree source text of tracked plugins (ADR-0041); writing the
 physical plugin file is a separate Save & Compile gesture, and neither requires a deploy.
 
 ## User Stories

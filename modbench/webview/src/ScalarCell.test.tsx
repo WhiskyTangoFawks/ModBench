@@ -101,7 +101,7 @@ describe('ScalarCell — committing (#415 AC1)', () => {
   });
 
   it('does not commit a value equal to the one already there', () => {
-    // A commit writes a ledger file. Re-typing the same value would produce a diff of nothing and
+    // A commit writes a source file. Re-typing the same value would produce a diff of nothing and
     // show the record as dirty in the Source Control panel for a keystroke the user never made.
     const onCommit = vi.fn();
     render(<ScalarCell value="before" meta={meta()} editable isFocused onCommit={onCommit} />);

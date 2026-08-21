@@ -6,12 +6,12 @@ using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 using Serilog;
 using Serilog.Events;
@@ -72,9 +72,9 @@ try
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
     // #415: the single write path, plus the read-time freshness validation the read model consumes.
-    builder.Services.AddSingleton<LedgerFreshness>();
+    builder.Services.AddSingleton<SourceFreshness>();
     builder.Services.AddSingleton<RecordEditService>();
-    // #416: the write path's other half — ledger text -> binary.
+    // #416: the write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
     // #417: the bridge's own live-watch lifecycle and pending-question queue — one instance for the
     // whole process, so the load-time check (session-load handlers) and the live watcher share it.

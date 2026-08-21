@@ -1,7 +1,7 @@
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -13,7 +13,7 @@ public sealed class RecordQueryService(
     ISchemaReflector schemaReflector,
     IConflictClassifier conflictClassifier,
     ILogger<RecordQueryService>? logger = null,
-    LedgerFreshness? freshness = null) : IRecordQueryService
+    SourceFreshness? freshness = null) : IRecordQueryService
 {
     private readonly ISessionManager _session = session;
     private readonly ISchemaReflector _schemaReflector = schemaReflector;
@@ -21,11 +21,11 @@ public sealed class RecordQueryService(
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // #415 / #413 D3: the two point reads below are the record editor's and compare grid's own
-    // answers, so they are where ledger text is re-checked against what the index stored. Optional
+    // answers, so they are where source text is re-checked against what the index stored. Optional
     // only so the many read-shape tests that construct this service directly keep compiling; the
     // default is the real validator, never a no-op, so production wiring cannot silently lose it.
-    private readonly LedgerFreshness _freshness =
-        freshness ?? new LedgerFreshness(session, NullLogger<LedgerFreshness>.Instance);
+    private readonly SourceFreshness _freshness =
+        freshness ?? new SourceFreshness(session, NullLogger<SourceFreshness>.Instance);
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {

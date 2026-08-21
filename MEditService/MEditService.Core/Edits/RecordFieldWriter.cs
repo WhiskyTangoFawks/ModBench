@@ -30,7 +30,7 @@ internal enum FieldApplyOutcome
 /// <para>Complex fields (CONTEXT.md: array or struct) are applied as one atomic value, never
 /// per-element — <see cref="ColumnSpec.Apply"/> takes the whole field's JSON, which is exactly the
 /// field-level write ADR-0041 asks for. The record this mutates is a throwaway: the edit path
-/// deserializes the record's ledger text, applies here, and re-serializes. Nothing about a loaded
+/// deserializes the record's source text, applies here, and re-serializes. Nothing about a loaded
 /// plugin is touched.</para>
 /// </summary>
 internal static class RecordFieldWriter

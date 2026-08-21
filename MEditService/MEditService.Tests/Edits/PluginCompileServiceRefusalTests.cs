@@ -1,5 +1,5 @@
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -18,15 +18,15 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         new(_mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     [Fact]
-    public void Compile_WithTwoLedgerFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
+    public void Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
-        // Two distinct ledger files, same FormKey — nothing this arc's edit path can produce (a
+        // Two distinct source files, same FormKey — nothing this arc's edit path can produce (a
         // rename/hand-edit/third-party tool could), and there is no way to emit it as two binary
         // records without changing one's FormKey (#416 comment 2 on the issue).
-        var npcLedgerText = File.ReadAllText(_mod.NpcLedgerFile);
-        var collidingPath = _mod.LedgerFileFor(_mod.Npc, "keyword");
+        var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
+        var collidingPath = _mod.SourceFileFor(_mod.Npc, "keyword");
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
-        File.WriteAllText(collidingPath, npcLedgerText);
+        File.WriteAllText(collidingPath, npcSourceText);
 
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
 

@@ -1,7 +1,7 @@
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -62,7 +62,7 @@ public sealed class TrackedModFixture : IDisposable
         if (track)
         {
             new TrackService(SharedSchemaReflector.Instance, NullLogger<TrackService>.Instance)
-                .TrackAsync(Sessions.Session!, ModFolderOrigin, LedgerPreset.Edits)
+                .TrackAsync(Sessions.Session!, ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
     }
@@ -73,10 +73,10 @@ public sealed class TrackedModFixture : IDisposable
     /// directory (ADR-0041), so this is the whole of "untracked".</summary>
     public static TrackedModFixture Untracked() => new(track: false);
 
-    public string LedgerFileFor(FormKey formKey, string recordType) =>
-        Path.Combine(ModFolder, LedgerRecordPath.For(PluginName, recordType, formKey.ToString()));
+    public string SourceFileFor(FormKey formKey, string recordType) =>
+        Path.Combine(ModFolder, SourceRecordPath.For(PluginName, recordType, formKey.ToString()));
 
-    public string NpcLedgerFile => LedgerFileFor(Npc, "npc_");
+    public string NpcSourceFile => SourceFileFor(Npc, "npc_");
 
     /// <summary>Porcelain status, scoped to the mod folder — what the native Source Control panel
     /// renders, asked the way a user would ask it.</summary>
@@ -89,8 +89,8 @@ public sealed class TrackedModFixture : IDisposable
     public string GitShowHead(string relativePath) =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
-    public static string RelativeLedgerPath(FormKey formKey, string recordType) =>
-        LedgerRecordPath.For(PluginName, recordType, formKey.ToString());
+    public static string RelativeSourcePath(FormKey formKey, string recordType) =>
+        SourceRecordPath.For(PluginName, recordType, formKey.ToString());
 
     public void Dispose()
     {

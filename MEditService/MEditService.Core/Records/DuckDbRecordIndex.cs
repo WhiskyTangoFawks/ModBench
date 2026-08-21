@@ -3,14 +3,13 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins.Records;
@@ -36,8 +35,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // silently wrong" fallback ConditionCodecRegistry.For already establishes elsewhere.
     private IConditionCodec? _conditionCodec;
 
-    // ADR-0041 / #413: the per-record ledger codec, which is now the ingest path for every record —
-    // each document body is exactly the bytes the record's ledger file holds. Constructed here
+    // ADR-0041 / #413: the per-record source codec, which is now the ingest path for every record —
+    // each document body is exactly the bytes the record's source file holds. Constructed here
     // rather than injected: it is stateless apart from its own reflection caches (which are static),
     // and every existing construction site of this repository would otherwise have to learn about a
     // dependency it has no say in.
@@ -259,7 +258,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         // D8: a container is serialized from a stripped deep copy, everything else from the getter
         // ingest already holds. Children are their own documents; a parent carrying them would store
-        // the same data twice and hold a body no ledger file can match.
+        // the same data twice and hold a body no source file can match.
         var toSerialize = ContainerStripFields.StrippedForSerialization(record);
         var body = _codec.SerializeToBytesAsync(toSerialize, gameRelease).GetAwaiter().GetResult();
 
@@ -274,10 +273,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             row.AppendNullValue();
         row.AppendValue((int?)loadOrderIndex);
         row.AppendValue((bool?)false);
-        row.AppendValue(LedgerRef.Committed);
+        row.AppendValue(SourceRef.Committed);
         row.AppendValue(Encoding.UTF8.GetString(body));
         // Hashed from the codec's own bytes rather than from the string just above: identical for
-        // the valid UTF-8 the codec emits, but this keeps the hash defined by what the ledger file
+        // the valid UTF-8 the codec emits, but this keeps the hash defined by what the source file
         // would contain, not by a round trip through .NET's string encoder.
         row.AppendValue(GitBlobHash.Of(body));
         row.EndRow();
@@ -554,7 +553,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             INSERT INTO records (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{LedgerRef.WorkingTree}', $5, $7)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.WorkingTree}', $5, $7)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
@@ -602,7 +601,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             ExecuteFor($"""
-                UPDATE records SET "ref" = '{LedgerRef.Committed}'
+                UPDATE records SET "ref" = '{SourceRef.Committed}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
                 """, formKey, key.Name, key.Origin!);
             return;
@@ -619,7 +618,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!, body, GitBlobHash.Of(Encoding.UTF8.GetBytes(body)));
         ExecuteFor($"""
-            UPDATE records SET "ref" = '{LedgerRef.WorkingTree}'
+            UPDATE records SET "ref" = '{SourceRef.WorkingTree}'
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!);
     }
@@ -632,7 +631,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         ExecuteFor($"""
             INSERT INTO records_committed ({RecordColumnList})
             SELECT {RecordColumnList} FROM records r
-            WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3 AND r."ref" = '{LedgerRef.Committed}'
+            WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3 AND r."ref" = '{SourceRef.Committed}'
               AND NOT EXISTS (
                 SELECT 1 FROM records_committed c
                 WHERE c.form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
@@ -673,7 +672,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             UPDATE records
-            SET body = $4, content_hash = $5, "ref" = '{LedgerRef.WorkingTree}',
+            SET body = $4, content_hash = $5, "ref" = '{SourceRef.WorkingTree}',
                 editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """;
@@ -943,7 +942,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // The header carries no `ref` column at all (D8: it has no document), so it is never
             // dirty here. On a Head-scoped read every row is committed by construction, so this
             // reads false for all of them without needing to know which relation it is on.
-            var isDirty = !isHeader && reader.GetString(7) == LedgerRef.WorkingTree;
+            var isDirty = !isHeader && reader.GetString(7) == SourceRef.WorkingTree;
             rows.Add((doc, isDirty));
         }
         reader.Close();
@@ -1280,14 +1279,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
             ReadWorkingTreeState(reader));
 
-    // #428: column 6 is "ref" (LedgerRef.Committed/WorkingTree), column 7 is the correlated
+    // #428: column 6 is "ref" (SourceRef.Committed/WorkingTree), column 7 is the correlated
     // records_committed EXISTS Search's SELECT list adds. None for the overwhelming majority (ref is
     // committed); Added/Modified only ever come from a row this ticket's own dirty-listing tests
     // produce. Kept out of ReadSummary's constructor call so the ref/snapshot→enum decision stays in
     // C#, not duplicated as SQL string literals ('modified'/'added') the reader would otherwise parse.
     private static WorkingTreeState ReadWorkingTreeState(DuckDBDataReader reader)
     {
-        if (reader.GetString(6) != LedgerRef.WorkingTree) return WorkingTreeState.None;
+        if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
         return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
     }
 

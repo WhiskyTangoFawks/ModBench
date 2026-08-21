@@ -11,7 +11,7 @@
          namespaces), not a discipline someone has to remember. It stays thin by design — the watch
          lifecycle and an in-memory pending-question queue are all that live here. Every git/codec
          mechanic it calls (classification, plumbing commit, rebase, the deferral marker) lives in
-         MEditService.Core/Ledger instead, next to LedgerRepository/CompileJournal/LedgerFreshness,
+         MEditService.Core/Source instead, next to SourceRepository/CompileJournal/SourceFreshness,
          which are already session/DB-free by the same construction — that's what lets the load-time
          hash check (fired from the session-load path in MEditService.Api, which cannot depend on
          this project without a circular reference back through Core) call the identical

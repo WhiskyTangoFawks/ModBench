@@ -62,16 +62,15 @@ describe('deploy', () => {
   );
 
   // #374 (AC1): a tracked mod deploys byte-identically to the untracked equivalent — no vcs
-  // state, no ledger text tree in the game directory. The gitdir needs no test here — it lives
-  // outside mods/ entirely (LedgerOptions) and this walk never reaches it; the ledger text tree
-  // does land inside the mod folder and is what fileConflictIndex.ts's exclusion (#374) keeps
-  // out of the index deploy() consumes.
-  it('deploys only the plugin, never its ledger text tree, when a mod has acquired a repo', async () => {
+  // state, no source text tree in the game directory. The source text tree lands inside the
+  // mod folder and is what fileConflictIndex.ts's exclusion (#374) keeps out of the index
+  // deploy() consumes.
+  it('deploys only the plugin, never its source text tree, when a mod has acquired a repo', async () => {
     fx = await makeDeployerFixture();
-    // "MyMod.esp" (9 chars), deliberately not 7 — see fileConflictIndex.test.ts's #374 ledger
-    // block for why a 7-char plugin name (matching ".ledger"'s own length) can hide a real bug.
+    // "MyMod.esp" (9 chars), deliberately not 7 — see fileConflictIndex.test.ts's #374 source
+    // block for why a 7-char plugin name (matching ".source"'s own length) can hide a real bug.
     await fx.writeModFile('ModA', 'MyMod.esp', 'PLUGINBYTES');
-    await fx.writeModFile('ModA', 'MyMod.esp.ledger/records/MyMod.esp/00001E.yaml', 'record: text');
+    await fx.writeModFile('ModA', 'MyMod.esp.source/records/MyMod.esp/00001E.yaml', 'record: text');
     const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
     const index = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
 
@@ -87,7 +86,7 @@ describe('deploy', () => {
   // repo" — there is no manifest hashing anywhere in Mod Management today (#388 owns hashing
   // pristine binaries for provenance, a different job), so this reads the criterion as *manifest
   // identity* across the tracked/untracked boundary and proves that directly: same plugin bytes,
-  // same manifest, whether or not the ledger tree exists alongside it.
+  // same manifest, whether or not the source tree exists alongside it.
   it('produces an identical manifest before and after the same mod acquires a repo, and never rewrites the plugin bytes', async () => {
     fx = await makeDeployerFixture();
     // "MyMod.esp" (9 chars), deliberately not 7 — same reason as the test above.
@@ -100,10 +99,10 @@ describe('deploy', () => {
     const pluginBytesBefore = await readFile(pluginPath, 'utf8');
     await purge(fx.instanceRoot, fx.gameDirectory, fakeReporter());
 
-    // Simulate the mod acquiring a repo: RecordVendor never rewrites the plugin binary (traced
-    // in MEditService.Core/Ledger/RecordVendor.cs — it serializes only to the ledger text path),
-    // it only adds the text tree alongside the untouched plugin.
-    await fx.writeModFile('ModA', 'MyMod.esp.ledger/records/MyMod.esp/00001E.yaml', 'record: text');
+    // Simulate the mod acquiring a repo: serialization never rewrites the plugin binary (Track
+    // writes only to the source text path — MEditService.Core/Source/TrackService.cs), it only
+    // adds the text tree alongside the untouched plugin.
+    await fx.writeModFile('ModA', 'MyMod.esp.source/records/MyMod.esp/00001E.yaml', 'record: text');
     const afterIndex = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
     await deploy(fx.instanceRoot, fx.gameDirectory, afterIndex, fakeReporter());
     const manifestAfter = await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8');

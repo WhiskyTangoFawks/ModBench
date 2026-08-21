@@ -39,9 +39,9 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
-  ADR-0041). `Edits/RecordEditService.EditField` reads the record's ledger file, applies the field,
+  ADR-0041). `Edits/RecordEditService.EditField` reads the record's source file, applies the field,
   writes the file back atomically, and tells the index what landed. It reads the **file**, not the
-  indexed body: ingest serializes from a plugin's binary overlay while the ledger holds a deep
+  indexed body: ingest serializes from a plugin's binary overlay while the source holds a deep
   parse, and the two are not always structurally identical (#369's measured 1-in-3,940 hole, on
   `GitBlobHash`), so editing the file's own bytes is what stops an edit rewriting a record's
   untouched fields into the overlay's shape. `POST /records/{formKey}/field` is the same service's
@@ -60,8 +60,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     that a top-level FormLink *column* has no write delegate at all in the reflected schema
     (`SchemaReflector`: "read-only as a column, `ApplyFormLinkJson` as a sub-field"), so the
     writable form of a FormLink today is an array or a struct sub-field.
-  - **Reads validate ledger freshness** (`Ledger/LedgerFreshness`, #413 D3 deferred here). Point
-    reads re-check the ledger text before answering, catching `git restore`, checkout, rebase,
+  - **Reads validate source freshness** (`Source/SourceFreshness`, #413 D3 deferred here). Point
+    reads re-check the source text before answering, catching `git restore`, checkout, rebase,
     terminal commits and hand edits — no watcher, because Modbench owns the `.git` folder and git
     never announces itself. **Both refs are re-derived**: after an external commit "committed"
     itself has moved, so a pass that refreshed only the working-tree side would leave Head serving
@@ -89,7 +89,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - Reads that answer from the **extracted** tables (`Resolve`, `GetReferencedBy`, `GetPlacement`)
     and the header table answer identically at both refs, deliberately: those carry no ref
     dimension and track Effective, which is the answer their consumers want.
-- **`LedgerRepository.CommittedLedgerHashes`/`ReadCommittedLedgerText` ask what `HEAD` holds** — not
+- **`SourceRepository.CommittedSourceHashes`/`ReadCommittedSourceText` ask what `HEAD` holds** — not
   what the working tree holds against the index, which is #417's `WorkingTreeStatus` (as are
   `CommitPristineToMain` and the rebase verbs). The two diverge after exactly the events these
   exist for: an external commit, rebase or amend moves `HEAD` without touching a file. Hash values
@@ -104,7 +104,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   is the compound identity on every seam member, ingest included, replacing every bare
   `(string plugin, string origin)` pair. `IRecordIndex.At(RecordRef)` repositions every read; #421
   ships `RecordRef.Head` answering identically to the default `RecordRef.Effective` (both map onto
-  the single `LedgerRef.Committed` value `records.ref` carries) — inert until #415 gives them
+  the single `SourceRef.Committed` value `records.ref` carries) — inert until #415 gives them
   independent state. No `Connection` property and no SQL crosses this seam except `SetFilter`
   (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
 - Every write backs up the target plugin first (timestamped `.bak`) — cross-session undo depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
@@ -124,9 +124,9 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
-| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns ledger text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `ContainerAssembler` |
-| `Serialization/` | Per-record text ledger codec (ADR-0041, née ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
-| `Ledger/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `LedgerRepository`, `TrackService`, `LedgerFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerStripFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
+| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `ContainerAssembler` |
+| `Serialization/` | Per-record text source codec (ADR-0041, née ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
+| `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerStripFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
 `MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
 lifecycle plus the pending-external-change queue, nothing else — it references only

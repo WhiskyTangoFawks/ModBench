@@ -1,7 +1,7 @@
 using System.Text.Json;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -17,14 +17,14 @@ public sealed class ExternalChangeWatcherTests
 
     private static string Track(string modFolder, string plugin, byte[] parkedBinary)
     {
-        var files = new[] { new PristineFile($"{plugin}.ledger/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+        var files = new[] { new PristineFile($"{plugin}.source/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
         var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "unused-at-track-time" });
-        LedgerRepository.Track(modFolder, LedgerPreset.Edits, files, trailers);
+        SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
         var pluginPath = Path.Combine(modFolder, plugin);
         File.WriteAllBytes(pluginPath, parkedBinary);
         var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(parkedBinary));
-        LedgerRepository.ParkCompileSnapshot(modFolder, plugin, atRef: null, binarySha256);
+        SourceRepository.ParkCompileSnapshot(modFolder, plugin, atRef: null, binarySha256);
         return pluginPath;
     }
 

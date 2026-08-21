@@ -297,7 +297,7 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
 
 // #426 (resurrected from before #410): setAtPath's own write-side counterpart — the one generic
 // implementation an edit anywhere in a struct/array writes through (ADR-0041: the whole subtree
-// commits as one atomic ledger write). Never mutates its input: each hop copies its own level before
+// commits as one atomic source write). Never mutates its input: each hop copies its own level before
 // recursing, so a caller can compare the result against the original root by reference.
 export function setAtPath(root: unknown, path: readonly PathSegment[], value: unknown): unknown {
   if (path.length === 0) return value;

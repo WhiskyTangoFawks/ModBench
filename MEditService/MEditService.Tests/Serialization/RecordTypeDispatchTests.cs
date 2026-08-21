@@ -100,7 +100,7 @@ public class RecordTypeDispatchTests
     // This used to be asserted by handing DeserializeAsync a Type with no generated serializer. That
     // route is gone: the text names its own concrete type now (MutagenObjectType), so no caller
     // supplies one and there is nothing to get wrong at the call site. The equivalent failure is a
-    // *document* naming a type the dispatch has no case for — corrupt text, a hand-edited ledger
+    // *document* naming a type the dispatch has no case for — corrupt text, a hand-edited source
     // file, or text written by a future schema — which is the real-world shape of this failure and
     // was previously untested.
     [Fact]

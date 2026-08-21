@@ -1,8 +1,8 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Schema;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -75,12 +75,12 @@ public sealed class PluginCompileServiceParkedRefTests : IDisposable
     [Fact]
     public void Compile_ThatRefuses_LeavesTheParkedRefUntouched()
     {
-        // Two ledger files claiming one FormKey (PluginCompileServiceRefusalTests' own scenario) —
+        // Two source files claiming one FormKey (PluginCompileServiceRefusalTests' own scenario) —
         // structurally cannot emit, so nothing about the plugin's parked state should move.
-        var npcLedgerText = File.ReadAllText(_mod.NpcLedgerFile);
-        var collidingPath = _mod.LedgerFileFor(_mod.Npc, "keyword");
+        var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
+        var collidingPath = _mod.SourceFileFor(_mod.Npc, "keyword");
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
-        File.WriteAllText(collidingPath, npcLedgerText);
+        File.WriteAllText(collidingPath, npcSourceText);
 
         var baselineParked = RunGit("rev-parse", ParkedRef).Trim();
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());

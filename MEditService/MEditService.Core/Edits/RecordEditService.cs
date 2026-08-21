@@ -1,12 +1,12 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -17,14 +17,14 @@ namespace MEditService.Core.Edits;
 
 /// <summary>
 /// The single write path (ADR-0041 / #415): a field edit on a tracked plugin becomes a working-tree
-/// change to that record's ledger JSON, and nothing else. There is no second path — no direct binary
+/// change to that record's source JSON, and nothing else. There is no second path — no direct binary
 /// write, no staged pending state — which is why an untracked plugin is refused here rather than
 /// quietly served by some other mechanism.
 ///
-/// <para><b>The ledger text is the source, not the index.</b> Each edit reads the record's ledger
+/// <para><b>The source text is the source, not the index.</b> Each edit reads the record's source
 /// file, applies the field to the record that text deserializes to, and writes the file back; the
 /// index is then told what landed. Reading the file rather than the indexed body is deliberate and
-/// measured: ingest serializes from a plugin's <i>binary overlay</i> while the ledger holds a
+/// measured: ingest serializes from a plugin's <i>binary overlay</i> while the source holds a
 /// <i>deep parse</i>, and the two are not always structurally identical (#369's 1-in-3,940 hole,
 /// documented on <see cref="GitBlobHash"/>). Editing the file's own bytes means an edit can never
 /// silently rewrite a record's unrelated fields into the overlay's shape.</para>
@@ -65,10 +65,10 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
-        var relativePath = LedgerRecordPath.For(plugin.Name, document.RecordType, formKey);
-        var ledgerPath = Path.Combine(modFolder, relativePath);
+        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey);
+        var sourcePath = Path.Combine(modFolder, relativePath);
 
-        var record = ReadRecordFromLedger(ledgerPath, document, release);
+        var record = ReadRecordFromSource(sourcePath, document, release);
         var schemas = schemaReflector.GetSchemas(release);
 
         if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value) is { } linkError)
@@ -83,21 +83,21 @@ public sealed class RecordEditService(
         // #412: the codec's own file write is atomic (temp file, then rename), which matters more
         // here than at Track — this file is inside a live git working tree that the SCM panel, and
         // git itself, may read at any moment.
-        _codec.SerializeAsync(record, ledgerPath, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
 
         index.ApplyWorkingTreeChanges(plugin, [(formKey, Encoding.UTF8.GetString(newBody))]);
         // #422: the new value can flip filter membership either way.
         sessions.ReapplyFilter();
 
         logger.LogInformation(
-            "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {LedgerPath}",
+            "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
             fieldPath, formKey, plugin.Name, plugin.Origin, relativePath);
         return RecordEditResult.Success();
     }
 
     /// <summary>
     /// #427: deletes one plugin's copy of <paramref name="formKey"/> as a working-tree change — the
-    /// ledger file goes away, and <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>'s null-Body case
+    /// source file goes away, and <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>'s null-Body case
     /// (the mechanism #415 landed and tested in both flip directions) takes it from there: gone at
     /// Effective, still served at Head until this is committed and compiled. No reference cascade —
     /// a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary
@@ -119,18 +119,18 @@ public sealed class RecordEditService(
                 $"{plugin.Name} does not hold record {formKey}.");
         }
 
-        var relativePath = LedgerRecordPath.For(plugin.Name, document.RecordType, formKey);
-        var ledgerPath = Path.Combine(modFolder, relativePath);
+        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey);
+        var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Never-assume-exclusive-ownership: the file may already be gone (another tool, a hand
         // delete) — that is exactly the working-tree state this call is trying to reach, not a
         // failure to report.
-        if (File.Exists(ledgerPath)) File.Delete(ledgerPath);
+        if (File.Exists(sourcePath)) File.Delete(sourcePath);
 
         index.ApplyWorkingTreeChanges(plugin, [(formKey, null)]);
 
         logger.LogInformation(
-            "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {LedgerPath}",
+            "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
             formKey, plugin.Name, plugin.Origin, relativePath);
         return RecordEditResult.Success();
     }
@@ -167,30 +167,30 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        var relativePath = LedgerRecordPath.For(plugin.Name, recordType, targetFormKey);
-        var ledgerPath = Path.Combine(modFolder, relativePath);
+        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey);
+        var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Track's eager serialization only created directories for (record type, origin ModKey)
         // combinations the plugin already held — a genuinely new one (the first Weapon a plugin ever
         // held, say) needs its own. The codec deliberately leaves directory-creation policy to its
         // caller (RecordTextCodec.SerializeAsync's own doc comment).
-        Directory.CreateDirectory(Path.GetDirectoryName(ledgerPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
 
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(record, ledgerPath, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
         // #422: a brand-new row can newly match an active filter.
         sessions.ReapplyFilter();
 
         logger.LogInformation(
-            "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree ledger file at {LedgerPath}",
+            "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source file at {SourcePath}",
             recordType, targetFormKey, plugin.Name, plugin.Origin, relativePath);
         return RecordEditResult.Success(targetFormKey);
     }
 
     /// <summary>
-    /// #427: a renumber is a delete+create pair in ledger terms (the ledger path embeds the FormKey)
+    /// #427: a renumber is a delete+create pair in source terms (the source path embeds the FormKey)
     /// plus a reference cascade — every other tracked plugin's FormLink to <paramref name="formKey"/>
     /// has to move with it, or it goes dangling the moment the old path disappears.
     ///
@@ -239,7 +239,7 @@ public sealed class RecordEditService(
 
         // Every distinct record that references formKey, source-record-deduplicated: GetReferencedBy
         // is one row per (source record, field), and a record referencing the target through two
-        // fields still only needs its ledger file rewritten once — the body-level replace below fixes
+        // fields still only needs its source file rewritten once — the body-level replace below fixes
         // every occurrence in one write.
         var referencers = index.GetReferencedBy(formKey)
             .Select(r => (FormKey: r.FormKey, Plugin: new PluginKey(r.Plugin, r.Origin)))
@@ -314,7 +314,7 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    /// <summary>One referencing record's ledger file, mechanically rewritten to point at the new
+    /// <summary>One referencing record's source file, mechanically rewritten to point at the new
     /// FormKey — a whole-body string replace rather than a field-by-field walk, so it also reaches
     /// VMAD Object properties and condition Form parameters (never checked by the reflected-column
     /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).</summary>
@@ -326,16 +326,16 @@ public sealed class RecordEditService(
             ?? throw new InvalidOperationException(
                 $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
 
-        var relativePath = LedgerRecordPath.For(referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey);
-        var ledgerPath = Path.Combine(referencerModFolder, relativePath);
-        var body = File.Exists(ledgerPath) ? File.ReadAllText(ledgerPath) : referencerDoc.Body!;
+        var relativePath = SourceRecordPath.For(referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey);
+        var sourcePath = Path.Combine(referencerModFolder, relativePath);
+        var body = File.Exists(sourcePath) ? File.ReadAllText(sourcePath) : referencerDoc.Body!;
         var newBody = body.Replace(oldFormKey, newFormKey, StringComparison.Ordinal);
 
-        File.WriteAllText(ledgerPath, newBody);
+        File.WriteAllText(sourcePath, newBody);
         index.ApplyWorkingTreeChanges(referencerPlugin, [(referencerFormKey, newBody)]);
     }
 
-    /// <summary>The delete+create pair itself — re-reads the ledger fresh (rather than trusting the
+    /// <summary>The delete+create pair itself — re-reads the source fresh (rather than trusting the
     /// caller's earlier snapshot) so a self-reference <see cref="RewriteReferenceField"/> already
     /// rewrote above is reflected in the body this reserializes under the new FormKey.</summary>
     private void RenumberTheRecordItself(
@@ -343,20 +343,20 @@ public sealed class RecordEditService(
     {
         var document = index.GetDocument(oldFormKey, plugin)
             ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
-        var oldRelativePath = LedgerRecordPath.For(plugin.Name, document.RecordType, oldFormKey);
-        var oldLedgerPath = Path.Combine(modFolder, oldRelativePath);
+        var oldRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, oldFormKey);
+        var oldSourcePath = Path.Combine(modFolder, oldRelativePath);
 
-        var record = ReadRecordFromLedger(oldLedgerPath, document, release);
+        var record = ReadRecordFromSource(oldSourcePath, document, release);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        var newRelativePath = LedgerRecordPath.For(plugin.Name, document.RecordType, newFormKey);
-        var newLedgerPath = Path.Combine(modFolder, newRelativePath);
+        var newRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, newFormKey);
+        var newSourcePath = Path.Combine(modFolder, newRelativePath);
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(record, newLedgerPath, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(record, newSourcePath, release).GetAwaiter().GetResult();
 
         index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
 
-        if (File.Exists(oldLedgerPath)) File.Delete(oldLedgerPath);
+        if (File.Exists(oldSourcePath)) File.Delete(oldSourcePath);
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 
@@ -417,9 +417,9 @@ public sealed class RecordEditService(
 
     /// <summary>
     /// #427: a caller-typed target FormKey (xEdit's own typed-FormID path, on both create and
-    /// renumber) must belong to <paramref name="plugin"/>'s own ModKey — the ledger path a native
+    /// renumber) must belong to <paramref name="plugin"/>'s own ModKey — the source path a native
     /// record's FormKey embeds is exactly <paramref name="plugin"/>'s own directory, so a foreign
-    /// ModKey would land a record physically inside this plugin's ledger tree while claiming to
+    /// ModKey would land a record physically inside this plugin's source tree while claiming to
     /// originate somewhere else, which is indistinguishable from a corrupt override once written.
     /// xEdit's own Add/renumber gestures have no way to claim a foreign FormID either — this is not
     /// a new restriction, only this seam refusing to silently accept what the UI never offered.
@@ -570,7 +570,7 @@ public sealed class RecordEditService(
 
         // #417 exit path 3: a same-plugin external-change question left unanswered refuses every
         // gesture on the single write path \u2014 checked before anything else, so neither of the write
-        // path's two doors fires: the ledger file is never touched, and the index call that would
+        // path's two doors fires: the source file is never touched, and the index call that would
         // tell the DB about it is never reached.
         return ExternalChangeDeferral.Pending(folder, plugin.Name) is { } pendingQuestion
             ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangePending, pendingQuestion)
@@ -600,18 +600,18 @@ public sealed class RecordEditService(
             : RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
 
     /// <summary>
-    /// The record as its ledger text has it. Falls back to the indexed body only when the file is
-    /// missing entirely — never-assume-exclusive-ownership (root CLAUDE.md): a tracked mod's ledger
+    /// The record as its source text has it. Falls back to the indexed body only when the file is
+    /// missing entirely — never-assume-exclusive-ownership (root CLAUDE.md): a tracked mod's source
     /// tree is complete when Track leaves it, but anything may have removed a file since, and
     /// refusing the edit would strand the user with no way to put the record back.
     /// </summary>
-    private IMajorRecord ReadRecordFromLedger(string ledgerPath, RecordDocument document, GameRelease release)
+    private IMajorRecord ReadRecordFromSource(string sourcePath, RecordDocument document, GameRelease release)
     {
-        if (File.Exists(ledgerPath))
-            return _codec.DeserializeAsync(ledgerPath, release).GetAwaiter().GetResult();
+        if (File.Exists(sourcePath))
+            return _codec.DeserializeAsync(sourcePath, release).GetAwaiter().GetResult();
 
         logger.LogWarning(
-            "Ledger file {LedgerPath} is missing; editing from the indexed document and rewriting it", ledgerPath);
+            "Source file {SourcePath} is missing; editing from the indexed document and rewriting it", sourcePath);
         return _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release)
             .GetAwaiter().GetResult();

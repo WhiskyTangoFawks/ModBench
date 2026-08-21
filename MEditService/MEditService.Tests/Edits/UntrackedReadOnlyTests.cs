@@ -1,9 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -33,7 +33,7 @@ public sealed class UntrackedReadOnlyTests
     public void EditingAPluginInAnUntrackedModFolder_IsRefused_NamingTheTrackCommand()
     {
         using var mod = TrackedModFixture.Untracked();
-        Assert.False(LedgerRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
+        Assert.False(SourceRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
 
         var result = ServiceFor(mod.Sessions).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
 
@@ -55,9 +55,9 @@ public sealed class UntrackedReadOnlyTests
         ServiceFor(mod.Sessions).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
 
         // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
-        // did not quietly create the ledger tree on its way out.
-        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}.ledger")));
-        Assert.False(File.Exists(mod.NpcLedgerFile));
+        // did not quietly create the source tree on its way out.
+        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}.source")));
+        Assert.False(File.Exists(mod.NpcSourceFile));
     }
 
     [Fact]

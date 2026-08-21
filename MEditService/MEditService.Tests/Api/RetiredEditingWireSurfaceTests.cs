@@ -36,7 +36,7 @@ public sealed class RetiredEditingWireSurfaceTests
         [.. root.GetProperty("components").GetProperty("schemas").EnumerateObject().Select(p => p.Name)];
 
     [Fact]
-    public async Task OpenApiDocument_ExposesNoRetiredEditingOrLedgerPath()
+    public async Task OpenApiDocument_ExposesNoRetiredEditingOrSourcePath()
     {
         var paths = PathsOf(await GetSchemaAsync());
 
@@ -49,11 +49,11 @@ public sealed class RetiredEditingWireSurfaceTests
         [
             "/records/delete",
             "/records/{formKey}/copy-to/{targetPlugin}",
-            // "/records/{formKey}/renumber" removed: reintroduced by #427 on working-tree-ledger
+            // "/records/{formKey}/renumber" removed: reintroduced by #427 on working-tree-source
             // semantics (renumber = delete+create pair with a cross-plugin reference cascade), not
             // the retired staged pending-change renumber this list used to guard.
-            // "/plugins/{plugin}/records" removed: reintroduced by #427 on working-tree-ledger
-            // semantics (create = a new ledger file, answering at Effective only), not the retired
+            // "/plugins/{plugin}/records" removed: reintroduced by #427 on working-tree-source
+            // semantics (create = a new source file, answering at Effective only), not the retired
             // staged pending-change create this list used to guard.
             "/plugins/{plugin}/cells/{cellFormKey}/placed",
             "/changes",
@@ -61,7 +61,10 @@ public sealed class RetiredEditingWireSurfaceTests
             "/changes/group/{groupId}",
             "/change-groups",
             "/change-groups/{groupId}/save",
+            // #437 renamed ledger→source; the retired route is pinned under both its
+            // historical literal and the name its concept would resurrect under today.
             "/ledger/status",
+            "/source/status",
         ];
         Assert.Equal([], retired.Where(paths.Contains).ToArray());
     }
@@ -83,7 +86,7 @@ public sealed class RetiredEditingWireSurfaceTests
     }
 
     [Fact]
-    public async Task OpenApiDocument_DeclaresNoRetiredPendingChangeOrLedgerSchema()
+    public async Task OpenApiDocument_DeclaresNoRetiredPendingChangeOrSourceSchema()
     {
         var schemas = SchemaNamesOf(await GetSchemaAsync());
 
@@ -100,7 +103,9 @@ public sealed class RetiredEditingWireSurfaceTests
             "SaveResult",
             "SaveGroupResponse",
             "DeleteRecordsResponse",
+            // #437 renamed ledger→source; retired schema pinned under both names, as above.
             "LedgerStatusEntry",
+            "SourceStatusEntry",
             "PatchRecordValidationError",
             "ReferenceValidationError",
         ];

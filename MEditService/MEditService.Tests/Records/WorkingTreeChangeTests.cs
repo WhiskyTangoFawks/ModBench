@@ -14,7 +14,7 @@ namespace MEditService.Tests.Records;
 /// <c>RecordRefIdentityTests</c>, which this ticket turns into the divergence tests next door.
 ///
 /// Bodies here are real codec documents — read back out of the index after a real ingest, then
-/// edited as text — not hand-written JSON: the invariant under test is "Body bytes = the ledger
+/// edited as text — not hand-written JSON: the invariant under test is "Body bytes = the source
 /// file's bytes at that ref", so a fabricated body would test a shape the codec never emits.
 /// </summary>
 public sealed class WorkingTreeChangeTests : IDisposable

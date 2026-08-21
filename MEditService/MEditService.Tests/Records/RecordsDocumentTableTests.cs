@@ -1,6 +1,6 @@
 using System.Globalization;
-using MEditService.Core.Ledger;
 using MEditService.Core.Serialization;
+using MEditService.Core.Source;
 using MEditService.Tests.RealData;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -22,7 +22,7 @@ namespace MEditService.Tests.Records;
 /// would pass just as happily if the table were shaped wrong but the method compensated.
 ///
 /// The body is asserted against <see cref="RecordTextCodec"/>'s own bytes rather than against a
-/// literal: ADR-0041's claim is not "some JSON is stored" but "the same bytes as the ledger file",
+/// literal: ADR-0041's claim is not "some JSON is stored" but "the same bytes as the source file",
 /// which is precisely what makes <c>content_hash</c> comparable to a git object and what a byte
 /// compare will later stand on.
 /// </summary>
@@ -97,12 +97,12 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
     }
 
     /// <summary>
-    /// The body is the codec's ledger text, byte for byte. A non-container record here on purpose:
+    /// The body is the codec's source text, byte for byte. A non-container record here on purpose:
     /// containers need the ingest-side child strip (#413 D8), which is its own slice and its own
     /// test — pinning a Cell here would conflate the two.
     /// </summary>
     [Fact]
-    public async Task Index_DocumentBody_IsTheCodecsLedgerText()
+    public async Task Index_DocumentBody_IsTheCodecsSourceText()
     {
         using var overlay = OpenPlugin();
         var record = ((IFallout4ModGetter)overlay).Npcs.First();
@@ -168,6 +168,6 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
         Assert.Equal(record.EditorID, reader.GetString(3));
         Assert.Equal(0, reader.GetInt32(4));
         Assert.True(reader.GetBoolean(5), "The only plugin indexed should win its own records.");
-        Assert.Equal(LedgerRef.Committed, reader.GetString(6));
+        Assert.Equal(SourceRef.Committed, reader.GetString(6));
     }
 }

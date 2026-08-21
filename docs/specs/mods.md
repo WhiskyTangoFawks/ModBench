@@ -361,7 +361,7 @@ The extension owns the editing backend process
 - **Write behavior**: every mutation (enable/disable, drag-reorder, separator ops, Move to
   Separator) writes to `modlist.txt` immediately via the active `IModlistSource`. There is
   **no save/discard flow** in this view — unlike the Editing surface, whose edits land as
-  working-tree ledger changes reviewed and committed in the native Source Control panel
+  working-tree source changes reviewed and committed in the native Source Control panel
   (ADR-0041, medit-version-control.md).
 
 ### Install (Modbench-6)

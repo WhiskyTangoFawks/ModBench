@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Text;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -16,7 +16,7 @@ namespace MEditService.Tests.Edits;
 /// <summary>
 /// #427: create-record, the entry point over <see cref="IRecordIndex.CreateWorkingTreeRecord"/>
 /// (mechanism-tested at the index layer in <c>WorkingTreeCreationTests</c>). This suite is about the
-/// entry point's own contract — FormKey allocation collision-safe across both refs, the ledger file
+/// entry point's own contract — FormKey allocation collision-safe across both refs, the source file
 /// it writes, record-type validation, and the two refusals every gesture on this write path inherits.
 /// </summary>
 public sealed class RecordEditServiceCreateRecordTests
@@ -25,7 +25,7 @@ public sealed class RecordEditServiceCreateRecordTests
         new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
-    public void CreateRecord_AllocatesAFormKey_WritesAMinimalLedgerFile_RecordBecomesReadable()
+    public void CreateRecord_AllocatesAFormKey_WritesAMinimalSourceFile_RecordBecomesReadable()
     {
         using var mod = TrackedModFixture.Tracked();
 
@@ -35,9 +35,9 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.NotNull(result.NewFormKey);
         Assert.EndsWith(":" + TrackedModFixture.PluginName, result.NewFormKey, StringComparison.Ordinal);
 
-        var ledgerFile = Path.Combine(mod.ModFolder, TrackedModFixture.RelativeLedgerPath(
+        var sourceFile = Path.Combine(mod.ModFolder, TrackedModFixture.RelativeSourcePath(
             Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_"));
-        Assert.True(File.Exists(ledgerFile));
+        Assert.True(File.Exists(sourceFile));
 
         var doc = mod.Sessions.Index!.GetDocument(result.NewFormKey!, mod.Plugin);
         Assert.NotNull(doc);

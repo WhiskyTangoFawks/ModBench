@@ -46,7 +46,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     /// <summary>
     /// <see cref="PrepareAsync"/>'s other half (#416): writes an already-assembled <paramref name="mod"/>
     /// rather than importing one from <paramref name="pluginPath"/> first — Save &amp; Compile's own
-    /// entry point, since compile's mod is built fresh from ledger text
+    /// entry point, since compile's mod is built fresh from source text
     /// (<see cref="ContainerAssembler"/>), never read off the binary it is about to replace.
     /// <paramref name="pluginPath"/> is still where the backup comes from and where the result lands.
     /// </summary>

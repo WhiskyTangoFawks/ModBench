@@ -406,7 +406,7 @@ export class SessionController {
     return true;
   }
 
-  /** #427: create-record — mints a new record as a working-tree ledger file (ADR-0041), answering
+  /** #427: create-record — mints a new record as a working-tree source file (ADR-0041), answering
    *  at Effective only until committed and compiled. `formKey` is xEdit's typed-FormID path; left
    *  undefined, the backend auto-allocates the next free local FormID (both-refs collision-safe).
    *
@@ -437,7 +437,7 @@ export class SessionController {
     }
   }
 
-  /** #427: delete-record — the ledger file goes away and #415's null-Body mechanism takes it from
+  /** #427: delete-record — the source file goes away and #415's null-Body mechanism takes it from
    *  there (gone at Effective, still served at Head until compiled). The confirmation ("are you
    *  sure") is extension-side UX, the same division `compile`'s compile-at-main modal already
    *  established — this method never asks, only acts. Returns whether it happened. */
@@ -579,7 +579,7 @@ export class SessionController {
   }
 
   /** #417: resumes a rebase left mid-flight by {@link rebaseOntoMain}'s own `Conflicted` outcome,
-   *  after the user has hand-resolved the conflicted ledger file(s) in the native merge editor. */
+   *  after the user has hand-resolved the conflicted source file(s) in the native merge editor. */
   async continueRebase(origin: string): Promise<RebaseResult | null> {
     return this.postRebase('/plugins/rebase/continue', origin, 'continueRebase');
   }
@@ -613,7 +613,7 @@ export class SessionController {
 function toCompileResult(data: {
   succeeded?: boolean;
   refusalReason?: string | null;
-  diagnostics?: { formKey?: string | null; ledgerRelativePath?: string | null; message?: string | null }[] | null;
+  diagnostics?: { formKey?: string | null; sourceRelativePath?: string | null; message?: string | null }[] | null;
   masters?: string[] | null;
 }): CompileResult {
   return {
@@ -621,7 +621,7 @@ function toCompileResult(data: {
     refusalReason: data.refusalReason ?? null,
     diagnostics: (data.diagnostics ?? []).map((d) => ({
       formKey: d.formKey ?? '',
-      ledgerRelativePath: d.ledgerRelativePath ?? '',
+      sourceRelativePath: d.sourceRelativePath ?? '',
       message: d.message ?? '',
     })),
     masters: data.masters ?? [],

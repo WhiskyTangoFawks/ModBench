@@ -1,6 +1,6 @@
 using MEditService.Api;
 using MEditService.Bridge;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -12,7 +12,7 @@ namespace MEditService.Tests.Api;
 /// <summary>
 /// #417 B11 / AC4: the load-time hash check. A binary changed while no watcher was ever running
 /// (the "Modbench was closed" case) is still caught the moment a session loads, through the same
-/// <see cref="MEditService.Core.Ledger.ExternalChangeClassifier"/> the live watcher itself calls.
+/// <see cref="MEditService.Core.Source.ExternalChangeClassifier"/> the live watcher itself calls.
 ///
 /// <para>#381: the same pass's crash-repair offers — an interrupted compile (a pending
 /// <see cref="CompileJournal"/> marker) and a binary that cannot be read at all — both routed away
@@ -69,7 +69,7 @@ public sealed class ExternalChangeSessionHookTests : IDisposable
     {
         Assert.ThrowsAny<Exception>(() =>
             CompileJournal.RunBatch(_mod.ModFolder, [TrackedModFixture.PluginName],
-                _ => throw new InvalidOperationException("simulated crash between ledger and binary write")));
+                _ => throw new InvalidOperationException("simulated crash between source and binary write")));
         Assert.NotNull(CompileJournal.PendingRecovery(_mod.ModFolder)); // sanity: the marker really is there.
 
         var watcher = new ExternalChangeWatcher();
@@ -82,7 +82,7 @@ public sealed class ExternalChangeSessionHookTests : IDisposable
         Assert.Empty(watcher.Pending()); // never the external-change dialog's own question.
     }
 
-    // #381 addition 2: the repo and ledger survive, only the plugin's own binary is gone — reachable
+    // #381 addition 2: the repo and source survive, only the plugin's own binary is gone — reachable
     // without the repo being destroyed (ADR-0041's "reads as untracked" case is a different, already-
     // handled path). Before this ticket the read failure was logged and dropped with nothing offered.
     [Fact]

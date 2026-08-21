@@ -1,5 +1,5 @@
 using System.Timers;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using Timer = System.Timers.Timer;
 
 namespace MEditService.Bridge;
@@ -8,7 +8,7 @@ namespace MEditService.Bridge;
 /// #417's live-watch half: a <see cref="FileSystemWatcher"/> per watched (mod folder, plugin) pair,
 /// debounced, calling straight into <see cref="ExternalChangeClassifier"/> — the only mechanic this
 /// class owns is the watch lifecycle and the pending-question queue; classification, self-echo
-/// suppression and crash-marker suppression all live in <c>MEditService.Core.Ledger</c>, exactly as
+/// suppression and crash-marker suppression all live in <c>MEditService.Core.Source</c>, exactly as
 /// the load-time hash check (a different caller entirely, wired from <c>MEditService.Api</c>) also
 /// calls it. See this project's own <c>.csproj</c> description for the boundary this keeps.
 /// </summary>

@@ -1,13 +1,13 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
 
 /// <summary>
 /// #417 B6 / exit path 3: an unanswered external-change question refuses every gesture on the single
-/// write path (ADR-0041/#415) — checked once, ahead of both doors that path has: the ledger file
+/// write path (ADR-0041/#415) — checked once, ahead of both doors that path has: the source file
 /// write, and <c>index.ApplyWorkingTreeChanges</c> telling the DB. #426/#427 add more edit gestures
 /// through <see cref="RecordEditService"/> later and must inherit this refusal without adding their
 /// own check.
@@ -36,18 +36,18 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         Assert.Contains("changed outside Modbench", result.Message, StringComparison.Ordinal);
     }
 
-    /// <summary>The write path's <b>first</b> door: refusing must happen before the ledger file is
+    /// <summary>The write path's <b>first</b> door: refusing must happen before the source file is
     /// touched at all — the same "no half-applied state" invariant every other refusal in this class
     /// already holds.</summary>
     [Fact]
-    public void EditField_Refuses_BeforeTouchingTheLedgerFile()
+    public void EditField_Refuses_BeforeTouchingTheSourceFile()
     {
-        var before = File.ReadAllText(_mod.NpcLedgerFile);
+        var before = File.ReadAllText(_mod.NpcSourceFile);
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
 
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
-        Assert.Equal(before, File.ReadAllText(_mod.NpcLedgerFile));
+        Assert.Equal(before, File.ReadAllText(_mod.NpcSourceFile));
         Assert.Empty(_mod.GitStatus());
     }
 

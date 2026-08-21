@@ -71,12 +71,12 @@ public static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        // The ledger file is not ours exclusively — an I/O failure mid-edit is a real answer this
+        // The source file is not ours exclusively — an I/O failure mid-edit is a real answer this
         // route can give, so it is declared like every other (endpoint invariant).
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #427: delete-record — the ledger file goes away and #415's null-Body mechanism takes it
+        // #427: delete-record — the source file goes away and #415's null-Body mechanism takes it
         // from there. Same door, same refusals, same doctrine as EditField above.
         app.MapPost("/records/{formKey}/delete", (
             string formKey, RecordDeleteRequest request, RecordEditService edits) =>
@@ -84,7 +84,7 @@ public static class RecordEndpoints
         .WithName("DeleteRecord")
         .WithSummary("Delete a record as a working-tree change (#415/#427).")
         .WithDescription(
-            "Deletes the record's ledger file — a git-native, null-Body working-tree change (#415's " +
+            "Deletes the record's source file — a git-native, null-Body working-tree change (#415's " +
             "mechanism): gone at Effective, still served at Head until the deletion is committed and " +
             "compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes " +
             "dangling and surfaces as an ordinary compile diagnostic (ADR-0020), the same as any other " +
@@ -109,10 +109,10 @@ public static class RecordEndpoints
         .WithSummary("Renumber a native record's FormKey as a delete+create pair (#427).")
         .WithDescription(
             "Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs " +
-            "collision-safe, or an explicit target) as a working-tree delete of the old ledger file " +
+            "collision-safe, or an explicit target) as a working-tree delete of the old source file " +
             "plus a create of the new one, cascading the FormKey change into every tracked plugin that " +
             "references it. Not the retired pending-change-era renumber this same route once served; " +
-            "that mechanism (staged rows, no ledger text, no reference cascade) was removed with " +
+            "that mechanism (staged rows, no source text, no reference cascade) was removed with " +
             "ADR-0041/#410.")
         .WithTags("Records")
         .Produces<RecordRenumberResponse>()
@@ -146,7 +146,7 @@ public static class RecordEndpoints
         // mount that just went away — and there is no global exception middleware to shape what
         // comes back. Every sibling write endpoint here catches and maps rather than letting one
         // escape as a bodyless 500 that a client cannot tell apart from the backend having died.
-        // LedgerFreshness already degrades on this same exception set on the read side, so this is
+        // SourceFreshness already degrades on this same exception set on the read side, so this is
         // the write side's equivalent rather than a new policy.
         try
         {
@@ -159,9 +159,9 @@ public static class RecordEndpoints
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Could not write the ledger file while editing {FormKey}.{FieldPath}",
+            logger.LogError(ex, "Could not write the source file while editing {FormKey}.{FieldPath}",
                 decoded, request.FieldPath);
-            return Results.Problem($"Could not write the ledger file for {decoded}: {ex.Message}", statusCode: 500);
+            return Results.Problem($"Could not write the source file for {decoded}: {ex.Message}", statusCode: 500);
         }
         catch (InvalidOperationException ex)
         {
@@ -187,8 +187,8 @@ public static class RecordEndpoints
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Could not delete the ledger file for {FormKey}", decoded);
-            return Results.Problem($"Could not delete the ledger file for {decoded}: {ex.Message}", statusCode: 500);
+            logger.LogError(ex, "Could not delete the source file for {FormKey}", decoded);
+            return Results.Problem($"Could not delete the source file for {decoded}: {ex.Message}", statusCode: 500);
         }
         catch (InvalidOperationException ex)
         {

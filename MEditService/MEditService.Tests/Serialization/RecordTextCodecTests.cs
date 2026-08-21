@@ -197,7 +197,7 @@ public class RecordTextCodecTests
         }
     }
 
-    // Atomicity: a failure partway through the write must not destroy a previously-valid ledger
+    // Atomicity: a failure partway through the write must not destroy a previously-valid source
     // record. A pre-cancelled CancellationToken cannot reach this window and so cannot rival it —
     // the generated Serialize call checks cancellation before any file is touched, in *both* the
     // old direct-write implementation and the current write-then-rename one, so it throws (and

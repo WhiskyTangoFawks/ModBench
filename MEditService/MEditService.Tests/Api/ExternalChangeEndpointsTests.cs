@@ -1,7 +1,7 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
-using MEditService.Core.Ledger;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http.HttpResults;
@@ -13,9 +13,9 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #417 B12: the HTTP door over the Ledger/Bridge machinery those layers already test exhaustively —
+/// #417 B12: the HTTP door over the Source/Bridge machinery those layers already test exhaustively —
 /// thin, mapping-only assertions per this run's plan (resolve target, call through, shape the
-/// response), not a re-derivation of every Ledger-level scenario.
+/// response), not a re-derivation of every Source-level scenario.
 /// </summary>
 public sealed class ExternalChangeEndpointsTests : IDisposable
 {

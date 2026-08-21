@@ -1,7 +1,7 @@
 # mEdit Record editor panel — Surface Specification
 
 **Status: Implemented.** Editing is git-native (ADR-0041): a field edit writes the record's
-working-tree ledger text directly — there is no pending/staged intermediate state, no Pending
+working-tree source text directly — there is no pending/staged intermediate state, no Pending
 column, and no ChangeGroup. The grid, conflict colouring, and type-appropriate editors below all
 ship and work on that write path. Review, commit, and revert happen in VS Code's native Source
 Control panel, one repo per tracked mod — see
@@ -67,7 +67,7 @@ per-cell conflict color coding from the two-axis model
 ([ADR-0016](../adr/0016-two-axis-conflict-model.md)). Values render as what they mean (flag
 names, EditorID links) rather than as what they are stored as.
 
-Editing is in-place and writes the record's working-tree ledger text directly (ADR-0041) — there
+Editing is in-place and writes the record's working-tree source text directly (ADR-0041) — there
 is no intermediate staged state. Save & Compile and review/commit are separate gestures, specified
 in [medit-version-control.md](medit-version-control.md).
 
@@ -399,7 +399,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
   Conditions are ordinary rows in the one tree* below.
-- **Editing writes working-tree ledger text directly** (ADR-0041) — there is no staged
+- **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
   intermediate state. A single field's value can be **dragged between plugin columns** to copy
   just that field into the target (which must be editable; the source need not be) — or **copied
   and pasted** when the target isn't conveniently reachable by drag, or lives outside mEdit

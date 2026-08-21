@@ -6,13 +6,13 @@ import * as vscode from 'vscode';
  * {@link RecordDecorationProvider} (`RecordDecorationProvider.ts`) has a `resourceUri` to key its
  * `FileDecorationProvider` on.
  *
- * Deliberately synthetic rather than the ledger file's own real path on disk. The ledger JSON is a
+ * Deliberately synthetic rather than the source file's own real path on disk. The source JSON is a
  * real file, but once a mod is tracked it already sits inside a repo `vscode.git` has opened
  * (`registerTrackedRepositories`) — reusing that path would put a second, independent decoration
  * source on the exact same URI, answering a different question (git's own index/staging state, not
  * this product's Effective/Head divergence: a newly created, unstaged record reads "Untracked" to
- * git, not "Added"). The synthetic scheme also means the frontend never needs the real ledger path
- * at all, which today only the backend computes (`LedgerRecordPath`, internal to
+ * git, not "Added"). The synthetic scheme also means the frontend never needs the real source path
+ * at all, which today only the backend computes (`SourceRecordPath`, internal to
  * `MEditService.Core`).
  *
  * Identity only, never state (#428 orchestrator ruling) — `WorkingTreeState` never appears in the

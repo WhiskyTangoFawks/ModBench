@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
-using MEditService.Core.Ledger;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
@@ -44,12 +44,12 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // per-type DDL.
     //
     // `body` is VARCHAR, never DuckDB's JSON type: the JSON type normalizes what it stores, and
-    // "the same bytes as the ledger file" is the entire load-bearing claim here — it is what makes
+    // "the same bytes as the source file" is the entire load-bearing claim here — it is what makes
     // `content_hash` a real git object name (GitBlobHash) rather than a hash of some re-rendered
     // equivalent, and what lets a byte compare stand in for dirty/ITM detection later.
     //
     // `ref` (ADR-0041's ref dimension, replacing ADR-0025's committed/staged view split) carries
-    // exactly one value in this ticket — see LedgerRef, which explains why it is here now rather
+    // exactly one value in this ticket — see SourceRef, which explains why it is here now rather
     // than added once #415 gives it a second. Quoted everywhere it appears: REF is a DuckDB keyword.
     //
     // Identity stays (form_key, origin, plugin) per ADR-0036 — no primary key declared, matching
@@ -66,7 +66,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 editor_id      VARCHAR,
                 load_order_idx INTEGER NOT NULL,
                 is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
-                "ref"          VARCHAR NOT NULL DEFAULT '{LedgerRef.Committed}',
+                "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
                 body           VARCHAR NOT NULL,
                 content_hash   VARCHAR NOT NULL
             )
@@ -110,7 +110,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 editor_id      VARCHAR,
                 load_order_idx INTEGER NOT NULL,
                 is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
-                "ref"          VARCHAR NOT NULL DEFAULT '{LedgerRef.Committed}',
+                "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
                 body           VARCHAR NOT NULL,
                 content_hash   VARCHAR NOT NULL
             )
@@ -121,7 +121,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
 
         // The Head relation: every diverged record's committed snapshot, plus every record that
-        // never diverged (still carrying LedgerRef.Committed in `records` itself). The two halves
+        // never diverged (still carrying SourceRef.Committed in `records` itself). The two halves
         // are disjoint by construction — ApplyWorkingTreeChanges writes the snapshot and flips the
         // Effective row's `ref` in the same transaction — so UNION ALL is exact, not an
         // approximation that DISTINCT would have to clean up after.
@@ -141,7 +141,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 FROM records_committed
                 UNION ALL
                 SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
-                FROM records WHERE "ref" = '{LedgerRef.Committed}'
+                FROM records WHERE "ref" = '{SourceRef.Committed}'
             )
             SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, h.load_order_idx,
                    (

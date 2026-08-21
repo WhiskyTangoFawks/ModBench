@@ -1,10 +1,10 @@
 using MEditService.Bridge;
 using MEditService.Core.Edits;
-using MEditService.Core.Ledger;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
+using MEditService.Core.Source;
 
 namespace MEditService.Api.Endpoints;
 
@@ -127,10 +127,10 @@ public static class PluginEndpoints
             .WithName("CreateRecord")
             .WithSummary("Create a new record as a working-tree change (#427).")
             .WithDescription(
-                "Mints a new record and writes it as a new ledger file in the plugin's working tree — " +
+                "Mints a new record and writes it as a new source file in the plugin's working tree — " +
                 "a git-native create, answering at Effective only until committed and compiled. Not the " +
                 "retired pending-change-era create this same route once served; that mechanism (staged " +
-                "rows, no ledger text) was removed with ADR-0041/#410.")
+                "rows, no source text) was removed with ADR-0041/#410.")
             .WithTags(Tag)
             .Produces<RecordCreateResponse>()
             .ProducesProblem(400)
@@ -362,8 +362,8 @@ public static class PluginEndpoints
         {
             var plugin = sessionManager.CreatePlugin(req.Name, req.Path, req.Origin);
 
-            if (!LedgerRepository.IsTracked(req.Path))
-                await trackService.TrackAsync(sessionManager.Session!, req.Origin, LedgerPreset.Edits);
+            if (!SourceRepository.IsTracked(req.Path))
+                await trackService.TrackAsync(sessionManager.Session!, req.Origin, SourcePreset.Edits);
 
             return Results.Ok(plugin);
         }
@@ -377,7 +377,7 @@ public static class PluginEndpoints
             logger.LogError(ex, "IO error creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 409);
         }
-        catch (LedgerAlreadyTrackedException ex)
+        catch (SourceAlreadyTrackedException ex)
         {
             // Defensive, not the ordinary path: CreatePlugin only Tracks a destination it just
             // checked was untracked, so reaching this means something else tracked the same folder
@@ -411,8 +411,8 @@ public static class PluginEndpoints
         logger.LogInformation("Received Track for {Origin} ({Preset})", req.Origin, req.Preset);
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
-        if (!Enum.TryParse<LedgerPreset>(req.Preset, ignoreCase: true, out var preset))
-            return Results.Problem($"Unknown ledger preset '{req.Preset}'.", statusCode: 400);
+        if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
+            return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
 
         if (sessionManager.Session is not { } session)
         {
@@ -430,7 +430,7 @@ public static class PluginEndpoints
             logger.LogWarning(ex, "No loaded plugin has origin {Origin} to track", req.Origin);
             return Results.Problem(ex.Message, statusCode: 404);
         }
-        catch (LedgerAlreadyTrackedException ex)
+        catch (SourceAlreadyTrackedException ex)
         {
             logger.LogWarning(ex, "Refused to re-track {Origin}", req.Origin);
             return Results.Problem(ex.Message, statusCode: 409);
@@ -495,8 +495,8 @@ public static class PluginEndpoints
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Could not write the ledger file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-            return Results.Problem($"Could not write the ledger file for the new record: {ex.Message}", statusCode: 500);
+            logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
+            return Results.Problem($"Could not write the source file for the new record: {ex.Message}", statusCode: 500);
         }
         catch (InvalidOperationException ex)
         {
@@ -595,7 +595,7 @@ public static class PluginEndpoints
         if (ResolveModFolder(sessionManager, req.Origin, logger) is not { } modFolder)
             return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
 
-        var result = LedgerRepository.RebaseEditBranch(modFolder);
+        var result = SourceRepository.RebaseEditBranch(modFolder);
         return Results.Ok(ToRebaseResponse(result));
     }
 
@@ -609,7 +609,7 @@ public static class PluginEndpoints
         if (ResolveModFolder(sessionManager, req.Origin, logger) is not { } modFolder)
             return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
 
-        var result = LedgerRepository.ContinueRebase(modFolder);
+        var result = SourceRepository.ContinueRebase(modFolder);
         return Results.Ok(ToRebaseResponse(result));
     }
 
@@ -664,7 +664,7 @@ public record UnloadPluginRequest(string Plugin, string Origin);
 // Management. Plugin is the filename, which is what the load order names and what does not change.
 public record RereadPluginRequest(string Plugin, string Path, string Origin);
 
-// #414: Preset is the wire-safe string form of LedgerPreset ("Edits"/"Everything") — Plugin/Path
+// #414: Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — Plugin/Path
 // aren't needed here, unlike RereadPluginRequest's: Origin alone is enough for TrackService to
 // resolve every plugin sharing that mod folder.
 public record TrackRequest(string Origin, string Preset);

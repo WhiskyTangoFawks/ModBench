@@ -8,7 +8,7 @@ Track is live end to end: preset QuickPick, progress-reported eager serializatio
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
 `vscode.git` `openRepository`. Editing is live on the git-native model: a field edit writes
-the record's working-tree ledger JSON (the single write path — scalar inline gesture in the
+the record's working-tree source JSON (the single write path — scalar inline gesture in the
 grid, plus `POST /records/{formKey}/field` for scripts/agents); the editor and compare grid
 render working-tree values; reverting through git restores the committed value at the next
 read (read-time freshness validation via `content_hash`, no watcher); untracked plugins are
@@ -16,7 +16,7 @@ hard read-only with signposting (`Modbench: Track…`, or the patch-plugin path 
 masters). Save & Compile is live end to end: `modbench.saveAndCompile` (record-editor icon
 resolving the active record's plugin, tree-row context menu, palette QuickPick fallback) and
 `modbench.pluginListTree.compileAtMain` (row-only, behind a modal naming the ref) compile
-ledger text to the binary through the journaled write pipeline — masters derived from content
+source text to the binary through the journaled write pipeline — masters derived from content
 in load order, container structure assembled from the index (`container_child` +
 placement), typed refusals for unemittable states, diagnostics to the Problems panel on
 success, per-repo `.git` journal markers (batch of one, `PendingRecovery` readable), and a
@@ -34,15 +34,15 @@ editor (#230 redirect), VMAD structural ops via the op-envelope through `EditFie
 array add/remove/move (withheld on sorted arrays). Lifecycle gestures are live (#427),
 on the Plugins-tree context menus with xEdit's own captions (Add / Remove / Change
 FormID…): create allocates the next-free FormID collision-safe against both refs and
-lands as a working-tree ledger file (absent at Head; rediscovered at session load if
-uncompiled), delete confirms modally and removes the ledger file (still served at Head),
+lands as a working-tree source file (absent at Head; rediscovered at session load if
+uncompiled), delete confirms modally and removes the source file (still served at Head),
 renumber is a delete+create pair with a cross-repo reference cascade — referencing repos
 write first, the target last, any untracked referencer refuses up front, and a typed
 refusal covers overrides, collisions, and FormKey-space exhaustion. Record-row dirty
 badges are live (#428): `RecordSummary.WorkingTreeState` (`Search()`'s own `"ref"` plus a
 `records_committed` presence check — None/Modified/Added) reaches the Plugins tree, whose
 `RecordNode`s carry a synthetic `medit-record:/<plugin>/<origin>/<formKey>` resourceUri
-(path-only, no authority — identity only, never state — deliberately not the real ledger
+(path-only, no authority — identity only, never state — deliberately not the real source
 path, which would double against `vscode.git`'s own decoration on the same tracked file)
 for a `FileDecorationProvider` to badge M/A with git's own
 `gitDecoration.modifiedResourceForeground`/`addedResourceForeground` colours. A field edit
@@ -61,7 +61,7 @@ and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417) — it repla
 retired aggregate-SCM and Pending Changes tree specs, both deleted by #418's closeout.
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **tracked mods**
-(glossary: Tracked mod, Track, Ledger, Edit branch, Baseline, Save & Compile, Working-tree
+(glossary: Tracked mod, Track, Source, Edit branch, Baseline, Save & Compile, Working-tree
 change — [CONTEXT.md](../../CONTEXT.md)). "Tracked mod" is deliberately admitted Editing
 vocabulary: tracking is a property of the mod *folder* (where `.git` lives), while every
 other gesture here operates on plugins and records.
@@ -190,7 +190,7 @@ using git.
 
 - **Where**: a plugin row's context menu (Plugins tree) and the command palette. The
   command tracks the plugin's *mod folder* — one repo per mod, covering all its plugins.
-- **Preset QuickPick**: **Edits** (default — everything ignored except `<plugin>.ledger/**`)
+- **Preset QuickPick**: **Edits** (default — everything ignored except `<plugin>.source/**`)
   or **Everything** (authoring — assets tracked too). Plugin binaries are ignored in both;
   the `.gitignore` is generated once and then owned by the user (ADR-0041).
 - **Progress**: eager, complete serialization is progress-reported (typically sub-second;
@@ -219,7 +219,7 @@ using git.
 - Everything the panel offers is git's own: staging, commit, discard, branch switching,
   history. Commit is ungated (ADR-0041) — no closure checks, no prompts, no vocabulary of
   ours on the panel.
-- Ledger diffs are readable by construction: canonical JSON formatting (#412 — stable key
+- Source diffs are readable by construction: canonical JSON formatting (#412 — stable key
   order, fixed indentation) means a one-field edit is a one-line diff.
 - **Branch gestures have honest consequences, not guards.** Checking out any ref —
   `main` included — changes the working-tree text, and every editing surface follows it
@@ -257,7 +257,7 @@ using git.
   through the journaled pipeline (timestamped `.bak` per ADR-0008). Masters are derived
   from content and written in current plugin load order. Semantic breakage (dangling
   FormLinks and kin) compiles *successfully* with diagnostics published to the Problems
-  panel against the ledger files; only structurally unemittable states refuse, as a typed
+  panel against the source files; only structurally unemittable states refuse, as a typed
   message naming the reason — including states that cannot be emitted without changing
   FormKeys (no silent renumber; ADR-0041 amendment).
 - **Compile at `main`**: compiling at ref `main` (no checkout — the edit branch and its
@@ -288,7 +288,7 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
   (the Authored workflow), there is no pristine left to diff against — that is the
   topology they chose, not a state Modbench detects or repairs. Rebase with any uncommitted dirt refuses, naming the paths — commit, stash, or
   discard is the user's move, then re-run via `Modbench: Rebase onto Updated Baseline`.
-  Conflicts open in VS Code's native merge editor on the ledger JSON.
+  Conflicts open in VS Code's native merge editor on the source JSON.
 - **Keep as My Edit**: the change deserializes into working-tree dirt on the affected
   records — commit or revert as usual. A same-record collision with existing uncommitted
   dirt refuses first, naming the records.
@@ -350,7 +350,7 @@ plugins are never probed at all.
 
 - Backend seams test against **real git repositories through the real CLI** (the house
   pattern the retired aggregate SCM provider established); fixtures verify the full Track
-  product — ledger, baseline, trailers, `.gitignore`, branch, parked ref — and compile
+  product — source, baseline, trailers, `.gitignore`, branch, parked ref — and compile
   round-trips re-parse clean (round-trip gate #369, permanent —
   `BinaryRoundTripGateTests`/`CompileRoundTripGateTests`,
   `MEditService.Tests/RealData/`, run in the ordinary `dotnet test`).
