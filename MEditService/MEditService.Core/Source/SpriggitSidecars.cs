@@ -22,12 +22,23 @@ internal sealed class SpriggitSource
     public string PackageName { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
 
-    // Resolved from the NuGet v3 flat-container index for Spriggit.Json.Fallout4
-    // (https://api.nuget.org/v3-flatcontainer/spriggit.json.fallout4/index.json, read 2026-08-21):
-    // the newest non-prerelease entry in the versions array. Re-check there before bumping this —
-    // the parity/interchange gates (#444 amendment) are what adjudicate drift once they exist.
+    // **The declared version must equal the version the parity gate actually runs against.** That
+    // coupling is checkable; "the newest version we aspire to" is not — declaring a version no test
+    // exercises is an unverified compatibility claim, and it would put a permanent row on #455's
+    // divergence allowlist that has nothing to do with format, poisoning the signal the allowlist
+    // exists to carry (an empty allowlist is #444's convergence trigger).
+    //
+    // 0.40.1 rather than the newest published 0.41.0 because 0.41.0 and later ship `tools/net10.0`
+    // only, and this project's toolchain is .NET 9 — 0.40.1 is the newest `tools/net9.0` build, so it
+    // is the newest version that can be run as an oracle at all (verified against the NuGet v3
+    // flat-container index and by unpacking the tool packages, #455). It bundles Serialization 1.38.3,
+    // so the 1.38.x divergences the allowlist names are genuinely observable against it.
+    //
+    // Bumping this requires a runnable oracle at the new version — a net10 runtime present, or a
+    // newer package that still ships a net9 tool. Bump both together, or SpriggitParityGateTests
+    // fails: it asserts this constant against the version string the oracle itself writes.
     internal const string CurrentPackageName = "Spriggit.Json.Fallout4";
-    internal const string CurrentVersion = "0.41.0";
+    internal const string CurrentVersion = "0.40.1";
 
     internal static SpriggitSource Current() => new() { PackageName = CurrentPackageName, Version = CurrentVersion };
 }
@@ -144,12 +155,20 @@ internal static class SpriggitRootHeader
             throw new InvalidOperationException($"'{rootRecordDataPath}' has no existing field to read this document's indent from.");
         var twoIndent = oneIndent + oneIndent[(oneIndent.LastIndexOf('\n') + 1)..];
 
+        // The trailing `oneIndent` is not decoration. `firstKeyStart` has already skipped past the
+        // document's own separator between `{` and its first key, so `text[firstKeyStart..]` begins
+        // at the key itself; without re-emitting that separator here, the original first key welds
+        // onto this object's closing brace — `},"ModKey"` where the kernel wrote `},\n  "ModKey"`.
+        // Still valid JSON and still readable by real Spriggit, which is why #451's own root-header
+        // assertions (first key is SpriggitSource; the tree round-trips through the real
+        // deserializer) all passed over it. It shipped on main until #455 diffed a real tree against
+        // the real tool.
         var source = SpriggitSource.Current();
         var spliced =
             $"{oneIndent}\"{nameof(SpriggitSource)}\": {{" +
             $"{twoIndent}\"{nameof(SpriggitSource.PackageName)}\": \"{source.PackageName}\"," +
             $"{twoIndent}\"{nameof(SpriggitSource.Version)}\": \"{source.Version}\"" +
-            $"{oneIndent}}},";
+            $"{oneIndent}}},{oneIndent}";
 
         File.WriteAllText(rootRecordDataPath, text[..afterBrace] + spliced + text[firstKeyStart..]);
     }

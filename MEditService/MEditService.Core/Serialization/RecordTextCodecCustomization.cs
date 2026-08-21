@@ -3,11 +3,20 @@ using Mutagen.Bethesda.Serialization.Customizations;
 namespace MEditService.Core.Serialization;
 
 /// <summary>
-/// Replicates the Spriggit-compatible customization from spike #359
-/// (<c>spike/Spriggit.Spike/Customization.cs</c> on the #359 spike branch),
-/// which itself mirrors Spriggit's own "Translation Packages/Spriggit.Yaml.Fallout4/Customization.cs"
-/// exactly for its three base settings — the whole of that file, verified against the clone at
-/// #450 rather than carried forward from the spike's replica.
+/// Replicates the base of Spriggit's overall customization —
+/// <c>references/spriggit/Translation Packages/Spriggit.Json.Fallout4/Customization.cs</c>, whose five
+/// calls are <c>OmitLastModifiedData().OmitTimestampData().OmitUnknownGroupData()
+/// .OmitUnusedConditionDataFields().FilePerRecord()</c>. Three of those five are reproduced below; the
+/// other two are unavailable in this project's pin and are addressed in their own paragraph.
+///
+/// <para><b>Cite the JSON package, not the YAML one</b> (corrected #455; this comment named
+/// <c>Spriggit.Yaml.Fallout4</c>, inherited from spike #359 when the kernel was still YAML). ADR-0041
+/// moved the project to the JSON kernel at #412 and <c>SpriggitSource.PackageName</c> is
+/// <c>Spriggit.Json.Fallout4</c>, so the JSON package is the specification we are held to. The two
+/// packages' <c>Customization.cs</c> happen to be identical call-for-call, so nothing below changes —
+/// but their <c>Customizations/</c> trees are <b>not</b> identical, and reading the wrong one is a real
+/// trap: the YAML package carries <c>HeadDataCustomization</c> and <c>SceneCustomization</c> that the
+/// JSON package does not. Anything replicated from upstream is read from the JSON package.</para>
 ///
 /// <para><b>Correction (#450).</b> This comment used to list <c>.EnforceRecordOrder()</c> as
 /// "present in Spriggit's real upstream file but absent from the spike's replica". That is false:
@@ -23,12 +32,22 @@ namespace MEditService.Core.Serialization;
 /// — not a choice; unavailable in Serialization 1.37.1 (spike #359 finding, Q10), and named entries
 /// on #444's parity allowlist that close at the version bump.</para>
 ///
-/// <para>What Spriggit's FO4 package adds <i>beyond</i> this base file: the five
-/// <c>EmbedRecordsInSameFile</c> calls, which #450 replicates
-/// (<see cref="SpriggitCellEmbedCustomization"/>); a suite of <c>SortList</c> customizations (1.38.x,
-/// allowlisted); and a <c>Customizations/Omit/</c> set (<c>NextFormID</c>, <c>NumRecords</c>,
-/// <c>OverriddenForms</c>, <c>Unknown1</c>) which is neither replicated nor currently allowlisted —
-/// filed separately, out of scope here.</para>
+/// <para>What Spriggit's FO4 package adds <i>beyond</i> this base file, and where each lands:
+/// the five <c>EmbedRecordsInSameFile</c> calls, replicated at #450
+/// (<see cref="SpriggitCellEmbedCustomization"/>); a suite of <c>SortList</c> customizations across
+/// nine-plus record types, which is 1.38.x-only and is therefore a named row on #455's parity
+/// allowlist rather than something replicable; and the <c>Customizations/Omit/</c> set
+/// (<c>Condition.Unknown1</c>, <c>ModStats.NextFormID</c>, <c>ModStats.NumRecords</c>,
+/// <c>Fallout4ModHeader.OverriddenForms</c>), <b>replicated at #455</b>
+/// (<see cref="SpriggitConditionOmitCustomization"/> and its two siblings). Plain <c>Omit</c> exists in
+/// the 1.37.1 pin, so unlike <c>SortList</c> it was adoptable now — and had to be adopted rather than
+/// allowlisted, since a row that can never close would falsely suppress #444's convergence trigger.</para>
+///
+/// <para><b>Correction (#455).</b> The paragraph above used to say that <c>Customizations/Omit/</c> set
+/// was "neither replicated nor currently allowlisted — filed separately, out of scope here." That
+/// stopped being true when #455 replicated it, and is corrected here. This is the second false claim
+/// found in this comment block (see the #450 correction above); it is long, it has drifted twice, and
+/// the next reader should check it against the clone rather than trust it.</para>
 /// </summary>
 public sealed class RecordTextCodecCustomization : ICustomize
 {
