@@ -43,7 +43,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([_mod.Npc.ToString()], result.LandedFormKeys);
 
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
         Assert.Contains("\"HeightMax\": 0.9", File.ReadAllText(_mod.NpcSourceFile), StringComparison.Ordinal);
     }
@@ -89,6 +89,87 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.False(result.Applied);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason, StringComparison.Ordinal);
         Assert.Equal(myOwnEditText, File.ReadAllText(_mod.NpcSourceFile));
+    }
+
+    /// <summary>
+    /// #459 review finding: <c>Keep</c>'s per-group order-index counter is recomputed from scratch on
+    /// every land, over whatever the incoming binary actually holds. An external add or delete
+    /// <i>anywhere earlier</i> in a flat group therefore shifts every later sibling's own <c>"[N] "</c>
+    /// order index — and with it, its own file name — even though that sibling's fields never changed.
+    /// Landing must move that sibling's file rather than write a second one at the new name and leave
+    /// the old one behind (two files claiming one FormKey is exactly the corrupt-tree state
+    /// <see cref="AmbiguousSourceUnitException"/> exists to catch elsewhere).
+    ///
+    /// <para><b>Not the DialogTopic.Responses scenario literally asked for</b> — traced, not assumed:
+    /// <c>RecordTypeDispatch.FolderNameFor</c>'s own doc comment names "a dialog topic" and (on
+    /// <c>GroupFolderNameFor</c>) "dialog responses" among the types with no top-level group at all, so
+    /// both hit <c>Keep</c>'s "container records have no flat source path yet" skip <i>before</i> ever
+    /// reaching the order-index counter — landing an external change anywhere inside a
+    /// Quest/DialogTopic/Response chain is already-documented #453 territory this method cannot
+    /// represent at all, order-shift or not, regardless of #459. The reachable analogue is a flat
+    /// group (Npcs here), which is what this test exercises — the shape of damage is the same one the
+    /// review named, just on a record kind this method can actually land.</para>
+    ///
+    /// <para><b>What this does not claim to fix</b>: a genuinely <i>deleted</i> record's own stale file
+    /// (here, <c>MiddleNpc</c>'s) is not cleaned up — <c>Keep</c> only ever iterates records the
+    /// incoming binary still holds, so it has no way to notice one dropped out entirely. That gap
+    /// predates #459 (this method has no external-deletion detection of any kind, order-shifted or
+    /// not) and is not what this fix addresses.</para>
+    /// </summary>
+    [Fact]
+    public void Keep_AfterAnExternalMidListDelete_MovesTheLaterSiblingWithoutLeavingADuplicateFile()
+    {
+        var middleFormKey = FormKey.Factory($"{0x900:X6}:{TrackedModFixture.PluginName}");
+
+        // Step 1: a third Npc appears externally, in the middle — landed, establishing an on-disk
+        // order of FixtureNpc=[0], MiddleNpc=[1], UntouchedNpc=[2].
+        var firstMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var race = new Race(_mod.Race, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.RaceEditorId };
+        firstMod.Races.Add(race);
+        firstMod.Keywords.Add(new Keyword(_mod.Keyword, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.KeywordEditorId });
+        var npc = new Npc(_mod.Npc, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.NpcEditorId };
+        npc.Race.SetTo(race);
+        firstMod.Npcs.Add(npc);
+        var middle = new Npc(middleFormKey, Fallout4Release.Fallout4) { EditorID = "MiddleNpc" };
+        middle.Race.SetTo(race);
+        firstMod.Npcs.Add(middle);
+        firstMod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.OtherNpcEditorId });
+        firstMod.WriteToBinary(PluginPath);
+
+        var firstLand = ExternalChangeEditLander.Keep(
+            _mod.ModFolder, TrackedModFixture.PluginName, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        Assert.True(firstLand.Applied, firstLand.RefusalReason);
+        var otherNpcPathBeforeDelete = SourceUnitResolver.FlatSourcePath(
+            _mod.ModFolder, TrackedModFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
+            TrackedModFixture.OtherNpcEditorId, GameRelease.Fallout4);
+        Assert.StartsWith("[2] UntouchedNpc", Path.GetFileNameWithoutExtension(otherNpcPathBeforeDelete), StringComparison.Ordinal);
+        var otherNpcTextBeforeDelete = File.ReadAllText(otherNpcPathBeforeDelete);
+
+        // Step 2: MiddleNpc is deleted externally — UntouchedNpc's own index shifts from 2 to 1, with
+        // no change to its own fields at all.
+        var secondMod = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        var race2 = new Race(_mod.Race, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.RaceEditorId };
+        secondMod.Races.Add(race2);
+        secondMod.Keywords.Add(new Keyword(_mod.Keyword, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.KeywordEditorId });
+        var npc2 = new Npc(_mod.Npc, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.NpcEditorId };
+        npc2.Race.SetTo(race2);
+        secondMod.Npcs.Add(npc2);
+        secondMod.Npcs.Add(new Npc(_mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.OtherNpcEditorId });
+        secondMod.WriteToBinary(PluginPath);
+
+        var secondLand = ExternalChangeEditLander.Keep(
+            _mod.ModFolder, TrackedModFixture.PluginName, PluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance);
+        Assert.True(secondLand.Applied, secondLand.RefusalReason);
+
+        // The old [2] file is gone — not left behind as a duplicate claiming the same FormKey.
+        Assert.False(File.Exists(otherNpcPathBeforeDelete), $"expected the stale file at {otherNpcPathBeforeDelete} to be cleaned up");
+
+        // Exactly one file for UntouchedNpc remains, at its new index, with its content intact.
+        var npcsDir = Path.Combine(_mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "Npcs");
+        var otherNpcFiles = Directory.GetFiles(npcsDir, "*UntouchedNpc*");
+        var survivor = Assert.Single(otherNpcFiles);
+        Assert.StartsWith("[1] UntouchedNpc", Path.GetFileNameWithoutExtension(survivor), StringComparison.Ordinal);
+        Assert.Equal(otherNpcTextBeforeDelete, File.ReadAllText(survivor));
     }
 
     [Fact]

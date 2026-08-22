@@ -54,10 +54,13 @@ public sealed class TrackServiceTests
             var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
             Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
 
-            var relativePath1 = SourceRecordPath.For("Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
-            var relativePath2 = SourceRecordPath.For("Fixture.esp", "npc_", npc2.FormKey.ToString(), "SecondNpc", GameRelease.Fallout4);
-            var sourceFile1 = Path.Combine(modFolder, relativePath1);
-            var sourceFile2 = Path.Combine(modFolder, relativePath2);
+            // #459: SourceRecordPath.For alone can no longer name the file without knowing its order
+            // index — resolved through SourceUnitResolver instead, which finds it by FormKey suffix
+            // regardless of position.
+            var sourceFile1 = SourceUnitResolver.FlatSourcePath(
+                modFolder, "Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
+            var sourceFile2 = SourceUnitResolver.FlatSourcePath(
+                modFolder, "Fixture.esp", "npc_", npc2.FormKey.ToString(), "SecondNpc", GameRelease.Fallout4);
             Assert.True(File.Exists(sourceFile1), $"expected {sourceFile1}");
             Assert.True(File.Exists(sourceFile2), $"expected {sourceFile2}");
 

@@ -40,16 +40,28 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditingEditorId_MovesTheSourceFileToItsNewName()
     {
-        var oldRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
-        var newRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
+        var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
+        var oldPrefix = SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(oldRelative));
         Assert.True(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
 
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "editor_id", Json("\"RenamedNpc\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
+        // #459: resolved *after* the rename, not before — RelativeSourcePath answers where the record
+        // actually is right now (SourceUnitResolver, live off disk), and before the rename that is
+        // still the old file (FormKey-suffix matching finds it under either EditorID).
+        //
+        // That same disk-live resolution is also why "the file is findable at its expected new name"
+        // alone would NOT catch a rename that drops the "[N] " order prefix: FormKey-suffix matching
+        // is deliberately blind to it and would still find the (wrongly unprefixed) file. The prefix
+        // check right below is the assertion that actually rules that out — verified against the real
+        // rival (RenameSourceUnit with prefix-preservation removed): it passes the File.Exists checks
+        // here unchanged and only this one goes red.
+        var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc");
         var moved = Path.Combine(_mod.ModFolder, newRelative);
         Assert.True(File.Exists(moved));
+        Assert.Equal(oldPrefix, SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(newRelative)));
         Assert.Contains("\"EditorID\": \"RenamedNpc\"", File.ReadAllText(moved), StringComparison.Ordinal);
         Assert.Equal("RenamedNpc", _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.EditorId);
     }
@@ -74,11 +86,15 @@ public sealed class RecordEditServiceTests : IDisposable
     [Fact]
     public void EditingEditorId_ShowsAsARenameOnceStaged_NotADeleteAndAdd()
     {
-        var oldRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)
+        var oldRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)
             .Replace('\\', '/');
-        var newRelative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc").Replace('\\', '/');
 
         Assert.True(Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "editor_id", Json("\"RenamedNpc\"")).Applied);
+
+        // #459: resolved *after* the rename — see the sibling test's own comment. Resolving both paths
+        // up front would have them collide on the same (still-old) file and make the assertions below
+        // pass without checking anything.
+        var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc").Replace('\\', '/');
 
         // The unstaged reality, asserted rather than glossed, so a future reader does not mistake it
         // for a bug in the write path.
@@ -106,7 +122,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
-        var relative = TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
+        var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
     }
 
@@ -135,7 +151,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var status = _mod.GitStatus();
         Assert.Single(status);
-        Assert.DoesNotContain(TrackedModFixture.RelativeSourcePath(_mod.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId).Replace('\\', '/'), status[0], StringComparison.Ordinal);
+        Assert.DoesNotContain(_mod.RelativeSourcePath(_mod.OtherNpc, "npc_", TrackedModFixture.OtherNpcEditorId).Replace('\\', '/'), status[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -151,7 +167,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         var head = index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!;
         Assert.DoesNotContain("0.75", head.Body!, StringComparison.Ordinal);
-        Assert.Equal(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
+        Assert.Equal(_mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
     }
 
     [Fact]
@@ -166,7 +182,7 @@ public sealed class RecordEditServiceTests : IDisposable
         var index = _mod.Sessions.Index!;
         Assert.Contains("0.5", index.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!, StringComparison.Ordinal);
         Assert.Equal(
-            _mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)),
+            _mod.GitShowHead(_mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId)),
             index.At(RecordRef.Head).GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body);
     }
 

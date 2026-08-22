@@ -39,9 +39,26 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// (<c>"{hex6}_{ModKeyFileName}"</c>) with an optional <c>"{EditorID} - "</c> prefix — exactly
 /// <c>SerializationHelper.RecordFileNameProvider</c>'s own scheme, verified against
 /// <c>references/mutagen-serialization</c> and <c>references/Mutagen</c> at implementation (#451), not
-/// reconstructed from memory. No <c>[N] </c> ordering prefix: that is gated on
-/// <c>Overall.EnforceRecordOrder</c>, which neither this project's customizations nor Spriggit's own
-/// (grepped, zero call sites) ever turn on.</para>
+/// reconstructed from memory.</para>
+///
+/// <para><b>#459: a leading <c>"[N] "</c> ordering prefix ahead of everything above.</b> Once
+/// <c>RecordTextCodecCustomization</c> turns <c>Overall.EnforceRecordOrder</c> on, the whole-mod
+/// door's own writer numbers every folder-split sibling by its position in the mod's in-memory list —
+/// flat top-level groups included, not only the container-nested lists the original ordering bug was
+/// measured against (decompiled confirmation lives on
+/// <see cref="RecordTextCodecCustomization"/>'s own doc comment). <see cref="For"/>'s
+/// <c>orderIndex</c> parameter is the caller's answer to "what position does this sibling occupy",
+/// mirroring <c>SerializationHelper.DecorateWithNumber</c> exactly — <c>$"[{orderIndex}] "</c> ahead of
+/// the EditorID/FormKey segment, with no extra separator when there's no EditorID either. Required,
+/// not optional: a caller that doesn't know the real index would otherwise mint an unprefixed (or
+/// wrongly numbered) path that collides or sorts wrong against real siblings the next time the tree is
+/// read — <see cref="SourceUnitResolver"/> is where callers that don't already know the index (a fresh
+/// create, a delete/renumber's lookup of the file to touch) go to get one.
+/// <see cref="TryParse"/> needs no matching change: it never decomposes a leaf file name into
+/// EditorID/FormKey/order at all — identity is <c>(pluginFileName, recordType)</c> from path
+/// <i>shape</i>, and the two group-file names it special-cases (<see cref="RecordDataFileName"/>/
+/// <see cref="GroupRecordDataFileName"/>) are never numbered by the writer either (confirmed:
+/// <c>WriteGroupRecordData</c> never calls <c>DecorateWithNumber</c>).</para>
 ///
 /// <para>The <c>&lt;originModKey&gt;</c> segment (the record's <i>origin</i> plugin — <c>FormKey.ModKey</c>
 /// — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
@@ -61,8 +78,13 @@ internal static class SourceRecordPath
     private const string RecordDataFileName = "RecordData.json";
     private const string GroupRecordDataFileName = "GroupRecordData.json";
 
+    /// <summary>The flat record's path under the Spriggit layout — see this class's own doc comment
+    /// for the full shape.</summary>
+    /// <param name="orderIndex">This sibling's position among the others in the same group folder —
+    /// see this class's own doc comment ("#459") for why it's required rather than optional.</param>
     internal static string For(
-        string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease)
+        string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease,
+        int orderIndex)
     {
         var formKey = FormKey.Factory(formKeyString);
         var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
@@ -75,7 +97,7 @@ internal static class SourceRecordPath
             ? $"{FilesafeFormKey(formKey)}{JsonSuffix}"
             : $"{editorId} - {FilesafeFormKey(formKey)}{JsonSuffix}";
 
-        return Path.Combine($"{pluginFileName}{SourceSuffix}", folder, fileName);
+        return Path.Combine($"{pluginFileName}{SourceSuffix}", folder, $"[{orderIndex}] {fileName}");
     }
 
     private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";

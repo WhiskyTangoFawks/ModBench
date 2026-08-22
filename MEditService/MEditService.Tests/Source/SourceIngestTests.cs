@@ -96,7 +96,7 @@ public sealed class SourceIngestTests
         Assert.NotNull(head);
         Assert.Equal(TrackedModFixture.NpcEditorId, head!.EditorId);
         // The Head row is HEAD's own bytes, not a reconstruction: same text `git show` serves.
-        Assert.Equal(mod.GitShowHead(TrackedModFixture.RelativeSourcePath(
+        Assert.Equal(mod.GitShowHead(mod.RelativeSourcePath(
             mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
     }
 
@@ -229,7 +229,7 @@ public sealed class SourceIngestTests
 
         // Two working-tree deletions. The first re-seeds Head and commits; the second throws when its
         // HEAD blob is parsed, aborting the ingest partway through the dirty set.
-        File.Delete(Path.Combine(mod.ModFolder, TrackedModFixture.RelativeSourcePath(
+        File.Delete(Path.Combine(mod.ModFolder, mod.RelativeSourcePath(
             mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
         File.Delete(poison);
 

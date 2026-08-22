@@ -181,7 +181,15 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
-        var newDirectory = Path.Combine(Path.GetDirectoryName(oldDirectory)!, "RenamedCell - " + FilesafeCellKey);
+        // #459: the rename preserves whatever "[N] " order prefix the old directory carried (Cells is
+        // itself a folder-split top-level group under the same EnforceRecordOrder numbering as any
+        // flat type) — carried forward from the old name rather than hardcoded, so this assertion
+        // doesn't have to know the fixture's own slot number.
+        var orderPrefix = SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(oldDirectory)) is { } index
+            ? $"[{index}] "
+            : "";
+        var newDirectory = Path.Combine(
+            Path.GetDirectoryName(oldDirectory)!, orderPrefix + "RenamedCell - " + FilesafeCellKey);
         Assert.True(Directory.Exists(newDirectory));
         Assert.Contains(
             "\"EditorID\": \"RenamedCell\"",

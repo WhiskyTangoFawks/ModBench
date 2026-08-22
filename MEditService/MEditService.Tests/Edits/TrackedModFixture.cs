@@ -140,8 +140,15 @@ public sealed class TrackedModFixture : IDisposable
     public string GitShowHead(string relativePath) =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
-    public static string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
-        SourceRecordPath.For(PluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
+    /// <summary>#459: no longer a bare <see cref="SourceRecordPath.For"/> call — <c>For</c> now needs
+    /// the record's order index, which this fixture's callers do not track and should not have to.
+    /// Resolved through <see cref="SourceUnitResolver"/> instead (the same FormKey-suffix-tolerant
+    /// lookup production code uses), which answers with the record's real current path — numbered
+    /// prefix included — regardless of its position. No longer static for the same reason: resolution
+    /// needs this fixture's own <see cref="ModFolder"/> to look at.</summary>
+    public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
+        Path.GetRelativePath(ModFolder, SourceUnitResolver.FlatSourcePath(
+            ModFolder, PluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
 
     public void Dispose()
     {

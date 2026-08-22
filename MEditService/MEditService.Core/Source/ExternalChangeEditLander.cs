@@ -41,9 +41,16 @@ public static class ExternalChangeEditLander
 
         var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease);
         var touched = new List<TouchedRecord>();
+        // #459: SourceRecordPath.For now needs each record's position among its own group-folder
+        // siblings. EnumerateMajorRecords walks the externally-changed binary's own deserialized
+        // object graph, which preserves each group's real GRUP order — so a running per-group counter,
+        // incremented in the same walk, reproduces exactly the index Track would assign this same
+        // binary, with no separate scan.
+        var orderIndexByGroup = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var record in deepParsed.EnumerateMajorRecords())
         {
             var recordType = SourceRecordType.Resolve(record, schemas);
+            var groupFolder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType);
 
             // #451 review: unlike Absorb (which rebuilds the whole tree and would silently drop a
             // skipped container from the new commit — refused wholesale instead, see
@@ -51,7 +58,7 @@ public static class ExternalChangeEditLander
             // the existing tree, so skipping one here loses nothing already on disk — it just means an
             // external change to a container record isn't offered as landable dirt yet (#453's own
             // territory). Not a silent catch: logged, and it's a `continue`, not a swallowed exception.
-            if (RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType) is null)
+            if (groupFolder is null)
             {
                 logger.LogDebug(
                     "Skipping {FormKey} ({RecordType}) in {Plugin}: container records have no flat source path yet (#453)",
@@ -59,17 +66,31 @@ public static class ExternalChangeEditLander
                 continue;
             }
 
+            var orderIndex = orderIndexByGroup.GetValueOrDefault(groupFolder);
+            orderIndexByGroup[groupFolder] = orderIndex + 1;
+
             var formKey = record.FormKey.ToString();
-            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease);
+            var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease, orderIndex);
             var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
 
             baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);
             if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
                 continue; // the external change never actually touched this record
 
+            // #459 review finding: an external add/delete anywhere earlier in this group shifts every
+            // later sibling's own order index, hence its own file name, even when that sibling's own
+            // fields never changed — this record can therefore already have a real file sitting at its
+            // *old* index. Resolved by FormKey suffix (index- and EditorID-blind, the same lookup
+            // RecordEditService's own point writes use), not assumed to be wherever the freshly
+            // computed name says, so the collision check below reads the record's actual current
+            // working-tree text and landing can clean the stale old file up instead of leaving two
+            // files claiming one FormKey behind (exactly the corruption AmbiguousSourceUnitException
+            // exists to catch elsewhere).
+            var existingPath = SourceUnitResolver.FlatSourcePath(
+                modFolder, pluginName, recordType, formKey, record.EditorID, gameRelease);
             var fullPath = Path.Combine(modFolder, relativePath);
-            var currentText = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;
-            touched.Add(new TouchedRecord(formKey, relativePath, fullPath, incomingText, currentText, baselineText));
+            var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
+            touched.Add(new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText));
         }
 
         var colliding = touched
@@ -86,6 +107,11 @@ public static class ExternalChangeEditLander
 
         foreach (var t in touched)
         {
+            // The stale file at the old order index, if this record's index shifted — never left
+            // behind as a duplicate (see this record's own construction, above).
+            if (!string.Equals(t.ExistingPath, t.FullPath, StringComparison.Ordinal) && File.Exists(t.ExistingPath))
+                File.Delete(t.ExistingPath);
+
             Directory.CreateDirectory(Path.GetDirectoryName(t.FullPath)!);
             File.WriteAllText(t.FullPath, t.IncomingText);
         }
@@ -103,7 +129,8 @@ public static class ExternalChangeEditLander
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
     private sealed record TouchedRecord(
-        string FormKey, string RelativePath, string FullPath, string IncomingText, string? CurrentText, string? BaselineText);
+        string FormKey, string RelativePath, string FullPath, string ExistingPath, string IncomingText,
+        string? CurrentText, string? BaselineText);
 }
 
 /// <summary>Keep as My Edit's outcome — a typed refusal (naming the colliding records), never a

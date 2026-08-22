@@ -131,13 +131,27 @@ public static class SourceRepository
 
     /// <summary>One source file's text as <c>HEAD</c> has it — the content behind a hash
     /// <see cref="CommittedSourceHashes"/> reported. Null when the folder isn't tracked or the path
-    /// isn't in the commit (a record created since, or one never committed).</summary>
+    /// isn't in the commit (a record created since, or one never committed).
+    ///
+    /// <para><b>#459: <c>cat-file -p</c>, deliberately not <c>git show</c>.</b> <c>git show
+    /// &lt;rev&gt;:&lt;path&gt;</c> treats a <b>missing</b> path as a pathspec and applies glob magic to
+    /// it — verified empirically against git 2.43: for a path containing <c>[</c>/<c>]</c> (exactly
+    /// what a folder-split child's <c>"[N] "</c> ordering prefix puts there) that does not exist at
+    /// <paramref name="modFolder"/>'s <c>HEAD</c>, <c>git show</c> exits <b>0</b> with <b>empty</b>
+    /// output instead of failing — a silent "found nothing" masquerading as "found an empty file",
+    /// which fed straight into <see cref="Records.DuckDbRecordIndex.SetCommittedBaseline"/> as a
+    /// real (empty) baseline body and crashed there on the malformed-JSON insert. <c>git cat-file -p
+    /// &lt;rev&gt;:&lt;path&gt;</c> resolves the same object syntax but never applies pathspec
+    /// glob-matching to the path half, so a missing bracketed path fails loudly (exit 128) exactly
+    /// like a missing unbracketed one always did — restoring the null this method's own contract
+    /// promises instead of a lying empty string.</para>
+    /// </summary>
     internal static string? ReadCommittedSourceText(string modFolder, string relativePath)
     {
         if (!IsTracked(modFolder)) return null;
 
         var gitDir = Path.Combine(modFolder, ".git");
-        return GitCli.TryRun(gitDir, modFolder, out var stdout, "show", $"HEAD:{ToGitPath(relativePath)}")
+        return GitCli.TryRun(gitDir, modFolder, out var stdout, "cat-file", "-p", $"HEAD:{ToGitPath(relativePath)}")
             ? stdout
             : null;
     }
@@ -171,7 +185,11 @@ public static class SourceRepository
             if (fields.Length < 3 || fields[1] != "blob") continue;
             var relativePath = entry[(tab + 1)..];
 
-            if (!GitCli.TryRun(gitDir, modFolder, out var text, "show", $"{gitRef}:{relativePath}")) continue;
+            // #459: cat-file -p, not show — see ReadCommittedSourceText's own doc comment (this path
+            // came from ls-tree so it always exists, but there is no reason to keep the one git
+            // subcommand that mishandles a bracketed "[N] "-prefixed path when a safe one is right
+            // there).
+            if (!GitCli.TryRun(gitDir, modFolder, out var text, "cat-file", "-p", $"{gitRef}:{relativePath}")) continue;
             results.Add((relativePath, System.Text.Encoding.UTF8.GetBytes(text)));
         }
         return results;

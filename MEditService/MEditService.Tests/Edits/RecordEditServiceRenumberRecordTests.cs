@@ -328,9 +328,12 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         public static TwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
+        // #459: resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
+        // now needs an order index this fixture has no reason to track.
         public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
-            Path.Combine(plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,
-                SourceRecordPath.For(plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
+            SourceUnitResolver.FlatSourcePath(
+                plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,
+                plugin.Name, recordType, formKey.ToString(), editorId, GameRelease.Fallout4);
 
         public void Dispose()
         {

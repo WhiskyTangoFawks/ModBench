@@ -136,8 +136,10 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
         // #451: routed through the production path helper (Spriggit-flat layout) rather than
         // hand-reconstructed — "ApiNpc" is BuildOneModOnePlugin's own literal EditorID above.
-        var sourcePath = Path.Combine(
-            modFolder, SourceRecordPath.For(Plugin, "npc_", formKey, "ApiNpc", GameRelease.Fallout4));
+        // #459: SourceUnitResolver rather than SourceRecordPath.For directly — For now needs an order
+        // index this test has no reason to track.
+        var sourcePath = SourceUnitResolver.FlatSourcePath(
+            modFolder, Plugin, "npc_", formKey, "ApiNpc", GameRelease.Fallout4);
         Assert.True(File.Exists(sourcePath), $"expected a source file at {sourcePath}");
         Assert.NotEqual(0, records.GetProperty("total").GetInt32());
         File.Delete(sourcePath);

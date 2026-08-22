@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Edits;
 
@@ -59,8 +60,18 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     {
         // Same group, same FormKey, a different EditorID in the file name — exactly what an interrupted
         // rename or a hand-copied file leaves behind.
+        //
+        // #459: SourceFileFor now resolves the record's real *current* file (FormKey-suffix matched,
+        // blind to the EditorID argument) — exactly wrong for this test, which needs a synthetic,
+        // not-yet-existing second name for the same FormKey. Computed directly through
+        // SourceRecordPath.For with an out-of-range order index instead, so it can never coincide with
+        // a real sibling's own index (collision detection matches on FormKey suffix alone regardless,
+        // per SourceUnitResolver.NameCarries — the index is only here to keep this path visibly
+        // synthetic).
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
-        var duplicatePath = _mod.SourceFileFor(_mod.Npc, "npc_", "CopyOfFixtureNpc");
+        var duplicatePath = Path.Combine(_mod.ModFolder, SourceRecordPath.For(
+            TrackedModFixture.PluginName, "npc_", _mod.Npc.ToString(), "CopyOfFixtureNpc", GameRelease.Fallout4,
+            orderIndex: 99));
         Assert.NotEqual(_mod.NpcSourceFile, duplicatePath);
         File.WriteAllText(duplicatePath, npcSourceText);
 
