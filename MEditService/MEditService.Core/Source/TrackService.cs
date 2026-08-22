@@ -36,8 +36,33 @@ public sealed class TrackService(ILogger<TrackService> logger)
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
 
-    public async Task TrackAsync(IGameSession session, string origin, SourcePreset preset, CancellationToken cancel = default)
+    public Task TrackAsync(IGameSession session, string origin, SourcePreset preset, CancellationToken cancel = default) =>
+        TrackAsync(session, origin, preset, deserializeForVerification: null, cancel);
+
+    /// <summary>
+    /// Same gesture as the public overload, with one extra seam: which function reads the tree
+    /// <see cref="VerifyRoundTrip"/> just wrote for a plugin back into a mod, for the round-trip
+    /// gate below (#471, ADR-0042 decision 2). Every real caller goes through the public overload,
+    /// which passes <see langword="null"/> here and gets the real whole-mod door
+    /// (<see cref="Serialization.RecordTextCodecGeneratorSeed.DeserializeWholeMod"/>). The only
+    /// override is the negative test proving the gate actually refuses a plugin: no known codec
+    /// defect is reproducible at this project's current Mutagen/Serialization pins to trigger that
+    /// path for real (<see cref="Serialization.RecordTextCodecCustomization"/>'s own doc comment —
+    /// decision 3 has no exception left; <c>BinaryRoundTripGateTests</c>' one known defect is
+    /// confined to the lazy overlay reader Track never uses), so that test forges one by
+    /// deserializing for real and then mutating a record, rather than mocking deserialization away
+    /// entirely.
+    /// </summary>
+    internal async Task TrackAsync(
+        IGameSession session,
+        string origin,
+        SourcePreset preset,
+        Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
+        CancellationToken cancel = default)
     {
+        var deserialize = deserializeForVerification
+            ?? ((folder, ct) => RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct));
+
         var plugins = session.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)).ToList();
         if (plugins.Count == 0)
             throw new KeyNotFoundException($"No loaded plugin has origin '{origin}' to track.");
@@ -74,8 +99,17 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
 
                 SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
-                pristineFiles.AddRange(
-                    await SerializeToPristineFiles(deepParsed, plugin.Name, cancel));
+                var pluginPristineFiles = await SerializeToPristineFiles(deepParsed, plugin.Name, cancel);
+
+                // #471, ADR-0042 decision 2: the gate. Refuses before a single byte of this plugin —
+                // or any other plugin sharing this Track call — is committed, so a failure here
+                // leaves the mod folder exactly as untracked as it was on entry
+                // (SourceRepository.Track below never runs). Reported under the same Serializing
+                // phase as the plugin whose tree it is verifying: no new TrackPhase, so no wire/API
+                // change and nothing for trackProgress.ts's own exhaustive switch to learn about.
+                await VerifyRoundTrip(deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, deserialize, cancel);
+
+                pristineFiles.AddRange(pluginPristineFiles);
 
                 binaryHashesByPlugin[plugin.Name] = ComputeSha256(plugin.Path);
                 SetProgress(origin, TrackPhase.Serializing, parsedDone, plugins.Count);
@@ -93,6 +127,94 @@ public sealed class TrackService(ILogger<TrackService> logger)
             // (or throws) must never keep reporting a track that is no longer actually running.
             SetProgress(null, TrackPhase.Idle, 0, 0);
         }
+    }
+
+    /// <summary>
+    /// ADR-0042 decision 2's gate, run live against the plugin actually being tracked: writes
+    /// <paramref name="pristineFilesForThisPlugin"/> (the tree <see cref="SerializeToPristineFiles"/>
+    /// just produced from <paramref name="original"/>) into a scratch tree, reads it back through
+    /// <paramref name="deserialize"/>, recompiles that to a scratch binary, and refuses unless it is
+    /// byte-identical to <paramref name="originalPluginPath"/>'s own bytes. Byte identity is the
+    /// gate; <see cref="DescribeFirstDivergence"/>'s per-record model equality is only reached to
+    /// name the offending record once the gate has already failed, so a passing Track pays one
+    /// extra deserialize and one extra binary write per plugin, never a record-by-record diff.
+    /// </summary>
+    private static async Task VerifyRoundTrip(
+        IMod original,
+        string pluginName,
+        string originalPluginPath,
+        IReadOnlyList<PristineFile> pristineFilesForThisPlugin,
+        Func<string, CancellationToken, Task<IFallout4Mod>> deserialize,
+        CancellationToken cancel)
+    {
+        var scratchDir = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
+        try
+        {
+            foreach (var file in pristineFilesForThisPlugin)
+            {
+                var destination = Path.Combine(scratchDir, file.RelativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                await File.WriteAllBytesAsync(destination, file.Content, cancel);
+            }
+
+            var treeRoot = Path.Combine(scratchDir, $"{pluginName}{SourceRecordPath.SourceSuffix}");
+            var recompiled = await deserialize(treeRoot, cancel);
+
+            var recompiledPath = Path.Combine(scratchDir, pluginName);
+            // Raw Mutagen write, deliberately not PluginWriter: this is a scratch verification
+            // write, never the plugin the user is tracking, so it must not drop a .bak beside the
+            // real plugin as a side effect of merely checking it. WithLoadOrderFromHeaderMasters
+            // mirrors BinaryRoundTripGateTests' own precedent for exactly this "reproduce the
+            // original's own bytes" shape (as opposed to PluginCompileService's session-derived
+            // load order, which answers a different question: what should the masters be now).
+            await recompiled.BeginWrite
+                .ToPath(recompiledPath)
+                .WithLoadOrderFromHeaderMasters()
+                .WithNoDataFolder()
+                .WriteAsync();
+
+            var originalBytes = await File.ReadAllBytesAsync(originalPluginPath, cancel);
+            var recompiledBytes = await File.ReadAllBytesAsync(recompiledPath, cancel);
+            if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
+                return;
+
+            throw new SourceRoundTripFailedException(DescribeFirstDivergence(original, recompiled, pluginName));
+        }
+        finally
+        {
+            Directory.Delete(scratchDir, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The diagnostic half of the gate (ADR-0042 decision 2): names the first record — in the
+    /// original plugin's own GRUP order — that does not survive a round trip through its own
+    /// tracked source, using Mutagen's own generated deep equality (every generated major record
+    /// overrides <c>object.Equals</c> to a field-by-field comparison — reached here through the
+    /// common <see cref="IMajorRecordGetter"/> interface type, no per-game downcast needed).
+    /// </summary>
+    private static string DescribeFirstDivergence(IMod original, IFallout4Mod recompiled, string pluginName)
+    {
+        var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
+        foreach (var originalRecord in original.EnumerateMajorRecords())
+        {
+            if (!recompiledByFormKey.TryGetValue(originalRecord.FormKey, out var recompiledRecord))
+            {
+                return $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"{originalRecord.GetType().Name} {originalRecord.FormKey} (EditorID '{originalRecord.EditorID}') " +
+                    "is missing from the recompiled plugin.";
+            }
+
+            if (!originalRecord.Equals(recompiledRecord))
+            {
+                return $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"{originalRecord.GetType().Name} {originalRecord.FormKey} (EditorID '{originalRecord.EditorID}') " +
+                    "differs after being recompiled from its own tracked source.";
+            }
+        }
+
+        return $"{pluginName} does not round-trip through its own tracked source, but every individual " +
+            "record matched — the divergence is in the plugin header or a container's own structure, not a record's content.";
     }
 
     /// <summary>
@@ -171,4 +293,26 @@ public sealed class TrackService(ILogger<TrackService> logger)
 
     private static string ComputeSha256(string filePath) =>
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));
+}
+
+/// <summary>Thrown by <see cref="TrackService.TrackAsync(IGameSession, string, SourcePreset, CancellationToken)"/>
+/// when a plugin fails ADR-0042 decision 2's round-trip gate — its own message names the first
+/// record (or, failing that, the header/container structure) that does not survive being recompiled
+/// from its own freshly-tracked source. Named and actionable, the same way
+/// <see cref="SourceAlreadyTrackedException"/> is, so the endpoint layer maps it to a real HTTP
+/// response distinct from every other failure <c>TrackAsync</c> can raise, rather than a bare
+/// <see cref="InvalidOperationException"/> a caller would have to string-match to tell apart.</summary>
+public sealed class SourceRoundTripFailedException : Exception
+{
+    public SourceRoundTripFailedException()
+    {
+    }
+
+    public SourceRoundTripFailedException(string message) : base(message)
+    {
+    }
+
+    public SourceRoundTripFailedException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
 }
