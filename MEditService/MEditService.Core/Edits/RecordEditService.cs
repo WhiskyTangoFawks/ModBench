@@ -262,9 +262,16 @@ public sealed class RecordEditService(
         var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
             .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
-        var newLeafPath = Path.Combine(
-            Path.GetDirectoryName(oldLeafPath)!,
-            SourceUnitResolver.LeafNameFor(edited.FormKey, edited.EditorID, isDirectoryPerRecord));
+
+        // #459: an EditorID-only rename must not silently drop the record back to the front of its
+        // siblings (LeafNameFor's own name never carries a prefix) — the old leaf's own "[N] ", if it
+        // has one, rides forward onto the new name unchanged. No siblings need touching: this record's
+        // slot number is exactly what it was before the rename, just spelled with a new EditorID.
+        var oldLeafName = Path.GetFileName(oldLeafPath);
+        var orderIndex = SourceUnitResolver.TryGetOrderIndex(oldLeafName);
+        var newLeafName = SourceUnitResolver.LeafNameFor(edited.FormKey, edited.EditorID, isDirectoryPerRecord);
+        if (orderIndex is { } index) newLeafName = $"[{index}] {newLeafName}";
+        var newLeafPath = Path.Combine(Path.GetDirectoryName(oldLeafPath)!, newLeafName);
 
         if (string.Equals(oldLeafPath, newLeafPath, StringComparison.Ordinal)) return unit.FullPath;
 
@@ -311,8 +318,13 @@ public sealed class RecordEditService(
         var release = sessions.Session!.GameRelease;
         if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
-        var relativePath = SourceRecordPath.For(plugin.Name, document.RecordType, formKey, document.EditorId, release);
-        var sourcePath = Path.Combine(modFolder, relativePath);
+        // #459: SourceRecordPath.For alone can no longer name the file to delete — it would need the
+        // record's current order index, which nothing here knows without looking. Resolved through
+        // SourceUnitResolver instead, the same FormKey-suffix-tolerant lookup EditField already uses,
+        // so a delete finds the real numbered file regardless of its position.
+        var sourcePath = SourceUnitResolver.FlatSourcePath(
+            modFolder, plugin.Name, document.RecordType, formKey, document.EditorId, release);
+        var relativePath = Path.GetRelativePath(modFolder, sourcePath);
 
         // Never-assume-exclusive-ownership: the file may already be gone (another tool, a hand
         // delete) — that is exactly the working-tree state this call is trying to reach, not a
@@ -360,7 +372,17 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release);
+        // #459: a brand-new sibling goes at the end of its group folder, one past whatever "[N] " is
+        // already the highest there (0 for a plugin's first record of this type) — never at the
+        // sibling *count*, which would collide with a real "[N]" the moment an earlier delete left a
+        // gap (SourceUnitResolver.NextOrderIndex's own doc comment has the worked example).
+        // RefuseIfContainerType above already guarantees FolderNameFor is non-null for recordType.
+        var groupDirectory = Path.Combine(
+            modFolder, $"{plugin.Name}{SourceRecordPath.SourceSuffix}",
+            RecordTypeDispatch.For(release).FolderNameFor(recordType)!);
+        var orderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
+
+        var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release, orderIndex);
         var sourcePath = Path.Combine(modFolder, relativePath);
 
         // Track's eager serialization only created directories for (record type, origin ModKey)
@@ -537,9 +559,11 @@ public sealed class RecordEditService(
             ?? throw new InvalidOperationException(
                 $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
 
-        var relativePath = SourceRecordPath.For(
-            referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey, referencerDoc.EditorId, release);
-        var sourcePath = Path.Combine(referencerModFolder, relativePath);
+        // #459: the referencer's real on-disk name now carries an order index SourceRecordPath.For
+        // alone cannot guess — resolved the same FormKey-suffix-tolerant way DeleteRecord is.
+        var sourcePath = SourceUnitResolver.FlatSourcePath(
+            referencerModFolder, referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey,
+            referencerDoc.EditorId, release);
         var body = File.Exists(sourcePath) ? File.ReadAllText(sourcePath) : referencerDoc.Body!;
         var newBody = body.Replace(oldFormKey, newFormKey, StringComparison.Ordinal);
 
@@ -555,14 +579,24 @@ public sealed class RecordEditService(
     {
         var document = index.GetDocument(oldFormKey, plugin)
             ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
-        var oldRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, oldFormKey, document.EditorId, release);
-        var oldSourcePath = Path.Combine(modFolder, oldRelativePath);
+        // #459: find the record's real current file (its order index is unknown here without looking).
+        var oldSourcePath = SourceUnitResolver.FlatSourcePath(
+            modFolder, plugin.Name, document.RecordType, oldFormKey, document.EditorId, release);
 
         var record = ReadRecordFromSource(oldSourcePath, document, release);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
         // EditorID does not change across a renumber — only the FormKey half of the file name does.
-        var newRelativePath = SourceRecordPath.For(plugin.Name, document.RecordType, newFormKey, document.EditorId, release);
+        // #459: doc-commented as "a delete+create pair in source terms" — taken literally, the new
+        // FormKey's file goes at the end of the group folder (a fresh next index), the same as an
+        // ordinary CreateRecord, leaving the old slot's number an unfilled gap rather than trying to
+        // preserve position (gaps are accepted by design).
+        var groupDirectory = Path.Combine(
+            modFolder, $"{plugin.Name}{SourceRecordPath.SourceSuffix}",
+            RecordTypeDispatch.For(release).FolderNameFor(document.RecordType)!);
+        var newOrderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
+        var newRelativePath = SourceRecordPath.For(
+            plugin.Name, document.RecordType, newFormKey, document.EditorId, release, newOrderIndex);
         var newSourcePath = Path.Combine(modFolder, newRelativePath);
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
         _codec.SerializeAsync(record, newSourcePath, release).GetAwaiter().GetResult();

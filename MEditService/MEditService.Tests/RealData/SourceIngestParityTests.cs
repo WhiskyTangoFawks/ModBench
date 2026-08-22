@@ -244,13 +244,20 @@ public sealed class SourceIngestParityTests : IDisposable
     /// <c>form_lookup</c> and <c>form_references</c>, through the two reads that answer from them —
     /// FormKey resolution and the reference graph. Both are pure derivations of the documents above,
     /// so this is the check that the derivation ran identically, not just that the documents matched.
+    ///
+    /// <para><b>#459: the array-ordinal allowlist is gone, not widened.</b> This used to tolerate 319
+    /// targets whose <c>FieldPath</c> array ordinal (the <c>[N]</c> inside a FieldPath like
+    /// <c>Responses[3]</c>) differed between the two ingests — <c>DialogTopic.Responses</c> and kin
+    /// carried no on-disk order carrier, so the ordinal reflected filesystem order, not GRUP order.
+    /// Turning <c>Overall.EnforceRecordOrder</c> on (<see cref="Serialization.RecordTextCodecCustomization"/>)
+    /// makes every folder-split sibling's file name carry its real GRUP position, so the two ingests'
+    /// array ordinals now agree exactly — asserted here as plain equality, no deindexing, no
+    /// allowlist.</para>
     /// </summary>
     [Fact]
     public void FormLookupAndReferenceRows_AreIdentical_TrackedAndUntracked()
     {
         var referenced = 0;
-        var indexOnly = 0;
-        var setDiff = 0;
 
         foreach (var formKey in AllFormKeys(_fromBinary))
         {
@@ -259,23 +266,15 @@ public sealed class SourceIngestParityTests : IDisposable
             var binaryRefs = _fromBinary.Index!.GetReferencedBy(formKey).OrderBy(r => r.ToString(), StringComparer.Ordinal).ToList();
             var sourceRefs = _fromSource.Index!.GetReferencedBy(formKey).OrderBy(r => r.ToString(), StringComparer.Ordinal).ToList();
             referenced += binaryRefs.Count;
-            if (binaryRefs.SequenceEqual(sourceRefs)) continue;
 
-            static List<string> Deindexed(IEnumerable<ReferenceResult> rs) =>
-                rs.Select(r => System.Text.RegularExpressions.Regex.Replace(r.ToString() ?? "", @"\[\d+\]", "[i]"))
-                  .OrderBy(x => x, StringComparer.Ordinal).ToList();
-            if (Deindexed(binaryRefs).SequenceEqual(Deindexed(sourceRefs), StringComparer.Ordinal)) indexOnly++; else setDiff++;
+            // Hard, and exact: no reference may appear, disappear, or move within its own FieldPath's
+            // array ordinal.
+            Assert.True(binaryRefs.SequenceEqual(sourceRefs),
+                $"form_references differs for {formKey}: binary=[{string.Join(", ", binaryRefs)}], " +
+                $"source=[{string.Join(", ", sourceRefs)}]");
         }
 
         Assert.True(referenced > 0, "fixture produced no form_references rows");
-
-        // Hard: no reference may appear or disappear. Only the array *ordinal* inside a FieldPath is
-        // allowlisted, and only for the folder-split-ordering reason documented on the sibling test.
-        Assert.True(setDiff == 0, $"form_references differs by SET for {setDiff} target(s) — not allowlisted");
-
-        // Asserted present, not tolerated: pinned at 319 targets (of 6,280 rows) against the hermetic
-        // fixture, so an upstream change in either direction is signal.
-        Assert.Equal(319, indexOnly);
     }
 
     /// <summary>
@@ -283,50 +282,34 @@ public sealed class SourceIngestParityTests : IDisposable
     /// and cell_location do not already carry — Quest's dialogue branches and topics, and DialogTopic's
     /// responses, which stay folder-split in the source tree rather than embedded.
     ///
-    /// <para><b>Allowlisted divergence: slot ORDER, never the containment set.</b> The graph is
-    /// identical — every parent holds exactly the same children in both ingests — but their
-    /// <c>SlotIndex</c> values differ for 233 parents. <b>Spriggit's layout carries no child ordering
-    /// at all.</b> Traced in <c>references/mutagen-serialization</c> (#452 implementation): the reader
-    /// does <c>Directory.GetFiles(...).OrderBy(TryGetNumber(...))</c>, and <c>TryGetNumber</c> returns
-    /// null unless the file name starts with a <c>"[N] "</c> prefix — which is written only under
-    /// <c>Overall.EnforceRecordOrder</c>, off in this project and in Spriggit alike (zero call sites).
-    /// <c>OrderBy</c> on an all-null key is a stable sort, so what survives is filesystem order, not
-    /// the binary's GRUP order.</para>
-    ///
-    /// <para>Turning <c>EnforceRecordOrder</c> on would fix it and was <b>rejected</b>: it puts
-    /// <c>"[N] "</c> into on-disk file names, abandoning the layout ADR-0041 pins wholesale and the
-    /// Spriggit byte-parity convergence target #455 gates. Order is therefore <i>stable</i> (same tree,
-    /// same order) without being <i>canonical</i> against the pre-Track binary — which is what #454's
-    /// scope item 4 already says a compiled-from-text binary does, and what
-    /// <see cref="CompileRoundTripGateTests"/>' own doc comment concedes for container grouping.</para>
+    /// <para><b>#459: no more allowlisted slot-order divergence.</b> This used to tolerate 233 parents
+    /// whose <c>SlotIndex</c> values differed between the two ingests, because the pre-#459 layout
+    /// carried no folder-split ordering at all (this doc comment's own #452-era trace of
+    /// <c>Directory.GetFiles(...).OrderBy(TryGetNumber(...))</c> landing on an all-null key, hence
+    /// filesystem order rather than GRUP order — see <c>git log -p</c> on this file for the full
+    /// account, since the tolerance itself is gone here, not restated). Turning
+    /// <c>Overall.EnforceRecordOrder</c> on retires the reason that allowlist existed: every
+    /// folder-split sibling's file name now carries its real GRUP position, so a tracked plugin's
+    /// <c>container_child</c> rows agree with the binary's exactly, slot order included.</para>
     /// </summary>
     [Fact]
-    public void ContainerChildRows_AreIdentical_ExceptSlotOrderWhichSpriggitsLayoutDoesNotCarry()
+    public void ContainerChildRows_AreIdentical_TrackedAndUntracked()
     {
         var children = 0;
-        var orderOnly = 0;
-        var setDiff = 0;
 
         foreach (var formKey in AllFormKeys(_fromBinary))
         {
             var binary = _fromBinary.Index!.GetContainerChildren(_plugin, formKey);
             var source = _fromSource.Index!.GetContainerChildren(_plugin, formKey);
             children += binary.Count;
-            if (binary.SequenceEqual(source)) continue;
 
-            var bset = binary.Select(r => $"{r.ParentFormKey}|{r.SlotName}|{r.ChildFormKey}").OrderBy(x => x, StringComparer.Ordinal).ToList();
-            var sset = source.Select(r => $"{r.ParentFormKey}|{r.SlotName}|{r.ChildFormKey}").OrderBy(x => x, StringComparer.Ordinal).ToList();
-            if (bset.SequenceEqual(sset, StringComparer.Ordinal)) orderOnly++; else setDiff++;
+            // Hard, and exact: the containment graph may not move, and neither may a child's slot
+            // order within it — no allowlist for either kind of divergence.
+            Assert.True(binary.SequenceEqual(source),
+                $"container_child differs for {formKey}: binary=[{string.Join(", ", binary)}], " +
+                $"source=[{string.Join(", ", source)}]");
         }
 
         Assert.True(children > 0, "fixture produced no container_child rows");
-
-        // Hard: the containment graph itself may not move. A child appearing under a different parent,
-        // or vanishing, is red — only the ordinal within a slot is allowlisted.
-        Assert.True(setDiff == 0, $"container_child differs by SET for {setDiff} parent(s) — not allowlisted");
-
-        // Asserted present, not tolerated: pinned at 233 parents (of 3,816 rows) against the hermetic
-        // fixture. If upstream ever starts preserving folder-split order, this goes red and we learn it.
-        Assert.Equal(233, orderOnly);
     }
 }

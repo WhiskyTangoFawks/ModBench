@@ -213,8 +213,10 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         var npc = _seed.Index!.Search(new RecordQuery(Plugin: _plugin, Limit: 100))
             .Items.Single(r => r.EditorId == "IngestNpc");
-        var npcFile = Path.Combine(_modFolder,
-            SourceRecordPath.For(PluginName, "npc_", npc.FormKey, "IngestNpc", GameRelease.Fallout4));
+        // #459: resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
+        // now needs an order index this test has no reason to track.
+        var npcFile = SourceUnitResolver.FlatSourcePath(
+            _modFolder, PluginName, "npc_", npc.FormKey, "IngestNpc", GameRelease.Fallout4);
         File.WriteAllText(npcFile, File.ReadAllText(npcFile).Replace("IngestNpc", "RenamedNpc", StringComparison.Ordinal));
 
         using var reloaded = NewSession();

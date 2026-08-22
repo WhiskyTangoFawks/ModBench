@@ -75,7 +75,7 @@ public sealed class FormLinkValidationTests : IDisposable
         File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
         _mod.Sessions.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
 
-        Assert.NotEmpty(_mod.GitShowHead(TrackedModFixture.RelativeSourcePath(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
+        Assert.NotEmpty(_mod.GitShowHead(_mod.RelativeSourcePath(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
 
         var result = SetKeywords(_mod.Keyword.ToString());
 

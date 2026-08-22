@@ -12,17 +12,20 @@ namespace MEditService.Core.Records;
 /// <c>ContainerChildFields.ByTypeName</c> holds minus
 /// <c>DuckDbRecordIndex.CoveredByPlacementTables</c> — six today.)
 ///
-/// <para><b><see cref="SlotIndex"/> no longer feeds compile, and nothing else records child order
-/// either</b> (#454). It used to be the ordering source <c>ContainerAssembler</c> rebuilt a
-/// folder-split slot from; that class is gone, because containment — and with it the child set — is
-/// now the tree's own directory nesting, read by the whole-mod deserializer. What did <i>not</i>
-/// survive the move is child <b>order</b>: Spriggit's layout carries none (its reader sorts on a
-/// <c>"[N] "</c> file-name prefix written only under <c>Overall.EnforceRecordOrder</c>, which neither
-/// this project nor Spriggit enables), so this column now holds whatever order the tree was read in —
-/// stable for a given tree, not canonical against the original binary. Pinned as a named allowlist
-/// entry with exact counts by <c>SourceIngestParityTests</c>. For FO4 <c>DialogTopic.Responses</c>
-/// that lost order is real semantic loss, tracked as #459; do not treat a reordering as a bug here
-/// without reading it.</para>
+/// <para><b><see cref="SlotIndex"/> no longer feeds compile</b> (#454). It used to be the ordering
+/// source <c>ContainerAssembler</c> rebuilt a folder-split slot from; that class is gone, because
+/// containment — and with it the child set — is now the tree's own directory nesting, read by the
+/// whole-mod deserializer.
+///
+/// <para><b>#459: child order is canonical again, not merely stable.</b> This used to say the order
+/// was lost — the pre-#459 layout carried none (its reader sorts on a <c>"[N] "</c> file-name prefix
+/// written only under <c>Overall.EnforceRecordOrder</c>, which neither this project nor Spriggit ever
+/// turned on), so this column held whatever order the tree happened to be read in, not the original
+/// binary's GRUP order. <c>RecordTextCodecCustomization</c> now turns that flag on, so every
+/// folder-split sibling's file name carries its real GRUP position and this column is that position —
+/// exact against the binary a tracked plugin came from, not just self-consistent across re-reads of
+/// one tree. No longer allowlisted by <c>SourceIngestParityTests</c>: that tolerance is gone, not
+/// widened.</para>
 ///
 /// <para><b>Ref-invariant, though less by construction than it was</b>: no gesture in this arc moves
 /// a record between containers or reorders a container's children, so this answers identically at

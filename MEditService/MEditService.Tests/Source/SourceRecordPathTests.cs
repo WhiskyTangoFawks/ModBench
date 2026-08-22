@@ -36,7 +36,9 @@ public sealed class SourceRecordPathTests
     public void For_ThenTryParse_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
-        var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release);
+        // The order index is never part of identity (#459's own doc comment on this class) — an
+        // arbitrary non-zero value proves TryParse doesn't accidentally depend on it being 0.
+        var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release, orderIndex: 7);
 
         var ok = SourceRecordPath.TryParse(path, Release, out var identity);
 
@@ -52,6 +54,19 @@ public sealed class SourceRecordPathTests
         Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
     }
 
+    /// <summary>#459: the order index is a leading <c>"[N] "</c> ahead of everything else <see cref="For"/>
+    /// already produced — exactly <c>SerializationHelper.DecorateWithNumber</c>'s own shape, verified
+    /// against the decompiled 1.37.1 assembly at implementation, not reconstructed from memory.</summary>
+    [Theory]
+    [InlineData("SomeNpc", "[3] SomeNpc - 000800_Vendor.esp.json")]
+    [InlineData(null, "[3] 000800_Vendor.esp.json")]
+    public void For_EmbedsTheOrderIndexAsALeadingBracketedPrefix(string? editorId, string expectedFileName)
+    {
+        var path = SourceRecordPath.For("Vendor.esp", "npc_", "000800:Vendor.esp", editorId, Release, orderIndex: 3);
+
+        Assert.Equal(expectedFileName, Path.GetFileName(path));
+    }
+
     [Theory]
     [InlineData("Cell")]
     [InlineData("Worldspace")]
@@ -59,7 +74,7 @@ public sealed class SourceRecordPathTests
     public void For_ForADirectoryPerRecordType_ThrowsNamedException(string recordType)
     {
         var ex = Assert.Throws<NotSupportedException>(
-            () => SourceRecordPath.For("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release));
+            () => SourceRecordPath.For("Vendor.esp", recordType, "000800:Vendor.esp", "SomeName", Release, orderIndex: 0));
 
         Assert.Contains(recordType, ex.Message, StringComparison.Ordinal);
     }
@@ -71,7 +86,7 @@ public sealed class SourceRecordPathTests
         // own (RecordTypeDispatch.FolderNameFor's own doc comment) — the same "ask SourceUnitResolver"
         // refusal as a directory-per-record type, for a structurally different reason.
         Assert.Throws<NotSupportedException>(
-            () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release));
+            () => SourceRecordPath.For("Vendor.esp", "placedobject", "000800:Vendor.esp", "SomeRef", Release, orderIndex: 0));
     }
 
     [Theory]

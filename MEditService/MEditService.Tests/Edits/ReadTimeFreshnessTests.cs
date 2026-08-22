@@ -34,7 +34,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcRelativePath => TrackedModFixture.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
+    private string NpcRelativePath => _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId);
 
     private void Git(params string[] args) =>
         GitCli.Run(Path.Combine(_mod.ModFolder, ".git"), _mod.ModFolder, args);
@@ -136,10 +136,15 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void AFileRenamedOnDiskWithItsContentUnchanged_IsStillFoundAndEditable()
     {
+        // #459: NpcSourceFile now resolves the record's real *current* file (SourceUnitResolver, live
+        // off disk) rather than a fixed computed path, so it must be captured before the hand-rename
+        // below — otherwise every later read of it would just re-find the file at its new location and
+        // this test would stop testing anything.
+        var originalPath = _mod.NpcSourceFile;
         var renamed = Path.Combine(
-            Path.GetDirectoryName(_mod.NpcSourceFile)!,
+            Path.GetDirectoryName(originalPath)!,
             $"SomeOtherName - {_mod.Npc.ID:X6}_{_mod.Npc.ModKey.FileName}.json");
-        File.Move(_mod.NpcSourceFile, renamed);
+        File.Move(originalPath, renamed);
 
         var result = EditService().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.6"));
 
@@ -147,7 +152,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // Written into the file that actually holds the record, not recreated at the stale computed
         // path — two files claiming one FormKey is the corruption AmbiguousSourceUnitException exists
         // for, and the flat path is the one that used never to look.
-        Assert.False(File.Exists(_mod.NpcSourceFile));
+        Assert.False(File.Exists(originalPath));
         Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
         Assert.NotNull(_mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }

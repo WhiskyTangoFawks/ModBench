@@ -150,13 +150,22 @@ internal static class SourceUnitResolver
     /// the container path takes. A record that is genuinely gone still resolves to its computed path,
     /// so the caller's existing "edit from the indexed body and rewrite the file" recovery is
     /// untouched.</para>
+    ///
+    /// <para><b>#459 shrank the guess's hit rate, and did not remove it.</b> <see cref="SourceRecordPath.For"/>
+    /// now needs the record's order index to compute an exact name, which this method does not have
+    /// without a scan — so the "computed" guess below is index 0 specifically, which still resolves
+    /// with zero scan for every group that has exactly one member (common) or whose first-ever sibling
+    /// is being looked up right after a fresh create (also common). Every other position falls straight
+    /// through to the same one-directory, non-recursive suffix scan below, which is FormKey-suffix
+    /// matching (<see cref="NameCarries"/>) and was already blind to position before this class had one
+    /// to be blind to.</para>
     /// </summary>
     internal static string FlatSourcePath(
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
         GameRelease release)
     {
         var computed = Path.Combine(
-            modFolder, SourceRecordPath.For(pluginFileName, recordType, formKey, editorId, release));
+            modFolder, SourceRecordPath.For(pluginFileName, recordType, formKey, editorId, release, orderIndex: 0));
         if (File.Exists(computed)) return computed;
 
         var groupFolder = RecordTypeDispatch.For(release).FolderNameFor(recordType);
@@ -267,21 +276,22 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>The tails <paramref name="leaf"/> carries under <see cref="NameCarries"/> — the whole
-    /// name, plus whatever follows each <c>" - "</c> in it. More than one candidate arises only when an
-    /// EditorID itself contains <c>" - "</c>, which is legal and is precisely why a file name cannot be
-    /// split into EditorID and FormKey unambiguously (<see cref="SourceRecordIdentity"/>'s own doc
-    /// comment); counting every candidate costs nothing, because a candidate that is not a real filesafe
-    /// FormKey is never looked up.</summary>
+    /// name (order prefix stripped, #459), plus whatever follows each <c>" - "</c> in it. More than one
+    /// candidate arises only when an EditorID itself contains <c>" - "</c>, which is legal and is
+    /// precisely why a file name cannot be split into EditorID and FormKey unambiguously (see
+    /// <see cref="SourceRecordIdentity"/>'s own doc comment); counting every candidate costs nothing,
+    /// because a candidate that is not a real filesafe FormKey is never looked up.</summary>
     private static IEnumerable<string> TailsCarriedBy(string leaf)
     {
-        yield return leaf;
+        var trimmed = WithoutOrderPrefix(leaf);
+        yield return trimmed;
 
         const string separator = " - ";
-        var at = leaf.IndexOf(separator, StringComparison.Ordinal);
+        var at = trimmed.IndexOf(separator, StringComparison.Ordinal);
         while (at >= 0)
         {
-            yield return leaf[(at + separator.Length)..];
-            at = leaf.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
+            yield return trimmed[(at + separator.Length)..];
+            at = trimmed.IndexOf(separator, at + separator.Length, StringComparison.Ordinal);
         }
     }
 
@@ -336,11 +346,60 @@ internal static class SourceUnitResolver
     // The whole-mod door's own two name shapes (SerializationHelper.RecordFileNameProvider): the
     // filesafe FormKey alone when the record has no EditorID, or "<EditorID> - " ahead of it when it
     // does. Anchored at both ends rather than a bare Contains, so a name that merely happens to
-    // embed the text cannot match.
-    private static bool NameCarries(string leaf, string tail) =>
-        leaf.Equals(tail, StringComparison.Ordinal)
-        || (leaf.EndsWith(tail, StringComparison.Ordinal)
-            && leaf.EndsWith($" - {tail}", StringComparison.Ordinal));
+    // embed the text cannot match. The leading "[N] " ordering prefix (#459) is stripped first, so
+    // FormKey-suffix matching stays exactly as blind to a record's position as it always was.
+    private static bool NameCarries(string leaf, string tail)
+    {
+        var trimmed = WithoutOrderPrefix(leaf);
+        return trimmed.Equals(tail, StringComparison.Ordinal)
+            || (trimmed.EndsWith(tail, StringComparison.Ordinal)
+                && trimmed.EndsWith($" - {tail}", StringComparison.Ordinal));
+    }
+
+    /// <summary>Strips a leading <c>"[N] "</c> ordering prefix (#459) when <paramref name="leaf"/>
+    /// genuinely has one — never on a false positive, so an EditorID that happens to start with a
+    /// bracketed number of its own (legal, if unusual) is left alone.</summary>
+    private static string WithoutOrderPrefix(string leaf) =>
+        TryGetOrderIndex(leaf) is null ? leaf : leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
+
+    /// <summary>
+    /// The <c>"[N] "</c> ordering prefix (#459) <paramref name="leaf"/> carries, or null when it has
+    /// none — used both to recognise one (<see cref="WithoutOrderPrefix"/>,
+    /// <see cref="NextOrderIndex"/>) and to carry an existing sibling's own index across a rename
+    /// (<see cref="Edits.RecordEditService.RenameSourceUnit"/>: an EditorID edit must not silently drop
+    /// a record back to the front of its siblings). Mirrors what the whole-mod door's own reader does
+    /// for the same reason (<c>SerializationHelper.TrimOrdering</c>/<c>TryGetNumber</c> in the
+    /// decompiled 1.37.1 assembly), reimplemented rather than shared because neither is public API.
+    /// </summary>
+    internal static int? TryGetOrderIndex(string leaf)
+    {
+        if (leaf.Length == 0 || leaf[0] != '[') return null;
+        var closeBracket = leaf.IndexOf("] ", StringComparison.Ordinal);
+        if (closeBracket < 2) return null;
+        return int.TryParse(leaf.AsSpan(1, closeBracket - 1), out var number) ? number : null;
+    }
+
+    /// <summary>
+    /// #459: the index a brand-new sibling should carry — one past the highest <c>"[N] "</c> prefix
+    /// already present in <paramref name="groupDirectory"/> (0 for an empty or not-yet-created folder),
+    /// never the sibling <i>count</i>. Count would collide the moment any earlier sibling has been
+    /// deleted (gaps are accepted by design, #459's brief) — e.g. siblings numbered <c>[0],[1],[3]</c>
+    /// after a delete leaves a gap at 2: count is 3, which would mint a second, colliding <c>[3]</c>;
+    /// max+1 correctly continues at 4.
+    /// </summary>
+    internal static int NextOrderIndex(string groupDirectory)
+    {
+        if (!Directory.Exists(groupDirectory)) return 0;
+
+        var highest = -1;
+        foreach (var entry in Directory.EnumerateFileSystemEntries(groupDirectory))
+        {
+            if (TryGetOrderIndex(Path.GetFileName(entry)) is int number && number > highest)
+                highest = number;
+        }
+
+        return highest + 1;
+    }
 
     /// <summary>
     /// The subtree to search, relative to the source root — the narrowing that keeps a point write off

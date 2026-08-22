@@ -148,11 +148,58 @@ public sealed class CompileRoundTripGateTests : IDisposable
             .ToList();
         Assert.NotEmpty(allFiles);
 
+        // #459: block/sub-block GRUP directories are folder-split too (SerializationHelper's own
+        // AddBlocksToWork/AddXYBlocksToWork take the same withNumbering the flat/nested lists do), so
+        // each numeric segment now carries an optional "[N] " prefix ahead of the block/sub-block
+        // number itself — that prefix is what this pattern allows for, not a coordinate.
         Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
-            f, @"^Cells/-?\d+/-?\d+/[^/]+/RecordData\.json$"));
+            f, @"^Cells/(\[\d+\] )?-?\d+/(\[\d+\] )?-?\d+/[^/]+/RecordData\.json$"));
 
         Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
-            f, @"^Worldspaces/[^/]+/-?\d+, -?\d+/-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+            f, @"^Worldspaces/[^/]+/(\[\d+\] )?-?\d+, -?\d+/(\[\d+\] )?-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+    }
+
+    /// <summary>
+    /// #459 slice 1: <c>DialogTopic.Responses</c> is the one folder-split relationship this fixture
+    /// measurably damages without a filename order carrier (#459's own investigation: 96 of 283
+    /// multi-response topics permute under the old unprefixed scheme). Once
+    /// <c>RecordTextCodecCustomization</c> turns <c>EnforceRecordOrder</c> on, every
+    /// <c>Responses</c> folder Track writes must carry a contiguous <c>"[N] "</c> prefix, one number
+    /// per sibling, zero gaps and zero duplicates — proven directly against what Track put on disk,
+    /// not against a proxy. A build with the flag left off writes unprefixed names here, which is
+    /// exactly the regression this test exists to catch.
+    /// </summary>
+    [Fact]
+    public void Track_OfTheRealFixture_PrefixesDialogTopicResponseFileNamesInGrupOrder()
+    {
+        var responseDirs = Directory.EnumerateDirectories(SourceRoot, "Responses", SearchOption.AllDirectories)
+            .ToList();
+        Assert.NotEmpty(responseDirs);
+
+        var multiResponseDirs = responseDirs
+            .Select(dir => Directory.EnumerateFiles(dir, "*.json", SearchOption.TopDirectoryOnly)
+                .Select(Path.GetFileName)
+                .ToList())
+            .Where(names => names.Count > 1)
+            .ToList();
+        Assert.NotEmpty(multiResponseDirs);
+
+        foreach (var names in multiResponseDirs)
+        {
+            var matches = names
+                .Select(n => System.Text.RegularExpressions.Regex.Match(n!, @"^\[(\d+)\] "))
+                .ToList();
+
+            Assert.True(matches.All(m => m.Success),
+                $"Expected every file under a multi-response Responses folder to start with '[N] ', " +
+                $"but found: {string.Join(", ", names)}");
+
+            var numbers = matches
+                .Select(m => int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture))
+                .Order()
+                .ToList();
+            Assert.Equal(Enumerable.Range(0, names.Count).ToList(), numbers);
+        }
     }
 
     /// <summary>#468: Tracking the committed fixture writes a root document with no Spriggit package
@@ -244,8 +291,10 @@ public sealed class CompileRoundTripGateTests : IDisposable
         var npc = _sessions.Index!
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: _plugin, Limit: 1))
             .Items[0];
-        var expectedPath = SourceRecordPath.For(
-            CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4);
+        // #459: SourceUnitResolver rather than SourceRecordPath.For directly — For now needs an order
+        // index this test would otherwise have to reverse-engineer from Track's own output.
+        var expectedPath = Path.GetRelativePath(_modFolder, SourceUnitResolver.FlatSourcePath(
+            _modFolder, CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4));
 
         var before = ReadSourceTree();
         Assert.Contains(expectedPath, before.Keys);
@@ -268,5 +317,45 @@ public sealed class CompileRoundTripGateTests : IDisposable
             .ToList();
 
         Assert.Equal([expectedPath], changed);
+    }
+
+    /// <summary>
+    /// #459's own acceptance criterion: renaming a <c>DialogTopic.Responses</c> child's EditorID —
+    /// already a live capability (<see cref="RecordEditService.EditField"/> never refuses it;
+    /// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> only gates create/delete/renumber)
+    /// — must not perturb its siblings' GRUP order. Deliberately renames the <b>middle</b> response of
+    /// a 3-or-more-response topic, so a renumbering-on-rename bug (shifting later siblings) would show
+    /// up as a moved FormKey rather than being masked by renaming an edge slot.
+    /// </summary>
+    [Fact]
+    public void Compile_AfterRenamingAResponsesEditorId_PreservesTheDialogTopicsInfoOrder()
+    {
+        using var untouchedOriginal = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginPath),
+            GameRelease.Fallout4);
+        var topic = ((IFallout4ModGetter)untouchedOriginal).Quests
+            .SelectMany(q => q.DialogTopics)
+            .First(t => t.Responses.Count >= 3 && !string.IsNullOrEmpty(t.Responses[1].EditorID));
+        var expectedOrder = topic.Responses.Select(r => r.FormKey).ToList();
+        var responseToRename = topic.Responses[1];
+
+        var edit = new RecordEditService(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(_plugin, responseToRename.FormKey.ToString(), "editor_id",
+                JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
+        Assert.True(edit.Applied, edit.Message);
+
+        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        Assert.True(result.Succeeded, result.RefusalReason);
+
+        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
+        using var compiled = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), pluginPath), GameRelease.Fallout4);
+        var compiledTopic = ((IFallout4ModGetter)compiled).Quests
+            .SelectMany(q => q.DialogTopics)
+            .Single(t => t.FormKey == topic.FormKey);
+
+        // The rename actually landed (not just "order held because nothing changed").
+        Assert.Equal(responseToRename.EditorID + "Renamed", compiledTopic.Responses[1].EditorID);
+        Assert.Equal(expectedOrder, compiledTopic.Responses.Select(r => r.FormKey).ToList());
     }
 }

@@ -14,10 +14,31 @@ namespace MEditService.Core.Serialization;
 /// <c>EnforceRecordOrder</c> appears <b>nowhere</b> in <c>references/spriggit/</c> — checked across
 /// the whole clone, not just the Fallout 4 package; the only thing that names it is the
 /// serialization library's own source generator. There is nothing there to replicate and nothing
-/// being diverged from. (It would have been a no-op here regardless: it only reaches
-/// <c>SerializationHelper.WriteFilePerRecord</c>/<c>ReadFilePerRecord</c>, multi-record
-/// folder-of-files group serialization, which <see cref="RecordTextCodec"/> never calls — it
-/// serializes exactly one record to one caller-given file, never a group.)</para>
+/// being diverged from.</para>
+///
+/// <para><b>#459: <c>.EnforceRecordOrder()</c> is now on, and it is not a no-op.</b> The #450-era
+/// claim this comment used to make ("it only reaches <c>WriteFilePerRecord</c>/<c>ReadFilePerRecord</c>,
+/// which <see cref="RecordTextCodec"/> never calls") was true but incomplete: the same flag also
+/// reaches <c>WriteFolderPerRecord</c>/<c>ReadFolderPerRecord</c> and <c>WriteMajorRecordList</c>/
+/// <c>ReadMajorRecordList</c> — confirmed by decompiling the pinned 1.37.1
+/// <c>Mutagen.Bethesda.Serialization.SourceGenerator</c> assembly directly, not by reading the newer
+/// reference clone under <c>references/mutagen-serialization</c> (that clone tracks 1.38.6, a version
+/// whose <c>Utility/*ParallelHelper.cs</c> refactor does not exist yet at this project's pin — its
+/// <c>Utility</c> namespace at 1.37.1 has only <c>SerializationHelper</c>). All three field
+/// generators that matter here (<c>GroupFieldGenerator</c>, <c>FolderPerRecordGroupFieldGenerator</c>,
+/// and <c>MajorRecordListFieldGenerator</c> — the one that actually governs
+/// <c>DialogTopic.Responses</c>, since that field is a plain list rather than a <c>Group&lt;T&gt;</c>)
+/// read the same single project-wide <c>compilation.Customization.Overall.EnforceRecordOrder</c> bool
+/// and pass it straight through as <c>withNumbering</c>. There is no per-record-type door:
+/// <c>ICustomizationBuilder&lt;TObject&gt;</c> (what <see cref="SpriggitCellEmbedCustomization"/> and
+/// its sibling use) exposes no <c>FilePerRecord</c>/<c>EnforceRecordOrder</c> at all. So this one call
+/// on this one root builder turns on <c>"[N] "</c> filename numbering for <b>every</b> folder-split
+/// relationship in the whole mod uniformly — flat top-level groups (Weapons, Npcs, …) included, not
+/// only the container-nested lists the bug report's damage numbers were measured against. That
+/// breadth is deliberate (ADR-0042's re-scope), not an accepted side effect — see
+/// <c>Source.SourceRecordPath</c> and <c>Edits.RecordEditService</c> for what changed to keep
+/// flat-record point writes (create/rename/renumber) consistent with numbered siblings now that the
+/// prefix is written everywhere, not only under <c>DialogTopic.Responses</c>.</para>
 ///
 /// <para><b>Not used, and not merely deferred</b> (#468, ADR-0042 decision 3 — "nothing is omitted
 /// and nothing is re-sorted in the files, ever"): <c>OmitUnknownGroupData</c> and
@@ -53,6 +74,7 @@ public sealed class RecordTextCodecCustomization : ICustomize
         builder
             .OmitLastModifiedData()
             .OmitTimestampData()
-            .FilePerRecord();
+            .FilePerRecord()
+            .EnforceRecordOrder();
     }
 }

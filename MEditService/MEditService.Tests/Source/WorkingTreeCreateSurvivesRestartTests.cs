@@ -44,6 +44,13 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
                 true)],
             GameRelease.Fallout4);
 
+        // #459 regression guard: a silently-failed source ingest degrades to the binary (which never
+        // held this uncompiled create), so the assertions below would pass for the wrong reason —
+        // "the record isn't found" reads identically whether ingest never ran or genuinely excluded
+        // it. This caught a real one: git show HEAD:<path> glob-matches a missing bracketed "[N] "
+        // path instead of failing, so a fresh, never-committed record's own Head lookup silently came
+        // back "" instead of null (SourceRepository.ReadCommittedSourceText's own doc comment).
+        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
         var reread = reloaded.Index!.GetDocument(created.NewFormKey!, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread!.EditorId);
@@ -68,6 +75,8 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
                 true)],
             GameRelease.Fallout4);
 
+        // #459 regression guard, same reasoning as the sibling test above.
+        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-session UpdateWinners() at the end of the load loop) leaves it_winner false.
         Assert.True(reloaded.Index!.GetDocument(created.NewFormKey!)!.IsWinner);

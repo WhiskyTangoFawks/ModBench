@@ -31,11 +31,13 @@ namespace MEditService.Tests.Edits;
 /// statement of each specific property, with the two-of-a-kind arrangement (two cells in one
 /// sub-block, two quests) that a curated real fixture does not guarantee.</para>
 ///
-/// <para><b>Nothing here asserts child <i>ordering</i>.</b> Spriggit's layout carries none — its
-/// reader sorts on a <c>"[N] "</c> file-name prefix written only under
-/// <c>Overall.EnforceRecordOrder</c>, which neither this project nor Spriggit enables — so what these
-/// assert is the child <i>set</i>, per #454's own scope item 4. Ordering for FO4
-/// <c>DialogTopic.Responses</c> is tracked separately as #459.</para>
+/// <para><b>Nothing here asserts child <i>ordering</i> — deliberately narrow, not because there is
+/// none to assert.</b> #459 turned <c>Overall.EnforceRecordOrder</c> on project-wide, so a real
+/// compile round trip does preserve GRUP order now (<c>RealData/CompileRoundTripGateTests</c>,
+/// <c>RealData/DialogueOrderDamageTests</c> assert exactly that, on the real #369 fixture). This
+/// suite's own two-cells/two-quests fixture only ever needed the child <i>set</i>, per #454's own
+/// scope item 4, and stays that way — the assertions below compare EditorID sets via <c>.Order()</c>
+/// on purpose, not as a gap.</para>
 /// </summary>
 public sealed class PluginCompileServiceContainerTests : IDisposable
 {

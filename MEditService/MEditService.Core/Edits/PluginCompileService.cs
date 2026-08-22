@@ -34,13 +34,15 @@ namespace MEditService.Core.Edits;
 /// having one of its own: both go through the same gateway, over the same tree, with the same
 /// sequential dropoff, so there is no second reader to drift from the first.</para>
 ///
-/// <para><b>Child order is not preserved and must not be claimed.</b> Spriggit's layout carries none —
-/// its reader sorts on a <c>"[N] "</c> file-name prefix written only under
-/// <c>Overall.EnforceRecordOrder</c>, which neither this project nor Spriggit enables — so a compiled
-/// binary's folder-split children come back in filesystem order, not the original binary's GRUP order.
-/// #454's scope item 4 accepts that (the gate is compile→re-serialize text stability, not byte identity
-/// with the pre-Track binary); for FO4 <c>DialogTopic.Responses</c> it is real semantic loss, tracked
-/// as #459.</para>
+/// <para><b>#459: child order is preserved now, and can be claimed.</b> This used to say the opposite
+/// — the layout carried no order carrier, so a compiled binary's folder-split children came back in
+/// filesystem order, not the original binary's GRUP order, and #454's scope item 4 accepted that as
+/// the gate compile→re-serialize offers (text stability, not byte identity with the pre-Track binary).
+/// <c>RecordTextCodecCustomization</c> now turns <c>Overall.EnforceRecordOrder</c> on, so every
+/// folder-split sibling's file name carries its real GRUP position and a compile reproduces it —
+/// verified byte-for-byte on the committed fixture (<c>CompileRoundTripGateTests</c>,
+/// <c>DialogueOrderDamageTests</c>). For FO4 <c>DialogTopic.Responses</c>, the one relationship this
+/// mattered behaviourally for, that closes the semantic loss #459 was opened to fix.</para>
 /// </summary>
 public sealed class PluginCompileService(
     ISessionManager sessions,

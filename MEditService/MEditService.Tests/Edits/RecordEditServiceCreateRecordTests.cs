@@ -35,13 +35,43 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.NotNull(result.NewFormKey);
         Assert.EndsWith(":" + TrackedModFixture.PluginName, result.NewFormKey, StringComparison.Ordinal);
 
-        var sourceFile = Path.Combine(mod.ModFolder, TrackedModFixture.RelativeSourcePath(
+        var sourceFile = Path.Combine(mod.ModFolder, mod.RelativeSourcePath(
             Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_", "BrandNewNpc"));
         Assert.True(File.Exists(sourceFile));
 
         var doc = mod.Sessions.Index!.GetDocument(result.NewFormKey!, mod.Plugin);
         Assert.NotNull(doc);
         Assert.Equal("BrandNewNpc", doc!.EditorId);
+    }
+
+    /// <summary>
+    /// #459: the new sibling's order index is one past the highest <c>"[N] "</c> already on disk, not
+    /// the sibling <i>count</i> — count would collide the moment an earlier delete left a gap. The
+    /// fixture's own Npcs group starts at <c>[0] FixtureNpc</c>/<c>[1] UntouchedNpc</c>; deleting
+    /// <c>[0]</c> leaves a one-sibling folder whose highest index is still 1, so the naive "count"
+    /// rival would mint a second, colliding <c>[1]</c> for the new record where the correct answer is
+    /// <c>[2]</c>.
+    /// </summary>
+    [Fact]
+    public void CreateRecord_AfterAnEarlierSiblingWasDeleted_LandsPastTheGap_NotAtTheSiblingCount()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+
+        var deleted = service.DeleteRecord(mod.Plugin, mod.Npc.ToString());
+        Assert.True(deleted.Applied, deleted.Message);
+
+        var created = service.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
+        Assert.True(created.Applied, created.Message);
+
+        var npcsDir = Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "Npcs");
+        var names = Directory.GetFiles(npcsDir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
+
+        // The surviving original sibling ([1] UntouchedNpc) plus the new one, landed one past the
+        // highest index still on disk — never colliding with [1].
+        Assert.Equal(2, names.Count);
+        Assert.Contains(names, n => n!.StartsWith("[1] UntouchedNpc", StringComparison.Ordinal));
+        Assert.Contains(names, n => n!.StartsWith("[2] AfterTheGap", StringComparison.Ordinal));
     }
 
     [Fact]
