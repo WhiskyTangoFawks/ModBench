@@ -140,7 +140,8 @@ public class RecordTextCodecGeneratorSeedTests
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
             "SourceIngest.cs",         // #452: ingest-from-source
-            "PluginCompileService.cs", // #454: compile from the tree — the third and last door
+            "PluginCompileService.cs", // #454: compile from the tree
+            "TrackService.cs",        // #471: Track's own round-trip gate reads its own tree back
         };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);

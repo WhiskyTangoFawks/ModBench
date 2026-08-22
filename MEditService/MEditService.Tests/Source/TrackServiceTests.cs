@@ -8,6 +8,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
+using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Source;
 
@@ -277,6 +278,106 @@ public sealed class TrackServiceTests
 
             Assert.Contains(observed, p => p.Phase == TrackPhase.Serializing && p.PluginsDone > 0 && p.PluginsDone < p.PluginsTotal);
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #471, ADR-0042 decision 2: "the gate runs ... at Track, over every record of the plugin being
+    // tracked". The public TrackAsync overload always passes null for the round-trip gate's own
+    // deserialize step, so it always uses the real whole-mod door — this test observes that it
+    // genuinely happens (not merely that Track happens to succeed, which a gate that never actually
+    // ran would also produce) by substituting a wrapper that still deserializes for real but also
+    // counts its own calls, through the internal overload that exists for exactly this.
+    [Fact]
+    public async Task TrackAsync_RealSession_RunsTheRoundTripGateForRealBeforeSucceeding()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-gateran-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-gateran-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(
+                gameDir,
+                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            var deserializeCalls = 0;
+            Task<IFallout4Mod> CountingDeserialize(string folder, CancellationToken ct)
+            {
+                deserializeCalls++;
+                return RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+            }
+
+            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits, CountingDeserialize);
+
+            Assert.Equal(1, deserializeCalls);
+            Assert.True(SourceRepository.IsTracked(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #471, ADR-0042 decision 2: "a plugin that does not round-trip is refused, with the failing
+    // record named". No known codec defect is reproducible at this project's current Mutagen/
+    // Serialization pins (TrackService's own doc comment on the internal overload), so this forges
+    // one: a genuine deserialize of the tree Track just wrote, immediately mutated so what comes
+    // back no longer matches what was serialized — indistinguishable, from the gate's own point of
+    // view, from a real codec regression that silently changed one field on read.
+    //
+    // Rival named and checked by hand while implementing this test (not committed): a TrackAsync
+    // that runs the gate but discards its result (or a stubbed-always-pass check) makes this test
+    // fail to throw — confirmed by temporarily short-circuiting VerifyRoundTrip to always return,
+    // observing this test go red, then reverting.
+    [Fact]
+    public async Task TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-badroundtrip-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-badroundtrip-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            var npc = mod.Npcs.AddNew("OriginalName");
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(
+                gameDir,
+                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            static async Task<IFallout4Mod> DeserializeThenCorruptTheNpc(string folder, CancellationToken ct)
+            {
+                var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+                deserialized.Npcs.First().EditorID += "Corrupted";
+                return deserialized;
+            }
+
+            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
+                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheNpc));
+
+            Assert.Contains(npc.FormKey.ToString(), ex.Message);
+            Assert.Contains("OriginalName", ex.Message);
+            Assert.False(SourceRepository.IsTracked(modFolder));
+            Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
         }
         finally
         {

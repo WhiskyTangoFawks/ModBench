@@ -89,6 +89,7 @@ public static class PluginEndpoints
             .ProducesProblem(400)
             .ProducesProblem(404)
             .ProducesProblem(409)
+            .ProducesProblem(422)
             .ProducesProblem(500)
             .ProducesProblem(503);
 
@@ -434,6 +435,15 @@ public static class PluginEndpoints
         {
             logger.LogWarning(ex, "Refused to re-track {Origin}", req.Origin);
             return Results.Problem(ex.Message, statusCode: 409);
+        }
+        // #471, ADR-0042 decision 2: a data-quality problem with the plugin itself, not a state
+        // conflict (409 is already spoken for by "this mod folder is already tracked") — 422 is the
+        // status Compile's own refusal already uses for the same kind of "understood, but cannot be
+        // processed" answer.
+        catch (SourceRoundTripFailedException ex)
+        {
+            logger.LogWarning(ex, "Refused to track {Origin}: round-trip gate failed", req.Origin);
+            return Results.Problem(ex.Message, statusCode: 422);
         }
         catch (GitUnavailableException ex)
         {

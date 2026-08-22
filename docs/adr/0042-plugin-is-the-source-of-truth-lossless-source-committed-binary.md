@@ -138,6 +138,24 @@ Recorded so nobody re-proposes either without the reason it was dropped.
   #385 pin gates nothing but itself.
 - **Existing tracked trees need re-Tracking** — same alpha posture ADR-0041 took for
   #451 and #455's format changes.
+- **Decision 2's gate is live at Track, and its cost is measured, not assumed** (#471).
+  Track now recompiles the tree it just wrote for each plugin, in a scratch directory,
+  before committing anything, and refuses (naming the first record whose Mutagen-generated
+  deep equality fails, or the header/container structure if every record matched) unless
+  the result is byte-identical to the plugin's own original bytes. Measured 2026-08-22 on
+  the committed 768 KB / 3,940-record fixture (`CutDownPluginFixture` — the same subset
+  ADR-0041's own "843 ms... 768 KB subset" figure used), steady-state over three runs: Track
+  without the gate ~1.7 s, Track with the gate ~2.3-2.5 s — roughly +40% for one extra
+  deserialize and one extra binary write per plugin, paid once regardless of record count
+  (per-record model equality is reached only when the gate has already failed). **The
+  ~20 MB "mega-plugin" figure this ADR's own Context section quotes (5.1 s cold,
+  ADR-0041) has no equivalent fixture to re-measure against in this environment**: no
+  committed or locally-available mod plugin near that size exists (the largest real mod
+  plugin found across a 204 GB curated Fallout 4 install is 246 KB); the real Fallout 4
+  DLC masters present locally (8-330 MB) are official base-game content, not a mod-shaped
+  fixture, and re-purposing one would need a full-data-folder session-load harness outside
+  this ticket's scope. Disclosed rather than extrapolated to avoid reporting a fabricated
+  number — same posture #459 and #470 took for their own real-install gaps.
 
 ## Supersessions
 

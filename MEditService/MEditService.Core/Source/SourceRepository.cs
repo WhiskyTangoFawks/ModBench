@@ -61,12 +61,7 @@ public static class SourceRepository
             EnsureCommitIdentity(gitDir, modFolder);
 
             File.WriteAllText(Path.Combine(modFolder, ".gitignore"), GitignoreContent(preset));
-            foreach (var file in pristineFiles)
-            {
-                var fullPath = Path.Combine(modFolder, file.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-                File.WriteAllBytes(fullPath, file.Content);
-            }
+            PristineFileWriter.WriteAll(pristineFiles, modFolder);
 
             GitCli.Run(gitDir, modFolder, "add", "-A");
             CommitWithTrailers(gitDir, modFolder, "Track: pristine baseline", trailers);
@@ -271,12 +266,7 @@ public static class SourceRepository
         var scratchIndex = Path.Combine(Path.GetTempPath(), $"medit-absorb-index-{Guid.NewGuid():N}");
         try
         {
-            foreach (var file in pristineFiles)
-            {
-                var fullPath = Path.Combine(scratchDir, file.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-                File.WriteAllBytes(fullPath, file.Content);
-            }
+            PristineFileWriter.WriteAll(pristineFiles, scratchDir);
 
             GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "add", "-A");
             var treeSha = GitCli.RunWithIndex(gitDir, scratchDir, scratchIndex, "write-tree").Trim();
