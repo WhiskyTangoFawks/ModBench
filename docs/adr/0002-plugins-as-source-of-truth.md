@@ -1,11 +1,12 @@
 # Plugins are the source of truth
 
-> **Amended by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
-> (2026-08-19):** for a *tracked* mod (manual gesture, `.git` in the mod folder),
-> per-record text is the working source and the binary is the compiled artifact —
-> Save & Compile serializes text to binary, and external binary changes flow back
-> through the bridge. The binary remains the interchange truth with every external
-> tool, and for untracked mods this ADR stands untouched.
+> **Restored unamended by [ADR-0042](0042-plugin-is-the-source-of-truth-lossless-source-committed-binary.md) (2026-08-22).** ADR-0041 (2026-08-19)
+> had amended this for *tracked* mods — text as the working source, the binary as a
+> compiled artifact. ADR-0042 returns the plugin to being the source of truth for
+> tracked and untracked mods alike: a tracked mod's source text is a lossless,
+> gate-verified editable form of the same truth, and the plugin itself is committed
+> beside it. The "YAML via Spriggit" rejection below was vindicated a second time, for
+> a new reason: Spriggit's format is lossy by design.
 
 The `.esp`/`.esm`/`.esl` binary files on disk are the authoritative source of record data. No intermediate format is introduced. The plugin is what the game reads, what every other tool in the ecosystem understands, and what the user ships — there is no drift problem, no synchronization problem, and no format translation cost.
 
