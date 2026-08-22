@@ -16,7 +16,7 @@ namespace MEditService.Tests.Source;
 /// records, tracked through <see cref="TrackService"/>. #451 slice A rewrote Track's own write path
 /// to serialize through the whole-mod door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>)
 /// instead of the per-record codec, so these assertions now check the Spriggit layout — group folders,
-/// root <c>RecordData.json</c>, sidecars — rather than the pre-#451 flat
+/// root <c>RecordData.json</c> — rather than the pre-#451 flat
 /// <c>&lt;recordType&gt;/&lt;originModKey&gt;/&lt;hex6&gt;.json</c> shape. Deliberately a small synthetic
 /// fixture, not the mega-plugin — mega-scale timing is a measured, reported number, not a
 /// suite-gating assertion.
@@ -65,26 +65,19 @@ public sealed class TrackServiceTests
             var roundTripped = await codec.DeserializeAsync(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
-            // AC2: both sidecars present, and the root document carries SpriggitSource, positioned
-            // and shaped exactly as the generator's own extraMeta hook would have written it (#451
-            // review, finding 3 — key placement and Newtonsoft-vs-System.Text.Json formatting drift).
-            Assert.True(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
-            Assert.True(File.Exists(Path.Combine(sourceRoot, "spriggit-meta.json")));
+            // #468: Spriggit has no role in v1 (ADR-0042) — the root document holds the mod
+            // header's own fields only, no package stamp, and Track writes no sidecar beside the
+            // tree.
+            Assert.False(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
+            Assert.False(File.Exists(Path.Combine(sourceRoot, "spriggit-meta.json")));
             var rootText = await File.ReadAllTextAsync(rootHeader);
-            Assert.Contains($"\"PackageName\": \"{SpriggitSource.CurrentPackageName}\"", rootText, StringComparison.Ordinal);
-            var firstKey = rootText.IndexOf('"', rootText.IndexOf('{') + 1);
-            Assert.StartsWith("\"SpriggitSource\"", rootText[firstKey..], StringComparison.Ordinal);
+            Assert.DoesNotContain("SpriggitSource", rootText, StringComparison.Ordinal);
 
-            // AC2, made real (#451 review, finding 6): a string-contains check passes on JSON the
-            // real deserializer can't read at all — round-trip the root document through the
-            // whole-mod door's own Deserialize, the same generated mixin Serialize went through, and
-            // confirm the two NPCs it wrote come back out. This is Tests-side, not Core (AC2's own
-            // guard scans Core's sources only — DocumentShapeParityTests already established this is
-            // exactly how the two doors are meant to be checked against each other). No extraMeta
-            // argument: the generated Deserialize's own extraMeta parameter hits the identical
-            // overload-collision defect Serialize's does (RecordTextCodecGeneratorSeed's own doc
-            // comment) — this proves the tree (SpriggitSource splice included) is genuinely valid,
-            // parseable Spriggit-shape JSON, which is AC2's actual claim.
+            // The root document is still genuinely valid, parseable JSON the whole-mod door's own
+            // Deserialize can read back — round-trip it through the same generated mixin Serialize
+            // went through and confirm the two NPCs it wrote come back out. No extraMeta argument:
+            // the generated Deserialize's own extraMeta parameter hits the overload-collision defect
+            // Serialize's does (RecordTextCodecGeneratorSeed's own doc comment).
             var deserializedMod = await MutagenJsonConverter.Instance.Deserialize(sourceRoot);
             Assert.Equal(2, deserializedMod.Npcs.Count);
             Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc1.FormKey && n.EditorID == "FirstNpc");
