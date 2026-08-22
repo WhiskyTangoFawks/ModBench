@@ -407,6 +407,55 @@ serialization library we already share is ~80 lines of convention — replicated
   binary (the interchange truth, ADR-0002); foreign trees are never parsed, so foreign
   serializer pins never need honoring and Engine's machinery stays unneeded.
 
+> **Erratum (2026-08-21, #455 — implementation).** Four corrections to the parity-gate bullet
+> above, all found by building the gate against the real tool rather than reasoning about it.
+>
+> **The oracle cannot run in-process, and the reason is the pin this project exists to hold.**
+> "Their engine accepts an injected entry point — runs in-process in CI" is wrong. The published
+> `Spriggit.Json.Fallout4` is a `PackAsTool` package, not a library: it is not
+> `PackageReference`-able at all, its current releases target `net10.0` against this repo's .NET 9,
+> and injecting their `IEntryPoint` in-process would pull Mutagen 0.54 into `MEditService`'s own
+> dependency graph — exactly what #385 forbids. The gate therefore installs the tool with
+> `dotnet tool install --tool-path` and **runs it as a subprocess**, which carries its own Mutagen
+> and Serialization assemblies in its own load context. Isolation is structural, not careful.
+>
+> **The allowlist has four rows, not three, and one named row was named for a symptom.** `SortList`
+> is not "cell child ordering" — it is nine-plus customization classes across Race, ScriptEntry,
+> VirtualMachineAdapter, Npc, Cell, ImpactDataSet, Perk, QuestAdapter and Location, of which cell
+> children are 3 of 118 affected files. The fourth row is **default-valued member skipping**: 1.38.x
+> omits a member equal to its default and 1.37.1 writes it, established by serializing two synthetic
+> plugins differing only in `ModHeader.Stats.Version` through both doors. It closes at the same bump
+> as the other three. `OmitUnusedConditionDataFields` is real but produces **zero** divergence on the
+> committed fixture, so "assert each of the three present" was unsatisfiable as written; the gate
+> uses two tiers, asserting observed rows present and declared-unobserved rows absent.
+>
+> **Spriggit's `Customizations/Omit` set is adopted, not allowlisted.** Plain `Omit` is available in
+> the 1.37.1 pin, so a row for it would never close — and a permanent row poisons the "empty
+> allowlist is the convergence trigger" signal this section defines. `Condition.Unknown1`,
+> `ModStats.{NextFormID,NumRecords}` and `Fallout4ModHeader.OverriddenForms` are now omitted on both
+> doors, which closed 982 of the 1,100 differing files. `Unknown1` was checked against xEdit and not
+> only against Spriggit: `wbDefinitionsFO4.pas` declares those three bytes `wbUnused(3)`, the
+> affirmative classification xEdit curates separately from `wbUnknown`.
+>
+> **That adoption is a format change, and existing tracked trees need re-Tracking.** These are
+> generation-time customizations, so both doors change together and the omitted fields simply stop
+> being written — which moves `records.content_hash` for every condition-bearing record and for the
+> mod header. On upgrade an already-tracked mod's working tree therefore reads as wholly changed
+> against its own baseline; the right response is to re-Track it, not to commit that churn as an
+> edit. 981 of the fixture's 3,858 documents were affected, so on a dialogue-heavy plugin this is
+> most of the tree. Accepted on the same posture this ADR already takes for #451's layout change:
+> the product is alpha with no shipped users, and a one-time re-Track is strictly cheaper than
+> carrying a permanent divergence from the format specification. The binary path is untouched —
+> compile still produces a loadable plugin, and what is dropped is CTDA padding plus counters the
+> writer recomputes.
+>
+> **Interchange and CI are #465**, split out of #455. Direction (a) was measured during #455's survey
+> — the real tool deserialized our tree into a plugin that deep-parses to all 3,940 fixture records —
+> but **nothing in this repo exercises it**: `SpriggitOracle` implements `serialize` only. #465's
+> issue body records that measurement and owns building the test, so treat the number as attributed
+> to that ticket rather than as a claim this repo can currently substantiate. There is no CI here
+> today either; the "11 — Continuous integration" milestone tracks it.
+
 **4. Codec scope amended; the whole-mod prohibition inverts.** The generated whole-mod
 mixin becomes the **designated door for Track, ingest-from-source, and compile** —
 `RecordTextCodecGeneratorSeed`'s AC2 guard re-scopes from "no caller, ever" (whose
