@@ -150,12 +150,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
         var scratchDir = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
         try
         {
-            foreach (var file in pristineFilesForThisPlugin)
-            {
-                var destination = Path.Combine(scratchDir, file.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                await File.WriteAllBytesAsync(destination, file.Content, cancel);
-            }
+            await PristineFileWriter.WriteAllAsync(pristineFilesForThisPlugin, scratchDir, cancel);
 
             var treeRoot = Path.Combine(scratchDir, $"{pluginName}{SourceRecordPath.SourceSuffix}");
             var recompiled = await deserialize(treeRoot, cancel);
