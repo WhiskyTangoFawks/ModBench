@@ -116,6 +116,75 @@ public sealed class DocumentShapeParityTests
         return quest;
     }
 
+    /// <summary>
+    /// #470 AC3's remaining two clauses, on record shapes the committed real fixture cannot exercise:
+    /// its <c>ModHeader.OverriddenForms</c> is genuinely null (the fixture's header is built fresh by
+    /// <c>CutDownPluginGenerator</c>, never copied from the real Fallout4.esm header it slices), and
+    /// every <c>Fallout4Group</c>/<c>Worldspace</c> in it is likewise constructed fresh with only
+    /// <c>BlockNumber</c>/<c>EditorID</c> copied — so <c>LastModified</c>/<c>SubCellsTimestamp</c> stay
+    /// at their CLR default (0) there regardless of whether anything omits them. Neither gap is caused
+    /// by any Omit customization; both need a hand-built mod instead, the same reason
+    /// <see cref="RecordTextCodecTests.MakeWeapon"/> exists for the per-record codec's own fixtures.
+    /// This uses the whole-mod door directly (as <see cref="AssertBothDoorsAgree"/> above already does)
+    /// because none of <c>ModHeader</c>, <c>Fallout4ListGroup&lt;T&gt;</c>, or a group's own
+    /// <c>LastModified</c> is reachable through <see cref="RecordTextCodec"/>, which only ever takes a
+    /// single <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>.
+    ///
+    /// <para><b><c>OverriddenForms</c>: green on arrival, cited rather than re-derived.</b> Nothing in
+    /// this codebase's current <c>Serialization/</c> or <c>Source/</c> code has ever suppressed it —
+    /// the per-type customization that once did was deleted whole in #468's revert of #455, and its own
+    /// test (recoverable at <c>git show 3f4e447:.../SpriggitOmitCustomizationsTests.cs</c>) is the rival
+    /// already applied and observed there, in the prior ticket: with that customization active, the
+    /// committed fixture's root document had no <c>"OverriddenForms"</c> key at all.</para>
+    ///
+    /// <para><b><c>LastModified</c>/<c>SubCellsTimestamp</c>: live rival, applied and observed here</b>
+    /// — with <see cref="Serialization.RecordTextCodecCustomization"/>'s <c>.OmitLastModifiedData()</c>
+    /// still present, this test failed with "Assert.Contains() Failure: Sub-string not found" against a
+    /// <c>Cells/[0] 0/GroupRecordData.json</c> that was empty (<c>{}</c>); confirmed by running this
+    /// exact assertion against that unmodified state before the call was deleted.</para>
+    /// </summary>
+    [Fact]
+    public async Task Serialize_OfASyntheticModWithNonDefaultGroupAndHeaderFields_WritesThemUnomitted()
+    {
+        var mod = NewMod();
+        var overriddenForm = new FormKey(ModKey.FromFileName("Test.esm"), 0x001);
+        mod.ModHeader.SetOverriddenForms([overriddenForm]);
+
+        var cell = new Cell(mod) { EditorID = "TimestampCell" };
+        var subBlock = new CellSubBlock { BlockNumber = 0, LastModified = 424242 };
+        subBlock.Cells.Add(cell);
+        var block = new CellBlock { BlockNumber = 0, LastModified = 424242 };
+        block.SubBlocks.Add(subBlock);
+        mod.Cells.Records.Add(block);
+        mod.Cells.LastModified = 424242;
+
+        var worldspace = mod.Worldspaces.AddNew();
+        worldspace.EditorID = "TimestampWorldspace";
+        worldspace.SubCellsTimestamp = 424242;
+
+        var dir = Directory.CreateTempSubdirectory("medit-parity-synthetic-");
+        try
+        {
+            await MutagenJsonConverter.Instance.Serialize(mod, dir.FullName);
+
+            var rootText = await File.ReadAllTextAsync(Path.Combine(dir.FullName, "RecordData.json"));
+            Assert.Contains($"\"OverriddenForms\"", rootText, StringComparison.Ordinal);
+            Assert.Contains(overriddenForm.ToString(), rootText, StringComparison.Ordinal);
+
+            var cellGroupFile = Path.Combine(dir.FullName, "Cells", "[0] 0", "GroupRecordData.json");
+            Assert.True(File.Exists(cellGroupFile), $"Expected {cellGroupFile} to exist.");
+            Assert.Contains("\"LastModified\": 424242", await File.ReadAllTextAsync(cellGroupFile), StringComparison.Ordinal);
+
+            var worldspaceFile = Directory.EnumerateFiles(dir.FullName, "RecordData.json", SearchOption.AllDirectories)
+                .Single(f => f.Contains("TimestampWorldspace", StringComparison.Ordinal));
+            Assert.Contains("\"SubCellsTimestamp\": 424242", await File.ReadAllTextAsync(worldspaceFile), StringComparison.Ordinal);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     private static async Task AssertBothDoorsAgree(
         Fallout4Mod mod, Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter record, string editorId)
     {

@@ -27,14 +27,13 @@ public class RecordTextCodecTests
             },
         };
 
-    // No exclusion list: verified empirically (#367 report, re-verified for JSON at #412 by
-    // temporarily dropping both calls and diffing the regenerated golden fixture byte-for-byte —
-    // see RecordTextCodecCustomization's own comment) that .OmitLastModifiedData()/
-    // .OmitTimestampData() are no-ops for a standalone Weapon — the serialized JSON is
-    // byte-identical with and without them. Both customizations are about mod/header-level
-    // metadata (Spriggit's own scope), which this codec never touches; VersionControl (the field
-    // that could plausibly be "the timestamp" on a record) round-trips like everything else, which
-    // is why this test asserts every field equal with no exceptions.
+    // No exclusion list: historically (#367 report, re-verified for JSON at #412), the now-deleted
+    // .OmitLastModifiedData()/.OmitTimestampData() calls (#470 removed them — see
+    // RecordTextCodecCustomization's own comment) were verified no-ops for a standalone Weapon — the
+    // serialized JSON was byte-identical with and without them, because both only ever targeted
+    // group/Cell/Worldspace fields Weapon doesn't have. VersionControl (the field that could
+    // plausibly be "the timestamp" on a record) round-trips like everything else, which is why this
+    // test asserts every field equal with no exceptions.
     //
     // The leaf-count guard is load-bearing, not decoration: Assert.Empty(divergent) alone passes
     // if the walker visits zero leaves (a broken walker, a mask that came back null-shaped, etc.)

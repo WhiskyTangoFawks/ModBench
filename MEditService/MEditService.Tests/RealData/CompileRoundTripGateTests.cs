@@ -221,6 +221,66 @@ public sealed class CompileRoundTripGateTests : IDisposable
         Assert.DoesNotContain("SpriggitSource", rootText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// #470: ADR-0042 decision 3 ("nothing is omitted from the files, ever") has no exception left —
+    /// this is the one clause of it that a real Track of the committed fixture can actually move,
+    /// since <c>RecordTextCodecCustomization</c>'s <c>.OmitTimestampData()</c> targeted exactly these
+    /// two <c>Cell</c> properties (see that class's own inline comment). Checked on the known interior
+    /// cell <c>03C0F0:Fallout4.esm</c> ("CroupManor01"), whose <c>Persistent</c>/<c>TemporaryTimestamp</c>
+    /// deep-copied from real Fallout4.esm data (<c>CutDownPluginGenerator.TrimCell</c>) are non-default
+    /// (138972) — not a coincidental zero that would pass whether or not the field were written.
+    ///
+    /// <para><b>Live rival, applied and observed</b> (not merely asserted): with
+    /// <c>.OmitTimestampData()</c> still in <see cref="Serialization.RecordTextCodecCustomization"/>,
+    /// this test fails with "Assert.Contains() Failure: Sub-string not found" against a cell document
+    /// that has no <c>PersistentTimestamp</c>/<c>TemporaryTimestamp</c> key at all — confirmed by
+    /// running this exact assertion against that unmodified state before the customization's two
+    /// calls were deleted.</para>
+    /// </summary>
+    [Fact]
+    public void Track_OfTheRealFixture_WritesCellTimestampData()
+    {
+        var cellFile = Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
+            .Single(f => f.Contains("03C0F0", StringComparison.Ordinal));
+        var cellText = File.ReadAllText(cellFile);
+
+        Assert.Contains("\"PersistentTimestamp\": 138972", cellText, StringComparison.Ordinal);
+        Assert.Contains("\"TemporaryTimestamp\": 138972", cellText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #470 AC3's other two clauses — condition <c>Unknown1</c> and the mod header's own stats
+    /// (<c>NumRecords</c>/<c>NextFormID</c>) — asserted on the committed fixture, unconditionally, no
+    /// exception clause. Both are already true today: nothing in this codebase's current
+    /// <c>Serialization/</c> or <c>Source/</c> code has ever suppressed either (confirmed by direct
+    /// read/grep — the per-type customization that once did,
+    /// <c>SpriggitConditionOmitCustomization</c> and its two siblings, was deleted whole in #468's
+    /// revert of #455). <b>Green on arrival, not an untested guess</b>: the deleted suite's own test
+    /// (<c>SpriggitOmitCustomizationsTests.TheTree_OmitsExactlyTheFieldsSpriggitsFallout4PackageOmits</c>,
+    /// recoverable at <c>git show 3f4e447</c>) is the rival already applied and observed, in the prior
+    /// ticket — with that customization active it pinned 1,929 <c>Unknown1</c> occurrences across 981
+    /// files and an absent <c>NumRecords</c>/<c>NextFormID</c> on the root document; #468 deleted the
+    /// customization, not the fixture, so the same fields are the ones this test finds present now.
+    /// Not re-derived by resurrecting deleted code — cited instead.
+    ///
+    /// <para>The known record is the same DialogTopic response #452/#454 already use elsewhere in this
+    /// class: <c>01AACD:Fallout4.esm</c>, whose first condition's <c>Unknown1</c> is a real,
+    /// non-default 3-byte pad copied from Fallout4.esm (<c>0x1D9D68</c>) — not a zero/empty value a
+    /// missing-field bug could produce by coincidence.</para>
+    /// </summary>
+    [Fact]
+    public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
+    {
+        var responseFile = Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
+            .Single(f => f.Contains("01AACD_Fallout4.esm.json", StringComparison.Ordinal));
+        var responseText = File.ReadAllText(responseFile);
+        Assert.Contains("\"Unknown1\": \"0x1D9D68\"", responseText, StringComparison.Ordinal);
+
+        var rootText = File.ReadAllText(Path.Combine(SourceRoot, "RecordData.json"));
+        Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);
+        Assert.Contains("\"NextFormID\": 2049", rootText, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Compile_OfTheRealFixture_Succeeds()
     {

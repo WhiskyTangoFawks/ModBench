@@ -353,19 +353,25 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // #413: the three GRUP-timestamp properties join this list for the same reason
     // MajorRecordFlagsRaw and FormVersion are already on it — they are not record data. A timestamp
-    // here belongs to the GRUP that contains the record, not to the record, and the per-record
-    // serializer accordingly never emits one. Once documents are the record store (ADR-0041), a
-    // reflected column the document model cannot carry would be a column that always reads its CLR
-    // default: the schema would be claiming a field it cannot serve. Dropping them makes the
-    // reflected schema agree with what the serializer actually emits, which is the invariant that
-    // matters; the alternative (keeping them and special-casing view generation) would have put
-    // per-type field knowledge into the view rule, which D2 forbids.
+    // here belongs to the GRUP that contains the record, not to the record, so it stays out of the
+    // queryable schema on that ground alone (ADR-0042's own file/view-layer split: the source
+    // document is the lossless side, this reflected schema is the queryable-projection side, and the
+    // two are allowed to diverge here on purpose).
+    //
+    // #470 correction: this comment used to also justify the skip by "the per-record serializer
+    // accordingly never emits one". That premise is gone — RecordTextCodecCustomization no longer
+    // omits Cell.PersistentTimestamp/TemporaryTimestamp or Worldspace.SubCellsTimestamp from the
+    // *file* (ADR-0042 decision 3 now has no exception), so <Type>_Serialization does write these
+    // properties today. The skip itself is unaffected: GrupTimestamps_AreAbsentFromSchemaAndViewsAlike
+    // still holds, and still should, on the GRUP-ownership argument above — a reflected column and a
+    // source-document field are different promises, and only the file's is required to be lossless.
     //
     // CAVEAT for whoever hits this next: the skip is BY PROPERTY NAME ACROSS EVERY RECORD TYPE. If a
-    // future game has a record type with a genuine, serializer-emitted field called Timestamp (or
-    // TemporaryTimestamp / PersistentTimestamp), this list would wrongly drop it. The rule to
-    // re-verify is parity with serializer emission — does <Type>_Serialization write this property?
-    // — not "extend the list because a new name looks similar".
+    // future game has a record type where Timestamp/TemporaryTimestamp/PersistentTimestamp is
+    // genuine per-record data rather than GRUP metadata, this list would wrongly drop it. The rule to
+    // re-verify is whether the field is conceptually the record's own data or its containing GRUP's
+    // — not "extend the list because a new name looks similar", and no longer "does the serializer
+    // emit it", since #470 means that question no longer distinguishes the two cases.
     private static readonly HashSet<string> BaseSkip = new(StringComparer.OrdinalIgnoreCase)
     {
         "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
