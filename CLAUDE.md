@@ -56,7 +56,11 @@ export MEDIT_SPRIGGIT_TOOL=~/.spriggit-oracle/Spriggit.Json.Fallout4
   sorted, `wbArray` = unsorted), `modorganizer/` (MO2 C++, e.g.
   `src/downloadmanager.cpp` for `.meta` semantics), `SFRecordCompareEngine/`
   (UX-parity reference).
-  `vscode-docs` for vscode api documentation
+  `vscode-docs` for vscode api documentation.
+  **Gitignored, so it exists only in the main checkout and never in a `git worktree`.**
+  From a worktree, read it at the main checkout's absolute path — a relative grep
+  there matches nothing and returns success, which reads as "no such convention
+  upstream" rather than "you looked in the wrong place".
 - New end-to-end command = 4 touch points, else half-wired: backend endpoint +
   `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) →
   `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in
