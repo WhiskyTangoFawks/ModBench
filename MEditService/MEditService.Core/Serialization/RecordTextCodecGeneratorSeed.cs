@@ -118,11 +118,12 @@ internal static class RecordTextCodecGeneratorSeed
     /// aren't part of a CLR signature), the two collide: <c>CS0111: Type
     /// 'MutagenJsonConverterFallout4ModMixIns' already defines a member called 'Serialize'/'Deserialize'
     /// with the same parameter types</c>, reproduced on this project's 1.37.1 pin by trying exactly
-    /// that. Nothing in this codebase needs <c>extraMeta</c> today (#468, ADR-0042: format identity, when
-    /// it lands in #473, is written into the root document's own fields rather than as a merged
-    /// side-object), so the defect is currently moot rather than worked around — recorded here in case
-    /// a future caller reaches for <c>extraMeta</c> and hits it fresh. Revisit if the Serialization pin
-    /// ever bumps past 1.37.1 and this is confirmed fixed upstream.</para>
+    /// that. Nothing in this codebase needs <c>extraMeta</c> today (#468; ADR-0042's #473 amendment
+    /// retired the format-identity stamp the original decision 5 would have needed this for — nothing
+    /// is written to the root document to compare, merged side-object or otherwise), so the defect is
+    /// currently moot rather than worked around — recorded here in case a future caller reaches for
+    /// <c>extraMeta</c> and hits it fresh. Revisit if the Serialization pin ever bumps past 1.37.1 and
+    /// this is confirmed fixed upstream.</para>
     /// </summary>
     internal static Task SerializeWholeMod(IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
         => MutagenJsonConverter.Instance.Serialize(mod, folder, workDropoff: workDropoff, cancel: cancel);

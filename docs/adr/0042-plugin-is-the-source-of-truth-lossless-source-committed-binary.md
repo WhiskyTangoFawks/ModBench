@@ -4,6 +4,13 @@ status: accepted
 
 # The plugin is the source of truth again: the source is its lossless, gate-verified editable form
 
+> **Amendment (2026-08-22, #473):** decision 5's format-identity stamp and its load-time
+> refusal gate are retired — no version is written at Track, and nothing is compared at
+> session load. Compatibility is not predicted, it's observed: compiling the source is
+> the one signal, uniform regardless of why it fails. See the amendment section below
+> ("Format identity is not stamped…") for the replacement; the Consequences bullet on
+> Mutagen bumps and #473's original acceptance criteria are superseded by it.
+
 Decided in the 2026-08-22 design session (grilled to closure), which began as #459's
 final design pass and ended by re-grounding the whole Spriggit relationship. Supersedes
 ADR-0040's Spriggit-codec decision and ADR-0041's #444 amendment ("Spriggit as format
@@ -198,3 +205,55 @@ Recorded so nobody re-proposes either without the reason it was dropped.
   to a hoped-for upstream fix)** — rejected by the maintainer as a divergence from a
   format we claimed to be held to. Moot now: numbering every folder-split list is our
   format's definition (decision 4).
+
+#### Format identity is not stamped; compile failure is the uniform signal *(amendment, 2026-08-22, #473)*
+
+Decided the same day, on review of decision 5 before #473's implementation started: a
+version comparison was the wrong trigger, and turns out not to need a stamp once retired.
+
+**The trigger was wrong.** A stored identity mismatch is a *guess* that the source won't
+compile, and a bad one both ways: comparing it against the running codec refuses mods
+that would round-trip fine (a Mutagen bump for reasons like #385 has nothing to do with
+whether our own JSON shape changed), and it says nothing when hand-edited or
+externally-corrupted source breaks compile without any version ever moving. The real
+signal is compiling itself succeeding or failing — and once that's the signal, *why* it
+failed stops mattering: a version-driven format break and a user's bad hand edit produce
+the same event and the same remedy (re-Track to regenerate the source). Decision 5's
+load-time refusal is retired; a tracked mod opens regardless of what, if anything, its
+source claims to be. Detection moves to the existing compile path — Save & Compile,
+already explicit per this ADR — and reuses the named-failure diagnostic decision 2's
+round-trip gate already produces (the failing record, or the header/container structure
+if every record matched); there is no separate mismatch-specific message.
+
+**The stamp itself does not survive.** Walking through every way a version number could
+still be load-bearing once it no longer gates anything:
+
+- A non-breaking codec change (additive field, internal refactor) needs nothing — the
+  deserializer just defaults the new field, unconditionally, for every tree whether old
+  or new.
+- A breaking change where old and new shapes differ in their content (a renamed key, a
+  field's presence or absence) migrates by sniffing the data itself — no stored version
+  is needed to decide which reading applies.
+- A breaking change with no possible migration fails compile with the round-trip gate's
+  own named-failure diagnostic; a version number would not change the remedy (re-Track)
+  or add information the failure doesn't already carry.
+- Hand-edited or externally-corrupted source fails compile the same way, and by
+  construction has nothing to do with a version at all — proof the uniform path works
+  without one.
+
+The one case where a discriminator would actually earn its keep — two shapes that are
+structurally indistinguishable from each other but mean different things across a
+breaking change — is narrow enough to be handled the day it happens, scoped to the one
+ambiguous field or document type that needs it, not stamped on every tracked mod from
+day one against a disambiguation need that may never arrive. A root-document-wide
+version field is exactly the kind of speculative infrastructure the load-time gate
+already was. **No format-identity field is written at Track.**
+
+**What decision 5 becomes:** codec changes are expected to stay backward-compatible
+(default new fields, sniff old shapes for a migration) wherever feasible — the standing
+obligation this amendment adds, stated by the maintainer directly ("we have control here,
+and should be able to avoid making breaking changes"). When a break is genuinely
+unavoidable and cannot migrate, compiling the affected old source fails, and the user
+sees one message naming the failure and pointing at re-Track — the same message
+hand-edited or externally-corrupted source already produces through the same path. That
+uniform failure path is #473's remaining scope.

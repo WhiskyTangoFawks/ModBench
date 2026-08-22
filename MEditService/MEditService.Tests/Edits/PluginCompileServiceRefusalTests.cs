@@ -80,4 +80,48 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         Assert.False(result.Succeeded);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason);
     }
+
+    /// <summary>
+    /// #473, ADR-0042 amendment: source the codec cannot even parse — a hand edit that breaks the
+    /// JSON, external corruption, anything that leaves the text not valid input to the deserializer
+    /// at all — is a typed refusal pointing at re-Track, the same as every other thing this method
+    /// cannot compile, never an unhandled exception surfacing as a bare 500.
+    /// </summary>
+    [Fact]
+    public void Compile_WithUnparsableSourceFile_RefusesPointingAtReTrack()
+    {
+        File.WriteAllText(_mod.NpcSourceFile, "{ not valid json");
+
+        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Re-Track", result.RefusalReason);
+        Assert.Empty(result.Diagnostics);
+        Assert.Empty(result.Masters);
+    }
+
+    /// <summary>
+    /// #473, ADR-0042 amendment, AC2: a breaking codec change with no migration, simulated without
+    /// waiting for a real one. The spike behind this ticket confirmed the generated deserializer is
+    /// lenient in both directions — an unrecognized property is silently skipped
+    /// (<c>kernel.Skip(reader)</c>) and a missing-but-expected one is silently left at its default —
+    /// so deserializing succeeds either way, and nothing before this ticket ever noticed. Renaming a
+    /// real field's key reproduces exactly that shape: the value is still on disk, but nothing reads
+    /// it anymore, so it never survives being written back out.
+    /// </summary>
+    [Fact]
+    public void Compile_WithSourceFieldRenamedToOneTheCodecNoLongerReads_RefusesNamingTheFile()
+    {
+        var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
+        Assert.Contains("\"Race\"", npcSourceText);
+        File.WriteAllText(_mod.NpcSourceFile, npcSourceText.Replace("\"Race\"", "\"RaceOld\""));
+
+        var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("Re-Track", result.RefusalReason);
+        Assert.Contains(TrackedModFixture.NpcEditorId, result.RefusalReason);
+        Assert.Empty(result.Diagnostics);
+        Assert.Empty(result.Masters);
+    }
 }
