@@ -29,9 +29,10 @@ namespace MEditService.Tests.Serialization;
 /// no-op. On Windows the whole-mod door's <c>Environment.NewLine</c> would make its file
 /// <c>\r\n</c>-delimited while the codec still emits bare <c>\n</c> — the canonical form. That
 /// difference is #444's open Windows question (ADR-0041: "Windows behavior of the whole-mod door to
-/// be verified at implementation, the parity gate adjudicating"); it belongs to the parity gate and
-/// the whole-mod door's own configuration, not to this codec, whose canonical output is defined as
-/// bare <c>\n</c> with no trailing newline on every platform.</para>
+/// be verified at implementation") — the gate ADR-0041 named to adjudicate it was #455's Spriggit
+/// parity gate, retired by #468, so this is currently unaddressed by any automated check; it
+/// belongs to the whole-mod door's own configuration, not to this codec, whose canonical output is
+/// defined as bare <c>\n</c> with no trailing newline on every platform.</para>
 /// </summary>
 public sealed class DocumentShapeParityTests
 {

@@ -82,9 +82,9 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     ///
     /// <para>Absorb rebuilds the whole tree and <c>CommitPristineToMain</c> writes only what it is
     /// handed, with no merge against the previous tree, so anything Absorb forgets is <i>deleted</i>
-    /// from the baseline. It used to be built one record at a time and so forgot all three non-record
-    /// files: the root <c>RecordData.json</c> that is the mod header's own source file (ADR-0041's #444
-    /// amendment, point 1) and both Spriggit sidecars. A tree with no root document cannot be read back
+    /// from the baseline. It used to be built one record at a time and so forgot the one non-record
+    /// file: the root <c>RecordData.json</c> that is the mod header's own source file (ADR-0041's #444
+    /// amendment, point 1). A tree with no root document cannot be read back
     /// at all — the whole-mod door's <c>ExtractMeta</c> takes ModKey and GameRelease from it — which
     /// breaks compile <i>and</i> ingest-from-source the moment that baseline reaches a working tree.</para>
     ///
@@ -94,7 +94,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     /// operations downstream.</para>
     /// </summary>
     [Fact]
-    public void Absorb_WritesACompleteSourceTree_IncludingTheModHeaderAndBothSidecars()
+    public void Absorb_WritesACompleteSourceTree_IncludingTheModHeader()
     {
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
@@ -109,8 +109,8 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
 
         var root = $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}";
         Assert.Contains($"{root}/RecordData.json", tree);
-        Assert.Contains($"{root}/spriggit-meta.json", tree);
-        Assert.Contains($"{root}/.spriggit", tree);
+        Assert.DoesNotContain($"{root}/spriggit-meta.json", tree);
+        Assert.DoesNotContain($"{root}/.spriggit", tree);
     }
 
     [Fact]

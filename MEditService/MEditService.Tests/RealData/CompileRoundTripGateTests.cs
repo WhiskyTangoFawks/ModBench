@@ -80,16 +80,10 @@ public sealed class CompileRoundTripGateTests : IDisposable
 
     private string SourceRoot => Path.Combine(_modFolder, $"{CutDownPluginFixture.PluginFileName}{SourceRecordPath.SourceSuffix}");
 
-    /// <summary>The name of the one sidecar both sides of every comparison here exclude — see
-    /// <see cref="DeriveSourceTreeFromBinary"/>. Its companion <c>.spriggit</c> needs no exclusion:
-    /// it has no <c>.json</c> extension, so neither glob below ever sees it.</summary>
-    private const string SidecarFileName = "spriggit-meta.json";
-
     /// <summary>The tree Track wrote, keyed exactly the way <see cref="DeriveSourceTreeFromBinary"/>
     /// keys its own, so the two dictionaries are directly comparable.</summary>
     private Dictionary<string, byte[]> ReadSourceTree() =>
         Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
-            .Where(f => Path.GetFileName(f) != SidecarFileName)
             .ToDictionary(f => Path.GetRelativePath(_modFolder, f), File.ReadAllBytes);
 
     /// <summary>
@@ -104,14 +98,11 @@ public sealed class CompileRoundTripGateTests : IDisposable
     /// Track wrote. Tests may call the door — the whitelist scan in
     /// <c>RecordTextCodecGeneratorSeedTests</c> is scoped to <c>MEditService.Core</c> sources.</para>
     ///
-    /// <para>Two post-steps make the derived tree comparable rather than merely similar, and both are
-    /// Track's own (<c>TrackService.TrackAsync</c>): the <c>SpriggitSource</c> <c>extraMeta</c> merge
-    /// into the root <c>RecordData.json</c> — deterministic, built from two constants — and the
-    /// <c>\r</c> strip. What is deliberately <i>not</i> reproduced is what
-    /// <c>SpriggitSidecarWriter</c> writes beside the tree (<c>spriggit-meta.json</c>,
-    /// <c>.spriggit</c>): those are not serializer output and carry load-order state rather than record
-    /// content, so both sides exclude them. Everything else in the tree, the mod header's own root
-    /// document included, is inside the comparison.</para>
+    /// <para>One post-step makes the derived tree comparable rather than merely similar, and it is
+    /// Track's own (<c>TrackService.TrackAsync</c>): the <c>\r</c> strip. Everything in the tree, the
+    /// mod header's own root document included, is inside the comparison — Track writes no sidecar
+    /// beside it (#468, ADR-0042: "Spriggit has no role in v1"), so there is nothing left to
+    /// exclude.</para>
     /// </summary>
     private static Dictionary<string, byte[]> DeriveSourceTreeFromBinary(string pluginPath, GameRelease release)
     {
@@ -124,10 +115,8 @@ public sealed class CompileRoundTripGateTests : IDisposable
             RecordTextCodecGeneratorSeed
                 .SerializeWholeMod((IFallout4ModGetter)mod, scratch, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();
-            SpriggitRootHeader.MergeSpriggitSource(Path.Combine(scratch, SpriggitRootHeader.RecordDataFileName));
 
             return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
-                .Where(f => Path.GetFileName(f) != SidecarFileName)
                 .ToDictionary(
                     f => Path.Combine(
                         $"{pluginFileName}{SourceRecordPath.SourceSuffix}", Path.GetRelativePath(scratch, f)),
@@ -164,6 +153,25 @@ public sealed class CompileRoundTripGateTests : IDisposable
 
         Assert.Contains(allFiles, f => System.Text.RegularExpressions.Regex.IsMatch(
             f, @"^Worldspaces/[^/]+/-?\d+, -?\d+/-?\d+, -?\d+/[^/]+/RecordData\.json$"));
+    }
+
+    /// <summary>#468: Tracking the committed fixture writes a root document with no Spriggit package
+    /// stamp and no sidecar beside the tree (ADR-0042, "Spriggit has no role in v1") — checked against
+    /// the real, curated #369 fixture this whole class Tracks in its constructor, not a synthetic
+    /// stand-in.</summary>
+    [Fact]
+    public void Track_OfTheRealFixture_WritesNoSpriggitStampOrSidecar()
+    {
+        var allFiles = Directory.EnumerateFiles(SourceRoot, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(SourceRoot, f).Replace('\\', '/'))
+            .ToList();
+        Assert.NotEmpty(allFiles);
+
+        Assert.DoesNotContain(".spriggit", allFiles);
+        Assert.DoesNotContain("spriggit-meta.json", allFiles);
+
+        var rootText = File.ReadAllText(Path.Combine(SourceRoot, "RecordData.json"));
+        Assert.DoesNotContain("SpriggitSource", rootText, StringComparison.Ordinal);
     }
 
     [Fact]

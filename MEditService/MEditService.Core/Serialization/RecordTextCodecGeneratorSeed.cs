@@ -110,20 +110,19 @@ internal static class RecordTextCodecGeneratorSeed
     /// #452 and compile #454 as they land) calls this, never <c>MutagenJsonConverter.Instance</c>
     /// directly — see the class doc comment for why a second direct call site does not compile.
     ///
-    /// <para><b>No <c>extraMeta</c> parameter, deliberately — a second, independent generator defect
-    /// found implementing #451, not a design choice.</b> The generated mixin always emits an
+    /// <para><b>No <c>extraMeta</c> parameter, deliberately — a real generator defect found
+    /// implementing #451, not a design choice.</b> The generated mixin always emits an
     /// <c>extraMeta = null</c> convenience overload; the moment any call site anywhere in the assembly
     /// passes a non-null <c>extraMeta</c> value, it <i>also</i> emits a second, <c>extraMeta</c>-required
     /// overload — and because both erase to a bare <c>object</c> parameter (nullability annotations
     /// aren't part of a CLR signature), the two collide: <c>CS0111: Type
     /// 'MutagenJsonConverterFallout4ModMixIns' already defines a member called 'Serialize'/'Deserialize'
     /// with the same parameter types</c>, reproduced on this project's 1.37.1 pin by trying exactly
-    /// that. <see cref="Source.TrackService"/> writes the <c>SpriggitSource</c> extraMeta object into
-    /// the root <c>RecordData.json</c> itself, as a post-write JSON merge — the same on-disk property
-    /// the generator's own <c>extraMeta</c> hook would have written (<c>WriteLoqui</c> keys the
-    /// property name off the object's own <c>GetType().Name</c>, which is exactly what the merge
-    /// reproduces), without exercising the broken overload pair. Revisit if the Serialization pin ever
-    /// bumps past 1.37.1 and this is confirmed fixed upstream.</para>
+    /// that. Nothing in this codebase needs <c>extraMeta</c> today (#468, ADR-0042: format identity, when
+    /// it lands in #473, is written into the root document's own fields rather than as a merged
+    /// side-object), so the defect is currently moot rather than worked around — recorded here in case
+    /// a future caller reaches for <c>extraMeta</c> and hits it fresh. Revisit if the Serialization pin
+    /// ever bumps past 1.37.1 and this is confirmed fixed upstream.</para>
     /// </summary>
     internal static Task SerializeWholeMod(IFallout4ModGetter mod, string folder, Noggog.WorkEngine.IWorkDropoff workDropoff, CancellationToken cancel)
         => MutagenJsonConverter.Instance.Serialize(mod, folder, workDropoff: workDropoff, cancel: cancel);

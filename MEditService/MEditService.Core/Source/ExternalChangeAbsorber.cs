@@ -20,10 +20,10 @@ namespace MEditService.Core.Source;
 ///
 /// <para><b>"Exactly as Track does" is now literally true (#454), and it was not before.</b> This used
 /// to build the tree one record at a time through <c>SourceRecordPath.For</c> — a second, divergent
-/// implementation of the door's write, which since #451 produced a tree missing all three non-record
-/// files: the root <c>RecordData.json</c> (the mod header's own source file) and both Spriggit
-/// sidecars. <see cref="SourceRepository.CommitPristineToMain"/> writes only what it is handed and
-/// never merges with the previous tree, so those were <i>deleted</i> from the baseline, leaving a tree
+/// implementation of the door's write, which since #451 produced a tree missing the one non-record
+/// file: the root <c>RecordData.json</c> (the mod header's own source file).
+/// <see cref="SourceRepository.CommitPristineToMain"/> writes only what it is handed and
+/// never merges with the previous tree, so that was <i>deleted</i> from the baseline, leaving a tree
 /// nothing could read back — compile and ingest-from-source both take ModKey and GameRelease from that
 /// root document. It now shares <see cref="TrackService.SerializeToPristineFiles"/>, so there is one
 /// implementation and it cannot drift again. Absorb's old container refusal went with it: it existed
@@ -41,7 +41,7 @@ public static class ExternalChangeAbsorber
             new ModPath(ModKey.FromFileName(pluginName), pluginPath), session.GameRelease);
 
         var pristineFiles = TrackService
-            .SerializeToPristineFiles(deepParsed, pluginName, session)
+            .SerializeToPristineFiles(deepParsed, pluginName)
             .GetAwaiter().GetResult();
 
         var binarySha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(pluginPath)));

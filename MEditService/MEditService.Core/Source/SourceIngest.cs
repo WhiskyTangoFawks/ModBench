@@ -88,9 +88,8 @@ internal static class SourceIngest
     /// <para><b>The dirty set comes from git, not from a hash compare against the index.</b> That is
     /// deliberate and it matters: <c>records.content_hash</c> is the hash of the codec's own
     /// <i>canonical</i> serialization, so comparing it against <c>HEAD</c>'s blob hash would report
-    /// every record of an interchange tree (one stock Spriggit wrote, whose bytes differ from ours by
-    /// the parity gate's named allowlist) as modified, and then re-baseline every one of them into
-    /// permanent dirt. <c>git status</c> answers the question actually being asked — does this file
+    /// every record of a tree not produced by this exact codec run as modified, and then re-baseline
+    /// every one of them into permanent dirt. <c>git status</c> answers the question actually being asked — does this file
     /// differ between the working tree and <c>HEAD</c> — with no canonicality assumption at all, in a
     /// single process.</para>
     ///
@@ -127,7 +126,7 @@ internal static class SourceIngest
             if (!SourceRecordPath.TryParse(relativePath, gameRelease, out var identity))
             {
                 // Fails closed for everything that is not a flat record file: the root RecordData.json,
-                // the Spriggit sidecars, .gitignore — and every *container* path
+                // .gitignore — and every *container* path
                 // (Cells/<b>/<sb>/<name>/RecordData.json, Quests/<name>/...). A container's Head
                 // divergence is genuinely out of reach here: recovering a record type from a container
                 // path needs a reader nothing has built: #454 declined the grammar (compile hands the
