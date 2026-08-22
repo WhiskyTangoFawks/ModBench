@@ -3,6 +3,7 @@ using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
@@ -51,20 +52,10 @@ public sealed class PluginCompileService(
 {
     public CompileResult Compile(PluginKey plugin, CompileSource source)
     {
-        var session = sessions.Session;
-        var index = sessions.Index;
-        if (session == null || index == null)
-            return CompileResult.Refused("No session is loaded.");
-
-        var modFolder = ModFolders.TrackedOf(session, plugin);
-        if (modFolder == null)
-            return CompileResult.Refused($"{plugin.Name} is not tracked, so there is no source to compile.");
-
-        var metadata = session.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
-            && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
-        if (metadata == null)
-            return CompileResult.Refused($"{plugin.Name} is not part of the loaded session.");
+        var (resolvedSession, resolvedIndex, resolvedModFolder, resolvedMetadata, targetRefusal) = ResolveCompileTarget(plugin);
+        if (targetRefusal != null)
+            return CompileResult.Refused(targetRefusal);
+        var (session, index, modFolder, metadata) = (resolvedSession!, resolvedIndex!, resolvedModFolder!, resolvedMetadata!);
 
         // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
         // same "read this directory" call. Once this returns, `using` disposes the scratch on every
@@ -77,9 +68,10 @@ public sealed class PluginCompileService(
                 $"{plugin.Name} has no source tree at {checkout.Description}, so there is nothing to compile.");
         }
 
-        var mod = RecordTextCodecGeneratorSeed
-            .DeserializeWholeMod(checkout.TreeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var (parsedMod, deserializeRefusal) = DeserializeSource(checkout.TreeRoot, plugin.Name);
+        if (deserializeRefusal != null)
+            return CompileResult.Refused(deserializeRefusal);
+        var mod = parsedMod!;
 
         // Structurally impossible to emit: two source units both claiming one FormKey (a hand-edit, an
         // interrupted rename, a third-party tool's copy) can only become one binary record, silently
@@ -96,42 +88,11 @@ public sealed class PluginCompileService(
                 $"{string.Join(", ", collidingFormKeys)}.");
         }
 
-        // Semantic breakage compiles successfully with diagnostics (dangling/type-mismatched
-        // FormLinks and kin) — the same CheckErrorBuilder-driven CheckError the editor already shows
-        // per field (DuckDbRecordIndex.GetDocument), read here rather than re-derived, so "what the
-        // editor flags" and "what compile reports" can't drift.
-        //
-        // #454's scope said "diagnostics unchanged", and this one place they are not — flagged here
-        // rather than left for a reader to notice the discrepancy on their own. The old loop walked the
-        // source *files* it had just read, so a record with no file of its own could not be diagnosed at
-        // all; this walks the mod, so embedded children (placed refs, navmeshes, landscape, a
-        // worldspace's TopCell) now report too, against the container document that holds them. It is a
-        // widening with nothing withdrawn — every record diagnosed before is still diagnosed, with the
-        // same message from the same builder — and it falls out of reading the tree whole rather than
-        // being sought; suppressing it back to the old set would mean re-deriving "does this record have
-        // a file", which is exactly the path-shaped reasoning this ticket removed.
-        var diagnostics = new List<CompileDiagnostic>();
-        foreach (var record in mod.EnumerateMajorRecords())
-        {
-            var formKey = record.FormKey.ToString();
-            var document = index.GetDocument(formKey, plugin);
-            if (document == null) continue;
+        var roundTripRefusal = RefuseIfSourceDoesNotRoundTrip(mod, plugin.Name, checkout.ResolverRoot);
+        if (roundTripRefusal != null)
+            return CompileResult.Refused(roundTripRefusal);
 
-            var errors = document.Fields
-                .Where(f => f.CheckError != null)
-                .Select(f => $"{f.Metadata.Name}: {f.CheckError}")
-                .ToList();
-            if (errors.Count == 0) continue;
-
-            // The record's own source unit, resolved the one way this codebase resolves one (#453) —
-            // a flat record's computed path, a container's own directory, or, for an embedded child,
-            // the parent document that actually holds it. Only records that have something to report
-            // pay for it, which is what keeps a container's subtree scan off the common path.
-            var relativePath = SourceUnitResolver
-                .Resolve(index, plugin, checkout.ResolverRoot, formKey, document.RecordType, document.EditorId, session.GameRelease)
-                ?.RelativePath ?? string.Empty;
-            diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
-        }
+        var diagnostics = CollectDiagnostics(mod, index, plugin, checkout.ResolverRoot, session.GameRelease);
 
         var loadOrder = session.Plugins
             .Where(p => p.InLoadOrder)
@@ -166,6 +127,143 @@ public sealed class PluginCompileService(
         logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
             plugin.Name, plugin.Origin, mod.EnumerateMajorRecords().Count());
         return CompileResult.Success(diagnostics, masters);
+    }
+
+    /// <summary>
+    /// The three checks that establish there is a source to compile at all: a session, a tracked mod
+    /// folder for <paramref name="plugin"/>, and that plugin's own metadata within the session.
+    /// Extracted out of <see cref="Compile"/> alongside this ticket's own two refusal checks (S1541)
+    /// — this one predates #473, but the same flattening applies to it once <see cref="Compile"/>
+    /// had two more branches to make room for.
+    /// </summary>
+    private (IGameSession? Session, IRecordIndex? Index, string? ModFolder, PluginMetadata? Metadata, string? RefusalReason)
+        ResolveCompileTarget(PluginKey plugin)
+    {
+        var session = sessions.Session;
+        var index = sessions.Index;
+        if (session == null || index == null)
+            return (null, null, null, null, "No session is loaded.");
+
+        var modFolder = ModFolders.TrackedOf(session, plugin);
+        if (modFolder == null)
+            return (null, null, null, null, $"{plugin.Name} is not tracked, so there is no source to compile.");
+
+        var metadata = session.Plugins.FirstOrDefault(p =>
+            p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
+            && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
+        if (metadata == null)
+            return (null, null, null, null, $"{plugin.Name} is not part of the loaded session.");
+
+        return (session, index, modFolder, metadata, null);
+    }
+
+    /// <summary>
+    /// Semantic breakage compiles successfully with diagnostics (dangling/type-mismatched FormLinks
+    /// and kin) — the same <c>CheckErrorBuilder</c>-driven <c>CheckError</c> the editor already shows
+    /// per field (<c>DuckDbRecordIndex.GetDocument</c>), read here rather than re-derived, so "what
+    /// the editor flags" and "what compile reports" can't drift.
+    ///
+    /// <para>#454's scope said "diagnostics unchanged", and this one place they are not — flagged
+    /// here rather than left for a reader to notice the discrepancy on their own. The old loop walked
+    /// the source <i>files</i> it had just read, so a record with no file of its own could not be
+    /// diagnosed at all; this walks the mod, so embedded children (placed refs, navmeshes, landscape,
+    /// a worldspace's TopCell) now report too, against the container document that holds them. It is
+    /// a widening with nothing withdrawn — every record diagnosed before is still diagnosed, with the
+    /// same message from the same builder — and it falls out of reading the tree whole rather than
+    /// being sought; suppressing it back to the old set would mean re-deriving "does this record have
+    /// a file", which is exactly the path-shaped reasoning this ticket removed. Extracted out of
+    /// <see cref="Compile"/> alongside this ticket's own two refusal checks (S1541).</para>
+    /// </summary>
+    private static List<CompileDiagnostic> CollectDiagnostics(
+        IMod mod, IRecordIndex index, PluginKey plugin, string resolverRoot, GameRelease gameRelease)
+    {
+        var diagnostics = new List<CompileDiagnostic>();
+        foreach (var record in mod.EnumerateMajorRecords())
+        {
+            var formKey = record.FormKey.ToString();
+            var document = index.GetDocument(formKey, plugin);
+            if (document == null) continue;
+
+            var errors = document.Fields
+                .Where(f => f.CheckError != null)
+                .Select(f => $"{f.Metadata.Name}: {f.CheckError}")
+                .ToList();
+            if (errors.Count == 0) continue;
+
+            // The record's own source unit, resolved the one way this codebase resolves one (#453) —
+            // a flat record's computed path, a container's own directory, or, for an embedded child,
+            // the parent document that actually holds it. Only records that have something to report
+            // pay for it, which is what keeps a container's subtree scan off the common path.
+            var relativePath = SourceUnitResolver
+                .Resolve(index, plugin, resolverRoot, formKey, document.RecordType, document.EditorId, gameRelease)
+                ?.RelativePath ?? string.Empty;
+            diagnostics.AddRange(errors.Select(message => new CompileDiagnostic(formKey, relativePath, message)));
+        }
+        return diagnostics;
+    }
+
+    /// <summary>
+    /// #473, ADR-0042 amendment: whatever is wrong with the source — a hand edit that breaks the
+    /// JSON, external corruption, a codec change the tree predates — the remedy is always the same
+    /// (re-Track), so the message is uniform regardless of which internal exception shape the
+    /// deserializer happens to throw for a given kind of damage. Deliberately unfiltered, the same
+    /// way <see cref="RecordEditService"/>'s own cascade catch is (Q5(b)): the failure surface is
+    /// "whatever the JSON/Mutagen layers throw for input they cannot read", not one exception type.
+    /// Extracted out of <see cref="Compile"/> to keep that method's branching flat as this ticket
+    /// adds a second, independent way to refuse the same deserialized source (S1541).
+    /// </summary>
+    private (IMod? Mod, string? RefusalReason) DeserializeSource(string treeRoot, string pluginName)
+    {
+        try
+        {
+            var mod = RecordTextCodecGeneratorSeed
+                .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            return (mod, null);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "{Plugin} could not be read from its source", pluginName);
+            return (null, $"{pluginName} could not be read from its source: {ex.Message} Re-Track to regenerate the source.");
+        }
+    }
+
+    /// <summary>
+    /// #473, ADR-0042 amendment: does this source, once understood by the codec, faithfully
+    /// reproduce itself? Deserializing above can succeed while quietly losing data — the spike
+    /// behind this ticket confirmed the generated deserializer skips an unrecognized property and
+    /// leaves a missing-but-expected one at its default, neither ever throwing — so a successful
+    /// parse is not itself evidence the source was read correctly.
+    ///
+    /// <para>Unlike <see cref="TrackService"/>'s own round-trip gate (#471, decision 2), there is no
+    /// independent "original" to check <paramref name="mod"/> against here — the source text is the
+    /// only ground truth compile has, which is ADR-0042's own premise. So the check is
+    /// self-consistency, not identity: regenerate canonical text from <paramref name="mod"/> and
+    /// byte-compare it against what is actually on disk. A silently dropped or defaulted field never
+    /// round-trips this way — the regenerated file omits what the on-disk file still carries — which
+    /// is where that surfaces, rather than as a wrong binary with no signal at all. Naming follows
+    /// the same shape as Track's gate (byte identity is the check; naming the offender is a second,
+    /// separate step only paid for on failure) but names the differing source file's own path rather
+    /// than a record via <c>Equals</c> — there is no independent object to compare against here
+    /// either, only the regenerated text and the real text.</para>
+    /// </summary>
+    private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
+    {
+        var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
+        var rootHeaderPath = Path.Combine($"{pluginName}{SourceRecordPath.SourceSuffix}", SourceUnitResolver.RecordDataFileName);
+
+        foreach (var file in regeneratedFiles)
+        {
+            var onDiskPath = Path.Combine(resolverRoot, file.RelativePath);
+            if (File.Exists(onDiskPath) && File.ReadAllBytes(onDiskPath).AsSpan().SequenceEqual(file.Content))
+                continue;
+
+            var offender = file.RelativePath == rootHeaderPath ? "the plugin header" : file.RelativePath;
+            return $"{pluginName} does not round-trip through its own source: {offender} does not match " +
+                "what the current codec would produce from it. Re-Track to regenerate the source.";
+        }
+
+        return null;
     }
 }
 
