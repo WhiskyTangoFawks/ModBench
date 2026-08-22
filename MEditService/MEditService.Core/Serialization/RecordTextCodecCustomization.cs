@@ -3,11 +3,11 @@ using Mutagen.Bethesda.Serialization.Customizations;
 namespace MEditService.Core.Serialization;
 
 /// <summary>
-/// Replicates the Spriggit-compatible customization from spike #359
-/// (<c>spike/Spriggit.Spike/Customization.cs</c> on the #359 spike branch),
-/// which itself mirrors Spriggit's own "Translation Packages/Spriggit.Yaml.Fallout4/Customization.cs"
-/// exactly for its three base settings — the whole of that file, verified against the clone at
-/// #450 rather than carried forward from the spike's replica.
+/// The base customization every whole-mod/per-record document goes through — three settings whose
+/// shape traces back to Spriggit's own "Translation Packages/Spriggit.Json.Fallout4/Customization.cs"
+/// (spike #359's replica, verified against the clone at #450), but no longer held to that source as
+/// a specification (#468, ADR-0042: "Spriggit has no role in v1"). What each call does and why this
+/// project still wants it is on <see cref="Customize"/>'s own inline comment below.
 ///
 /// <para><b>Correction (#450).</b> This comment used to list <c>.EnforceRecordOrder()</c> as
 /// "present in Spriggit's real upstream file but absent from the spike's replica". That is false:
@@ -19,16 +19,16 @@ namespace MEditService.Core.Serialization;
 /// folder-of-files group serialization, which <see cref="RecordTextCodec"/> never calls — it
 /// serializes exactly one record to one caller-given file, never a group.)</para>
 ///
-/// <para>Deliberately not replicated: <c>OmitUnknownGroupData</c>/<c>OmitUnusedConditionDataFields</c>
-/// — not a choice; unavailable in Serialization 1.37.1 (spike #359 finding, Q10), and named entries
-/// on #444's parity allowlist that close at the version bump.</para>
-///
-/// <para>What Spriggit's FO4 package adds <i>beyond</i> this base file: the five
-/// <c>EmbedRecordsInSameFile</c> calls, which #450 replicates
-/// (<see cref="SpriggitCellEmbedCustomization"/>); a suite of <c>SortList</c> customizations (1.38.x,
-/// allowlisted); and a <c>Customizations/Omit/</c> set (<c>NextFormID</c>, <c>NumRecords</c>,
-/// <c>OverriddenForms</c>, <c>Unknown1</c>) which is neither replicated nor currently allowlisted —
-/// filed separately, out of scope here.</para>
+/// <para><b>Not used, and not merely deferred</b> (#468, ADR-0042 decision 3 — "nothing is omitted
+/// and nothing is re-sorted in the files, ever"): <c>OmitUnknownGroupData</c> and
+/// <c>OmitUnusedConditionDataFields</c> are unavailable in this project's Serialization 1.37.1 pin
+/// regardless, but even if a future bump made either available, turning it on would now be a bug,
+/// not a gap to close. <b>The one tracked exception to decision 3 is the two calls right below</b> —
+/// <c>OmitLastModifiedData()</c>/<c>OmitTimestampData()</c> are real, load-bearing omissions today
+/// (see their own inline comment on <see cref="Customize"/>), not yet reconciled with "nothing is
+/// omitted, ever"; removing them is #470's job, not this one's. Spriggit's own FO4 package layers a
+/// <c>SortList</c>/<c>Customizations/Omit</c> suite on top of a base like this one; none of it is
+/// adopted here for the same reason.</para>
 /// </summary>
 public sealed class RecordTextCodecCustomization : ICustomize
 {

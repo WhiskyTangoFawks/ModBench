@@ -4,17 +4,20 @@ using Mutagen.Bethesda.Serialization.Customizations;
 namespace MEditService.Core.Serialization;
 
 /// <summary>
-/// Spriggit's own Fallout 4 <c>CellCustomization</c>/<c>WorldspaceCustomization</c>, replicated
-/// (ADR-0041's #444 amendment, "the source tree adopts Spriggit's layout wholesale"; #450). Source:
-/// <c>references/spriggit/Translation Packages/Spriggit.Yaml.Fallout4/Customizations/Sorting/</c> —
-/// grep-only clone, read at implementation, not from memory.
+/// The five <c>EmbedRecordsInSameFile</c> customizations across Cell/Worldspace — historically
+/// adopted at #450 from Spriggit's own <c>CellCustomization</c>/<c>WorldspaceCustomization</c>, and
+/// kept today on this project's own grounds rather than as a compatibility claim: one document per
+/// cell is the tree a human wants (#468, ADR-0042 decision 4).
 ///
-/// <para><b>Deliberately excluded: their <c>SortList</c> calls</b> (<c>Persistent</c>/<c>Temporary</c>
-/// by FormKey). <c>SortList</c> is a Serialization 1.38.x feature, absent from this project's 1.37.1
-/// pin, and is a named entry on the #444 parity allowlist — it closes at the version bump, which is
-/// itself gated on the Mutagen 0.54 ObjectTemplate regression (#385) our round-trip gate exists to
-/// reject. Nothing else in Spriggit's FO4 customization suite is an embed: everything else there is
-/// <c>SortList</c> or <c>Omit</c>.</para>
+/// <para><b>Deliberately excluded: Spriggit's own <c>SortList</c> calls</b> (re-sorting
+/// <c>Persistent</c>/<c>Temporary</c> by FormKey for a cleaner diff). That is exactly the kind of
+/// customization ADR-0042 rules out on principle, not merely a feature this project's Serialization
+/// pin happens to lack: "nothing is omitted and nothing is re-sorted in the files — ever" (decision
+/// 3). Reordering a Cell's own children for diff-cleanliness would be a permanent, silent loss of
+/// the binary's actual child order — the same kind of loss #459 tracks for folder-split children —
+/// so this is never adopted, regardless of what a future Serialization bump makes available. Nothing
+/// else in Spriggit's FO4 customization suite is an embed: everything else there is <c>SortList</c>
+/// or <c>Omit</c>, neither of which this project uses.</para>
 ///
 /// <para><b>These are generation-time customizations, and their reach is assembly-wide.</b> They do
 /// not configure a codec instance — the source generator reads them at compile time and emits
@@ -23,13 +26,12 @@ namespace MEditService.Core.Serialization;
 /// is precisely what makes "one document shape everywhere" checkable — see
 /// <c>DocumentShapeParityTests</c>, which compares the two byte-for-byte.</para>
 ///
-/// <para><b>Which containers this does <i>not</i> cover.</b> Spriggit embeds only these five slots.
+/// <para><b>Which containers this does <i>not</i> cover.</b> Only these five slots embed.
 /// <c>Quest.{DialogBranches,DialogTopics,Scenes}</c> and <c>DialogTopic.Responses</c> stay
 /// folder-split on both doors, which is why <see cref="RecordTextCodec"/> keeps its child-stream and
 /// child-folder suppressions rather than deleting them with the shallow-strip machinery.</para>
 ///
-/// <para>Two classes rather than one because <see cref="ICustomize{T}"/> is per-record-type; that is
-/// Spriggit's own shape too, file for file.</para>
+/// <para>Two classes rather than one because <see cref="ICustomize{T}"/> is per-record-type.</para>
 /// </summary>
 public sealed class SpriggitCellEmbedCustomization : ICustomize<ICellGetter>
 {
