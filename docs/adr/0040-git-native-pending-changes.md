@@ -5,7 +5,10 @@ status: superseded by ADR-0041
 # Pending changes move to git: text ledger, commit = save, merge = acceptance
 
 > **Superseded in full by [ADR-0041](0041-manual-git-tracking-compile-from-text.md)
-> (2026-08-19), including both amendments below.** The git-native direction survives;
+> (2026-08-19), including both amendments below.** The one piece ADR-0041 restated on
+> new terms — the codec's library-level integration of Spriggit's customizations — is
+> itself superseded by [ADR-0042](0042-plugin-is-the-source-of-truth-lossless-source-committed-binary.md) (2026-08-22): the serialization library
+> stays, Spriggit's configuration does not. The git-native direction survives;
 > the shape does not: tracking became a manual per-mod gesture (repo in the mod folder,
 > eager full serialization, pristine `main` + edit branch), the truth partition,
 > vendor-on-first-touch, provenance payloads, drift classification, change-group
