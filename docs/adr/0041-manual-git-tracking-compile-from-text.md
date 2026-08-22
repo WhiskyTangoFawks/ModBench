@@ -19,12 +19,11 @@ status: accepted
 > **Partially superseded by [ADR-0042](0042-plugin-is-the-source-of-truth-lossless-source-committed-binary.md) (2026-08-22):** the #444
 > amendment's "Spriggit as format specification" posture (replica customizations,
 > parity oracle, stamp, `.spriggit` sidecar, binary-first import of foreign trees) is
-> retired — the source is our own lossless format, gate-verified; the plugin binary is
-> **committed** beside it as the version-independent truth; and **commit is no longer
-> ungated** — a pre-commit hook compiles. Manual Track, repo-in-folder, pristine
-> `main` + edit branch, native git UI, the bridge, compile-as-compiler, and the #444
-> amendment's source-completeness/containment-as-path/ingest-from-source content all
-> stand.
+> retired — the source is our own lossless format, gate-verified at Track and in tests,
+> with nothing omitted or re-sorted in the files. Everything else here stands: manual
+> Track, repo-in-folder, pristine `main` + edit branch, **ungated commit**, native git
+> UI, the bridge, compile-as-compiler, `refs/medit/last-compile`, and the #444
+> amendment's source-completeness/containment-as-path/ingest-from-source content.
 
 Supersedes [ADR-0040](0040-git-native-pending-changes.md) and both of its 2026-08
 amendments. Decided in the 2026-08-19 design conversation (grilled to closure); the

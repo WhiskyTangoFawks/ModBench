@@ -4,8 +4,7 @@
 > had amended this for *tracked* mods — text as the working source, the binary as a
 > compiled artifact. ADR-0042 returns the plugin to being the source of truth for
 > tracked and untracked mods alike: a tracked mod's source text is a lossless,
-> gate-verified editable form of the same truth, and the plugin itself is committed
-> beside it. The "YAML via Spriggit" rejection below was vindicated a second time, for
+> gate-verified editable form of the same truth. The "YAML via Spriggit" rejection below was vindicated a second time, for
 > a new reason: Spriggit's format is lossy by design.
 
 The `.esp`/`.esm`/`.esl` binary files on disk are the authoritative source of record data. No intermediate format is introduced. The plugin is what the game reads, what every other tool in the ecosystem understands, and what the user ships — there is no drift problem, no synchronization problem, and no format translation cost.

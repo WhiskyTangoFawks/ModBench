@@ -2,13 +2,14 @@
 status: accepted
 ---
 
-# The plugin is the source of truth again: lossless own-format source, committed binary, commit compiles
+# The plugin is the source of truth again: the source is its lossless, gate-verified editable form
 
-Decided in the 2026-08-22 design session (grilled to closure, four clusters, every
-question answered), which began as #459's final design pass and ended by re-grounding
-the whole Spriggit relationship. Supersedes ADR-0040's Spriggit-codec decision and
-ADR-0041's #444 amendment ("Spriggit as format specification"); reverses ADR-0041's
-ungated commit; restores [ADR-0002](0002-plugins-as-source-of-truth.md) unamended.
+Decided in the 2026-08-22 design session (grilled to closure), which began as #459's
+final design pass and ended by re-grounding the whole Spriggit relationship. Supersedes
+ADR-0040's Spriggit-codec decision and ADR-0041's #444 amendment ("Spriggit as format
+specification"); restores [ADR-0002](0002-plugins-as-source-of-truth.md) unamended.
+*(File name kept from the first draft, which also committed the binary and gated commit
+on compile — both withdrawn the same day; see "Withdrawn the same day" below.)*
 
 ## Context
 
@@ -32,52 +33,40 @@ finishing #459 under that model:
    was inspected: **none ever pinned Mutagen 0.53.x** — the line jumps from 0.52-alpha
    to 0.54-alpha. Our 0.53.1 pin exists only because of #385, so no stamp we write
    could be honest until #385 is fixed upstream. The replica layer (three customization
-   files + oracle + allowlist) therefore takes ownership of something someone else
-   understands better than we do, while carrying a very heavy load: *anything upstream
-   changes outside the configuration — library behaviour, entry-point glue — breaks a
-   persisted artifact silently.*
+   files + oracle + allowlist) took ownership of something someone else understands
+   better than we do, while carrying a very heavy load: anything upstream changes
+   outside the configuration — library behaviour, entry-point glue — would break a
+   persisted artifact silently.
 3. **Persisted artifacts make the serializer version matter**, and we had no answer
    for an existing tree after a Mutagen bump beyond re-running a tool we don't control.
 
-The insight that resolved it: **we don't have access to the real truth the way software
-does — we decompile.** The binary is the one artifact whose meaning depends on nobody's
-version. Commit it.
+The resolving insight: we don't have access to the real truth the way software does —
+we decompile. So make the decompilation **provably faithful**, and the plugin stays the
+truth.
 
 ## Decision
 
-**1. The plugin binary is the source of truth, and it is committed.** Every commit in a
-tracked mod's repository holds the plugin binary *and* its source text, in lockstep.
-The committed plugin is the safety net and the version-independent meaning: any codec,
-at any version, can regenerate the text from it. `.gitignore` presets change
-accordingly — Edits = `<plugin>.source/**` plus the plugin binaries; Everything = all
-assets plus binaries. Nothing needed to rebuild the pair is ever ignored. No LFS in v1
-(the committed fixture has 22 compressed records in 3,941; measure a 2–5 MB scripted
-patch output before deciding otherwise).
+**1. The plugin is the source of truth — one plugin, at the mod folder root.** It is
+what the game loads, what the mod manager deploys, and what every other tool edits.
+There is no second, hidden, Modbench-owned copy and the plugin is not committed to the
+mod's repository: `refs/medit/last-compile/<plugin>` (ADR-0041) remains the reference
+for "the binary as Modbench last wrote it", and the existing load-time hash check and
+bridge watcher remain how external change is observed.
 
-**2. The source is our own format, and it is lossless.** Spriggit's layout is no
-longer a specification we are held to. The one rule, and the test that proves it:
+**2. The source is Modbench's own format, and it is lossless.** Spriggit's layout is
+no longer a specification we are held to. The one rule, and the test that proves it:
 **`compile(serialize(plugin))` is byte-identical to `plugin`** (the existing
-`CompileRoundTripGateTests`, minus any allowlist). Model equality per record is the
+`CompileRoundTripGateTests`, with no allowlist). Per-record model equality is the
 diagnostic that names the broken record when byte identity fails. The gate runs in
 tests **and at Track, over every record of the plugin being tracked** — a plugin that
-does not round-trip is refused, with the failing record named. **Nothing is omitted
-and nothing is re-sorted in the files — ever.** Byte identity of the files is the safety
-net, and every omission, however well proven, is a hole in it. Omission and sorting
-are *view-layer* concerns: if header counters, timestamps, or Creation-Kit-shuffled
-lists make a diff noisy, the diff view or the editor hides or sorts them at render time,
-and the files underneath stay a faithful image of the plugin.
-*(Amended 2026-08-22, same day: the first draft allowed an omission "if and only if the
-gate stays green without it"; the maintainer struck that — a field recomputed by the
-writer is still a field the file should carry.)*
+does not round-trip is refused, with the failing record named.
 
-**3. Commit compiles.** A pre-commit hook compiles the working tree, stages the binary,
-and fails the commit if compile refuses. This reverses ADR-0041's "commit is ungated":
-the invariant "text and binary agree at every commit" is the property the committed
-plugin exists for, and a binary lagging its text breaks it silently. The cost is near
-zero — under the compiler model compile refuses almost nothing (masters and renumber
-cascades are derived, not refused). Because nothing is omitted, compile never has
-anything to normalize: the committed pair is `(binary, serialize(binary))` by
-construction, and the gate proves it.
+**3. Nothing is omitted and nothing is re-sorted in the files — ever.** Byte identity
+of the files is the safety net, and every omission, however well proven, is a hole in
+it. Omission and sorting are *view-layer* concerns: if header counters, timestamps, or
+Creation-Kit-shuffled lists make a diff noisy, the diff view or the editor hides or
+sorts them at render time, and the files underneath stay a faithful image of the
+plugin.
 
 **4. Order is carried in the tree.** Every folder-split list (`DialogTopic.Responses`,
 `Quest.{DialogTopics,DialogBranches,Scenes}`, Cell/Worldspace children) is written with
@@ -88,17 +77,40 @@ wait on. The Cell/Worldspace *embeds* (children inline in the parent document) a
 on our own grounds — one document per cell is the tree a human wants — and
 `SourceUnitResolver` already addresses embedded children.
 
-**5. Format identity lives in the root document**: the Mutagen package version and a
-layout version. On mismatch, Modbench regenerates both tips' text from their committed
-plugins and commits the result — the entire version-bump story, now a mechanical step
-with no old tool, no runtime matching, no escape hatch.
+**5. Format identity lives in the root document** — the Mutagen package version and a
+layout version. A tracked mod whose identity does not match the running codec is
+**refused with a re-Track instruction**; re-Track from the root plugin (working tip) or
+from the mod's origin archive (pristine `main`) is the migration action. A
+format-breaking bump with edits in flight on a downloaded mod is the one awkward case:
+re-Track, then rebase the edit branch. Pre-alpha, documented, manageable — not worth
+machinery.
 
 **6. Spriggit has no role in v1.** No stamp, no `.spriggit` sidecar, no parity oracle,
 no allowlist, no import of Spriggit-shaped trees. Interop, when wanted, is *export*: run
-the real Spriggit tool on the committed plugin. Upstream bug reports (#385 to Mutagen;
-#464's ordering data to Spriggit) are filed as good citizenship, off our critical path,
-and **every text posted to another project is signed off by the maintainer before it is
-posted.**
+the real Spriggit tool on the plugin. Upstream bug reports are filed as good
+citizenship, off our critical path, and **every text posted to another project is
+signed off by the maintainer before it is posted** (#385 → Mutagen-Modding/Mutagen#684,
+2026-08-22).
+
+## Withdrawn the same day
+
+The first draft of this ADR also **committed the plugin binary beside the source at
+every commit** and, to keep that pair honest, **gated commit on compile** via a
+pre-commit hook. Both withdrawn within hours, on the maintainer's re-examination:
+
+- A committed binary's only benefit once the text is lossless is a safety net against
+  *our own codec bugs* and a convenience for format-breaking bumps. The root plugin
+  already is the working tip's binary; the origin archive already is pristine `main`'s.
+  The residual edge case is small enough to be a documented migration (decision 5).
+- A second plugin copy — committed or hidden — confuses the UX ("which one is real?")
+  and either duplicates `refs/medit/last-compile`'s role or makes git see every external
+  tool's edit as binary dirt that the commit hook must then defer on.
+- With no committed pair to keep honest, the commit hook degrades to "auto Save &
+  Compile on commit", reversing ADR-0041's ungated commit for no remaining invariant.
+  **Commit stays ungated; Save & Compile stays explicit**; the compile-pending
+  decoration (#449) stays meaningful.
+
+Recorded so nobody re-proposes either without the reason it was dropped.
 
 ## Consequences
 
@@ -107,23 +119,23 @@ posted.**
   diagnostics) is already "index built from serialized documents" and is untouched;
   the write path's file-addressing layer (`SourceUnitResolver`, `SourceIngest`,
   `SourceRecordPath`, the rename/path halves of `RecordEditService` and
-  `PluginCompileService`, ~1,750 lines) is **kept as-is** because text remains input.
-  The alternative "text is a read-only view" design would have deleted it and left
-  `AtRef` (compile a named ref — how pristine restore works) without a mechanism.
+  `PluginCompileService`, ~1,750 lines) is kept because text remains input. The
+  alternative "text is a read-only view" design would have deleted it and left `AtRef`
+  (compile a named ref — how pristine restore works) without a mechanism.
 - **What is removed**: the three Spriggit customization replicas, `SpriggitSource`/
-  `.spriggit` sidecars, `SpriggitParityGateTests` and its allowlist, the two-door
-  document-shape parity machinery, and every "read at implementation from
-  `references/spriggit`" rationale (~600 test lines). #455's oracle install is no
-  longer a gate.
+  `.spriggit` sidecars, `SpriggitParityGateTests` and its allowlist, and every "read at
+  implementation from `references/spriggit`" rationale (~600 test lines). #455's oracle
+  install is no longer a gate. The two-door document-shape parity test stays — it checks
+  our own two serializers agree.
 - **Git rebase/merge of text, scripts, agents and hand edits all remain first-class**
   — the text is verified lossless, so merging it is merging records. The upstream-update
   rebase story in ADR-0041 stands.
 - **Diffs show what actually changed in the binary**, including header counters and
   timestamps when a plugin last touched by the Creation Kit is tracked. That is true,
-  not noise; if it ever bothers anyone the place to hide it is the diff view, never the
-  format — a view-layer concern by decision 2. mEdit's own writes do not churn.
-- **Mutagen bumps become cheap** (decision 5), so the #385 pin stops gating anything
-  but itself.
+  not noise; hiding it is the diff view's job (decision 3). mEdit's own writes do not
+  churn.
+- **Mutagen bumps** are a format-identity change (decision 5): refuse-and-re-Track. The
+  #385 pin gates nothing but itself.
 - **Existing tracked trees need re-Tracking** — same alpha posture ADR-0041 took for
   #451 and #455's format changes.
 
@@ -131,15 +143,15 @@ posted.**
 
 - **ADR-0002: restored unamended.** The plugin is the source of truth for tracked and
   untracked mods alike; for tracked mods the lossless source is the editable form of
-  the same truth, verified by the gate and backed by the committed plugin.
+  the same truth, verified by the gate.
 - **ADR-0040's "codec from Spriggit" decision and ADR-0041's #444 amendment: superseded**
   — Spriggit as format specification, the replica customizations, the parity oracle, the
   stamp, binary-first import of foreign trees. The #444 amendment's *other* content
   (source is complete, header in source, containment as path, ingest-from-source,
   whole-mod door) **stands**.
-- **ADR-0041's ungated commit: reversed** (decision 3). Everything else in ADR-0041
-  stands: manual Track, repo in the mod folder, pristine `main` + edit branch, native
-  git UI, the bridge, compile-as-compiler.
+- **Everything else in ADR-0041 stands**, including the ungated commit: manual Track,
+  repo in the mod folder, pristine `main` + edit branch, native git UI, the bridge,
+  compile-as-compiler, `refs/medit/last-compile`.
 - **ADR-0003 (Mutagen as parser), ADR-0032 (generic by reflection), ADR-0038 (derived
   masters): stand.**
 
@@ -148,19 +160,18 @@ posted.**
 - **A — keep Spriggit's format as the system of record, harden it** (stamp as an exact
   `(Spriggit, Serialization, Mutagen)` tuple; upstream-only fixes; extract Spriggit's
   customizations from the published package as a data manifest and generate ours from
-  it; format-upgrade gesture running the stamped Spriggit tool out-of-process for any
-  tip not at last-compile). Workable, and the manifest idea is sound for the
-  *configuration* layer — but library behaviour and Spriggit's ~60-line entry-point
-  glue sit outside any manifest, so the design still relies on upstream not changing
-  things we can't see; and it keeps a deliberately lossy format as truth. The first
-  honest stamp would also have waited on #385 + net10 + Mutagen 0.54.
+  it; format-upgrade gesture running the stamped Spriggit tool out-of-process). Workable,
+  and the manifest idea is sound for the *configuration* layer — but library behaviour
+  and Spriggit's ~60-line entry-point glue sit outside any manifest, so the design still
+  relies on upstream not changing things we can't see; and it keeps a deliberately lossy
+  format as truth. The first honest stamp would also have waited on #385 + net10 +
+  Mutagen 0.54.
 - **B — binary is truth, text is a regenerated read-only view, edits go straight to
-  the Mutagen model.** Gets version-independence but discards the file-addressing write
-  path (~1,750 lines + ~1,150 test lines), needs a new mechanism for pristine restore,
-  and loses git-native merge/rebase of content (binaries conflict on every rebase) —
-  forcing a record-level replay design for upstream updates. Design C (this ADR) gets
-  B's safety net while keeping A's workflow, because a *verified* lossless text is
-  trustworthy input.
+  the Mutagen model.** Version-independent, but discards the file-addressing write path
+  (~1,750 lines + ~1,150 test lines), needs a new mechanism for pristine restore, and
+  loses git-native merge/rebase of content (binaries conflict on every rebase). A
+  *verified* lossless text is trustworthy input, which gets the safety without the loss.
+- **Committed binary + commit-compiles hook** — see "Withdrawn the same day".
 - **Fork Spriggit / ask for a library / per-record API upstream.** Three mismatches
   (tool packaging, net10, exact 0.54 pins) plus `internal` generated serializers; even
   granted, it binds us to their version exactly, and #385 shows why that is not ours to
@@ -168,4 +179,4 @@ posted.**
 - **Option D on #459 (local post-write `[N] ` prefix on `Responses/` only, byte-identical
   to a hoped-for upstream fix)** — rejected by the maintainer as a divergence from a
   format we claimed to be held to. Moot now: numbering every folder-split list is our
-  format's definition (decision 4), not a bridge.
+  format's definition (decision 4).
