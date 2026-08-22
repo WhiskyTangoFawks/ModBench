@@ -67,15 +67,23 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     document form is bare `\n` newlines with **nothing after the closing brace**: no trailing
     newline, on every platform. An embedded child is represented inline in its parent's document and
     also as its own `records` row extracted from it; since #452 a tracked plugin has one parse, so
-    the two cannot drift apart. **Spriggit's layout carries no ordering for folder-split children**
-    (its `[N] ` file-name prefix is gated on `Overall.EnforceRecordOrder`, which neither this project
-    nor Spriggit enables), so `container_child.SlotIndex` is the *tree's* order for a tracked plugin,
-    not the binary's — stable, not canonical. **Compile does not restore it either** (#454 retired
-    `ContainerAssembler`, the last thing that tried): a compiled binary's folder-split children come
-    back in the tree's order, so never write prose claiming compile preserves child order. Pinned as a
-    named allowlist entry with exact counts by `SourceIngestParityTests`; for FO4
-    `DialogTopic.Responses` the lost order is real semantic data loss, tracked as **#459** — read it
-    before treating a reordering as a bug or as acceptable.
+    the two cannot drift apart. **Folder-split children carry real GRUP order, not #454-era tree
+    order** (**#459**, superseding the "stable, not canonical" claim this bullet used to make):
+    `RecordTextCodecCustomization` turns `Overall.EnforceRecordOrder` on project-wide, so every
+    folder-split sibling's file name carries a leading `[N] ` prefix — its actual GRUP position, not
+    filesystem-read order — for flat top-level groups and container-nested lists
+    (`Quest.{DialogBranches,DialogTopics,Scenes}`, `DialogTopic.Responses`) alike. `container_child.SlotIndex`
+    is now that position, exact against the binary a tracked plugin came from. **Compile restores it
+    too**: a compiled binary's folder-split children come back in the tree's `[N] ` order, which is the
+    original GRUP order — verified byte-for-byte on the real #369 fixture by
+    `RealData/CompileRoundTripGateTests` and, independently of that byte check, by
+    `RealData/DialogueOrderDamageTests` (0 permuted parents / 0 moved slots, reproducing #464's own
+    harness against the tree Track actually writes). No longer allowlisted by
+    `SourceIngestParityTests` — that tolerance is gone, not widened. Point writes
+    (`Edits/RecordEditService` create/delete/renumber/rename) keep the prefix consistent: create/renumber
+    assign the next free index (never the sibling count, which would collide after a gap), delete
+    leaves gaps rather than renumbering survivors, and an EditorID rename carries its own old index
+    forward unchanged.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /

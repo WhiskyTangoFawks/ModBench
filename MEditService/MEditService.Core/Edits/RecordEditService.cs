@@ -377,10 +377,7 @@ public sealed class RecordEditService(
         // sibling *count*, which would collide with a real "[N]" the moment an earlier delete left a
         // gap (SourceUnitResolver.NextOrderIndex's own doc comment has the worked example).
         // RefuseIfContainerType above already guarantees FolderNameFor is non-null for recordType.
-        var groupDirectory = Path.Combine(
-            modFolder, $"{plugin.Name}{SourceRecordPath.SourceSuffix}",
-            RecordTypeDispatch.For(release).FolderNameFor(recordType)!);
-        var orderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
+        var orderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, recordType, release);
 
         var relativePath = SourceRecordPath.For(plugin.Name, recordType, targetFormKey, record.EditorID, release, orderIndex);
         var sourcePath = Path.Combine(modFolder, relativePath);
@@ -591,10 +588,7 @@ public sealed class RecordEditService(
         // FormKey's file goes at the end of the group folder (a fresh next index), the same as an
         // ordinary CreateRecord, leaving the old slot's number an unfilled gap rather than trying to
         // preserve position (gaps are accepted by design).
-        var groupDirectory = Path.Combine(
-            modFolder, $"{plugin.Name}{SourceRecordPath.SourceSuffix}",
-            RecordTypeDispatch.For(release).FolderNameFor(document.RecordType)!);
-        var newOrderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
+        var newOrderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, document.RecordType, release);
         var newRelativePath = SourceRecordPath.For(
             plugin.Name, document.RecordType, newFormKey, document.EditorId, release, newOrderIndex);
         var newSourcePath = Path.Combine(modFolder, newRelativePath);

@@ -402,6 +402,25 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
+    /// <see cref="NextOrderIndex"/>, given a flat record type rather than an already-computed group
+    /// directory — the two call sites that mint a brand-new flat-record file
+    /// (<see cref="Edits.RecordEditService.CreateRecord"/> and <see cref="Edits.RecordEditService.RenumberRecord"/>'s
+    /// own delete+create) both need "where does this type's group folder live" answered the same way,
+    /// and duplicating that <c>Path.Combine</c>/<c>FolderNameFor</c> pair at each site is exactly the
+    /// kind of drift this class exists to prevent. Callers must already know <paramref name="recordType"/>
+    /// has a flat group folder (both do, having passed <c>RefuseIfContainerType</c> first) — this does
+    /// not re-check, so a caller that hasn't would NRE on the null-forgiving <c>FolderNameFor</c> rather
+    /// than fail closed silently.
+    /// </summary>
+    internal static int NextOrderIndexFor(string modFolder, string pluginFileName, string recordType, GameRelease release)
+    {
+        var groupDirectory = Path.Combine(
+            modFolder, $"{pluginFileName}{SourceRecordPath.SourceSuffix}",
+            RecordTypeDispatch.For(release).FolderNameFor(recordType)!);
+        return NextOrderIndex(groupDirectory);
+    }
+
+    /// <summary>
     /// The subtree to search, relative to the source root — the narrowing that keeps a point write off
     /// the 0.39 s full-tree walk (see this class's own doc comment for the measurements).
     ///

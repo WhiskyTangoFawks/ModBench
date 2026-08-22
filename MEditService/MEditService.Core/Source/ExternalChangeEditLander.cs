@@ -77,9 +77,20 @@ public static class ExternalChangeEditLander
             if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
                 continue; // the external change never actually touched this record
 
+            // #459 review finding: an external add/delete anywhere earlier in this group shifts every
+            // later sibling's own order index, hence its own file name, even when that sibling's own
+            // fields never changed — this record can therefore already have a real file sitting at its
+            // *old* index. Resolved by FormKey suffix (index- and EditorID-blind, the same lookup
+            // RecordEditService's own point writes use), not assumed to be wherever the freshly
+            // computed name says, so the collision check below reads the record's actual current
+            // working-tree text and landing can clean the stale old file up instead of leaving two
+            // files claiming one FormKey behind (exactly the corruption AmbiguousSourceUnitException
+            // exists to catch elsewhere).
+            var existingPath = SourceUnitResolver.FlatSourcePath(
+                modFolder, pluginName, recordType, formKey, record.EditorID, gameRelease);
             var fullPath = Path.Combine(modFolder, relativePath);
-            var currentText = File.Exists(fullPath) ? File.ReadAllText(fullPath) : null;
-            touched.Add(new TouchedRecord(formKey, relativePath, fullPath, incomingText, currentText, baselineText));
+            var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
+            touched.Add(new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText));
         }
 
         var colliding = touched
@@ -96,6 +107,11 @@ public static class ExternalChangeEditLander
 
         foreach (var t in touched)
         {
+            // The stale file at the old order index, if this record's index shifted — never left
+            // behind as a duplicate (see this record's own construction, above).
+            if (!string.Equals(t.ExistingPath, t.FullPath, StringComparison.Ordinal) && File.Exists(t.ExistingPath))
+                File.Delete(t.ExistingPath);
+
             Directory.CreateDirectory(Path.GetDirectoryName(t.FullPath)!);
             File.WriteAllText(t.FullPath, t.IncomingText);
         }
@@ -113,7 +129,8 @@ public static class ExternalChangeEditLander
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
     private sealed record TouchedRecord(
-        string FormKey, string RelativePath, string FullPath, string IncomingText, string? CurrentText, string? BaselineText);
+        string FormKey, string RelativePath, string FullPath, string ExistingPath, string IncomingText,
+        string? CurrentText, string? BaselineText);
 }
 
 /// <summary>Keep as My Edit's outcome — a typed refusal (naming the colliding records), never a
