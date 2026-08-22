@@ -60,18 +60,24 @@ longer a specification we are held to. The one rule, and the test that proves it
 `CompileRoundTripGateTests`, minus any allowlist). Model equality per record is the
 diagnostic that names the broken record when byte identity fails. The gate runs in
 tests **and at Track, over every record of the plugin being tracked** — a plugin that
-does not round-trip is refused, with the failing record named. A field may be omitted
-from the text **if and only if the gate stays green without it** — omission is proved
-derived, never judged junk. No list is ever re-sorted.
+does not round-trip is refused, with the failing record named. **Nothing is omitted
+and nothing is re-sorted in the files — ever.** Byte identity of the files is the safety
+net, and every omission, however well proven, is a hole in it. Omission and sorting
+are *view-layer* concerns: if header counters, timestamps, or Creation-Kit-shuffled
+lists make a diff noisy, the diff view or the editor hides or sorts them at render time,
+and the files underneath stay a faithful image of the plugin.
+*(Amended 2026-08-22, same day: the first draft allowed an omission "if and only if the
+gate stays green without it"; the maintainer struck that — a field recomputed by the
+writer is still a field the file should carry.)*
 
 **3. Commit compiles.** A pre-commit hook compiles the working tree, stages the binary,
 and fails the commit if compile refuses. This reverses ADR-0041's "commit is ungated":
 the invariant "text and binary agree at every commit" is the property the committed
 plugin exists for, and a binary lagging its text breaks it silently. The cost is near
 zero — under the compiler model compile refuses almost nothing (masters and renumber
-cascades are derived, not refused). Compile also *normalizes* the source where the
-gate's omission rule leaves nothing to normalize — the committed pair is always
-`(binary, serialize(binary))`.
+cascades are derived, not refused). Because nothing is omitted, compile never has
+anything to normalize: the committed pair is `(binary, serialize(binary))` by
+construction, and the gate proves it.
 
 **4. Order is carried in the tree.** Every folder-split list (`DialogTopic.Responses`,
 `Quest.{DialogTopics,DialogBranches,Scenes}`, Cell/Worldspace children) is written with
@@ -115,7 +121,7 @@ posted.**
 - **Diffs show what actually changed in the binary**, including header counters and
   timestamps when a plugin last touched by the Creation Kit is tracked. That is true,
   not noise; if it ever bothers anyone the place to hide it is the diff view, never the
-  format. mEdit's own writes do not churn.
+  format — a view-layer concern by decision 2. mEdit's own writes do not churn.
 - **Mutagen bumps become cheap** (decision 5), so the #385 pin stops gating anything
   but itself.
 - **Existing tracked trees need re-Tracking** — same alpha posture ADR-0041 took for
