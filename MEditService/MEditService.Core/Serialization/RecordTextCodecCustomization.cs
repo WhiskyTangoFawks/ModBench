@@ -3,7 +3,7 @@ using Mutagen.Bethesda.Serialization.Customizations;
 namespace MEditService.Core.Serialization;
 
 /// <summary>
-/// The base customization every whole-mod/per-record document goes through — three settings whose
+/// The base customization every whole-mod/per-record document goes through — two settings whose
 /// shape traces back to Spriggit's own "Translation Packages/Spriggit.Json.Fallout4/Customization.cs"
 /// (spike #359's replica, verified against the clone at #450), but no longer held to that source as
 /// a specification (#468, ADR-0042: "Spriggit has no role in v1"). What each call does and why this
@@ -40,40 +40,46 @@ namespace MEditService.Core.Serialization;
 /// flat-record point writes (create/rename/renumber) consistent with numbered siblings now that the
 /// prefix is written everywhere, not only under <c>DialogTopic.Responses</c>.</para>
 ///
-/// <para><b>Not used, and not merely deferred</b> (#468, ADR-0042 decision 3 — "nothing is omitted
-/// and nothing is re-sorted in the files, ever"): <c>OmitUnknownGroupData</c> and
-/// <c>OmitUnusedConditionDataFields</c> are unavailable in this project's Serialization 1.37.1 pin
-/// regardless, but even if a future bump made either available, turning it on would now be a bug,
-/// not a gap to close. <b>The one tracked exception to decision 3 is the two calls right below</b> —
-/// <c>OmitLastModifiedData()</c>/<c>OmitTimestampData()</c> are real, load-bearing omissions today
-/// (see their own inline comment on <see cref="Customize"/>), not yet reconciled with "nothing is
-/// omitted, ever"; removing them is #470's job, not this one's. Spriggit's own FO4 package layers a
-/// <c>SortList</c>/<c>Customizations/Omit</c> suite on top of a base like this one; none of it is
-/// adopted here for the same reason.</para>
+/// <para><b>No <c>Omit*</c> call remains, and decision 3 now has no exception</b> (#468/#470,
+/// ADR-0042 decision 3 — "nothing is omitted and nothing is re-sorted in the files, ever". Decision
+/// 3's own text never carried an escape clause — checked across all three commits of
+/// <c>docs/adr/0042-*.md</c> (<c>41542e7</c>, <c>43b4aa1</c>, <c>771cc5e</c>), the ADR document
+/// itself was never amended on this point. The escape clause lived only in issue #470's own
+/// original triage-draft body ("if a header counter... breaks byte identity, that is the gate
+/// proving it derived — omit it and say so"), and it is the maintainer's amendment to <i>that
+/// ticket</i> — a comment on #470, not a revision to the ADR — that struck it, so there is no
+/// circumstance under which this class may reintroduce one).
+/// <c>OmitUnknownGroupData</c> and <c>OmitUnusedConditionDataFields</c> were never available in this
+/// project's Serialization 1.37.1 pin, and turning either on if a future bump ever made it available
+/// would be a bug, not a gap to close. <c>OmitLastModifiedData()</c>/<c>OmitTimestampData()</c> — the
+/// two calls this comment used to carry as "the one tracked exception to decision 3" — are gone as of
+/// #470: <c>Fallout4Group.LastModified</c> and <c>Cell.{Persistent,Temporary}Timestamp</c>/
+/// <c>Worldspace.SubCellsTimestamp</c> are ordinary fields in the source now, proven present on real
+/// and hand-built records by <c>CompileRoundTripGateTests</c> and
+/// <c>DocumentShapeParityTests.Serialize_OfASyntheticModWithNonDefaultGroupAndHeaderFields_WritesThemUnomitted</c>
+/// respectively — removing them changed neither the committed fixture's compile round-trip
+/// byte-identity nor its source-ingest parity (both re-run and green after the removal). Spriggit's
+/// own FO4 package layers a <c>SortList</c>/<c>Customizations/Omit</c> suite on top of a base like
+/// this one; none of it is adopted here, and none ever will be — omission and sorting are view-layer
+/// concerns now, never the files (#470 amendment).</para>
 /// </summary>
 public sealed class RecordTextCodecCustomization : ICustomize
 {
-    // OmitLastModifiedData/OmitTimestampData are verified no-ops at this scope, not assumed: a
-    // Weapon built with a deliberately non-default VersionControl round-trips it unchanged
-    // (RecordTextCodecTests.SerializeAsync_ThenDeserializeAsync_IsFieldFaithful has no exclusion
-    // list), and the serialized JSON is byte-identical with and without these two calls — verified again at
-    // #412's YAML-to-JSON kernel swap (temporarily dropping both calls and diffing the
-    // regenerated golden weapon fixture byte-for-byte), not just carried forward on the strength
-    // of the original #367 verification, which was against YAML output.
-    // Weapon just has nothing they touch, not "nothing on a record" in general:
-    // OmitTimestampData suppresses any object's Timestamp/PersistentTimestamp/TemporaryTimestamp/
-    // SubCellsTimestamp fields (CustomizationDriver.WrapOmission) — three of those ARE major-record
-    // properties (Cell.PersistentTimestamp, Cell.TemporaryTimestamp, Worldspace.SubCellsTimestamp),
-    // not mod/header-level. OmitLastModifiedData targets Fallout4Group.LastModified specifically —
-    // a plugin-file group header field, not the mod header (Fallout4ModHeader) either. Keep both
-    // anyway: ADR-0040 says replicate the customization, and they go load-bearing the moment #370
-    // serializes a Cell, a Worldspace, or anything written through a group. Do not read "verified
-    // no-op on Weapon" as "safe to delete" or as "only matters for headers" — neither is true.
+    // #470: OmitLastModifiedData()/OmitTimestampData() are gone, not merely never turned on. They
+    // used to suppress Fallout4Group.LastModified (OmitLastModifiedData) and any object's
+    // Timestamp/PersistentTimestamp/TemporaryTimestamp/SubCellsTimestamp fields (OmitTimestampData,
+    // via CustomizationDriver.WrapOmission) — three of those ARE major-record properties
+    // (Cell.PersistentTimestamp, Cell.TemporaryTimestamp, Worldspace.SubCellsTimestamp), not
+    // mod/header-level, and the fourth is a plugin-file group header field, not the mod header
+    // (Fallout4ModHeader) either. Both were real, load-bearing omissions (confirmed no-op only for
+    // Weapon, which has none of these fields to touch) up to and including #459; removing them is
+    // what closes ADR-0042 decision 3's one remaining exception, per the #470 amendment ("nothing is
+    // omitted from the files under any circumstance — there is no 'gate proves it derived'
+    // exception"). Do not read "no-op on Weapon" as "safe to have kept omitting" — it never was, for
+    // any record with a group, a Cell, or a Worldspace in play.
     public void Customize(ICustomizationBuilder builder)
     {
         builder
-            .OmitLastModifiedData()
-            .OmitTimestampData()
             .FilePerRecord()
             .EnforceRecordOrder();
     }
