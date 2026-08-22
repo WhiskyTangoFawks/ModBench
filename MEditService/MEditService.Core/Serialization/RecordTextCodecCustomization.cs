@@ -41,9 +41,14 @@ namespace MEditService.Core.Serialization;
 /// prefix is written everywhere, not only under <c>DialogTopic.Responses</c>.</para>
 ///
 /// <para><b>No <c>Omit*</c> call remains, and decision 3 now has no exception</b> (#468/#470,
-/// ADR-0042 decision 3 — "nothing is omitted and nothing is re-sorted in the files, ever"; the
-/// maintainer's #470 amendment struck the "gate proves it derived" escape clause the decision
-/// originally left open, so there is no circumstance under which this class may reintroduce one).
+/// ADR-0042 decision 3 — "nothing is omitted and nothing is re-sorted in the files, ever". Decision
+/// 3's own text never carried an escape clause — checked across all three commits of
+/// <c>docs/adr/0042-*.md</c> (<c>41542e7</c>, <c>43b4aa1</c>, <c>771cc5e</c>), the ADR document
+/// itself was never amended on this point. The escape clause lived only in issue #470's own
+/// original triage-draft body ("if a header counter... breaks byte identity, that is the gate
+/// proving it derived — omit it and say so"), and it is the maintainer's amendment to <i>that
+/// ticket</i> — a comment on #470, not a revision to the ADR — that struck it, so there is no
+/// circumstance under which this class may reintroduce one).
 /// <c>OmitUnknownGroupData</c> and <c>OmitUnusedConditionDataFields</c> were never available in this
 /// project's Serialization 1.37.1 pin, and turning either on if a future bump ever made it available
 /// would be a bug, not a gap to close. <c>OmitLastModifiedData()</c>/<c>OmitTimestampData()</c> — the
