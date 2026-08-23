@@ -2,11 +2,8 @@ using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
-using Microsoft.Extensions.Logging.Abstractions;
+using MEditService.Tests.Edits;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
-using Noggog;
 
 namespace MEditService.Tests.Source;
 
@@ -15,90 +12,34 @@ namespace MEditService.Tests.Source;
 /// writes inline into the parent document rather than as files of their own — are still their own
 /// queryable records after a tracked plugin is ingested from its source tree, at both refs.
 ///
-/// <para><b>Its own local fixture, deliberately.</b> The shared <c>TrackedModFixture</c> holds
-/// Npc/Race/Keyword and no containers at all, so it structurally cannot exercise any of this — which
-/// is exactly how #451 shipped a container regression no test could see. Modifying it would put 25
-/// other test files at risk for no benefit, so this follows
-/// <see cref="ContainerRecordRegressionTests"/>' precedent of a small local Cell fixture instead.
+/// <para>Runs against the shared <see cref="ContainerModFixture"/> (#466) rather than a local Cell
+/// fixture of its own — the shared <c>TrackedModFixture</c> holds Npc/Race/Keyword and no containers
+/// at all, so it structurally cannot exercise any of this, which is exactly how #451 shipped a
+/// container regression no test could see; <see cref="ContainerModFixture"/> is the consolidated
+/// answer to that gap, covering the same ground this suite always needed (an embedded placed ref, a
+/// flat record beside it) plus what its siblings needed.
 /// (<c>SourceIngestParityTests</c> covers the same ground across 2,577 real records; this suite is the
 /// fast, readable statement of the specific property.)</para>
 /// </summary>
 public sealed class SourceIngestContainerTests : IDisposable
 {
-    private const string PluginName = "CellIngest.esp";
-    private const string Origin = "CellIngestMod";
+    private readonly ContainerModFixture _fixture = new();
 
-    private readonly string _modFolder;
-    private readonly string _gameDirectory;
-    private readonly SessionManager _seed;
-    private readonly PluginKey _plugin = new(PluginName, Origin);
-    private readonly FormKey _cell;
-    private readonly FormKey _placed;
-
-    public SourceIngestContainerTests()
-    {
-        _modFolder = Directory.CreateTempSubdirectory("medit-source-container-").FullName;
-        _gameDirectory = Directory.CreateTempSubdirectory("medit-source-container-game-").FullName;
-
-        var pluginPath = Path.Combine(_modFolder, PluginName);
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-
-        var cell = new Cell(mod) { EditorID = "IngestCell" };
-        // Temporary, not Persistent: this is one of the five slots Spriggit embeds inline, so the
-        // child has no source file of its own and can only reach the index through its parent's
-        // document — which is the whole property under test.
-        var placed = new PlacedObject(mod) { EditorID = "IngestRef", Position = new P3Float(11f, 22f, 33f) };
-        cell.Temporary.Add(placed);
-
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-
-        mod.Npcs.AddNew("IngestNpc");
-        mod.WriteToBinary(pluginPath);
-        (_cell, _placed) = (cell.FormKey, placed.FormKey);
-
-        _seed = NewSession();
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_seed.Session!, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
-    }
+    public void Dispose() => _fixture.Dispose();
 
     private SessionManager NewSession()
     {
         var sessions = new SessionManager(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         ((ISessionManager)sessions).LoadExplicit(
-            _gameDirectory,
-            [new ExplicitPluginInput(PluginName, Path.Combine(_modFolder, PluginName), Origin, true)],
+            _fixture.GameDirectory,
+            [new ExplicitPluginInput(
+                ContainerModFixture.PluginName,
+                Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName),
+                ContainerModFixture.ModFolderOrigin,
+                true)],
             GameRelease.Fallout4);
         return sessions;
-    }
-
-    private string SourceRoot => Path.Combine(_modFolder, $"{PluginName}{SourceRecordPath.SourceSuffix}");
-
-    /// <summary>The Cell's own source file. Under the Spriggit layout a Cell is a directory-per-record
-    /// container (<c>Cells/&lt;block&gt;/&lt;subblock&gt;/&lt;name&gt;/RecordData.json</c>), so it is
-    /// found by content rather than by <see cref="SourceRecordPath.For"/>, which has no flat path for
-    /// one and throws by design.</summary>
-    private string CellSourceFile =>
-        Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"IngestCell\"", StringComparison.Ordinal));
-
-    public void Dispose()
-    {
-        _seed.Dispose();
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
     }
 
     // ---- AC3: embedded children survive the round trip through the tree ----
@@ -108,10 +49,10 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         using var reloaded = NewSession();
 
-        var record = reloaded.Index!.GetDocument(_placed.ToString(), _plugin);
+        var record = reloaded.Index!.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(record);
-        Assert.Equal("IngestRef", record!.EditorId);
-        Assert.NotNull(reloaded.Index!.Resolve(_placed.ToString()));
+        Assert.Equal(ContainerModFixture.TemporaryRefEditorId, record!.EditorId);
+        Assert.NotNull(reloaded.Index!.Resolve(_fixture.TemporaryRef.ToString()));
     }
 
     [Fact]
@@ -119,10 +60,10 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         using var reloaded = NewSession();
 
-        var placement = reloaded.Index!.GetPlacement(_placed.ToString(), _plugin);
+        var placement = reloaded.Index!.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(placement);
         // The spatial facts survive containment being expressed as a directory rather than a GRUP.
-        Assert.Equal(_cell.ToString(), placement!.Value.ParentCell);
+        Assert.Equal(_fixture.EmbedCell.ToString(), placement!.Value.ParentCell);
         Assert.Equal(11f, placement.Value.PosX);
     }
 
@@ -133,8 +74,8 @@ public sealed class SourceIngestContainerTests : IDisposable
 
         // Nothing is dirty, so the one parse serves both refs — ADR-0041's clean fast path, asserted
         // rather than assumed, and asserted for a record that exists only inside its parent's document.
-        var effective = reloaded.Index!.GetDocument(_placed.ToString(), _plugin);
-        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(_placed.ToString(), _plugin);
+        var effective = reloaded.Index!.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(head);
         Assert.Equal(effective!.Body, head!.Body);
     }
@@ -144,11 +85,11 @@ public sealed class SourceIngestContainerTests : IDisposable
     {
         using var reloaded = NewSession();
 
-        var cell = reloaded.Index!.GetDocument(_cell.ToString(), _plugin);
+        var cell = reloaded.Index!.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin);
         Assert.NotNull(cell);
-        Assert.Equal("IngestCell", cell!.EditorId);
+        Assert.Equal(ContainerModFixture.EmbedCellEditorId, cell!.EditorId);
         // The child is embedded in the parent's document, which is what gives it no file of its own.
-        Assert.Contains("IngestRef", cell.Body, StringComparison.Ordinal);
+        Assert.Contains(ContainerModFixture.TemporaryRefEditorId, cell.Body, StringComparison.Ordinal);
     }
 
     // ---- The pinned #463 limitation ----
@@ -189,20 +130,22 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AnExternallyEditedContainer_IsCorrectAtEffective_ButItsHeadStateIsNotYetReconciled()
     {
-        var file = CellSourceFile;
-        File.WriteAllText(file, File.ReadAllText(file).Replace("IngestCell", "RenamedCell", StringComparison.Ordinal));
+        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        File.WriteAllText(
+            file,
+            File.ReadAllText(file).Replace(ContainerModFixture.EmbedCellEditorId, "RenamedCell", StringComparison.Ordinal));
 
         using var reloaded = NewSession();
 
         // The load completed and the edit is visible — no throw, no dropped plugin, no fallback.
         Assert.Empty(reloaded.Status.Failures);
-        Assert.Equal("RenamedCell", reloaded.Index!.GetDocument(_cell.ToString(), _plugin)!.EditorId);
+        Assert.Equal("RenamedCell", reloaded.Index!.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
 
-        // The gap: Head should hold "IngestCell" and does not, because the container's dirty path was
-        // skipped by the reconciliation pass. Asserted as-is so the day it changes, we are told.
+        // The gap: Head should hold the pre-edit EditorID and does not, because the container's dirty
+        // path was skipped by the reconciliation pass. Asserted as-is so the day it changes, we are told.
         Assert.Equal(
             "RenamedCell",
-            reloaded.Index!.At(RecordRef.Head).GetDocument(_cell.ToString(), _plugin)!.EditorId);
+            reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.EditorId);
     }
 
     /// <summary>The positive control for the test above: a <i>flat</i> record edited in the same tree
@@ -211,17 +154,20 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
     {
-        var npc = _seed.Index!.Search(new RecordQuery(Plugin: _plugin, Limit: 100))
-            .Items.Single(r => r.EditorId == "IngestNpc");
         // #459: resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
         // now needs an order index this test has no reason to track.
         var npcFile = SourceUnitResolver.FlatSourcePath(
-            _modFolder, PluginName, "npc_", npc.FormKey, "IngestNpc", GameRelease.Fallout4);
-        File.WriteAllText(npcFile, File.ReadAllText(npcFile).Replace("IngestNpc", "RenamedNpc", StringComparison.Ordinal));
+            _fixture.ModFolder, ContainerModFixture.PluginName, "npc_", _fixture.Npc.ToString(),
+            ContainerModFixture.NpcEditorId, GameRelease.Fallout4);
+        File.WriteAllText(
+            npcFile,
+            File.ReadAllText(npcFile).Replace(ContainerModFixture.NpcEditorId, "RenamedNpc", StringComparison.Ordinal));
 
         using var reloaded = NewSession();
 
-        Assert.Equal("RenamedNpc", reloaded.Index!.GetDocument(npc.FormKey, _plugin)!.EditorId);
-        Assert.Equal("IngestNpc", reloaded.Index!.At(RecordRef.Head).GetDocument(npc.FormKey, _plugin)!.EditorId);
+        Assert.Equal("RenamedNpc", reloaded.Index!.GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
+        Assert.Equal(
+            ContainerModFixture.NpcEditorId,
+            reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
     }
 }
