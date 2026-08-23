@@ -472,4 +472,60 @@ public class PlacementIndexingTests
         Assert.Null(bare.CellX);
         Assert.Null(bare.CellY);
     }
+
+    // #458: same non-unique-ordering shape as Search's — several interior cells below share
+    // "DupCell", two more share a blank EditorID (ordinary in real plugin data), so an
+    // ORDER BY c.editor_id with no tiebreak leaves DuckDB free to place tied rows on either side of
+    // a LIMIT/OFFSET boundary differently across calls. Paging the full set two cells at a time and
+    // concatenating the pages must reconstruct exactly the single unpaged read's order — no cell
+    // skipped, none repeated — and doing the same walk again must reproduce the identical sequence.
+    private static DuckDbRecordIndex BuildDuplicateEditorIdInteriorCellsFixture(out int total)
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("DupCells.esp"), Fallout4Release.Fallout4);
+        var intSub = new CellSubBlock { BlockNumber = 0 };
+        for (var i = 0; i < 3; i++)
+            intSub.Cells.Add(new Cell(mod) { EditorID = "DupCell" });
+        for (var i = 0; i < 2; i++)
+            intSub.Cells.Add(new Cell(mod)); // blank EditorID
+        intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellA" });
+        intSub.Cells.Add(new Cell(mod) { EditorID = "UniqueCellB" });
+        var intBlock = new CellBlock { BlockNumber = 0 };
+        intBlock.SubBlocks.Add(intSub);
+        mod.Cells.Records.Add(intBlock);
+
+        var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.UpdateWinners();
+        total = intSub.Cells.Count;
+        return repo;
+    }
+
+    [Fact]
+    public void GetInteriorCells_PagesCellsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
+    {
+        using var repo = BuildDuplicateEditorIdInteriorCellsFixture(out var total);
+        var plugin = new PluginKey("DupCells.esp", "Data");
+
+        var full = repo.GetInteriorCells(plugin, 100, 0);
+        Assert.Equal(total, full.Total);
+        var expected = full.Items.Select(i => i.FormKey).ToList();
+
+        List<string> WalkAllPages()
+        {
+            var seen = new List<string>();
+            for (var offset = 0; offset < full.Total; offset += 2)
+            {
+                var page = repo.GetInteriorCells(plugin, 2, offset);
+                seen.AddRange(page.Items.Select(i => i.FormKey));
+            }
+            return seen;
+        }
+
+        var firstWalk = WalkAllPages();
+        var secondWalk = WalkAllPages();
+
+        Assert.Equal(expected, firstWalk);
+        Assert.Equal(firstWalk, secondWalk);
+    }
 }

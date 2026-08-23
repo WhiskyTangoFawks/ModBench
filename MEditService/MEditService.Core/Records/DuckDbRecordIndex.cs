@@ -1083,10 +1083,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         AddParams(countCmd, paramValues);
         var total = (long)countCmd.ExecuteScalar()!;
 
+        // #458: editor_id alone is not unique — blank/duplicate EditorIDs are ordinary, and overrides
+        // of one record across plugins share one by definition — so LIMIT/OFFSET paging over it with
+        // no tiebreak lets DuckDB place tied rows on either side of a page boundary differently
+        // across calls, silently skipping some and repeating others. (form_key, plugin, origin) is
+        // this table's own identity (see CreateRecordsTable's doc comment), so appending it makes the
+        // order total and paging stable.
         using var dataCmd = Connection.CreateCommand();
         dataCmd.CommandText = $"""
             SELECT {cols} FROM {records} r{where}
-            ORDER BY editor_id
+            ORDER BY editor_id, form_key, plugin, origin
             LIMIT {query.Limit} OFFSET {query.Offset}
             """;
         AddParams(dataCmd, paramValues);
@@ -1866,13 +1872,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         countCmd.Parameters.Add(new DuckDBParameter { Value = origin });
         var total = (long)countCmd.ExecuteScalar()!;
 
+        // #458: same non-unique-ordering shape as Search's above — c.editor_id alone gives DuckDB no
+        // tiebreak for LIMIT/OFFSET paging, so ties can land on either side of a page boundary
+        // differently across calls. The WHERE clause already scopes this query to one plugin+origin,
+        // so cl.cell_form_key alone (cell_location's own identity within that scope) is a sufficient
+        // tiebreak — no need to repeat the already-constant plugin/origin columns.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
             LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
-            ORDER BY c.editor_id
+            ORDER BY c.editor_id, cl.cell_form_key
             LIMIT {limit} OFFSET {offset}
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
