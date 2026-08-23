@@ -3,12 +3,10 @@ using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
+using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Fallout4;
-using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
@@ -17,9 +15,10 @@ namespace MEditService.Tests.Source;
 /// for a container record (Cell/Worldspace/Quest — no flat path), and before this suite existed nothing
 /// caught it on the read path (<see cref="SourceFreshness"/>) or the point-write path
 /// (<see cref="RecordEditService"/>) — a real regression the shared <c>TrackedModFixture</c> (Npc/Race/
-/// Keyword only) could never surface, which is exactly why this is its own small local fixture with a
-/// real Cell, per the review's own instruction not to add one to the shared fixture (risking the other
-/// 24 files it feeds).
+/// Keyword only) could never surface. #466 moved this suite onto the shared
+/// <see cref="ContainerModFixture"/> instead of the small local Cell fixture the #451 review asked for
+/// at the time — that fixture, and its siblings that grew up in <c>SourceIngestContainerTests</c> and
+/// <c>EmbeddedChildEditTests</c>, are what #466 consolidated.
 ///
 /// <para><b>What a user now sees editing a cell in a tracked plugin</b> (the sentence the review asked
 /// for, verified by the tests below): reading it (record editor, compare grid) still works — the
@@ -31,80 +30,25 @@ namespace MEditService.Tests.Source;
 /// </summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
-    private const string PluginName = "CellFixture.esp";
-    private const string Origin = "CellFixtureMod";
+    private readonly ContainerModFixture _fixture = new();
 
-    public string ModFolder { get; }
-    private readonly string _gameDirectory;
-    public SessionManager Sessions { get; }
-    public PluginKey Plugin { get; } = new(PluginName, Origin);
-    public FormKey Cell { get; }
-    public FormKey Npc { get; }
-
-    public ContainerRecordRegressionTests()
-    {
-        ModFolder = Directory.CreateTempSubdirectory("medit-container-regress-").FullName;
-        _gameDirectory = Directory.CreateTempSubdirectory("medit-container-regress-game-").FullName;
-
-        var pluginPath = Path.Combine(ModFolder, PluginName);
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
-
-        // WaterHeight: a plain nullable float, given a value at Track time so the point-write tests
-        // below have a field whose textual before/after they can compare byte for byte (#453 AC1).
-        // Left null it would serialize as a null literal, and the substitution assertion would be
-        // measuring the serializer's null handling rather than the edit.
-        var cell = new Cell(mod) { EditorID = "FixtureCell", WaterHeight = 100f };
-        var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
-        subBlock.Cells.Add(cell);
-        var block = new CellBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellBlock };
-        block.SubBlocks.Add(subBlock);
-        mod.Cells.Records.Add(block);
-
-        var npc = mod.Npcs.AddNew("FixtureNpc");
-        mod.WriteToBinary(pluginPath);
-        (Cell, Npc) = (cell.FormKey, npc.FormKey);
-
-        Sessions = new SessionManager(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)Sessions).LoadExplicit(
-            _gameDirectory,
-            [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)],
-            GameRelease.Fallout4);
-
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Sessions.Session!, Origin, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
-    }
-
-    public void Dispose()
-    {
-        Sessions.Dispose();
-        TryDelete(ModFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* ditto */ }
-    }
+    public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() =>
-        new(Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_fixture.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     // ---- Reads degrade (SourceFreshness) ----
 
     [Fact]
     public void ReadingACellInATrackedPlugin_DoesNotThrow_AndServesTheIndexedDocument()
     {
-        var record = Reads().GetRecord(Cell.ToString());
+        var record = Reads().GetRecord(_fixture.Cell.ToString());
 
         Assert.NotNull(record);
-        Assert.Equal("FixtureCell", record!.EditorId);
+        Assert.Equal(ContainerModFixture.CellEditorId, record!.EditorId);
     }
 
     [Fact]
@@ -112,20 +56,12 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     {
         // GetCompare drives SourceFreshness.Validate exactly like GetRecord — a second real read path
         // that must not crash on a container, not a duplicate assertion of the same code path.
-        Assert.Null(Record.Exception(() => Reads().GetCompare(Cell.ToString())));
+        Assert.Null(Record.Exception(() => Reads().GetCompare(_fixture.Cell.ToString())));
     }
 
     // ---- Point writes refuse (RecordEditService) ----
 
-    /// <summary>The Cell's own source file, found by walking the tree rather than by
-    /// <see cref="SourceRecordPath.For"/> (which has no flat path for a container and throws by
-    /// design) — the test's own independent locator, deliberately <b>not</b> <c>SourceUnitResolver</c>,
-    /// so it cannot agree with the code under test by construction.</summary>
-    private string CellSourceFile =>
-        Directory.EnumerateFiles(
-                Path.Combine(ModFolder, $"{PluginName}{SourceRecordPath.SourceSuffix}"),
-                "RecordData.json", SearchOption.AllDirectories)
-            .Single(f => File.ReadAllText(f).Contains("\"FixtureCell\"", StringComparison.Ordinal));
+    private string CellSourceFile => _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
 
     [Fact]
     public void EditingACellsOwnField_WritesItsRecordDataJson_AndChangesNothingElseInTheFile()
@@ -134,7 +70,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var before = File.ReadAllText(file);
         Assert.Contains("\"WaterHeight\": 100.0", before, StringComparison.Ordinal);
 
-        var result = EditService().EditField(Plugin, Cell.ToString(), "water_height", Json("250.0"));
+        var result = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "water_height", Json("250.0"));
 
         Assert.True(result.Applied, result.Message);
         // AC1, in its strongest form: the whole file is byte-identical outside the one field's own
@@ -146,7 +82,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             before.Replace("\"WaterHeight\": 100.0", "\"WaterHeight\": 250.0", StringComparison.Ordinal),
             File.ReadAllText(file));
         // Scope 4: the source unit's own indexed document moved with the file.
-        Assert.Contains("250.0", Sessions.Index!.GetDocument(Cell.ToString(), Plugin)!.Body!, StringComparison.Ordinal);
+        Assert.Contains(
+            "250.0", _fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -175,9 +112,9 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void EditingACellsEditorId_MovesItsSourceDirectory_AndStagesAsARename()
     {
         var oldDirectory = Path.GetDirectoryName(CellSourceFile)!;
-        Assert.EndsWith("FixtureCell - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
+        Assert.EndsWith(ContainerModFixture.CellEditorId + " - " + FilesafeCellKey, oldDirectory, StringComparison.Ordinal);
 
-        var result = EditService().EditField(Plugin, Cell.ToString(), "editor_id", Json("\"RenamedCell\""));
+        var result = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "editor_id", Json("\"RenamedCell\""));
 
         Assert.True(result.Applied, result.Message);
         Assert.False(Directory.Exists(oldDirectory));
@@ -196,19 +133,19 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             File.ReadAllText(Path.Combine(newDirectory, "RecordData.json")),
             StringComparison.Ordinal);
 
-        var git = Path.Combine(ModFolder, ".git");
-        GitCli.Run(git, ModFolder, "add", "-A");
-        var staged = GitCli.Run(git, ModFolder, "diff", "--cached", "-M", "--name-status")
+        var git = Path.Combine(_fixture.ModFolder, ".git");
+        GitCli.Run(git, _fixture.ModFolder, "add", "-A");
+        var staged = GitCli.Run(git, _fixture.ModFolder, "diff", "--cached", "-M", "--name-status")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
 
         var rename = Assert.Single(staged, l => l.StartsWith('R'));
-        Assert.Contains("FixtureCell", rename, StringComparison.Ordinal);
+        Assert.Contains(ContainerModFixture.CellEditorId, rename, StringComparison.Ordinal);
         Assert.Contains("RenamedCell", rename, StringComparison.Ordinal);
     }
 
-    private string FilesafeCellKey => $"{Cell.ID:X6}_{Cell.ModKey.FileName}";
+    private string FilesafeCellKey => $"{_fixture.Cell.ID:X6}_{_fixture.Cell.ModKey.FileName}";
 
     private static System.Text.Json.JsonElement Json(string raw) =>
         System.Text.Json.JsonDocument.Parse(raw).RootElement;
@@ -216,18 +153,18 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void DeletingACell_RefusesWithTheContainerRefusal()
     {
-        var result = EditService().DeleteRecord(Plugin, Cell.ToString());
+        var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
         // No half-applied state: the refusal fires before anything is touched.
-        Assert.NotNull(Sessions.Index!.GetDocument(Cell.ToString(), Plugin));
+        Assert.NotNull(_fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
     }
 
     [Fact]
     public void CreatingANewCell_RefusesWithTheContainerRefusal()
     {
-        var result = EditService().CreateRecord(Plugin, "cell", "BrandNewCell");
+        var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
@@ -236,7 +173,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void RenumberingACell_RefusesWithTheContainerRefusal()
     {
-        var result = EditService().RenumberRecord(Plugin, Cell.ToString());
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
@@ -248,7 +185,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         // Positive control: the container guard must not blanket-refuse renumber for a plugin that
         // merely *holds* a cell elsewhere — only the record actually being touched (target or
         // referencer) is checked.
-        var result = EditService().RenumberRecord(Plugin, Npc.ToString());
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
     }
@@ -265,19 +202,19 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void AbsorbingAnExternalChange_OnAPluginWithACell_Succeeds_AndWritesACompleteBaseline()
     {
-        var pluginPath = Path.Combine(ModFolder, PluginName);
-        var beforeMain = GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "rev-parse", "main").Trim();
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
+        var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
-        ExternalChangeAbsorber.Absorb(ModFolder, PluginName, pluginPath, Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, _fixture.Sessions.Session!);
 
-        var afterMain = GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "rev-parse", "main").Trim();
+        var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
 
-        var tree = GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "ls-tree", "-r", "--name-only", "main")
+        var tree = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "ls-tree", "-r", "--name-only", "main")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .ToList();
-        var root = $"{PluginName}{SourceRecordPath.SourceSuffix}";
+        var root = $"{ContainerModFixture.PluginName}{SourceRecordPath.SourceSuffix}";
         Assert.Contains($"{root}/RecordData.json", tree);
         // The Cell that used to make this refuse, now written as its own directory-per-record unit.
         Assert.Contains(tree, f => f.StartsWith($"{root}/Cells/", StringComparison.Ordinal));
@@ -286,14 +223,15 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     [Fact]
     public void KeepingAnExternalChange_OnAPluginWithACell_DoesNotThrow_AndSkipsTheCell()
     {
-        var pluginPath = Path.Combine(ModFolder, PluginName);
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
 
         var result = ExternalChangeEditLander.Keep(
-            ModFolder, PluginName, pluginPath, GameRelease.Fallout4, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, GameRelease.Fallout4,
+            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         // Nothing actually changed in the binary since Track, so nothing lands either way — the load-
         // bearing assertion is the one above this: it ran to completion without throwing.
         Assert.True(result.Applied);
-        Assert.DoesNotContain(Cell.ToString(), result.LandedFormKeys);
+        Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
     }
 }
