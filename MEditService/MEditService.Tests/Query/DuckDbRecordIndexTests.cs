@@ -730,4 +730,49 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Null(baseKw.CheckError);
         Assert.Null(patchKw.CheckError);
     }
+
+    // #458: editor_id alone is not a unique ordering — several NPCs below share "Dup", two more
+    // share a blank EditorID (real plugin data: blank/duplicate EditorIDs are ordinary), so an
+    // ORDER BY editor_id with no tiebreak leaves DuckDB free to place tied rows on either side of a
+    // LIMIT/OFFSET boundary differently across calls. Paging the full set two records at a time and
+    // concatenating the pages must reconstruct exactly the single unpaged read's order — no row
+    // skipped, none repeated — and doing the same walk again must reproduce the identical sequence.
+    [Fact]
+    public void Search_PagesRecordsWithSharedAndBlankEditorId_ReturnsEveryRowExactlyOnceAndStably()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("DupEditorId.esp"), Fallout4Release.Fallout4);
+        mod.Npcs.AddNew("Dup");
+        mod.Npcs.AddNew("Dup");
+        mod.Npcs.AddNew("Dup");
+        mod.Npcs.AddNew(); // blank EditorID
+        mod.Npcs.AddNew(); // blank EditorID
+        mod.Npcs.AddNew("UniqueA");
+        mod.Npcs.AddNew("UniqueB");
+
+        using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+        repo.Initialize(GameRelease.Fallout4);
+        repo.Index((IModGetter)mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.UpdateWinners();
+
+        var full = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        Assert.Equal(7, full.Total);
+        var expected = full.Items.Select(i => i.FormKey).ToList();
+
+        List<string> WalkAllPages()
+        {
+            var seen = new List<string>();
+            for (var offset = 0; offset < full.Total; offset += 2)
+            {
+                var page = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 2, Offset: offset));
+                seen.AddRange(page.Items.Select(i => i.FormKey));
+            }
+            return seen;
+        }
+
+        var firstWalk = WalkAllPages();
+        var secondWalk = WalkAllPages();
+
+        Assert.Equal(expected, firstWalk);
+        Assert.Equal(firstWalk, secondWalk);
+    }
 }
