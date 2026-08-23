@@ -106,10 +106,12 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - **FormLinks validate at edit time**, against effective state (ADR-0020 kept, relocated from
     stage time). The check is `CheckErrorBuilder` over the incoming value — the same builder the
     read model renders check errors from — so "what the editor flags" and "what it refuses to
-    create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; note
-    that a top-level FormLink *column* has no write delegate at all in the reflected schema
-    (`SchemaReflector`: "read-only as a column, `ApplyFormLinkJson` as a sub-field"), so the
-    writable form of a FormLink today is an array or a struct sub-field.
+    create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; #429
+    gave a top-level FormLink *column* the same `ApplyFormLinkJson` write delegate its struct/array
+    sub-field sibling already had (`SchemaReflector`'s `ProjectColumn`/`ProjectSubField`), so every
+    reflected FormLink shape — top-level column, struct/array sub-field — is writable through this
+    one door. VMAD Object properties and condition Form params still carry FormKeys outside the
+    reflected schema and are still not checked here; that stays its own, unwidened, change.
   - **Reads validate source freshness** (`Source/SourceFreshness`, #413 D3 deferred here). Point
     reads re-check the source text before answering, catching `git restore`, checkout, rebase,
     terminal commits and hand edits — no watcher, because Modbench owns the `.git` folder and git

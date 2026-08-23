@@ -1138,8 +1138,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // ── Shared leaf classification (column ⇄ sub-field) ───────────────────────
     // The neutral facts a leaf field carries, independent of whether it becomes a top-level
     // column or a struct/array sub-field. Get reads the raw value from any instance; Convert
-    // turns a JSON token into the value to write — null means "no generic applier" (form-links
-    // supply their own per context: read-only as a column, ApplyFormLinkJson as a sub-field).
+    // turns a JSON token into the value to write — null means "no generic applier" (a form-link
+    // instead gets ApplyFormLinkJson, #429: identically for a top-level column and a sub-field).
     private sealed record LeafSpec(
         string ApiType,
         string DuckDbType,
@@ -1280,7 +1280,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // Projects a shared LeafSpec into a sub-field. Generic leaves (primitive / enum / translated-
     // string) use the shared applier; a form-link (its Convert is null) gets ApplyFormLinkJson —
-    // the one place a sub-field form-link differs from its read-only column counterpart.
+    // the same routing ProjectColumn gives a top-level FormLink column (#429).
     private static SubFieldSpec ProjectSubField(
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
@@ -1363,23 +1363,33 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
-            { } leaf => ProjectColumn(prop, nullable, leaf),
+            { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
             _ => null,
         };
     }
 
-    // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) yields a
-    // null Apply — top-level form-link columns are read-only in the index.
-    private static ColumnInfoResult ProjectColumn(PropertyInfo prop, bool nullable, LeafSpec leaf) =>
-        new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
-            leaf.Convert is { } c ? MakeColumnApplier(prop.Name, nullable, c) : null,
+    // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) gets
+    // ApplyFormLinkJson (#429) — the same routing ProjectSubField gives its sub-field sibling, so a
+    // top-level column is no longer the one FormLink shape without a write path.
+    private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
+    {
+        var pName = prop.Name;
+        Action<IMajorRecord, JsonElement>? apply = leaf.Convert switch
+        {
+            { } c => MakeColumnApplier(pName, nullable, c),
+            null when IsFormLink(core) => (record, val) => ApplyFormLinkJson(record, val, pName, logger),
+            _ => null,
+        };
+        return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
+            apply,
             AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues,
             IsFlagsEnum: leaf.IsFlagsEnum,
             // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
             // being coalesced to a default it never had.
             ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
+    }
 
     // ── IReadOnlyList<T> ──────────────────────────────────────────────────────
 
