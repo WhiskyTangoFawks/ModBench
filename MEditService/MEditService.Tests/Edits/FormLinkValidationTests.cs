@@ -25,11 +25,11 @@ public sealed class FormLinkValidationTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // `keywords` rather than a bare FormLink column, because a top-level FormLink column carries no
-    // write delegate at all in the reflected schema (SchemaReflector: "read-only as a column,
-    // ApplyFormLinkJson as a sub-field") — so it would refuse as FieldReadOnly long before any link
-    // was validated, and prove nothing. An array of FormLinks is the writable form, and is also the
-    // atomic complex-field write CONTEXT.md describes: the whole field, never one element.
+    // `keywords` rather than a bare FormLink column, because an array of FormLinks is also the
+    // atomic complex-field write CONTEXT.md describes: the whole field, never one element. A
+    // top-level scalar FormLink column (#429, e.g. an NPC's Race) carries its own end-to-end
+    // coverage in TopLevelFormLinkColumnEditTests — both shapes now write through ApplyFormLinkJson
+    // (SchemaReflector), so neither stands in for the other's proof.
     private RecordEditResult SetKeywords(params string[] formKeys) =>
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "keywords", Json(JsonSerializer.Serialize(formKeys)));
 

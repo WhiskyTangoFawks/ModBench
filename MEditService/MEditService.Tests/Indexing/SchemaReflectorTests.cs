@@ -432,13 +432,14 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Npc_FormLinkColumn_HasNullApply()
+    public void GetSchemas_Npc_FormLinkColumn_HasApply()
     {
-        // FormLink fields are read-only in the index; Apply must be null so writes are no-ops.
+        // #429: a top-level FormLink column gets the same ApplyFormLinkJson write delegate its
+        // struct/array sub-field sibling already had — no longer a null-Apply read-only column.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["npc_"].RecordColumns.FirstOrDefault(c => c.Name == "race");
         Assert.NotNull(col);
-        Assert.Null(col.Apply);
+        Assert.NotNull(col!.Apply);
     }
 
     [Fact]

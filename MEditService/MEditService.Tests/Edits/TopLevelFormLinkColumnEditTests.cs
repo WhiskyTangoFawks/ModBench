@@ -1,0 +1,109 @@
+using System.Text.Json;
+using MEditService.Core.Edits;
+using MEditService.Core.Source;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace MEditService.Tests.Edits;
+
+/// <summary>
+/// #429: a top-level scalar FormLink <b>column</b> (e.g. an NPC's Race) gets a write path through
+/// the same single door as every other FormLink shape (ADR-0034 — xEdit edits any FormID field in
+/// place). Before this ticket <c>SchemaReflector</c> gave a bare FormLink column a null <c>Apply</c>
+/// ("read-only as a column, <c>ApplyFormLinkJson</c> as a sub-field"), so <c>RecordFieldWriter</c>
+/// answered <see cref="RecordEditRefusal.FieldReadOnly"/> for it regardless of the value's validity.
+///
+/// <para><b>Green-on-arrival, by design, for four of these five.</b> <c>RecordEditService.EditField</c>
+/// validates a FormLink column's incoming value (<c>ValidateFormLinks</c> → <c>CheckErrorBuilder</c>)
+/// <i>before</i> it ever reaches <c>RecordFieldWriter.TryApply</c>'s null-<c>Apply</c> check, and that
+/// validation reads the column's schema metadata (<c>ApiType</c>/<c>ValidFormKeyTypes</c>), which was
+/// always populated for a FormLink column independent of whether <c>Apply</c> was null. The untracked
+/// and external-change-deferral refusals are checked earlier still, in <c>RefuseIfBlocked</c>, ahead
+/// of any column lookup at all. So four of the five tests below already passed against the code as it
+/// stood before this ticket's <c>SchemaReflector</c> fix — confirmed by running them against that
+/// code, not assumed — and are kept here anyway because the acceptance criteria ask for this exact
+/// column class to carry its own end-to-end proof, not a citation to generic coverage that happens to
+/// use a different field. Only <see cref="EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange"/>
+/// is a genuine red-to-green slice of this ticket's diff.
+/// </summary>
+public sealed class TopLevelFormLinkColumnEditTests : IDisposable
+{
+    private readonly TrackedModFixture _mod = TrackedModFixture.Tracked();
+
+    public void Dispose() => _mod.Dispose();
+
+    private RecordEditService Service() =>
+        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+
+    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    // Genuine red-before/green-after slice of this ticket: OtherNpc's own "race" field is the CLR
+    // default (never set by TrackedModFixture), so pointing it at _mod.Race is a real value change,
+    // not a same-value no-op that could pass by producing byte-identical output.
+    [Fact]
+    public void EditField_TopLevelFormLinkColumn_AcceptsAValidTarget_LandsAsWorkingTreeChange()
+    {
+        Assert.Empty(_mod.GitStatus());
+
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Race}\""));
+
+        Assert.True(result.Applied, result.Message);
+        Assert.NotEmpty(_mod.GitStatus());
+
+        // Answers at Effective: the read model's own document for OtherNpc now carries the new race.
+        var body = _mod.Sessions.Index!.GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
+        Assert.Contains(_mod.Race.ToString(), body, StringComparison.Ordinal);
+    }
+
+    // Pre-fix observed result: InvalidFormLink (already refused) — ValidateFormLinks runs ahead of
+    // the null-Apply ReadOnly check, so a dangling target on this column was never silently blocked
+    // by read-onliness in the first place.
+    [Fact]
+    public void EditField_TopLevelFormLinkColumn_RefusesADanglingTarget()
+    {
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json("\"ABCDEF:NoSuchPlugin.esp\""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
+        Assert.Empty(_mod.GitStatus());
+    }
+
+    // Pre-fix observed result: InvalidFormLink (already refused) — same reasoning: Keyword resolves
+    // (it exists) but is the wrong type for a RACE-typed column, and that check does not consult Apply.
+    [Fact]
+    public void EditField_TopLevelFormLinkColumn_RefusesTheWrongRecordType()
+    {
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Keyword}\""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.InvalidFormLink, result.Refusal);
+        Assert.Empty(_mod.GitStatus());
+    }
+
+    // Pre-fix observed result: PluginNotTracked (already refused) — RefuseIfBlocked runs before any
+    // column is even looked up, so this inherits unconditionally of Apply.
+    [Fact]
+    public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginIsUntracked()
+    {
+        using var untracked = TrackedModFixture.Untracked();
+
+        var result = new RecordEditService(untracked.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(untracked.Plugin, untracked.OtherNpc.ToString(), "race", Json($"\"{untracked.Race}\""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+    }
+
+    // Pre-fix observed result: ExternalChangePending (already refused) — same RefuseIfBlocked gate,
+    // #417 exit path 3.
+    [Fact]
+    public void EditField_TopLevelFormLinkColumn_Refuses_WhileExternalChangeDeferralIsPending()
+    {
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+
+        var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Race}\""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Empty(_mod.GitStatus());
+    }
+}
