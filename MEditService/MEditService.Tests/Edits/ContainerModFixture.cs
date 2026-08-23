@@ -182,14 +182,53 @@ public sealed class ContainerModFixture : IDisposable
         Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
 
-    /// <summary>Porcelain status, scoped to the mod folder. Plain (non-<c>-z</c>) form is safe to
-    /// compare unquoted here — unlike <see cref="TrackedModFixture"/>'s flat layout, no container path
-    /// this fixture produces carries a space, so none of it is ever quoted by git.</summary>
+    /// <summary>Porcelain status, scoped to the mod folder — what the native Source Control panel
+    /// renders, asked the way a user would ask it.
+    ///
+    /// <para>Unquoted, for the same reason as <see cref="TrackedModFixture"/>'s own <c>GitStatus</c>:
+    /// a container's directory name carries the identical <c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;
+    /// ModKeyFileName&gt;"</c> shape as this fixture's flat file names, spaces included, and plain
+    /// (non-<c>-z</c>) porcelain v1 always C-quotes a path containing one — unconditionally, not gated
+    /// by <c>core.quotePath</c>. Every caller here that ever compares against a plain expected string
+    /// needs the unquoted text, the same way <see cref="TrackedModFixture"/>'s callers do.</para>
+    /// </summary>
     public IReadOnlyList<string> GitStatus() =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "status", "--porcelain")
             .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-            .Select(l => l.Trim())
+            .Select(l => UnquotePorcelainLine(l.Trim()))
             .ToList();
+
+    // "XY <path>" — <path> is C-quoted (wrapped in "...", \\ and \" escaped, higher bytes as \NNN
+    // octal when core.quotePath's default applies) exactly when it needs to be; this repo's own Track
+    // sets core.quotePath=false, so the only escapes a filename built from this fixture's own naming
+    // scheme can ever produce are \\ and \" — but is written generally rather than special-cased to
+    // that. Duplicated from TrackedModFixture rather than shared, to keep that fixture (and the 24
+    // files depending on it) untouched by #466.
+    private static string UnquotePorcelainLine(string line)
+    {
+        var space = line.IndexOf(' ');
+        if (space < 0) return line;
+        var status = line[..space];
+        var rest = line[(space + 1)..].TrimStart();
+        if (rest.Length < 2 || rest[0] != '"' || rest[^1] != '"') return line;
+
+        var inner = rest[1..^1];
+        var unquoted = new System.Text.StringBuilder(inner.Length);
+        for (var i = 0; i < inner.Length; i++)
+        {
+            if (inner[i] != '\\' || i + 1 >= inner.Length) { unquoted.Append(inner[i]); continue; }
+            var next = inner[++i];
+            unquoted.Append(next switch
+            {
+                '"' => '"',
+                '\\' => '\\',
+                't' => '\t',
+                'n' => '\n',
+                _ => next,
+            });
+        }
+        return $"{status} {unquoted}";
+    }
 
     public void Dispose()
     {
