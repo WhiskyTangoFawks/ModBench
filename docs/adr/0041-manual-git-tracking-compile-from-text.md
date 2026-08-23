@@ -25,6 +25,25 @@ status: accepted
 > UI, the bridge, compile-as-compiler, `refs/medit/last-compile`, and the #444
 > amendment's source-completeness/containment-as-path/ingest-from-source content.
 
+> **Amendment (2026-08-23, #460/#463 triage):** container source-unit resolution is
+> **scan-based, by design, permanently** — no path-computation grammar will be built.
+> The direction was proposed and declined twice (#453, #454) for the same reason each
+> time: computing a container's path would need a second copy of the whole-mod door's
+> own directory-naming policy, which can only drift from the real one. #453 answered
+> the *existing*-record question instead by reading the disk (`SourceUnitResolver`,
+> narrowed to one group subtree per lookup, ~20-60 ms) — the one source that cannot
+> drift because it is the serializer's own output. That closes every case except a
+> container that has never existed in the tree, which has nothing on disk to scan for
+> and stays an open, separately-tracked gap (sequenced after #462, which is deciding
+> the placement question — worldspace/interior, persistent/temporary — a brand-new
+> container needs answered first). Head/Effective reconciliation for a dirty container
+> path (#463) needs no grammar either: it reconciles **structurally**, deserializing
+> HEAD the same whole-mod way Effective already is and diffing the two mod objects,
+> rather than parsing an individual path. If a container-path grammar is ever proposed
+> again, this amendment is the answer: don't — reach for a disk scan or a structural
+> diff instead, whichever the caller's shape (point lookup vs. whole-tree
+> reconciliation) calls for.
+
 Supersedes [ADR-0040](0040-git-native-pending-changes.md) and both of its 2026-08
 amendments. Decided in the 2026-08-19 design conversation (grilled to closure); the
 migration epic is the rebuilt milestone "5 — Git-native editing".
