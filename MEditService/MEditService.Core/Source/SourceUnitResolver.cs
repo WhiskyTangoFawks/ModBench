@@ -23,7 +23,19 @@ namespace MEditService.Core.Source;
 /// <param name="IsEmbedded">True when <paramref name="OwnerFormKey"/> is not the requested record —
 /// i.e. the caller must reach into the owner's object graph to find what it asked for.</param>
 internal readonly record struct SourceUnit(
-    string FullPath, string RelativePath, string OwnerFormKey, string OwnerRecordType, bool IsEmbedded);
+    string FullPath, string RelativePath, string OwnerFormKey, string OwnerRecordType, bool IsEmbedded)
+{
+    /// <summary>
+    /// True when <see cref="FullPath"/> is a directory-per-record container's own field file (a
+    /// Cell/Worldspace/Quest, or a nested folder-split child such as a Quest's DialogTopic) rather
+    /// than a flat record's single file. #461 review: this exact test used to be retyped at every
+    /// call site (<c>RecordEditService.RenameSourceUnit</c>, <c>DeleteRecord</c>,
+    /// <c>RenumberTheRecordItself</c>) — one definition here, alongside <see cref="IsEmbedded"/>,
+    /// which <see cref="SourceUnit"/> already carries the same way.
+    /// </summary>
+    internal bool IsDirectoryPerRecord =>
+        Path.GetFileName(FullPath).Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+}
 
 /// <summary>
 /// The record→source-unit question, answered for <b>every</b> record shape the Spriggit layout has

@@ -45,8 +45,21 @@ namespace MEditService.Core.Records;
 /// the child-slot columns outright (<c>Cell.{Landscape,NavigationMeshes}</c> and
 /// <c>Worldspace.{TopCell,SubCells}</c> all reflect as ordinary writable columns, and writing one
 /// would swap a container's children through a JSON blob), so parentage and slot order stay untouched
-/// by anything on the write path. The next gesture to widen this — #461's delete and renumber, which
-/// do change the set — is the one that has to make this read ref-aware for real.</para>
+/// by anything on the write path.
+///
+/// <para><b>#461 is the gesture that footing named, and it did not hold — by ruling, not by
+/// accident.</b> Delete and Renumber genuinely change the child set (removing an embedded child from
+/// its owner's inline list; changing one's FormKey in place), and this table (alongside
+/// <see cref="PlacementRow"/>/<see cref="CellLocationRow"/>) is <b>not</b> updated by either — they go
+/// through <c>IRecordIndex.ApplyWorkingTreeChanges</c>/<c>CreateWorkingTreeRecord</c>, which re-derive
+/// only <c>form_lookup</c>/<c>form_references</c>, the same as #427's <c>CreateRecord</c> already left
+/// unfixed. Deliberately out of #461's scope — extending the derivation machinery to cover these three
+/// tables is a bigger change than that ticket's mechanics warrant, and it does not affect <b>compile</b>,
+/// which stopped reading them at all back in #454 (it deserializes the on-disk source tree directly).
+/// It does affect any live read within the same session that consults these tables directly before a
+/// reload/re-Track re-ingests the tree — tracked as its own follow-up,
+/// <see href="https://github.com/WhiskyTangoFawks/ModBench/issues/488">#488</see>, rather than left to
+/// evaporate as an undocumented gap.</para>
 /// </summary>
 public readonly record struct ContainerChildRow(
     string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);

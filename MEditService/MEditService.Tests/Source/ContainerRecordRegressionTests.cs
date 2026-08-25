@@ -155,15 +155,16 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     private static System.Text.Json.JsonElement Json(string raw) =>
         System.Text.Json.JsonDocument.Parse(raw).RootElement;
 
+    /// <summary>#461: delete now resolves a Cell's own directory through <see cref="SourceUnitResolver"/>
+    /// instead of refusing outright — see <c>RecordEditServiceContainerDeleteRenumberTests</c> for the
+    /// full cascade/embedded-child coverage this flip is a sibling of.</summary>
     [Fact]
-    public void DeletingACell_RefusesWithTheContainerRefusal()
+    public void DeletingACell_Succeeds_NoLongerRefusesWithTheContainerRefusal()
     {
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
-        // No half-applied state: the refusal fires before anything is touched.
-        Assert.NotNull(_fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.True(result.Applied, result.Message);
+        Assert.Null(_fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
     }
 
     [Fact]
@@ -175,13 +176,33 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
     }
 
+    /// <summary>AC6 guard: the refusal's own message must stop naming this ticket now that delete and
+    /// renumber no longer refuse container records — a message still saying "renumbering it do not
+    /// yet (#461 delete/renumber...)" beside a Create call that in fact still refuses would send a user
+    /// down a dead end that has since opened. #462 (the ticket that remains true) must still be
+    /// named.</summary>
     [Fact]
-    public void RenumberingACell_RefusesWithTheContainerRefusal()
+    public void CreatingANewCell_RefusalMessage_NoLongerNamesDeleteOrRenumberAsUnsupported()
+    {
+        var result = EditService().CreateRecord(_fixture.Plugin, "cell", "BrandNewCell");
+
+        Assert.False(result.Applied);
+        Assert.DoesNotContain("#461", result.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("renumbering it do not yet", result.Message, StringComparison.Ordinal);
+        Assert.Contains("#462", result.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>#461: renumber now resolves a Cell's own directory the same way delete does — see
+    /// <c>RecordEditServiceContainerDeleteRenumberTests</c> for the full coverage this flip is a
+    /// sibling of.</summary>
+    [Fact]
+    public void RenumberingACell_Succeeds_NoLongerRefusesWithTheContainerRefusal()
     {
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
-        Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.True(result.Applied, result.Message);
+        Assert.Null(_fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.NotNull(_fixture.Sessions.Index!.GetDocument(result.NewFormKey!, _fixture.Plugin));
     }
 
     [Fact]
