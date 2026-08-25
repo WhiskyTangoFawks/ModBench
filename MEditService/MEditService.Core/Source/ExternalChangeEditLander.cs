@@ -86,19 +86,22 @@ public static class ExternalChangeEditLander
                     // (#450), and that owner is itself walked by this same EnumerateMajorRecords loop,
                     // so its own pass (below, non-embedded) already serializes this child's current
                     // value as part of the owner's whole text. Nothing to separately write here.
+                    logger.LogTrace(
+                        "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
+                        "it is embedded, not its own source unit",
+                        record.FormKey, recordType, pluginName, unit.Value.OwnerFormKey);
                     continue;
                 }
 
-                var ownIncomingText = Encoding.UTF8.GetString(
-                    codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
-                baselineByPath.TryGetValue(ToGitPath(unit.Value.RelativePath), out var ownBaselineText);
-                if (string.Equals(ownIncomingText, ownBaselineText, StringComparison.Ordinal))
-                    continue; // the external change never actually touched this record
-
-                var ownCurrentText = File.Exists(unit.Value.FullPath) ? File.ReadAllText(unit.Value.FullPath) : null;
-                touched.Add(new TouchedRecord(
-                    containerFormKey, unit.Value.RelativePath, unit.Value.FullPath, unit.Value.FullPath,
-                    ownIncomingText, ownCurrentText, ownBaselineText));
+                // The record IS its own source unit here (not embedded), so the path found is the path
+                // to diff and land on — no separately computed path to reconcile against, unlike a flat
+                // record's own order-index shift below.
+                if (DiffAgainstBaseline(
+                        record, gameRelease, codec, baselineByPath, containerFormKey,
+                        unit.Value.RelativePath, unit.Value.FullPath, unit.Value.FullPath) is { } containerTouched)
+                {
+                    touched.Add(containerTouched);
+                }
                 continue;
             }
 
@@ -107,11 +110,6 @@ public static class ExternalChangeEditLander
 
             var formKey = record.FormKey.ToString();
             var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease, orderIndex);
-            var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
-
-            baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);
-            if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
-                continue; // the external change never actually touched this record
 
             // #459 review finding: an external add/delete anywhere earlier in this group shifts every
             // later sibling's own order index, hence its own file name, even when that sibling's own
@@ -125,8 +123,13 @@ public static class ExternalChangeEditLander
             var existingPath = SourceUnitResolver.FlatSourcePath(
                 modFolder, pluginName, recordType, formKey, record.EditorID, gameRelease);
             var fullPath = Path.Combine(modFolder, relativePath);
-            var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
-            touched.Add(new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText));
+
+            if (DiffAgainstBaseline(
+                    record, gameRelease, codec, baselineByPath, formKey, relativePath, fullPath, existingPath)
+                is { } flatTouched)
+            {
+                touched.Add(flatTouched);
+            }
         }
 
         var colliding = touched
@@ -160,6 +163,32 @@ public static class ExternalChangeEditLander
         ExternalChangeDeferral.Clear(modFolder, pluginName);
 
         return ExternalChangeLandResult.Success([.. touched.Select(t => t.FormKey)]);
+    }
+
+    /// <summary>
+    /// The three-way diff this class's own doc comment describes, for one record whose path (flat or
+    /// container-own-unit alike) is already resolved — <c>baseline</c> (the parked ref's own
+    /// snapshot), <c>incoming</c> (this record as the just-observed binary deep-parses to) and
+    /// <c>current</c> (the working tree right now, at <paramref name="existingPath"/>). Null when the
+    /// external binary never actually touched this record (<c>incoming == baseline</c>) — the caller's
+    /// signal to leave it alone rather than add it to <c>touched</c>. Shared by both the flat-record
+    /// branch and the container-own-unit branch of <see cref="Keep"/>, which differ only in how
+    /// <paramref name="relativePath"/>/<paramref name="fullPath"/>/<paramref name="existingPath"/> were
+    /// arrived at, not in what happens once they are known.
+    /// </summary>
+    private static TouchedRecord? DiffAgainstBaseline(
+        IMajorRecordGetter record, GameRelease gameRelease, RecordTextCodec codec,
+        Dictionary<string, string> baselineByPath, string formKey, string relativePath, string fullPath,
+        string existingPath)
+    {
+        var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+
+        baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);
+        if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
+            return null; // the external change never actually touched this record
+
+        var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
+        return new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText);
     }
 
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');

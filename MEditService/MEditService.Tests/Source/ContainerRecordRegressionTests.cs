@@ -27,11 +27,11 @@ namespace MEditService.Tests.Source;
 ///
 /// <para><b>What a user now sees editing a cell in a tracked plugin</b> (the sentence the review asked
 /// for, verified by the tests below): reading it (record editor, compare grid) still works — the
-/// container is served from the indexed document, degraded, logged, never a crash. Every write gesture
-/// (field edit, delete, create, renumber) refuses with <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/>,
-/// naming that point-write support for containers isn't built yet (#453) — the same shape of refusal
-/// every other blocked gesture on this write path already returns, not an unhandled exception or a
-/// 500.</para>
+/// container is served from the indexed document, degraded, logged, never a crash. #453/#454 landed
+/// field-edit and EditorID-rename support for a container's own scalar fields, verified below; delete,
+/// create and renumber still refuse with <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/>,
+/// naming that a container's own structural gestures aren't built yet — the same shape of refusal every
+/// other blocked gesture on this write path already returns, not an unhandled exception or a 500.</para>
 /// </summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
