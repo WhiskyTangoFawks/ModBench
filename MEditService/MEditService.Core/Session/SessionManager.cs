@@ -322,7 +322,8 @@ public sealed class SessionManager(
             _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
             SourceIngest.Ingest(
                 repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
-                plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease, _logger, token);
+                plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease,
+                _repositoryFactory.SchemaReflector, _logger, token);
             return;
         }
         catch (OperationCanceledException)

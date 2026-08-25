@@ -14,6 +14,8 @@ public sealed class DuckDbRecordIndexFactory(
     private readonly ITableDdlBuilder _ddlBuilder = ddlBuilder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
+    public ISchemaReflector SchemaReflector => _schemaReflector;
+
     public IRecordIndex Create(GameRelease gameRelease)
     {
         var repo = new DuckDbRecordIndex(_schemaReflector, _ddlBuilder, _logger);

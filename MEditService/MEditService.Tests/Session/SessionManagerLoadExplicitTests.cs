@@ -115,6 +115,8 @@ public sealed class SessionManagerLoadExplicitTests
     private sealed class ThrowingOnIndexRepositoryFactory(IRecordIndexFactory inner, string poisonPlugin)
         : IRecordIndexFactory
     {
+        public ISchemaReflector SchemaReflector => inner.SchemaReflector;
+
         public IRecordIndex Create(GameRelease gameRelease) =>
             new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
     }
