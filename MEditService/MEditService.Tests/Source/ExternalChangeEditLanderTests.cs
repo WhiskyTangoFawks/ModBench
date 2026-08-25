@@ -172,6 +172,38 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.Equal(otherNpcTextBeforeDelete, File.ReadAllText(survivor));
     }
 
+    /// <summary>#433: <c>Keep</c> reads the parked baseline through
+    /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> (<see cref="SourceRepository.EnumerateSourceAtRef"/>)
+    /// and re-parks through <see cref="SourceRepository.ParkCompileSnapshot"/> after landing — both
+    /// must survive a real-world-shaped, ref-unsafe plugin name, not just the fixture's own
+    /// <see cref="TrackedModFixture.PluginName"/>.</summary>
+    [Fact]
+    public void Keep_Succeeds_ForASpaceNamedPlugin()
+    {
+        using var mod = TrackedModFixture.TrackedAs("LitR - Settings Holotapes Sorting.esp");
+        var pluginPath = Path.Combine(mod.ModFolder, mod.ActualPluginName);
+
+        var fallout4Mod = new Fallout4Mod(ModKey.FromFileName(mod.ActualPluginName), Fallout4Release.Fallout4);
+        var race = new Race(mod.Race, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.RaceEditorId };
+        fallout4Mod.Races.Add(race);
+        fallout4Mod.Keywords.Add(new Keyword(mod.Keyword, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.KeywordEditorId });
+        var npc = new Npc(mod.Npc, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.NpcEditorId };
+        npc.Race.SetTo(race);
+        npc.HeightMax = 0.9f;
+        fallout4Mod.Npcs.Add(npc);
+        fallout4Mod.Npcs.Add(new Npc(mod.OtherNpc, Fallout4Release.Fallout4) { EditorID = TrackedModFixture.OtherNpcEditorId });
+        fallout4Mod.WriteToBinary(pluginPath);
+
+        var result = ExternalChangeEditLander.Keep(
+            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, mod.Sessions.Index!, SharedSchemaReflector.Instance);
+
+        Assert.True(result.Applied, result.RefusalReason);
+        Assert.Equal([mod.Npc.ToString()], result.LandedFormKeys);
+
+        var binarySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(pluginPath)));
+        Assert.Equal(binarySha, SourceRepository.ParkedCompileBinarySha256(mod.ModFolder, mod.ActualPluginName));
+    }
+
     [Fact]
     public void Keep_DoesNotRefuse_WhenExistingDirtAlreadyAgreesWithTheIncomingValue()
     {

@@ -68,7 +68,7 @@ public static class SourceRepository
 
             var baselineSha = GitCli.Run(gitDir, modFolder, "rev-parse", "main").Trim();
             foreach (var plugin in trailers.BinarySha256ByPlugin.Keys)
-                GitCli.Run(gitDir, modFolder, "update-ref", $"refs/medit/last-compile/{plugin}", baselineSha);
+                GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), baselineSha);
 
             GitCli.Run(gitDir, modFolder, "checkout", "-q", "-b", EditBranchName);
         }
@@ -226,7 +226,7 @@ public static class SourceRepository
         // object nothing else in this class builds through `git commit`.
         var message = $"Save & Compile: {plugin}\n\nBinary-SHA256: {binarySha256}";
         var snapshotSha = GitCli.Run(gitDir, modFolder, "commit-tree", tree, "-p", headSha, "-m", message).Trim();
-        GitCli.Run(gitDir, modFolder, "update-ref", $"refs/medit/last-compile/{plugin}", snapshotSha);
+        GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
 
     // git stash create answers empty (not an error) when the working tree has nothing to stash —
@@ -278,7 +278,7 @@ public static class SourceRepository
 
             GitCli.Run(gitDir, modFolder, "update-ref", "refs/heads/main", commitSha);
             foreach (var plugin in trailers.BinarySha256ByPlugin.Keys)
-                GitCli.Run(gitDir, modFolder, "update-ref", $"refs/medit/last-compile/{plugin}", commitSha);
+                GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), commitSha);
         }
         finally
         {
@@ -419,7 +419,7 @@ public static class SourceRepository
         if (!IsTracked(modFolder)) return null;
 
         var gitDir = Path.Combine(modFolder, ".git");
-        if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", $"refs/medit/last-compile/{plugin}"))
+        if (!GitCli.TryRun(gitDir, modFolder, out var body, "log", "-1", "--format=%B", LastCompileRef(plugin)))
             return null;
 
         const string prefix = "Binary-SHA256: ";
@@ -482,6 +482,46 @@ public static class SourceRepository
     // git speaks forward slashes on every platform, Windows included, while SourceRecordPath builds
     // its paths with Path.Combine.
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
+
+    /// <summary>
+    /// #433: the one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built — every call site
+    /// that reads or writes this ref family goes through here, never a second inline interpolation of
+    /// the raw filename. Almost every real Fallout 4 plugin name is ref-unsafe by git's own rules
+    /// (spaces, <c>[</c>/<c>]</c>, and more are forbidden — <c>git check-ref-format</c>), so
+    /// <see cref="EncodeRefComponent"/> percent-encodes the plugin filename before it ever reaches
+    /// git.
+    ///
+    /// <para><b>The encoding is stable and injective, deliberately not reversible</b> (triage decision
+    /// on #433): two distinct plugin filenames must never collapse onto the same ref, but nothing in
+    /// this codebase enumerates <c>refs/medit/last-compile/*</c> (no <c>for-each-ref</c>/<c>show-ref</c>
+    /// caller exists) — every site starts from a known plugin name and encodes forward. A future
+    /// caller that needs to go the other way must not assume this ref suffix decodes back to a literal
+    /// filename.</para>
+    /// </summary>
+    internal static string LastCompileRef(string plugin) => $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
+
+    // Percent-encodes (UTF-8, byte-wise) every byte that isn't ASCII alnum/-/_, plus '.' whenever
+    // leaving it literal would produce a ref component git itself rejects for reasons beyond the
+    // issue's named character list: a leading dot, a trailing dot, or a ".." run. '%' itself is
+    // always escaped (to "%25"), which is what keeps this injective — the encoded output can never be
+    // ambiguous about where an escape sequence starts. Already-safe names (the common case: plain
+    // alnum/dot/dash/underscore filenames) pass through unchanged.
+    private static string EncodeRefComponent(string plugin)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(plugin);
+        var sb = new System.Text.StringBuilder(bytes.Length);
+        for (var i = 0; i < bytes.Length; i++)
+        {
+            var b = bytes[i];
+            var isDot = b == (byte)'.';
+            var dotIsSafe = isDot && i != 0 && i != bytes.Length - 1 && bytes[i - 1] != (byte)'.';
+            var safe = (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
+                || b == '-' || b == '_' || dotIsSafe;
+            if (safe) sb.Append((char)b);
+            else sb.Append('%').Append(b.ToString("X2", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        return sb.ToString();
+    }
 
     /// <summary>
     /// Commits whatever is currently staged, with <paramref name="trailers"/> rendered as commit

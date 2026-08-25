@@ -26,7 +26,12 @@ public sealed class TrackedModFixture : IDisposable
     public string ModFolder { get; }
     public string GameDirectory { get; }
     public SessionManager Sessions { get; }
-    public PluginKey Plugin { get; } = new(PluginName, ModFolderOrigin);
+    public PluginKey Plugin { get; }
+
+    /// <summary>The plugin filename this instance actually tracked — <see cref="PluginName"/> unless
+    /// a caller asked for a different one (#433: real-world-shaped, ref-unsafe names need a real
+    /// tracked session to exercise, which this fixture is the only thing that builds).</summary>
+    public string ActualPluginName { get; }
 
     /// <summary>The NPC every editing test edits, and the records that must stay untouched beside
     /// it. <see cref="Keyword"/> is a valid target for the NPC's <c>keywords</c> field and
@@ -37,13 +42,15 @@ public sealed class TrackedModFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private TrackedModFixture(bool track)
+    private TrackedModFixture(bool track, string pluginName)
     {
+        ActualPluginName = pluginName;
+        Plugin = new PluginKey(pluginName, ModFolderOrigin);
         ModFolder = Directory.CreateTempSubdirectory("medit-edit-mod-").FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-edit-game-").FullName;
 
-        var pluginPath = Path.Combine(ModFolder, PluginName);
-        var mod = new Fallout4Mod(ModKey.FromFileName(PluginName), Fallout4Release.Fallout4);
+        var pluginPath = Path.Combine(ModFolder, pluginName);
+        var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
         var race = mod.Races.AddNew("FixtureRace");
         var keyword = mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew("FixtureNpc");
@@ -56,7 +63,7 @@ public sealed class TrackedModFixture : IDisposable
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
         ((ISessionManager)Sessions).LoadExplicit(
             GameDirectory,
-            [new ExplicitPluginInput(PluginName, pluginPath, ModFolderOrigin, true)],
+            [new ExplicitPluginInput(pluginName, pluginPath, ModFolderOrigin, true)],
             GameRelease.Fallout4);
 
         if (track)
@@ -67,11 +74,16 @@ public sealed class TrackedModFixture : IDisposable
         }
     }
 
-    public static TrackedModFixture Tracked() => new(track: true);
+    public static TrackedModFixture Tracked() => new(track: true, PluginName);
 
     /// <summary>The same mod folder with no <c>.git</c> in it — tracking *is* the presence of that
     /// directory (ADR-0041), so this is the whole of "untracked".</summary>
-    public static TrackedModFixture Untracked() => new(track: false);
+    public static TrackedModFixture Untracked() => new(track: false, PluginName);
+
+    /// <summary>#433: same fixture, but tracking a caller-chosen (typically ref-unsafe, real-world-
+    /// shaped) plugin filename instead of the fixed <see cref="PluginName"/> — everything else about
+    /// the fixture (record shape, EditorIDs) is identical.</summary>
+    public static TrackedModFixture TrackedAs(string pluginName) => new(track: true, pluginName);
 
     public const string NpcEditorId = "FixtureNpc";
     public const string RaceEditorId = "FixtureRace";
@@ -148,7 +160,7 @@ public sealed class TrackedModFixture : IDisposable
     /// needs this fixture's own <see cref="ModFolder"/> to look at.</summary>
     public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
         Path.GetRelativePath(ModFolder, SourceUnitResolver.FlatSourcePath(
-            ModFolder, PluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
+            ModFolder, ActualPluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));
 
     public void Dispose()
     {

@@ -38,7 +38,7 @@ public static class ExternalChangeEditLander
         var schemas = reflector.GetSchemas(gameRelease);
         var pluginName = plugin.Name;
 
-        var parkedRef = $"refs/medit/last-compile/{pluginName}";
+        var parkedRef = SourceRepository.LastCompileRef(pluginName);
         var baselineByPath = SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, parkedRef)
             .ToDictionary(f => ToGitPath(f.RelativePath), f => Encoding.UTF8.GetString(f.Bytes), StringComparer.Ordinal);
 
