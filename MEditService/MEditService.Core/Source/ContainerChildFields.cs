@@ -133,7 +133,70 @@ internal static class ContainerChildFields
     /// a silently lost edit. So the walk follows containment only as far as the document itself
     /// does.</para>
     /// </summary>
-    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey)
+    internal static EmbeddedChild? FindEmbeddedChild(IMajorRecordGetter parent, string formKey) =>
+        FindEmbeddedChildSlot(parent, formKey) is { } slot
+            ? new EmbeddedChild(slot.SlotName, slot.SlotIndex, slot.Child)
+            : null;
+
+    /// <summary>
+    /// #461: <paramref name="formKey"/>'s removal from wherever <see cref="FindEmbeddedChild"/> would
+    /// have found it — the same <see cref="FindEmbeddedChildSlot"/> traversal, but acting on the match
+    /// instead of only reporting it, so a Cell/Worldspace deleted through
+    /// <c>Edits.RecordEditService.DeleteRecord</c> comes back with its embedded child genuinely gone
+    /// from the object graph that gets reserialized. Returns <see langword="false"/> when nothing
+    /// matched (the same "indexed but not actually there" state <see cref="FindEmbeddedChild"/>'s own
+    /// callers already have to handle), never throws.
+    ///
+    /// <para>A list slot (<c>Persistent</c>/<c>Temporary</c>/<c>NavigationMeshes</c>) is spliced by
+    /// <see cref="EmbeddedChildSlot.SlotIndex"/>; a single-value slot (<c>Cell.Landscape</c>,
+    /// <c>Worldspace.TopCell</c>) is set to <see langword="null"/> outright —
+    /// <see cref="EnumerateChildren"/>'s own two cases, mirrored here for the write instead of the
+    /// read.</para>
+    /// </summary>
+    internal static bool RemoveEmbeddedChild(IMajorRecordGetter parent, string formKey)
+    {
+        if (FindEmbeddedChildSlot(parent, formKey) is not { } slot) return false;
+
+        RemoveFromSlot(slot.Parent, slot.SlotName, slot.SlotIndex);
+        return true;
+    }
+
+    /// <summary>One child located inside a parent's live object graph, plus the <i>direct</i> parent it
+    /// sits in — which is <paramref name="parent"/> itself for a top-level slot, but a nested embedded
+    /// record (e.g. a Worldspace's TopCell) when the match is found two levels down. Carrying the direct
+    /// parent alongside the slot is what lets <see cref="RemoveEmbeddedChild"/> mutate the right object
+    /// without re-deriving it.</summary>
+    private readonly record struct EmbeddedChildSlot(IMajorRecordGetter Parent, string SlotName, int SlotIndex, IMajorRecord Child);
+
+    /// <summary>
+    /// <paramref name="formKey"/>'s slot inside <paramref name="parent"/>'s object graph, or null when
+    /// <paramref name="parent"/> does not carry it. This is the one recursive descent
+    /// <see cref="FindEmbeddedChild"/> and <see cref="RemoveEmbeddedChild"/> both need — #461 review:
+    /// they used to retype this walk near line-for-line, differing only in what happened at the match;
+    /// this is the shared traversal, and each caller now only states what it does with the slot found.
+    /// This is the answer to #453 scope 1's "at which JSON path inside the file", given through
+    /// Mutagen's own object model instead of a JSON pointer: the child is a real record in the parent's
+    /// graph, so every existing write mechanism — <c>RecordFieldWriter</c>, the codecs it dispatches to,
+    /// the refusal set around it — applies to it completely unchanged, and there is no second copy of
+    /// the document's structure to keep in step with the serializer.
+    ///
+    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> (#453 review
+    /// finding 2 — this used to stop at one, on the stated premise that "anything deeper is its own
+    /// source unit with its own file", which is false for exactly one real shape). A worldspace's
+    /// <c>RecordData.json</c> embeds its <c>TopCell</c>, and that cell embeds its own placed
+    /// references: such a reference is <b>two</b> levels down inside one file, with no file of its own
+    /// anywhere. Stopping at one level refused it — and refused it citing an external change that had
+    /// not happened.</para>
+    ///
+    /// <para><b>Descent is bounded to <see cref="SpriggitEmbeddedSlots"/>, and that bound is
+    /// correctness rather than thrift.</b> A Quest's dialog topics and scenes are children in this
+    /// class's table too, but they are folder-split — each is its own source unit with its own file.
+    /// Descending into one and acting on it here would apply the change into the <i>quest's</i>
+    /// document while the child's own file, which is what compile and ingest actually read, kept the
+    /// old value: a silently lost edit. So the walk follows containment only as far as the document
+    /// itself does.</para>
+    /// </summary>
+    private static EmbeddedChildSlot? FindEmbeddedChildSlot(IMajorRecordGetter parent, string formKey)
     {
         var parentType = NormalizedTypeName(parent.GetType());
 
@@ -144,47 +207,14 @@ internal static class ContainerChildFields
                 // A deserialized parent's children are settable records, so this cast holds for every
                 // caller on the write path. Guarded rather than assumed so a read-only graph (a binary
                 // overlay, which no write-path caller holds) declines instead of throwing.
-                return child is IMajorRecord settable ? new EmbeddedChild(slotName, slotIndex, settable) : null;
+                return child is IMajorRecord settable ? new EmbeddedChildSlot(parent, slotName, slotIndex, settable) : null;
             }
 
             if (!SpriggitEmbeddedSlots.Contains((parentType, slotName))) continue;
-            if (FindEmbeddedChild(child, formKey) is { } deeper) return deeper;
+            if (FindEmbeddedChildSlot(child, formKey) is { } deeper) return deeper;
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// #461: <paramref name="formKey"/>'s removal from wherever <see cref="FindEmbeddedChild"/> would
-    /// have found it — same recursive descent through <see cref="SpriggitEmbeddedSlots"/>, but mutating
-    /// the slot in place instead of only reporting it, so a Cell/Worldspace deleted through
-    /// <c>Edits.RecordEditService.DeleteRecord</c> comes back with its embedded child genuinely gone
-    /// from the object graph that gets reserialized. Returns <see langword="false"/> when nothing
-    /// matched (the same "indexed but not actually there" state <see cref="FindEmbeddedChild"/>'s own
-    /// callers already have to handle), never throws.
-    ///
-    /// <para>A list slot (<c>Persistent</c>/<c>Temporary</c>/<c>NavigationMeshes</c>) is spliced by
-    /// <see cref="SlotIndex"/>; a single-value slot (<c>Cell.Landscape</c>, <c>Worldspace.TopCell</c>)
-    /// is set to <see langword="null"/> outright — <see cref="EnumerateChildren"/>'s own two cases,
-    /// mirrored here for the write instead of the read.</para>
-    /// </summary>
-    internal static bool RemoveEmbeddedChild(IMajorRecordGetter parent, string formKey)
-    {
-        var parentType = NormalizedTypeName(parent.GetType());
-
-        foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
-        {
-            if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
-            {
-                RemoveFromSlot(parent, slotName, slotIndex);
-                return true;
-            }
-
-            if (!SpriggitEmbeddedSlots.Contains((parentType, slotName))) continue;
-            if (RemoveEmbeddedChild(child, formKey)) return true;
-        }
-
-        return false;
     }
 
     /// <summary>The mutation half of <see cref="RemoveEmbeddedChild"/> — reflection rather than a

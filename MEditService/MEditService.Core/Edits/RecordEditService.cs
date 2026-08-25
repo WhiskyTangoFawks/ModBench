@@ -259,8 +259,7 @@ public sealed class RecordEditService(
         if (unit.IsEmbedded) return unit.FullPath;
         if (string.Equals(edited.EditorID, document.EditorId, StringComparison.Ordinal)) return unit.FullPath;
 
-        var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
-            .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+        var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
 
         // #459: an EditorID-only rename must not silently drop the record back to the front of its
@@ -362,9 +361,7 @@ public sealed class RecordEditService(
             // DialogTopic etc.), or a flat record's single file. Never-assume-exclusive-ownership: the
             // unit may already be gone (another tool, a hand delete) — that is exactly the working-tree
             // state this call is trying to reach, not a failure to report.
-            var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
-                .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
-            if (isDirectoryPerRecord)
+            if (unit.IsDirectoryPerRecord)
             {
                 var directory = Path.GetDirectoryName(unit.FullPath)!;
                 if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
@@ -715,9 +712,9 @@ public sealed class RecordEditService(
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
         // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child) versus
-        // a flat record's single file — the same distinction DeleteRecord makes.
-        var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
-            .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+        // a flat record's single file — the same distinction DeleteRecord makes, both now reading
+        // SourceUnit's own IsDirectoryPerRecord rather than retyping the check.
+        var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
         var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
 
