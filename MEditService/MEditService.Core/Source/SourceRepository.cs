@@ -498,23 +498,39 @@ public static class SourceRepository
     /// caller that needs to go the other way must not assume this ref suffix decodes back to a literal
     /// filename.</para>
     /// </summary>
-    internal static string LastCompileRef(string plugin) => $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
+    internal static string LastCompileRef(string plugin)
+    {
+        // A caller passing an empty plugin name is a bug upstream, not a name to accommodate — left
+        // unguarded, EncodeRefComponent's identity behavior on an empty string produces
+        // "refs/medit/last-compile/" (a ref ending in "/", which git also rejects), and no placeholder
+        // string could be substituted without risking a collision with some real plugin name.
+        if (string.IsNullOrEmpty(plugin))
+            throw new ArgumentException("Plugin filename must not be empty.", nameof(plugin));
+
+        return $"refs/medit/last-compile/{EncodeRefComponent(plugin)}";
+    }
 
     // Percent-encodes (UTF-8, byte-wise) every byte that isn't ASCII alnum/-/_, plus '.' whenever
     // leaving it literal would produce a ref component git itself rejects for reasons beyond the
-    // issue's named character list: a leading dot, a trailing dot, or a ".." run. '%' itself is
-    // always escaped (to "%25"), which is what keeps this injective — the encoded output can never be
-    // ambiguous about where an escape sequence starts. Already-safe names (the common case: plain
-    // alnum/dot/dash/underscore filenames) pass through unchanged.
+    // issue's named character list: a leading dot, a trailing dot, a ".." run, or (git's own lock-file
+    // convention) a trailing ".lock". '%' itself is always escaped (to "%25"), which is what keeps
+    // this injective — the encoded output can never be ambiguous about where an escape sequence
+    // starts. Already-safe names (the common case: plain alnum/dot/dash/underscore filenames, and not
+    // ending in ".lock") pass through unchanged.
     private static string EncodeRefComponent(string plugin)
     {
         var bytes = System.Text.Encoding.UTF8.GetBytes(plugin);
+        var endsWithDotLock = bytes.Length >= 5
+            && bytes[^5] == (byte)'.' && bytes[^4] == (byte)'l' && bytes[^3] == (byte)'o'
+            && bytes[^2] == (byte)'c' && bytes[^1] == (byte)'k';
+
         var sb = new System.Text.StringBuilder(bytes.Length);
         for (var i = 0; i < bytes.Length; i++)
         {
             var b = bytes[i];
             var isDot = b == (byte)'.';
-            var dotIsSafe = isDot && i != 0 && i != bytes.Length - 1 && bytes[i - 1] != (byte)'.';
+            var dotIsSafe = isDot && i != 0 && i != bytes.Length - 1 && bytes[i - 1] != (byte)'.'
+                && !(endsWithDotLock && i == bytes.Length - 5);
             var safe = (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
                 || b == '-' || b == '_' || dotIsSafe;
             if (safe) sb.Append((char)b);
