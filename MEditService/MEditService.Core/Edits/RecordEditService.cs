@@ -298,6 +298,14 @@ public sealed class RecordEditService(
     /// Effective, still served at Head until this is committed and compiled. No reference cascade —
     /// a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary
     /// compile diagnostic, exactly like any other dangling link (ADR-0020).
+    ///
+    /// <para><b>#461 widened this off the flat-only path onto <see cref="SourceUnitResolver"/></b>,
+    /// the same resolution <see cref="EditField"/> already uses, so a container's own record (its
+    /// directory, cascading every embedded/folder-split descendant's index row) and an embedded
+    /// child (spliced out of its owner's inline slot, the owner rewritten) both delete through this
+    /// one method instead of refusing outright. A flat record resolves exactly as it always did —
+    /// <see cref="SourceUnitResolver.Resolve"/>'s own flat branch <i>is</i>
+    /// <see cref="SourceUnitResolver.FlatSourcePath"/> — so nothing about that case changed.</para>
     /// </summary>
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
@@ -316,28 +324,115 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
-        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
-        // #459: SourceRecordPath.For alone can no longer name the file to delete — it would need the
-        // record's current order index, which nothing here knows without looking. Resolved through
-        // SourceUnitResolver instead, the same FormKey-suffix-tolerant lookup EditField already uses,
-        // so a delete finds the real numbered file regardless of its position.
-        var sourcePath = SourceUnitResolver.FlatSourcePath(
-            modFolder, plugin.Name, document.RecordType, formKey, document.EditorId, release);
-        var relativePath = Path.GetRelativePath(modFolder, sourcePath);
+        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
+            is not { } unit)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
+                "that would. Something moved or removed it outside Modbench — check the Source Control panel.");
+        }
 
-        // Never-assume-exclusive-ownership: the file may already be gone (another tool, a hand
-        // delete) — that is exactly the working-tree state this call is trying to reach, not a
-        // failure to report.
-        if (File.Exists(sourcePath)) File.Delete(sourcePath);
+        var deltas = new List<(string FormKey, string? Body)>();
 
-        index.ApplyWorkingTreeChanges(plugin, [(formKey, null)]);
+        if (unit.IsEmbedded)
+        {
+            var owner = index.GetDocument(unit.OwnerFormKey, plugin)!;
+            var record = ReadRecordFromSource(unit.FullPath, owner, release);
+
+            if (!ContainerChildFields.RemoveEmbeddedChild(record, formKey))
+            {
+                // Same "indexed but not actually there" diagnosis EditField's own embedded lookup
+                // gives — states only what is observed, never guesses an external-change cause.
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.SourceUnitNotFound,
+                    $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
+                    "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
+                    "report it; otherwise reload the session so the index re-reads the tree.");
+            }
+
+            var newOwnerBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
+            _codec.SerializeAsync(record, unit.FullPath, release).GetAwaiter().GetResult();
+            deltas.Add((unit.OwnerFormKey, Encoding.UTF8.GetString(newOwnerBody)));
+        }
+        else
+        {
+            // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child —
+            // DialogTopic etc.), or a flat record's single file. Never-assume-exclusive-ownership: the
+            // unit may already be gone (another tool, a hand delete) — that is exactly the working-tree
+            // state this call is trying to reach, not a failure to report.
+            var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
+                .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+            if (isDirectoryPerRecord)
+            {
+                var directory = Path.GetDirectoryName(unit.FullPath)!;
+                if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            }
+            else if (File.Exists(unit.FullPath))
+            {
+                File.Delete(unit.FullPath);
+            }
+        }
+
+        // Both shapes cascade the same way: a container's own delete removes its directory whole (a
+        // Cell's placed refs/navmesh/landscape inline, a Quest's DialogTopics/Scenes/Branches nested
+        // beneath it on disk), and an embedded child's own delete can itself have descendants two
+        // levels deep (a Worldspace's TopCell carrying its own placed refs). Every descendant's index
+        // row is nulled alongside the target's own, in the one batch below.
+        deltas.Add((formKey, null));
+        foreach (var descendant in EnumerateDescendantFormKeys(index, plugin, formKey))
+            deltas.Add((descendant, null));
+
+        index.ApplyWorkingTreeChanges(plugin, deltas);
+        // #422: a deleted row can no longer match an active filter.
+        sessions.ReapplyFilter();
 
         logger.LogInformation(
-            "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath}",
-            formKey, plugin.Name, plugin.Origin, relativePath);
+            "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath} ({Count} index row(s) removed)",
+            formKey, plugin.Name, plugin.Origin, unit.RelativePath, deltas.Count);
         return RecordEditResult.Success();
     }
+
+    /// <summary>
+    /// #461: every descendant <paramref name="formKey"/> holds, recursively — a Cell's placed refs
+    /// (<see cref="IRecordReads.GetCellReferences"/>), a Worldspace's TopCell
+    /// (<see cref="IRecordReads.GetWorldspaceCells"/>, the row with no block coordinates) and
+    /// whatever <see cref="IRecordReads.GetContainerChildren"/> names (navmesh/landscape, a Quest's
+    /// dialog branches/topics/scenes, a DialogTopic's responses) — so a container's own delete can
+    /// null every descendant's index row in the same batch as its own.
+    ///
+    /// <para>Deliberately index-derived, not object-graph-derived: <see cref="ContainerChildFields.EnumerateChildren"/>
+    /// walks a <i>deserialized</i> record, and the per-record codec never populates a folder-split
+    /// child (a Quest's DialogTopics) onto the parent it reads — only the whole-mod door does that.
+    /// The index's own side tables, populated at ingest from that same whole-mod walk, are what still
+    /// know the relationship. Harmless to call for a childless or non-container FormKey: every one of
+    /// the three reads below simply answers empty, so no caller needs to know the shape in advance
+    /// (<see cref="DeleteRecord"/> calls this unconditionally).</para>
+    /// </summary>
+    private static IEnumerable<string> EnumerateDescendantFormKeys(IRecordReads reads, PluginKey plugin, string formKey)
+    {
+        var refs = reads.GetCellReferences(plugin, formKey);
+        var placedDescendants = refs.Persistent.Concat(refs.Temporary)
+            .SelectMany(placed => WithDescendants(reads, plugin, placed.FormKey));
+
+        var topCell = reads.GetWorldspaceCells(plugin, formKey).FirstOrDefault(c => c.BlockX == null);
+        var topCellDescendants = topCell == null
+            ? Enumerable.Empty<string>()
+            : WithDescendants(reads, plugin, topCell.FormKey);
+
+        var childDescendants = reads.GetContainerChildren(plugin, formKey)
+            .SelectMany(child => WithDescendants(reads, plugin, child.ChildFormKey));
+
+        return placedDescendants.Concat(topCellDescendants).Concat(childDescendants);
+    }
+
+    /// <summary><paramref name="formKey"/> itself, followed by everything <b>it</b> descends to — the
+    /// per-child recursive step <see cref="EnumerateDescendantFormKeys"/>'s three
+    /// <c>SelectMany</c>/ternary branches all need identically (a Worldspace's TopCell is itself a Cell
+    /// with its own placed refs, e.g.), factored out once rather than repeated per branch.</summary>
+    private static IEnumerable<string> WithDescendants(IRecordReads reads, PluginKey plugin, string formKey) =>
+        new[] { formKey }.Concat(EnumerateDescendantFormKeys(reads, plugin, formKey));
 
     /// <summary>
     /// #427: mints a brand-new record — the create half of a lifecycle gesture. The FormKey is either
@@ -439,7 +534,19 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
-        if (RefuseIfContainerType(document.RecordType, release) is { } targetContainerRefusal) return targetContainerRefusal;
+
+        // #461: the same record→source-unit resolution EditField/DeleteRecord use, replacing the old
+        // blanket container refusal — a container's own directory, an embedded child, or a flat
+        // record's file all answer here; only "nothing on disk holds this, and the index names no
+        // container that would" still refuses.
+        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
+            is null)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
+                "that would. Something moved or removed it outside Modbench — check the Source Control panel.");
+        }
 
         var originatingPlugin = FormKey.Factory(formKey).ModKey.FileName.String;
         if (!originatingPlugin.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
@@ -475,22 +582,6 @@ public sealed class RecordEditService(
                 RecordEditRefusal.UntrackedReferencer,
                 $"{formKey} is referenced by untracked plugin(s) {string.Join(", ", untrackedReferencers)}, " +
                 "so the renumber cannot rewrite their FormLinks. Track them first, then try again.");
-        }
-
-        // #451 review: a referencer that is itself a container record has no flat source path either
-        // (SourceRecordPath.For would throw mid-cascade, after some referencers already landed) —
-        // refused up front, before any write, same as the untracked-referencer case just above.
-        var containerReferencers = referencers
-            .Select(r => (r.FormKey, r.Plugin, Document: index.GetDocument(r.FormKey, r.Plugin)))
-            .Where(t => t.Document != null && RefuseIfContainerType(t.Document.RecordType, release) != null)
-            .Select(t => $"{t.FormKey} in {t.Plugin.Name}")
-            .ToList();
-        if (containerReferencers.Count > 0)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerRecordNotYetSupported,
-                $"{formKey} is referenced by container record(s) {string.Join(", ", containerReferencers)}, whose " +
-                "own source file this can't yet rewrite (#461). Renumber is not available until then.");
         }
 
         var writtenRepos = new List<string>();
@@ -547,8 +638,19 @@ public sealed class RecordEditService(
     /// <summary>One referencing record's source file, mechanically rewritten to point at the new
     /// FormKey — a whole-body string replace rather than a field-by-field walk, so it also reaches
     /// VMAD Object properties and condition Form parameters (never checked by the reflected-column
-    /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).</summary>
-    private static void RewriteReferenceField(
+    /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).
+    ///
+    /// <para><b>#461</b>: widened off the flat-only <see cref="SourceUnitResolver.FlatSourcePath"/>
+    /// assumption onto full <see cref="SourceUnitResolver.Resolve"/>, so a referencer that is itself a
+    /// container or an embedded child (a placed ref's own <c>Base</c> FormLink, say) rewrites cleanly
+    /// instead of the whole renumber refusing outright. The string replace still lands on whichever
+    /// file actually carries the text — the referencer's own file when it isn't embedded, its owner's
+    /// file when it is, since an embedded record's fields live inside the owner's document. An embedded
+    /// referencer additionally re-derives its own extracted row from the mutated owner, the same
+    /// two-row shape <see cref="EditField"/>'s own embedded edit uses (owner's body changed, and the
+    /// child's own row must not go stale next to it).</para>
+    /// </summary>
+    private void RewriteReferenceField(
         IRecordIndex index, PluginKey referencerPlugin, string referencerModFolder,
         string referencerFormKey, string oldFormKey, string newFormKey, GameRelease release)
     {
@@ -556,48 +658,129 @@ public sealed class RecordEditService(
             ?? throw new InvalidOperationException(
                 $"{referencerPlugin.Name} no longer holds {referencerFormKey} mid-renumber.");
 
-        // #459: the referencer's real on-disk name now carries an order index SourceRecordPath.For
-        // alone cannot guess — resolved the same FormKey-suffix-tolerant way DeleteRecord is.
-        var sourcePath = SourceUnitResolver.FlatSourcePath(
-            referencerModFolder, referencerPlugin.Name, referencerDoc.RecordType, referencerFormKey,
-            referencerDoc.EditorId, release);
-        var body = File.Exists(sourcePath) ? File.ReadAllText(sourcePath) : referencerDoc.Body!;
+        if (SourceUnitResolver.Resolve(
+                index, referencerPlugin, referencerModFolder, referencerFormKey, referencerDoc.RecordType,
+                referencerDoc.EditorId, release)
+            is not { } unit)
+        {
+            throw new InvalidOperationException(
+                $"No source unit in {referencerPlugin.Name}'s tree holds {referencerFormKey} mid-renumber.");
+        }
+
+        var body = File.Exists(unit.FullPath) ? File.ReadAllText(unit.FullPath) : referencerDoc.Body!;
         var newBody = body.Replace(oldFormKey, newFormKey, StringComparison.Ordinal);
 
-        File.WriteAllText(sourcePath, newBody);
-        index.ApplyWorkingTreeChanges(referencerPlugin, [(referencerFormKey, newBody)]);
+        File.WriteAllText(unit.FullPath, newBody);
+
+        if (!unit.IsEmbedded)
+        {
+            index.ApplyWorkingTreeChanges(referencerPlugin, [(referencerFormKey, newBody)]);
+            return;
+        }
+
+        var owner = ReadRecordFromSource(
+            unit.FullPath, index.GetDocument(unit.OwnerFormKey, referencerPlugin)!, release);
+        var child = ContainerChildFields.FindEmbeddedChild(owner, referencerFormKey)?.Child
+            ?? throw new InvalidOperationException(
+                $"{unit.RelativePath} no longer carries {referencerFormKey} after its own reference rewrite.");
+        var childBody = Encoding.UTF8.GetString(
+            _codec.SerializeToBytesAsync(child, release).GetAwaiter().GetResult());
+
+        index.ApplyWorkingTreeChanges(
+            referencerPlugin, [(unit.OwnerFormKey, newBody), (referencerFormKey, childBody)]);
     }
 
     /// <summary>The delete+create pair itself — re-reads the source fresh (rather than trusting the
     /// caller's earlier snapshot) so a self-reference <see cref="RewriteReferenceField"/> already
-    /// rewrote above is reflected in the body this reserializes under the new FormKey.</summary>
+    /// rewrote above is reflected in the body this reserializes under the new FormKey. #461: dispatches
+    /// on the target's own source unit shape, resolved fresh for the same reason.</summary>
     private void RenumberTheRecordItself(
         IRecordIndex index, PluginKey plugin, string modFolder, string oldFormKey, string newFormKey, GameRelease release)
     {
         var document = index.GetDocument(oldFormKey, plugin)
             ?? throw new InvalidOperationException($"{plugin.Name} no longer holds {oldFormKey} mid-renumber.");
-        // #459: find the record's real current file (its order index is unknown here without looking).
-        var oldSourcePath = SourceUnitResolver.FlatSourcePath(
-            modFolder, plugin.Name, document.RecordType, oldFormKey, document.EditorId, release);
+        if (SourceUnitResolver.Resolve(index, plugin, modFolder, oldFormKey, document.RecordType, document.EditorId, release)
+            is not { } unit)
+        {
+            throw new InvalidOperationException($"No source unit in {plugin.Name}'s tree holds {oldFormKey} mid-renumber.");
+        }
 
-        var record = ReadRecordFromSource(oldSourcePath, document, release);
+        if (unit.IsEmbedded)
+        {
+            RenumberEmbeddedChild(index, plugin, unit, oldFormKey, newFormKey, document.RecordType, release);
+            return;
+        }
+
+        var record = ReadRecordFromSource(unit.FullPath, document, release);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
-        // EditorID does not change across a renumber — only the FormKey half of the file name does.
+        // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child) versus
+        // a flat record's single file — the same distinction DeleteRecord makes.
+        var isDirectoryPerRecord = Path.GetFileName(unit.FullPath)
+            .Equals(SourceUnitResolver.RecordDataFileName, StringComparison.Ordinal);
+        var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
+        var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
+
+        // EditorID does not change across a renumber — only the FormKey half of the leaf name does.
         // #459: doc-commented as "a delete+create pair in source terms" — taken literally, the new
-        // FormKey's file goes at the end of the group folder (a fresh next index), the same as an
-        // ordinary CreateRecord, leaving the old slot's number an unfilled gap rather than trying to
-        // preserve position (gaps are accepted by design).
-        var newOrderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, document.RecordType, release);
-        var newRelativePath = SourceRecordPath.For(
-            plugin.Name, document.RecordType, newFormKey, document.EditorId, release, newOrderIndex);
-        var newSourcePath = Path.Combine(modFolder, newRelativePath);
+        // FormKey's leaf goes at the end of the same parent directory (a fresh next index), the same
+        // as an ordinary CreateRecord, leaving the old slot's number an unfilled gap rather than trying
+        // to preserve position (gaps are accepted by design).
+        var newOrderIndex = SourceUnitResolver.NextOrderIndex(parentDirectory);
+        var newLeafName = $"[{newOrderIndex}] " +
+            SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
+        var newLeafPath = Path.Combine(parentDirectory, newLeafName);
+
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(record, newSourcePath, release).GetAwaiter().GetResult();
+
+        if (isDirectoryPerRecord)
+        {
+            // Moved whole, not recreated from scratch: a container's nested folder-split children (a
+            // Quest's own DialogTopics subtree) travel with it rather than being orphaned.
+            Directory.Move(oldLeafPath, newLeafPath);
+            _codec.SerializeAsync(record, Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName), release)
+                .GetAwaiter().GetResult();
+        }
+        else
+        {
+            Directory.CreateDirectory(parentDirectory);
+            _codec.SerializeAsync(record, newLeafPath, release).GetAwaiter().GetResult();
+        }
 
         index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
 
-        if (File.Exists(oldSourcePath)) File.Delete(oldSourcePath);
+        if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
+        index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
+    }
+
+    /// <summary>
+    /// #461: the embedded half of a renumber — the child's own <c>FormKey</c> field changes in place
+    /// inside its owner's object graph (no file moves: an embedded record has no leaf name of its own
+    /// to carry a new identity), the owner is reserialized over its existing file, and the child's own
+    /// extracted row is replaced (old FormKey's row nulled, new FormKey's row created from the child
+    /// alone) — the same two-row shape <see cref="EditField"/>'s own embedded edit and
+    /// <see cref="RewriteReferenceField"/>'s embedded-referencer branch both use.
+    /// </summary>
+    private void RenumberEmbeddedChild(
+        IRecordIndex index, PluginKey plugin, SourceUnit unit, string oldFormKey, string newFormKey,
+        string childRecordType, GameRelease release)
+    {
+        var owner = ReadRecordFromSource(unit.FullPath, index.GetDocument(unit.OwnerFormKey, plugin)!, release);
+
+        if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
+        {
+            throw new InvalidOperationException(
+                $"{unit.RelativePath} is indexed as holding {oldFormKey}, but its own text does not carry it mid-renumber.");
+        }
+
+        ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
+
+        var newOwnerBody = _codec.SerializeToBytesAsync(owner, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(owner, unit.FullPath, release).GetAwaiter().GetResult();
+        var newChildBody = _codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult();
+
+        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, Encoding.UTF8.GetString(newOwnerBody))]);
+        index.CreateWorkingTreeRecord(plugin, newFormKey, childRecordType, Encoding.UTF8.GetString(newChildBody));
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 
@@ -841,15 +1024,18 @@ public sealed class RecordEditService(
             : RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
 
     /// <summary>
-    /// The record has no flat source path, so the <b>structural</b> gestures still refuse it —
-    /// <see cref="DeleteRecord"/>, <see cref="CreateRecord"/> and <see cref="RenumberRecord"/>. Checked
-    /// before any write, at every entry point that reaches <c>SourceRecordPath.For</c> unconditionally.
+    /// The record has no flat source path, so <see cref="CreateRecord"/> — the one remaining
+    /// structural gesture that still cannot place it — refuses. Checked before any write, at the one
+    /// entry point that reaches <c>SourceRecordPath.For</c> unconditionally.
     ///
-    /// <para><b><see cref="EditField"/> is deliberately not among them any more</b> (#453): a field
-    /// edit resolves through <see cref="SourceUnitResolver"/>, which finds a container's own
-    /// <c>RecordData.json</c> and reaches an embedded child through its parent's document. The three
-    /// gestures here are the ones that change <i>which</i> records a source unit holds rather than one
-    /// record's fields, and that is a different problem — see the two tickets named in the message.</para>
+    /// <para><b>#461: <see cref="DeleteRecord"/> and <see cref="RenumberRecord"/> are no longer among
+    /// them.</b> Both now resolve through <see cref="SourceUnitResolver"/> instead — the same
+    /// resolution <see cref="EditField"/> already used (#453) — because deleting or renumbering a
+    /// container's own record, or an embedded child, is mechanical (move/remove a known file, or splice
+    /// a known slot) the moment the record→source-unit question has an answer. Only
+    /// <see cref="CreateRecord"/> is left refusing this shape: a brand-new record has no containment
+    /// for anything to resolve <i>to</i> yet, and choosing one is a UX decision (#462), not a mechanical
+    /// one.</para>
     ///
     /// <para>Note the condition is wider than "Cell, Worldspace or Quest", which is what this message
     /// used to claim (#453 finding): <see cref="RecordTypeDispatch.FolderNameFor"/> is also null for
@@ -864,8 +1050,9 @@ public sealed class RecordEditService(
             RecordEditRefusal.ContainerRecordNotYetSupported,
             $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace, " +
             "Quest) or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, " +
-            "scene). Editing its fields works; creating, deleting and renumbering it do not yet " +
-            "(#461 delete/renumber, #462 create).");
+            "scene). Editing its fields works, and so do deleting and renumbering it; creating one from " +
+            "scratch does not yet (#462) — a brand-new record has no containment for anything to place " +
+            "it into.");
     }
 
     /// <summary>

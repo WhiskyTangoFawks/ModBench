@@ -155,6 +155,62 @@ internal static class ContainerChildFields
     }
 
     /// <summary>
+    /// #461: <paramref name="formKey"/>'s removal from wherever <see cref="FindEmbeddedChild"/> would
+    /// have found it — same recursive descent through <see cref="SpriggitEmbeddedSlots"/>, but mutating
+    /// the slot in place instead of only reporting it, so a Cell/Worldspace deleted through
+    /// <c>Edits.RecordEditService.DeleteRecord</c> comes back with its embedded child genuinely gone
+    /// from the object graph that gets reserialized. Returns <see langword="false"/> when nothing
+    /// matched (the same "indexed but not actually there" state <see cref="FindEmbeddedChild"/>'s own
+    /// callers already have to handle), never throws.
+    ///
+    /// <para>A list slot (<c>Persistent</c>/<c>Temporary</c>/<c>NavigationMeshes</c>) is spliced by
+    /// <see cref="SlotIndex"/>; a single-value slot (<c>Cell.Landscape</c>, <c>Worldspace.TopCell</c>)
+    /// is set to <see langword="null"/> outright — <see cref="EnumerateChildren"/>'s own two cases,
+    /// mirrored here for the write instead of the read.</para>
+    /// </summary>
+    internal static bool RemoveEmbeddedChild(IMajorRecordGetter parent, string formKey)
+    {
+        var parentType = NormalizedTypeName(parent.GetType());
+
+        foreach (var (slotName, slotIndex, child) in EnumerateChildren(parent))
+        {
+            if (child.FormKey.ToString().Equals(formKey, StringComparison.Ordinal))
+            {
+                RemoveFromSlot(parent, slotName, slotIndex);
+                return true;
+            }
+
+            if (!SpriggitEmbeddedSlots.Contains((parentType, slotName))) continue;
+            if (RemoveEmbeddedChild(child, formKey)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>The mutation half of <see cref="RemoveEmbeddedChild"/> — reflection rather than a
+    /// hand-written switch over each of the four/two concrete slot shapes, for the same reason
+    /// <see cref="EnumerateChildren"/> reads them that way: one path that cannot drift from the table
+    /// above as new container shapes are added to it. <c>dynamic</c> resolves <c>RemoveAt</c> against
+    /// the slot's own runtime list type (<c>ExtendedList&lt;IPlaced&gt;</c>, etc.) — the same DLR
+    /// dispatch <see cref="RecordFieldWriter"/>'s own complex-field appliers already rely on
+    /// elsewhere in this codebase.</summary>
+    private static void RemoveFromSlot(IMajorRecordGetter parent, string slotName, int slotIndex)
+    {
+        var property = parent.GetType().GetProperty(slotName)
+            ?? throw new InvalidOperationException(
+                $"{parent.GetType().Name} has no property '{slotName}' to remove a child from — ContainerChildFields' table is stale.");
+
+        var value = property.GetValue(parent);
+        if (value is IMajorRecordGetter)
+        {
+            property.SetValue(parent, null);
+            return;
+        }
+
+        ((dynamic)value!).RemoveAt(slotIndex);
+    }
+
+    /// <summary>
     /// The child slots that serialize <b>inline into their parent's own document</b> rather than to a
     /// file of their own — exactly the set
     /// <see cref="MEditService.Core.Serialization.SpriggitCellEmbedCustomization"/> and

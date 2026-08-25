@@ -72,17 +72,20 @@ public enum RecordEditRefusal
     FormKeySpaceExhausted,
 
     /// <summary>
-    /// #451 review: the record (or, for renumber, a referencer of it) has no flat source path — a
-    /// container type whose own directory holds a <c>RecordData.json</c> (Cell, Worldspace, Quest), or
-    /// a record with no top-level group at all whose bytes live inside a container's document (a
-    /// placed reference, a landscape, a navmesh, a dialog topic, a scene). The message used to name
-    /// only the first group, which was narrower than what actually triggers it (#453 finding).
+    /// #451 review: the record has no flat source path — a container type whose own directory holds a
+    /// <c>RecordData.json</c> (Cell, Worldspace, Quest), or a record with no top-level group at all
+    /// whose bytes live inside a container's document (a placed reference, a landscape, a navmesh, a
+    /// dialog topic, a scene). The message used to name only the first group, which was narrower than
+    /// what actually triggers it (#453 finding).
     ///
     /// <para><b>Field edits no longer refuse for this reason</b> — #453 gave them
-    /// <c>SourceUnitResolver</c>. What still refuses is delete and renumber (<b>#461</b>: both are
-    /// structural, changing which children a container holds rather than one child's fields) and
-    /// create (<b>#462</b>: a new container has no containment until someone chooses interior-vs-
-    /// worldspace and block coordinates, which no gesture asks yet).</para>
+    /// <c>SourceUnitResolver</c>. <b>#461 did the same for delete and renumber</b>: both now resolve
+    /// through the same record→source-unit lookup instead of refusing outright — a container's own
+    /// delete/renumber and an embedded child's are mechanical once that question has an answer. The
+    /// one gesture still refused here is <see cref="CreateRecord"/> (<b>#462</b>): a brand-new record
+    /// has no containment until someone chooses interior-vs-worldspace and block coordinates, which no
+    /// gesture asks yet — that is a UX decision, not a mechanical one, and this refusal is what is left
+    /// once delete/renumber stopped needing it.</para>
     /// </summary>
     ContainerRecordNotYetSupported,
 
