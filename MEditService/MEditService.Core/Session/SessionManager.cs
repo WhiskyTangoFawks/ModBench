@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,12 +15,18 @@ namespace MEditService.Core.Session;
 public sealed class SessionManager(
     IRecordIndexFactory repositoryFactory,
     ILogger<SessionManager>? logger = null,
-    IModImporter? modImporter = null) : ISessionManager, IDisposable
+    IModImporter? modImporter = null,
+    ISchemaReflector? schemaReflector = null) : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<SessionManager> _logger = logger ?? NullLogger<SessionManager>.Instance;
     private readonly IRecordIndexFactory _repositoryFactory = repositoryFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
+    // #463: the same reflector ReconcileHeadStructurally's SourceRecordType.Resolve needs for a
+    // container's Head-only deletion — DI already registers ISchemaReflector as its own singleton
+    // (Program.cs), so this is a direct constructor parameter rather than routed through
+    // IRecordIndexFactory, which has no other reason to carry it.
+    private readonly ISchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
     private GameSession? _session;
     private IRecordIndex? _repository;
     // #274: the load's own progress. Guarded by _lock like _session/_repository — written by the
@@ -323,7 +330,7 @@ public sealed class SessionManager(
             SourceIngest.Ingest(
                 repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
                 plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease,
-                _repositoryFactory.SchemaReflector, _logger, token);
+                _schemaReflector, _logger, token);
             return;
         }
         catch (OperationCanceledException)

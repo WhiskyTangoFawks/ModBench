@@ -340,7 +340,13 @@ internal static class SourceIngest
         }
         finally
         {
-            Directory.Delete(scratchRoot, recursive: true);
+            // Best-effort, mirroring SourceCheckout.Dispose's own guard: a scratch directory this
+            // process itself created and is done with, so a delete failure here (another process
+            // still touching it, permissions) is never worth letting mask whatever the try block
+            // actually threw.
+            try { Directory.Delete(scratchRoot, recursive: true); }
+            catch (IOException) { /* scratch, best-effort */ }
+            catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
         }
     }
 

@@ -380,8 +380,6 @@ public class SessionManagerTests(TestPluginFixture fixture)
         public int CreateCallCount { get; private set; }
         public GameRelease? LastGameRelease { get; private set; }
 
-        public ISchemaReflector SchemaReflector => _inner.SchemaReflector;
-
         public IRecordIndex Create(GameRelease gameRelease)
         {
             CreateCallCount++;
@@ -395,8 +393,6 @@ public class SessionManagerTests(TestPluginFixture fixture)
     private sealed class FaultingSetFilterRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
     {
         public bool FaultNextCall;
-
-        public ISchemaReflector SchemaReflector => inner.SchemaReflector;
 
         public IRecordIndex Create(GameRelease gameRelease) => new FaultingSetFilterRepository(inner.Create(gameRelease), this);
     }

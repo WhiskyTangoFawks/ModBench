@@ -169,8 +169,6 @@ public sealed class SessionManagerRereadPluginTests
     /// Nothing on the load path calls Unindex, so the hook cannot fire early.</summary>
     private sealed class UnindexHookFactory(IRecordIndexFactory inner, Action onUnindex) : IRecordIndexFactory
     {
-        public ISchemaReflector SchemaReflector => inner.SchemaReflector;
-
         public IRecordIndex Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
 
         private sealed class HookedRepository(IRecordIndex inner, Action onUnindex) : DelegatingRecordIndex(inner)

@@ -1,5 +1,4 @@
 using MEditService.Core.Records;
-using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -24,8 +23,6 @@ internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, str
     /// <summary>Every repository this factory has created — one per load, so a test that supersedes
     /// a load can assert on the abandoned one as well as the survivor.</summary>
     public List<GatedIndexRepository> Created { get; } = [];
-
-    public ISchemaReflector SchemaReflector => inner.SchemaReflector;
 
     public IRecordIndex Create(GameRelease gameRelease)
     {
