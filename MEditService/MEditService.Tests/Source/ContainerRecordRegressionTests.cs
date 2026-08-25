@@ -5,8 +5,13 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+using Noggog;
 
 namespace MEditService.Tests.Source;
 
@@ -22,11 +27,11 @@ namespace MEditService.Tests.Source;
 ///
 /// <para><b>What a user now sees editing a cell in a tracked plugin</b> (the sentence the review asked
 /// for, verified by the tests below): reading it (record editor, compare grid) still works — the
-/// container is served from the indexed document, degraded, logged, never a crash. Every write gesture
-/// (field edit, delete, create, renumber) refuses with <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/>,
-/// naming that point-write support for containers isn't built yet (#453) — the same shape of refusal
-/// every other blocked gesture on this write path already returns, not an unhandled exception or a
-/// 500.</para>
+/// container is served from the indexed document, degraded, logged, never a crash. #453/#454 landed
+/// field-edit and EditorID-rename support for a container's own scalar fields, verified below; delete,
+/// create and renumber still refuse with <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/>,
+/// naming that a container's own structural gestures aren't built yet — the same shape of refusal every
+/// other blocked gesture on this write path already returns, not an unhandled exception or a 500.</para>
 /// </summary>
 public sealed class ContainerRecordRegressionTests : IDisposable
 {
@@ -220,18 +225,157 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         Assert.Contains(tree, f => f.StartsWith($"{root}/Cells/", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// #460 (Keep half): renamed and re-explained from
+    /// <c>KeepingAnExternalChange_OnAPluginWithACell_DoesNotThrow_AndSkipsTheCell</c> — that name and
+    /// its comment described a container being <i>unconditionally</i> skipped, which stopped being true
+    /// the moment <c>Keep</c> started resolving a container's existing source unit
+    /// (<see cref="SourceUnitResolver"/>) instead of refusing on sight. This test still asserts the Cell
+    /// does not land, but for the reason that now actually governs it: the binary is byte-for-byte what
+    /// Track already committed, so <c>incoming == baseline</c> and there is nothing to land — the same
+    /// "unchanged, so skip" rule a flat record gets. <see cref="KeepingAnExternalChange_OnAModifiedCell_LandsItOnItsExistingRecordDataJson"/>
+    /// is the positive control this one needs beside it.
+    /// </summary>
     [Fact]
-    public void KeepingAnExternalChange_OnAPluginWithACell_DoesNotThrow_AndSkipsTheCell()
+    public void KeepingAnExternalChange_OnAnUnchangedCell_LandsNothing()
     {
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
 
         var result = ExternalChangeEditLander.Keep(
-            _fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, GameRelease.Fallout4,
-            SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
+            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
-        // Nothing actually changed in the binary since Track, so nothing lands either way — the load-
-        // bearing assertion is the one above this: it ran to completion without throwing.
-        Assert.True(result.Applied);
+        Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
+    }
+
+    /// <summary>
+    /// #460 (Keep half), AC1: a container already tracked in the source tree lands as working-tree
+    /// dirt on its <b>existing</b> file, exactly like a flat record — the resolver
+    /// (<see cref="SourceUnitResolver"/>) finds the Cell's own <c>RecordData.json</c>, so there is a
+    /// file to land on and no reason to keep refusing.
+    /// </summary>
+    [Fact]
+    public void KeepingAnExternalChange_OnAModifiedCell_LandsItOnItsExistingRecordDataJson()
+    {
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
+        var file = _fixture.SourceFileContaining(ContainerModFixture.CellEditorId);
+        Assert.Contains("\"WaterHeight\": 100.0", File.ReadAllText(file), StringComparison.Ordinal);
+
+        MutateExternalBinary(pluginPath, mod => mod.Cells.Records
+            .SelectMany(block => block.SubBlocks)
+            .SelectMany(sub => sub.Cells)
+            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
+
+        var result = ExternalChangeEditLander.Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
+            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+
+        Assert.True(result.Applied, result.RefusalReason);
+        Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
+        Assert.Contains("\"WaterHeight\": 250.0", File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #460 (Keep half), AC2: an embedded child's external change (here, a placed ref's own position,
+    /// inside a Cell carrying all four embeddable slots at once) lands correctly even though it has no
+    /// file of its own — it is inlined in its owner's document (#450), and the owner's own pass through
+    /// the same <c>EnumerateMajorRecords</c> walk captures the aggregate text, so only the owner's own
+    /// FormKey is reported landed (see this method's own second assertion — a deliberate, low-stakes
+    /// design choice: <c>LandedFormKeys</c> is test-observability only, <c>ExternalChangeActionResponse</c>
+    /// never carries it over the wire).
+    /// </summary>
+    [Fact]
+    public void KeepingAnExternalChangeOnAnEmbeddedChild_LandsViaTheOwningCellsDocument()
+    {
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
+        var file = _fixture.SourceFileContaining(ContainerModFixture.EmbedCellEditorId);
+        Assert.Contains("\"Position\": \"11, 22, 33\"", File.ReadAllText(file), StringComparison.Ordinal);
+
+        MutateExternalBinary(pluginPath, mod =>
+        {
+            var cell = mod.Cells.Records.SelectMany(block => block.SubBlocks).SelectMany(sub => sub.Cells)
+                .Single(c => c.FormKey == _fixture.EmbedCell);
+            var placedRef = (PlacedObject)cell.Temporary.Single(r => r.FormKey == _fixture.TemporaryRef);
+            placedRef.Position = new P3Float(999f, 22f, 33f);
+        });
+
+        var result = ExternalChangeEditLander.Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
+            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+
+        Assert.True(result.Applied, result.RefusalReason);
+        Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
+        Assert.DoesNotContain(_fixture.TemporaryRef.ToString(), result.LandedFormKeys);
+        Assert.Contains("\"Position\": \"999, 22, 33\"", File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #460 (Keep half), AC3: a collision on an existing container refuses the whole gesture, exactly
+    /// as it already does for a flat record — the same shared collision computation, unmodified.
+    /// </summary>
+    [Fact]
+    public void KeepingAnExternalChange_CollidingWithACellsOwnWorkingTreeEdit_RefusesTheWholeGesture()
+    {
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
+        var editResult = EditService().EditField(_fixture.Plugin, _fixture.Cell.ToString(), "water_height", Json("500.0"));
+        Assert.True(editResult.Applied, editResult.Message);
+        var myOwnEditText = File.ReadAllText(CellSourceFile);
+
+        MutateExternalBinary(pluginPath, mod => mod.Cells.Records
+            .SelectMany(block => block.SubBlocks)
+            .SelectMany(sub => sub.Cells)
+            .Single(c => c.FormKey == _fixture.Cell).WaterHeight = 250f);
+
+        var result = ExternalChangeEditLander.Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
+            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+
+        Assert.False(result.Applied);
+        Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
+        Assert.Equal(myOwnEditText, File.ReadAllText(CellSourceFile));
+    }
+
+    /// <summary>
+    /// #460 (Keep half), residual scope: a container with no existing source unit anywhere in the tree
+    /// — genuinely new, never tracked — is still skipped and logged, not landed and not a hard failure.
+    /// Landing a brand-new container needs the layout grammar that places it (#454's territory), which
+    /// this method deliberately does not have; the follow-up is tracked separately.
+    /// </summary>
+    [Fact]
+    public void KeepingAnExternalChange_OnABrandNewNeverTrackedCell_SkipsItWithoutFailing()
+    {
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
+        var brandNewCellKey = FormKey.Factory($"{0xD00:X6}:{ContainerModFixture.PluginName}");
+
+        MutateExternalBinary(pluginPath, mod =>
+        {
+            var brandNewCell = new Cell(brandNewCellKey, Fallout4Release.Fallout4) { EditorID = "BrandNewCell" };
+            var subBlock = new CellSubBlock { BlockNumber = 9, GroupType = GroupTypeEnum.InteriorCellSubBlock };
+            subBlock.Cells.Add(brandNewCell);
+            var block = new CellBlock { BlockNumber = 9, GroupType = GroupTypeEnum.InteriorCellBlock };
+            block.SubBlocks.Add(subBlock);
+            mod.Cells.Records.Add(block);
+        });
+
+        var entries = new List<LogEntry>();
+        var result = ExternalChangeEditLander.Keep(
+            _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
+            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, new CollectingLogger(entries));
+
+        Assert.True(result.Applied, result.RefusalReason);
+        Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);
+        Assert.Contains(entries, e => e.Message.Contains(brandNewCellKey.ToString(), StringComparison.Ordinal));
+    }
+
+    // Loads the plugin mutably (the same technique the whole-mod door itself uses to read a binary),
+    // applies the mutation to the live object graph, then writes it back over the same path — the same
+    // shape an external tool's own save would take, not a from-scratch reconstruction of the fixture.
+    private static void MutateExternalBinary(string pluginPath, Action<Fallout4Mod> mutate)
+    {
+        var mod = (Fallout4Mod)ModFactory.ImportSetter(
+            new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), pluginPath), GameRelease.Fallout4);
+        mutate(mod);
+        mod.WriteToBinary(pluginPath);
     }
 }

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
@@ -29,11 +30,13 @@ namespace MEditService.Core.Source;
 public static class ExternalChangeEditLander
 {
     public static ExternalChangeLandResult Keep(
-        string modFolder, string pluginName, string pluginPath, GameRelease gameRelease, ISchemaReflector reflector, ILogger? logger = null)
+        string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease, IRecordReads reads,
+        ISchemaReflector reflector, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var schemas = reflector.GetSchemas(gameRelease);
+        var pluginName = plugin.Name;
 
         var parkedRef = $"refs/medit/last-compile/{pluginName}";
         var baselineByPath = SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, parkedRef)
@@ -51,18 +54,54 @@ public static class ExternalChangeEditLander
         {
             var recordType = SourceRecordType.Resolve(record, schemas);
             var groupFolder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType);
+            var containerFormKey = record.FormKey.ToString();
 
-            // #451 review: unlike Absorb (which rebuilds the whole tree and would silently drop a
-            // skipped container from the new commit — refused wholesale instead, see
-            // ExternalChangeAbsorber), Keep only ever writes individual touched records straight into
-            // the existing tree, so skipping one here loses nothing already on disk — it just means an
-            // external change to a container record isn't offered as landable dirt yet (#453's own
-            // territory). Not a silent catch: logged, and it's a `continue`, not a swallowed exception.
+            // #460 (Keep half): a container/embedded record has no flat, directly-computable path, but
+            // it may well already have a real file — the overwhelmingly common case, a container Track
+            // or a prior edit already wrote to the tree. SourceUnitResolver is the same disk-scan
+            // resolution RecordEditService's point-write path already uses successfully for this exact
+            // record-shape class, reused here rather than re-derived.
             if (groupFolder is null)
             {
-                logger.LogDebug(
-                    "Skipping {FormKey} ({RecordType}) in {Plugin}: container records have no flat source path yet (#453)",
-                    record.FormKey, recordType, pluginName);
+                var unit = SourceUnitResolver.Resolve(
+                    reads, plugin, modFolder, containerFormKey, recordType, record.EditorID, gameRelease);
+
+                if (unit is null)
+                {
+                    // Truly new: never tracked, nowhere in the tree, and the index names no container
+                    // that would hold it either. Landing a brand-new container needs the layout grammar
+                    // that places it, which this method does not have — logged and skipped, exactly
+                    // like the old blanket container skip, but now only for the residual case that
+                    // actually has no home to land in (tracked separately as a follow-up).
+                    logger.LogDebug(
+                        "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
+                        "the tree — landing a brand-new container isn't supported yet",
+                        record.FormKey, recordType, pluginName);
+                    continue;
+                }
+
+                if (unit.Value.IsEmbedded)
+                {
+                    // This record has no file of its own — it is inlined in its owner's document
+                    // (#450), and that owner is itself walked by this same EnumerateMajorRecords loop,
+                    // so its own pass (below, non-embedded) already serializes this child's current
+                    // value as part of the owner's whole text. Nothing to separately write here.
+                    logger.LogTrace(
+                        "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
+                        "it is embedded, not its own source unit",
+                        record.FormKey, recordType, pluginName, unit.Value.OwnerFormKey);
+                    continue;
+                }
+
+                // The record IS its own source unit here (not embedded), so the path found is the path
+                // to diff and land on — no separately computed path to reconcile against, unlike a flat
+                // record's own order-index shift below.
+                if (DiffAgainstBaseline(
+                        record, gameRelease, codec, baselineByPath, containerFormKey,
+                        unit.Value.RelativePath, unit.Value.FullPath, unit.Value.FullPath) is { } containerTouched)
+                {
+                    touched.Add(containerTouched);
+                }
                 continue;
             }
 
@@ -71,11 +110,6 @@ public static class ExternalChangeEditLander
 
             var formKey = record.FormKey.ToString();
             var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease, orderIndex);
-            var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
-
-            baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);
-            if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
-                continue; // the external change never actually touched this record
 
             // #459 review finding: an external add/delete anywhere earlier in this group shifts every
             // later sibling's own order index, hence its own file name, even when that sibling's own
@@ -89,8 +123,13 @@ public static class ExternalChangeEditLander
             var existingPath = SourceUnitResolver.FlatSourcePath(
                 modFolder, pluginName, recordType, formKey, record.EditorID, gameRelease);
             var fullPath = Path.Combine(modFolder, relativePath);
-            var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
-            touched.Add(new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText));
+
+            if (DiffAgainstBaseline(
+                    record, gameRelease, codec, baselineByPath, formKey, relativePath, fullPath, existingPath)
+                is { } flatTouched)
+            {
+                touched.Add(flatTouched);
+            }
         }
 
         var colliding = touched
@@ -124,6 +163,32 @@ public static class ExternalChangeEditLander
         ExternalChangeDeferral.Clear(modFolder, pluginName);
 
         return ExternalChangeLandResult.Success([.. touched.Select(t => t.FormKey)]);
+    }
+
+    /// <summary>
+    /// The three-way diff this class's own doc comment describes, for one record whose path (flat or
+    /// container-own-unit alike) is already resolved — <c>baseline</c> (the parked ref's own
+    /// snapshot), <c>incoming</c> (this record as the just-observed binary deep-parses to) and
+    /// <c>current</c> (the working tree right now, at <paramref name="existingPath"/>). Null when the
+    /// external binary never actually touched this record (<c>incoming == baseline</c>) — the caller's
+    /// signal to leave it alone rather than add it to <c>touched</c>. Shared by both the flat-record
+    /// branch and the container-own-unit branch of <see cref="Keep"/>, which differ only in how
+    /// <paramref name="relativePath"/>/<paramref name="fullPath"/>/<paramref name="existingPath"/> were
+    /// arrived at, not in what happens once they are known.
+    /// </summary>
+    private static TouchedRecord? DiffAgainstBaseline(
+        IMajorRecordGetter record, GameRelease gameRelease, RecordTextCodec codec,
+        Dictionary<string, string> baselineByPath, string formKey, string relativePath, string fullPath,
+        string existingPath)
+    {
+        var incomingText = Encoding.UTF8.GetString(codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult());
+
+        baselineByPath.TryGetValue(ToGitPath(relativePath), out var baselineText);
+        if (string.Equals(incomingText, baselineText, StringComparison.Ordinal))
+            return null; // the external change never actually touched this record
+
+        var currentText = File.Exists(existingPath) ? File.ReadAllText(existingPath) : null;
+        return new TouchedRecord(formKey, relativePath, fullPath, existingPath, incomingText, currentText, baselineText);
     }
 
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
