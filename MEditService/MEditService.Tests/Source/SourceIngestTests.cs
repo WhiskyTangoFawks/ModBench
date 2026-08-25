@@ -256,10 +256,13 @@ public sealed class SourceIngestTests
     /// one record, dirty, whose committed bytes are the ones at its old path.
     ///
     /// <para>Flat record on the shared fixture deliberately: this is a property of the reconciliation
-    /// pass, not of containers, and the ~24 files built on this fixture should see it. The container
-    /// half of the same rename is <b>not</b> reachable — <see cref="SourceRecordPath.TryParse"/> fails
-    /// closed on container paths, which is the gap <c>SourceIngestContainerTests</c> pins for #463 —
-    /// so a renamed <i>container</i> still reads clean at Head after a reload.</para>
+    /// pass, not of containers, and the ~24 files built on this fixture should see it. A renamed
+    /// <i>container</i> never reaches this same pairing step — <see cref="SourceRecordPath.TryParse"/>
+    /// still fails closed on container paths — but it is not left unreconciled either (#463):
+    /// <c>SourceIngest.ReconcileHeadStructurally</c> diffs by FormKey rather than by path, so a
+    /// container's directory rename (its own EditorID edit) lands there as an ordinary edit, old bytes
+    /// at Head and new at Effective under the one FormKey throughout, with no pairing needed at
+    /// all.</para>
     /// </summary>
     [Fact]
     public void AnEditorIdRename_ReadsAsOneDirtyRecordAfterReload_NotACreateAndADelete()
