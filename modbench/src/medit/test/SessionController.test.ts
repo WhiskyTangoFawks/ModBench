@@ -1307,7 +1307,7 @@ describe('SessionController.rebaseOntoMain / continueRebase', () => {
     const client = makeClient();
     client.POST = vi.fn().mockResolvedValue({
       response: { ok: true, status: 200 },
-      data: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['Fixture.esp.source/npc_/Fixture.esp/000800.json'] },
+      data: { outcome: 'Conflicted', refusalReason: null, conflictedPaths: ['source/Fixture.esp/npc_/000800.json'] },
     });
     const deps = makeDeps({ client });
     const controller = new SessionController(deps);
@@ -1315,7 +1315,7 @@ describe('SessionController.rebaseOntoMain / continueRebase', () => {
     const result = await controller.rebaseOntoMain('ModA');
 
     expect(result?.outcome).toBe('Conflicted');
-    expect(result?.conflictedPaths).toEqual(['Fixture.esp.source/npc_/Fixture.esp/000800.json']);
+    expect(result?.conflictedPaths).toEqual(['source/Fixture.esp/npc_/000800.json']);
   });
 
   it('continueRebase POSTs to /plugins/rebase/continue', async () => {
