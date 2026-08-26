@@ -361,6 +361,10 @@ public sealed class RecordEditService(
             // DialogTopic etc.), or a flat record's single file. Never-assume-exclusive-ownership: the
             // unit may already be gone (another tool, a hand delete) — that is exactly the working-tree
             // state this call is trying to reach, not a failure to report.
+            var groupDirectory = unit.IsDirectoryPerRecord
+                ? Path.GetDirectoryName(Path.GetDirectoryName(unit.FullPath)!)!
+                : Path.GetDirectoryName(unit.FullPath)!;
+
             if (unit.IsDirectoryPerRecord)
             {
                 var directory = Path.GetDirectoryName(unit.FullPath)!;
@@ -370,6 +374,12 @@ public sealed class RecordEditService(
             {
                 File.Delete(unit.FullPath);
             }
+
+            // #489: the delete's own last file-system act — closes whatever "[N]" gap it just left in
+            // the touched group directory, so the source tree's own working invariant (every group
+            // directory contiguous, SourceUnitResolver's own doc comment) holds again before this
+            // returns, rather than merely being restorable by a later re-Track.
+            SourceUnitResolver.RenormalizeGroupOrder(groupDirectory);
         }
 
         // Both shapes cascade the same way: a container's own delete removes its directory whole (a
@@ -465,9 +475,7 @@ public sealed class RecordEditService(
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
         // #459: a brand-new sibling goes at the end of its group folder, one past whatever "[N] " is
-        // already the highest there (0 for a plugin's first record of this type) — never at the
-        // sibling *count*, which would collide with a real "[N]" the moment an earlier delete left a
-        // gap (SourceUnitResolver.NextOrderIndex's own doc comment has the worked example).
+        // already the highest there (0 for a plugin's first record of this type).
         // RefuseIfContainerType above already guarantees FolderNameFor is non-null for recordType.
         var orderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, recordType, release);
 
@@ -482,6 +490,12 @@ public sealed class RecordEditService(
 
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
         _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
+
+        // #489: defensive, not merely a repeat of the invariant NextOrderIndexFor above already
+        // upholds — never-assume-exclusive-ownership means this group folder can already hold a gap
+        // nothing here caused (a hand-deleted sibling, another tool's edit), and this closes it as part
+        // of the same write rather than leaving it for the next structural write to trip over.
+        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
         // #422: a brand-new row can newly match an active filter.
@@ -721,8 +735,9 @@ public sealed class RecordEditService(
         // EditorID does not change across a renumber — only the FormKey half of the leaf name does.
         // #459: doc-commented as "a delete+create pair in source terms" — taken literally, the new
         // FormKey's leaf goes at the end of the same parent directory (a fresh next index), the same
-        // as an ordinary CreateRecord, leaving the old slot's number an unfilled gap rather than trying
-        // to preserve position (gaps are accepted by design).
+        // as an ordinary CreateRecord. #489: the old slot's number is only ever a momentary gap now —
+        // the renormalize pass below closes it as this method's own last file-system act, rather than
+        // leaving it unfilled.
         var newOrderIndex = SourceUnitResolver.NextOrderIndex(parentDirectory);
         var newLeafName = $"[{newOrderIndex}] " +
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
@@ -747,6 +762,11 @@ public sealed class RecordEditService(
         index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
+
+        // #489: this method's own last file-system act — closes the gap the old slot just left (and
+        // any pre-existing one besides) so the group directory is contiguous again before this returns.
+        SourceUnitResolver.RenormalizeGroupOrder(parentDirectory);
+
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 

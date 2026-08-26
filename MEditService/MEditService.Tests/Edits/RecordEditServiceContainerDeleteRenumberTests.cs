@@ -261,24 +261,23 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     /// container-nested folder-split list (<c>Quest.DialogTopics</c>) rather than a flat top-level one.
     /// Renumber <i>is</i> "delete the old file, create the new one" for the same child (the ticket's
     /// own framing), so renumbering the middle of three DialogTopics exercises exactly "delete then
-    /// create a mid-list embedded child" in one gesture: the untouched survivors must keep their own
-    /// <c>"[N] "</c> slots, and the renumbered one lands at the next free slot rather than colliding
-    /// with (or closing) the gap it left.
+    /// create a mid-list embedded child" in one gesture.
     ///
-    /// <para><b>Verified against the tracked source tree's own <c>"[N] "</c>-prefixed directory
-    /// names directly, not by compiling</b> — #489 (filed alongside this ticket): a gap-leaving delete
-    /// on <i>any</i> record type, container or not, already makes <see cref="PluginCompileService"/>'s
-    /// round-trip gate (#473) refuse to compile, because that gate regenerates canonical names by
-    /// contiguous in-memory list position and a gap is by design not contiguous (#459/#427). That is a
-    /// real, pre-existing bug this ticket found and does not own fixing — it inherits
-    /// <see cref="SourceUnitResolver.NextOrderIndex"/>'s existing gap-acceptance behavior for the
-    /// container-nested case exactly as flat delete/renumber already had it, no better and no worse.
-    /// So this asserts the property AC5 actually cares about — the tree's own recorded order, which is
-    /// what <see cref="SourceUnitResolver"/> and a <i>working</i> compile would both read — without
-    /// routing through the one mechanism known to be broken for reasons outside this ticket.</para>
+    /// <para><b>#489 (filed alongside this ticket, now fixed):</b> this test originally asserted the
+    /// untouched survivors kept their <i>original</i> slots (a permanent gap at the renumbered record's
+    /// old slot) and could only be verified against the tracked source tree's own <c>"[N] "</c>-prefixed
+    /// names directly, never by compiling — a gap-leaving delete or renumber, on any record type,
+    /// container or not, made <see cref="PluginCompileService"/>'s round-trip gate (#473) refuse to
+    /// compile, because that gate regenerates canonical names by contiguous in-memory list position and
+    /// a gap is by design not contiguous. #489 retired the gap: every structural write renormalizes its
+    /// own touched group folder to contiguous <c>[0..k]</c> as its own last file-system act. This test
+    /// now asserts <i>both</i> halves of that — the tree's own renumbered slots directly (what the old
+    /// assertion checked, updated to the new contiguous outcome) <i>and</i> that a compile of the result
+    /// now succeeds and reproduces the survivors' relative order in the binary (what a successful
+    /// compile does not, by itself, prove about the literal on-disk slot numbers).</para>
     /// </summary>
     [Fact]
-    public void RenumberingAMidListFolderSplitChild_PreservesSurvivingSiblingsSlots_InTheTrackedTree()
+    public void RenumberingAMidListFolderSplitChild_RenormalizesSurvivingSiblingsToContiguousSlots_AndCompiles()
     {
         var dialogTopicsDirectory = Path.GetDirectoryName(
             Path.GetDirectoryName(_fixture.SourceFileContaining(ContainerModFixture.DialogTopicEditorId)))!;
@@ -294,17 +293,33 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             .ToList();
 
         Assert.Equal(3, slots.Count);
-        // The two untouched survivors keep their own original slots — index 0 and index 2, not
-        // renumbered down to close the gap index 1 (the renumbered record's old slot) left behind.
+        // The two untouched survivors renormalize to contiguous slots, in their original relative
+        // order — DialogTopic was already slot 0 (untouched); DialogTopic3 moves down from slot 2 to
+        // slot 1, closing the gap the renumbered record's old slot left.
         Assert.Equal(0, slots[0].Index);
         Assert.Contains(ContainerModFixture.DialogTopicEditorId, slots[0].Name, StringComparison.Ordinal);
-        Assert.Equal(2, slots[1].Index);
+        Assert.Equal(1, slots[1].Index);
         Assert.Contains(ContainerModFixture.DialogTopic3EditorId, slots[1].Name, StringComparison.Ordinal);
-        // ...and the renumbered record (same EditorID, new FormKey) landed at the next free slot (3),
-        // not squeezed back into the gap (1) it left.
-        Assert.Equal(3, slots[2].Index);
+        // ...and the renumbered record (same EditorID, new FormKey) appends at the next contiguous slot
+        // (2), never left at a gapped slot further out.
+        Assert.Equal(2, slots[2].Index);
         Assert.Contains(ContainerModFixture.DialogTopic2EditorId, slots[2].Name, StringComparison.Ordinal);
         Assert.Contains(result.NewFormKey!.Split(':')[0], slots[2].Name, StringComparison.OrdinalIgnoreCase);
+
+        // #489's own promise: this now compiles (it refused before the fix), and the compiled binary's
+        // DialogTopics preserve the survivors' relative order.
+        var compileResult = new PluginCompileService(
+                _fixture.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+            .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
+        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+
+        var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
+        using var overlay = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(ContainerModFixture.PluginName), pluginPath), GameRelease.Fallout4);
+        var quest = ((IFallout4ModGetter)overlay).Quests.Single(q => q.FormKey == _fixture.Quest);
+        Assert.Equal(
+            [ContainerModFixture.DialogTopicEditorId, ContainerModFixture.DialogTopic3EditorId, ContainerModFixture.DialogTopic2EditorId],
+            quest.DialogTopics.Select(t => t.EditorID!).ToArray());
     }
 
     /// <summary>

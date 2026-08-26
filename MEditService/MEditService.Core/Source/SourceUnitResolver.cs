@@ -38,6 +38,16 @@ internal readonly record struct SourceUnit(
 }
 
 /// <summary>
+/// One sibling <see cref="SourceUnitResolver.RenormalizeGroupOrder"/> actually renamed to close a gap
+/// — named explicitly (#489) rather than left an inline local, because it is exactly the
+/// touched-record set #488's own <c>container_child.SlotIndex</c> re-derivation will need fed in
+/// (renumbering a container-nested sibling shifts its slot the same way a direct edit would). Only the
+/// leading <c>"[N] "</c> prefix ever changes between <see cref="OldPath"/> and <see cref="NewPath"/> —
+/// the EditorID/FormKey tail a caller already has cause to recognise is untouched.
+/// </summary>
+internal readonly record struct RenormalizedSibling(string OldPath, string NewPath);
+
+/// <summary>
 /// The record→source-unit question, answered for <b>every</b> record shape the Spriggit layout has
 /// (#453 scope 1; ADR-0041's #444 amendment, "one source unit = one file"). <see cref="SourceRecordPath"/>
 /// answers it for flat records by computing a path; this answers it for the rest — containers, whose
@@ -392,12 +402,16 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
-    /// #459: the index a brand-new sibling should carry — one past the highest <c>"[N] "</c> prefix
-    /// already present in <paramref name="groupDirectory"/> (0 for an empty or not-yet-created folder),
-    /// never the sibling <i>count</i>. Count would collide the moment any earlier sibling has been
-    /// deleted (gaps are accepted by design, #459's brief) — e.g. siblings numbered <c>[0],[1],[3]</c>
-    /// after a delete leaves a gap at 2: count is 3, which would mint a second, colliding <c>[3]</c>;
-    /// max+1 correctly continues at 4.
+    /// #459, re-scoped by #489: the index a brand-new sibling should carry — one past the highest
+    /// <c>"[N] "</c> prefix already present in <paramref name="groupDirectory"/> (0 for an empty or
+    /// not-yet-created folder). <see cref="RenormalizeGroupOrder"/> now keeps every group directory
+    /// gap-free as its own last file-system act after every structural write, so max+1 and the plain
+    /// sibling <i>count</i> coincide in the steady state — max+1 stays the expression here regardless,
+    /// because it also does the right thing (still no collision, no premature renormalization needed)
+    /// on a directory this call cannot itself prove is gap-free: one Modbench has not yet renormalized
+    /// mid-write, or one an external tool left mid-edit (root CLAUDE.md's
+    /// never-assume-exclusive-ownership rule) — count alone would collide against a real higher "[N]"
+    /// in either of those, max+1 never does.
     /// </summary>
     internal static int NextOrderIndex(string groupDirectory)
     {
@@ -414,6 +428,69 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
+    /// #489: closes whatever gap a structural write (delete, renumber's delete+create, or a
+    /// defensively-checked create) just left or could have inherited — the fix for "a gap-leaving
+    /// delete permanently breaks that plugin's Save &amp; Compile" (round-trip regenerates canonical
+    /// <c>"[N]"</c> prefixes as contiguous list position, which a gap can never match).
+    /// <see cref="Edits.RecordEditService"/>'s three structural-write entry points call this as their
+    /// own last file-system act, so a group directory is contiguous <c>[0..k]</c> again by the time any
+    /// of them returns — the source tree's own working invariant (this class's own doc comment) stays
+    /// true, rather than being merely restorable by a re-Track.
+    ///
+    /// <para><b>Renaming smallest-rank-first is always collision-free — the proof, so the next reader
+    /// (#488's own implementer very possibly among them) does not have to re-derive it.</b> Sort
+    /// survivors by their <i>current</i> index ascending; a survivor's rank <c>i</c> among them is its
+    /// new index. For the <c>i</c>-th smallest old index, there are exactly <c>i</c> other survivors
+    /// with a strictly smaller old index, all distinct non-negative integers, so the old index is always
+    /// <c>&gt;= i</c> — the new index (rank) can never exceed the old one. That means the destination
+    /// name <c>"[i] ..."</c> is, for every rename in ascending-rank order, either a genuine gap nothing
+    /// occupies yet, or the name an earlier (smaller-rank, already-processed) rename in this very pass
+    /// just vacated — never a name a still-to-be-renamed survivor is sitting on. No temp-name shuffle is
+    /// needed, and nothing here can produce a transient duplicate <c>"[i]"</c>.</para>
+    ///
+    /// <para>Survivors' relative order is preserved by construction: sorting by old index ascending and
+    /// assigning ranks ascending cannot reorder anyone relative to anyone else, whether or not gaps
+    /// existed. Only the tail after <c>"] "</c> is ever touched by <see cref="TryGetOrderIndex"/>'s own
+    /// parse — the EditorID/FormKey segment a survivor's name carries is never altered, only its own
+    /// index prefix.</para>
+    ///
+    /// <para><b>Fail-safe by construction, not by any new journal.</b> This is the last file-system act
+    /// of the write that called it (#489's own key-interfaces note); a crash mid-pass leaves a
+    /// half-renumbered group, which <see cref="Edits.PluginCompileService"/>'s existing byte-exact
+    /// round-trip gate (#473) already refuses correctly (some sibling's canonical name will not match
+    /// what is on disk) — the same "re-Track to repair" recovery that gate has always offered, needing
+    /// nothing new to keep offering it here.</para>
+    /// </summary>
+    internal static IReadOnlyList<RenormalizedSibling> RenormalizeGroupOrder(string groupDirectory)
+    {
+        if (!Directory.Exists(groupDirectory)) return [];
+
+        var survivors = Directory.EnumerateFileSystemEntries(groupDirectory)
+            .Select(entry => (Entry: entry, Index: TryGetOrderIndex(Path.GetFileName(entry))))
+            .Where(s => s.Index is not null)
+            .OrderBy(s => s.Index!.Value)
+            .ToList();
+
+        var renamed = new List<RenormalizedSibling>();
+        for (var newIndex = 0; newIndex < survivors.Count; newIndex++)
+        {
+            var (entry, oldIndex) = survivors[newIndex];
+            if (oldIndex == newIndex) continue;
+
+            var leaf = Path.GetFileName(entry);
+            var tail = leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
+            var newPath = Path.Combine(groupDirectory, $"[{newIndex}] {tail}");
+
+            if (Directory.Exists(entry)) Directory.Move(entry, newPath);
+            else File.Move(entry, newPath);
+
+            renamed.Add(new RenormalizedSibling(entry, newPath));
+        }
+
+        return renamed;
+    }
+
+    /// <summary>
     /// <see cref="NextOrderIndex"/>, given a flat record type rather than an already-computed group
     /// directory — the two call sites that mint a brand-new flat-record file
     /// (<see cref="Edits.RecordEditService.CreateRecord"/> and <see cref="Edits.RecordEditService.RenumberRecord"/>'s
@@ -422,7 +499,8 @@ internal static class SourceUnitResolver
     /// kind of drift this class exists to prevent. Callers must already know <paramref name="recordType"/>
     /// has a flat group folder (both do, having passed <c>RefuseIfContainerType</c> first) — this does
     /// not re-check, so a caller that hasn't would NRE on the null-forgiving <c>FolderNameFor</c> rather
-    /// than fail closed silently.
+    /// than fail closed silently. #489: both callers also renormalize their own group directory
+    /// afterward, so a gap this returns into is transient at worst, closed before either call returns.
     /// </summary>
     internal static int NextOrderIndexFor(string modFolder, string pluginFileName, string recordType, GameRelease release)
     {
