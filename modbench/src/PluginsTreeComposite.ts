@@ -229,7 +229,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     // the more fundamental fact: nothing about a plugin's own masters could even be evaluated.
     const failureReason = file !== undefined ? this.loadFailures?.get(file) : undefined;
     if (failureReason !== undefined) {
-      item.iconPath = new vscode.ThemeIcon('error');
+      item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
       item.description = '✗ Failed to load';
       const note = `Failed to load: ${failureReason}`;
       item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
@@ -254,7 +254,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       ...issues.map((i) => i.kind === 'DirectlyMissing' ? `Missing master: ${i.masterName}` : `Master ${i.masterName} cannot be loaded`),
       ...orderOnly.map((m) => `Master ${m} is not loaded before this plugin`),
     ];
-    item.iconPath = new vscode.ThemeIcon('error');
+    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('problemsErrorIcon.foreground'));
     item.description = lines.length === 1 ? '✗ Master issue' : `✗ ${lines.length} master issues`;
     const note = lines.join('\n');
     item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
