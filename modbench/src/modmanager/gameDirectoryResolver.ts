@@ -8,7 +8,13 @@
 // Pure over injected config/detection/change-notification, like `gameDirectory.ts` itself — no
 // vscode import, unit-testable without a VS Code harness.
 
-import { resolveGameDirectory, type ConfigLike, type DetectPaths, type GameDirectory } from './gameDirectory';
+import {
+  resolveGameDirectory,
+  type ConfigLike,
+  type DetectPaths,
+  type DetectWinePrefix,
+  type GameDirectory,
+} from './gameDirectory';
 
 /** Minimal stand-in for vscode's `ConfigurationChangeEvent`. */
 export interface ConfigChangeEvent {
@@ -36,6 +42,7 @@ export function createGameDirectoryResolver(
   instanceRoot: string,
   config: () => ConfigLike,
   detectPaths: DetectPaths,
+  detectWinePrefix: DetectWinePrefix,
   onConfigChange: OnConfigChange,
 ): GameDirectoryResolver {
   let cached: Promise<GameDirectory | null> | undefined;
@@ -46,7 +53,7 @@ export function createGameDirectoryResolver(
 
   return {
     resolve: () => {
-      cached ??= resolveGameDirectory(instanceRoot, config(), detectPaths);
+      cached ??= resolveGameDirectory(instanceRoot, config(), detectPaths, detectWinePrefix);
       return cached;
     },
     dispose: () => subscription.dispose(),

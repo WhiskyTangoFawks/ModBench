@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 
 vi.mock('node:fs/promises');
 
-import { detectGamePaths, detectWindowsGamePaths, parseLibraryFoldersVdf, parseRegQuerySteamPath } from '../GamePathDetector';
+import { detectGamePaths, detectWindowsGamePaths, detectWinePrefix, parseLibraryFoldersVdf, parseRegQuerySteamPath } from '../GamePathDetector';
 
 const FO4_APP_ID = '377160';
 
@@ -94,6 +94,39 @@ describe('detectGamePaths (Linux)', () => {
     vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
 
     const result = await detectGamePaths('linux');
+    expect(result).toBeNull();
+  });
+});
+
+/** #187: the Proton prefix root, factored out of `detectLinux` — the same lookup that already
+ *  builds `Plugins.txt`'s `pfx/drive_c/...` path, now reusable by `gameDirectory.ts`'s Wine
+ *  drive-letter translation instead of it re-deriving the library lookup itself. */
+describe('detectWinePrefix', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it('returns the compatdata pfx root when the FO4 library is found', async () => {
+    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITH_FO4);
+
+    const result = await detectWinePrefix();
+
+    expect(result).toBe('/mnt/games/steam/steamapps/compatdata/377160/pfx');
+  });
+
+  it('returns null when the VDF cannot be read', async () => {
+    vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+    const result = await detectWinePrefix();
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when the VDF has no FO4 library', async () => {
+    vi.mocked(fs.readFile).mockResolvedValue(VDF_WITHOUT_FO4);
+
+    const result = await detectWinePrefix();
+
     expect(result).toBeNull();
   });
 });

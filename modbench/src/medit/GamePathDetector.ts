@@ -38,13 +38,22 @@ export async function detectGamePaths(platform: NodeJS.Platform): Promise<GamePa
   return detectLinux();
 }
 
-async function detectLinux(): Promise<GamePaths | null> {
+/** The Steam library folder containing FO4, or `null` if `libraryfolders.vdf` is absent/unreadable
+ *  or has no FO4 entry. Shared by `detectLinux` and `detectWinePrefix` so the VDF lookup lives in
+ *  exactly one place. */
+async function findFo4Library(): Promise<string | null> {
   const vdfPath = path.join(os.homedir(), '.steam', 'steam', 'config', 'libraryfolders.vdf');
   try {
-    const content = await fs.readFile(vdfPath, 'utf-8');
-    const library = parseLibraryFoldersVdf(content);
-    if (!library) return null;
+    return parseLibraryFoldersVdf(await fs.readFile(vdfPath, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
 
+async function detectLinux(): Promise<GamePaths | null> {
+  const library = await findFo4Library();
+  if (!library) return null;
+  try {
     const steamapps = path.join(library, 'steamapps');
     const dataFolder = path.join(steamapps, 'common', 'Fallout 4', 'Data');
     const pluginsTxt = path.join(
@@ -57,6 +66,15 @@ async function detectLinux(): Promise<GamePaths | null> {
   } catch {
     return null;
   }
+}
+
+/** The Proton prefix root (`steamapps/compatdata/<appid>/pfx`) for the FO4 Steam library, or
+ *  `null` if the library can't be found — reuses `findFo4Library`'s lookup (the same one
+ *  `detectLinux` already does to build `Plugins.txt`'s path) so `gameDirectory.ts`'s Wine
+ *  drive-letter translation (#187) doesn't re-derive it. */
+export async function detectWinePrefix(): Promise<string | null> {
+  const library = await findFo4Library();
+  return library ? path.join(library, 'steamapps', 'compatdata', FO4_APP_ID, 'pfx') : null;
 }
 
 // Parses `reg query "HKCU\Software\Valve\Steam" /v SteamPath` output for the SteamPath value.

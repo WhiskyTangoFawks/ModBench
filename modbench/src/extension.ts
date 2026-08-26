@@ -8,7 +8,7 @@ import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer } from './medit/ApiClient';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
-import { detectGamePaths } from './medit/GamePathDetector';
+import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
 import {
@@ -2090,7 +2090,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     // reads through, so none of them can disagree about which folder is current. Replaces the old
     // activation-scoped `dataFolder: Promise<string | undefined>`, which was resolved once here and
     // then frozen for the life of the window regardless of later edits to the setting.
-    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), vscode.workspace.onDidChangeConfiguration);
+    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
     // Non-blocking (keeps registration synchronous) and never rejects — a null resolution or a
     // misconfigured explicit setting both fold to undefined, so the consumers degrade exactly as
     // before (empty vanilla masters, badges absent). A rejection is re-thrown by every other

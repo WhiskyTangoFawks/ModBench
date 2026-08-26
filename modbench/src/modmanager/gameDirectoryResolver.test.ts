@@ -8,6 +8,7 @@ function fakeConfig(values: Record<string, string>) {
 }
 
 const noDetect = () => Promise.resolve(null);
+const noDetectPrefix = () => Promise.resolve(null);
 
 /** Captures the listener `onConfigChange` was given so a test can fire it directly, the same way
  *  `vscode.workspace.onDidChangeConfiguration`'s single-listener-arg overload would be driven. */
@@ -29,7 +30,7 @@ describe('createGameDirectoryResolver', () => {
       calls++;
       return fakeConfig({});
     };
-    const resolver = createGameDirectoryResolver('/instance', config, noDetect, fakeOnConfigChange().subscribe);
+    const resolver = createGameDirectoryResolver('/instance', config, noDetect, noDetectPrefix, fakeOnConfigChange().subscribe);
 
     await resolver.resolve();
     await resolver.resolve();
@@ -44,7 +45,7 @@ describe('createGameDirectoryResolver', () => {
       return fakeConfig({});
     };
     const onConfigChange = fakeOnConfigChange();
-    const resolver = createGameDirectoryResolver('/instance', config, noDetect, onConfigChange.subscribe);
+    const resolver = createGameDirectoryResolver('/instance', config, noDetect, noDetectPrefix, onConfigChange.subscribe);
 
     await resolver.resolve();
     onConfigChange.fire('modbench.mods.gameDirectory');
@@ -60,7 +61,7 @@ describe('createGameDirectoryResolver', () => {
       return fakeConfig({});
     };
     const onConfigChange = fakeOnConfigChange();
-    const resolver = createGameDirectoryResolver('/instance', config, noDetect, onConfigChange.subscribe);
+    const resolver = createGameDirectoryResolver('/instance', config, noDetect, noDetectPrefix, onConfigChange.subscribe);
 
     await resolver.resolve();
     onConfigChange.fire('modbench.mods.deploymentMode');
@@ -72,7 +73,7 @@ describe('createGameDirectoryResolver', () => {
   it('resolves to the same GameDirectory the underlying resolveGameDirectory would produce', async () => {
     const detected: GameDirectory = { root: '/game', dataFolder: '/game/Data' };
     const detect = () => Promise.resolve({ dataFolder: detected.dataFolder, pluginsTxt: 'ignored' });
-    const resolver = createGameDirectoryResolver('/instance', () => fakeConfig({}), detect, fakeOnConfigChange().subscribe);
+    const resolver = createGameDirectoryResolver('/instance', () => fakeConfig({}), detect, noDetectPrefix, fakeOnConfigChange().subscribe);
 
     expect(await resolver.resolve()).toEqual(detected);
   });
