@@ -2281,6 +2281,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
 
+    /// <summary>See <see cref="IRecordIndex.RepointCellLocationParent"/>.</summary>
+    public void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        ExecuteFor(
+            """
+            UPDATE cell_location SET parent_worldspace = $1
+            WHERE parent_worldspace = $2 AND plugin = $3 AND origin = $4
+            """,
+            newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
+
     public void SetFilter(string? sql)
     {
         if (sql is null)

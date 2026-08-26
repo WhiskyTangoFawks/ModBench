@@ -217,6 +217,130 @@ public sealed class ContainmentRederivationTests : IDisposable
             c => c.ChildFormKey == _fixture.Response.ToString());
     }
 
+    // ---- #493 AC1: renumbering a container's own record updates its placed refs' placement rows ----
+
+    /// <summary>
+    /// #493's first AC — no existing test drives a Cell's own <c>RenumberRecord</c> end to end and
+    /// checks its embedded placed refs' <c>placement.parent_cell</c> afterward (the DialogTopic
+    /// regression above, and every AC2 test in this file, exercise the index seam directly instead).
+    /// Green on arrival: <c>Cell.Persistent</c>/<c>Temporary</c> are embedded inline in the Cell's own
+    /// document (<c>ContainerChildFields.SpriggitEmbeddedSlots</c>), so
+    /// <c>CreateWorkingTreeRecord</c>'s existing #488 re-derivation already rebuilds these rows for the
+    /// new FormKey — verified by applying the rival below and watching it fail.
+    /// </summary>
+    [Fact]
+    public void RenumberingAContainersOwnRecord_RepointsItsPlacedRefsPlacementRows_ToTheNewFormKey_SameSession()
+    {
+        var index = _fixture.Sessions.Index!;
+        Assert.Equal(_fixture.EmbedCell.ToString(), index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.ParentCell);
+
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
+        Assert.True(result.Applied, result.Message);
+        Assert.NotEqual(_fixture.EmbedCell.ToString(), result.NewFormKey);
+
+        Assert.Equal(result.NewFormKey, index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.ParentCell);
+        Assert.Contains(
+            index.GetCellReferences(_fixture.Plugin, result.NewFormKey!).Temporary,
+            p => p.FormKey == _fixture.TemporaryRef.ToString());
+        Assert.DoesNotContain(
+            index.GetCellReferences(_fixture.Plugin, _fixture.EmbedCell.ToString()).Temporary,
+            p => p.FormKey == _fixture.TemporaryRef.ToString());
+    }
+
+    /// <summary>
+    /// #493 AC4 (parity), the Cell/<c>placement</c> half — same reload-parity guard #488's own AC5
+    /// established for <c>container_child</c> (<see cref="AfterDeletingAFolderSplitChild_AFreshSessionReload_AgreesWithTheLiveSession"/>),
+    /// extended to cover this ticket's other two ACs literally rather than only the Worldspace/
+    /// <c>cell_location</c> scenario <see cref="WorldspaceRenumberContainmentTests"/> already checks.
+    /// </summary>
+    [Fact]
+    public void AfterRenumberingAContainersOwnRecord_AFreshSessionReload_AgreesWithTheLiveSessionsPlacementRow()
+    {
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
+        Assert.True(result.Applied, result.Message);
+
+        var live = _fixture.Sessions.Index!.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+
+        using var reloaded = new SessionManager(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ISessionManager)reloaded).LoadExplicit(
+            _fixture.GameDirectory,
+            [new ExplicitPluginInput(
+                ContainerModFixture.PluginName,
+                Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName),
+                ContainerModFixture.ModFolderOrigin,
+                true)],
+            GameRelease.Fallout4);
+        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+
+        var freshlyIngested = reloaded.Index!.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+
+        Assert.Equal(freshlyIngested, live);
+    }
+
+    // ---- #493 AC3: renumbering a Quest updates its DialogTopics' container_child rows ----
+
+    /// <summary>
+    /// #493's third AC, the Quest half of the DialogTopic regression above — <c>RepointContainerChildParent</c>
+    /// is fully FormKey-generic (no type branching), so this exercises the exact same mechanism one
+    /// level up the tree. Green on arrival: verified by applying the rival below (removing the
+    /// <c>RepointContainerChildParent</c> call) and watching it fail.
+    /// </summary>
+    [Fact]
+    public void RenumberingAQuest_RepointsItsDialogTopicsContainerChildRows_ToTheNewParentFormKey_SameSession()
+    {
+        var index = _fixture.Sessions.Index!;
+        var before = index.GetContainerParent(_fixture.Plugin, _fixture.DialogTopic.ToString());
+        Assert.NotNull(before);
+        Assert.Equal(_fixture.Quest.ToString(), before!.Value.ParentFormKey);
+
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Quest.ToString());
+        Assert.True(result.Applied, result.Message);
+        Assert.NotEqual(_fixture.Quest.ToString(), result.NewFormKey);
+
+        var after = index.GetContainerParent(_fixture.Plugin, _fixture.DialogTopic.ToString());
+        Assert.NotNull(after);
+        Assert.Equal(result.NewFormKey, after!.Value.ParentFormKey);
+        Assert.Equal(before.Value.SlotName, after.Value.SlotName);
+        Assert.Equal(before.Value.SlotIndex, after.Value.SlotIndex);
+        Assert.DoesNotContain(
+            index.GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString()),
+            c => c.ChildFormKey == _fixture.DialogTopic.ToString());
+    }
+
+    /// <summary>
+    /// #493 AC4 (parity), the Quest/<c>container_child</c> half — see
+    /// <see cref="AfterRenumberingAContainersOwnRecord_AFreshSessionReload_AgreesWithTheLiveSessionsPlacementRow"/>'s
+    /// own doc comment for why this exists alongside the same-session test above.
+    /// </summary>
+    [Fact]
+    public void AfterRenumberingAQuest_AFreshSessionReload_AgreesWithTheLiveSessionsContainerChildRows()
+    {
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Quest.ToString());
+        Assert.True(result.Applied, result.Message);
+        var newFormKey = result.NewFormKey!;
+
+        var live = _fixture.Sessions.Index!.GetContainerChildren(_fixture.Plugin, newFormKey)
+            .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
+
+        using var reloaded = new SessionManager(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ISessionManager)reloaded).LoadExplicit(
+            _fixture.GameDirectory,
+            [new ExplicitPluginInput(
+                ContainerModFixture.PluginName,
+                Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName),
+                ContainerModFixture.ModFolderOrigin,
+                true)],
+            GameRelease.Fallout4);
+        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+
+        var freshlyIngested = reloaded.Index!.GetContainerChildren(_fixture.Plugin, newFormKey)
+            .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
+
+        Assert.Equal(freshlyIngested, live);
+    }
+
     // ---- AC4: creating a record whose own body embeds children populates all three tables ----
 
     [Fact]

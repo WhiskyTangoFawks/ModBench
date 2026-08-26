@@ -209,6 +209,39 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
 
     /// <summary>
+    /// #493: re-points every <c>cell_location</c> row naming <paramref name="oldParentFormKey"/> as
+    /// <c>parent_worldspace</c> to <paramref name="newParentFormKey"/> instead — <see cref="RepointContainerChildParent"/>'s
+    /// own shape, for the sibling gap it explicitly declined: a renumbered Worldspace's <i>exterior</i>
+    /// cells (<c>SubCells</c>) rather than its own folder-split children. <c>Worldspace.SubCells</c>
+    /// holds <c>WorldspaceBlock</c>, which is not <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>
+    /// (<see cref="Source.ContainerChildFields"/>'s own doc comment), so
+    /// <c>DuckDbRecordIndex.RederiveContainmentForRecord</c> can never reach an exterior cell — it
+    /// only ever recurses one level, into <c>TopCell</c> — and <see cref="CreateWorkingTreeRecord"/>'s
+    /// re-derivation of the renumbered Worldspace's own new document cannot recreate those rows for
+    /// the same reason it cannot recreate a folder-split child's <c>container_child</c> row.
+    ///
+    /// <para><b>Position relative to <see cref="CreateWorkingTreeRecord"/> does not matter, and this
+    /// is called after it, alongside <see cref="RepointContainerChildParent"/> — verified, not
+    /// assumed: a rival that called this <i>before</i> <see cref="CreateWorkingTreeRecord"/> instead
+    /// was applied and still left exactly one row for the Worldspace's own <c>TopCell</c>, never two.</b>
+    /// <c>RederiveContainmentForRecord</c>'s own <c>cell_location</c> write for <c>TopCell</c>
+    /// deletes-then-inserts keyed by that cell's own unchanging <c>cell_form_key</c>, never by
+    /// <c>parent_worldspace</c> — so it unconditionally removes whatever row already exists for that
+    /// cell (whichever parent it currently names) and replaces it with a fresh, correct one, regardless
+    /// of whether this method ran before or after it. This method's own <c>UPDATE</c> and that
+    /// delete-then-insert therefore never contend for the same row: an exterior cell's row is never
+    /// touched by <c>CreateWorkingTreeRecord</c>'s re-derivation either way (the same reachability gap
+    /// this method exists to close), and <c>TopCell</c>'s row is never left for this method's
+    /// <c>WHERE parent_worldspace = oldParentFormKey</c> to match once <c>CreateWorkingTreeRecord</c>
+    /// has already run.</para>
+    ///
+    /// <para>Harmless to call for any renumbered record: the <c>UPDATE</c> matches zero rows for one
+    /// with no <c>cell_location</c> children of its own (every renumbered type other than
+    /// Worldspace).</para>
+    /// </summary>
+    void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
+
+    /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one
     /// door SQL crosses this seam through, since it is itself a published contract for user filter
     /// SQL (ADR-0041). Throws <see cref="ArgumentException"/> if the SQL doesn't return a
