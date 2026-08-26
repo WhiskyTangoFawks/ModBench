@@ -21,10 +21,14 @@ Classify changed files → run matching gate (never review non-compiling code):
 
 | Changed | Command |
 |---|---|
-| `MEditService/**/*.cs` | `bash .claude/skills/validate/run-gates.sh --backend` |
+| `MEditService/**/*.cs` | `bash .claude/skills/validate/run-gates.sh --backend --api-drift` |
 | `modbench/**` | `… --frontend` |
-| both | `… --backend --frontend` |
+| both | `… --backend --frontend --api-drift` |
 | config/docs only | skip |
+
+`--api-drift` (#245) boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
+has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
+silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 
 Run gate commands with an explicit `timeout: 600000` — the Bash tool's 120 s default
 silently backgrounds a full `dotnet test` run, which reads as a hang or a skipped gate.
