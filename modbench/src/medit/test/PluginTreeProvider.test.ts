@@ -29,7 +29,7 @@ vi.mock('vscode', () => ({
 }));
 
 import {
-  PluginTreeProvider, RecordTypeNode, RecordNode, LoadMoreNode,
+  PluginTreeProvider, RecordTypeNode, RecordNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
   ErrorNode, headerFormKeyFor,
@@ -143,7 +143,7 @@ describe('PluginTreeProvider.getPluginChildren (record types)', () => {
 // ── getChildren(RecordTypeNode) ───────────────────────────────────────────────
 
 describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
-  it('returns RecordNodes for each record in the first page', async () => {
+  it('returns a RecordNode for every record in one call', async () => {
     const records = [makeRecord(0), makeRecord(1), makeRecord(2)];
     const repo = makeRepository({ records: { items: records, total: 3 } });
     const provider = new PluginTreeProvider(repo);
@@ -151,22 +151,34 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 
     const children = await provider.getChildren(typeNode);
 
-    expect(children.filter(c => c instanceof RecordNode)).toHaveLength(3);
-    expect(children.filter(c => c instanceof LoadMoreNode)).toHaveLength(0);
+    expect(children).toHaveLength(3);
+    expect(children.every(c => c instanceof RecordNode)).toBe(true);
   });
 
-  it('appends LoadMoreNode when total exceeds loaded count', async () => {
-    const records = Array.from({ length: 50 }, (_, i) => makeRecord(i));
-    const repo = makeRepository({ records: { items: records, total: 120 } });
+  // #398: record-type children no longer paginate — xEdit's own record-type group nodes load
+  // unconditionally in full (`vstNavInitChildren`, xeMainForm.pas: `ChildCount :=
+  // Container.ElementCount`), and measurement found no meaningful cost even at the realistic
+  // worst case (Fallout4.esm's own INFO records in a full FO4 load order, ~78k rows, ~500ms
+  // backend query + extension-host materialization combined; docs/specs/plugins.md). This test
+  // is issue #398 AC3's own check: a genuinely large count still comes back as one batch with no
+  // manual step, not just "the LoadMoreNode class is gone".
+  it('returns every record in one call at a large, realistic-worst-case count — no manual step', async () => {
+    const count = 78_089; // Fallout4.esm's own measured INFO count in a full FO4 load order
+    const records = Array.from({ length: count }, (_, i) => makeRecord(i));
+    const repo = makeRepository({ records: { items: records, total: count } });
     const provider = new PluginTreeProvider(repo);
     const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
 
     const children = await provider.getChildren(typeNode);
 
-    expect(children.filter(c => c instanceof RecordNode)).toHaveLength(50);
-    const loadMore = children.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
-    expect(loadMore).toBeDefined();
-    expect(loadMore.parentNode).toBe(typeNode);
+    expect(children).toHaveLength(count);
+    expect(children.every(c => c instanceof RecordNode)).toBe(true);
+    // One call, offset 0, and a limit nowhere near the deleted 50-row PAGE_SIZE — the whole type
+    // requested up front, not paged.
+    expect(repo.getRecords).toHaveBeenCalledTimes(1);
+    expect(repo.getRecords).toHaveBeenCalledWith('Plugin0.esp', 'WEAP', 0, expect.any(Number), undefined);
+    const limitArg = (repo.getRecords as ReturnType<typeof vi.fn>).mock.calls[0][3] as number;
+    expect(limitArg).toBeGreaterThan(count);
   });
 
   it('uses cache on second expand without re-fetching', async () => {
@@ -178,95 +190,6 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     await provider.getChildren(typeNode);
 
     expect(repo.getRecords).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ── loadMore ──────────────────────────────────────────────────────────────────
-
-describe('PluginTreeProvider.loadMore', () => {
-  it('fetches next page and appends records to cache', async () => {
-    const firstPage = Array.from({ length: 50 }, (_, i) => makeRecord(i));
-    const secondPage = Array.from({ length: 20 }, (_, i) => makeRecord(50 + i));
-    const repo = makeRepository({ records: { items: firstPage, total: 70 } });
-    (repo.getRecords as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: firstPage, total: 70 })
-      .mockResolvedValueOnce({ items: secondPage, total: 70 });
-
-    const provider = new PluginTreeProvider(repo);
-    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
-    const firstChildren = await provider.getChildren(typeNode);
-    const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
-
-    await provider.loadMore(loadMoreNode);
-    const afterLoad = await provider.getChildren(typeNode);
-
-    expect(afterLoad.filter(c => c instanceof RecordNode)).toHaveLength(70);
-    expect(afterLoad.find(c => c instanceof LoadMoreNode)).toBeUndefined();
-  });
-
-  it('fires onDidChangeTreeData after loading', async () => {
-    const firstPage = Array.from({ length: 50 }, (_, i) => makeRecord(i));
-    const repo = makeRepository({ records: { items: firstPage, total: 60 } });
-    (repo.getRecords as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: firstPage, total: 60 })
-      .mockResolvedValueOnce({ items: [makeRecord(50)], total: 60 });
-
-    const provider = new PluginTreeProvider(repo);
-    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
-    const firstChildren = await provider.getChildren(typeNode);
-    const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
-
-    const fired: unknown[] = [];
-    provider.onDidChangeTreeData(e => fired.push(e));
-
-    await provider.loadMore(loadMoreNode);
-
-    expect(fired).toHaveLength(1);
-  });
-
-  it('renders an ErrorNode alongside the retry affordance when a page fetch fails, preserving already-loaded items', async () => {
-    const firstPage = Array.from({ length: 50 }, (_, i) => makeRecord(i));
-    const repo = makeRepository({ records: { items: firstPage, total: 70 } });
-    (repo.getRecords as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: firstPage, total: 70 })
-      .mockRejectedValueOnce(new Error('boom'));
-
-    const provider = new PluginTreeProvider(repo);
-    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
-    const firstChildren = await provider.getChildren(typeNode);
-    const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
-
-    await provider.loadMore(loadMoreNode);
-    const afterFailure = await provider.getChildren(typeNode);
-
-    expect(afterFailure.filter(c => c instanceof RecordNode)).toHaveLength(50);
-    expect(afterFailure.find(c => c instanceof LoadMoreNode)).toBeDefined();
-    const errorNode = afterFailure.find(c => c instanceof ErrorNode);
-    expect(errorNode).toBeDefined();
-    expect(errorNode!.tooltip).toContain('boom');
-  });
-
-  it('clears the ErrorNode on a successful retry', async () => {
-    const firstPage = Array.from({ length: 50 }, (_, i) => makeRecord(i));
-    const secondPage = Array.from({ length: 20 }, (_, i) => makeRecord(50 + i));
-    const repo = makeRepository({ records: { items: firstPage, total: 70 } });
-    (repo.getRecords as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: firstPage, total: 70 })
-      .mockRejectedValueOnce(new Error('boom'))
-      .mockResolvedValueOnce({ items: secondPage, total: 70 });
-
-    const provider = new PluginTreeProvider(repo);
-    const [typeNode] = await provider.getPluginChildren('Plugin0.esp') as RecordTypeNode[];
-    const firstChildren = await provider.getChildren(typeNode);
-    const loadMoreNode = firstChildren.find(c => c instanceof LoadMoreNode) as LoadMoreNode;
-
-    await provider.loadMore(loadMoreNode);
-    await provider.loadMore(loadMoreNode);
-    const afterRetry = await provider.getChildren(typeNode);
-
-    expect(afterRetry.filter(c => c instanceof RecordNode)).toHaveLength(70);
-    expect(afterRetry.find(c => c instanceof LoadMoreNode)).toBeUndefined();
-    expect(afterRetry.find(c => c instanceof ErrorNode)).toBeUndefined();
   });
 });
 
@@ -374,21 +297,10 @@ describe('RecordTypeNode', () => {
   });
 });
 
-// ── LoadMoreNode ──────────────────────────────────────────────────────────────
-
-describe('LoadMoreNode', () => {
-  it('label includes remaining count', () => {
-    const parent = new RecordTypeNode('MyPlugin.esp', 'WEAP', 100);
-    const node = new LoadMoreNode(parent, 43);
-    expect(String(node.label)).toContain('43');
-  });
-
-  it('has contextValue "loadMore"', () => {
-    const parent = new RecordTypeNode('MyPlugin.esp', 'WEAP', 100);
-    const node = new LoadMoreNode(parent, 10);
-    expect(node.contextValue).toBe('loadMore');
-  });
-});
+// #398: LoadMoreNode (record-type pagination) is deleted along with its tests — record-type
+// children load in one getChildren call now (see the large-count test above). InteriorLoadMoreNode
+// is unaffected (interior-cell listing is out of scope for #398 and still paginates; see its own
+// tests further down).
 
 // ── RecordNode ────────────────────────────────────────────────────────────────
 

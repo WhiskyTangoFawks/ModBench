@@ -137,8 +137,10 @@ there is no separate load-session step.
 
 ### Record navigation (Editing, once a backend session is running)
 
-15. As a user, I want to expand a plugin row and see its record types, then its records
-    (paginated, with a "Load more…" step), so that browsing a large plugin stays responsive.
+15. As a user, I want to expand a plugin row and see its record types, then every record under a
+    type in one step, so that browsing works the way it does in xEdit — no manual "Load more…" click
+    (#398: measured no meaningful cost even at the realistic worst case; see Record navigation
+    below).
 16. As a user, I want each record labeled with its EditorID and FormKey (or just the FormKey
     when it has no EditorID), so that I can recognize records the way I do in xEdit.
 17. As a user, I want to select multiple tree nodes with Ctrl/Shift-click and run a batch
@@ -244,7 +246,8 @@ there is no separate load-session step.
   Closing the session returns every row to a leaf. Neither transition re-reads `plugins.txt`, so
   the load order, the name filter, row expansion and scroll position all survive it.
 - **Expanding a row browses that plugin's records** — record types, the spatial
-  worldspace/interior-cell hierarchy, and paginated record nodes (see Record navigation below).
+  worldspace/interior-cell hierarchy (the interior-cell listing itself still pages), and record
+  nodes, every one of a type in a single call (see Record navigation below).
 - **A row expands only if the session actually holds its plugin.** A row whose plugin is not in
   the session stays a leaf rather than opening onto an empty list, which would read as "this
   plugin has no records" (ADR-0026).
@@ -338,8 +341,23 @@ without saying what is not yet known would make that worse, not better.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache
-  keys, `contextValue`, commands, API `type`). Children are paginated record nodes with a
-  "Load more…" node at the end of a page.
+  keys, `contextValue`, commands, API `type`). Children are **every record of that type, loaded in
+  one `getChildren` call — no pagination, no "Load more…" step** (#398, amending the earlier,
+  never-maintainer-approved 50-per-page design this replaced). Measured before removing it: the
+  backend's `/records` query has no artificial limit, and the realistic worst case a Bethesda load
+  order can put in front of this surface — a single plugin's own contribution to one record type,
+  since that's the unit a `RecordTypeNode` scopes to — is vanilla `Fallout4.esm`'s own `INFO`
+  (Dialog response) records, ~78,000 of them in a full real-world FO4 modlist (`/home/wayne/Games/
+  FO4/LitR`, 592 active plugins; every mod plugin checked, including the largest quest mod in that
+  list, stayed under 13,000 for its own biggest type — vanilla dwarfs mods here). At that count:
+  ~125-280ms for the full backend query (DuckDB, `LIMIT`/`OFFSET` with no artificial cap) plus an
+  estimated ~280ms to materialize and hand off the `TreeItem` batch extension-host-side (synthetic
+  benchmark, upper-bound proxy) — comfortably sub-second end to end, one dev machine, Debug build.
+  VS Code's own `TreeView` already virtualizes rendering, so row count alone was never the
+  limitation pagination solved; xEdit itself shows a record-type group's full child list
+  unconditionally (`xeMainForm.pas`'s `vstNavInitChildren`: `ChildCount := Container.ElementCount`,
+  no `LIMIT`), so this also removes an ADR-0034 divergence that never had a demonstrated platform
+  limitation behind it.
 - **Record nodes** (`contextValue: "record"`, or `"recordImmutable"` for a row whose plugin is
   read-only for editing — an immutable plugin or a shadowed copy, which hides Remove/Change
   FormID… (though not Copy — see below); #427): labeled `{EditorID}  [{RecordType}:{FormID}]`
@@ -653,9 +671,10 @@ overflow, then native **Collapse All** last.
   populate it) but handled for completeness: a single informational node, "No plugins," the same
   fetch-failure-is-an-error-node/empty-is-a-known-fact convention every tree in this product
   follows.
-- Per `modbench/CLAUDE.md`: this holds for **load-more (pagination) fetches** on the
-  record-browsing side too — a failed "Load more…" surfaces an error node for that parent while
-  keeping the already-loaded pages and the retry affordance, and the error clears on a
+- Per `modbench/CLAUDE.md`: this holds for **load-more (pagination) fetches on the interior-cell
+  listing** too (#398 removed record-type pagination; the interior-cell listing is the only
+  surface left here that pages) — a failed "Load more…" surfaces an error node for that parent
+  while keeping the already-loaded pages and the retry affordance, and the error clears on a
   successful retry.
 
 ### Architecture / seams
@@ -692,8 +711,8 @@ overflow, then native **Collapse All** last.
 - **Good tests assert external behavior, not implementation details** — same standard as every
   other surface spec in this directory: given `plugins.txt` text + a mutation, assert the
   resulting text; given a plugin's masters + the ordered plugin list, assert the verdict; given a
-  session, assert the rendered node shape, labels, `contextValue`s, and pagination through
-  `getChildren`/`getTreeItem` against a stubbed repository. Never construct nodes directly.
+  session, assert the rendered node shape, labels, `contextValue`s, and interior-cell pagination
+  through `getChildren`/`getTreeItem` against a stubbed repository. Never construct nodes directly.
 - **Primary unit seam — `pluginsText.ts`** (Vitest, `npm run test:unit`, no backend):
   - parse: line → row mapping, comments/blanks ignored but preserved on write.
   - toggle: `*` prefix set/cleared, byte-faithful (CRLF/BOM/comments untouched).

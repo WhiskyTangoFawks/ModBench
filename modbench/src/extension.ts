@@ -12,7 +12,7 @@ import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
 import {
-  LoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, headerFormKeyFor,
+  InteriorLoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, headerFormKeyFor,
 } from './medit/PluginTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
@@ -685,7 +685,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
         { routerDeps, recordPanels, activeRecordTracker });
     }),
-    vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
+    vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node)),
     ...registerFilterCommands(scriptsPath, controller),
     // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
     // medit's own PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite

@@ -6,7 +6,14 @@ import type {
 import type { PluginRepository } from './PluginRepository';
 import { recordResourceUri } from './recordResourceUri';
 
+// #398: interior-cell listing is the only surface left that pages — record-type children (below)
+// load in one call now (measured no meaningful cost even at the realistic worst case; see
+// fetchRecords and docs/specs/plugins.md).
 const PAGE_SIZE = 50;
+
+// The backend's `/records` `limit` query param is a plain `int`, no upper bound enforced —
+// Int32.MaxValue as "no limit" fetches every record of a type in one call. #398.
+const UNLIMITED_RECORDS = 2147483647;
 
 function formId(formKey: string): string {
   return formKey.split(':')[0];
@@ -67,15 +74,6 @@ export class RecordNode extends vscode.TreeItem {
     // owning plugin, which an override stack row can differ from the RecordTypeNode's plugin) paired
     // with origin, the same (plugin, origin, formKey) triple every record-scoped command already uses.
     this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
-  }
-}
-
-export class LoadMoreNode extends vscode.TreeItem {
-  readonly kind = 'loadMore' as const;
-  constructor(public readonly parentNode: RecordTypeNode, remaining: number) {
-    super(`$(sync) Load more… (${remaining.toLocaleString()} remaining)`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'loadMore';
-    this.command = { command: 'modbench.loadMore', title: 'Load More', arguments: [this] };
   }
 }
 
@@ -225,7 +223,7 @@ export class ErrorNode extends vscode.TreeItem {
 }
 
 export type PluginTreeNode =
-  | RecordTypeNode | RecordNode | LoadMoreNode
+  | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode | ErrorNode;
 
@@ -253,10 +251,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
-  // Last load-more failure per parent, keyed the same as pageCache/interiorCache
-  // (originKey + "::recordType" / originKey alone). Cleared on a successful retry; renders as an
-  // ErrorNode alongside the still-clickable LoadMoreNode/InteriorLoadMoreNode.
-  private readonly loadMoreFailures = new Map<string, string>();
+  // Last load-more failure per parent, keyed by originKey alone — interior cells are the only
+  // surface left that pages (#398 removed record-type pagination). Cleared on a successful retry;
+  // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
   // #281: lowercased filenames of the session's immutable plugins (the same set extension.ts
   // already hands PluginsTreeComposite.setSession as readOnlyFiles) — record/placed rows under
@@ -285,7 +282,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.pageCache.clear();
     this.interiorCache.clear();
     this.refCache.clear();
-    this.loadMoreFailures.clear();
     this.interiorLoadMoreFailures.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -375,25 +371,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return [];
   }
 
-  async loadMore(node: LoadMoreNode | InteriorLoadMoreNode): Promise<void> {
-    if (node instanceof InteriorLoadMoreNode) return this.loadMoreInterior(node);
-
-    const parent = node.parentNode;
-    const cacheKey = this.cacheKey(parent);
-    const cached = this.pageCache.get(cacheKey) ?? { items: [], total: 0 };
-    try {
-      const result = await this.repository.getRecords(parent.plugin, parent.recordType, cached.items.length, PAGE_SIZE, parent.origin);
-      this.pageCache.set(cacheKey, { items: [...cached.items, ...result.items], total: result.total });
-      this.loadMoreFailures.delete(cacheKey);
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}, ${parent.recordType}) failed: ${message}`);
-      this.loadMoreFailures.set(cacheKey, message);
-    }
-    this._onDidChangeTreeData.fire(parent);
-  }
-
-  private async loadMoreInterior(node: InteriorLoadMoreNode): Promise<void> {
+  // #398: the only pagination left in this provider — record-type children load in one
+  // getChildren call now (see fetchRecords).
+  async loadMore(node: InteriorLoadMoreNode): Promise<void> {
     const parent = node.parentNode;
     const cacheKey = this.originKey(parent.plugin, parent.origin);
     const cached = this.interiorCache.get(cacheKey) ?? { items: [], total: 0 };
@@ -403,7 +383,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       this.interiorLoadMoreFailures.delete(cacheKey);
     } catch (e) {
       const message = this.err(e);
-      this.log(`[PluginTreeProvider] loadMoreInterior(${parent.plugin}) failed: ${message}`);
+      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}) failed: ${message}`);
       this.interiorLoadMoreFailures.set(cacheKey, message);
     }
     this._onDidChangeTreeData.fire(parent);
@@ -525,7 +505,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     let cached = this.pageCache.get(cacheKey);
     if (!cached) {
       try {
-        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE, node.origin);
+        // #398: every record of this type, one call, no "Load more…" step — measured no
+        // meaningful cost even at the realistic worst case (Fallout4.esm's own INFO records in a
+        // full FO4 load order, ~78k rows, ~500ms backend query + extension-host materialization
+        // combined; docs/specs/plugins.md). Matches xEdit's own record-type group nodes, which
+        // load unconditionally in full (xeMainForm.pas `vstNavInitChildren`:
+        // `ChildCount := Container.ElementCount`, no LIMIT).
+        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin);
         this.pageCache.set(cacheKey, cached);
       } catch (e) {
         const message = this.err(e);
@@ -534,13 +520,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
 
-    const nodes: PluginTreeNode[] = cached.items.map(r =>
-      new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
-    if (cached.total > cached.items.length) {
-      nodes.push(new LoadMoreNode(node, cached.total - cached.items.length));
-    }
-    const failure = this.loadMoreFailures.get(cacheKey);
-    if (failure) nodes.push(new ErrorNode(failure));
-    return nodes;
+    return cached.items.map(r => new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
   }
 }
