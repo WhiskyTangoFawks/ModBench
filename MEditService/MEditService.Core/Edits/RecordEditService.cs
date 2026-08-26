@@ -426,7 +426,9 @@ public sealed class RecordEditService(
     /// <summary>
     /// #461: every descendant <paramref name="formKey"/> holds, recursively — a Cell's placed refs
     /// (<see cref="IRecordReads.GetCellReferences"/>), a Worldspace's TopCell
-    /// (<see cref="IRecordReads.GetWorldspaceCells"/>, the row with no block coordinates) and
+    /// (<see cref="IRecordReads.GetWorldspaceCells"/>, every row with no block coordinates — #496:
+    /// normally exactly one, but the cascade can't assume that, the same reason
+    /// <see cref="Queries.WorldspaceQueryService.GetWorldspaceBlocks"/> can't either) and
     /// whatever <see cref="IRecordReads.GetContainerChildren"/> names (navmesh/landscape, a Quest's
     /// dialog branches/topics/scenes, a DialogTopic's responses) — so a container's own delete can
     /// null every descendant's index row in the same batch as its own.
@@ -445,10 +447,14 @@ public sealed class RecordEditService(
         var placedDescendants = refs.Persistent.Concat(refs.Temporary)
             .SelectMany(placed => WithDescendants(reads, plugin, placed.FormKey));
 
-        var topCell = reads.GetWorldspaceCells(plugin, formKey).FirstOrDefault(c => c.BlockX == null);
-        var topCellDescendants = topCell == null
-            ? Enumerable.Empty<string>()
-            : WithDescendants(reads, plugin, topCell.FormKey);
+        // #496: every block-less cell-location row, not just the first — the same fix #251 made in
+        // WorldspaceQueryService.GetWorldspaceBlocks for the identical FirstOrDefault shape. A
+        // worldspace is only ever supposed to carry one such row (its TopCell), but the data can't
+        // rule out a second, and a delete cascade that silently stops at the first would orphan the
+        // second row's own descendants rather than merely mislabeling them.
+        var topCellDescendants = reads.GetWorldspaceCells(plugin, formKey)
+            .Where(c => c.BlockX == null)
+            .SelectMany(topCell => WithDescendants(reads, plugin, topCell.FormKey));
 
         var childDescendants = reads.GetContainerChildren(plugin, formKey)
             .SelectMany(child => WithDescendants(reads, plugin, child.ChildFormKey));

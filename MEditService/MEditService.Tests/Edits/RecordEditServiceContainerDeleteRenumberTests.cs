@@ -1,4 +1,5 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
@@ -76,6 +77,89 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Null(Index.GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
         Assert.Null(Index.GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
         Assert.Null(Index.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
+    }
+
+    /// <summary>
+    /// #496: <c>EnumerateDescendantFormKeys</c> picked the worldspace's TopCell via
+    /// <c>FirstOrDefault(c => c.BlockX == null)</c> — the same shape #251 fixed in
+    /// <see cref="Queries.WorldspaceQueryService.GetWorldspaceBlocks"/>, and the same blind spot: a
+    /// second block-less cell-location row (anomalous, but the data can't rule it out — see #251's
+    /// own doc comment on why it only warns rather than refuses) never reached the cascade at all.
+    /// Real Mutagen can't produce this shape itself (<c>Worldspace.TopCell</c> is a single-valued
+    /// slot), so the second row is injected at the <see cref="IRecordReads"/> seam exactly the way
+    /// #251's own regression test fabricated it — appended <b>after</b> the real TopCell row, so the
+    /// pre-fix <c>FirstOrDefault</c> still finds the real TopCell (proving the existing single-row
+    /// case is untouched) and the injected row's own descendants are exactly what the bug drops.
+    /// <see cref="ContainerModFixture.EmbedCell"/> stands in for the injected row's FormKey because it
+    /// already carries real indexed descendants of its own (<see cref="ContainerModFixture.TemporaryRef"/>,
+    /// <see cref="ContainerModFixture.PersistentRef"/>) that
+    /// <see cref="DeletingAContainersOwnRecord_RemovesItsDirectory_AndCascadesEveryEmbeddedDescendantsIndexRow"/>
+    /// already proves <c>EnumerateDescendantFormKeys</c> reaches when called on it directly — so a
+    /// failure here can only be the two-row enumeration itself, not some other gap in the recursion.
+    /// </summary>
+    [Fact]
+    public void DeletingAWorldspace_WithTwoBlocklessCellRows_CascadesIntoBothCellsDescendants()
+    {
+        var realRows = Index.GetWorldspaceCells(_fixture.Plugin, _fixture.Worldspace.ToString());
+        var extraRow = new CellLocationSummary(
+            _fixture.EmbedCell.ToString(), ContainerModFixture.EmbedCellEditorId,
+            BlockX: null, BlockY: null, SubX: null, SubY: null, CellX: null, CellY: null);
+
+        var injectingIndex = new WorldspaceCellInjectingIndex(
+            Index, _fixture.Worldspace.ToString(), [.. realRows, extraRow]);
+        var sessions = new IndexOverridingSessionManager(_fixture.Sessions, injectingIndex);
+        var service = new RecordEditService(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+
+        var result = service.DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
+
+        Assert.True(result.Applied, result.Message);
+        // The real TopCell's own descendants — unaffected by the second row's presence, proving the
+        // existing single-block-less-row behavior is unchanged.
+        Assert.Null(Index.GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
+        // The injected second block-less row's own descendants — this is what the pre-#496
+        // FirstOrDefault dropped, since it stopped at the first (real) row above.
+        Assert.Null(Index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
+        Assert.Null(Index.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
+        Assert.Null(Index.GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
+    }
+
+    /// <summary>#496: intercepts only <see cref="IRecordIndex.GetWorldspaceCells"/> — everything else
+    /// stays the real DuckDB-backed behavior, per <see cref="DelegatingRecordIndex"/>'s own posture of
+    /// "one seam intercepted, not a fake database".</summary>
+    private sealed class WorldspaceCellInjectingIndex(
+        IRecordIndex inner, string worldspaceFormKey, IReadOnlyList<CellLocationSummary> rows)
+        : DelegatingRecordIndex(inner)
+    {
+        public override IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKeyArg) =>
+            worldspaceFormKeyArg == worldspaceFormKey ? rows : base.GetWorldspaceCells(plugin, worldspaceFormKeyArg);
+    }
+
+    /// <summary>#496: forwards every <see cref="ISessionManager"/> member to a real session except
+    /// <see cref="Index"/>, which <see cref="RecordEditService"/> reads its <see cref="IRecordIndex"/>
+    /// from — the only way to hand it an intercepted index, since <see cref="MEditService.Core.Session.SessionManager"/>'s
+    /// own <c>Index</c> getter has no setter a test can reach.</summary>
+    private sealed class IndexOverridingSessionManager(ISessionManager inner, IRecordIndex overrideIndex) : ISessionManager
+    {
+        public IGameSession? Session => inner.Session;
+        public IRecordReads? Repository => inner.Repository;
+        public IRecordIndex? Index => overrideIndex;
+        public SessionStatus Status => inner.Status;
+        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
+            inner.Load(dataFolderPath, pluginsTxtPath, gameRelease);
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
+            inner.LoadExplicit(gameDirectory, plugins, gameRelease);
+        public void Unload() => inner.Unload();
+        public PluginResponse CreatePlugin(string name, string path, string origin) => inner.CreatePlugin(name, path, origin);
+        public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);
+        public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
+        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) =>
+            inner.RereadPlugin(plugin, newPath, newOrigin);
+        public Task ReindexPlugin(string plugin) => inner.ReindexPlugin(plugin);
+        public Task ReindexPlugins(IReadOnlyList<string> plugins) => inner.ReindexPlugins(plugins);
+        public void SetFilter(string sql) => inner.SetFilter(sql);
+        public void ClearFilter() => inner.ClearFilter();
+        public void ReapplyFilter() => inner.ReapplyFilter();
     }
 
     // ---- AC2: an embedded child ----
