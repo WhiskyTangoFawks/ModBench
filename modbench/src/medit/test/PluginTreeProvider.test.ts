@@ -97,6 +97,8 @@ function makeRepository(overrides: Partial<{
     getRecordOwner: vi.fn(),
     // #427: the tree provider never renumbers either — same "whole surface, unused here" note.
     peekNextFreeFormKey: vi.fn(),
+    // #494: the tree provider never copies either — same "whole surface, unused here" note.
+    getRecordOverridePlugins: vi.fn(),
   };
 }
 

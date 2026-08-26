@@ -38,17 +38,19 @@ function makePlugins(count: number): PluginMetadata[] {
 function makeClient({
   plugins = makePlugins(2),
   createPluginOk = true,
-  copyRecordOk = true,
   createRecordOk = true,
   deleteRecordOk = true,
   renumberRecordOk = true,
+  copyAsOverrideOk = true,
+  copyAsNewRecordOk = true,
 }: {
   plugins?: PluginMetadata[];
   createPluginOk?: boolean;
-  copyRecordOk?: boolean;
   createRecordOk?: boolean;
   deleteRecordOk?: boolean;
   renumberRecordOk?: boolean;
+  copyAsOverrideOk?: boolean;
+  copyAsNewRecordOk?: boolean;
 } = {}) {
   return {
     GET: vi.fn().mockResolvedValue({ data: plugins, response: { ok: true } }),
@@ -59,9 +61,6 @@ function makeClient({
             ? { response: { ok: true, status: 200 }, data: { name: 'test.esp' } }
             : drainedError(400, 'Bad Request'),
         );
-      }
-      if (path === '/records/{formKey}/copy-to/{targetPlugin}') {
-        return Promise.resolve(copyRecordOk ? { response: { ok: true, status: 200 } } : drainedError(400, 'Copy failed'));
       }
       // #427: create/delete/renumber — the wire shapes RecordEndpoints/PluginEndpoints actually
       // serve (RecordCreateResponse/RecordDeleteResponse/RecordRenumberResponse), not the retired
@@ -84,6 +83,24 @@ function makeClient({
         return Promise.resolve(
           renumberRecordOk
             ? { response: { ok: true, status: 200 }, data: { applied: true, oldFormKey: '000801:MyPatch.esp', newFormKey: '000802:MyPatch.esp' } }
+            : drainedError(422, 'Unprocessable Content'),
+        );
+      }
+      // #436/#494 — the two restored copy gestures' real wire shapes (RecordCopyAsOverrideResponse/
+      // RecordCopyAsNewRecordResponse), not the single retired /copy-to/{targetPlugin} endpoint
+      // (RetiredEditingWireSurfaceTests.cs pins that route absent — these are new shapes, not a
+      // resurrection of it).
+      if (path === '/records/{formKey}/copy-as-override') {
+        return Promise.resolve(
+          copyAsOverrideOk
+            ? { response: { ok: true, status: 200 }, data: { applied: true, formKey: '000801:MyPatch.esp' } }
+            : drainedError(422, 'Unprocessable Content'),
+        );
+      }
+      if (path === '/records/{formKey}/copy-as-new-record') {
+        return Promise.resolve(
+          copyAsNewRecordOk
+            ? { response: { ok: true, status: 200 }, data: { applied: true, sourceFormKey: '000801:MyPatch.esp', newFormKey: '000802:MyPatch.esp' } }
             : drainedError(422, 'Unprocessable Content'),
         );
       }
@@ -184,9 +201,109 @@ describe('SessionController.createPlugin', () => {
   });
 });
 
-// ── copyRecordTo ──────────────────────────────────────────────────────────────
+// ── copyRecordAsOverride / copyRecordAsNewRecord (#436/#494) ──────────────────
 
-// ── copyAsNewRecord ───────────────────────────────────────────────────────────
+describe('SessionController.copyRecordAsOverride', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the source/destination plugin+origin and refreshes the tree', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const ok = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+
+    expect(ok).toBe(true);
+    expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/copy-as-override', {
+      params: { path: { formKey: '000801:Fallout4.esm' } },
+      body: { sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', destinationPlugin: 'MyPatch.esp', destinationOrigin: 'ModA' },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('surfaces a refusal and reports that it did not happen', async () => {
+    const client = makeClient({ copyAsOverrideOk: false });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:Fallout4.esm'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
+
+describe('SessionController.copyRecordAsNewRecord', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the source/destination plugin+origin with a null requestedFormKey, refreshes the tree, and returns the new FormKey', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const newFormKey = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+
+    expect(newFormKey).toBe('000802:MyPatch.esp');
+    expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/copy-as-new-record', {
+      params: { path: { formKey: '000801:Fallout4.esm' } },
+      body: {
+        sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', destinationPlugin: 'MyPatch.esp', destinationOrigin: 'ModA',
+        requestedFormKey: null,
+      },
+    });
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  it('passes an explicit requested FormKey through, xEdit\'s typed-FormID path', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA', '000900:MyPatch.esp');
+
+    expect(deps.client.POST).toHaveBeenCalledWith('/records/{formKey}/copy-as-new-record', {
+      params: { path: { formKey: '000801:Fallout4.esm' } },
+      body: {
+        sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', destinationPlugin: 'MyPatch.esp', destinationOrigin: 'ModA',
+        requestedFormKey: '000900:MyPatch.esp',
+      },
+    });
+  });
+
+  it('surfaces a refusal and reports that it did not happen', async () => {
+    const client = makeClient({ copyAsNewRecordOk: false });
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const newFormKey = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+
+    expect(newFormKey).toBeUndefined();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:Fallout4.esm'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const newFormKey = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
+
+    expect(newFormKey).toBeUndefined();
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+  });
+});
 
 // ── setFilter ─────────────────────────────────────────────────────────────────
 

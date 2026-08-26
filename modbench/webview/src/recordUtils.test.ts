@@ -19,6 +19,7 @@ import {
   vmadScriptsContext,
   vmadScriptContext,
   vmadPropertyContext,
+  headerCellContext,
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride } from './types';
@@ -395,6 +396,26 @@ describe('vmadScriptsContext / vmadScriptContext / vmadPropertyContext', () => {
     expect(vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'MyScript', 'Health')).toEqual({
       webviewSection: 'vmadProperty', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       scriptName: 'MyScript', propName: 'Health', preventDefaultContextMenuItems: true,
+    });
+  });
+});
+
+// #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as the column header's own
+// native context — unconditional on the column's own read-only-ness, since copying *from* an
+// immutable/vanilla column is the headline use case, unlike every row-scoped context above.
+describe('headerCellContext', () => {
+  it('identifies the header cell, carrying the column\'s own record identity', () => {
+    expect(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA')).toEqual({
+      webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('combines like every other context, for a header cell that one day carries more than one', () => {
+    const result = combineVscodeContexts(headerCellContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA'));
+    expect(JSON.parse(result!)).toEqual({
+      webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      preventDefaultContextMenuItems: true,
     });
   });
 });

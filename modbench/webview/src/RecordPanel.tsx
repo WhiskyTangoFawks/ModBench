@@ -4,6 +4,7 @@ import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, parseElementIndex, collidingFilenames,
   getAtPath, setAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultElementValue,
+  headerCellContext, combineVscodeContexts,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
@@ -554,6 +555,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
+                        // #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as
+                        // this column's native right-click menu — unconditional on isImmutable/
+                        // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
+                        // case, not one to gate out.
+                        vscodeContext={combineVscodeContexts(
+                          headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
+                        )}
                       />
                     </th>
                   );

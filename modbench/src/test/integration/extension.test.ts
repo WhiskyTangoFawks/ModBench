@@ -383,6 +383,11 @@ describe('modbench command registration', () => {
     'modbench.record.create',
     'modbench.record.delete',
     'modbench.record.renumber',
+    // #436/#494: Copy as Override Into…/Copy as New Record Into… — restored on both the plugins-
+    // tree record row and the record editor's own column header, sharing one implementation path.
+    // Gated and hidden from the palette the same way, for the same reason.
+    'modbench.record.copyAsOverride',
+    'modbench.record.copyAsNewRecord',
   ];
 
   it('registers all expected commands on activation', async () => {
