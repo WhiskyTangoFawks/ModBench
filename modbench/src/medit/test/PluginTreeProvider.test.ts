@@ -274,7 +274,7 @@ describe('PluginTreeProvider.loadMore', () => {
 
 describe('PluginTreeProvider.loadMoreInterior', () => {
   it('renders an ErrorNode alongside the retry affordance when a page fetch fails, preserving already-loaded items', async () => {
-    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0 }];
+    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }];
     const repo = makeRepository();
     (repo.getInteriorCells as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ items: firstPage, total: 2 })
@@ -296,8 +296,8 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
   });
 
   it('clears the ErrorNode on a successful retry', async () => {
-    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0 }];
-    const secondPage = [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0 }];
+    const firstPage = [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }];
+    const secondPage = [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false }];
     const repo = makeRepository();
     (repo.getInteriorCells as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ items: firstPage, total: 2 })
@@ -615,7 +615,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
       topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
-      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5 }] }] }],
+      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
     const [wsRoot] = await provider.getPluginChildren('Plugin0.esp');
@@ -663,7 +663,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 });
+    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false });
 
     const groups = await provider.getChildren(cellNode);
     expect(groups).toHaveLength(1); // only persistent (temporary empty)
@@ -677,7 +677,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   it('paginates interior cells with a load-more node', async () => {
     const repo = makeRepository();
     (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
-      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0 }],
+      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }],
       total: 60,
     });
     const provider = new PluginTreeProvider(repo);
@@ -780,7 +780,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchCellGroups: renders an error node when getCellReferences fails', async () => {
     const repo = { ...makeRepository(), getCellReferences: vi.fn().mockRejectedValue(new Error('boom')) };
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 });
+    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false });
 
     const children = await provider.getChildren(node);
 
@@ -835,7 +835,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
     const repo = makeRepository();
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
       topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
-      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5 }] }] }],
+      blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
     const node = new WorldspaceNode('Shared.esp', { formKey: 'wrld:M.esp', editorId: 'World' }, 'ModB');
@@ -858,7 +858,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 }, 'ModB');
+    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }, 'ModB');
 
     const [groupNode] = await provider.getChildren(node) as PlacedGroupNode[];
     expect(repo.getCellReferences).toHaveBeenCalledWith('Shared.esp', 'c:M.esp', 'ModB');
@@ -871,7 +871,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
   it('fetchInteriorCells: asks the repository for the node\'s own copy, and the CellNodes it builds carry that origin forward', async () => {
     const repo = makeRepository();
     (repo.getInteriorCells as ReturnType<typeof vi.fn>).mockResolvedValue({
-      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0 }],
+      items: [{ formKey: 'i:M.esp', editorId: 'IntCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }],
       total: 1,
     });
     const provider = new PluginTreeProvider(repo);
@@ -889,7 +889,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
   it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
-    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0 };
+    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false };
     const fromA = new CellNode('Shared.esp', cell, 'ModA');
     const fromB = new CellNode('Shared.esp', cell, 'ModB');
 
@@ -914,8 +914,8 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
   it('loadMoreInterior: keeps asking the repository for the node\'s own copy on the next page', async () => {
     const repo = makeRepository();
     (repo.getInteriorCells as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0 }], total: 2 })
-      .mockResolvedValueOnce({ items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0 }], total: 2 });
+      .mockResolvedValueOnce({ items: [{ formKey: 'i0:M.esp', editorId: 'IntCell0', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }], total: 2 })
+      .mockResolvedValueOnce({ items: [{ formKey: 'i1:M.esp', editorId: 'IntCell1', cellX: 1, cellY: 0, isPersistentWorldspaceCell: false }], total: 2 });
     const provider = new PluginTreeProvider(repo);
     const node = new InteriorCellsNode('Shared.esp', 'ModB');
     const firstChildren = await provider.getChildren(node);

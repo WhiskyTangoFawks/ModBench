@@ -130,10 +130,14 @@ export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
     // xEdit's TwbMainRecord.GetDisplayName CELL branch (wbImplementation.pas): the worldspace's own
-    // persistent cell (container group type 1) is always '<Persistent Worldspace Cell>'; an
-    // exterior cell (has grid coordinates) is always '<x, y>', regardless of its own EditorID —
-    // xEdit only ever consults the record's FULL name there, never EDID. An interior cell (no grid
-    // coordinates, out of scope for #251) keeps the EditorID-or-FormKey fallback.
+    // persistent cell (container group type 1) is always '<Persistent Worldspace Cell>'; otherwise
+    // xEdit checks the record's FULL name first and only falls into the '<x, y>' grid format when
+    // that's empty. CellSummary carries no FULL-name field at all today, so an exterior cell (has
+    // grid coordinates) always uses the coordinate format here regardless of its own EditorID —
+    // never EDID either way, but also not the FULL-name-first precedence xEdit actually has. Known
+    // gap, not a deliberate divergence; a FULL-name field is new scope (DTO + backend plumbing)
+    // beyond #251's AC. An interior cell (no grid coordinates, out of scope for #251) keeps the
+    // EditorID-or-FormKey fallback.
     const label = cell.isPersistentWorldspaceCell
       ? '<Persistent Worldspace Cell>'
       : cell.cellX != null

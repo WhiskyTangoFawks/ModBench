@@ -168,10 +168,10 @@ export interface CellSummary {
   cellX: number | null;
   cellY: number | null;
   // #251: xEdit's "<Persistent Worldspace Cell>" — the tree provider's label logic reads this
-  // instead of inferring it from which field of WorldspaceBlocks a cell arrived in. Optional
-  // (defaults falsy) like the generated schema's own field — only the worldspace's own TopCell
-  // ever sets it.
-  isPersistentWorldspaceCell?: boolean;
+  // instead of inferring it from which field of WorldspaceBlocks a cell arrived in. Required, like
+  // its siblings above: the backend always emits it (toCellSummary normalizes the generated
+  // schema's own optional field to a concrete boolean at the repository boundary).
+  isPersistentWorldspaceCell: boolean;
 }
 
 export interface PlacedSummary {
