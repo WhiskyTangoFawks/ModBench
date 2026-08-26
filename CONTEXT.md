@@ -48,6 +48,12 @@
 
 **Winning override**: Last override in plugin load order — what the game actually uses. _Avoid: active record, final record._
 
+**Container record**: A record whose plugin form owns a child group — CELL, WRLD, DIAL, QUST — so its children (placed refs, landscape, navmeshes, exterior cells, INFOs, scenes) can only exist in a plugin that also carries the container itself. A copy of a child therefore always lands its container too (as a Partial Form when nothing else was asked for). In Source, a cell's children are embedded inline in the cell's document; quest and topic children are folder-split. _Avoid: parent record (ambiguous with a master), group record (the GRUP, not the record)._
+
+**Partial Form**: Record-header flag (bit 14, `0x4000`; CELL, WRLD, DIAL, QUST across Skyrim, FO4 and Starfield) marking an override that exists only to carry children — its own fields are ignored for conflict resolution, which falls through to the previous non-partial override, and xEdit hides it in conflict display. Modbench sets it on any container override it auto-creates, treats such records as read-only except the record header, and excludes their fields from conflict detection (#440). _Avoid: empty override, ITM parent._
+
+**Deep copy**: Copy-as-override of a container record together with its whole child group (xEdit "Deep copy as override into…"); a plain copy of a container takes its own fields only, with empty child lists. A distinct menu entry offered only for container records, never a prompt. _Avoid: recursive copy, copy with children._
+
 **ITM (Identical to Master)**: Override byte-for-byte equal to the master; wastes a load-order slot with no effect. _Avoid: clean record._
 
 **ConflictAll**: Conflict classification for an override stack, computed at two independent scopes (#114, [ADR-0016](docs/adr/0016-two-axis-conflict-model.md)): **record-wide** (one value per record — drives the Plugins-tree's record-node badge) and **per-node, bottom-up** (one value per compare-grid row — a leaf reduces its own cross-plugin values; a struct/array node aggregates the worst state anywhere in its subtree, and shows that aggregate while collapsed but defers to its own children's individual values while expanded). Same values, same severity order, at both scopes — only the tree scope over which they're folded differs. Drives row background color at whichever scope applies. Values (ascending severity):
