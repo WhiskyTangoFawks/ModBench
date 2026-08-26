@@ -257,7 +257,7 @@ public sealed class SessionManager(
                 // failures, extended to this later indexing stage (Index() runs in its own DuckDB
                 // transaction, so the rollback on throw leaves no partial rows behind).
                 _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable this session", plugin.Name);
-                session.RecordIndexFailure(plugin.Name, ex.Message);
+                session.RecordIndexFailure(plugin.Name, PluginLoadFailure.ReasonFor(ex));
                 continue;
             }
 
@@ -349,8 +349,8 @@ public sealed class SessionManager(
             _logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
             session.RecordIndexFailure(plugin.Name,
-                $"Could not read this plugin's source tree ({ex.Message}). Showing the compiled binary " +
-                "instead — edits made since the last compile are not reflected.");
+                $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Showing the " +
+                "compiled binary instead — edits made since the last compile are not reflected.");
         }
 
         repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key);

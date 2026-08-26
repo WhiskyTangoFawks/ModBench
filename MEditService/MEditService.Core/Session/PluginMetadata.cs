@@ -32,4 +32,20 @@ public record PluginMetadata(
 
 /// <summary>A plugin that could not be loaded into the session (e.g. an unparseable record);
 /// it is skipped so the rest of the load order still loads, and reported here.</summary>
-public record PluginLoadFailure(string Name, string Reason);
+public record PluginLoadFailure(string Name, string Reason)
+{
+    /// <summary>#395: the reason a failure reports is never just the outer exception's message —
+    /// Mutagen typically wraps a parse error (which record, which subrecord, offset) naming the
+    /// actual cause several levels down the <see cref="Exception.InnerException"/> chain, and a
+    /// bare <c>ex.Message</c> discards exactly that detail. This flattens the whole chain,
+    /// outermost first, one line per level, each prefixed with its exception type name — every
+    /// call site that builds a <see cref="PluginLoadFailure"/> from a caught exception goes
+    /// through here rather than reading <c>ex.Message</c> directly.</summary>
+    public static string ReasonFor(Exception ex)
+    {
+        var lines = new List<string>();
+        for (Exception? current = ex; current is not null; current = current.InnerException)
+            lines.Add($"{current.GetType().Name}: {current.Message}");
+        return string.Join('\n', lines);
+    }
+}

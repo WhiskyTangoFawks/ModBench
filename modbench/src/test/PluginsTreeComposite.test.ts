@@ -14,6 +14,9 @@ vi.mock('vscode', () => ({
     }
   },
   ThemeIcon: class {
+    constructor(public id: string, public color?: unknown) {}
+  },
+  ThemeColor: class {
     constructor(public id: string) {}
   },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
@@ -418,6 +421,9 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
+    // #395: the same red the Problems panel uses, not the plain foreground color a colorless
+    // ThemeIcon renders in — otherwise indistinguishable at a glance in a large load order.
+    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
     expect(item.tooltip).toContain('Missing master: Ghost.esm');
   });
 
@@ -519,11 +525,16 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    // #395: the reason can be a multi-line exception-chain summary (GameSession.PluginLoadFailure
+    // now joins outer through innermost message) — the tooltip must carry every line, readably.
+    const reason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', reason]]));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
-    expect(item.tooltip).toContain('Failed to load: Malformed record');
+    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    expect(item.tooltip).toContain('Failed to load: InvalidOperationException: Malformed record');
+    expect(item.tooltip).toContain('FormatException: bad subrecord at offset 12');
   });
 
   // AC2: the row stays put — plugins.txt still lists it — but it never got indexed, so it's

@@ -239,7 +239,7 @@ public sealed class GameSession : IGameSession
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[{Index}] Failed to load plugin {FileName}; skipping", i, fileName);
-                AddLoadFailure(new PluginLoadFailure(fileName, ex.Message));
+                AddLoadFailure(new PluginLoadFailure(fileName, PluginLoadFailure.ReasonFor(ex)));
                 mod?.Dispose();
             }
 
