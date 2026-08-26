@@ -29,6 +29,22 @@ public class SessionManagerTests(TestPluginFixture fixture)
             modImporter: modImporter);
     }
 
+    // #445: an explicit request for a release this build doesn't carry the Mutagen assembly for
+    // (SkyrimSE, genuinely unreferenced here — see SchemaReflectorAvailabilityTests) must refuse
+    // with a typed, actionable exception rather than a raw FileNotFoundException surfacing from
+    // deep inside DuckDbRecordIndex.Initialize. The FO4 fixture's data is irrelevant: the throw
+    // happens in IndexAndStore before any plugin is opened.
+    [Fact]
+    public void Load_ForUnsupportedGameRelease_ThrowsUnsupportedGameReleaseException()
+    {
+        using var manager = MakeManager();
+
+        var ex = Assert.Throws<UnsupportedGameReleaseException>(
+            () => manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.SkyrimSE));
+
+        Assert.Contains("SkyrimSE", ex.Message);
+    }
+
     [Fact]
     public void Load_DelegatesToFactory()
     {

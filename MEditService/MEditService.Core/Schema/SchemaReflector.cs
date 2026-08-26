@@ -49,19 +49,56 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private readonly ConcurrentDictionary<GameCategory, GameSchemaCache> _cache = new();
 
-    public IReadOnlyDictionary<string, RecordTableSchema> GetSchemas(GameRelease release) =>
-        GetCache(release.ToCategory()).Schemas;
+    // #445: keyed by category (not release) because the assembly is category-wide — a `null` entry
+    // means that category's assembly was probed once and found unreferenced, cached so a repeated
+    // ask never re-attempts the load or re-logs the warning below.
+    private readonly ConcurrentDictionary<GameCategory, Assembly?> _assemblyByCategory = new();
 
-    private GameSchemaCache GetCache(GameCategory category) =>
-        _cache.GetOrAdd(category, c => BuildForCategory(c, _logger));
-
-    private static GameSchemaCache BuildForCategory(GameCategory category, ILogger logger)
+    public IReadOnlyDictionary<string, RecordTableSchema> GetSchemas(GameRelease release)
     {
-        var assemblyName = $"Mutagen.Bethesda.{category}";
-        var assembly = AppDomain.CurrentDomain.GetAssemblies()
-                           .FirstOrDefault(a => a.GetName().Name == assemblyName)
-                       ?? Assembly.Load(assemblyName);
+        var category = release.ToCategory();
+        var assembly = ResolveAssembly(release, category)
+            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
+        return GetCache(category, assembly).Schemas;
+    }
 
+    /// <inheritdoc />
+    public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
+
+    private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
+
+    // The one place that probes whether a category's Mutagen assembly is loadable. Never throws:
+    // a `FileNotFoundException` from `Assembly.Load` means "not referenced in this build", which is
+    // reported (cached `null`, one warning) rather than propagated — GetSchemas is what turns an
+    // unsupported category into a typed refusal for a caller that actually needs one.
+    private Assembly? ResolveAssembly(GameRelease release, GameCategory category) =>
+        _assemblyByCategory.GetOrAdd(category, c => ProbeAssembly(release, c, _logger));
+
+    private static Assembly? ProbeAssembly(GameRelease release, GameCategory category, ILogger logger)
+    {
+        var assemblyName = AssemblyNameFor(category);
+        var loaded = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(a => a.GetName().Name == assemblyName);
+        if (loaded != null) return loaded;
+
+        try
+        {
+            return Assembly.Load(assemblyName);
+        }
+        catch (FileNotFoundException ex)
+        {
+            logger.LogWarning(ex,
+                "Game release {Release} is unavailable: Mutagen assembly {AssemblyName} is not referenced in this build",
+                release, assemblyName);
+            return null;
+        }
+    }
+
+    private GameSchemaCache GetCache(GameCategory category, Assembly assembly) =>
+        _cache.GetOrAdd(category, c => BuildForCategory(c, assembly, _logger));
+
+    private static GameSchemaCache BuildForCategory(GameCategory category, Assembly assembly, ILogger logger)
+    {
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
@@ -1523,4 +1560,38 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     [GeneratedRegex("(?<=[a-z0-9])([A-Z])")]
     private static partial Regex SnakeCaseBoundary();
+}
+
+/// <summary>
+/// Thrown by <see cref="ISchemaReflector.GetSchemas"/> when a game release's backing Mutagen
+/// record-type assembly is not referenced by this build (#445) — e.g. requesting Skyrim before
+/// #423 adds <c>Mutagen.Bethesda.Skyrim</c>. Distinguishes "this release isn't compiled in" from
+/// Mutagen's own <see cref="FileNotFoundException"/>, which is not an actionable message for a
+/// caller. <see cref="ISchemaReflector.IsSupported"/> is the non-throwing check discovery should
+/// use instead of catching this.
+/// </summary>
+public sealed class UnsupportedGameReleaseException : Exception
+{
+    // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
+    // callers generally — not how SchemaReflector itself throws this (see the release-based
+    // constructor below), which builds a specific, actionable message naming the missing assembly.
+    public UnsupportedGameReleaseException()
+    {
+    }
+
+    public UnsupportedGameReleaseException(string message) : base(message)
+    {
+    }
+
+    public UnsupportedGameReleaseException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    internal UnsupportedGameReleaseException(GameRelease release, string assemblyName)
+        : base($"Game release '{release}' is not supported by this build: the Mutagen assembly '{assemblyName}' is not referenced.")
+    {
+        Release = release;
+    }
+
+    public GameRelease Release { get; }
 }
