@@ -405,8 +405,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the array's expand state, matching xEdit — the retired "+" button's expanded-only visibility was
   that button's own rendering choice, not a functional rule. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
   sort key, so the entries are absent, not merely disabled. All three ops write the **whole
-  array** as a single field edit (same path as an element-value edit — a complex field is always
-  edited atomically, CONTEXT.md), and only on non-immutable columns. There is no free drag-reorder
+  array** as a single field edit — the atomic complex-field write CONTEXT.md describes — and only
+  on non-immutable columns. An element-**value** edit is offered on the same cell but does not
+  currently share this path: nothing reconstructs the array first, so the write is silently lost
+  rather than landing atomically (known defect, #503). There is no free drag-reorder
   and no auto-sort. A VMAD array-of-scalars
   property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
@@ -731,12 +733,18 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    resolution, not a well-formedness proxy, so a dangling reference (one pointing outside the
    index) no longer looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
-   per-session, not persisted across restarts. Array **element values** are editable
-   everywhere. Array **arity and order** are editable for **unsorted** arrays (add / remove /
-   move-up / move-down, swap-based, on non-immutable columns) and **absent** for sorted
-   (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — a VMAD array-of-scalars property
-   reuses this exact machinery (#231); VMAD's own struct/structList element ops are described
-   under *VMAD and Conditions are ordinary rows in the one tree* above.
+   per-session, not persisted across restarts. Array **element values** offer the inline-edit
+   gesture everywhere (plain and struct-element arrays alike), but committing one is a **known
+   defect** (#503): the cell accepts the value and reports success, yet the write never reaches
+   the source document — silently, with no error and no working-tree change. Nothing on the
+   current write path reconstructs the array's (or struct-array element's) whole value before
+   the commit, the reconstruction CONTEXT.md's Complex-field entry's atomic-write model requires
+   for a per-element gesture. Array **arity and order** are editable for **unsorted** arrays (add
+   / remove / move-up / move-down, swap-based, on non-immutable columns) and **absent** for
+   sorted (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — these ops are unaffected
+   by #503, since they already reconstruct the whole array before writing. A VMAD array-of-scalars
+   property reuses this exact machinery (#231); VMAD's own struct/structList element
+   ops are described under *VMAD and Conditions are ordinary rows in the one tree* above.
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
    change already overlaid (#413); there is no separate pending/dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
