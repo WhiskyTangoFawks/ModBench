@@ -45,6 +45,34 @@ public class SessionManagerTests(TestPluginFixture fixture)
         Assert.Contains("SkyrimSE", ex.Message);
     }
 
+    // #400: distinct from Load_ForUnsupportedGameRelease above, which fails *before* IndexAndStore
+    // publishes. Faulting UpdateWinners fails *after* publish, inside IndexAndStore's own catch
+    // (DisposeCurrentSession) — and with nothing after this call touching state (no follow-up
+    // Load/Unload), the assertions below observe that catch's own cleanup rather than a later call's
+    // masking it, which is exactly what the existing gated tests (UnloadMidLoad_..., ASecondLoadMidLoad_...)
+    // could not isolate.
+    [Fact]
+    public void Load_WhenUpdateWinnersFaultsMidLoad_LeavesNoSessionBehindImmediately()
+    {
+        var data = new PluginFixtureBuilder("solo-mid-load-failure")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+            var faulting = new FaultingUpdateWinnersRepositoryFactory(inner);
+            using var manager = new SessionManager(faulting);
+
+            Assert.Throws<InvalidOperationException>(() =>
+                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4));
+
+            Assert.Null(manager.Session);
+            Assert.Null(manager.Repository);
+            Assert.Equal(SessionState.None, manager.Status.State);
+        }
+    }
+
     [Fact]
     public void Load_DelegatesToFactory()
     {
@@ -353,6 +381,79 @@ public class SessionManagerTests(TestPluginFixture fixture)
         }
     }
 
+    // --- #400: LoadUnlistedPlugin's loadOrderIndex fallback ---
+    //
+    // The filter test above is the only unit test that ever drives LoadUnlistedPlugin against a real
+    // SessionManager, and it never asserts the resulting LoadOrderIndex — it only checks filter
+    // behavior, and it only ever takes the "no shadowing copy, session non-empty" branch of the
+    // fallback. The matched-shadow-copy branch (`.Where(...).First()` finding a same-named load-order
+    // plugin) and the "session has zero load-order plugins" branch were reachable only through the
+    // MEDIT_SMOKE=1-gated smoke test. These three pin all three paths by asserting the index itself.
+
+    [Fact]
+    public void LoadUnlistedPlugin_ShadowedByALoadOrderCopy_SharesItsLoadOrderIndex()
+    {
+        var data = new PluginFixtureBuilder("load-unlisted-shadow")
+            .WithPlugin("Base.esp")
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var loadOrderIndex = manager.Session!.Plugins
+                .Single(p => p.InLoadOrder && p.Name == "Base.esp").LoadOrderIndex;
+
+            // A second physical copy of the same filename, from a different mod folder — the
+            // "shadowed" case LoadUnlistedPlugin exists for (docs on the method itself).
+            var shadowFolder = Path.Combine(data.DataFolder, "ShadowMod");
+            Directory.CreateDirectory(shadowFolder);
+            new Fallout4Mod(ModKey.FromFileName("Base.esp"), Fallout4Release.Fallout4)
+                .WriteToBinary(Path.Combine(shadowFolder, "Base.esp"));
+
+            var result = manager.LoadUnlistedPlugin(Path.Combine(shadowFolder, "Base.esp"), "ShadowMod");
+
+            Assert.Equal(loadOrderIndex, result.LoadOrderIndex);
+        }
+    }
+
+    [Fact]
+    public void LoadUnlistedPlugin_NoLoadOrderCopyOfItsName_UsesOnePastTheHighestLoadOrderIndex()
+    {
+        var data = new PluginFixtureBuilder("load-unlisted-no-match")
+            .WithPlugin("Base.esp")
+            .WithPlugin("Second.esp")
+            .WithPlugin("Unlisted.esp", listed: false)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var maxLoadOrderIndex = manager.Session!.Plugins.Where(p => p.InLoadOrder).Max(p => p.LoadOrderIndex);
+
+            var result = manager.LoadUnlistedPlugin(Path.Combine(data.DataFolder, "Unlisted.esp"), "SomeMod");
+
+            Assert.Equal(maxLoadOrderIndex + 1, result.LoadOrderIndex);
+        }
+    }
+
+    [Fact]
+    public void LoadUnlistedPlugin_SessionHasNoLoadOrderPlugins_UsesIndexZero()
+    {
+        var data = new PluginFixtureBuilder("load-unlisted-empty-session")
+            .WithPlugin("Unlisted.esp", listed: false)
+            .Build();
+        using (data)
+        {
+            using var manager = MakeManager();
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            Assert.Empty(manager.Session!.Plugins);
+
+            var result = manager.LoadUnlistedPlugin(Path.Combine(data.DataFolder, "Unlisted.esp"), "SomeMod");
+
+            Assert.Equal(0, result.LoadOrderIndex);
+        }
+    }
+
     // Review finding #1: SetFilter runs raw SQL, so its re-run inside ReapplyFilter can fault for
     // reasons SetFilter's own initial validation never saw — and by the time any of ReapplyFilter's
     // 8 call sites reaches it, the write it followed is already durable. It must degrade to a stale
@@ -432,6 +533,19 @@ public class SessionManagerTests(TestPluginFixture fixture)
     // concrete DbException the catch clause can be proven against from outside it. The catch is typed
     // on the DbException base, so which concrete subtype arrives is not the thing under test here.
     private sealed class FakeDbFault(string message) : System.Data.Common.DbException(message);
+
+    // #400: UpdateWinners runs once, after IndexProgressively's per-plugin loop — faulting it fails
+    // the load synchronously, on the calling thread, after publish, with no gate/thread coordination
+    // needed to isolate IndexAndStore's own catch (DisposeCurrentSession) from a later call's cleanup.
+    private sealed class FaultingUpdateWinnersRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
+    {
+        public IRecordIndex Create(GameRelease gameRelease) => new FaultingUpdateWinnersRepository(inner.Create(gameRelease));
+    }
+
+    private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)
+    {
+        public override void UpdateWinners() => throw new InvalidOperationException("simulated mid-load winner-sweep fault");
+    }
 
 
 
