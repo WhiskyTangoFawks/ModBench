@@ -98,7 +98,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Working-tree change**: An edit not yet committed — ordinary git dirt in the source, shown by the native Source Control panel per tracked mod. This is the only "pending" state that exists; the staged pending-change model and change groups are retired (ADR-0041 superseding ADR-0017/0028). _Avoid: pending change, staged edit, change group._
 
-**Complex field**: Field of type `array` or `struct`. Always edited as one atomic value — a field-level write to the source document, never per-element; revert is all-or-nothing at the column level. _Avoid: compound field, nested field._
+**Complex field**: Field of type `array` or `struct`. Always edited as one atomic value — a field-level write to the source document, never per-element; revert is all-or-nothing at the column level. Array arity/order ops (add / remove / move-up / move-down) correctly perform this atomic write today, reconstructing the whole array before committing. A **value** edit on an existing array or struct-array element does not: the grid offers the per-element gesture and reports success, but nothing reconstructs the field's whole value first, so the write silently never reaches the source document — known defect, #503. _Avoid: compound field, nested field._
 
 **Sorted array**: Array with a stable sort key (e.g. `Keywords`, `Perks`, keyed by FormKey). In compare grid: elements aligned by sort key across columns. See ADR-0019. _Avoid: keyed array._
 
