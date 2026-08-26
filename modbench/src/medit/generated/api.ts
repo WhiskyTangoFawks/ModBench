@@ -633,6 +633,7 @@ export interface components {
             /** Format: int32 */
             cellY?: number | null;
             isPersistentWorldspaceCell?: boolean;
+            fullName?: string | null;
         };
         CellSummaryPagedResult: {
             items?: components["schemas"]["CellSummary"][] | null;

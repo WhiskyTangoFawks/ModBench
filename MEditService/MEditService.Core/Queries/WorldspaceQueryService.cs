@@ -60,7 +60,7 @@ public sealed class WorldspaceQueryService(ISessionManager session, ILogger<Worl
                 worldspaceFormKey, plugin, origin, topCellRows.Count);
         }
         var topCells = topCellRows
-            .Select((c, i) => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0))
+            .Select((c, i) => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0, FullName: c.FullName))
             .ToList();
 
         var blocks = cells
@@ -74,7 +74,7 @@ public sealed class WorldspaceQueryService(ISessionManager session, ILogger<Worl
                     .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
                     .Select(subGroup => new WorldspaceSubBlockDto(
                         subGroup.Key.X, subGroup.Key.Y,
-                        [.. subGroup.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY))]))]))
+                        [.. subGroup.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, FullName: c.FullName))]))]))
             .ToList();
 
         return new WorldspaceBlocks(blocks, topCells);

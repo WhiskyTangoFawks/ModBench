@@ -311,4 +311,23 @@ public class WorldspaceQueryServiceTests
         Assert.True(result.TopCells[0].IsPersistentWorldspaceCell);
         Assert.False(result.TopCells[1].IsPersistentWorldspaceCell);
     }
+
+    // #497: GetWorldspaceCells's repository row carries a FULL name independently of grid
+    // coordinates / persistence — this pins that GetWorldspaceBlocks actually forwards it into both
+    // CellSummary construction sites (TopCells and a block/sub-block's Cells) rather than dropping
+    // it on the floor. The tree-provider label precedence itself is a frontend concern; this only
+    // proves the DTO field survives this hop.
+    [Fact]
+    public void GetWorldspaceBlocks_ForwardsFullNameOntoCellSummary_ForTopCellsAndBlockCells()
+    {
+        var svc = Service([
+            new CellLocationSummary("top:M.esp", "TopCell", null, null, null, null, 0, 0, "Sanctuary Hills"),
+            new CellLocationSummary("aaa:M.esp", "CellA", 0, 0, 0, 0, 1, 1, "Concord"),
+        ]);
+
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+
+        Assert.Equal("Sanctuary Hills", result.TopCells[0].FullName);
+        Assert.Equal("Concord", result.Blocks[0].SubBlocks[0].Cells[0].FullName);
+    }
 }

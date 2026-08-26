@@ -568,14 +568,14 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const result = await repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C');
 
     expect(result).toEqual({
-      topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
+      topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, fullName: null }],
       blocks: [{
         x: 1,
         y: -1,
         subBlocks: [{
           x: 2,
           y: -2,
-          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }],
+          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, fullName: null }],
         }],
       }],
     });
@@ -638,7 +638,7 @@ describe('ApiPluginRepository.getInteriorCells', () => {
     const result = await repo.getInteriorCells('Plugin.esp', 50, 25);
 
     expect(result).toEqual({
-      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false }],
+      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, fullName: null }],
       total: 42,
     });
     expect(client.GET).toHaveBeenCalledWith(

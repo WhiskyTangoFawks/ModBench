@@ -2005,8 +2005,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private List<CellLocationSummary> GetWorldspaceCells(string records, string plugin, string worldspaceFormKey, string origin)
     {
         using var cmd = Connection.CreateCommand();
+        // #497: full_name is read straight out of the joined row's own JSON body rather than a
+        // stored column the way editor_id is — this is the only consumer today, c.body is already
+        // in scope on every relation {records} resolves to, and promoting it to a stored column
+        // (mirroring editor_id's INSERT/UPDATE plumbing across every working-tree write path) is
+        // easy to do later if a second consumer ever needs it. '$.Name.Value' is what the codec
+        // emits for an *unlocalized* plugin's FULL subrecord (Mutagen's TranslatedString with a
+        // direct string) — a localized plugin (STRINGS-backed, e.g. an official master) serializes
+        // to '$.Name.Values' (a per-language array) instead, which this misses; the FULL name then
+        // reads as absent and this falls back to the grid/EditorID label, same as a cell with no
+        // FULL name at all, rather than surfacing the wrong string.
         cmd.CommandText = $"""
-            SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
+            SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
+                   json_extract_string(c.body, '$.Name.Value')
             FROM cell_location cl
             LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
@@ -2026,7 +2037,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 reader.IsDBNull(4) ? null : reader.GetInt32(4),
                 reader.IsDBNull(5) ? null : reader.GetInt32(5),
                 reader.IsDBNull(6) ? null : reader.GetInt32(6),
-                reader.IsDBNull(7) ? null : reader.GetInt32(7)));
+                reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8)));
         }
 
         return rows;
