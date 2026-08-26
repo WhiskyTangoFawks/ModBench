@@ -81,12 +81,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // already computes for each DiffRow's own `key=` below. Deliberately reset on LOAD_RECORD (a
   // different record has no "same cell" to keep focused — mirrors the result/allChanges resets
   // there) but left untouched by refresh() (same-record reload from staging or a background
-  // refresh, where the focused cell should survive — AC3). Issue #232: covers a pending-column
-  // cell too now, disambiguated from its same-plugin disk companion by FocusedCell's own
-  // `column` discriminant — handleFocusCell just forwards whatever DiffRow passes.
+  // refresh, where the focused cell should survive — AC3).
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
-  function handleFocusCell(rowKey: string, plugin: ColumnKey, column?: 'pending') {
-    setFocusedCell({ rowKey, plugin, column });
+  function handleFocusCell(rowKey: string, plugin: ColumnKey) {
+    setFocusedCell({ rowKey, plugin });
   }
   // Issue #3: collapsed plugin columns, keyed by column identity (#272: ColumnKey, not the bare
   // plugin name — two same-filename columns must collapse independently). Deliberately NOT reset

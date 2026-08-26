@@ -17,37 +17,28 @@ function sanitizeForPath(segment: string): string {
     .slice(0, 80) || '_';
 }
 
-// Issue #230 (seam: tab naming): deterministic — not random — per record+field+plugin(+column,
-// #242), so re-double-clicking the same cell reveals the same already-open tab (VS Code's own
-// per-URI reuse) instead of opening a duplicate. Directory keyed by the record (readable, and
-// groups a record's several open fields together); filename is what the tab title shows by
-// default — `Description [SomePlugin.esp].txt`, naming the field and the plugin without repeating
-// the record identity the directory already carries.
+// Issue #230 (seam: tab naming): deterministic — not random — per record+field+plugin, so
+// re-double-clicking the same cell reveals the same already-open tab (VS Code's own per-URI
+// reuse) instead of opening a duplicate. Directory keyed by the record (readable, and groups a
+// record's several open fields together); filename is what the tab title shows by default —
+// `Description [SomePlugin.esp].txt`, naming the field and the plugin without repeating the
+// record identity the directory already carries.
 //
-// Issue #242: `column` is the same disk/pending discriminant #232 gave `FocusedCell` — a pending
-// cell shares record+field+plugin exactly with its disk companion (a pending column only ever
-// exists alongside a disk column for the same plugin), so without a fourth axis here the two
-// would alias onto the same temp file/tab. Folded into the *filename*, not a new directory, so
-// the record's fields still group together on disk and the discriminant is also the one thing the
-// user sees (the tab title), telling apart two open tabs for the same field at a glance.
-//
-// #304 / ADR-0036: `origin` is its own directory segment, between the record and the field —
-// unlike `column` above, folded unconditionally, not into the filename. Two columns can now share
-// a filename (a shadowed copy), and without origin here they'd alias onto the same temp file:
-// column A's tab would silently show column B's content (right commit target — the closure is
-// bound in the webview — wrong displayed content). No "elide the Data origin" branch, unlike
-// columnKey()'s own convention: the directory is never what the user reads (the tab title stays
-// the plain filename, per ADR-0036 — "origin is never what the user reads"), so there is nothing
-// to keep quiet for the common single-origin case and no collision-dependent rule to get wrong.
-// Run through the same sanitizeForPath every other segment already gets — a mod folder name is a
-// real directory name MO2 already accepted, but on whatever filesystem created it, not
-// necessarily this one, and it can carry columnKey()'s own `|` delimiter.
+// #304 / ADR-0036: `origin` is its own directory segment, between the record and the field.
+// Two columns can share a filename (a shadowed copy), and without origin here they'd alias onto
+// the same temp file: column A's tab would silently show column B's content (right commit target
+// — the closure is bound in the webview — wrong displayed content). No "elide the Data origin"
+// branch, unlike columnKey()'s own convention: the directory is never what the user reads (the
+// tab title stays the plain filename, per ADR-0036 — "origin is never what the user reads"), so
+// there is nothing to keep quiet for the common single-origin case and no collision-dependent rule
+// to get wrong. Run through the same sanitizeForPath every other segment already gets — a mod
+// folder name is a real directory name MO2 already accepted, but on whatever filesystem created
+// it, not necessarily this one, and it can carry columnKey()'s own `|` delimiter.
 export function extendedEditorPath(
-  tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string, column?: 'pending',
+  tempRoot: string, recordLabel: string, fieldName: string, plugin: string, origin: string,
 ): string {
   const dir = join(tempRoot, sanitizeForPath(recordLabel), sanitizeForPath(origin));
-  const suffix = column === 'pending' ? ' (Pending)' : '';
-  const file = `${sanitizeForPath(fieldName)} [${sanitizeForPath(plugin)}]${suffix}.txt`;
+  const file = `${sanitizeForPath(fieldName)} [${sanitizeForPath(plugin)}].txt`;
   return join(dir, file);
 }
 
@@ -65,10 +56,6 @@ export interface OpenExtendedFieldEditorParams {
   // this message's shape too.
   origin: string;
   readOnly: boolean;
-  // Issue #242: FocusedCell's own disk/pending discriminant (#232), mirrored here — absent means
-  // the disk cell, `'pending'` its independent companion. See extendedEditorPath's own comment for
-  // why this can't be left out.
-  column?: 'pending';
 }
 
 export interface ExtendedFieldEditorDeps {
@@ -98,7 +85,7 @@ export interface ExtendedFieldEditorDeps {
 export async function openExtendedFieldEditor(
   params: OpenExtendedFieldEditorParams, deps: ExtendedFieldEditorDeps,
 ): Promise<void> {
-  const path = extendedEditorPath(deps.tempRoot, params.recordLabel, params.fieldName, params.plugin, params.origin, params.column);
+  const path = extendedEditorPath(deps.tempRoot, params.recordLabel, params.fieldName, params.plugin, params.origin);
   try {
     await mkdir(join(path, '..'), { recursive: true });
     // Issue #230 (review fix): the path is deterministic (same record+field+plugin -> same

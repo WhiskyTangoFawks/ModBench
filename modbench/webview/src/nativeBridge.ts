@@ -130,10 +130,6 @@ export function openExtendedFieldEditor(
     // one file. See messages.ts' OPEN_EXTENDED_EDITOR doc comment.
     origin: string;
     readOnly: boolean;
-    // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is
-    // every pre-#242 call site's own meaning, unchanged; the pending column's own call site is
-    // the one place that passes 'pending'.
-    column?: 'pending';
   },
   onCommit: (value: string) => void,
 ): void {

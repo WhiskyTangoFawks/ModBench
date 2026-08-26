@@ -146,9 +146,6 @@ export type WebviewToExtension =
       // segment) so two same-filename columns never alias onto one file.
       origin: string;
       readOnly: boolean;
-      // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is
-      // every call site's own meaning unless it's the pending column's own.
-      column?: 'pending';
     };
 
 // Issue #227 (#426 Track 4: restored): the shape of a `data-vscode-context` payload VS Code
