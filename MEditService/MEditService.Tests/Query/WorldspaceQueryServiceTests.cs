@@ -113,7 +113,7 @@ public class WorldspaceQueryServiceTests
 
         var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
 
-        Assert.Null(result.TopCell);
+        Assert.Empty(result.TopCells);
         Assert.Equal(2, result.Blocks.Count);
 
         var block00 = result.Blocks.Single(b => b is { X: 0, Y: 0 });
@@ -285,8 +285,30 @@ public class WorldspaceQueryServiceTests
 
         var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
 
-        Assert.NotNull(result.TopCell);
-        Assert.Equal("TopCell", result.TopCell!.EditorId);
+        Assert.Single(result.TopCells);
+        Assert.Equal("TopCell", result.TopCells[0].EditorId);
+        Assert.True(result.TopCells[0].IsPersistentWorldspaceCell);
         Assert.Single(result.Blocks);
+    }
+
+    // #251: GetWorldspaceBlocks used to pick the *first* block-less row as TopCell and build Blocks
+    // only from rows that had block coordinates — a second block-less row was in neither, silently
+    // dropped. Confirmed against the pre-fix code (SCRATCH_GetWorldspaceBlocks_TwoBlocklessCellRows_
+    // TodayOnlyOneIsReachable, since removed) that this really did drop data at runtime, not just in
+    // theory. Both rows must now be reachable, with only the first flagged as the persistent cell.
+    [Fact]
+    public void GetWorldspaceBlocks_TwoBlocklessCellRows_SurfacesBoth()
+    {
+        var svc = Service([
+            new CellLocationSummary("first:M.esp", "FirstBlockless", null, null, null, null, 0, 0),
+            new CellLocationSummary("second:M.esp", "SecondBlockless", null, null, null, null, 0, 0),
+        ]);
+
+        var result = svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp");
+
+        Assert.Equal(2, result.TopCells.Count);
+        Assert.Equal(new string?[] { "FirstBlockless", "SecondBlockless" }, result.TopCells.Select(c => c.EditorId).ToArray());
+        Assert.True(result.TopCells[0].IsPersistentWorldspaceCell);
+        Assert.False(result.TopCells[1].IsPersistentWorldspaceCell);
     }
 }

@@ -4,7 +4,10 @@ namespace MEditService.Core.Queries;
 
 public record WorldspaceSummary(string FormKey, string? EditorId);
 
-public record CellSummary(string FormKey, string? EditorId, int? CellX, int? CellY);
+// #251: IsPersistentWorldspaceCell — true for the single cell a Worldspace's own TopCell slot
+// names (xEdit's "<Persistent Worldspace Cell>"), so the tree provider's label derivation doesn't
+// have to infer it from which field of WorldspaceBlocks a cell arrived in.
+public record CellSummary(string FormKey, string? EditorId, int? CellX, int? CellY, bool IsPersistentWorldspaceCell = false);
 
 public record PlacedSummary(string FormKey, string? EditorId, string? BaseFormKey, string RecordType);
 
@@ -16,7 +19,11 @@ public record WorldspaceSubBlockDto(int X, int Y, IReadOnlyList<CellSummary> Cel
 
 public record WorldspaceBlockDto(int X, int Y, IReadOnlyList<WorldspaceSubBlockDto> SubBlocks);
 
-public record WorldspaceBlocks(IReadOnlyList<WorldspaceBlockDto> Blocks, CellSummary? TopCell);
+// #251: TopCells is a list, not a single nullable cell — a worldspace is only ever supposed to
+// have one block-less cell row (its TopCell), but GetWorldspaceBlocks surfaces every one it finds
+// rather than silently discarding anything past the first if the data is ever anomalous. Only the
+// first carries IsPersistentWorldspaceCell = true.
+public record WorldspaceBlocks(IReadOnlyList<WorldspaceBlockDto> Blocks, IReadOnlyList<CellSummary> TopCells);
 
 // Flat row returned by the repository for cells under a worldspace; the query service groups
 // these into blocks/sub-blocks. BlockX/Y and SubX/Y are null for a worldspace's TopCell.

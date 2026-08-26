@@ -632,6 +632,7 @@ export interface components {
             cellX?: number | null;
             /** Format: int32 */
             cellY?: number | null;
+            isPersistentWorldspaceCell?: boolean;
         };
         CellSummaryPagedResult: {
             items?: components["schemas"]["CellSummary"][] | null;
@@ -1089,7 +1090,7 @@ export interface components {
         };
         WorldspaceBlocks: {
             blocks?: components["schemas"]["WorldspaceBlockDto"][] | null;
-            topCell?: components["schemas"]["CellSummary"] | null;
+            topCells?: components["schemas"]["CellSummary"][] | null;
         };
         WorldspaceSubBlockDto: {
             /** Format: int32 */

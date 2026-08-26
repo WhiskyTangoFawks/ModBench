@@ -549,7 +549,7 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: {
-          topCell: { formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null },
+          topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
           blocks: [{
             x: 1,
             y: -1,
@@ -568,14 +568,14 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const result = await repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C');
 
     expect(result).toEqual({
-      topCell: { formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null },
+      topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
       blocks: [{
         x: 1,
         y: -1,
         subBlocks: [{
           x: 2,
           y: -2,
-          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5 }],
+          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false }],
         }],
       }],
     });
@@ -638,7 +638,7 @@ describe('ApiPluginRepository.getInteriorCells', () => {
     const result = await repo.getInteriorCells('Plugin.esp', 50, 25);
 
     expect(result).toEqual({
-      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null }],
+      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false }],
       total: 42,
     });
     expect(client.GET).toHaveBeenCalledWith(
@@ -700,7 +700,7 @@ describe('ApiPluginRepository origin threading', () => {
   });
 
   it('sends origin as a query param on getWorldspaceBlocks', async () => {
-    const client = { GET: vi.fn().mockResolvedValue({ data: { blocks: [], topCell: null }, response: { ok: true } }) } as any;
+    const client = { GET: vi.fn().mockResolvedValue({ data: { blocks: [], topCells: [] }, response: { ok: true } }) } as any;
 
     await new ApiPluginRepository(client).getWorldspaceBlocks('Shared.esp', 'Fallout4.esm:00003C', 'ModB');
 

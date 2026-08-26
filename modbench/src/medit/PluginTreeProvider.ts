@@ -102,10 +102,12 @@ export class WorldspaceNode extends vscode.TreeItem {
   }
 }
 
+// xEdit's TwbGroupRecord.GetShortName (wbImplementation.pas), group types 4/5: 'Block ' + Hi + ', '
+// + Lo / 'Sub-Block ' + Hi + ', ' + Lo — no parens, capital B in "Sub-Block".
 export class BlockNode extends vscode.TreeItem {
   readonly kind = 'block' as const;
   constructor(public readonly plugin: string, public readonly block: WorldspaceBlock, public readonly origin?: string) {
-    super(`Block (${block.x}, ${block.y})`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(`Block ${block.x}, ${block.y}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'block';
   }
 }
@@ -113,16 +115,34 @@ export class BlockNode extends vscode.TreeItem {
 export class SubBlockNode extends vscode.TreeItem {
   readonly kind = 'subBlock' as const;
   constructor(public readonly plugin: string, public readonly subBlock: WorldspaceSubBlock, public readonly origin?: string) {
-    super(`Sub-block (${subBlock.x}, ${subBlock.y})`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(`Sub-Block ${subBlock.x}, ${subBlock.y}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'subBlock';
   }
+}
+
+// xEdit's StrRight (wbImplementation.pas) right-justifies each grid coordinate to width 3 with
+// leading spaces before wrapping it in the angle brackets — not a plain decimal string.
+function strRight3(n: number | null): string {
+  return String(n).padStart(3, ' ');
 }
 
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
-    const label = cell.editorId
-      ?? (cell.cellX != null ? `Cell (${cell.cellX}, ${cell.cellY})` : cell.formKey);
+    // xEdit's TwbMainRecord.GetDisplayName CELL branch (wbImplementation.pas): the worldspace's own
+    // persistent cell (container group type 1) is always '<Persistent Worldspace Cell>'; otherwise
+    // xEdit checks the record's FULL name first and only falls into the '<x, y>' grid format when
+    // that's empty. CellSummary carries no FULL-name field at all today, so an exterior cell (has
+    // grid coordinates) always uses the coordinate format here regardless of its own EditorID —
+    // never EDID either way, but also not the FULL-name-first precedence xEdit actually has. Known
+    // gap, not a deliberate divergence; a FULL-name field is new scope (DTO + backend plumbing)
+    // beyond #251's AC. An interior cell (no grid coordinates, out of scope for #251) keeps the
+    // EditorID-or-FormKey fallback.
+    const label = cell.isPersistentWorldspaceCell
+      ? '<Persistent Worldspace Cell>'
+      : cell.cellX != null
+        ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>`
+        : cell.editorId ?? cell.formKey;
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
@@ -435,8 +455,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private async fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
     try {
       const data = await this.repository.getWorldspaceBlocks(node.plugin, node.worldspace.formKey, node.origin);
-      const nodes: PluginTreeNode[] = [];
-      if (data.topCell) nodes.push(new CellNode(node.plugin, data.topCell, node.origin));
+      const nodes: PluginTreeNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin));
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin)));
       return nodes;
     } catch (e) {
