@@ -83,20 +83,6 @@ describe('extendedEditorPath', () => {
     expect(a).toBe(b);
   });
 
-  // Issue #242: a pending cell and its disk companion share record+field+plugin exactly (a
-  // pending column only ever exists alongside a disk column for the same plugin) — without a
-  // fourth discriminant, opening one would silently reuse/reseed the other's already-open tab.
-  it('a pending cell path differs from its disk companion, given identical record+field+plugin', () => {
-    const disk = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'Data', 'pending');
-    expect(pending).not.toBe(disk);
-  });
-
-  it('the pending path stays in the same record/origin directory, suffixed on the filename only', () => {
-    const pending = extendedEditorPath('/tmp/root', 'Deacon', 'Description', 'Fallout4.esm', 'Data', 'pending');
-    expect(pending).toBe(join('/tmp/root', 'Deacon', 'Data', 'Description [Fallout4.esm] (Pending).txt'));
-  });
-
   // #304 / ADR-0036: origin folds into the path unconditionally (no "elide Data" branch) — the
   // directory is never what the user reads (the tab title is the filename alone, unchanged), so
   // there is nothing to keep quiet for the common single-origin case, and no collision-dependent
@@ -291,30 +277,6 @@ describe('openExtendedFieldEditor', () => {
     expect(secondDeps.reporter.report).not.toHaveBeenCalled();
     const mode = (await stat(path)).mode & 0o777;
     expect(mode & 0o200).toBe(0); // still read-only after the second open
-  });
-
-  // Issue #242 (AC2): a pending cell and its disk companion share record+field+plugin exactly —
-  // opening both must land on two distinct files, each holding its own value, not one silently
-  // reseeding the other. Proves the independence at openExtendedFieldEditor's own boundary (the
-  // path-level discriminant is extendedEditorPath's own test above).
-  it('a pending cell and its disk companion open independent temp files for the same record+field+plugin', async () => {
-    const tempRoot = await makeTempRoot();
-    const diskPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data');
-    const pendingPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Fallout4.esm', 'Data', 'pending');
-    openTextDocument.mockImplementation((uri: { fsPath: string }) => Promise.resolve({ uri, getText: () => '' }));
-
-    await openExtendedFieldEditor(
-      { requestId: 'r1', value: 'disk value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
-      makeDeps(tempRoot),
-    );
-    await openExtendedFieldEditor(
-      { requestId: 'r2', value: 'pending value', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false, column: 'pending' },
-      makeDeps(tempRoot),
-    );
-
-    expect(diskPath).not.toBe(pendingPath);
-    expect(await readFile(diskPath, 'utf8')).toBe('disk value');
-    expect(await readFile(pendingPath, 'utf8')).toBe('pending value');
   });
 
   // #304 / ADR-0036: the actual regression this ticket exists to fix, at the coordinator's own

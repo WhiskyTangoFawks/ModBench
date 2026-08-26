@@ -515,7 +515,7 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
     );
 
     expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
-      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true, column: undefined },
+      { requestId: 'r1', value: 'a long description', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'ModA', readOnly: true },
       extendedFieldEditorDeps,
     );
   });
@@ -533,27 +533,6 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
 
     expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
       expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }),
-      extendedFieldEditorDeps,
-    );
-  });
-
-  // Issue #242: the pending column's own request carries `column: 'pending'` — forwarded through
-  // to openExtendedFieldEditor's params so its tab identity stays independent of the disk cell's.
-  it('forwards column: "pending" through to openExtendedFieldEditor for a pending-cell request', async () => {
-    const reply = vi.fn();
-    const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
-
-    await routeRecordPanelMessage(
-      {
-        type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR, requestId: 'r1', value: 'staged value',
-        recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data',
-        readOnly: false, column: 'pending',
-      },
-      makeDeps({ extendedFieldEditor: extendedFieldEditorDeps }),
-    );
-
-    expect(openExtendedFieldEditorMock).toHaveBeenCalledWith(
-      expect.objectContaining({ column: 'pending' }),
       extendedFieldEditorDeps,
     );
   });

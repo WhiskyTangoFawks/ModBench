@@ -171,28 +171,19 @@ export interface RowContext {
 // `key=` at every nesting level (top-level/array-element/struct-child/grandchild), so no new
 // identity scheme is invented.
 //
-// Issue #232: `plugin` alone can't tell a pending cell apart from its disk-column companion —
-// both share the exact same plugin name (buildColumns only ever adds a `'pending'` column for a
-// plugin whose `'disk'` column already exists). `column` is the discriminant: absent (or
-// `undefined`) means the disk cell, `'pending'` means that plugin's pending companion — so every
-// pre-#232 `{ rowKey, plugin }` literal still means "the disk cell," unchanged, while a pending
-// cell gets its own independent focus identity rather than aliasing its disk sibling's.
 // #272 / ADR-0036: `plugin` is this column's compound identity (ColumnKey), not the bare filename
 // — two columns sharing a filename but differing in origin must not both read as focused off one
-// `setFocusedCell` call. Field name kept as `plugin` (not renamed to `column`, which already means
-// the disk/pending discriminant below) — only its type changed.
+// `setFocusedCell` call.
 export interface FocusedCell {
   rowKey: string;
   plugin: ColumnKey;
-  column?: 'pending';
 }
 
-// Issue #232 (review): the one check both the disk-leaf and pending-column branches below need —
-// "is this exact row/plugin/column the panel's single focused cell" — pulled out so neither
-// re-derives FocusedCell's own three-field comparison inline. `column` defaults to `undefined`
-// (a disk cell), matching FocusedCell's own convention.
-function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey, column?: 'pending'): boolean {
-  return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin && focusedCell.column === column;
+// Issue #232 (review): the one check the leaf branches below need — "is this exact row/plugin the
+// panel's single focused cell" — pulled out so nothing re-derives FocusedCell's own two-field
+// comparison inline.
+function isCellFocused(focusedCell: FocusedCell | null, rowKey: string, plugin: ColumnKey): boolean {
+  return focusedCell?.rowKey === rowKey && focusedCell.plugin === plugin;
 }
 
 interface DiffRowProps {
@@ -219,12 +210,10 @@ interface DiffRowProps {
   // Issue #222: this row's own identity (see FocusedCell above), the panel's current focused
   // cell (or none), and the callback that reports a click up to RecordPanel's single source of
   // truth. onFocusCell takes rowKey explicitly (rather than closing over it here) so RecordPanel
-  // stays the one place that knows how a click turns into a FocusedCell. Issue #232: the optional
-  // third parameter is FocusedCell's own `column` discriminant — omitted (disk cell) by every
-  // call site below except the pending column's own.
+  // stays the one place that knows how a click turns into a FocusedCell.
   rowKey: string;
   focusedCell: FocusedCell | null;
-  onFocusCell: (rowKey: string, plugin: ColumnKey, column?: 'pending') => void;
+  onFocusCell: (rowKey: string, plugin: ColumnKey) => void;
   // #415: the columns whose cells can be written — mutable plugin, in the load order, and its mod
   // tracked. RecordPanel computes it once for the whole grid so a single definition of "writable"
   // reaches every row; a column absent from this set renders read-only everywhere it appears.
@@ -340,10 +329,6 @@ export function DiffRow({
           // itself unconditionally read-only regardless of column mutability — `meta.readOnly` is
           // the one new per-row override on top of immutableSet's existing per-column rule, ORed
           // in wherever a column's mutability previously stood alone.
-          // Issue #232: `isCellFocused`'s default (no `column` arg, i.e. `undefined`) is the disk
-          // cell's own identity — never matches a same-row, same-plugin *pending* focus record,
-          // which carries `column: 'pending'` — see FocusedCell's own doc comment for why the two
-          // need separate identities despite sharing `plugin`.
           const isFocused = isCellFocused(focusedCell, rowKey, key);
           // Issue #224 / ADR-0034: the string Ctrl+C copies for this cell — the same value used
           // for display below (diff.values[key]), run through the one shared modelValue
