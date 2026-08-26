@@ -124,9 +124,11 @@ export function appendArrayElement(array: unknown[], value: unknown): unknown[] 
 // Code hands them, and that module is the one place both processes already share a contract.
 export type {
   ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext, ColumnHeaderContext,
+  StringValueContext,
 } from './messages';
 import type {
   ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext, ColumnHeaderContext,
+  StringValueContext,
 } from './messages';
 
 // Issue #227: DiffRow only attaches this on a mutable column's unsorted-array cell — its mere
@@ -185,6 +187,19 @@ export function vmadPropertyContext(
 // the headline case — so every column carries this context unconditionally.
 export function headerCellContext(formKey: string, plugin: string, origin: string): ColumnHeaderContext {
   return { webviewSection: 'recordHeader', formKey, plugin, origin, preventDefaultContextMenuItems: true };
+}
+
+// #258 / ADR-0039: a `string` value cell's own right-click entry — the extended editor's only
+// remaining trigger, now that no left-click gesture reaches it (the debounced double-click-to-tab
+// binding this replaces is gone from ScalarCell). Offered unconditionally on every string leaf
+// cell in the field grid, mutable or immutable alike — `readOnly` is what the command's own
+// `when` clause (and the tab it opens) act on, not the cell's mere presence here. `value` is the
+// cell's own current model value (DiffRow already computes this identically for display/copy), so
+// the extension host never needs to re-derive it.
+export function stringValueContext(
+  formKey: string, plugin: string, origin: string, fieldName: string, value: string, readOnly: boolean,
+): StringValueContext {
+  return { webviewSection: 'stringValue', formKey, plugin, origin, fieldName, value, readOnly, preventDefaultContextMenuItems: true };
 }
 
 // Issue #231 (review): combines every context object sharing one row into the single

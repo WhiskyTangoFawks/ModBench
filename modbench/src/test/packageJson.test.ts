@@ -438,6 +438,9 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.vmad.removeProperty',
     'modbench.vmad.setScriptFlags',
     'modbench.vmad.setPropertyFlags',
+    // #258 / ADR-0039: needs the clicked string cell's own identity/value/readOnly from its
+    // data-vscode-context — no ambient fallback, same posture as the array/VMAD ops above.
+    'modbench.field.openExtended',
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
     'modbench.downloads.openFile',
@@ -481,7 +484,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(37);
+    expect(PALETTE_GATED).toHaveLength(38);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));

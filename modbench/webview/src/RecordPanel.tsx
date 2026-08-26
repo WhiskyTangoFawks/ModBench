@@ -130,8 +130,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     editField(formKey, override.plugin, override.origin, fieldPath, value);
   }, [result, formKey]);
 
-  // #426: a string cell's double click, opened in a real editor tab. Commits through the exact
-  // same handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
+  // #426, retriggered by #258 / ADR-0039: a string cell's value, opened in a real editor tab.
+  // Reached only from the cell's right-click menu now (FIELD_OPEN_EXTENDED_EDITOR's own listener
+  // branch below) — no left-click gesture reaches it any more. Commits through the exact same
+  // handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
   // identical write path, not a second one (extendedFieldEditor.ts's own doc comment).
   const handleOpenExtended = useCallback((plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => {
     const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
@@ -295,6 +297,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // same reason (handleEditCell closes over `result`/`formKey`, both of which change).
   const handleEditCellRef = useRef(handleEditCell);
   useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
+  // #258 / ADR-0039: FIELD_OPEN_EXTENDED_EDITOR's own commit reaches through handleOpenExtended —
+  // same ref-for-a-mount-once-listener shape as handleEditCellRef/handleArrayOpRef above, for the
+  // same reason (handleOpenExtended closes over `result`/`formKey`/`handleEditCell`, all of which
+  // change). Previously this bridge call was reached directly from DiffRow's onDoubleClick prop;
+  // now it's reached only from this broadcast, the right-click menu's own trigger.
+  const handleOpenExtendedRef = useRef(handleOpenExtended);
+  useLayoutEffect(() => { handleOpenExtendedRef.current = handleOpenExtended; }, [handleOpenExtended]);
 
   // Listen for loadRecord messages from the extension (panel reuse), the session's own
   // conflicts-computed signal, and the array-op right-click commands (#426 Track 4) — the one
@@ -351,6 +360,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
         if (msg.formKey !== prevFormKeyRef.current) return;
         setAddPropertyDialog({ scriptName: msg.scriptName, plugin: columnKey(msg.plugin, msg.origin) });
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR) {
+        // #258 / ADR-0039: the string-cell right-click command's own broadcast — self-filter on
+        // formKey, same convention as every other right-click op above, then hand off to the exact
+        // bridge call a double click used to reach directly.
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        handleOpenExtendedRef.current(columnKey(msg.plugin, msg.origin), msg.fieldName, msg.value, msg.readOnly);
       }
     };
     window.addEventListener('message', handler);
@@ -450,7 +465,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={handleEditCell}
-        onOpenExtendedEditor={handleOpenExtended}
         onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType) : undefined}
         onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
         onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}

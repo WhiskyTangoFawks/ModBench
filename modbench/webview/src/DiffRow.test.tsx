@@ -10,10 +10,6 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 // here too so the #224 describe block below can assert on it directly.
 // Issue #225: readClipboardText is DiffRow's own import too (Ctrl+V's clipboard read) — mocked so
 // the #225 describe block below can control what it resolves to per test.
-// Issue #230: openExtendedFieldEditor is DiffRow's own import too — a string leaf's double click
-// calls it instead of opening the inline editor, so it's mocked here the same way as the three
-// bridges above rather than exercising the real webview<->extension-host message round trip
-// (that's nativeBridge.test.ts's job).
 const copyToClipboard = vi.fn();
 const pickFormKey = vi.fn().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
@@ -426,31 +422,47 @@ describe('DiffRow — formKey cell wiring (#426)', () => {
   });
 });
 
-// #426: a string cell's double click reports its own identity (plugin/fieldPath/value/readOnly)
-// up to RecordPanel, which alone knows the record's own label for the bridge call — DiffRow never
-// opens the tab itself.
-describe('DiffRow — extended editor wiring (#426)', () => {
-  it('an editable string cell reports readOnly: false with its current value', () => {
-    const onOpenExtendedEditor = vi.fn();
+// #258 / ADR-0039: no left-click gesture reaches the extended editor any more — its only trigger
+// is the string cell's own right-click menu, a native `webview/context` contribution driven by
+// the `data-vscode-context` attribute DiskCell carries (recordUtils.ts's stringValueContext).
+// Rival this guards against: the pre-#258 code, where a double click called onOpenExtendedEditor
+// directly and an immutable cell (no onEditCell wired) got no vscodeContext at all — the literal
+// proof of the AC gap this closes (today, right-click on an immutable string cell offers nothing).
+describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
+  function stringContext(text: string, index = 0): Record<string, unknown> {
+    const td = screen.getAllByText(text)[index].closest('td');
+    const attr = td?.getAttribute('data-vscode-context');
+    expect(attr).toBeTruthy();
+    return JSON.parse(attr!) as Record<string, unknown>;
+  }
+
+  it('a mutable string cell carries a stringValue context with readOnly: false and its current value', () => {
     renderRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
       onEditCell: vi.fn(),
-      onOpenExtendedEditor,
     });
-    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]);
-    expect(onOpenExtendedEditor).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', 'disk-value', false);
+    expect(stringContext('disk-value', 1)).toEqual({
+      webviewSection: 'stringValue',
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      origin: 'Data',
+      fieldName: 'Name',
+      value: 'disk-value',
+      readOnly: false,
+      preventDefaultContextMenuItems: true,
+    });
   });
 
-  it('an immutable string cell (no onEditCell wired) still reaches the bridge, with readOnly: true', () => {
-    const onOpenExtendedEditor = vi.fn();
-    renderRow({ onOpenExtendedEditor });
-    fireEvent.doubleClick(screen.getAllByText('disk-value')[0]);
-    expect(onOpenExtendedEditor).toHaveBeenCalledWith(columnKey('Fallout4.esm', null), 'Name', 'disk-value', true);
-  });
-
-  it('no bridge call when onOpenExtendedEditor is not wired', () => {
+  it('an immutable string cell (no onEditCell wired at all) still carries the context, with readOnly: true', () => {
     renderRow();
-    // Would throw if DiffRow assumed the prop present rather than guarding it.
-    expect(() => fireEvent.doubleClick(screen.getAllByText('disk-value')[0])).not.toThrow();
+    const ctx = stringContext('disk-value', 0);
+    expect(ctx.webviewSection).toBe('stringValue');
+    expect(ctx.readOnly).toBe(true);
+  });
+
+  it('double click opens the inline editor, never a tab — DiffRow no longer has any callback to call', () => {
+    renderRow({ editableColumns: new Set([columnKey('MyMod.esp', null)]), onEditCell: vi.fn() });
+    fireEvent.doubleClick(screen.getAllByText('disk-value')[1]);
+    expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 });

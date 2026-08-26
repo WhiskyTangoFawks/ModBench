@@ -299,6 +299,8 @@ describe('modbench command registration', () => {
     'modbench.vmad.removeProperty',
     'modbench.vmad.setScriptFlags',
     'modbench.vmad.setPropertyFlags',
+    // #258 / ADR-0039: the string cell's own right-click command (record editor's field grid).
+    'modbench.field.openExtended',
     'modbench.closeMedit',
     'modbench.reloadSession',
     // #247: one Refresh for every Mod-Management source, replacing modbench.refreshTree,
