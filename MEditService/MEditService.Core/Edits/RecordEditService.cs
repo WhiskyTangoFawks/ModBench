@@ -357,6 +357,13 @@ public sealed class RecordEditService(
         }
         else
         {
+            // #488: a folder-split child's container_child.SlotIndex mirrors its own "[N]" file-name
+            // prefix (#459) — captured before anything moves, so the survivors' new positions can be
+            // computed the same way RenormalizeGroupOrder computes them on disk below (sort by old
+            // rank ascending, assign 0..k-1). Null for a top-level container/flat record, which is
+            // nobody's folder-split child.
+            var parentLink = index.GetContainerParent(plugin, formKey);
+
             // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child —
             // DialogTopic etc.), or a flat record's single file. Never-assume-exclusive-ownership: the
             // unit may already be gone (another tool, a hand delete) — that is exactly the working-tree
@@ -380,6 +387,21 @@ public sealed class RecordEditService(
             // directory contiguous, SourceUnitResolver's own doc comment) holds again before this
             // returns, rather than merely being restorable by a later re-Track.
             SourceUnitResolver.RenormalizeGroupOrder(groupDirectory);
+
+            // #488: container_child's own copy of that same renumbering — the deleted child's row
+            // disappears for free (it is simply not among the survivors passed in), and every
+            // surviving sibling's SlotIndex lands exactly where a fresh ingest of the renormalized
+            // tree would put it.
+            if (parentLink is { } parent)
+            {
+                var survivors = index.GetContainerChildren(plugin, parent.ParentFormKey)
+                    .Where(c => c.SlotName == parent.SlotName && c.ChildFormKey != formKey)
+                    .OrderBy(c => c.SlotIndex)
+                    .Select((c, i) => (c.ChildFormKey, SlotIndex: i))
+                    .ToList();
+                index.ReplaceContainerChildSlot(
+                    plugin, parent.ParentFormKey, parent.ParentRecordType, parent.SlotName, survivors);
+            }
         }
 
         // Both shapes cascade the same way: a container's own delete removes its directory whole (a
@@ -766,6 +788,15 @@ public sealed class RecordEditService(
         // #489: this method's own last file-system act — closes the gap the old slot just left (and
         // any pre-existing one besides) so the group directory is contiguous again before this returns.
         SourceUnitResolver.RenormalizeGroupOrder(parentDirectory);
+
+        // #488 review: a folder-split container's own children (a renumbered Quest's DialogTopics, a
+        // renumbered DialogTopic's Responses) keep their own FormKeys and their own files untouched —
+        // only this record's own directory name changed, moved whole above — so nothing re-derives
+        // their container_child rows from a reserialized document the way an embedded child's would
+        // be. Re-pointed here, before the old FormKey's own rows are torn down below, so they are
+        // never left orphaned even for one transaction. A no-op for a record with no folder-split
+        // children of its own (every other renumbered type).
+        index.RepointContainerChildParent(plugin, oldFormKey, newFormKey);
 
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }

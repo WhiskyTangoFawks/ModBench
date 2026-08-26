@@ -91,6 +91,12 @@ public sealed class ContainerModFixture : IDisposable
     public const string DialogTopicEditorId = "EmbedTopic";
     public FormKey DialogTopic { get; }
 
+    // #488 review: a folder-split grandchild of its own — DialogTopic.Responses is folder-split same
+    // as Quest.DialogTopics is, so renumbering DialogTopic (a container of folder-split children in
+    // its own right) is the shape that regressed container_child for its own children.
+    public const string ResponseEditorId = "EmbedResponse";
+    public FormKey Response { get; }
+
     // #461 AC5: two more siblings under the same Quest, so "delete/renumber a mid-list folder-split
     // child, then compile" has an actual middle and two actual survivors to pin the GRUP order of —
     // one DialogTopic alone (the #453/#460-era shape above) cannot exercise "gap, not renumbered".
@@ -148,6 +154,8 @@ public sealed class ContainerModFixture : IDisposable
 
         var quest = new Quest(mod) { EditorID = QuestEditorId };
         var dialogTopic = new DialogTopic(mod) { EditorID = DialogTopicEditorId };
+        var response = new DialogResponses(mod) { EditorID = ResponseEditorId };
+        dialogTopic.Responses.Add(response);
         var dialogTopic2 = new DialogTopic(mod) { EditorID = DialogTopic2EditorId };
         var dialogTopic3 = new DialogTopic(mod) { EditorID = DialogTopic3EditorId };
         quest.DialogTopics.Add(dialogTopic);
@@ -163,6 +171,7 @@ public sealed class ContainerModFixture : IDisposable
         (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
         (Quest, DialogTopic) = (quest.FormKey, dialogTopic.FormKey);
+        Response = response.FormKey;
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
 
         Sessions = new SessionManager(

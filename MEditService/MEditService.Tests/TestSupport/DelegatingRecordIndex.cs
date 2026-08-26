@@ -34,6 +34,12 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.MarkWorkingTreeOnly(key, formKeys);
     public virtual void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records) =>
         Inner.SeedCommittedOnly(key, records);
+    public virtual void ReplaceContainerChildSlot(
+        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
+        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children) =>
+        Inner.ReplaceContainerChildSlot(key, parentFormKey, parentRecordType, slotName, children);
+    public virtual void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        Inner.RepointContainerChildParent(key, oldParentFormKey, newParentFormKey);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
