@@ -74,6 +74,43 @@ export function startExternalChangePolling(
   return () => { stopped = true; clearTimeout(timer); };
 }
 
+export interface ExternalChangePollerGateDeps {
+  /** Subscribe once, synchronously, to the backend's own lifecycle signal — the callback fires on
+   *  every transition (BackendManager's 'status' event in production). */
+  onBackendStatusChange: (cb: () => void) => void;
+  /** Read fresh inside the callback, not cached — the emitted status string and `isHealthy` are
+   *  two separate reads on the real `BackendManager`, and this only ever cares about the latter. */
+  isBackendHealthy: () => boolean;
+  /** Starts polling; returns its own stop function (same contract as {@link startExternalChangePolling}). */
+  startPolling: () => () => void;
+}
+
+/**
+ * #432: couples the external-change poller to the backend's actual process lifecycle instead of
+ * extension activation — a backend that doesn't exist yet can never answer
+ * `GET /plugins/external-changes/status`, so polling before one exists is pure noise (a permanent
+ * `poll failed: fetch failed` line every tick, ADR-0026 background tier, but a call that can never
+ * succeed).
+ *
+ * Gated on the backend's health signal alone, deliberately never on session load (the triage
+ * comment's own binding call on #432): a backend that is up with no session loaded still answers
+ * the endpoint normally, so the poller has no reason to wait for one. Starts on the first healthy
+ * transition, never double-starts on a repeated one (e.g. a crash-restart's own second "attached"),
+ * stops on any not-healthy transition (deliberate Close mEdit, a lost connection, or a restart
+ * giving up), and starts fresh on the next healthy transition — a relaunch restarts it.
+ */
+export function gateExternalChangePolling(deps: ExternalChangePollerGateDeps): void {
+  let stop: (() => void) | undefined;
+  deps.onBackendStatusChange(() => {
+    if (deps.isBackendHealthy()) {
+      stop ??= deps.startPolling();
+    } else {
+      stop?.();
+      stop = undefined;
+    }
+  });
+}
+
 async function handlePending(deps: ExternalChangeCoordinatorDeps, pending: PendingExternalChange[]): Promise<void> {
   const outcomes = await runExternalChangeDialogs(pending, deps.showDialog);
   for (const { pending: item, answer } of outcomes) {

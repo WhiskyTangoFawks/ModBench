@@ -21,7 +21,7 @@ import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
-import { startExternalChangePolling, runRebase, type OpenMergeEditor } from './medit/externalChangeCoordinator';
+import { startExternalChangePolling, runRebase, gateExternalChangePolling, type OpenMergeEditor } from './medit/externalChangeCoordinator';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
@@ -414,14 +414,14 @@ export function activate(context: vscode.ExtensionContext) {
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
 
+  wireExternalChangePolling(repository, controller, outputChannel, log);
+
   context.subscriptions.push(
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCreatePluginCommand(controller, modlistSource, instanceRoot, pluginListProvider, outputChannel),
-    // #417: started once at activation, not per session — see the function's own doc comment.
-    { dispose: startExternalChangeDialogPolling(repository, controller, outputChannel, log) },
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
@@ -1500,6 +1500,22 @@ async function runCopyRecordCommand(
     );
     if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Copied as ${newFormKey} into ${destination.name}.`);
   }
+}
+
+/** #432: the poller has no backend to answer it until Launch mEdit's spawn succeeds — gated on
+ *  BackendManager's own 'status'/isHealthy signal (`gateExternalChangePolling`'s own doc comment),
+ *  the same idiom `clearSessionWhenBackendDies` already reacts to. Pulled out of `activate()`
+ *  purely for that function's own line budget. No disposable to register: a deliberate Close mEdit
+ *  and this file's own deactivate() (backendManager.dispose()) both already emit 'stopped', which
+ *  this reacts to like any other transition. */
+function wireExternalChangePolling(
+  repository: PluginRepository, controller: SessionController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+): void {
+  gateExternalChangePolling({
+    onBackendStatusChange: (cb) => backendManager!.on('status', cb),
+    isBackendHealthy: () => backendManager!.isHealthy,
+    startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel, log),
+  });
 }
 
 /** #417: polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and
