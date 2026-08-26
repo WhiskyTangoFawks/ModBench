@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createGameDirectoryResolver, type ConfigChangeEvent } from './gameDirectoryResolver';
+import { createGameDirectoryResolver, dataFolderFrom, type ConfigChangeEvent, type GameDirectoryResolver } from './gameDirectoryResolver';
 import type { GameDirectory } from './gameDirectory';
 
 /** A minimal stand-in for vscode's WorkspaceConfiguration, same shape gameDirectory.test.ts uses. */
@@ -75,5 +75,69 @@ describe('createGameDirectoryResolver', () => {
     const resolver = createGameDirectoryResolver('/instance', () => fakeConfig({}), detect, fakeOnConfigChange().subscribe);
 
     expect(await resolver.resolve()).toEqual(detected);
+  });
+});
+
+/** #357 AC5 review: the old code logged a resolution failure exactly once for the life of the
+ *  window (a single `.then()/.catch()` at activation). `dataFolderFrom` degrades a resolver's
+ *  failure to `undefined` for views the same way — this suite pins that the fold's log side
+ *  effect happens once per *resolver generation*, not once per read, even though
+ *  `ImplicitMasterDecorationProvider` reads it once per visible file. */
+describe('dataFolderFrom', () => {
+  /** A resolver double whose `resolve()` returns whatever `current` currently points at — set to
+   *  a new rejected promise between calls to simulate the resolver moving to a new generation
+   *  (a config change), and left alone to simulate the resolver still serving its cached one. */
+  function fakeResolver(initial: Promise<GameDirectory | null>): GameDirectoryResolver & { setCurrent(p: Promise<GameDirectory | null>): void } {
+    let current = initial;
+    return {
+      resolve: () => current,
+      dispose: () => {},
+      setCurrent: (p) => { current = p; },
+    };
+  }
+  const rejectedSilently = (message: string) => {
+    const p = Promise.reject(new Error(message));
+    p.catch(() => {}); // this is the fixture's own await, not the code under test's — keep the runner quiet
+    return p;
+  };
+
+  it('logs once across repeated reads of the same stuck-rejecting resolution', async () => {
+    const resolver = fakeResolver(rejectedSilently('no Data/ subfolder'));
+    const errors: unknown[] = [];
+    const dataFolder = dataFolderFrom(resolver, (e) => errors.push(e));
+
+    await dataFolder();
+    await dataFolder();
+    await dataFolder();
+
+    expect(errors).toHaveLength(1);
+  });
+
+  it('logs again once the resolver moves to a new generation', async () => {
+    const resolver = fakeResolver(rejectedSilently('first'));
+    const errors: unknown[] = [];
+    const dataFolder = dataFolderFrom(resolver, (e) => errors.push(e));
+
+    await dataFolder();
+    resolver.setCurrent(rejectedSilently('second'));
+    await dataFolder();
+
+    expect(errors).toHaveLength(2);
+  });
+
+  it('folds a resolved GameDirectory to its dataFolder, without logging', async () => {
+    const resolver = fakeResolver(Promise.resolve({ root: '/game', dataFolder: '/game/Data' }));
+    const errors: unknown[] = [];
+
+    expect(await dataFolderFrom(resolver, (e) => errors.push(e))()).toBe('/game/Data');
+    expect(errors).toHaveLength(0);
+  });
+
+  it('folds a null resolution to undefined, without logging', async () => {
+    const resolver = fakeResolver(Promise.resolve(null));
+    const errors: unknown[] = [];
+
+    expect(await dataFolderFrom(resolver, (e) => errors.push(e))()).toBeUndefined();
+    expect(errors).toHaveLength(0);
   });
 });

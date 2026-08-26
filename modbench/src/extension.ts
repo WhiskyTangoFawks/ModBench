@@ -46,7 +46,7 @@ import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { createDriftTracker, type DriftTracker } from './pluginDrift';
 import { rereadDriftedPlugin } from './medit/rereadPlugin';
 import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
-import { createGameDirectoryResolver, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
+import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPluginsWithOrigin, resolveCurrentPluginOrigins } from './modmanager/explicitSession';
@@ -2095,12 +2095,12 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     // misconfigured explicit setting both fold to undefined, so the consumers degrade exactly as
     // before (empty vanilla masters, badges absent). A rejection is re-thrown by every other
     // consumer of `gameDirResolver` directly; only the views degrade to undefined.
-    const dataFolder = () => gameDirResolver.resolve()
-      .then((gd) => gd?.dataFolder)
-      .catch((e: unknown) => {
-        outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
-        return undefined;
-      });
+    // #357 AC5: `dataFolderFrom` memoises the fold (and its error log) by the resolver's own cache
+    // generation, so a stuck-broken setting logs once — `ImplicitMasterDecorationProvider` alone
+    // reads this once per visible file, and a naive `.then()/.catch()` per call would re-log on
+    // every one of those reads instead of once for the life of the resolution.
+    const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
+      outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const { pluginListProvider, disposables: pluginListDisposables } =
       registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller });

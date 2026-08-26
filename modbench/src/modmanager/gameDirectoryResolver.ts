@@ -52,3 +52,35 @@ export function createGameDirectoryResolver(
     dispose: () => subscription.dispose(),
   };
 }
+
+/** Wraps a resolver into a `dataFolder` getter for consumers (the Loadout views) that degrade a
+ *  failed/absent resolution to `undefined` rather than propagate it — `ModListProvider`,
+ *  `PluginListProvider` and `ImplicitMasterDecorationProvider`'s `dataFolder` option.
+ *
+ *  #357 AC5: the fold's log side effect is memoised by the resolver's own cache generation
+ *  (referential identity of the promise `resolve()` currently returns), not re-run per read. A
+ *  naive `resolve().then().catch()` on every call would re-run `onError` on every read of the
+ *  same cached rejection — `ImplicitMasterDecorationProvider` alone reads it once per visible
+ *  file — turning a misconfigured setting that never changes into a repeat-logged error instead
+ *  of the single log the old activation-scoped code produced. Riding the resolver's own cache
+ *  identity keeps this on the one lifeline the ticket asks for, rather than a second independent
+ *  cache with its own invalidation to keep in sync. */
+export function dataFolderFrom(
+  resolver: Pick<GameDirectoryResolver, 'resolve'>,
+  onError: (e: unknown) => void,
+): () => Promise<string | undefined> {
+  let lastResolution: Promise<GameDirectory | null> | undefined;
+  let folded: Promise<string | undefined> | undefined;
+
+  return () => {
+    const resolution = resolver.resolve();
+    if (resolution !== lastResolution) {
+      lastResolution = resolution;
+      folded = resolution.then((gd) => gd?.dataFolder).catch((e: unknown) => {
+        onError(e);
+        return undefined;
+      });
+    }
+    return folded!;
+  };
+}
