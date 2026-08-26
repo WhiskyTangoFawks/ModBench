@@ -44,6 +44,26 @@ status: accepted
 > diff instead, whichever the caller's shape (point lookup vs. whole-tree
 > reconciliation) calls for.
 
+> **Amendment (2026-08-21 triage, #441):** the per-plugin sibling source tree
+> (`<plugin>.source/`, the #437 amendment's disk suffix) is replaced by **one plain root
+> `source/` folder per mod**, holding every tracked plugin's own tree beneath it
+> (`source/<plugin>/…`) — no dot prefix, the plugin's source stays first-class, not hidden
+> metadata. The repo itself still lives at the mod folder root (unchanged, and reaffirmed:
+> a repo nested inside the source folder was considered and rejected — it breaks the
+> Everything gitignore preset, splinters a multi-plugin mod into multiple repos, and breaks
+> one-repo-per-mod SCM identity). `SourceRecordPath` stays the one place that builds a
+> plugin's own root (`RootFor`); every reader/writer goes through it. This also collapses
+> Mod Management's deployer/conflict-index exclusion from the old sibling-plugin suffix
+> guard (which orphaned a tree the moment its plugin was renamed or deleted outside
+> Modbench, #436) to two name-only rules needing no such guard: never deploy a
+> dot-prefixed entry, at any depth (closing #438's undetected `.git`), and never deploy a
+> root-level directory literally named `source`, case-insensitive (root-anchored — Papyrus
+> ships nested `Scripts/Source/…`, never at mod root, so this loses nothing). The
+> pre-#441 sibling-tree exclusion is retained, unchanged, for mods tracked before this
+> change (never assume exclusive ownership — those trees are still on disk wherever they
+> were written). No on-disk migration shipped; an existing tracked mod is re-Tracked or
+> hand-renamed by the user.
+
 Supersedes [ADR-0040](0040-git-native-pending-changes.md) and both of its 2026-08
 amendments. Decided in the 2026-08-19 design conversation (grilled to closure); the
 migration epic is the rebuilt milestone "5 — Git-native editing".

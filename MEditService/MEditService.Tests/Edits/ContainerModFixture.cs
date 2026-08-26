@@ -196,7 +196,7 @@ public sealed class ContainerModFixture : IDisposable
     }
 
     /// <summary>The tree Track wrote everything above into.</summary>
-    public string SourceRoot => Path.Combine(ModFolder, $"{PluginName}{SourceRecordPath.SourceSuffix}");
+    public string SourceRoot => Path.Combine(ModFolder, SourceRecordPath.RootFor(PluginName));
 
     /// <summary>The source file whose text contains <paramref name="editorId"/> — found by content
     /// rather than by <see cref="SourceRecordPath.For"/>, which has no flat path for a container and

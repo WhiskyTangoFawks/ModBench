@@ -258,7 +258,7 @@ public sealed class PluginCompileService(
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
         var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
-        var rootHeaderPath = Path.Combine($"{pluginName}{SourceRecordPath.SourceSuffix}", SourceUnitResolver.RecordDataFileName);
+        var rootHeaderPath = Path.Combine(SourceRecordPath.RootFor(pluginName), SourceUnitResolver.RecordDataFileName);
 
         foreach (var file in regeneratedFiles)
         {
@@ -307,7 +307,7 @@ internal sealed class SourceCheckout : IDisposable
 
     internal static SourceCheckout Of(string modFolder, string pluginName, CompileSource source)
     {
-        var treeName = $"{pluginName}{SourceRecordPath.SourceSuffix}";
+        var treeName = SourceRecordPath.RootFor(pluginName);
 
         if (source is CompileSource.AtRef atRef)
         {

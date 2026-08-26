@@ -179,7 +179,7 @@ public sealed class ExternalChangeClassifierTests
 
     private static void Track(string modFolder, string plugin)
     {
-        var files = new[] { new PristineFile($"{plugin}.source/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+        var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
         var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), new Dictionary<string, string> { [plugin] = "0000000000" });
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
     }

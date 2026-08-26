@@ -50,7 +50,7 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     }
 
     private string NpcsDirectory =>
-        Path.Combine(_mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "Npcs");
+        Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
 
     // ---- AC1: the issue's own repro ----
 

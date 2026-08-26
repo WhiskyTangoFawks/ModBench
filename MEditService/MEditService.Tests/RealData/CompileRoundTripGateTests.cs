@@ -78,7 +78,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
     private PluginCompileService CompileService() =>
         new(_sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
-    private string SourceRoot => Path.Combine(_modFolder, $"{CutDownPluginFixture.PluginFileName}{SourceRecordPath.SourceSuffix}");
+    private string SourceRoot => Path.Combine(_modFolder, SourceRecordPath.RootFor(CutDownPluginFixture.PluginFileName));
 
     /// <summary>The tree Track wrote, keyed exactly the way <see cref="DeriveSourceTreeFromBinary"/>
     /// keys its own, so the two dictionaries are directly comparable.</summary>
@@ -119,7 +119,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
             return Directory.EnumerateFiles(scratch, "*.json", SearchOption.AllDirectories)
                 .ToDictionary(
                     f => Path.Combine(
-                        $"{pluginFileName}{SourceRecordPath.SourceSuffix}", Path.GetRelativePath(scratch, f)),
+                        SourceRecordPath.RootFor(pluginFileName), Path.GetRelativePath(scratch, f)),
                     f => StripCarriageReturns(File.ReadAllBytes(f)));
         }
         finally

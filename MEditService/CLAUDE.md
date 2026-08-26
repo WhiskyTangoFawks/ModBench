@@ -6,7 +6,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 
 - **A tracked plugin's source tree is the source of truth; the binary is for untracked plugins**
   (#452 / ADR-0041's #444 amendment). Session load ingests a tracked plugin by deserializing
-  `<plugin>.source/` whole (`Source/SourceIngest`, a designated whole-mod door) — working tree →
+  `source/<plugin>/` whole (#441; `Source/SourceIngest`, a designated whole-mod door) — working tree →
   Effective, git `HEAD` → Head — and never consults the binary for its *content*. Untracked plugins
   keep the binary-overlay ingest unchanged; both paths end in the same `IRecordIndex.Index` over the
   same `IModGetter`, so the read model never sees a dialect. The binary is still opened for a tracked

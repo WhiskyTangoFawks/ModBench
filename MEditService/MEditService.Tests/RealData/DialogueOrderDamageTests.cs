@@ -122,7 +122,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
             GameRelease.Fallout4);
         var expected = DialogueOrderings((IFallout4ModGetter)original);
 
-        var sourceTree = Path.Combine(_modFolder, $"{CutDownPluginFixture.PluginFileName}{SourceRecordPath.SourceSuffix}");
+        var sourceTree = Path.Combine(_modFolder, SourceRecordPath.RootFor(CutDownPluginFixture.PluginFileName));
         var written = await RecordTextCodecGeneratorSeed
             .DeserializeWholeMod(sourceTree, InlineWorkDropoff.Instance, CancellationToken.None);
         var actual = DialogueOrderings((IFallout4ModGetter)written);

@@ -6,9 +6,10 @@ namespace MEditService.Tests.Source;
 
 /// <summary>
 /// #451 slice E: <see cref="SourceRecordPath"/> speaks the Spriggit flat layout —
-/// <c>&lt;plugin&gt;.source/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>,
-/// group-folder names resolved via <see cref="RecordTypeDispatch"/> rather than hardcoded here, so
-/// these tests do not silently drift from whatever the reflection walk actually decides. Rewritten
+/// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>
+/// (#441: one root <c>source/</c> folder per mod, not a per-plugin <c>&lt;plugin&gt;.source/</c> sibling
+/// tree), group-folder names resolved via <see cref="RecordTypeDispatch"/> rather than hardcoded here,
+/// so these tests do not silently drift from whatever the reflection walk actually decides. Rewritten
 /// from the pre-#451 flat <c>&lt;recordType&gt;/&lt;originModKey&gt;/&lt;hex6&gt;.json</c> version —
 /// <see cref="SourceRecordIdentity"/> no longer carries a FormKey (see its own doc comment for why).
 /// </summary>
@@ -21,9 +22,9 @@ public sealed class SourceRecordPathTests
     [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", "SomeNpc")]
     // No EditorID — the bare filesafe FormKey, no leading "&lt;EditorID&gt; - ".
     [InlineData("Vendor.esp", "npc_", "000800:Vendor.esp", null)]
-    // A plugin name with its own internal dot must not confuse suffix-stripping (SourceRecordPath
-    // strips a trailing ".source", never splits on the first dot) — a patch-plugin-shaped filename
-    // proves this for real rather than by argument.
+    // A plugin name with its own internal dot must round-trip as one whole segment (SourceRecordPath
+    // never splits a plugin name on its own dots) — a patch-plugin-shaped filename proves this for
+    // real rather than by argument.
     [InlineData("Vendor.patch.esp", "keyword", "0012AB:Vendor.patch.esp", "SomeKeyword")]
     // The record's origin ModKey legitimately differs from the plugin holding it (an override edited
     // through a patch plugin) — the two segments must recombine into the *origin's* FormKey, not the
@@ -39,6 +40,13 @@ public sealed class SourceRecordPathTests
         // The order index is never part of identity (#459's own doc comment on this class) — an
         // arbitrary non-zero value proves TryParse doesn't accidentally depend on it being 0.
         var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release, orderIndex: 7);
+
+        // #441: everything nests under one root "source/" folder, the plugin its own child directory —
+        // not a "<plugin>.source/" sibling tree. Asserted here, not just implied by TryParse round-
+        // tripping: a broken root that still happened to be 4 segments deep would round-trip too.
+        var segments = path.Split(Path.DirectorySeparatorChar);
+        Assert.Equal(SourceRecordPath.RootFolderName, segments[0]);
+        Assert.Equal(pluginFileName, segments[1]);
 
         var ok = SourceRecordPath.TryParse(path, Release, out var identity);
 
@@ -90,21 +98,22 @@ public sealed class SourceRecordPathTests
     }
 
     [Theory]
-    // Too few / too many path segments — the flat shape is exactly three: <plugin>.source/<folder>/<file>.json.
-    [InlineData("Vendor.esp.source/000800.json")]
-    [InlineData("Vendor.esp.source/Npcs/Vendor.esp/000800.json")]
-    // First segment missing the load-bearing ".source" suffix.
+    // Too few / too many path segments — the flat shape is exactly four: source/<plugin>/<folder>/<file>.json.
+    [InlineData("source/Vendor.esp/000800.json")]
+    [InlineData("source/Vendor.esp/Npcs/Vendor.esp/000800.json")]
+    // First segment isn't the literal root folder name at all.
     [InlineData("Vendor.esp/Npcs/000800.json")]
+    [InlineData("NotSource/Vendor.esp/Npcs/000800.json")]
+    // Root segment present but no plugin segment at all (an empty path component collapses away).
+    [InlineData("source//Npcs/000800.json")]
     // Last segment missing the load-bearing ".json" suffix.
-    [InlineData("Vendor.esp.source/Npcs/000800.txt")]
-    [InlineData("Vendor.esp.source/Npcs/000800")]
-    // A bare ".source" — the suffix matches but strips to an empty plugin name, never a real identity.
-    [InlineData(".source/Npcs/000800.json")]
+    [InlineData("source/Vendor.esp/Npcs/000800.txt")]
+    [InlineData("source/Vendor.esp/Npcs/000800")]
     // The whole-mod door's own header/group files — never a flat record's own file.
-    [InlineData("Vendor.esp.source/Npcs/RecordData.json")]
-    [InlineData("Vendor.esp.source/Cells/GroupRecordData.json")]
+    [InlineData("source/Vendor.esp/Npcs/RecordData.json")]
+    [InlineData("source/Vendor.esp/Cells/GroupRecordData.json")]
     // A folder this game's schema has no group for at all.
-    [InlineData("Vendor.esp.source/NotARealFolder/000800.json")]
+    [InlineData("source/Vendor.esp/NotARealFolder/000800.json")]
     public void TryParse_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
     {
         // Malformed input must fail outright, not return a *wrong* parse (review finding 2, #368) — a
@@ -129,7 +138,8 @@ public sealed class SourceRecordPathTests
     {
         var ambiguousFolder = RecordTypeDispatch.For(Release).FolderNameFor("globalfloat");
         Assert.NotNull(ambiguousFolder); // sanity: GlobalFloat is a flat type with a real folder...
-        var path = Path.Combine("Vendor.esp.source", ambiguousFolder!, "SomeGlobal - 000800_Vendor.esp.json");
+        var path = Path.Combine(
+            SourceRecordPath.RootFolderName, "Vendor.esp", ambiguousFolder!, "SomeGlobal - 000800_Vendor.esp.json");
 
         var ok = SourceRecordPath.TryParse(path, Release, out var identity);
 

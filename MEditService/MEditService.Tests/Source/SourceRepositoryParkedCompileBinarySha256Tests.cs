@@ -17,7 +17,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new PristineFile("Test.esp.source/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, new TrackProvenance(null, null, new Dictionary<string, string> { ["Test.esp"] = "0000" }));
 
             SourceRepository.ParkCompileSnapshot(modFolder, "Test.esp", atRef: null, binarySha256: "DEADBEEF1234");
@@ -36,7 +36,7 @@ public sealed class SourceRepositoryParkedCompileBinarySha256Tests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new PristineFile("Test.esp.source/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             // Track parks the ref only for plugins named in trailers.BinarySha256ByPlugin — an empty
             // dict here leaves "Other.esp" with no parked ref at all, the orphaned-ref case the
             // pinned decision says must degrade, never throw.

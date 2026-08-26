@@ -18,13 +18,13 @@ public sealed class SourceRepositoryTrackAlreadyTrackedTests
         var modFolder = Directory.CreateTempSubdirectory("medit-track-retrack-").FullName;
         try
         {
-            var firstFiles = new[] { new PristineFile("Test.esp.source/npc_/Test.esp/000001.json", "{\"first\":true}"u8.ToArray()) };
+            var firstFiles = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{\"first\":true}"u8.ToArray()) };
             SourceRepository.Track(modFolder, SourcePreset.Edits, firstFiles, new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             var gitDir = Path.Combine(modFolder, ".git");
             var firstMainSha = GitCli.Run(gitDir, modFolder, "rev-parse", "main").Trim();
 
-            var secondFiles = new[] { new PristineFile("Test.esp.source/npc_/Test.esp/000002.json", "{\"second\":true}"u8.ToArray()) };
+            var secondFiles = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000002.json", "{\"second\":true}"u8.ToArray()) };
             Assert.Throws<SourceAlreadyTrackedException>(() =>
                 SourceRepository.Track(modFolder, SourcePreset.Edits, secondFiles, new TrackProvenance(null, null, new Dictionary<string, string>())));
 

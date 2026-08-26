@@ -56,7 +56,7 @@ public sealed class UntrackedReadOnlyTests
 
         // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
         // did not quietly create the source tree on its way out.
-        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}.source")));
+        Assert.False(Directory.Exists(Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName))));
         Assert.False(File.Exists(mod.NpcSourceFile));
     }
 
