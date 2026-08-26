@@ -98,8 +98,8 @@ public sealed class SwaggerSchemaTests
     // so Swashbuckle's schema generator (which only honors that attribute form, not the global
     // ConfigureHttpJsonOptions converter Program.cs registers) describes them as numeric unions
     // while the wire actually carries strings — same class of bug FormKeyResolutionState already
-    // fixed. Asserted against FormKeyResolutionState's own already-correct shape as the known-good
-    // reference, not a hand-derived expectation.
+    // fixed. expectedMembers below is modeled on FormKeyResolutionState's already-fixed shape
+    // (string-enum member names, not the numeric form), not read from it at runtime.
     [Theory]
     [InlineData("ConditionOperator", new[] { "EqualTo", "NotEqualTo", "GreaterThan", "GreaterThanOrEqualTo", "LessThan", "LessThanOrEqualTo" })]
     [InlineData("ConditionParamCategory", new[] { "Number", "Form", "Text" })]
