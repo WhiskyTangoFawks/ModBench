@@ -23,6 +23,11 @@ interface PluginHeaderProps {
   showOriginInline: boolean;
   collapsed: boolean;
   onToggleCollapse: () => void;
+  // #494: the already-combined `data-vscode-context` JSON string (recordUtils.ts's
+  // headerCellContext + combineVscodeContexts) VS Code's own `contributes.menus["webview/context"]`
+  // gates Copy as Override Into…/Copy as New Record Into… on — same shape as DiskCell's own
+  // `vscodeContext` prop, computed by the caller (RecordPanel) rather than derived in here.
+  vscodeContext?: string;
 }
 
 // #304: the on-screen wording for each read-only reason, plus the tooltip that explains it.
@@ -98,11 +103,11 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', {
 // any more; the header record's masters field still renders through the ordinary compare-grid
 // rows below, read-only.
 export function PluginHeader({
-  override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
+  override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse, vscodeContext,
 }: PluginHeaderProps) {
   const reason = readOnlyReason(isImmutable, inLoadOrder, isTracked);
   return (
-    <div>
+    <div data-vscode-context={vscodeContext}>
       {/* Issue #3: left-click the plugin-name chip collapses/expands this column. ADR-0036:
           origin is never what the user reads by default — always in the tooltip, inline in the
           label only when a second loaded copy shares this filename (showOriginInline). */}

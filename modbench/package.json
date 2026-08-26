@@ -481,6 +481,16 @@
         "command": "modbench.record.renumber",
         "title": "Change FormID…",
         "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.copyAsOverride",
+        "title": "Copy as Override Into…",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.record.copyAsNewRecord",
+        "title": "Copy as New Record Into…",
+        "category": "Modbench"
       }
     ],
     "menus": {
@@ -635,6 +645,14 @@
         },
         {
           "command": "modbench.record.renumber",
+          "when": "false"
+        },
+        {
+          "command": "modbench.record.copyAsOverride",
+          "when": "false"
+        },
+        {
+          "command": "modbench.record.copyAsNewRecord",
           "when": "false"
         }
       ],
@@ -917,6 +935,16 @@
           "command": "modbench.record.renumber",
           "when": "view == modbench.pluginListTree && viewItem == record",
           "group": "recordActions@2"
+        },
+        {
+          "command": "modbench.record.copyAsOverride",
+          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable)",
+          "group": "recordActions@3"
+        },
+        {
+          "command": "modbench.record.copyAsNewRecord",
+          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable)",
+          "group": "recordActions@4"
         }
       ],
       "webview/context": [
@@ -969,6 +997,16 @@
           "command": "modbench.vmad.setPropertyFlags",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\bvmadProperty\\b/",
           "group": "modbench@10"
+        },
+        {
+          "command": "modbench.record.copyAsOverride",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
+          "group": "modbench@11"
+        },
+        {
+          "command": "modbench.record.copyAsNewRecord",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
+          "group": "modbench@12"
         }
       ]
     },

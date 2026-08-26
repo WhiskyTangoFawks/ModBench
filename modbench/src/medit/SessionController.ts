@@ -490,6 +490,70 @@ export class SessionController {
     }
   }
 
+  /** #436/#494: Copy as Override Into… — the source record's own bytes land under the identical
+   *  FormKey in the destination plugin's working tree. No confirmation ("are you sure") — xEdit's
+   *  own CopyInto asks nothing before an override copy either, only before an EditorID-changing
+   *  copy-as-new. Returns whether it happened; success carries no new FormKey to report (the
+   *  backend's own `RecordEditResult.Success()` — an override echoes the caller's FormKey rather
+   *  than minting one), the same "success, nothing new" shape `deleteRecord` already uses. */
+  async copyRecordAsOverride(
+    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
+  ): Promise<boolean> {
+    try {
+      const { error, response } = await this.deps.client.POST('/records/{formKey}/copy-as-override', {
+        params: { path: { formKey } },
+        body: { sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] copyRecordAsOverride(${formKey}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${text}`);
+        return false;
+      }
+      this.deps.refreshTree();
+      return true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] copyRecordAsOverride(${formKey}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${message}`);
+      return false;
+    }
+  }
+
+  /** #436/#494: Copy as New Record Into… — a deep copy under a fresh FormKey (auto-allocated,
+   *  both-refs collision-safe, or `requestedFormKey`'s explicit typed-FormID path). No EditorID
+   *  prompt, unlike xEdit's own copy-as-new: the backend's request carries no EditorID field at
+   *  all, and `createRecord`'s own "land immediately, rename via the grid afterward" posture
+   *  already applies the same zero-friction answer to a freshly-created record — extending it here
+   *  is consistency with that existing decision, not a fresh divergence. Returns the new FormKey on
+   *  success, `undefined` on failure (already surfaced). */
+  async copyRecordAsNewRecord(
+    formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
+    requestedFormKey?: string,
+  ): Promise<string | undefined> {
+    try {
+      const { data, error, response } = await this.deps.client.POST('/records/{formKey}/copy-as-new-record', {
+        params: { path: { formKey } },
+        body: {
+          sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey: requestedFormKey ?? null,
+        },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] copyRecordAsNewRecord(${formKey}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${text}`);
+        return undefined;
+      }
+      this.deps.refreshTree();
+      return data?.newFormKey ?? undefined;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] copyRecordAsNewRecord(${formKey}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${message}`);
+      return undefined;
+    }
+  }
+
   /** #416: Save & Compile. `atRef` is the compile-at-`main` gesture's own target (never a
    *  "confirmed" flag — the confirmation itself is extension-side UX, S13); undefined is the
    *  normal working-tree compile. Returns null (not a thrown error) on a transport/HTTP failure —

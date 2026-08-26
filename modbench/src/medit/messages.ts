@@ -204,6 +204,21 @@ export interface VmadPropertyContext {
   preventDefaultContextMenuItems: true;
 }
 
+// #494 (name revived from #209, pre-ADR-0041): the record editor's own column header — one
+// override column's identity, carried the same way every other native-menu context here is.
+// Unlike the row-scoped contexts above, resolving the command this feeds (Copy as Override Into…/
+// Copy as New Record Into…) never round-trips back through the webview at all: since ADR-0041 the
+// mutation is an ordinary `SessionController` HTTP call the extension host already owns, the same
+// as the plugins-tree row entry point for the identical two commands — this context exists only
+// to tell the host *which* record/plugin/origin was right-clicked.
+export interface ColumnHeaderContext {
+  webviewSection: 'recordHeader';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  preventDefaultContextMenuItems: true;
+}
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }

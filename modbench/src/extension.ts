@@ -27,8 +27,9 @@ import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import {
   EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext,
-  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext,
+  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext,
 } from './medit/messages';
+import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { RecordDecorationProvider } from './medit/RecordDecorationProvider';
 import { recordResourceUri } from './medit/recordResourceUri';
@@ -1153,6 +1154,7 @@ function registerPluginRowCommands(
     registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
     ...registerRecordLifecycleCommands(controller, repository, outputChannel),
+    ...registerRecordCopyCommands(controller, repository, outputChannel),
   ];
 }
 
@@ -1330,14 +1332,7 @@ function registerCreatePluginCommand(
 function registerRecordLifecycleCommands(
   controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
-  const resolveOriginOrReport = async (node: { origin?: string; pluginName: string }): Promise<string | undefined> => {
-    const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
-    if (!origin) {
-      outputChannel.error(`[extension] record lifecycle command could not resolve an origin for "${node.pluginName}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${node.pluginName}" belongs to.`);
-    }
-    return origin;
-  };
+  const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
 
   return [
     // xEdit's own "Add": zero friction, no prompt — a blank record appears immediately, named
@@ -1397,6 +1392,114 @@ function registerRecordLifecycleCommands(
       if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Renumbered to ${newFormKey}.`);
     }),
   ];
+}
+
+/** #427: shared by `registerRecordLifecycleCommands` and `registerRecordCopyCommands` — a node's
+ *  own `origin` when the row already carries it (ADR-0036), else `controller.resolveOrigin`;
+ *  reports and returns undefined when neither answers (there is no ambient fallback worth a
+ *  QuickPick, which is why every command that needs this is palette-gated). */
+function makeResolveOriginOrReport(
+  controller: SessionController, outputChannel: vscode.LogOutputChannel,
+): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
+  return async (node) => {
+    const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
+    if (!origin) {
+      outputChannel.error(`[extension] record lifecycle command could not resolve an origin for "${node.pluginName}"`);
+      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${node.pluginName}" belongs to.`);
+    }
+    return origin;
+  };
+}
+
+/** #436/#494 (xEdit parity: xeMainForm.pas's CopyInto, reached from both mniNavCopyIntoClick — the
+ *  tree row — and mniViewHeaderCopyIntoClick — the column header): one command per gesture,
+ *  registered once, reached from either entry point. `arg` is a plugins-tree RecordNode or the
+ *  column header's own ColumnHeaderContext (its data-vscode-context payload) — resolved to the
+ *  same {formKey, plugin, origin} identity either way (recordCopyIdentity below), so everything
+ *  past that point is one implementation path regardless of which row was right-clicked (#281's
+ *  original unification, preserved). Split out of registerRecordLifecycleCommands purely for that
+ *  function's own line budget, same reason registerArrayOpCommands/registerVmadOpCommands split
+ *  off registerEditorCommands. */
+function registerRecordCopyCommands(
+  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable[] {
+  const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
+
+  return [
+    vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: RecordNode | ColumnHeaderContext) => {
+      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport);
+    }),
+    vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: RecordNode | ColumnHeaderContext) => {
+      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport);
+    }),
+  ];
+}
+
+/** #436/#494: the plugins-tree row and column-header entry points' shared identity — a
+ *  `RecordNode` names it via its own `record.plugin`, a `ColumnHeaderContext` (the header's
+ *  `data-vscode-context` payload) names it directly. Undefined for anything else (a `RecordNode`
+ *  whose `kind` isn't `'record'` — the command is only ever contributed on a record row, but a
+ *  stale/mistyped invocation should still resolve to nothing rather than throw). */
+function recordCopyIdentity(
+  arg: RecordNode | ColumnHeaderContext | undefined,
+): { formKey: string; plugin: string; origin?: string } | undefined {
+  if (!arg) return undefined;
+  if ('kind' in arg) return arg.kind === 'record' ? { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin } : undefined;
+  return { formKey: arg.formKey, plugin: arg.plugin, origin: arg.origin };
+}
+
+/** #436/#494: the destination QuickPick both copy commands share — candidates are
+ *  `copyTargetPlugins`' own gesture-aware filter (immutable always excluded; every plugin already
+ *  carrying the record excluded too, but only for 'copy-as-override' — xEdit parity,
+ *  xeMainForm.pas:3023-3042). No "New Plugin…" entry, unlike #209's own retired picker: "copy into
+ *  a new file" is out of scope (#494). Returns the picked `PluginMetadata` (not just its name) so
+ *  the caller reads `.origin` straight off it — a second `resolveOrigin` round trip for the
+ *  destination would be redundant, `repository.getPlugins()` already answers it. */
+async function pickCopyDestination(
+  repository: PluginRepository, gesture: CopyGesture, formKey: string,
+): Promise<{ name: string; origin: string } | undefined> {
+  const allPlugins = await repository.getPlugins();
+  const carrying = gesture === 'copy-as-override' ? await repository.getRecordOverridePlugins(formKey) : [];
+  const candidates = copyTargetPlugins(allPlugins, gesture, carrying);
+  if (candidates.length === 0) {
+    void vscode.window.showInformationMessage('Modbench: No eligible destination plugin for this copy.');
+    return undefined;
+  }
+  const items = candidates.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]`, plugin: p }));
+  const picked = await vscode.window.showQuickPick(items, {
+    placeHolder: gesture === 'copy-as-override' ? 'Copy as Override Into…' : 'Copy as New Record Into…',
+  });
+  return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
+}
+
+/** #436/#494: the shared body behind both `modbench.record.copyAsOverride`/`copyAsNewRecord` —
+ *  resolve which record was right-clicked and from where, pick a destination, call the matching
+ *  `SessionController` method, toast on success. No confirmation modal (xEdit's own CopyInto asks
+ *  nothing before an override copy, only before an EditorID-changing copy-as-new — and Copy as New
+ *  Record here prompts for neither an EditorID nor a FormKey, the same "land immediately, rename
+ *  via the grid afterward" posture `record.create` already established for a blank creation). */
+async function runCopyRecordCommand(
+  gesture: CopyGesture, arg: RecordNode | ColumnHeaderContext | undefined,
+  controller: SessionController, repository: PluginRepository,
+  resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
+): Promise<void> {
+  const identity = recordCopyIdentity(arg);
+  if (!identity) return;
+  const sourceOrigin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
+  if (!sourceOrigin) return;
+
+  const destination = await pickCopyDestination(repository, gesture, identity.formKey);
+  if (!destination) return;
+
+  if (gesture === 'copy-as-override') {
+    const ok = await controller.copyRecordAsOverride(identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin);
+    if (ok) void vscode.window.showInformationMessage(`Modbench: Copied ${identity.formKey} into ${destination.name}.`);
+  } else {
+    const newFormKey = await controller.copyRecordAsNewRecord(
+      identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin,
+    );
+    if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Copied as ${newFormKey} into ${destination.name}.`);
+  }
 }
 
 /** #417: polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and

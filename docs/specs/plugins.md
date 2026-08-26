@@ -342,14 +342,26 @@ without saying what is not yet known would make that worse, not better.
   "Load more…" node at the end of a page.
 - **Record nodes** (`contextValue: "record"`, or `"recordImmutable"` for a row whose plugin is
   read-only for editing — an immutable plugin or a shadowed copy, which hides Remove/Change
-  FormID…; #427): labeled `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no EditorID).
-  Single-click (or Open Record) opens the editor; the context menu adds Remove (a confirmation
-  listing every selected record, deleting the whole selection as one batch; the Delete key also
-  triggers it) and Change FormID… (renumber), with xEdit's own captions, per
-  [medit-version-control.md](medit-version-control.md) — Add lives on the record-type row above
-  a plugin's records. Removing a record deletes its source file as an ordinary working-tree
-  change (#427); an uncommitted create has no special-cased handling — its source file is simply
-  removed the same way, since it was never committed to begin with.
+  FormID… (though not Copy — see below); #427): labeled `{EditorID}  [{RecordType}:{FormID}]`
+  (FormKey only when no EditorID). Single-click (or Open Record) opens the editor; the context
+  menu adds Remove (a confirmation listing every selected record, deleting the whole selection as
+  one batch; the Delete key also triggers it) and Change FormID… (renumber), with xEdit's own
+  captions, per [medit-version-control.md](medit-version-control.md) — Add lives on the
+  record-type row above a plugin's records. Removing a record deletes its source file as an
+  ordinary working-tree change (#427); an uncommitted create has no special-cased handling — its
+  source file is simply removed the same way, since it was never committed to begin with.
+- **Copy as Override Into…/Copy as New Record Into…** (#281 shipped this; ADR-0041's
+  pending-change sweep tore it out along with the storage layer it sat on; #436/#494 restored it):
+  available on both `"record"` and `"recordImmutable"` rows — unlike Remove/Change FormID…,
+  copying *from* an immutable or shadowed source is the ordinary case here, not an exception — and
+  identically from the record editor's own column header context menu, both entry points sharing
+  one implementation path. A native QuickPick picks the destination plugin, filtered to mutable
+  plugins only; Copy as Override additionally excludes every plugin that already carries the
+  record (xEdit parity, `xeMainForm.pas`'s `CopyInto` — a plugin cannot hold two overrides of the
+  same FormKey), which Copy as New Record does not apply, since its fresh FormKey always coexists
+  with the source. Copy as New Record prompts for neither an EditorID nor a FormKey: it lands
+  immediately under the source's own EditorID and the next free local FormID, renamed afterward
+  like any freshly created record (Add's own posture, above).
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
   the record browser for everything a row expands into (`"recordType"`, `"record"` /
@@ -598,9 +610,9 @@ overflow, then native **Collapse All** last.
   pluginDrifted`) — see Drift below. Absent on an undrifted row (nothing to re-read) and on a
   drifted row whose name resolves to nothing (nowhere to read from). Destructive, so no icon and
   no inline variant — overflow plus a modal confirm, per `modbench/CLAUDE.md` rule 4.
-- Record-scope context menu entries (Copy as Override Into…, Copy as New Record Into…, Remove,
-  Create Placed…) are described under Record navigation above — they apply to this tree's
-  expanded rows the same way regardless of which side of the composite built the row above them.
+- Record-scope context menu entries (Remove, Change FormID…, Copy as Override Into…, Copy as New
+  Record Into…) are described under Record navigation above — they apply to this tree's expanded
+  rows the same way regardless of which side of the composite built the row above them.
 
 ### Write mechanism
 

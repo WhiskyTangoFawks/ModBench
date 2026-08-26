@@ -520,6 +520,40 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
   });
 });
 
+// #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as the column header's
+// own native right-click menu — proves the real end-to-end wiring (RecordPanel → PluginHeader),
+// not just PluginHeader.test.tsx's own component-level pin, the same two-layer treatment VMAD's
+// own contexts got (recordUtils.test.ts's builder test + VmadStructuralOps.test.tsx's panel test).
+describe('RecordPanel — column header native right-click menu (#494)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('the header cell carries the recordHeader context, naming this column\'s own record identity', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = {
+      conflictAll: 'OnlyOne',
+      overrides: [{
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        loadOrderIndex: 0, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      }],
+      diffs: [{
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+      }],
+    };
+    const { container } = renderPanel(compare);
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+
+    // Same `th > div` query the #304 dimming test above uses — the context lives on
+    // PluginHeader's own root div, nested inside RecordPanel's <th>.
+    const headerRoot = container.querySelector('th > div');
+    expect(JSON.parse(headerRoot!.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+});
+
 describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)', () => {
   afterEach(() => vi.unstubAllGlobals());
 

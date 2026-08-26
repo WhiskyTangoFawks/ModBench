@@ -122,8 +122,12 @@ export function appendArrayElement(array: unknown[], value: unknown): unknown[] 
 // The two interfaces themselves live in `src/medit/messages.ts` (imported below), not here —
 // extension.ts's own command handlers need the identical shape to type the `ctx` parameter VS
 // Code hands them, and that module is the one place both processes already share a contract.
-export type { ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext } from './messages';
-import type { ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext } from './messages';
+export type {
+  ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext, ColumnHeaderContext,
+} from './messages';
+import type {
+  ArrayElementContext, ArrayParentContext, VmadScriptsContext, VmadScriptContext, VmadPropertyContext, ColumnHeaderContext,
+} from './messages';
 
 // Issue #227: DiffRow only attaches this on a mutable column's unsorted-array cell — its mere
 // presence is the gate, so no separate immutable/isSortable flag travels in the payload the way
@@ -172,6 +176,15 @@ export function vmadPropertyContext(
   return {
     webviewSection: 'vmadProperty', formKey, plugin, origin, scriptName, propName, preventDefaultContextMenuItems: true,
   };
+}
+
+// #494: the record editor's column header — restores Copy as Override Into…/Copy as New Record
+// Into… (#436) as native `webview/context` entries, the same mechanism every other row-level menu
+// here already uses. No mutable/immutable/tracked gating baked in here: the column's own
+// read-only-ness is irrelevant to whether it can be a *source* — copying from a vanilla master is
+// the headline case — so every column carries this context unconditionally.
+export function headerCellContext(formKey: string, plugin: string, origin: string): ColumnHeaderContext {
+  return { webviewSection: 'recordHeader', formKey, plugin, origin, preventDefaultContextMenuItems: true };
 }
 
 // Issue #231 (review): combines every context object sharing one row into the single
