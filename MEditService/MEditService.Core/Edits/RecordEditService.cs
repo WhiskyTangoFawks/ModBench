@@ -995,6 +995,18 @@ public sealed class RecordEditService(
         // children of its own (every other renumbered type).
         index.RepointContainerChildParent(plugin, oldFormKey, newFormKey);
 
+        // #493: the mirror gap #488 declined — a renumbered Worldspace's *exterior* cells
+        // (cell_location.parent_worldspace), which CreateWorkingTreeRecord's own re-derivation above
+        // can never reach (ContainerChildFields cannot walk into Worldspace.SubCells at all; it only
+        // ever recurses into TopCell). Positioned the same as RepointContainerChildParent, before the
+        // old FormKey's rows are torn down — and safely so even though CreateWorkingTreeRecord already
+        // ran above: that call's own cell_location write for TopCell deletes-then-inserts keyed by the
+        // *cell's own* cell_form_key (unaffected by whichever parent_worldspace value the row currently
+        // holds), so it never leaves a stale TopCell row for this UPDATE to touch — this only ever
+        // matches an exterior cell's row, which CreateWorkingTreeRecord's re-derivation never reaches
+        // either way. A no-op for any renumbered record other than a Worldspace.
+        index.RepointCellLocationParent(plugin, oldFormKey, newFormKey);
+
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 
