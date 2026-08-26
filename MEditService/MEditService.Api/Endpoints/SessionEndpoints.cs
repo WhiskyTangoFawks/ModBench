@@ -1,5 +1,6 @@
 using MEditService.Bridge;
 using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 using MEditService.Core.Session;
 using Mutagen.Bethesda;
 
@@ -69,6 +70,15 @@ public static class SessionEndpoints
         return Results.Problem("The session load was superseded by another load or by unloading the session.", statusCode: 409);
     }
 
+    // #445: a client asking for a release this build has no Mutagen assembly for is a bad request,
+    // not a server fault — 400 with the exception's own actionable message (names the release and
+    // the missing assembly), matching ParseGameRelease's own 400 for a bad enum string just above.
+    private static IResult UnsupportedGameRelease(ILogger logger, UnsupportedGameReleaseException ex)
+    {
+        logger.LogWarning(ex, "Rejected session load for unsupported game release {Release}", ex.Release);
+        return Results.Problem(ex.Message, statusCode: 400);
+    }
+
     private static IResult? ParseGameRelease(string? raw, out GameRelease release)
     {
         return Enum.TryParse(raw, out release)
@@ -101,6 +111,10 @@ public static class SessionEndpoints
         catch (OperationCanceledException ex)
         {
             return SupersededLoad(logger, ex);
+        }
+        catch (UnsupportedGameReleaseException ex)
+        {
+            return UnsupportedGameRelease(logger, ex);
         }
         catch (Exception ex)
         {
@@ -143,6 +157,10 @@ public static class SessionEndpoints
         catch (OperationCanceledException ex)
         {
             return SupersededLoad(logger, ex);
+        }
+        catch (UnsupportedGameReleaseException ex)
+        {
+            return UnsupportedGameRelease(logger, ex);
         }
         catch (Exception ex)
         {

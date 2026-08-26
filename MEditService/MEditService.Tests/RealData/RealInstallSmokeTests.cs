@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using MEditService.Core.Queries;
+using MEditService.Core.Schema;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Installs;
@@ -26,6 +27,12 @@ public sealed class RealInstallSmokeTests
         GameRelease.Starfield,
     ];
 
+    // #445: which of the candidates above are actually usable is decided here, never by editing
+    // this list — a release whose Mutagen record-type assembly isn't referenced (true for every
+    // entry above except Fallout4 in this build) is not offered, not loaded, and not counted
+    // towards `tested` below. SchemaReflector.IsSupported logs the skip warning itself.
+    private static readonly ISchemaReflector SchemaReflector = new SchemaReflector();
+
     /// <summary>
     /// Marks the smoke test skipped (not passed) unless <c>MEDIT_SMOKE=1</c>, so normal and
     /// mutation runs report an honest "skipped" rather than a green no-op.
@@ -47,6 +54,11 @@ public sealed class RealInstallSmokeTests
 
         foreach (var release in CandidateGames)
         {
+            // Skip gracefully (#445): an unsupported release is not offered, never a crash — this
+            // is discovery's own guard, checked before even looking for an install of it.
+            if (!SchemaReflector.IsSupported(release))
+                continue;
+
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
