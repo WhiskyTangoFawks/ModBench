@@ -635,6 +635,40 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(cells[0].label).toBe('< 12,  -5>');
   });
 
+  // #497: xEdit's TwbMainRecord.GetDisplayName checks GetFullName unconditionally, before any
+  // signature-specific branch — including the CELL branch's persistent-cell / grid-coordinate
+  // logic. A FULL name wins over both.
+  it('#497: an exterior cell with a FULL name shows it, not the grid coordinates', () => {
+    const node = new CellNode('M.esp', {
+      formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
+      isPersistentWorldspaceCell: false, fullName: 'Sanctuary Hills',
+    });
+    expect(node.label).toBe('Sanctuary Hills');
+  });
+
+  it('#497: an exterior cell with no FULL name still shows the padded grid coordinates (#251, unchanged)', () => {
+    const node = new CellNode('M.esp', {
+      formKey: 'c:M.esp', editorId: 'TheCell', cellX: 12, cellY: -5,
+      isPersistentWorldspaceCell: false, fullName: null,
+    });
+    expect(node.label).toBe('< 12,  -5>');
+  });
+
+  // Guard test: a plausible wrong implementation checks isPersistentWorldspaceCell before
+  // fullName (the literal reading of #497's own AC #3) — but xEdit's actual GetDisplayName checks
+  // GetFullName first, unconditionally, and only reaches the GroupType=1 (persistent) check when
+  // FULL is empty. Confirmed by reading wbImplementation.pas directly: `Result := GetFullName; if
+  // Result = '' then if ... (GetSignature = 'CELL') then begin if ... GroupType = 1 ... Result :=
+  // '<Persistent Worldspace Cell>' else ...`. The persistent-check-first rival makes this fail by
+  // producing '<Persistent Worldspace Cell>' instead.
+  it('#497: the persistent worldspace cell with a FULL name shows the FULL name, not the placeholder', () => {
+    const node = new CellNode('M.esp', {
+      formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null,
+      isPersistentWorldspaceCell: true, fullName: 'Sanctuary Hills',
+    });
+    expect(node.label).toBe('Sanctuary Hills');
+  });
+
   it('surfaces every block-less cell row under a worldspace, not just the first (#251)', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
     (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
@@ -663,7 +697,7 @@ describe('PluginTreeProvider worldspace tree', () => {
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false });
+    const cellNode = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null });
 
     const groups = await provider.getChildren(cellNode);
     expect(groups).toHaveLength(1); // only persistent (temporary empty)
@@ -780,7 +814,7 @@ describe('PluginTreeProvider fetch failures', () => {
   it('fetchCellGroups: renders an error node when getCellReferences fails', async () => {
     const repo = { ...makeRepository(), getCellReferences: vi.fn().mockRejectedValue(new Error('boom')) };
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false });
+    const node = new CellNode('M.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null });
 
     const children = await provider.getChildren(node);
 
@@ -858,7 +892,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
       temporary: [],
     });
     const provider = new PluginTreeProvider(repo);
-    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false }, 'ModB');
+    const node = new CellNode('Shared.esp', { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null }, 'ModB');
 
     const [groupNode] = await provider.getChildren(node) as PlacedGroupNode[];
     expect(repo.getCellReferences).toHaveBeenCalledWith('Shared.esp', 'c:M.esp', 'ModB');
@@ -889,7 +923,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
   it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
     const repo = makeRepository();
     const provider = new PluginTreeProvider(repo);
-    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false };
+    const cell = { formKey: 'c:M.esp', editorId: 'TheCell', cellX: 0, cellY: 0, isPersistentWorldspaceCell: false, fullName: null };
     const fromA = new CellNode('Shared.esp', cell, 'ModA');
     const fromB = new CellNode('Shared.esp', cell, 'ModB');
 

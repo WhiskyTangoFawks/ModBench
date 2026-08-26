@@ -172,6 +172,11 @@ export interface CellSummary {
   // its siblings above: the backend always emits it (toCellSummary normalizes the generated
   // schema's own optional field to a concrete boolean at the repository boundary).
   isPersistentWorldspaceCell: boolean;
+  // #497: the CELL record's own FULL name, independent of isPersistentWorldspaceCell — xEdit's
+  // TwbMainRecord.GetDisplayName checks FULL name first, unconditionally, before even the
+  // persistent-cell placeholder, so the tree provider needs both facts separately rather than one
+  // pre-resolved label. null when the cell has no FULL name set.
+  fullName: string | null;
 }
 
 export interface PlacedSummary {

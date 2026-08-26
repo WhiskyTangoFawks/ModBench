@@ -105,6 +105,7 @@ function toCellSummary(c: GenCell): CellSummary {
     cellX: c.cellX ?? null,
     cellY: c.cellY ?? null,
     isPersistentWorldspaceCell: c.isPersistentWorldspaceCell ?? false,
+    fullName: c.fullName ?? null,
   };
 }
 

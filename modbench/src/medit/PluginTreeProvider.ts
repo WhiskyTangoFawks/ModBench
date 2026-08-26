@@ -129,20 +129,34 @@ function strRight3(n: number | null): string {
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
-    // xEdit's TwbMainRecord.GetDisplayName CELL branch (wbImplementation.pas): the worldspace's own
-    // persistent cell (container group type 1) is always '<Persistent Worldspace Cell>'; otherwise
-    // xEdit checks the record's FULL name first and only falls into the '<x, y>' grid format when
-    // that's empty. CellSummary carries no FULL-name field at all today, so an exterior cell (has
-    // grid coordinates) always uses the coordinate format here regardless of its own EditorID —
-    // never EDID either way, but also not the FULL-name-first precedence xEdit actually has. Known
-    // gap, not a deliberate divergence; a FULL-name field is new scope (DTO + backend plumbing)
-    // beyond #251's AC. An interior cell (no grid coordinates, out of scope for #251) keeps the
-    // EditorID-or-FormKey fallback.
-    const label = cell.isPersistentWorldspaceCell
-      ? '<Persistent Worldspace Cell>'
-      : cell.cellX != null
-        ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>`
-        : cell.editorId ?? cell.formKey;
+    // xEdit's TwbMainRecord.GetDisplayName CELL branch (wbImplementation.pas), read directly (#497
+    // — #251's original version of this comment paraphrased the precedence and got it wrong; do
+    // not re-derive it from this comment either, go back to the source if it's ever in doubt):
+    //
+    //   Result := GetFullName;
+    //   if Result = '' then
+    //     if ... else if (GetSignature = 'CELL') then begin
+    //       if Supports(GetContainer, IwbGroupRecord, GroupRecord) and (GroupRecord.GroupType = 1) then
+    //         Result := '<Persistent Worldspace Cell>'
+    //       else
+    //         if GetGridCell(GridCell) then
+    //           Result := '<' + StrRight(GridCell.X.ToString, 3) + ', ' + StrRight(GridCell.Y.ToString, 3) + '>';
+    //     end else if ...
+    //
+    // GetFullName runs unconditionally, before any signature-specific branch — including CELL's
+    // own persistent-cell (group type 1) check. So FULL name wins even for the worldspace's own
+    // persistent cell; the placeholder and the grid format are both only reached when FULL is
+    // empty. EditorID is never referenced anywhere in this function, for any signature — an
+    // interior cell (no grid coordinates, out of scope for #251) keeps the EditorID-or-FormKey
+    // fallback below, but that is this file's own choice for the case xEdit's GetDisplayName
+    // resolves through its generic GetSummary fallback instead, not xEdit's own precedence.
+    const label = cell.fullName
+      ? cell.fullName
+      : cell.isPersistentWorldspaceCell
+        ? '<Persistent Worldspace Cell>'
+        : cell.cellX != null
+          ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>`
+          : cell.editorId ?? cell.formKey;
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };

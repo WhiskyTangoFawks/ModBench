@@ -202,6 +202,7 @@
       "CellY": null,
       "EditorId": "CroupManor01",
       "FormKey": "03C0F0:Fallout4.esm",
+      "FullName": null,
       "IsPersistentWorldspaceCell": false
     },
     {
@@ -209,6 +210,7 @@
       "CellY": null,
       "EditorId": "MinutemenHoldingCell",
       "FormKey": "0782A8:Fallout4.esm",
+      "FullName": null,
       "IsPersistentWorldspaceCell": false
     },
     {
@@ -216,6 +218,7 @@
       "CellY": null,
       "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
       "FormKey": "092A18:Fallout4.esm",
+      "FullName": null,
       "IsPersistentWorldspaceCell": false
     }
   ],
@@ -254,6 +257,7 @@
         "CellY": 7,
         "EditorId": null,
         "FormKey": "00DB41:Fallout4.esm",
+        "FullName": null,
         "SubX": 0,
         "SubY": 0
       },
@@ -264,6 +268,7 @@
         "CellY": 7,
         "EditorId": null,
         "FormKey": "00DB42:Fallout4.esm",
+        "FullName": null,
         "SubX": 0,
         "SubY": 0
       },
@@ -274,6 +279,7 @@
         "CellY": 7,
         "EditorId": null,
         "FormKey": "00DB43:Fallout4.esm",
+        "FullName": null,
         "SubX": 0,
         "SubY": 0
       },
@@ -284,6 +290,7 @@
         "CellY": 0,
         "EditorId": null,
         "FormKey": "018AA2:Fallout4.esm",
+        "FullName": null,
         "SubX": null,
         "SubY": null
       }
