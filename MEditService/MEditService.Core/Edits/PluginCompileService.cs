@@ -246,6 +246,14 @@ public sealed class PluginCompileService(
     /// separate step only paid for on failure) but names the differing source file's own path rather
     /// than a record via <c>Equals</c> — there is no independent object to compare against here
     /// either, only the regenerated text and the real text.</para>
+    ///
+    /// <para><b>Unchanged by #489, deliberately.</b> A structural write's own group-folder
+    /// renormalization (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>) is what keeps a
+    /// gap-leaving delete/renumber from ever reaching this comparison mismatched — this method's own
+    /// byte-exact, per-path comparison stays exactly as it was. One case it still correctly refuses
+    /// because of that: a crash mid-renormalization, which leaves a group folder half-renumbered —
+    /// this gate catches that the same way it catches any other genuine divergence, pointing at
+    /// re-Track, with no new recovery machinery needed.</para>
     /// </summary>
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {

@@ -80,10 +80,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     `RealData/DialogueOrderDamageTests` (0 permuted parents / 0 moved slots, reproducing #464's own
     harness against the tree Track actually writes). No longer allowlisted by
     `SourceIngestParityTests` — that tolerance is gone, not widened. Point writes
-    (`Edits/RecordEditService` create/delete/renumber/rename) keep the prefix consistent: create/renumber
-    assign the next free index (never the sibling count, which would collide after a gap), delete
-    leaves gaps rather than renumbering survivors, and an EditorID rename carries its own old index
-    forward unchanged.
+    (`Edits/RecordEditService` create/delete/renumber/rename) keep the prefix consistent: create,
+    delete and renumber all renormalize their touched group folder to contiguous `[0..k]` as their own
+    last file-system act (**#489** — survivors keep their relative order; no persistent gaps survive a
+    write), and an EditorID rename carries its own old index forward unchanged.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
