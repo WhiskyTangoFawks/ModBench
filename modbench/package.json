@@ -202,6 +202,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.field.openExtended",
+        "title": "Open in Editor…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.reloadSession",
         "title": "Reload Session",
         "category": "Modbench"
@@ -549,6 +554,10 @@
         },
         {
           "command": "modbench.vmad.setPropertyFlags",
+          "when": "false"
+        },
+        {
+          "command": "modbench.field.openExtended",
           "when": "false"
         },
         {
@@ -1007,6 +1016,11 @@
           "command": "modbench.record.copyAsNewRecord",
           "when": "webviewId == 'modbench' && webviewSection =~ /\\brecordHeader\\b/",
           "group": "modbench@12"
+        },
+        {
+          "command": "modbench.field.openExtended",
+          "when": "webviewId == 'modbench' && webviewSection =~ /\\bstringValue\\b/",
+          "group": "modbench@13"
         }
       ]
     },

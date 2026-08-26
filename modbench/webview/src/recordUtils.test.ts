@@ -20,6 +20,7 @@ import {
   vmadScriptContext,
   vmadPropertyContext,
   headerCellContext,
+  stringValueContext,
   type PathSegment,
 } from './recordUtils';
 import type { CompareOverride } from './types';
@@ -416,6 +417,35 @@ describe('headerCellContext', () => {
     expect(JSON.parse(result!)).toEqual({
       webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
       preventDefaultContextMenuItems: true,
+    });
+  });
+});
+
+// #258 / ADR-0039: the string-cell right-click menu's own identity — the extended editor's only
+// remaining trigger now that no left-click gesture reaches it.
+describe('stringValueContext', () => {
+  it('carries the cell\'s own identity, current value and readOnly flag', () => {
+    expect(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false)).toEqual({
+      webviewSection: 'stringValue',
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      origin: 'ModA',
+      fieldName: 'Name',
+      value: 'Dogmeat',
+      readOnly: false,
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('carries readOnly: true for an immutable/untracked/not-in-load-order column unchanged', () => {
+    expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true).readOnly).toBe(true);
+  });
+
+  it('combines like every other context', () => {
+    const result = combineVscodeContexts(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false));
+    expect(JSON.parse(result!)).toEqual({
+      webviewSection: 'stringValue', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      fieldName: 'Name', value: 'Dogmeat', readOnly: false, preventDefaultContextMenuItems: true,
     });
   });
 });

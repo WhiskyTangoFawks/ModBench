@@ -28,6 +28,7 @@ import { buildWebviewHtml } from './medit/webviewHtml';
 import {
   EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext,
   type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext,
+  type StringValueContext,
 } from './medit/messages';
 import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
@@ -472,6 +473,28 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
     ...registerRecordViewCommands(deps),
     ...registerArrayOpCommands(deps.recordPanels),
     ...registerVmadOpCommands(deps.recordPanels),
+    ...registerFieldOpCommands(deps.recordPanels),
+  ];
+}
+
+// #258 / ADR-0039: the string cell's right-click menu — same broadcast-and-self-filter shape as
+// registerArrayOpCommands/registerVmadOpCommands above and for the identical reason (the
+// extension host has no live reference into any open panel's own React state, which alone holds
+// the record's current display label). Unlike those two, there's nothing to compute here beyond
+// forwarding `ctx` — `stringValueContext` (recordUtils.ts) already carries the cell's own current
+// value and readOnly flag, computed webview-side at right-click time, so the matching panel's own
+// listener can call `handleOpenExtended` directly with no further webview-side computation
+// (RecordPanel.tsx's FIELD_OPEN_EXTENDED_EDITOR branch).
+function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+  return [
+    vscode.commands.registerCommand('modbench.field.openExtended', (ctx?: StringValueContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
+        formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
+        value: ctx.value, readOnly: ctx.readOnly,
+      });
+    }),
   ];
 }
 

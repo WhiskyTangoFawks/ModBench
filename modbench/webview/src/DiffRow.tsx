@@ -11,7 +11,7 @@ import { copyToClipboard } from './nativeBridge';
 import { baseCell, toggleBtnStyle, getCellStyle, focusedRowStyle, DIMMED_OPACITY } from './gridStyles';
 import {
   arrayElementContext, arrayParentContext, combineVscodeContexts,
-  vmadScriptsContext, vmadScriptContext, vmadPropertyContext, type Column, type PathSegment,
+  vmadScriptsContext, vmadScriptContext, vmadPropertyContext, stringValueContext, type Column, type PathSegment,
 } from './recordUtils';
 import { WRAPPER_NAME } from './vmadTreeAdapter';
 import { parseVmadPath } from './vmadOps';
@@ -39,12 +39,6 @@ interface RenderCellExtras {
   // #415: where an edited value goes. Absent means this cell has nowhere to write — an immutable
   // or untracked column, or a caller outside the field grid — and the leaf renders read-only.
   onCommit?: (v: unknown) => void;
-  // #426: a `string` cell's double click — see ScalarCell's own `onOpenExtended` doc comment.
-  // Already bound to this cell's own identity (plugin/fieldPath/value/readOnly) by the disk-cell
-  // call site below; renderCell only decides whether the string branch gets it. Absent for every
-  // other type and every caller outside the field grid (VMAD/Condition — Track 5), where a string
-  // cell's double click keeps opening the inline editor unchanged.
-  onOpenExtended?: () => void;
 }
 
 // #415/ADR-0041: leaves render read-only unless the caller supplies `onCommit` — the presence of
@@ -57,7 +51,7 @@ function renderCell(
   meta: FieldMetadata,
   isFocused: boolean,
   onOpen: (fk: string) => void,
-  { checkError, resolution, summaryLabel, onCommit, onOpenExtended }: RenderCellExtras = {},
+  { checkError, resolution, summaryLabel, onCommit }: RenderCellExtras = {},
 ): React.ReactNode {
   if (meta.type === 'formKey') {
     return (
@@ -147,9 +141,6 @@ function renderCell(
       // column allows — ORed with "the caller gave us nowhere to write", so both have to say yes.
       editable={onCommit != null && !meta.readOnly}
       onCommit={onCommit}
-      // #426: only `string` reads it (ScalarCell's own type check) — passed unconditionally for
-      // every scalar type, same as every other extra here.
-      onOpenExtended={onOpenExtended}
     />
   );
 }
@@ -241,12 +232,6 @@ interface DiffRowProps {
   // #415: commits an edited value for one column's cell on this row. Absent when this row cannot be
   // written at all (a synthesized read-only row, or a panel with no write path wired).
   onEditCell?: (plugin: ColumnKey, fieldPath: string, value: unknown) => void;
-  // #426: opens a `string` cell's value in the extended editor (a real editor tab) — reported up
-  // with this cell's own identity (plugin, field path, current disk value, and whether the column
-  // is writable) so RecordPanel, which alone knows the record's own label, can build the bridge
-  // call. Absent when the panel has no write path wired (RecordPanel always supplies one, same
-  // convention as onEditCell); DiffRow never opens the tab itself.
-  onOpenExtendedEditor?: (plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => void;
   // Issue #142/#227 (#426: restored): Add on this row — present only when this row is itself a
   // mutable, unsorted array's own row (RecordPanel's buildRows decides that; DiffRow only wires
   // whatever it's handed, per column, gated by editableColumns the same as onEditCell).
@@ -262,7 +247,7 @@ export function DiffRow({
   diff, columns, overrideMap, fieldMetaMap, notInLoadOrderSet,
   collapsedColumns, onOpen,
   context, hasChildren, isExpanded, onToggle,
-  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell, onOpenExtendedEditor,
+  rowKey, focusedCell, onFocusCell, editableColumns, onEditCell,
   onArrayAdd, onArrayRemove, onArrayMoveUp, onArrayMoveDown,
 }: Readonly<DiffRowProps>) {
   // Issue #231: prefer the caller's own `context.overrideMeta` whenever it's supplied — RecordPanel
@@ -386,7 +371,18 @@ export function DiffRow({
           // Ctrl+↑/↓) — only the vscodeContext half of DiskCell's contract applies here, wired
           // below alongside the array contexts on the same writable-column gate.
           const vmadEditable = !!onEditCell && editableColumns.has(key) && (isVmadWrapperRow || isVmadScriptRow || !!vmadPropertyPath);
-          const vscodeContext = (arrayEditable || vmadEditable) ? combineVscodeContexts(
+          // #415/#258: the one definition of "this cell can be written" — onEditCell wired, the
+          // column in editableColumns, and no per-row readOnly veto. Hoisted above vscodeContext
+          // (rather than computed only inside the leaf branch below, as it was pre-#258) because
+          // stringValueContext needs it too — a string cell's own `readOnly` is this same boolean,
+          // negated, so the right-click menu and the inline-editor gate can never disagree about
+          // whether the cell is writable.
+          const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
+          // #258 / ADR-0039: a `string` cell always carries its own right-click context — mutable
+          // or immutable alike, unlike arrayEditable/vmadEditable above which only attach on a
+          // writable column. A read-only tab is still the only way to read a long immutable value
+          // in full (unchanged from before this ticket; only the trigger moved off double click).
+          const vscodeContext = (arrayEditable || vmadEditable || meta.type === 'string') ? combineVscodeContexts(
             isUnsortedArrayParentRow
               ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField)
               : undefined,
@@ -409,6 +405,12 @@ export function DiffRow({
               ? vmadPropertyContext(
                   col.override.formKey, col.override.plugin, col.override.origin,
                   vmadPropertyPath.script, vmadPropertyPath.prop,
+                )
+              : undefined,
+            meta.type === 'string'
+              ? stringValueContext(
+                  col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField,
+                  modelValue(diff.values[key], meta), !cellEditable,
                 )
               : undefined,
           ) : undefined;
@@ -448,23 +450,11 @@ export function DiffRow({
               onFocusCell={() => onFocusCell(rowKey, key)}
               onCopy={() => copyToClipboard(copyText)}
             >
-              {(() => {
-                // #415/#426: the one definition of "this cell can be written" — onEditCell wired,
-                // the column in editableColumns, and no per-row readOnly veto. onCommit (renderCell's
-                // own editability signal) and onOpenExtended's readOnly flag both derive from it, so
-                // they can never disagree about whether this cell is writable.
-                const cellEditable = !!onEditCell && editableColumns.has(key) && !meta.readOnly;
-                return renderCell(diff.values[key], meta, isFocused, onOpen, {
-                  checkError, resolution: diff.resolutions?.[key],
-                  summaryLabel: diff.collapsedSummary?.[key],
-                  onCommit: cellEditable ? (v: unknown) => onEditCell(key, pendingLookupField, v) : undefined,
-                  // #426: reported with this cell's own identity so RecordPanel (which alone knows
-                  // the record's own label) can build the bridge call.
-                  onOpenExtended: onOpenExtendedEditor
-                    ? () => onOpenExtendedEditor(key, pendingLookupField, modelValue(diff.values[key], meta), !cellEditable)
-                    : undefined,
-                });
-              })()}
+              {renderCell(diff.values[key], meta, isFocused, onOpen, {
+                checkError, resolution: diff.resolutions?.[key],
+                summaryLabel: diff.collapsedSummary?.[key],
+                onCommit: cellEditable ? (v: unknown) => onEditCell(key, pendingLookupField, v) : undefined,
+              })}
             </DiskCell>
           );
         }
