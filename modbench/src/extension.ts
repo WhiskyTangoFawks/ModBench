@@ -2449,13 +2449,20 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
  *  `fetch` only recognizes its own — handed a global `Request`, it falls back to coercing it to a
  *  URL string and fails with "Failed to parse URL from [object Request]". Unpacked into a plain
  *  url/method/headers/body call instead. Lives here, not in ApiClient.ts: that module is also
- *  imported by the webview bundle (RecordSessionClient.ts), which has no `undici`/Node runtime. */
+ *  imported by the webview bundle (RecordSessionClient.ts), which has no `undici`/Node runtime.
+ *
+ *  #495: `input.signal` is part of that unpacking too, deliberately — it is the *other* half of
+ *  the "own deliberate abort signal" this comment already promises above (#307 AC7's mid-load
+ *  close). Dropping it here silently disconnects that abort from the network layer: the caller's
+ *  `AbortController.abort()` still flips `signal.aborted`, but nothing downstream ever rejects
+ *  the fetch on it, so the abandoned load just runs to completion against a session nobody wants
+ *  any more. If a future rewrite unpacks this request shape again, carry `signal` with it. */
 function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
   return async (input) => {
     const hasBody = input.method !== 'GET' && input.method !== 'HEAD';
     const body = hasBody ? await input.clone().arrayBuffer() : undefined;
-    return undiciFetch(input.url, { method: input.method, headers: [...input.headers], body, dispatcher });
+    return undiciFetch(input.url, { method: input.method, headers: [...input.headers], body, dispatcher, signal: input.signal });
   };
 }
 
