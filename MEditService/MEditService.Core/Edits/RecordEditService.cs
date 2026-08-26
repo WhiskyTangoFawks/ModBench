@@ -592,7 +592,10 @@ public sealed class RecordEditService(
             "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
             "({DestinationOrigin}) — new working-tree source file at {SourcePath}",
             formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, relativePath);
-        return RecordEditResult.Success(formKey);
+        // NewFormKey is for a gesture that mints or suggests a FormKey the caller didn't already
+        // have (RecordEditResult's own doc comment) — an override echoes the caller's own FormKey
+        // back, same shape as DeleteRecord's "success, nothing new" below.
+        return RecordEditResult.Success();
     }
 
     /// <summary>
@@ -672,6 +675,13 @@ public sealed class RecordEditService(
             var fullPath = SourceUnitResolver.FlatSourcePath(
                 sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
             if (File.Exists(fullPath)) return File.ReadAllText(fullPath);
+
+            // #453's own never-assume-exclusive-ownership diagnostic (ReadRecordFromSource), for the
+            // same case here: a tracked source whose file went missing outside Modbench between the
+            // session loading and this copy running — worth knowing about, unlike the untracked
+            // fallback below, which is the expected, silent case.
+            logger.LogWarning(
+                "Source file {SourcePath} is missing; copying from the indexed document instead", fullPath);
         }
         return document.Body!;
     }
@@ -685,7 +695,12 @@ public sealed class RecordEditService(
         {
             var fullPath = SourceUnitResolver.FlatSourcePath(
                 sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
-            return ReadRecordFromSource(fullPath, document, release);
+            if (File.Exists(fullPath))
+                return _codec.DeserializeAsync(fullPath, release, document.RecordType).GetAwaiter().GetResult();
+
+            // Same diagnostic as ReadCopySourceBody's own missing-file branch above.
+            logger.LogWarning(
+                "Source file {SourcePath} is missing; copying from the indexed document instead", fullPath);
         }
 
         return _codec

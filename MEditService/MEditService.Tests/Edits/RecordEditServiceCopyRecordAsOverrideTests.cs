@@ -31,7 +31,10 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Equal(mod.SourceNpc.ToString(), result.NewFormKey);
+        // Not NewFormKey: an override echoes the caller's own FormKey rather than minting one
+        // (RecordEditResult's own doc comment), so success here carries no new FormKey at all —
+        // the same "success, nothing new" shape DeleteRecord's own result uses.
+        Assert.Null(result.NewFormKey);
 
         var sourceFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
         Assert.True(File.Exists(sourceFile));
