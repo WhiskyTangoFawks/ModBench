@@ -71,6 +71,47 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
     }
 
     [Fact]
+    public void CreationClubPlugin_AlsoInPluginsTxt_IsNotDuplicated()
+    {
+        // ccDup.esl is *-listed in Plugins.txt AND cataloged in Fallout4.ccc — should appear once,
+        // forced on, the same as ImplicitPlugin_AlreadyInPluginsTxt_IsNotDuplicated above.
+        using var data = new PluginFixtureBuilder("medit-ccc-dedup")
+            .WithPlugin("ccDup.esl")
+            .WithCreationClubCatalog("ccDup.esl")
+            .Build();
+
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var matches = session.Plugins.Where(p => p.Name == "ccDup.esl").ToList();
+        var cc = Assert.Single(matches);
+        Assert.True(cc.IsImmutable);
+        Assert.True(cc.Participates);
+    }
+
+    [Fact]
+    public void LoadSession_CreationClubOnlyPlugin_IsForcedImmutableAndOrdered()
+    {
+        using var data = new PluginFixtureBuilder("medit-gs-ccc")
+            .WithPlugin("Fallout4.esm", listed: false)
+            .WithPlugin("ccTest.esl", listed: false)
+            .WithPlugin(GameSessionImplicitFixture.UserPluginName)
+            .WithCreationClubCatalog("ccTest.esl")
+            .Build();
+
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var implicitMaster = session.Plugins.Single(p => p.Name == "Fallout4.esm");
+        var cc = session.Plugins.Single(p => p.Name == "ccTest.esl");
+        var user = session.Plugins.Single(p => p.Name == GameSessionImplicitFixture.UserPluginName);
+
+        Assert.True(cc.IsImmutable);
+        Assert.True(cc.Participates);
+        Assert.Equal(PluginOrigin.DataDirectory, cc.Origin);
+        Assert.True(implicitMaster.LoadOrderIndex < cc.LoadOrderIndex);
+        Assert.True(cc.LoadOrderIndex < user.LoadOrderIndex);
+    }
+
+    [Fact]
     public void Constructor_ExposesGameRelease()
     {
         using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
