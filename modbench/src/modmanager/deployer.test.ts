@@ -160,6 +160,18 @@ describe('deploy', () => {
     expect(manifest.links).toEqual(['textures/foo.dds']);
   });
 
+  it('deploys a mod file literally named "root" (no slash) normally into Data/root — #324', async () => {
+    fx = await makeDeployerFixture();
+    const rootFile = await fx.writeModFile('ModA', 'root', 'ROOTFILE');
+    const index = makeIndex({ root: rootFile });
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
+
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'root'), 'utf8')).toBe('ROOTFILE');
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual(['root']);
+  });
+
   it('copies the active profile\'s load-order file to the resolved target and purge removes it', async () => {
     fx = await makeDeployerFixture();
     const profileDir = join(fx.instanceRoot, 'profiles', 'Default');
