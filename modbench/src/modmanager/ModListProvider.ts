@@ -434,7 +434,7 @@ export class ModListProvider
 
   /** Flip the view direction (losing-at-top &lt;-&gt; winning-at-top) and refresh
    *  the tree. Presentation only — never changes which mod wins a conflict. */
-  toggleSortOrder(): void {
+  toggleViewDirection(): void {
     this.winningAtTop = !this.winningAtTop;
     this.invalidate();
   }

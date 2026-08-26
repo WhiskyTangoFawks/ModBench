@@ -48,7 +48,7 @@ export function resolvePluginPaths(
 }
 
 /** Root-level files directly under the instance's overwrite/ folder, keyed by case-folded name to
- *  their real on-disk name (#269 / ADR-0036). MO2's VFS gives overwrite/ the highest priority of
+ *  their real on-disk name (#269 / ADR-0036). MO2's VFS makes overwrite/ winning-most of
  *  all — above every mod and the Data folder — so a plugin found here always wins path resolution
  *  too, not just origin classification. Root-level only, mirroring rootLevelWinners' own reasoning:
  *  a nested file sharing a plugin's basename must not shadow the real plugin. Empty when the
