@@ -11,18 +11,22 @@ import { discoverImplicitMasters } from './vanillaMasters';
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
 /** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
- *  the constructor so it isn't a fresh async operation per instance. */
-const NO_DATA_FOLDER: Promise<string | undefined> = Promise.resolve(undefined);
+ *  the constructor so it isn't a fresh closure per instance. */
+const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
 /** Constructor options for {@link PluginListProvider}. Field order matches
  *  ModListProvider's identically-shaped options so the two siblings read the
- *  same (issue #80: replaces five positional args whose order diverged). */
+ *  same (issue #80: replaces five positional args whose order diverged).
+ *
+ *  #357: `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
+ *  while Modbench runs, so a value captured once at construction could go stale for the life of
+ *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface PluginListProviderOptions {
   source: IModlistSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
   instanceRoot?: string;
-  dataFolder?: Promise<string | undefined>;
+  dataFolder?: () => Promise<string | undefined>;
 }
 
 /** A single plugins.txt line, with a native checkbox mirroring its `*` (enabled)
@@ -149,7 +153,7 @@ export class PluginListProvider
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot?: string;
-  private readonly dataFolder: Promise<string | undefined>;
+  private readonly dataFolder: () => Promise<string | undefined>;
   /** The last rendered plugin order, so a drop computes its index against exactly
    *  what the user dragged against (not a fresh read that an external edit could skew).
    *  A separate concern from `cache` below — this is plugins.txt's raw file order
@@ -167,9 +171,9 @@ export class PluginListProvider
   /** `instanceRoot`, when provided, enables the order-aware missing-master badge
    *  (issue #67): each plugin's declared masters are read and checked against the
    *  Plugin load order. Omitted in tests using an in-memory-only source.
-   *  `dataFolder` is the game's resolved Data folder (the single GameDirectory
-   *  resolved once at the composition root, #78) — for locating vanilla/DLC/CC
-   *  plugins no mod ships; a resolved `Promise<undefined>` degrades those lookups. */
+   *  `dataFolder` reads the game's resolved Data folder through the single
+   *  game-directory resolver (#357) — for locating vanilla/DLC/CC plugins no mod
+   *  ships; an undefined resolution degrades those lookups. */
   constructor(options: PluginListProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
@@ -224,7 +228,7 @@ export class PluginListProvider
     try {
       const entries = await this.source.readModlist();
       const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
-      const dataFolder = await this.dataFolder;
+      const dataFolder = await this.dataFolder();
       if (!dataFolder) return undefined;
       return resolvePluginPaths([name], index, dataFolder).get(name);
     } catch (e) {
@@ -286,7 +290,7 @@ export class PluginListProvider
     // `fullOrder` (implicit-first) is used for row rendering and badge computation
     // ONLY; `this.lastOrder` above stays plugins.txt's raw order, since that's what
     // `dropIndexForMove`/`reorderPlugins` write positions against.
-    const dataFolder = await this.dataFolder;
+    const dataFolder = await this.dataFolder();
     const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
     const dedupedOrder = order.filter((n) => !implicitLower.has(n.toLowerCase()));
@@ -327,7 +331,7 @@ export class PluginListProvider
     try {
       const entries = await this.source.readModlist();
       const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
-      const dataFolder = await this.dataFolder;
+      const dataFolder = await this.dataFolder();
       return await computePluginOrderStatuses(order, index, dataFolder, this.log);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

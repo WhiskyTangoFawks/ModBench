@@ -885,7 +885,7 @@ describe('ModListProvider — missing-master badge over the injected game Data f
     (await provider.getChildren()).find((n): n is ModNode => n instanceof ModNode && n.label === 'Consumer')!;
 
   it('resolves the vanilla master from the injected Data folder, so no missing-master badge', async () => {
-    const provider = new ModListProvider({ source: new FakeSource([modA()]), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
+    const provider = new ModListProvider({ source: new FakeSource([modA()]), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
     const node = await modNode(provider);
     expect(node.iconPath).toEqual({ id: 'package' }); // Fallout4.esm found → status ok
   });

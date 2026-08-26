@@ -17,7 +17,7 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
   const dataUri = (name: string) => ({ fsPath: join(dataFolder, name) } as never);
 
   it('grays an implicit master row', async () => {
-    const provider = new ImplicitMasterDecorationProvider(Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
     const decoration = await provider.provideFileDecoration(dataUri('Fallout4.esm'));
     expect(decoration).toBeDefined();
     // MO2's foregroundData() grays via this exact theme color (#276) — check the
@@ -27,12 +27,12 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
   });
 
   it('returns undefined for a plugin that is not an implicit master', async () => {
-    const provider = new ImplicitMasterDecorationProvider(Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
     expect(await provider.provideFileDecoration(dataUri('Mod.esp'))).toBeUndefined();
   });
 
   it('returns undefined for a URI outside the resolved Data folder', async () => {
-    const provider = new ImplicitMasterDecorationProvider(Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
     expect(await provider.provideFileDecoration({ fsPath: '/other/Fallout4.esm' } as never)).toBeUndefined();
   });
 
@@ -47,7 +47,7 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
     // VS Code calls this provider for every workspace URI, not just ones under
     // Data — a sibling folder like Data2/ or DataBackup/ is a real filesystem
     // layout the missing-'/'-join bug would wrongly match via startsWith.
-    const provider = new ImplicitMasterDecorationProvider(Promise.resolve(dataFolder), permissive);
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), permissive);
     expect(
       await provider.provideFileDecoration({ fsPath: '/game/Data2/Fallout4.esm' } as never),
     ).toBeUndefined();
@@ -58,12 +58,12 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
     // (implicitMasterNames().has(name)) — a real bug in the first guard's
     // short-circuit would otherwise hide behind the second one filtering the
     // wrong answer out.
-    const provider = new ImplicitMasterDecorationProvider(Promise.resolve(dataFolder), permissive);
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), permissive);
     expect(await provider.provideFileDecoration({ fsPath: '/other/Fallout4.esm' } as never)).toBeUndefined();
   });
 
   it('degrades to undefined when the Data folder never resolved', async () => {
-    const provider = new ImplicitMasterDecorationProvider(Promise.resolve(undefined), () => new Set(['fallout4.esm']));
+    const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(undefined), () => new Set(['fallout4.esm']));
     expect(await provider.provideFileDecoration(dataUri('Fallout4.esm'))).toBeUndefined();
   });
 });

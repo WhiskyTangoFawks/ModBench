@@ -45,7 +45,8 @@ import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListN
 import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { createDriftTracker, type DriftTracker } from './pluginDrift';
 import { rereadDriftedPlugin } from './medit/rereadPlugin';
-import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
+import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
+import { createGameDirectoryResolver, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPluginsWithOrigin, resolveCurrentPluginOrigins } from './modmanager/explicitSession';
@@ -1055,7 +1056,15 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
-  dataFolder: Promise<string | undefined>;
+  // #357: a getter through the single game-directory resolver, not a Promise settled once —
+  // see ModListProviderOptions/PluginListProviderOptions for why. Folds a resolution failure to
+  // undefined (degrading vanilla-master lookups/badges), unlike `gameDirResolver` below.
+  dataFolder: () => Promise<string | undefined>;
+  // #357: the same resolver `dataFolder` reads through, passed through raw (not folded to
+  // undefined on failure) for the drift tracker below — #334 relies on a thrown resolution
+  // reaching its own try/catch so a failed refresh keeps the last known drift state rather than
+  // reading a misconfigured directory as "nothing resolves".
+  gameDirResolver: GameDirectoryResolver;
   /** The record browser that supplies a plugin row's children (#270). Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
@@ -1072,9 +1081,9 @@ interface PluginListDeps {
  *  records. The composite is built here, at the composition root, because it is the only place
  *  that may know both; `PluginListProvider` is unchanged and still owns everything about a row. */
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser, controller } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel);
+  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel, gameDirResolver);
   driftTracker = tracker;
   const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
@@ -1771,6 +1780,7 @@ function makeDriftTracker(
   modlistSource: Mo2ModlistSource,
   instanceRoot: string,
   outputChannel: vscode.LogOutputChannel,
+  gameDirResolver: GameDirectoryResolver,
 ): DriftTracker {
   return createDriftTracker({
     log: (msg) => outputChannel.debug(msg),
@@ -1778,13 +1788,11 @@ function makeDriftTracker(
       names,
       await buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot, (msg) => outputChannel.debug(msg)),
       instanceRoot,
-      // Resolved here, per refresh, and *not* taken from the `dataFolder` promise the views share:
-      // that one is resolved once at activation, while the session resolves its own at launch
-      // (`makeEnterEditing`). The two can name different folders — the setting is editable while
-      // Modbench runs — and drift compares against what the session actually loaded, so it has to
-      // ask the same question the same way. Caught by the integration suite, which changes the
-      // setting after activation and saw every Data-origin plugin flagged as resolving to nothing.
-      (await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths()))?.dataFolder,
+      // #357: read through the single game-directory resolver every other consumer (views,
+      // session launch, deploy) shares — memoised and invalidated only when
+      // modbench.mods.gameDirectory changes, so this always agrees with what the session actually
+      // loaded even though the setting is editable while Modbench runs.
+      (await gameDirResolver.resolve())?.dataFolder,
     ),
   });
 }
@@ -2076,13 +2084,18 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
   void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', true);
     const modListReporter = makeReporter(outputChannel, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
-    // Resolve the game's Data folder ONCE (#78): the single GameDirectory resolver
-    // (config override → ini gamePath → autodetect) is kicked off here and its
-    // dataFolder threaded to the providers, replacing their per-refresh ini re-reads.
-    // Non-blocking (keeps registration synchronous) and never rejects — a null
-    // resolution or a misconfigured explicit setting both fold to undefined, so the
-    // consumers degrade exactly as before (empty vanilla masters, badges absent).
-    const dataFolder: Promise<string | undefined> = resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths())
+    // #357: the single GameDirectory resolver (config override → ini gamePath → autodetect),
+    // memoised and invalidated only when modbench.mods.gameDirectory changes — the one thing every
+    // consumer of the game directory (these views, the drift tracker, session launch, deploy)
+    // reads through, so none of them can disagree about which folder is current. Replaces the old
+    // activation-scoped `dataFolder: Promise<string | undefined>`, which was resolved once here and
+    // then frozen for the life of the window regardless of later edits to the setting.
+    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), vscode.workspace.onDidChangeConfiguration);
+    // Non-blocking (keeps registration synchronous) and never rejects — a null resolution or a
+    // misconfigured explicit setting both fold to undefined, so the consumers degrade exactly as
+    // before (empty vanilla masters, badges absent). A rejection is re-thrown by every other
+    // consumer of `gameDirResolver` directly; only the views degrade to undefined.
+    const dataFolder = () => gameDirResolver.resolve()
       .then((gd) => gd?.dataFolder)
       .catch((e: unknown) => {
         outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -2090,13 +2103,13 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       });
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser, controller });
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
 
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
     const enterEditing = makeEnterEditing({
-      instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers,
+      instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.
@@ -2113,8 +2126,9 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       modListFilter,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
       ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
-      ...registerDeployCommands(instanceRoot, modlistSource, outputChannel),
+      ...registerDeployCommands(instanceRoot, modlistSource, outputChannel, gameDirResolver),
       registerLaunchCommand(outputChannel),
+      gameDirResolver,
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, outputChannel, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
@@ -2368,6 +2382,10 @@ interface EnterEditingDeps {
   revealLog: () => void;
   /** #381: run once a load completes, for whatever crash-repair offers it reported. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
+  /** #357: the single game-directory resolver, shared with the views and the drift tracker —
+   *  memoised and invalidated only when modbench.mods.gameDirectory changes, so a session launch
+   *  always agrees with what they currently show. */
+  gameDirResolver: GameDirectoryResolver;
 }
 /** Build the enter-editing action: spawn/attach the backend and load the active
  *  modlist as a load-explicit session, then reveal the editing view. Also the
@@ -2379,13 +2397,13 @@ interface EnterEditingDeps {
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
     instanceRoot, modlistSource, controller,
-    outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers,
+    outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
   } = deps;
   const enter = async (): Promise<void> => {
       const { signal, abandoned } = armLoadAbort(outputChannel);
       const treeProgress = makeTreeProgressHandler();
       revealLog(); // the load can take a while; let the user watch the step log
-      const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
+      const gd = await gameDirResolver.resolve();
       if (abandoned()) return;
       if (!gd) {
         exitToLoadout(); // don't strand the UI in an empty editing view
@@ -2566,6 +2584,7 @@ function registerDeployCommands(
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
   outputChannel: vscode.LogOutputChannel,
+  gameDirResolver: GameDirectoryResolver,
 ): vscode.Disposable[] {
   const config = meditConfig;
   const detectPaths = makeDetectPaths();
@@ -2573,7 +2592,9 @@ function registerDeployCommands(
   const reporter = makeReporter(outputChannel, 'deploy');
 
   const resolveGd = async () => {
-    const gd = await resolveGameDirectory(instanceRoot, config(), detectPaths);
+    // #357: the single game-directory resolver, shared with the views/drift tracker/session
+    // launch — memoised and invalidated only when modbench.mods.gameDirectory changes.
+    const gd = await gameDirResolver.resolve();
     if (!gd) {
       reporter.report('error', 'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.');
     }

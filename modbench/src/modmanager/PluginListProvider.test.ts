@@ -603,7 +603,7 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
   });
 
   const provider = () =>
-    new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
+    new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
 
   it('badges a plugin whose master is sequenced after it', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
@@ -717,12 +717,12 @@ describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #6
   });
 
   it('resolves a mod-provided plugin to the winning mod copy', async () => {
-    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
+    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
     expect(await provider.resolvePluginPath('Base.esp')).toBe(join(dir, 'mods', 'Provider', 'Base.esp'));
   });
 
   it('resolves an unmanaged vanilla plugin to the game Data folder', async () => {
-    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(join(dir, 'Game', 'Data')) });
+    const provider = new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
     expect(await provider.resolvePluginPath('Fallout4.esm')).toBe(join(dir, 'Game', 'Data', 'Fallout4.esm'));
   });
 
@@ -752,7 +752,7 @@ describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', (
     new PluginListProvider({
       source: new Mo2ModlistSource(dir),
       instanceRoot: dir,
-      dataFolder: Promise.resolve(dataFolder()),
+      dataFolder: () => Promise.resolve(dataFolder()),
       ...extra,
     });
 
@@ -837,7 +837,7 @@ describe('PluginListProvider — implicit (vanilla) master rows (issue #108)', (
     await writeFile(join(dir, 'mods', 'SomeMod', 'Mod.esp'), buildTes4Buffer([]));
     await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+SomeMod\r\n');
 
-    const provider = providerFor({ dataFolder: Promise.resolve(join(dir, 'no', 'such', 'Data')), log: (m) => logs.push(m) });
+    const provider = providerFor({ dataFolder: () => Promise.resolve(join(dir, 'no', 'such', 'Data')), log: (m) => logs.push(m) });
     const rows = await provider.getChildren();
 
     expect(rows.some((r) => r instanceof ImplicitMasterNode)).toBe(false);
@@ -887,7 +887,7 @@ describe('PluginListProvider — implicit master drop-index mapping (issue #108 
 
   async function dragToDisk(moved: string[], target: PluginNode | ImplicitMasterNode | undefined) {
     const source = new Mo2ModlistSource(dir);
-    const provider = new PluginListProvider({ source, instanceRoot: dir, dataFolder: Promise.resolve(dataFolder()) });
+    const provider = new PluginListProvider({ source, instanceRoot: dir, dataFolder: () => Promise.resolve(dataFolder()) });
     await provider.getChildren(); // cache the rendered order (raw plugins.txt order — no implicit lines)
     const dt = new FakeDataTransfer();
     provider.handleDrag(moved.map(node), dt as never, NONE);
@@ -895,7 +895,7 @@ describe('PluginListProvider — implicit master drop-index mapping (issue #108 
   }
 
   it('dropping onto the implicit block lands the moved plugin at file-index 0, and the file never gains an implicit-master line', async () => {
-    const rows = await new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: Promise.resolve(dataFolder()) }).getChildren();
+    const rows = await new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(dataFolder()) }).getChildren();
     const implicitRow = rows.find((r): r is ImplicitMasterNode => r instanceof ImplicitMasterNode)!;
 
     await dragToDisk(['C.esp'], implicitRow);
