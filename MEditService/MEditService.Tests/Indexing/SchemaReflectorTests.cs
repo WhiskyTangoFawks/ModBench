@@ -163,6 +163,23 @@ public class SchemaReflectorTests
     }
 
     [Fact]
+    public void GetSchemas_Gmst_DataColumn_WidenedBoolFalse_FormatsAsLowercaseFalse()
+    {
+        // #365 mutation-triage gap: GetSchemas_Gmst_DataColumn_ExtractsCorrectValuePerSubclass above
+        // only ever asserts Data = true for GameSettingBool, so FormatWidenedValue's bool branch has
+        // never been exercised with a false input — a mutant collapsing `b ? "true" : "false"` to
+        // always "true" survived undetected. This closes that gap directly, not through the "one of
+        // each subclass" test above (whose point is per-subclass dispatch, not this specific value).
+        var mod = new Fallout4Mod(ModKey.FromFileName("Gmst365BoolFalse.esp"), Fallout4Release.Fallout4);
+        var b = new GameSettingBool(mod.GetNextFormKey("bFalseTest"), Fallout4Release.Fallout4) { EditorID = "bFalseTest", Data = false };
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var data = schemas["gmst"].RecordColumns.Single(c => c.Name == "data");
+
+        Assert.Equal("false", data.Extract(b));
+    }
+
+    [Fact]
     public void GetSchemas_Omod_PropertiesColumn_KeepsStructuredArrayShape_NotWidened()
     {
         // #339: OMOD's Properties is the same per-subclass-typed shape as GMST/GLOB's Data, but on
@@ -1313,6 +1330,26 @@ public class SchemaReflectorTests
         schema.HeaderColumnApply![authorIndex]!(mod, json);
 
         Assert.Equal("New Author", mod.ModHeader.Author);
+    }
+
+    [Fact]
+    public void GetSchemas_Header_HeaderColumnApply_AuthorJsonNull_ClearsModHeaderAuthor()
+    {
+        // #365 mutation-triage gap: MakeApplier's JSON-null-write branch (`if (nullable)
+        // rp.SetValue(obj, null); return;`) was never exercised by any test — every existing Apply
+        // test only ever writes a real value. Author is nullable (HeaderPropertyApply's own
+        // nullable: true), so clearing it via JSON null is a real, user-visible requirement (the
+        // record editor clearing an optional field), not just a mutation-kill exercise.
+        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
+        var authorIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "author");
+
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        mod.ModHeader.Author = "Some Author";
+
+        var nullJson = System.Text.Json.JsonSerializer.SerializeToElement<string?>(null);
+        schema.HeaderColumnApply![authorIndex]!(mod, nullJson);
+
+        Assert.Null(mod.ModHeader.Author);
     }
 
     [Fact]
