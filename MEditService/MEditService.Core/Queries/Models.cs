@@ -309,3 +309,20 @@ public record RecordRenumberResponse(bool Applied, string OldFormKey, string New
 
 /// <summary>The Renumber gesture's FormID input box's suggested default (<c>RecordEditService.PeekNextFreeFormKey</c>).</summary>
 public record NextFreeFormKeyResponse(string FormKey);
+
+// #436 (ADR-0041 restoration): xEdit's "Copy as Override Into…" / "Copy as New Record Into…", on the
+// same door the other lifecycle gestures use — the route's own {formKey} names the record being
+// copied, so the two plugins involved travel as SourcePlugin/SourceOrigin and
+// DestinationPlugin/DestinationOrigin (ADR-0036's compound identity, on both sides of the copy).
+
+public record RecordCopyAsOverrideRequest(string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin);
+
+public record RecordCopyAsOverrideResponse(bool Applied, string FormKey);
+
+/// <summary><see cref="RequestedFormKey"/> null means auto-allocate the next free local FormID
+/// (both-refs collision-safe, the same posture <see cref="RecordCreateRequest.FormKey"/> uses); non-null
+/// is xEdit's typed-FormID path.</summary>
+public record RecordCopyAsNewRecordRequest(
+    string SourcePlugin, string SourceOrigin, string DestinationPlugin, string DestinationOrigin, string? RequestedFormKey);
+
+public record RecordCopyAsNewRecordResponse(bool Applied, string SourceFormKey, string NewFormKey);

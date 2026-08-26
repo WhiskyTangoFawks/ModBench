@@ -1,0 +1,149 @@
+using MEditService.Core.Edits;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
+using MEditService.Core.Session;
+using MEditService.Core.Source;
+using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins;
+
+namespace MEditService.Tests.Edits;
+
+/// <summary>
+/// #436 (ADR-0041 restoration): xEdit's "Copy as Override Into…" — #281 shipped this, ADR-0041's
+/// pending-change sweep tore it out along with the storage layer it happened to sit on, and #426/#427's
+/// re-implementation wave never carried it forward. This suite is the entry point's own contract:
+/// same-FormKey landing in the destination's own working tree, the collision/container/untracked
+/// refusals every gesture on this write path either inherits or reuses, and the two read postures
+/// (tracked source's own file, untracked source's indexed body) #453/#452 already established for
+/// <see cref="RecordEditService.EditField"/>.
+/// </summary>
+public sealed class RecordEditServiceCopyRecordAsOverrideTests
+{
+    private static RecordEditService ServiceFor(ISessionManager sessions) =>
+        new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+
+    [Fact]
+    public void CopyRecordAsOverride_FromAnUntrackedSource_LandsUnderTheSameFormKey_AndAnswersAtEffective()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        // Not NewFormKey: an override echoes the caller's own FormKey rather than minting one
+        // (RecordEditResult's own doc comment), so success here carries no new FormKey at all —
+        // the same "success, nothing new" shape DeleteRecord's own result uses.
+        Assert.Null(result.NewFormKey);
+
+        var sourceFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
+        Assert.True(File.Exists(sourceFile));
+
+        var doc = mod.Sessions.Index!.GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        Assert.NotNull(doc);
+        Assert.Equal(CopyFixture.SourceNpcEditorId, doc!.EditorId);
+
+        // The source plugin's own copy is untouched — this is a copy, not a move.
+        Assert.NotNull(mod.Sessions.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_IsAbsentAtHead_UntilCommittedAndCompiled()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Null(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin));
+    }
+
+    // #452/#453's own read posture: a tracked source reads its current file, not a stale index
+    // snapshot — proven by mutating the file on disk directly (never-assume-exclusive-ownership) after
+    // the session has already indexed it, then observing the copy carries the mutated bytes forward.
+    [Fact]
+    public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentFileBytes_NotAStaleIndexSnapshot()
+    {
+        using var mod = CopyFixture.Create(trackSource: true);
+        var sourceFile = mod.SourceFileFor(mod.SourcePlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
+        var mutatedText = File.ReadAllText(sourceFile).Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk");
+        File.WriteAllText(sourceFile, mutatedText);
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var destinationFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", "MutatedOnDisk");
+        Assert.True(File.Exists(destinationFile));
+        Assert.Contains("MutatedOnDisk", File.ReadAllText(destinationFile), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_Refuses_WhenTheDestinationIsUntracked_NamingTheTrackCommand()
+    {
+        using var mod = CopyFixture.Create();
+        // The destination fixture always tracks; simulate an untracked destination the same way
+        // TrackedModFixture.Untracked() does — no .git in the folder at all.
+        Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+        Assert.Contains("Modbench: Track…", result.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_Refuses_WhenTheDestinationAlreadyHoldsTheFormKey()
+    {
+        using var mod = CopyFixture.Create();
+        // Seeded directly at the index layer (bypassing the service), the same way
+        // RecordEditServiceCreateRecordTests seeds a both-refs collision fixture — this is what "the
+        // destination already carries this FormKey at some ref" looks like in the index.
+        var seedBody = mod.Sessions.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin)!.Body!;
+        mod.Sessions.Index!.CreateWorkingTreeRecord(mod.DestinationPlugin, mod.SourceNpc.ToString(), "npc_", seedBody);
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_Refuses_WhenTheSourceIsAContainerFamilyRecord_ReadingNotYetSupported()
+    {
+        using var fixture = new ContainerModFixture();
+
+        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(fixture.Plugin, fixture.Cell.ToString(), fixture.Plugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
+        Assert.Contains("not yet", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void CopyRecordAsOverride_Refuses_WhenTheSourcePluginDoesNotHoldTheRecord()
+    {
+        using var mod = CopyFixture.Create();
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
+    }
+
+    // #422: a brand-new row was never evaluated against an active filter's snapshot.
+    [Fact]
+    public void CopyRecordAsOverride_MakesTheCopyAppearInAnActiveFilteredListing()
+    {
+        using var mod = CopyFixture.Create();
+        mod.Sessions.SetFilter("SELECT form_key FROM npc_");
+        var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.DestinationPlugin, Limit: 50, Offset: 0);
+        var before = mod.Sessions.Repository!.Search(query).Total;
+
+        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var after = mod.Sessions.Repository!.Search(query);
+        Assert.Equal(before + 1, after.Total);
+    }
+}
