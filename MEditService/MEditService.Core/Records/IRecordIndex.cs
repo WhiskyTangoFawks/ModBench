@@ -187,6 +187,28 @@ public interface IRecordIndex : IRecordReads, IDisposable
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
 
     /// <summary>
+    /// #488 review: re-points every <c>container_child</c> row naming <paramref name="oldParentFormKey"/>
+    /// as <c>parent_form_key</c> to <paramref name="newParentFormKey"/> instead — an
+    /// <c>UPDATE</c>, deliberately not a delete-then-rebuild. A renumbered record's folder-split
+    /// children (a renumbered Quest's DialogTopics, a renumbered DialogTopic's Responses) keep their
+    /// own FormKeys and their own files untouched on disk (only the parent's directory name changes,
+    /// moved whole); re-deriving the renumbered record's own new document
+    /// (<see cref="CreateWorkingTreeRecord"/>) cannot recreate their rows, because a folder-split
+    /// child is never embedded in its parent's document for that re-derivation to find
+    /// (<see cref="Source.ContainerChildFields"/>'s own doc comment — the same fact
+    /// <see cref="CreateWorkingTreeRecord"/>'s own re-derivation is already bounded by). Called
+    /// before the old FormKey's row is torn down, so those children's rows are never left orphaned
+    /// even for one transaction.
+    ///
+    /// <para>Scoped to exactly the one column a rename invalidates for a record's own children —
+    /// not a general FormKey-rename sweep across every containment column (that broader question,
+    /// e.g. a renumbered container's own position within <i>its</i> parent's slot, is #488's own
+    /// declined tier 2, tracked as its own follow-up). Harmless to call for any renumbered record:
+    /// the <c>UPDATE</c> matches zero rows for one with no folder-split children of its own.</para>
+    /// </summary>
+    void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
+
+    /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one
     /// door SQL crosses this seam through, since it is itself a published contract for user filter
     /// SQL (ADR-0041). Throws <see cref="ArgumentException"/> if the SQL doesn't return a

@@ -789,6 +789,15 @@ public sealed class RecordEditService(
         // any pre-existing one besides) so the group directory is contiguous again before this returns.
         SourceUnitResolver.RenormalizeGroupOrder(parentDirectory);
 
+        // #488 review: a folder-split container's own children (a renumbered Quest's DialogTopics, a
+        // renumbered DialogTopic's Responses) keep their own FormKeys and their own files untouched —
+        // only this record's own directory name changed, moved whole above — so nothing re-derives
+        // their container_child rows from a reserialized document the way an embedded child's would
+        // be. Re-pointed here, before the old FormKey's own rows are torn down below, so they are
+        // never left orphaned even for one transaction. A no-op for a record with no folder-split
+        // children of its own (every other renumbered type).
+        index.RepointContainerChildParent(plugin, oldFormKey, newFormKey);
+
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 

@@ -2272,6 +2272,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
+    /// <summary>See <see cref="IRecordIndex.RepointContainerChildParent"/>.</summary>
+    public void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        ExecuteFor(
+            """
+            UPDATE container_child SET parent_form_key = $1
+            WHERE parent_form_key = $2 AND plugin = $3 AND origin = $4
+            """,
+            newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
+
     public void SetFilter(string? sql)
     {
         if (sql is null)

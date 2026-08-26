@@ -189,6 +189,34 @@ public sealed class ContainmentRederivationTests : IDisposable
             after.OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotIndex)));
     }
 
+    // ---- Regression: renumbering a folder-split container that itself owns folder-split children ----
+
+    [Fact]
+    public void RenumberingADialogTopic_RepointsItsResponsesContainerChildRows_ToTheNewParentFormKey_SameSession()
+    {
+        var index = _fixture.Sessions.Index!;
+        var before = index.GetContainerParent(_fixture.Plugin, _fixture.Response.ToString());
+        Assert.NotNull(before);
+        Assert.Equal(_fixture.DialogTopic.ToString(), before!.Value.ParentFormKey);
+
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.DialogTopic.ToString());
+        Assert.True(result.Applied, result.Message);
+        Assert.NotEqual(_fixture.DialogTopic.ToString(), result.NewFormKey);
+
+        // The response itself never moved — same FormKey, same file — only its owning DialogTopic's
+        // identity changed. Its container_child row must follow, not simply vanish: DialogTopic's
+        // own children are DialogTopic's own accounting, squarely #488's job, not the "another
+        // record's stale pointer into a renamed container" question #488 declined.
+        var after = index.GetContainerParent(_fixture.Plugin, _fixture.Response.ToString());
+        Assert.NotNull(after);
+        Assert.Equal(result.NewFormKey, after!.Value.ParentFormKey);
+        Assert.Equal(before.Value.SlotName, after.Value.SlotName);
+        Assert.Equal(before.Value.SlotIndex, after.Value.SlotIndex);
+        Assert.DoesNotContain(
+            index.GetContainerChildren(_fixture.Plugin, _fixture.DialogTopic.ToString()),
+            c => c.ChildFormKey == _fixture.Response.ToString());
+    }
+
     // ---- AC4: creating a record whose own body embeds children populates all three tables ----
 
     [Fact]

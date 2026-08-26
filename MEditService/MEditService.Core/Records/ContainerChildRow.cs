@@ -58,6 +58,19 @@ namespace MEditService.Core.Records;
 /// against <c>records</c> instead — was considered and rejected: it would have turned "these tables
 /// track Effective" into a documented falsehood every future reader has to remember, rather than an
 /// invariant the write path upholds.</para>
+///
+/// <para><b>Review: a renumbered folder-split container's own children needed the same care as its
+/// own document.</b> Renumbering a Quest or a DialogTopic keeps its folder-split children's FormKeys
+/// and files untouched — only the parent's own directory name (and therefore FormKey) changes — so
+/// their rows still name the <i>old</i> parent FormKey after the rename, and re-deriving the parent's
+/// own (now-new-FormKey) document cannot repair them for the same reason <c>CreateWorkingTreeRecord</c>
+/// never populates them on create: a folder-split child is never embedded in its parent's document.
+/// <c>IRecordIndex.RepointContainerChildParent</c> re-points them with an <c>UPDATE</c>, run before
+/// the old FormKey's own rows are torn down, so a renamed container's children are never merely
+/// deleted out from under it. Still open, and still #488's own declined tier 2: a renumbered
+/// folder-split record's <i>own</i> row as somebody else's child (its position in <i>its</i> parent's
+/// slot) — the general "another record's stale pointer into a renamed record" question, not this
+/// table's own accounting of its own children.</para>
 /// </summary>
 public readonly record struct ContainerChildRow(
     string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);
