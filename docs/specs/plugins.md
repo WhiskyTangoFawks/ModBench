@@ -371,10 +371,13 @@ without saying what is not yet known would make that worse, not better.
 
 - The record tree is filtered by a **filter file** — a plain `.sql` file containing a DuckDB
   `SELECT` returning `form_key`. While active, record types and records with no matching
-  records are pruned. **A plugin row is never hidden by this filter** — it stays visible and
-  simply does not expand, since this tree is also the load order and hiding a plugin would make
-  it unviewable and unreorderable mid-patch (ADR-0035 amends
-  [ADR-0018](../adr/0018-sql-file-based-record-filter.md) on this point).
+  records are pruned, and **a plugin with zero matching records is hidden entirely** — including
+  a load-failed or missing-master plugin, which is otherwise always visible. `GET /plugins`
+  itself never drops a plugin row (`HasMatchingRecords` is an additive per-plugin fact, backend-
+  tested); the hiding is a presentation decision in the Plugins tree, made only while a filter is
+  active. Clearing the filter restores every hidden row immediately, in load order. (ADR-0035
+  amends [ADR-0018](../adr/0018-sql-file-based-record-filter.md) on record/record-type pruning,
+  and its own dated §Filters amendment on plugin-row hiding, #396.)
 - Entry points: a title-bar funnel (opens a `setFilter` quick pick of `.sql` files in
   `modbench.scriptsPath` plus "New filter…"), a funnel-slash to clear (shown only while a
   filter is active), command-palette equivalents, and **Code Lens** on open `.sql` files under
@@ -739,11 +742,12 @@ overflow, then native **Collapse All** last.
   `plugins.txt` with no session; checkbox toggle, drag-reorder and the name filter round-trip
   with and without a session running; starting/stopping a session puts chevrons on and takes
   them off without disturbing the load order; navigation opens a record panel; a plugin
-  `GET /plugins` reports with no matching records keeps its row and loses only its chevron,
-  restored once a reload reports no filter at all rather than staying stuck suppressed (#278) —
-  the pruning rule itself (record types and records pruned, a plugin row never removed) is
-  backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock backend
-  drives `GET /plugins` directly rather than through a real `POST /session/filter`; Reveal in
+  `GET /plugins` reports with no matching records is hidden from the tree entirely (#396),
+  restored once a reload reports no filter at all rather than staying stuck hidden (#278's own
+  "map outlives the filter state" regression, in the row-hiding form #396 gave it) — the pruning
+  rule itself (record types and records pruned, a plugin row never removed by `GetPlugins()`
+  itself) is backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock
+  backend drives `GET /plugins` directly rather than through a real `POST /session/filter`; Reveal in
   Explorer dispatches; read failure renders the error tree node. Add new command id(s) to
   `EXPECTED_COMMANDS` (`modbench/CLAUDE.md`).
 

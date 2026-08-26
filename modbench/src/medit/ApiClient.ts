@@ -19,8 +19,9 @@ export interface PluginMetadata {
   // never a transitive fact about a master's own masters. Empty for a plugin with none.
   masterIssues: MasterIssue[];
   // #278 / ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
-  // owns at least one record the filter matches — the fact PluginsTreeComposite's chevron reads,
-  // since GetPlugins() itself never drops a plugin for having none.
+  // owns at least one record the filter matches — GetPlugins() itself never drops a plugin for
+  // having none. #396 / ADR-0035's dated §Filters amendment is what PluginsTreeComposite does
+  // with a `false`: omits the row entirely rather than only suppressing its chevron.
   hasMatchingRecords: boolean;
 }
 
