@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  startExternalChangePolling, runRebase, rebaseOfferMessage, REBASE_NOW_BUTTON, REBASE_LATER_BUTTON,
-  type ExternalChangeCoordinatorDeps,
+  startExternalChangePolling, runRebase, rebaseOfferMessage, gateExternalChangePolling,
+  REBASE_NOW_BUTTON, REBASE_LATER_BUTTON,
+  type ExternalChangeCoordinatorDeps, type ExternalChangePollerGateDeps,
 } from '../externalChangeCoordinator';
 import { ABSORB_BUTTON, KEEP_BUTTON } from '../externalChangeDialog';
 import type { PendingExternalChange } from '../ApiClient';
@@ -170,5 +171,68 @@ describe('runRebase', () => {
     await runRebase({ controller, openMergeEditor }, 'ModA');
 
     expect(openMergeEditor).not.toHaveBeenCalled();
+  });
+});
+
+// #432: the poller has no reason to exist before a backend does — these prove the gate reacts to
+// the backend's health signal alone (never a timer, never session state, which this fixture has no
+// concept of at all).
+describe('gateExternalChangePolling', () => {
+  function makeGateDeps() {
+    let statusCb: (() => void) | undefined;
+    let healthy = false;
+    const stopFns: Array<ReturnType<typeof vi.fn>> = [];
+    const deps: ExternalChangePollerGateDeps = {
+      onBackendStatusChange: vi.fn((cb: () => void) => { statusCb = cb; }),
+      isBackendHealthy: () => healthy,
+      startPolling: vi.fn(() => {
+        const stop = vi.fn();
+        stopFns.push(stop);
+        return stop;
+      }),
+    };
+    return {
+      deps,
+      stopFns,
+      setHealthy: (value: boolean) => { healthy = value; statusCb?.(); },
+    };
+  }
+
+  it('never starts polling before the backend has ever been healthy', () => {
+    const { deps } = makeGateDeps();
+    gateExternalChangePolling(deps);
+    expect(deps.startPolling).not.toHaveBeenCalled();
+  });
+
+  it('starts polling once the backend becomes healthy', () => {
+    const { deps, setHealthy } = makeGateDeps();
+    gateExternalChangePolling(deps);
+    setHealthy(true);
+    expect(deps.startPolling).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-start on a repeated healthy signal (e.g. a crash-restart\'s own second "attached")', () => {
+    const { deps, setHealthy } = makeGateDeps();
+    gateExternalChangePolling(deps);
+    setHealthy(true);
+    setHealthy(true);
+    expect(deps.startPolling).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops polling when the backend becomes unhealthy', () => {
+    const { deps, setHealthy, stopFns } = makeGateDeps();
+    gateExternalChangePolling(deps);
+    setHealthy(true);
+    setHealthy(false);
+    expect(stopFns[0]).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts a fresh poll on the next healthy transition after stopping — a relaunch restarts it', () => {
+    const { deps, setHealthy } = makeGateDeps();
+    gateExternalChangePolling(deps);
+    setHealthy(true);
+    setHealthy(false);
+    setHealthy(true);
+    expect(deps.startPolling).toHaveBeenCalledTimes(2);
   });
 });

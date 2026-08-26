@@ -594,6 +594,59 @@ describe('Overwrite row (#82)', () => {
   });
 });
 
+// ── External-change poller lifecycle is gated on the backend, not activation (#432) ─────────────
+// Deliberately placed here, before any other describe below ever calls Launch mEdit — this suite
+// activates the extension exactly once (the file's own top-level before()), so "no poll before
+// Launch mEdit" is only provable at the one point in the run where that is still true.
+
+describe('External-change poller starts/stops with the backend, never before Launch mEdit (#432)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  let gameDir = '';
+  const pollRequests = (log: string[]) => log.filter((r) => r.includes('external-changes/status'));
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('polls only between a successful Launch mEdit and Close mEdit', async function () {
+    if (!root) this.skip();
+    this.timeout(20000);
+
+    // Wait past one full poll interval (EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000ms) with no Launch
+    // mEdit run — the pre-#432 wiring (unconditional start at activation) would already have
+    // ticked at least once by now.
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.strictEqual(pollRequests(requestLog).length, 0,
+      'no external-change poll should fire before Launch mEdit has ever run');
+
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.ok(pollRequests(requestLog).length > 0,
+      'expected the poller to start once Launch mEdit confirms the backend is up');
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    const countAtClose = pollRequests(requestLog).length;
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.strictEqual(pollRequests(requestLog).length, countAtClose,
+      'expected no further external-change polls after Close mEdit');
+  });
+});
+
 // ── Launch mEdit → editing plugin tree populated (#75) ──────────────────────────
 
 interface TreeLike {
