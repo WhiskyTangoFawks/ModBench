@@ -1160,17 +1160,23 @@ describe('Reload Session actually reloads (#295)', () => {
   });
 
   // #278 review finding 1 (Standards): matchingPlugins used to be refreshed only by
-  // SessionController.setFilter/clearFilter, so a plugin a filter suppressed the chevron of
-  // stayed suppressed through a Reload Session that came up with no filter at all — the exact
-  // "map outlives the filter state it describes" bug this ticket exists to prevent, in mirror
-  // image. Fixed by routing GET /plugins' hasMatchingRecords through the same completion hand-off
+  // SessionController.setFilter/clearFilter, so a plugin a filter suppressed the row of stayed
+  // suppressed through a Reload Session that came up with no filter at all — the exact "map
+  // outlives the filter state it describes" bug this ticket exists to prevent, in mirror image.
+  // Fixed by routing GET /plugins' hasMatchingRecords through the same completion hand-off
   // (applyLoadedSessionToTree) every session (re)load already reaches downstream of
   // SessionController.syncFilterState — modbench.reloadSession included, since it re-runs the
   // identical makeEnterEditing closure Launch mEdit uses. The first reload below stands in for
   // "a filter was active"; the second is the regression case (reload with no filter must clear
   // it) and is what would have stayed red without the fix — before it, matchingPlugins had no
   // path back to `true` short of an in-session setFilter/clearFilter call.
-  it('clears a chevron a filter suppressed once a reload comes up with no filter, not just applies the suppression (#278 review)', async () => {
+  //
+  // #396 / ADR-0035's dated §Filters amendment reverses what "suppressed" means here: a plugin
+  // with no matching records used to keep its row and lose only its chevron; now the row itself
+  // is omitted from getChildren() entirely. The regression this test guards is unchanged (a stale
+  // `false` must not survive a filter-free reload) — only the observable effect of the stale value
+  // is different, hence asserting absence/presence of the row rather than its collapsibleState.
+  it('hides a plugin a filter suppresses, and restores it once a reload comes up with no filter (#396 / #278 review)', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
@@ -1180,16 +1186,16 @@ describe('Reload Session actually reloads (#295)', () => {
     // session loaded" — GetPlugins() reports it, unprompted by any setFilter call on this side.
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p);
     await vscode.commands.executeCommand('modbench.reloadSession');
-    const suppressed = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(suppressed).collapsibleState, vscode.TreeItemCollapsibleState.None,
-      'sanity: the mechanism reaches the tree — a filter with no matches on this plugin suppresses its chevron');
+    const hidden = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
+    assert.strictEqual(hidden, undefined,
+      'sanity: the mechanism reaches the tree — #396: a filter with no matches on this plugin hides its row entirely, not just its chevron');
 
     // The next load — a plain reload, reporting no filter at all — must restore it.
     mockPluginsOverride = null;
     await vscode.commands.executeCommand('modbench.reloadSession');
     const restored = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(restored).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'a reload that comes up with no filter must restore a chevron an earlier filter suppressed, not leave it permanently unexpandable');
+      'a reload that comes up with no filter must restore a row an earlier filter hid, not leave it permanently gone');
   });
 
   // AC4: a failed reload must not leave the tree claiming a session the backend has already

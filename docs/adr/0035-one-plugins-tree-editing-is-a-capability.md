@@ -84,6 +84,29 @@ Narrowing to a single plugin for authoring is `Apply Filter to Selected`, adopte
 `mniNavFilterApplySelected` — the ordinary record filter invoked against the tree selection. It is
 not a mode, and it introduces no new term.
 
+#### A plugin with zero matching records is hidden, not merely unexpandable *(amendment, 2026-08-26)*
+
+The paragraph above is withdrawn on one point: "never removes a plugin row" no longer holds while a
+record filter is active. A plugin the active filter matches nothing of is now hidden from the tree
+entirely, the same way the plugin-name filter already hides a row — not merely left visible with no
+chevron.
+
+The original reasoning (a filter that hides plugins makes the load order unviewable and
+unreorderable mid-patch) was sound for the *plugin-name* filter, which the user might apply while
+mid-reorder and needs the whole order in view for. It does not carry over to the *record* filter:
+clearing it — the ordinary next step once a query has answered its question — restores every hidden
+row immediately, in load order, with nothing lost or made unreorderable in the meantime (nothing was
+deleted; the row was only left out of one render). A visible-but-permanently-inert row was never the
+load order serving a purpose — it was noise the filter's own point is to cut, including a
+load-failed or missing-master plugin, which stays hidden right along with the rest while a filter it
+doesn't match is active, for the same reason.
+
+`RecordQueryService.GetPlugins()` is unchanged by this: it still returns every plugin with
+`HasMatchingRecords` as an additive fact, never pruning a row itself (the "prunes records and record
+types, never a plugin row" rule stays a backend contract, still true and still tested). What changed
+is purely a presentation decision one layer up — `PluginsTreeComposite` omits a row from the tree
+when `HasMatchingRecords` is `false`, rather than only suppressing its chevron.
+
 ### Live mutation
 
 Reorder, enable and disable **apply live and unprompted**, with a view-header progress indicator as

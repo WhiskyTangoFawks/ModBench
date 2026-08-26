@@ -44,12 +44,14 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  is kept here: a failure never reaches this accessor as an answer. Optional and the same shape
    *  as the accessors above; omitted in tests that don't exercise drift. */
   driftOf?(pluginFile: string): PluginDrift | undefined;
-  /** #278 / ADR-0035 amending ADR-0018: whether this plugin owns at least one record the active
-   *  record filter matches. A record filter narrows records and record types, never plugin rows
-   *  — this is the one thing it is allowed to change about a row, and only via the chevron: a
-   *  plugin with no matches stays visible, it just doesn't expand onto an empty list. Optional,
-   *  and `undefined` from the accessor's own return (as opposed to the accessor being unwired)
-   *  means the same as `true` — no filter machinery to ask means nothing has been ruled out. */
+  /** #278 / ADR-0035 amending ADR-0018, reversed in part by #396 / ADR-0035's dated §Filters
+   *  amendment: whether this plugin owns at least one record the active record filter matches.
+   *  `false` is only ever produced while a filter is active — `RecordQueryService.GetPlugins()`
+   *  reports `true` for every plugin whenever no filter is active — so this accessor alone is
+   *  what root `getChildren()` reads to omit the row entirely: a filter's whole point is cutting
+   *  noise, and a visible-but-inert row is still noise. Optional, and `undefined` from the
+   *  accessor's own return (as opposed to the accessor being unwired) means the same as `true` —
+   *  no filter machinery to ask means nothing has been ruled out. */
   hasMatchingRecords?(pluginFile: string): boolean | undefined;
 }
 
@@ -97,8 +99,14 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   async getChildren(element?: TRow | TChild): Promise<(TRow | TChild)[]> {
     if (element === undefined) {
       const rows = await this.deps.rows.getChildren();
-      for (const row of rows) this.rowsSeen.add(row as object);
-      return rows;
+      // #396 / ADR-0035's dated §Filters amendment: a row whose plugin the active filter matches
+      // nothing of is omitted here, not merely left unexpandable — see isHiddenByFilter. rowsSeen
+      // only ever needs to remember rows actually handed out; a hidden row is never asked about by
+      // getTreeItem (VS Code's own contract: it only calls getTreeItem with an element a
+      // getChildren returned), so leaving it out of rowsSeen too is not a separate decision.
+      const visible = rows.filter((row) => !this.isHiddenByFilter(row));
+      for (const row of visible) this.rowsSeen.add(row as object);
+      return visible;
     }
     if (!this.isRow(element)) return this.deps.children.getChildren(element as TChild);
     const file = this.expandableFile(element as TRow);
@@ -276,18 +284,29 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   /** The plugin file this row can browse, or undefined when it can't be expanded — no session, no
-   *  plugin file, a file the session doesn't hold, or (#278 / ADR-0035 amending ADR-0018) an active
-   *  record filter that matches none of this plugin's records. That last case is the row-visible,
-   *  chevron-only half of the amendment: the row itself is never removed by a record filter — only
-   *  `getTreeItem`'s decision to render it collapsible is. The empty-session case is the honest one
-   *  for the same underlying reason: a row that would expand to an empty list reads as "this plugin
-   *  has no records" (ADR-0026's silent-wrong-state tier), whether the emptiness comes from never
-   *  having been indexed or from every record having been filtered out. */
+   *  plugin file, or a file the session doesn't hold. A row whose filter match is `false` never
+   *  reaches here at all (#396: `getChildren()` omits it before `getTreeItem`/`getChildren(row)`
+   *  can be called on it — VS Code's own contract guarantees neither is called with an element
+   *  `getChildren` didn't return), so there is nothing left for this method itself to rule out on
+   *  that account. The empty-session case is the honest answer for the same underlying reason a
+   *  filtered-out row used to be here: a row that would expand to an empty list reads as "this
+   *  plugin has no records" (ADR-0026's silent-wrong-state tier), whether the emptiness comes from
+   *  never having been indexed or (now handled one level up) from every record being filtered out. */
   private expandableFile(row: TRow): string | undefined {
     if (this.sessionFiles === undefined) return undefined;
     const file = this.deps.pluginFileOf(row);
-    if (file === undefined || !this.sessionFiles.has(file.toLowerCase())) return undefined;
-    return this.deps.hasMatchingRecords?.(file) === false ? undefined : file;
+    return file === undefined || !this.sessionFiles.has(file.toLowerCase()) ? undefined : file;
+  }
+
+  /** #396 / ADR-0035's dated §Filters amendment: true for a row whose plugin the active record
+   *  filter matches zero records of. `hasMatchingRecords` only ever answers `false` while a filter
+   *  is active (`RecordQueryService.GetPlugins()` reports `true` for every plugin otherwise), so
+   *  reading it here — with no separate "is a filter active" signal threaded in — is sufficient. A
+   *  row with no plugin file at all (an error/empty-state row) is never hidden by this: there is
+   *  nothing for a record filter to have an opinion about. */
+  private isHiddenByFilter(row: TRow): boolean {
+    const file = this.deps.pluginFileOf(row);
+    return file !== undefined && this.deps.hasMatchingRecords?.(file) === false;
   }
 
   private sessionFiles?: Set<string>;
