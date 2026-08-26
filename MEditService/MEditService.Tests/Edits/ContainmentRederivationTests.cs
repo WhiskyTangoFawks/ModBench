@@ -247,6 +247,37 @@ public sealed class ContainmentRederivationTests : IDisposable
             p => p.FormKey == _fixture.TemporaryRef.ToString());
     }
 
+    /// <summary>
+    /// #493 AC4 (parity), the Cell/<c>placement</c> half — same reload-parity guard #488's own AC5
+    /// established for <c>container_child</c> (<see cref="AfterDeletingAFolderSplitChild_AFreshSessionReload_AgreesWithTheLiveSession"/>),
+    /// extended to cover this ticket's other two ACs literally rather than only the Worldspace/
+    /// <c>cell_location</c> scenario <see cref="WorldspaceRenumberContainmentTests"/> already checks.
+    /// </summary>
+    [Fact]
+    public void AfterRenumberingAContainersOwnRecord_AFreshSessionReload_AgreesWithTheLiveSessionsPlacementRow()
+    {
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.EmbedCell.ToString());
+        Assert.True(result.Applied, result.Message);
+
+        var live = _fixture.Sessions.Index!.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+
+        using var reloaded = new SessionManager(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ISessionManager)reloaded).LoadExplicit(
+            _fixture.GameDirectory,
+            [new ExplicitPluginInput(
+                ContainerModFixture.PluginName,
+                Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName),
+                ContainerModFixture.ModFolderOrigin,
+                true)],
+            GameRelease.Fallout4);
+        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+
+        var freshlyIngested = reloaded.Index!.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+
+        Assert.Equal(freshlyIngested, live);
+    }
+
     // ---- #493 AC3: renumbering a Quest updates its DialogTopics' container_child rows ----
 
     /// <summary>
@@ -275,6 +306,39 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.DoesNotContain(
             index.GetContainerChildren(_fixture.Plugin, _fixture.Quest.ToString()),
             c => c.ChildFormKey == _fixture.DialogTopic.ToString());
+    }
+
+    /// <summary>
+    /// #493 AC4 (parity), the Quest/<c>container_child</c> half — see
+    /// <see cref="AfterRenumberingAContainersOwnRecord_AFreshSessionReload_AgreesWithTheLiveSessionsPlacementRow"/>'s
+    /// own doc comment for why this exists alongside the same-session test above.
+    /// </summary>
+    [Fact]
+    public void AfterRenumberingAQuest_AFreshSessionReload_AgreesWithTheLiveSessionsContainerChildRows()
+    {
+        var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Quest.ToString());
+        Assert.True(result.Applied, result.Message);
+        var newFormKey = result.NewFormKey!;
+
+        var live = _fixture.Sessions.Index!.GetContainerChildren(_fixture.Plugin, newFormKey)
+            .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
+
+        using var reloaded = new SessionManager(
+            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+        ((ISessionManager)reloaded).LoadExplicit(
+            _fixture.GameDirectory,
+            [new ExplicitPluginInput(
+                ContainerModFixture.PluginName,
+                Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName),
+                ContainerModFixture.ModFolderOrigin,
+                true)],
+            GameRelease.Fallout4);
+        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+
+        var freshlyIngested = reloaded.Index!.GetContainerChildren(_fixture.Plugin, newFormKey)
+            .OrderBy(c => c.SlotIndex).Select(c => (c.ChildFormKey, c.SlotName, c.SlotIndex)).ToList();
+
+        Assert.Equal(freshlyIngested, live);
     }
 
     // ---- AC4: creating a record whose own body embeds children populates all three tables ----
