@@ -593,9 +593,21 @@ const hasLitr = existsSync(litrModlist);
 describe.skipIf(!hasLitr)('full LitR round-trip (opt-in)', () => {
   it('toggling a real mod off then on reproduces the original bytes exactly', () => {
     const input = readFileSync(litrModlist, 'utf8');
-    const mod = 'SKK Fast Start new game (Fallout 4)';
-    const disabled = setEnabledInText(input, mod, false);
-    expect(disabled).not.toBe(input);
-    expect(setEnabledInText(disabled, mod, true)).toBe(input);
+    // Don't assume any particular mod's live enabled/disabled state (#403) — read
+    // it out of the file and toggle away from whatever it actually is.
+    const firstMod = parseModlist(input).find((e) => e.kind === 'mod');
+    if (!firstMod) throw new Error('LitR modlist.txt has no mod entries — fixture assumption broken');
+    const { name, enabled } = firstMod;
+
+    const toggled = setEnabledInText(input, name, !enabled);
+
+    // Prove a real toggle happened, not a vacuous no-op: re-read the mod's state
+    // back out of the result and require it to have actually flipped. A no-op
+    // implementation (the exact failure this issue reports) cannot satisfy this.
+    expect(toggled).not.toBe(input);
+    const toggledMod = parseModlist(toggled).find((e) => e.kind === 'mod' && e.name === name);
+    expect(toggledMod?.enabled).toBe(!enabled);
+
+    expect(setEnabledInText(toggled, name, enabled)).toBe(input);
   });
 });
