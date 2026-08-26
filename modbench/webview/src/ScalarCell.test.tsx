@@ -114,9 +114,8 @@ describe('ScalarCell — committing (#415 AC1)', () => {
   });
 });
 
-// #258 / ADR-0039 guard: a genuine mouse click (detail >= 1, what a real click always carries —
-// see the file's own #230 describe block below for why detail 0 is F2's own signature, not a
-// click's) on an already-focused string cell must open the inline editor *synchronously*, with no
+// #258 / ADR-0039 guard: a genuine mouse click (`detail: 1`, what a real click always carries) on
+// an already-focused string cell must open the inline editor *synchronously*, with no
 // debounce delay of any kind. Named rival this is checked against: the pre-#258 debounced
 // implementation, which defers this behind STRING_OPEN_DEBOUNCE_MS so a following native
 // `dblclick` can still redirect it — that rival fails this test outright (the textbox does not
