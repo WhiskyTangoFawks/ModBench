@@ -530,7 +530,10 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     public static ConditionApplyResult ApplyFieldValue(
         IList<Condition> conditions, int index, string subField, JsonElement value)
     {
-        if (index < 0 || index >= conditions.Count) return ConditionApplyResult.NotFound;
+        // #401 Route A: no `index < 0` disjunct here — the only production caller
+        // (RecordFieldWriter.ApplyConditionField) sources index from ConditionPath.TryParse, which
+        // already rejects negatives before this is ever reached.
+        if (index >= conditions.Count) return ConditionApplyResult.NotFound;
         var condition = conditions[index];
 
         if (subField == "Function") return ApplyFunction(condition, value);
