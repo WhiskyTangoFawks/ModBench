@@ -10,6 +10,11 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 {
     private readonly string _prefix = prefix;
     private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams, string Origin)> _plugins = [];
+    // #434: names for a fixture Fallout4.ccc, in the order given — a Creation Club catalog entry,
+    // not a plugins.txt line. Kept separate from _plugins' Listed flag: BuildScattered ignores
+    // Listed entirely (it has no plugins.txt), so a test controls "also *-listed" by hand-appending
+    // an ExplicitPluginInput, the same way its sibling missing/unparseable-plugin tests already do.
+    private readonly List<string> _cccCatalog = [];
 
     public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null, bool enabled = true, string origin = PluginOrigin.DataDirectory)
     {
@@ -23,9 +28,26 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         return this;
     }
 
+    /// <summary>Fixture Fallout4.ccc catalog (#434): written into the data folder (<see cref="Build"/>)
+    /// or the game directory (<see cref="BuildScattered"/>) alongside whatever plugins <c>WithPlugin</c>
+    /// declared. Names are written in the given order — catalog order is part of what the fix under
+    /// test must preserve.</summary>
+    public PluginFixtureBuilder WithCreationClubCatalog(params string[] names)
+    {
+        _cccCatalog.AddRange(names);
+        return this;
+    }
+
     public PluginFixtureData Build()
     {
-        var dataFolder = Path.Combine(Path.GetTempPath(), $"{_prefix}-{Guid.NewGuid():N}");
+        // #434: Fallout4.ccc lives one directory *above* the Data folder in a real install —
+        // Mutagen's own CreationClubListings.GetListingsPath resolves it that way — so the fixture
+        // needs a root above dataFolder to hold it, the same shape BuildScattered's root/gameDir
+        // already has. Root is unique per fixture instance (never the shared OS temp directory
+        // itself), so a fixture's catalog can never bleed into an unrelated fixture built alongside
+        // it in a parallel test run.
+        var root = Path.Combine(Path.GetTempPath(), $"{_prefix}-{Guid.NewGuid():N}");
+        var dataFolder = Path.Combine(root, "Data");
         Directory.CreateDirectory(dataFolder);
 
         var builtMods = new List<Fallout4Mod>();
@@ -43,7 +65,9 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             .Select(p => $"{(p.Enabled ? "*" : "")}{p.Name}");
         File.WriteAllText(pluginsTxtPath, string.Join("\n", lines) + "\n");
 
-        return new PluginFixtureData(dataFolder, pluginsTxtPath);
+        WriteCreationClubCatalog(root);
+
+        return new PluginFixtureData(dataFolder, pluginsTxtPath, root);
     }
 
     /// <summary>
@@ -60,6 +84,12 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         var implicitNames = Implicits.Get(GameRelease.Fallout4).Listings
             .Select(l => l.FileName.ToString())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // #434: a cataloged CC plugin's file lives in the game directory too — never a mod
+        // folder — the same as an implicit master. A test that also wants it to arrive via the
+        // explicit list (simulating a plugins.txt `*` line pointing at the Data-folder copy) adds
+        // that ExplicitPluginInput by hand afterwards, same convention this method already uses for
+        // the missing/unparseable-plugin tests.
+        var cccNames = _cccCatalog.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var root = Path.Combine(Path.GetTempPath(), $"{_prefix}-scatter-{Guid.NewGuid():N}");
         var gameDir = Path.Combine(root, "GameDir");
@@ -74,7 +104,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             configure?.Invoke(mod, builtMods.AsReadOnly());
 
             string targetPath;
-            if (implicitNames.Contains(name))
+            if (implicitNames.Contains(name) || cccNames.Contains(name))
             {
                 targetPath = Path.Combine(gameDir, name);
             }
@@ -91,13 +121,23 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             i++;
         }
 
+        // #434: same one-level-above-Data placement as Build() — gameDir is what LoadExplicit
+        // treats as the Data path, so the catalog belongs in its parent, root.
+        WriteCreationClubCatalog(root);
+
         return new ScatteredFixtureData(root, gameDir, explicitPlugins);
+    }
+
+    private void WriteCreationClubCatalog(string folder)
+    {
+        if (_cccCatalog.Count == 0) return;
+        File.WriteAllText(Path.Combine(folder, "Fallout4.ccc"), string.Join("\n", _cccCatalog) + "\n");
     }
 }
 
-public sealed record PluginFixtureData(string DataFolder, string PluginsTxtPath) : IDisposable
+public sealed record PluginFixtureData(string DataFolder, string PluginsTxtPath, string CleanupRoot) : IDisposable
 {
-    public void Dispose() => Directory.Delete(DataFolder, recursive: true);
+    public void Dispose() => Directory.Delete(CleanupRoot, recursive: true);
 }
 
 /// <summary>
