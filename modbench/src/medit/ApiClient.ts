@@ -167,6 +167,11 @@ export interface CellSummary {
   editorId: string | null;
   cellX: number | null;
   cellY: number | null;
+  // #251: xEdit's "<Persistent Worldspace Cell>" — the tree provider's label logic reads this
+  // instead of inferring it from which field of WorldspaceBlocks a cell arrived in. Optional
+  // (defaults falsy) like the generated schema's own field — only the worldspace's own TopCell
+  // ever sets it.
+  isPersistentWorldspaceCell?: boolean;
 }
 
 export interface PlacedSummary {
@@ -195,7 +200,10 @@ export interface WorldspaceBlock {
 
 export interface WorldspaceBlocks {
   blocks: WorldspaceBlock[];
-  topCell: CellSummary | null;
+  // #251: a list, not a single nullable cell — a worldspace is only ever supposed to have one
+  // block-less cell row (its TopCell), but the backend surfaces every one it finds rather than
+  // discarding anything past the first.
+  topCells: CellSummary[];
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

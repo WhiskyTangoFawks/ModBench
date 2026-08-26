@@ -104,6 +104,7 @@ function toCellSummary(c: GenCell): CellSummary {
     editorId: c.editorId ?? null,
     cellX: c.cellX ?? null,
     cellY: c.cellY ?? null,
+    isPersistentWorldspaceCell: c.isPersistentWorldspaceCell ?? false,
   };
 }
 
@@ -413,7 +414,7 @@ export class ApiPluginRepository implements PluginRepository {
     });
     this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
     return {
-      topCell: data?.topCell ? toCellSummary(data.topCell) : null,
+      topCells: (data?.topCells ?? []).map(toCellSummary),
       blocks: (data?.blocks ?? []).map(b => ({
         x: b.x ?? 0,
         y: b.y ?? 0,

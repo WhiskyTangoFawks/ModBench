@@ -87,7 +87,7 @@ function makeRepository(overrides: Partial<{
     clearFilter: vi.fn().mockResolvedValue(undefined),
     getActiveFilter: vi.fn().mockResolvedValue(null),
     getWorldspaces: vi.fn().mockResolvedValue([]),
-    getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCell: null }),
+    getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCells: [] }),
     getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
     // #415: the tree provider never edits — present only because the double implements the
     // whole PluginRepository surface.
@@ -610,11 +610,11 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(labels).not.toContain('wrld');
   });
 
-  it('expands a worldspace into its TopCell and blocks', async () => {
+  it('expands a worldspace into its persistent cell and blocks, labeled the way xEdit does', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
     (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
-      topCell: { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null },
+      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
       blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: null, cellX: 12, cellY: -5 }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
@@ -622,13 +622,38 @@ describe('PluginTreeProvider worldspace tree', () => {
     const [wsNode] = await provider.getChildren(wsRoot);
 
     const wsChildren = await provider.getChildren(wsNode);
-    const [, blockNode] = wsChildren;
+    const [topCellNode, blockNode] = wsChildren;
     const subBlocks = await provider.getChildren(blockNode);
     const cells = await provider.getChildren(subBlocks[0]);
 
-    expect(wsChildren).toHaveLength(2); // TopCell + 1 block
+    expect(wsChildren).toHaveLength(2); // persistent cell + 1 block
+    expect(topCellNode.label).toBe('<Persistent Worldspace Cell>');
+    expect(blockNode.label).toBe('Block 0, 0');
+    expect(subBlocks[0].label).toBe('Sub-Block 0, 0');
     expect((cells[0] as CellNode).cell.cellX).toBe(12);
-    expect(cells[0].label).toBe('Cell (12, -5)');
+    // xEdit's StrRight right-justifies each coordinate to width 3 inside the angle brackets.
+    expect(cells[0].label).toBe('< 12,  -5>');
+  });
+
+  it('surfaces every block-less cell row under a worldspace, not just the first (#251)', async () => {
+    const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }] });
+    (repo.getWorldspaces as ReturnType<typeof vi.fn>).mockResolvedValue([{ formKey: 'wrld:M.esp', editorId: 'World' }]);
+    (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
+      topCells: [
+        { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true },
+        { formKey: 'stray:M.esp', editorId: 'StrayCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false },
+      ],
+      blocks: [],
+    });
+    const provider = new PluginTreeProvider(repo);
+    const [wsRoot] = await provider.getPluginChildren('Plugin0.esp');
+    const [wsNode] = await provider.getChildren(wsRoot);
+
+    const wsChildren = await provider.getChildren(wsNode);
+
+    expect(wsChildren.filter(c => c instanceof CellNode)).toHaveLength(2);
+    expect(wsChildren[0].label).toBe('<Persistent Worldspace Cell>');
+    expect(wsChildren[1].label).toBe('StrayCell');
   });
 
   it('expands a cell into non-empty persistent/temporary groups and placed leaves', async () => {
@@ -809,7 +834,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
   it('fetchWorldspaceChildren: asks the repository for the node\'s own copy, and its TopCell/Block children carry that origin forward', async () => {
     const repo = makeRepository();
     (repo.getWorldspaceBlocks as ReturnType<typeof vi.fn>).mockResolvedValue({
-      topCell: { formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null },
+      topCells: [{ formKey: 'top:M.esp', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
       blocks: [{ x: 0, y: 0, subBlocks: [{ x: 0, y: 0, cells: [{ formKey: 'c:M.esp', editorId: 'Cell', cellX: 12, cellY: -5 }] }] }],
     });
     const provider = new PluginTreeProvider(repo);
