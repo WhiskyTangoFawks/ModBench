@@ -458,13 +458,15 @@ per entry, carrying `binary`, `arguments`, `workingDirectory`, `steamAppID`, `ti
 MO2 entries are authored against MO2's view of the filesystem, which is neither Modbench's
 nor Linux's. Two translations are mandatory:
 
-- **Wine drive letters.** `Z:` maps to the filesystem root, but **`C:` maps to the prefix's
-  `drive_c` and must not be stripped to `/`.** `normalizeGamePath` strips *any* drive letter,
-  which is correct only for `Z:`; it is applied solely to `gamePath` today, and consuming
-  executables — which routinely carry real `C:` tool paths — exposes that. The strip is
-  anchored to the start of the path, so a colon inside a folder name (`mods/A:B/…`) survives
-  intact; it takes the platform as an explicit argument rather than reading `process.platform`,
-  and on `win32` returns the path untouched.
+- **Wine drive letters.** `Z:` maps to the filesystem root; `C:` maps to the Proton prefix's
+  `drive_c` (#187). `normalizeGamePath` translates each explicitly — `Z:` strips to root
+  unchanged, `C:` resolves under an injected prefix detector's `drive_c`, and any other drive
+  letter throws rather than guessing, since a third, user-custom-mapped letter is not
+  guaranteed to live under the prefix at all. It is applied solely to `gamePath` today;
+  wiring it into consuming executables' `C:` tool paths is #96's executables-registry scope,
+  not yet built. The translation is anchored to the start of the path, so a colon inside a
+  folder name (`mods/A:B/…`) survives intact; it takes the platform as an explicit argument
+  rather than reading `process.platform`, and on `win32` returns the path untouched.
 - **Staging-relative binaries only resolve under usvfs.** An entry may point at
   `mods/<Mod>/root/<tool>.exe`, which usvfs makes appear inside the game directory but which
   is a plain staging path to Modbench. Such an entry is remapped to its deployed location, or
