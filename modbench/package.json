@@ -281,13 +281,13 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.sortDescending",
+        "command": "modbench.modList.view.winningAtTop",
         "title": "Show Winning Mods at Top",
         "icon": "$(triangle-down)",
         "category": "Modbench"
       },
       {
-        "command": "modbench.modList.sortAscending",
+        "command": "modbench.modList.view.losingAtTop",
         "title": "Show Losing Mods at Top",
         "icon": "$(triangle-up)",
         "category": "Modbench"
@@ -727,13 +727,13 @@
           "group": "navigation@1"
         },
         {
-          "command": "modbench.modList.sortDescending",
-          "when": "view == modbench.modList && !modbench.modList.sortDescending",
+          "command": "modbench.modList.view.winningAtTop",
+          "when": "view == modbench.modList && !modbench.modList.winningAtTop",
           "group": "navigation@2"
         },
         {
-          "command": "modbench.modList.sortAscending",
-          "when": "view == modbench.modList && modbench.modList.sortDescending",
+          "command": "modbench.modList.view.losingAtTop",
+          "when": "view == modbench.modList && modbench.modList.winningAtTop",
           "group": "navigation@2"
         },
         {

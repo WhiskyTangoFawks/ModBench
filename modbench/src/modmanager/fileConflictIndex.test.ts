@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { join } from 'node:path';
 import { mkdtemp, mkdir, writeFile, rm, symlink, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
+import { tmpdir, homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import type { Mod, Separator, ModlistEntry } from './model';
-import { buildFileConflictIndex, rootLevelWinners } from './fileConflictIndex';
+import { buildFileConflictIndex, rootLevelWinners, foldPath } from './fileConflictIndex';
+import { parseModlist } from './mo2/modlistText';
+import { computeModStatuses } from './statusChecker';
+import { readVanillaMasters } from './vanillaMasters';
+import { deploy } from './deployer';
+import { makeDeployerFixture, makeIndex } from './test/deployerFixture';
 
 // Scoped to this file only, passthrough by default: wraps `stat` so a single test below can
 // divert one specific path to a synthetic non-ENOENT error. Same wrapper shape as
@@ -508,4 +514,118 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (
 
     expect(index.files.has('sourceish/note.txt')).toBe(true);
   });
+});
+
+// #84 regression backstop: prove the override-order direction against a REAL MO2 instance, not
+// just synthetic fixtures — the direction was inverted for a long time (bottom-of-modlist.txt
+// picked as winner) before being corrected; this is what stands between that bug and it silently
+// re-inverting again. Opt-in like modlistText.test.ts's own LitR round-trip: skipped when the
+// instance is absent (CI, Windows, other machines), same MEDIT_LITR_INSTANCE override.
+const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? join(homedir(), 'Games', 'FO4', 'LitR');
+const litrModlistPath = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
+const hasLitr = existsSync(litrModlistPath);
+
+// #84 review: the game directory a badge/deploy check against the real instance needs — read
+// from ModOrganizer.ini in principle, but this opt-in test is already coupled to this specific
+// real instance's on-disk shape (its exact mod names), so hardcoding the sibling "Stock Game
+// Folder" is no more fragile than the mod names above and avoids pulling in gameDirectory.ts's
+// full resolver (config → ini → Steam scan) for a read-only masters lookup.
+const litrVanillaData = join(litrInstance, 'Stock Game Folder', 'Data');
+
+function fakeReporter() {
+  return { report: () => {} };
+}
+
+describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in, #84)', () => {
+  // Real, independently-verifiable conflict discovered in the live LitR modlist (not planted):
+  // "Pipboy Arm Fix for Grafs Assaultron Armor" sits above "Graf's Assaultron Armor" in
+  // modlist.txt (nearer the winning end) and both ship the same 4 mesh files. A fix patch must
+  // override what it fixes, or it isn't a fix — an oracle independent of this codebase's own
+  // logic, not re-derived from it.
+  const fixName = 'Pipboy Arm Fix for Grafs Assaultron Armor';
+  const baseName = "Graf's Assaultron Armor";
+  const contested = [
+    'meshes/graf/assaultronarmor/assaultronarmorarmlheavyf.nif',
+    'meshes/graf/assaultronarmor/assaultronarmorarmlheavym.nif',
+    'meshes/graf/assaultronarmor/assaultronarmorarmlmediumf.nif',
+    'meshes/graf/assaultronarmor/assaultronarmorarmlmediumm.nif',
+  ];
+
+  // #84 review: the issue asked for "Modbench (badge + deploy)" to match MO2's winner, not just
+  // the index — statusChecker.ts and deployer.ts both consume the index's winner/winnerMod with
+  // no divergent logic of their own, so this proves all three agree on the same real conflict
+  // rather than asserting the index alone and documenting the rest away.
+  it('a fix patch positioned above the mod it fixes wins the meshes they both ship — index, badge, and deploy all agree', async () => {
+    const entries = parseModlist(readFileSync(litrModlistPath, 'utf8'));
+    const fixEntry = entries.find((e) => e.kind === 'mod' && e.name === fixName);
+    const baseEntry = entries.find((e) => e.kind === 'mod' && e.name === baseName);
+    if (!fixEntry?.enabled || !baseEntry?.enabled) {
+      throw new Error(
+        `LitR fixture assumption broken: expected both "${fixName}" and "${baseName}" present and enabled in modlist.txt`,
+      );
+    }
+
+    // 1. FileConflictIndex — the winner map itself.
+    const index = await buildFileConflictIndex(entries, litrInstance, () => {});
+    const winnerPaths = new Map<string, string>();
+    for (const relativePath of contested) {
+      const entry = index.files.get(relativePath);
+      expect(entry?.providers.sort()).toEqual([baseName, fixName].sort());
+      expect(entry?.winnerMod).toBe(fixName);
+      winnerPaths.set(relativePath, entry!.winner);
+    }
+
+    // 2. Badge — statusChecker.ts's per-mod status, built from the SAME index, against the real
+    // instance (read-only: modFolderExists/readMasters stat calls, never a write).
+    const vanillaMasters = await readVanillaMasters(litrVanillaData, () => {});
+    const statuses = await computeModStatuses([fixEntry, baseEntry], litrInstance, index, vanillaMasters, () => {});
+    expect(statuses.get(fixName)?.status).toEqual({ kind: 'overrides', count: contested.length });
+    // baseName's real count is 5, not 4: it also ships GrafAssaultronArmorNoAwkcrDlc01.esl,
+    // which "Lunar Arsenal Unique Replacer - Armor And Power Armor" happens to ship too (a real,
+    // separate root-level name collision, confirmed on disk) — one more real conflict this mod
+    // loses, unrelated to the fix pair under test but part of its honest real badge.
+    expect(statuses.get(baseName)?.status).toEqual({ kind: 'conflicts', count: contested.length + 1 });
+    for (const relativePath of contested) {
+      // The badge's conflictLines carry the base mod's OWN on-disk casing (e.g.
+      // "Meshes/Graf/...", not the lowercase form used above for index lookups) — compare
+      // case-insensitively, the same rule the index itself applies (foldPath).
+      expect(
+        statuses
+          .get(baseName)
+          ?.conflictLines.some((line) => foldPath(line) === foldPath(`${relativePath} → winner: ${fixName}`)),
+      ).toBe(true);
+    }
+
+    // 3. Deploy — the real deployer hardlinks the SAME real winner file (Pipboy Arm Fix's actual
+    // mesh, not a synthetic fixture) into Data/. instanceRoot/gameDirectory are scratch temp
+    // dirs (makeDeployerFixture) so the live LitR instance is never written to; only the winner
+    // SOURCE path is real.
+    const fx = await makeDeployerFixture();
+    try {
+      const deployIndex = makeIndex(Object.fromEntries(winnerPaths));
+      await deploy(fx.instanceRoot, fx.gameDirectory, deployIndex, fakeReporter());
+      for (const relativePath of contested) {
+        const winner = winnerPaths.get(relativePath)!;
+        const target = join(fx.gameDirectory.dataFolder, relativePath);
+        const [srcStat, tgtStat] = await Promise.all([stat(winner), stat(target)]);
+        expect(tgtStat.ino).toBe(srcStat.ino); // same inode == a real hardlink to the winner, not a copy
+        expect(tgtStat.dev).toBe(srcStat.dev);
+      }
+    } finally {
+      await fx.cleanup();
+    }
+  });
+
+  // #84 review: vanilla-loses anchor check against the real instance. Checked for a genuine
+  // pair — the real vanilla Data/ (litrVanillaData) ships every asset packed inside .ba2
+  // archives with NO loose textures/meshes/sounds at all, and no root-level file (plugin, BA2,
+  // ini) it ships shares a name with any enabled mod's root-level file either (diffed the full
+  // real mod list against it). So there genuinely is no real vanilla-vs-mod loose-file conflict
+  // pair in this instance to assert against — stating that explicitly rather than silently
+  // skipping the check, per review. The invariant itself (an existing file at a target path,
+  // vanilla or otherwise, is always skipped rather than overwritten) is exercised with a
+  // synthetic vanilla file in deployer.test.ts's "skips and reports a winner whose Data/ path
+  // already exists and is not a prior link" — that is real code, just not data this specific
+  // instance can supply.
+  it.todo('vanilla Data/ loose file loses to an enabled mod shipping the same file — no such real pair exists in this LitR instance; see deployer.test.ts for the synthetic-fixture proof of the invariant');
 });

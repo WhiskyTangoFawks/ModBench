@@ -23,10 +23,10 @@ with an owner per axis.
 uses the disambiguated terms throughout — see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and each
 context's `CONTEXT.md`:
 
-- **Mod load order** — `modlist.txt` order (the **Modlist**, owned by the Mods tree); later
-  position wins **file** conflicts.
-- **Plugin load order** — `plugins.txt` order (owned by this surface); later position wins
-  **record-override** conflicts (an Editing-context concern this surface's artifact feeds).
+- **Mod override order** — `modlist.txt` order (the **Modlist**, owned by the Mods tree); the mod
+  nearer the **winning end** (top of file) wins **file** conflicts — never "later position".
+- **Plugin load order** — `plugins.txt` order (owned by this surface); the **last-loaded** plugin
+  wins **record-override** conflicts (an Editing-context concern this surface's artifact feeds).
 
 ## Purpose
 
@@ -780,7 +780,7 @@ overflow, then native **Collapse All** last.
 
 - **Glossary** — `CONTEXT.md` (Editing) and
   [modmanager `CONTEXT.md`](../../modbench/src/modmanager/CONTEXT.md) distinguish **Plugin
-  load order** (this surface's subject, `plugins.txt`, record-level) from **Mod load order**
+  load order** (this surface's subject, `plugins.txt`, record-level) from **Mod override order**
   (the Modlist, `modlist.txt`, file-level) — previously conflated under one ambiguous "load
   order" term. [CONTEXT-MAP.md](../../CONTEXT-MAP.md)'s Mod-Management→Editing relationship
   description matches: the Editing session's plugin *order* comes from Plugin load order, not

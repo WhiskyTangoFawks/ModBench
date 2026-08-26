@@ -830,13 +830,13 @@ interface ModListCoreDeps {
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
   const { modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
   return [
-      vscode.commands.registerCommand('modbench.modList.sortDescending', () => {
-        modListProvider.toggleSortOrder();
-        void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', true);
+      vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
+        modListProvider.toggleViewDirection();
+        void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', true);
       }),
-      vscode.commands.registerCommand('modbench.modList.sortAscending', () => {
-        modListProvider.toggleSortOrder();
-        void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', false);
+      vscode.commands.registerCommand('modbench.modList.view.losingAtTop', () => {
+        modListProvider.toggleViewDirection();
+        void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', false);
       }),
       vscode.commands.registerCommand('modbench.modList.switchProfile', async () => {
         const [profiles, active] = await Promise.all([

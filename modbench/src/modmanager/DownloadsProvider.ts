@@ -124,7 +124,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
 
   /** Show hidden toggle (#238): additive, not an exclusive filter — matches MO2's own
    *  Show-hidden (downloadmanager.cpp:102). Re-renders via invalidate(), same as
-   *  ModListProvider.toggleSortOrder(); the command handler owns setting the
+   *  ModListProvider.toggleViewDirection(); the command handler owns setting the
    *  `modbench.downloads.showHidden` context key. */
   setShowHidden(show: boolean): void {
     this.showHidden = show;
