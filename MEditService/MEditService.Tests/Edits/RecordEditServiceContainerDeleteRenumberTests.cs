@@ -304,7 +304,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             Track(sessions, origin);
 
             var file = Directory.EnumerateFiles(
-                    Path.Combine(modFolder, $"{pluginName}.source"), "RecordData.json", SearchOption.AllDirectories)
+                    Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName)), "RecordData.json", SearchOption.AllDirectories)
                 .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
             Assert.Contains(npc.FormKey.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
 

@@ -121,7 +121,7 @@ internal static class SourceUnitResolver
 
         // Everything else may still have a file of its own — a Cell, a Worldspace, a Quest, a dialog
         // topic, a scene. Look for it before assuming it is embedded.
-        var root = Path.Combine(modFolder, $"{plugin.Name}{SourceRecordPath.SourceSuffix}");
+        var root = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name));
         if (FindOwnUnit(reads, plugin, root, formKey, recordType, release) is { } own)
         {
             return new SourceUnit(
@@ -183,7 +183,7 @@ internal static class SourceUnitResolver
         var groupFolder = RecordTypeDispatch.For(release).FolderNameFor(recordType);
         if (groupFolder == null) return computed;
 
-        var groupDirectory = Path.Combine(modFolder, $"{pluginFileName}{SourceRecordPath.SourceSuffix}", groupFolder);
+        var groupDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginFileName), groupFolder);
         if (!Directory.Exists(groupDirectory)) return computed;
 
         var suffix = FilesafeFormKey(formKey) + JsonSuffix;
@@ -490,7 +490,7 @@ internal static class SourceUnitResolver
     internal static int NextOrderIndexFor(string modFolder, string pluginFileName, string recordType, GameRelease release)
     {
         var groupDirectory = Path.Combine(
-            modFolder, $"{pluginFileName}{SourceRecordPath.SourceSuffix}",
+            modFolder, SourceRecordPath.RootFor(pluginFileName),
             RecordTypeDispatch.For(release).FolderNameFor(recordType)!);
         return NextOrderIndex(groupDirectory);
     }

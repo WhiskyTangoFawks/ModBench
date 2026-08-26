@@ -37,8 +37,9 @@ public sealed class SessionLeavesSourceTreesAloneTests
             mod.WriteToBinary(stillHerePath);
 
             // Per-record text for a plugin that is no longer on disk beside it — exactly the
-            // "orphan" shape the reconciler used to sweep away.
-            var orphanTree = Path.Combine(originFolder, "Removed.esp.source");
+            // "orphan" shape the reconciler used to sweep away. #441: under the current root
+            // "source/" layout, an orphan is a plugin folder inside it with no plugin file left.
+            var orphanTree = Path.Combine(originFolder, "source", "Removed.esp");
             var orphanFile = Path.Combine(orphanTree, "records", "Removed.esp", "000800.json");
             Directory.CreateDirectory(Path.GetDirectoryName(orphanFile)!);
             File.WriteAllText(orphanFile, "{\"formKey\":\"000800:Removed.esp\"}");

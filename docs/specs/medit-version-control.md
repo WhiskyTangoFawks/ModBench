@@ -190,7 +190,8 @@ using git.
 
 - **Where**: a plugin row's context menu (Plugins tree) and the command palette. The
   command tracks the plugin's *mod folder* — one repo per mod, covering all its plugins.
-- **Preset QuickPick**: **Edits** (default — everything ignored except `<plugin>.source/**`)
+- **Preset QuickPick**: **Edits** (default — everything ignored except `source/**`, the
+  one root folder holding every tracked plugin's own tree — #441)
   or **Everything** (authoring — assets tracked too). Plugin binaries are ignored in both;
   the `.gitignore` is generated once and then owned by the user (ADR-0041).
 - **Progress**: eager, complete serialization is progress-reported (typically sub-second;
@@ -198,6 +199,13 @@ using git.
   on `main` (provenance trailers: `Upstream-Version`, `Binary-SHA256`, `Meta-SHA256`, all
   optional, read from `meta.ini` as opaque bytes), the edit branch checked out, and the
   parked ref initialized — and the mod appears in the Source Control panel.
+- **The `source/` folder's lifecycle, in one place** (#441): Track is what creates it —
+  eager serialization writes `source/<plugin>/…` for every plugin Track covers, the moment
+  Track runs. The edit path (field edits, create/delete/renumber) writes into an
+  already-tracked plugin's own tree under it. Compile reads from it (working tree or a
+  named ref). No other gesture creates or deletes the folder or a plugin's tree inside
+  it — untracking is deleting `.git` by hand, which leaves the folder exactly where it
+  is (never assume exclusive ownership); there is no separate cleanup or migration step.
 - **Track is uniform** (ADR-0041 amendment): no Authored/Modified mode is chosen or
   stored. "Authored" is the workflow of merging into `main` at will.
 - **Untrack is not a command** — deleting the `.git` folder is the gesture (git itself

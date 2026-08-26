@@ -24,7 +24,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     public void CommitPristineToMain_AdvancesMain_WithTheNewContentAndFreshTrailers()
     {
         var modFolder = NewModFolder();
-        var relativePath = $"{Plugin}.source/npc_/{Plugin}/000001.json";
+        var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";
         try
         {
             Track(modFolder, relativePath, "{\"old\":true}");
@@ -52,7 +52,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     public void CommitPristineToMain_AdvancesTheParkedRef_ToTheNewBaselineCommit()
     {
         var modFolder = NewModFolder();
-        var relativePath = $"{Plugin}.source/npc_/{Plugin}/000001.json";
+        var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";
         try
         {
             Track(modFolder, relativePath, "{\"old\":true}");
@@ -76,7 +76,7 @@ public sealed class SourceRepositoryCommitPristineToMainTests
     public void CommitPristineToMain_TouchesNeitherTheEditBranchsWorkingTreeNorItsHeadNorItsDirt()
     {
         var modFolder = NewModFolder();
-        var relativePath = $"{Plugin}.source/npc_/{Plugin}/000001.json";
+        var relativePath = $"source/{Plugin}/npc_/{Plugin}/000001.json";
         try
         {
             Track(modFolder, relativePath, "{\"old\":true}");

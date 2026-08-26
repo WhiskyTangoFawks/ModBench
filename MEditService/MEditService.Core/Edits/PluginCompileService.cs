@@ -258,7 +258,7 @@ public sealed class PluginCompileService(
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
         var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
-        var rootHeaderPath = Path.Combine($"{pluginName}{SourceRecordPath.SourceSuffix}", SourceUnitResolver.RecordDataFileName);
+        var rootHeaderPath = Path.Combine(SourceRecordPath.RootFor(pluginName), SourceUnitResolver.RecordDataFileName);
 
         foreach (var file in regeneratedFiles)
         {
@@ -279,7 +279,7 @@ public sealed class PluginCompileService(
 /// The directory <see cref="PluginCompileService"/> reads a plugin's source tree from, for either
 /// <see cref="CompileSource"/>.
 ///
-/// <para>The working tree is the plain files on disk under <c>&lt;plugin&gt;.source/</c> — no git
+/// <para>The working tree is the plain files on disk under <c>source/&lt;plugin&gt;/</c> (#441) — no git
 /// involved, the same way <see cref="RecordEditService"/> reads a single record's source file. A named
 /// ref (#416 S8) is that ref's blobs written into a scratch directory laid out identically, so the
 /// whole-mod reader — which takes a folder, not a byte stream — can read it without a checkout: HEAD,
@@ -293,7 +293,7 @@ internal sealed class SourceCheckout : IDisposable
     private SourceCheckout(string treeRoot, string resolverRoot, string description, string? scratchRoot) =>
         (TreeRoot, ResolverRoot, Description, _scratchRoot) = (treeRoot, resolverRoot, description, scratchRoot);
 
-    /// <summary>The <c>&lt;plugin&gt;.source/</c> directory itself — what the whole-mod reader takes.</summary>
+    /// <summary>The <c>source/&lt;plugin&gt;/</c> directory itself (#441) — what the whole-mod reader takes.</summary>
     internal string TreeRoot { get; }
 
     /// <summary>Its parent — the mod folder for a working-tree compile, the scratch root for a ref.
@@ -307,7 +307,7 @@ internal sealed class SourceCheckout : IDisposable
 
     internal static SourceCheckout Of(string modFolder, string pluginName, CompileSource source)
     {
-        var treeName = $"{pluginName}{SourceRecordPath.SourceSuffix}";
+        var treeName = SourceRecordPath.RootFor(pluginName);
 
         if (source is CompileSource.AtRef atRef)
         {

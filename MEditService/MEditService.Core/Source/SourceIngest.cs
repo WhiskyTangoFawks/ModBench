@@ -51,7 +51,7 @@ internal static class SourceIngest
         if (ModFolders.Of(origin, pluginPath) is not { } modFolder) return null;
         if (!SourceRepository.IsTracked(modFolder)) return null;
 
-        var tree = Path.Combine(modFolder, $"{pluginName}{SourceRecordPath.SourceSuffix}");
+        var tree = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName));
         return Directory.Exists(tree) ? tree : null;
     }
 
@@ -137,7 +137,7 @@ internal static class SourceIngest
         // successful-parse branch below already checks via identity.PluginFileName, just needed one
         // parse earlier here. Not a container-path grammar: it says nothing about record type or
         // position, only which plugin's own subtree the path sits under (#463; ADR-0041 amendment).
-        var ownTreePrefix = $"{key.Name}{SourceRecordPath.SourceSuffix}{Path.DirectorySeparatorChar}";
+        var ownTreePrefix = $"{SourceRecordPath.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
 
         foreach (var gitPath in dirty)
         {
@@ -333,7 +333,7 @@ internal static class SourceIngest
                 File.WriteAllBytes(destination, bytes);
             }
 
-            var treeRoot = Path.Combine(scratchRoot, $"{pluginName}{SourceRecordPath.SourceSuffix}");
+            var treeRoot = Path.Combine(scratchRoot, SourceRecordPath.RootFor(pluginName));
             return RecordTextCodecGeneratorSeed
                 .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
                 .GetAwaiter().GetResult();

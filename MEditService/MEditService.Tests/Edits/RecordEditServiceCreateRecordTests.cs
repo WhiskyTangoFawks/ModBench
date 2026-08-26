@@ -65,7 +65,7 @@ public sealed class RecordEditServiceCreateRecordTests
         var created = service.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
         Assert.True(created.Applied, created.Message);
 
-        var npcsDir = Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "Npcs");
+        var npcsDir = Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
         var names = Directory.GetFiles(npcsDir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
         // The delete's own renormalization already closed the gap — the surviving sibling now carries

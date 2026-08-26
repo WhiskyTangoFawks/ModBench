@@ -21,7 +21,7 @@ public sealed class SourceRepositoryTrackCleanupTests
         {
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
-                [new PristineFile("Test.esp.source/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
+                [new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray())],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             Assert.True(Directory.Exists(Path.Combine(modFolder, ".git")));

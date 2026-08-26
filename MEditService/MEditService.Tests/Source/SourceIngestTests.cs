@@ -179,7 +179,7 @@ public sealed class SourceIngestTests
         // Never-assume-exclusive-ownership: MO2, a git operation, or the user can leave this tree
         // half-written at any moment. The root header is what the whole-mod door reads first.
         File.WriteAllText(
-            Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "RecordData.json"),
+            Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "RecordData.json"),
             "{ this is not json");
 
         using var reloaded = Reload(mod);
@@ -218,7 +218,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
         var gitDir = Path.Combine(mod.ModFolder, ".git");
-        var sourceRoot = Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}");
+        var sourceRoot = Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName));
 
         // A committed file the per-record codec cannot read back. "Npcs" sorts after "Keywords" and git
         // orders porcelain output by path, so the good deletion below is processed first.

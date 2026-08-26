@@ -418,3 +418,94 @@ describe('buildFileConflictIndex — source text tree exclusion (#374)', () => {
     expect(index.files.has(`nested/${PLUGIN}.source/note.txt`)).toBe(true);
   });
 });
+
+// #441: the layout root's own exclusion — a plain root "source/" folder (SourceRecordPath's outer
+// layout, replacing the per-plugin "<plugin>.source/" sibling tree the block above still guards)
+// and, separately, any dot-prefixed entry at any depth (closing #438's undetected ".git"). Neither
+// rule needs the sibling-plugin check above: a root "source/" folder is excluded unconditionally,
+// which is what closes the #436 orphaning trap by construction rather than by a guard that could
+// itself be defeated the same way the old one was.
+describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (#441, closes #438)', () => {
+  let instanceRoot: string;
+  let modARoot: string;
+
+  beforeEach(async () => {
+    instanceRoot = await mkdtemp(join(tmpdir(), 'medit-conflict-root-source-'));
+    modARoot = join(instanceRoot, 'mods', 'ModA');
+    await mkdir(modARoot, { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(instanceRoot, { recursive: true, force: true });
+  });
+
+  it('excludes a .git directory at the mod root, at any depth beneath it (closes #438)', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    await mkdir(join(modARoot, '.git', 'objects', 'pack'), { recursive: true });
+    await writeFile(join(modARoot, '.git', 'HEAD'), 'ref: refs/heads/main');
+    await writeFile(join(modARoot, '.git', 'objects', 'pack', 'pack-abc.pack'), 'binary-ish');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect([...index.files].map((e) => e.relativePath)).toEqual(['Plugin.esp']);
+    expect(index.filesByMod.get('ModA')?.map((f) => f.relativePath)).toEqual(['Plugin.esp']);
+  });
+
+  it('excludes any dot-prefixed file, not only directories', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    await writeFile(join(modARoot, '.gitignore'), '*\n');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('.gitignore')).toBe(false);
+  });
+
+  it('excludes a dot-prefixed directory nested below the mod root, not just at the root', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    await mkdir(join(modARoot, 'textures', '.thumbs'), { recursive: true });
+    await writeFile(join(modARoot, 'textures', '.thumbs', 'cache.bin'), 'thumbnail cache');
+    await writeFile(join(modARoot, 'textures', 'foo.dds'), 'texture bytes');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('textures/.thumbs/cache.bin')).toBe(false);
+    expect(index.files.has('textures/foo.dds')).toBe(true);
+  });
+
+  it('excludes a root-level "source" directory, case-insensitively, with no sibling-plugin check needed', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    // #436: an orphaned tree for a plugin that doesn't even exist in this mod. The old sibling
+    // guard would have left this deployable; the new rule excludes the whole root folder outright.
+    await mkdir(join(modARoot, 'source', 'DeletedPlugin.esp', 'npc_'), { recursive: true });
+    await writeFile(join(modARoot, 'source', 'DeletedPlugin.esp', 'npc_', '000800.json'), '{}');
+    await mkdir(join(modARoot, 'SOURCE'), { recursive: true }); // a second mod could ship any casing
+    await writeFile(join(modARoot, 'SOURCE', 'stray.json'), '{}');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect([...index.files].map((e) => e.relativePath)).toEqual(['Plugin.esp']);
+  });
+
+  // Root-anchoring proof: Papyrus ships its own scripts nested under "Scripts/Source/…", never at
+  // the mod root — SourceRecordPath's own layout is what "source" means only at the root, so a
+  // nested directory of that exact name must still deploy normally.
+  it('does NOT exclude a nested directory literally named "Source" — root-anchored, not any depth', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    await mkdir(join(modARoot, 'Scripts', 'Source'), { recursive: true });
+    await writeFile(join(modARoot, 'Scripts', 'Source', 'MyScript.psc'), 'Scriptname MyScript');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('Scripts/Source/MyScript.psc')).toBe(true);
+  });
+
+  it('does NOT exclude an ordinary top-level file or folder that merely starts with "source"', async () => {
+    await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
+    await mkdir(join(modARoot, 'sourceish'), { recursive: true });
+    await writeFile(join(modARoot, 'sourceish', 'note.txt'), 'ordinary content');
+
+    const index = await buildFileConflictIndex([mod('ModA')], instanceRoot, () => {});
+
+    expect(index.files.has('sourceish/note.txt')).toBe(true);
+  });
+});

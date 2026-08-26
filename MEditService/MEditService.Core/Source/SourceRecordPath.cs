@@ -18,9 +18,19 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// <summary>
 /// The source's own file layout policy for <b>flat</b> (single-file) records — one record, one file,
 /// under the whole-mod door's own group-folder naming (ADR-0041's #444 amendment, "the source tree
-/// adopts Spriggit's layout wholesale"; #451 slice E). Relative to the origin folder (the source's
-/// working tree):
-/// <c>&lt;pluginFileName&gt;.source/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>.
+/// adopts Spriggit's layout wholesale"; #451 slice E). Relative to the mod folder:
+/// <c>source/&lt;pluginFileName&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>.
+///
+/// <para><b>#441: one root <c>source/</c> folder per mod, not a per-plugin sibling tree.</b> A
+/// 2026-08-21 triage retired the prior <c>&lt;pluginFileName&gt;.source/</c> sibling-tree layout
+/// (ADR-0041 amendment) in favor of every plugin's tree nesting inside one plain root folder
+/// (<see cref="RootFor"/>). That lets the deployer/conflict-index exclusion collapse to two dumb,
+/// name-only rules (any dot-prefixed entry, at any depth; a root-level directory literally named
+/// <c>source</c>) — neither needs a sibling-plugin check to stay correct, unlike the old per-plugin
+/// suffix guard it replaces, which orphaned a tree the moment its plugin was renamed or deleted
+/// outside Modbench (#436, and #438's undetected <c>.git</c>). <see cref="RootFor"/> is the one place
+/// that builds a plugin's own root — every reader/writer goes through it or through <see cref="For"/>,
+/// never hand-rolls the segment.</para>
 ///
 /// <para><b>Only flat records.</b> Cell, Worldspace and Quest (see
 /// <see cref="RecordTypeDispatch.FolderNameFor"/>'s own doc comment for why exactly these three) get
@@ -68,7 +78,13 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// </summary>
 internal static class SourceRecordPath
 {
-    internal const string SourceSuffix = ".source";
+    /// <summary>The one root folder every plugin's source tree nests inside (#441) — plain, not
+    /// dot-prefixed: the plugin's source is first-class, not hidden metadata. Root-anchored deployer
+    /// exclusion (Mod Management's <c>fileConflictIndex.ts</c>) matches this literal name at the mod
+    /// folder's own root only; a nested directory that happens to share the name (Papyrus ships
+    /// <c>Scripts/Source/…</c>) is never this folder and always deploys.</summary>
+    internal const string RootFolderName = "source";
+
     private const string JsonSuffix = ".json";
 
     // The whole-mod door's own header/group-level files (SerializationHelper.RecordDataFileNameWithoutExtension
@@ -77,6 +93,11 @@ internal static class SourceRecordPath
     // known group name.
     private const string RecordDataFileName = "RecordData.json";
     private const string GroupRecordDataFileName = "GroupRecordData.json";
+
+    /// <summary>The plugin's own root under the mod's one <see cref="RootFolderName"/> folder —
+    /// <c>source/&lt;pluginFileName&gt;</c>. The single way any reader/writer finds a plugin's tree;
+    /// nothing else in this codebase concatenates a plugin name with anything to build it.</summary>
+    internal static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
     /// <summary>The flat record's path under the Spriggit layout — see this class's own doc comment
     /// for the full shape.</summary>
@@ -97,14 +118,14 @@ internal static class SourceRecordPath
             ? $"{FilesafeFormKey(formKey)}{JsonSuffix}"
             : $"{editorId} - {FilesafeFormKey(formKey)}{JsonSuffix}";
 
-        return Path.Combine($"{pluginFileName}{SourceSuffix}", folder, $"[{orderIndex}] {fileName}");
+        return Path.Combine(RootFor(pluginFileName), folder, $"[{orderIndex}] {fileName}");
     }
 
     private static string FilesafeFormKey(FormKey formKey) => $"{formKey.ID:X6}_{formKey.ModKey.FileName}";
 
     /// <summary>Recovers a flat record's plugin/type identity straight from its own path text — no
-    /// JSON parse, no git read, matching <see cref="For"/>'s own flat shape exactly (three segments:
-    /// <c>&lt;plugin&gt;.source/&lt;GroupFolder&gt;/&lt;file&gt;.json</c>). Fails closed (returns
+    /// JSON parse, no git read, matching <see cref="For"/>'s own flat shape exactly (four segments:
+    /// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/&lt;file&gt;.json</c>). Fails closed (returns
     /// <see langword="false"/>) on anything not shaped like a path a flat record could produce —
     /// including every container path (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
     /// <c>Quests/&lt;name&gt;/RecordData.json</c>) and the root <c>RecordData.json</c> header file —
@@ -113,16 +134,14 @@ internal static class SourceRecordPath
     {
         identity = null!;
         var segments = relativePath.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        if (segments.Length != 3) return false;
+        if (segments.Length != 4) return false;
 
-        var (pluginSegment, folder, fileSegment) = (segments[0], segments[1], segments[2]);
-        if (!pluginSegment.EndsWith(SourceSuffix, StringComparison.Ordinal)) return false;
+        var (rootSegment, pluginFileName, folder, fileSegment) = (segments[0], segments[1], segments[2], segments[3]);
+        if (!rootSegment.Equals(RootFolderName, StringComparison.Ordinal)) return false;
+        if (pluginFileName.Length == 0) return false;
         if (!fileSegment.EndsWith(JsonSuffix, StringComparison.Ordinal)) return false;
         if (fileSegment.Equals(RecordDataFileName, StringComparison.Ordinal)) return false;
         if (fileSegment.Equals(GroupRecordDataFileName, StringComparison.Ordinal)) return false;
-
-        var pluginFileName = pluginSegment[..^SourceSuffix.Length];
-        if (pluginFileName.Length == 0) return false;
 
         var recordType = RecordTypeDispatch.For(gameRelease).RecordTypeForFolder(folder);
         if (recordType is null) return false;

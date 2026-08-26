@@ -16,7 +16,7 @@ public sealed class SourceRepositoryUntrackTests
         var modFolder = Directory.CreateTempSubdirectory("medit-untrack-").FullName;
         try
         {
-            var relativePath = Path.Combine("Test.esp.source", "npc_", "Test.esp", "000001.json");
+            var relativePath = Path.Combine("source", "Test.esp", "npc_", "Test.esp", "000001.json");
             var content = "{\"formKey\":\"000001:Test.esp\"}"u8.ToArray();
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,

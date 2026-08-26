@@ -11,21 +11,25 @@ import type { ModlistEntry } from './model';
  *  which have one) doesn't spuriously "conflict" with every other mod on it. */
 const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
 
-/** ADR-0040/#374: MEditService's per-plugin source text tree (`<pluginFileName>.source/...`,
- *  `SourceRecordPath.For` in `MEditService.Core/Source/`) is internal Modbench state that lands
- *  inside the mod folder itself. The text tree genuinely is walked and must be excluded
- *  explicitly.
+/** LEGACY (pre-#441 layout) ADR-0040/#374: MEditService's old per-plugin source text tree
+ *  (`<pluginFileName>.source/...`, the layout `SourceRecordPath.For` built before #441) is
+ *  internal Modbench state that lands inside the mod folder itself and must be excluded
+ *  explicitly. #441 replaced this per-plugin sibling-tree layout with one root `source/` folder
+ *  (see `ROOT_SOURCE_FOLDER_NAME` below) for every mod tracked from that point on — this
+ *  sibling-suffix guard is kept, unchanged, only because a mod tracked *before* #441 still has
+ *  its old-layout tree on disk (no migration shipped — never assume exclusive ownership, root
+ *  CLAUDE.md) and un-excluding it would re-open the deploy trap #441 closes.
  *
- *  Matched at the mod root only — the layout is never nested (`SourceRecordPath.For` always
- *  builds root-relative paths) — and only when a sibling *file* of the exact stripped name also
- *  exists at that same root: a `.source`-suffixed folder with no matching plugin alongside it is
- *  ordinary mod content an author happened to name that way, not source state. An exclusion that
- *  fired on the bare suffix alone would over-match exactly that folder — the #324 hazard-class
- *  pattern this guards against: a match must mean "this is the thing", not "this looks like the
- *  thing". Directory-only: a plain *file* sharing the same name (`Foo.esp.source` as a file, not
- *  a folder) is never touched by this rule — MEditService never creates one. Sibling comparison
- *  is case-folded (`foldPath`) like the rest of this module, since Bethesda plugin filenames are
- *  inconsistently cased and Proton/ext4 casing must not defeat the match.
+ *  Matched at the mod root only — the old layout was never nested — and only when a sibling
+ *  *file* of the exact stripped name also exists at that same root: a `.source`-suffixed folder
+ *  with no matching plugin alongside it is ordinary mod content an author happened to name that
+ *  way, not source state. An exclusion that fired on the bare suffix alone would over-match
+ *  exactly that folder — the #324 hazard-class pattern this guards against: a match must mean
+ *  "this is the thing", not "this looks like the thing". Directory-only: a plain *file* sharing
+ *  the same name (`Foo.esp.source` as a file, not a folder) is never touched by this rule —
+ *  MEditService never creates one. Sibling comparison is case-folded (`foldPath`) like the rest
+ *  of this module, since Bethesda plugin filenames are inconsistently cased and Proton/ext4
+ *  casing must not defeat the match.
  *
  *  The sibling candidate set counts a symlink dirent as much as a real file (review finding,
  *  #374): this walker's own symlink policy (see `walk()`'s doc comment, #322) treats a symlinked
@@ -39,7 +43,7 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
  *  symlink (only `Directory.CreateDirectory`, a real directory), so unlike the plugin side, there
  *  is no genuine shape here to support. */
 const SOURCE_TREE_SUFFIX = '.source';
-/** Pre-#437 name of the same tree, still on disk wherever a mod was tracked before the
+/** Pre-#437 name of the same legacy tree, still on disk wherever a mod was tracked before that
  *  rename (no migration shipped — never assume exclusive ownership, root CLAUDE.md). */
 const LEGACY_SOURCE_TREE_SUFFIX = '.ledger';
 
@@ -56,6 +60,43 @@ function sourceTreeDirNames(dirents: Dirent[]): Set<string> {
     if (fileNames.has(foldPath(pluginFileName))) names.add(dirent.name);
   }
   return names;
+}
+
+/** #441: the *current* layout's own exclusion — `SourceRecordPath.RootFor` in
+ *  `MEditService.Core/Source/` always builds `source/<plugin>/...`, one root folder per mod. Mod
+ *  Management stays pure TS and learns this by convention (the fixed name), never by calling the
+ *  backend. Root-anchored (matched only at the mod root, like the legacy guard above) and
+ *  case-insensitive (`foldPath`) — but unlike the legacy guard, needs no sibling-plugin check:
+ *  the whole folder is excluded unconditionally, which is what closes the #436 orphaning trap by
+ *  construction (a plugin renamed or deleted outside Modbench can never leave part of `source/`
+ *  behind un-excluded, because nothing about the exclusion depends on which plugins still exist).
+ *  Root-anchoring specifically (not a bare name match at any depth) is what keeps a mod's own
+ *  Papyrus assets safe: those ship nested (`Scripts/Source/...`), never at the mod root, so
+ *  `Data/source` has no game meaning and losing it costs nothing real. */
+const ROOT_SOURCE_FOLDER_NAME = 'source';
+
+/** #441/#438: never deployed or indexed as mod content, at any depth — closes #438 (a tracked
+ *  mod's `.git/` was previously walked and deployed like ordinary content, undetected). Applies
+ *  uniformly to every dirent kind (file, directory, symlink), unlike the two source-tree guards
+ *  above which are directory-only and root-only: a dot-prefixed *file* nested anywhere (a stray
+ *  `.DS_Store`, an editor swap file) is exactly as much "not mod content" as `.git` itself. */
+function isDotPrefixed(name: string): boolean {
+  return name.startsWith('.');
+}
+
+/** `walk`'s own directory-skip decision, split out to keep that function's cyclomatic/cognitive
+ *  complexity down: is `name` (a directory at `dir`) either the legacy per-plugin sibling tree
+ *  (`legacySourceDirNames`, root-only, sibling-plugin-checked — see `sourceTreeDirNames`) or the
+ *  current layout's own root `source/` folder (root-only, no sibling check needed — see
+ *  `ROOT_SOURCE_FOLDER_NAME`)? Either match means "do not descend into this directory". */
+function isExcludedSourceDirectory(
+  name: string,
+  dir: string,
+  root: string,
+  legacySourceDirNames: Set<string> | null,
+): boolean {
+  if (legacySourceDirNames?.has(name)) return true;
+  return dir === root && foldPath(name) === ROOT_SOURCE_FOLDER_NAME;
 }
 
 export interface ConflictEntry {
@@ -182,12 +223,15 @@ async function walk(
 ): Promise<{ relativePath: string; absolutePath: string }[]> {
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];
-  // Source-tree exclusion only ever applies at the mod root — see sourceTreeDirNames' own doc.
+  // Legacy source-tree exclusion only ever applies at the mod root — see sourceTreeDirNames' own doc.
   const sourceDirNames = dir === root ? sourceTreeDirNames(dirents) : null;
   for (const dirent of dirents) {
+    // #441/#438: dot-prefixed at any depth, any dirent kind — checked first, ahead of every other
+    // rule, since it needs none of their context (root-relative or not, file or directory).
+    if (isDotPrefixed(dirent.name)) continue;
     const absolutePath = join(dir, dirent.name);
     if (dirent.isDirectory()) {
-      if (sourceDirNames?.has(dirent.name)) continue;
+      if (isExcludedSourceDirectory(dirent.name, dir, root, sourceDirNames)) continue;
       results.push(...(await descend(absolutePath, root, ancestors, log)));
     } else if (dirent.isFile()) {
       pushEntry(results, root, absolutePath);

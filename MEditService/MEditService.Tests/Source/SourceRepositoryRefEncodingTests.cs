@@ -21,7 +21,7 @@ public sealed class SourceRepositoryRefEncodingTests
         try
         {
             const string plugin = "LitR - Settings Holotapes Sorting.esp";
-            var files = new[] { new PristineFile($"{plugin}.source/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
             var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "AAAA" });
 
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
@@ -40,7 +40,7 @@ public sealed class SourceRepositoryRefEncodingTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new PristineFile($"{plugin}.source/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
             var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "AAAA" });
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
@@ -59,7 +59,7 @@ public sealed class SourceRepositoryRefEncodingTests
     {
         var modFolder = NewModFolder();
         const string plugin = "LitR - Settings Holotapes Sorting.esp";
-        var relativePath = $"{plugin}.source/npc_/{plugin}/000001.json";
+        var relativePath = $"source/{plugin}/npc_/{plugin}/000001.json";
         try
         {
             var files = new[] { new PristineFile(relativePath, "{\"old\":true}"u8.ToArray()) };

@@ -17,7 +17,7 @@ public sealed class ExternalChangeWatcherTests
 
     private static string Track(string modFolder, string plugin, byte[] parkedBinary)
     {
-        var files = new[] { new PristineFile($"{plugin}.source/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
+        var files = new[] { new PristineFile($"source/{plugin}/npc_/{plugin}/000001.json", "{}"u8.ToArray()) };
         var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [plugin] = "unused-at-track-time" });
         SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 

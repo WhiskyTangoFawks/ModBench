@@ -165,7 +165,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.False(File.Exists(otherNpcPathBeforeDelete), $"expected the stale file at {otherNpcPathBeforeDelete} to be cleaned up");
 
         // Exactly one file for UntouchedNpc remains, at its new index, with its content intact.
-        var npcsDir = Path.Combine(_mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "Npcs");
+        var npcsDir = Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
         var otherNpcFiles = Directory.GetFiles(npcsDir, "*UntouchedNpc*");
         var survivor = Assert.Single(otherNpcFiles);
         Assert.StartsWith("[1] UntouchedNpc", Path.GetFileNameWithoutExtension(survivor), StringComparison.Ordinal);
