@@ -103,6 +103,54 @@ public sealed class SourceRepositoryTrackGitignoreTests
         }
     }
 
+    // AC (#441): "the Edits preset repo tracks exactly .gitignore + source/**". Every test above
+    // only probes a couple of paths with Contains/DoesNotContain — that style would pass even if
+    // one unexpected extra file leaked into the commit alongside a correctly-included/-excluded
+    // probe pair. This asserts the whole committed set, exactly, for a fixture that mixes every
+    // kind of thing the Edits preset must reject (meta.ini, a plugin binary, an ordinary asset, a
+    // top-level folder that merely ends with "source") alongside two real plugins' source trees,
+    // so "exactly" is checked against a representative mix, not a single-file happy path.
+    [Fact]
+    public void Track_EditsPreset_TracksExactlyGitignorePlusTheWholeSourceTree_NothingElse()
+    {
+        var modFolder = NewModFolder();
+        try
+        {
+            WriteMetaIniBesideTheSource(modFolder);
+            WritePluginBinaryBesideTheSource(modFolder);
+            File.WriteAllText(Path.Combine(modFolder, "texture.dds"), "not really a texture");
+            Directory.CreateDirectory(Path.Combine(modFolder, "MySource"));
+            File.WriteAllText(Path.Combine(modFolder, "MySource", "notes.txt"), "notes");
+
+            var otherPluginFile = new PristineFile(
+                Path.Combine("source", "Other.esp", "npc_", "Other.esp", "000002.json"), "{}"u8.ToArray());
+
+            SourceRepository.Track(
+                modFolder, SourcePreset.Edits, [SourceFile(), otherPluginFile],
+                new TrackProvenance(null, null, new Dictionary<string, string>()));
+
+            var gitDir = Path.Combine(modFolder, ".git");
+            var committedPaths = GitCli
+                .Run(gitDir, modFolder, "ls-tree", "-r", "--name-only", "main")
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .OrderBy(p => p, StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(
+                new[]
+                {
+                    ".gitignore",
+                    "source/Other.esp/npc_/Other.esp/000002.json",
+                    "source/Test.esp/npc_/Test.esp/000001.json",
+                }.OrderBy(p => p, StringComparer.Ordinal),
+                committedPaths);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+        }
+    }
+
     [Fact]
     public void Track_EverythingPreset_TracksAssetsButStillIgnoresThePluginBinary()
     {

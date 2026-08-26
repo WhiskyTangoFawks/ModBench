@@ -129,8 +129,8 @@ internal static class RecordTextCodecGeneratorSeed
         => MutagenJsonConverter.Instance.Serialize(mod, folder, workDropoff: workDropoff, cancel: cancel);
 
     /// <summary>
-    /// The read side of the same door (#452, ingest-from-source): a whole <c>&lt;plugin&gt;.source/</c>
-    /// tree back into a mod. Same rule as <see cref="SerializeWholeMod"/> — every real caller comes
+    /// The read side of the same door (#452, ingest-from-source): a whole <c>source/&lt;plugin&gt;/</c>
+    /// (#441) tree back into a mod. Same rule as <see cref="SerializeWholeMod"/> — every real caller comes
     /// through here, never through <c>MutagenJsonConverter.Instance</c> directly.
     ///
     /// <para><b>This second call site does not re-trigger CS8785, and the reason is structural rather
