@@ -125,6 +125,54 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
+        // #436 (ADR-0041 restoration): Copy as Override Into… — the source record's own bytes,
+        // landing under the same FormKey in the destination's working tree. A new route shape (not
+        // the retired /records/{formKey}/copy-to/{targetPlugin}, pinned absent by
+        // RetiredEditingWireSurfaceTests — that was the staged pending-change copy this ticket does
+        // not resurrect).
+        app.MapPost("/records/{formKey}/copy-as-override", (
+            string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits) =>
+            CopyRecordAsOverride(formKey, request, edits, logger))
+        .WithName("CopyRecordAsOverride")
+        .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin (#436).")
+        .WithDescription(
+            "Serializes the source record's own text, verbatim, into the destination plugin's working " +
+            "tree under the identical FormKey — no Mutagen deserialization, since a record's stored " +
+            "document is already byte-identical to its source file. The destination's master dependency " +
+            "on the record's origin is derived at compile from the bytes it now carries (ADR-0038); no " +
+            "copy-specific master handling happens here.")
+        .WithTags("Records")
+        .Produces<RecordCopyAsOverrideResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500)
+        .ProducesProblem(503);
+
+        // #436 (ADR-0041 restoration): Copy as New Record Into… — a deep copy under a fresh FormKey,
+        // via Mutagen's own record-level Duplicate. Same collision posture as CreateRecord, reused
+        // rather than re-implemented.
+        app.MapPost("/records/{formKey}/copy-as-new-record", (
+            string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits) =>
+            CopyRecordAsNewRecord(formKey, request, edits, logger))
+        .WithName("CopyRecordAsNewRecord")
+        .WithSummary("Copy as New Record Into… — a deep copy of the source record under a fresh FormKey (#436).")
+        .WithDescription(
+            "Deep-copies the source record (Mutagen's own record-level Duplicate — no mod object is " +
+            "constructed) under a fresh FormKey in the destination plugin's working tree. FormKey is the " +
+            "caller's requested one or the next free local FormID, both-refs collision-checked exactly " +
+            "as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto " +
+            "the new FormKey, so an internal self-reference follows the copy, not the original.")
+        .WithTags("Records")
+        .Produces<RecordCopyAsNewRecordResponse>()
+        .ProducesProblem(400)
+        .ProducesProblem(404)
+        .ProducesProblem(409)
+        .ProducesProblem(422)
+        .ProducesProblem(500)
+        .ProducesProblem(503);
+
         return app;
     }
 
@@ -224,6 +272,74 @@ public static class RecordEndpoints
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable session while renumbering {FormKey}", decoded);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
+    internal static IResult CopyRecordAsOverride(
+        string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        logger.LogInformation(
+            "Received CopyRecordAsOverride for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
+            decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+
+        if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
+            return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
+            return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
+
+        try
+        {
+            var result = edits.CopyRecordAsOverride(
+                new PluginKey(request.SourcePlugin, request.SourceOrigin), decoded,
+                new PluginKey(request.DestinationPlugin, request.DestinationOrigin));
+            return result.Applied
+                ? Results.Ok(new RecordCopyAsOverrideResponse(true, decoded))
+                : Refusal(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not write the source file while copying {FormKey} as an override", decoded);
+            return Results.Problem($"Could not write the source file for the copy: {ex.Message}", statusCode: 500);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No usable session while copying {FormKey} as an override", decoded);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
+    internal static IResult CopyRecordAsNewRecord(
+        string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, ILogger logger)
+    {
+        var decoded = Uri.UnescapeDataString(formKey);
+        logger.LogInformation(
+            "Received CopyRecordAsNewRecord for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
+            decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+
+        if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
+            return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
+        if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
+            return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
+
+        try
+        {
+            var result = edits.CopyRecordAsNewRecord(
+                new PluginKey(request.SourcePlugin, request.SourceOrigin), decoded,
+                new PluginKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey);
+            return result.Applied
+                ? Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, result.NewFormKey!))
+                : Refusal(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
+            return Results.Problem($"Could not write the source file for the copy: {ex.Message}", statusCode: 500);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No usable session while copying {FormKey} as a new record", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }

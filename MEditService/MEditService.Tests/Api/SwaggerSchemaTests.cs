@@ -61,6 +61,23 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "409", "500", "503" }, declared);
     }
 
+    // #436: the same declared-vs-thrown audit CreatePluginRoute's own test above runs, for the two
+    // restored Copy routes — RecordEndpoints.Refusal only ever emits 409/422/404, and each handler's
+    // own catch blocks add 500/503, so an undeclared status here would mean Swashbuckle silently
+    // emitting `content?: never` for whichever one a client actually hits (MEditService/CLAUDE.md's
+    // endpoint invariant).
+    [Theory]
+    [InlineData("/records/{formKey}/copy-as-override")]
+    [InlineData("/records/{formKey}/copy-as-new-record")]
+    public async Task CopyRoute_DeclaresEveryStatusItsHandlerCanReturn(string path)
+    {
+        var root = await GetSchemaAsync();
+        var responses = root.GetProperty("paths").GetProperty(path).GetProperty("post").GetProperty("responses");
+
+        var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
+        Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
+    }
+
     // Slice 2: a non-nullable object-typed property (required ref) must stay a bare $ref — the
     // filter must not wrap indiscriminately, only genuinely-nullable properties.
     [Fact]

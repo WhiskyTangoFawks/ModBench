@@ -530,6 +530,188 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
+    /// #436 (ADR-0041 restoration): xEdit's "Copy as Override Into…" — <paramref name="formKey"/>'s
+    /// bytes, landing under the <b>same</b> FormKey in <paramref name="destinationPlugin"/>'s own
+    /// working tree. Needs no Mutagen deserialization at all: <see cref="RecordDocument.Body"/> is
+    /// byte-identical to the source file (its own doc-comment guarantee), so the seed text goes
+    /// straight from wherever it is read to the destination's <see cref="SourceRecordPath"/>,
+    /// verbatim. The destination's master dependency on the record's origin is derived at compile
+    /// from whatever FormLinks/origin the bytes carry (ADR-0038) — no copy-specific master handling
+    /// here, deliberately.
+    ///
+    /// <para>Seed reading follows <see cref="EditField"/>'s own read posture (<see cref="ReadCopySourceBody"/>):
+    /// a tracked <paramref name="sourcePlugin"/> reads its current source file; an untracked one — the
+    /// common case, a Data-directory master such as Fallout4.esm — has no working tree to read from,
+    /// so the indexed document body is the only representation that exists for it.</para>
+    /// </summary>
+    public RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin)
+    {
+        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
+
+        var index = sessions.Index;
+        if (index == null)
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+
+        var document = index.GetDocument(formKey, sourcePlugin);
+        if (document == null)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"{sourcePlugin.Name} does not hold record {formKey}.");
+        }
+
+        var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
+        if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FormKeyCollision,
+                $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
+        }
+
+        var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
+
+        // Same shape as CreateRecord's own write: next order index in the destination's own group
+        // folder for this record type, a brand-new file there, and the same #489 renormalize pass as
+        // this method's own last file-system act.
+        var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
+        var relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release, orderIndex);
+        var sourcePath = Path.Combine(destinationModFolder, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
+
+        WriteBodyAtomic(sourcePath, body);
+
+        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+
+        index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, body);
+        // #422: a brand-new row can newly match an active filter.
+        sessions.ReapplyFilter();
+
+        logger.LogInformation(
+            "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+            "({DestinationOrigin}) — new working-tree source file at {SourcePath}",
+            formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, relativePath);
+        return RecordEditResult.Success(formKey);
+    }
+
+    /// <summary>
+    /// #436 (ADR-0041 restoration): xEdit's "Copy as New Record Into…" — a deep copy of
+    /// <paramref name="formKey"/> under a fresh FormKey in <paramref name="destinationPlugin"/>'s own
+    /// working tree, via Mutagen's own record-level <c>Duplicate</c> (no mod object — nothing in this
+    /// feature constructs a Mutagen plugin). <paramref name="requestedFormKey"/> and the auto-allocated
+    /// fallback share <see cref="CreateRecord"/>'s own <see cref="ResolveTargetFormKey"/> resolution,
+    /// so the collision posture (checked against both <see cref="RecordRef.Effective"/> and
+    /// <see cref="RecordRef.Head"/>) is identical rather than re-implemented.
+    ///
+    /// <para>A FormLink from the record to itself is remapped onto the new FormKey
+    /// (<see cref="IFormLinkContainer.RemapLinks"/>), immediately after the duplicate — so an internal
+    /// self-reference follows the copy, not the original, the same as xEdit's own duplication.</para>
+    /// </summary>
+    public RecordEditResult CopyRecordAsNewRecord(
+        PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null)
+    {
+        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
+
+        var index = sessions.Index;
+        if (index == null)
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+
+        var document = index.GetDocument(formKey, sourcePlugin);
+        if (document == null)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"{sourcePlugin.Name} does not hold record {formKey}.");
+        }
+
+        var release = sessions.Session!.GameRelease;
+        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
+        if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
+            return refusedTarget;
+
+        var sourceRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
+        var newRecord = sourceRecord.Duplicate(FormKey.Factory(targetFormKey));
+        if (newRecord is IFormLinkContainer selfLinking)
+        {
+            selfLinking.RemapLinks(new Dictionary<FormKey, FormKey> { [FormKey.Factory(formKey)] = FormKey.Factory(targetFormKey) });
+        }
+
+        var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
+        var relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, targetFormKey, newRecord.EditorID, release, orderIndex);
+        var sourcePath = Path.Combine(destinationModFolder, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
+
+        var newBody = _codec.SerializeToBytesAsync(newRecord, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(newRecord, sourcePath, release).GetAwaiter().GetResult();
+
+        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+
+        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
+        // #422: a brand-new row can newly match an active filter.
+        sessions.ReapplyFilter();
+
+        logger.LogInformation(
+            "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
+            "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source file at {SourcePath}",
+            formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
+            destinationPlugin.Origin, relativePath);
+        return RecordEditResult.Success(targetFormKey);
+    }
+
+    /// <summary>Copy as Override's own seed read (#436): the record's source text, verbatim — no
+    /// Mutagen deserialization, since <see cref="RecordDocument.Body"/> is already byte-identical to
+    /// the source file. Mirrors <see cref="EditField"/>'s read posture for a tracked plugin (the
+    /// file's current bytes, not a stale index snapshot) and falls back to the indexed body for an
+    /// untracked one — the only representation that exists for it.</summary>
+    private string ReadCopySourceBody(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
+    {
+        if (ModFolders.TrackedOf(sessions.Session, sourcePlugin) is { } sourceModFolder)
+        {
+            var fullPath = SourceUnitResolver.FlatSourcePath(
+                sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
+            if (File.Exists(fullPath)) return File.ReadAllText(fullPath);
+        }
+        return document.Body!;
+    }
+
+    /// <summary>Copy as New Record's own seed read (#436): the same posture as
+    /// <see cref="ReadCopySourceBody"/>, but deserialized to a Mutagen record — <c>Duplicate</c> needs
+    /// an object to copy, unlike the override path.</summary>
+    private IMajorRecord ReadCopySourceRecord(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
+    {
+        if (ModFolders.TrackedOf(sessions.Session, sourcePlugin) is { } sourceModFolder)
+        {
+            var fullPath = SourceUnitResolver.FlatSourcePath(
+                sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
+            return ReadRecordFromSource(fullPath, document, release);
+        }
+
+        return _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
+            .GetAwaiter().GetResult();
+    }
+
+    /// <summary>The same write-then-rename <see cref="RecordTextCodec.SerializeAsync"/> uses (#412) —
+    /// needed here too, since Copy as Override writes text directly rather than through the codec (no
+    /// Mutagen deserialization is the whole point of that path).</summary>
+    private static void WriteBodyAtomic(string filePath, string body)
+    {
+        var tempPath = filePath + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, body);
+            File.Move(tempPath, filePath, overwrite: true);
+        }
+        catch
+        {
+            File.Delete(tempPath);
+            throw;
+        }
+    }
+
+    /// <summary>
     /// #427: a renumber is a delete+create pair in source terms (the source path embeds the FormKey)
     /// plus a reference cascade — every other tracked plugin's FormLink to <paramref name="formKey"/>
     /// has to move with it, or it goes dangling the moment the old path disappears.
