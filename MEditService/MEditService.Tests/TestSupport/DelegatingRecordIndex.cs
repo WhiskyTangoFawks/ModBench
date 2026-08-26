@@ -60,4 +60,8 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.GetContainerChildren(plugin, parentFormKey);
     public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
         Inner.GetContainerParent(plugin, childFormKey);
+    public void ReplaceContainerChildSlot(
+        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
+        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children) =>
+        Inner.ReplaceContainerChildSlot(key, parentFormKey, parentRecordType, slotName, children);
 }

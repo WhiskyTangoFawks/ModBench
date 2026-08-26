@@ -83,16 +83,12 @@ public sealed class PlacementWalker
         object cell, string? worldspaceFk, BlockCoords coords, bool isInterior,
         Action<CellLocationRow> onCell, Action<PlacementRow> onPlacement)
     {
-        var cellFk = ((IMajorRecordGetter)cell).FormKey.ToString();
-        var point = Get(Get(cell, "Grid"), "Point");
-        int? gx = point == null ? null : Int(Get(point, "X"));
-        int? gy = point == null ? null : Int(Get(point, "Y"));
+        var cellRec = (IMajorRecordGetter)cell;
+        onCell(EmitCellLocationRow(
+            cellRec, worldspaceFk, coords.BlockX, coords.BlockY, coords.SubX, coords.SubY, isInterior));
 
-        onCell(new CellLocationRow(cellFk, worldspaceFk,
-            coords.BlockX, coords.BlockY, coords.SubX, coords.SubY, gx, gy, isInterior));
-
-        EmitPlaced(cell, cellFk, "Persistent", "persistent", onPlacement);
-        EmitPlaced(cell, cellFk, "Temporary", "temporary", onPlacement);
+        EmitPlaced(cell, cellRec.FormKey.ToString(), "Persistent", "persistent", onPlacement);
+        EmitPlaced(cell, cellRec.FormKey.ToString(), "Temporary", "temporary", onPlacement);
     }
 
     private void EmitPlaced(object cell, string cellFk, string listName, string group, Action<PlacementRow> onPlacement)
@@ -100,16 +96,45 @@ public sealed class PlacementWalker
         foreach (var placed in List(cell, listName))
         {
             if (placed is not IMajorRecordGetter rec) continue;
-            var pos = Get(placed, "Position");
-            float? px = null, py = null, pz = null;
-            if (pos != null)
-            {
-                px = Float(Get(pos, "X"));
-                py = Float(Get(pos, "Y"));
-                pz = Float(Get(pos, "Z"));
-            }
-            onPlacement(new PlacementRow(rec.FormKey.ToString(), cellFk, group, px, py, pz));
+            onPlacement(EmitPlacementRow(rec, cellFk, group));
         }
+    }
+
+    /// <summary>
+    /// #488: the per-item half of <see cref="EmitCell"/>'s own cell_location row, factored out so a
+    /// single already-in-hand cell (found through <see cref="Source.ContainerChildFields.EnumerateChildren"/>
+    /// rather than a whole-mod walk — <c>DuckDbRecordIndex</c>'s working-tree re-derivation) can be
+    /// answered without re-deriving the block/sub/worldspace facts a lone document cannot carry: those
+    /// are supplied by the caller, which is always in one of two positions to know them — either
+    /// unchanged from what a prior ingest already established, or (a <c>Worldspace.TopCell</c>) fixed
+    /// by construction (no block/sub, not interior).
+    /// </summary>
+    internal CellLocationRow EmitCellLocationRow(
+        IMajorRecordGetter cell, string? parentWorldspace, int? blockX, int? blockY, int? subX, int? subY,
+        bool isInterior)
+    {
+        var cellFk = cell.FormKey.ToString();
+        var point = Get(Get(cell, "Grid"), "Point");
+        int? gx = point == null ? null : Int(Get(point, "X"));
+        int? gy = point == null ? null : Int(Get(point, "Y"));
+
+        return new CellLocationRow(cellFk, parentWorldspace, blockX, blockY, subX, subY, gx, gy, isInterior);
+    }
+
+    /// <summary>#488: the per-item half of <see cref="EmitPlaced"/>'s own placement row — see
+    /// <see cref="EmitCellLocationRow"/>'s doc comment for why a single-item variant exists
+    /// alongside the whole-mod walk.</summary>
+    internal PlacementRow EmitPlacementRow(IMajorRecordGetter placed, string parentCellFormKey, string group)
+    {
+        var pos = Get(placed, "Position");
+        float? px = null, py = null, pz = null;
+        if (pos != null)
+        {
+            px = Float(Get(pos, "X"));
+            py = Float(Get(pos, "Y"));
+            pz = Float(Get(pos, "Z"));
+        }
+        return new PlacementRow(placed.FormKey.ToString(), parentCellFormKey, group, px, py, pz);
     }
 
     // ── reflection helpers (property-or-field, cached) ──────────────────────────

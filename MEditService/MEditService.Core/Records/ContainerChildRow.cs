@@ -27,39 +27,37 @@ namespace MEditService.Core.Records;
 /// one tree. No longer allowlisted by <c>SourceIngestParityTests</c>: that tolerance is gone, not
 /// widened.</para>
 ///
-/// <para><b>Ref-invariant, though less by construction than it was</b>: no gesture in this arc moves
-/// a record between containers or reorders a container's children, so this answers identically at
-/// every <see cref="RecordRef"/>, the same way <see cref="IRecordReads.GetPlacement"/> does. Note
-/// what changed under #450: the guarantee used to rest on <c>ContainerStripFields</c> hollowing these
-/// slots out of the source before anyone could reach them, and that strip is gone — the embedded
-/// slots (<c>Cell.NavigationMeshes</c>/<c>Landscape</c>) are now present in the cell's own source
-/// text. What holds the invariant up today is only that no gesture edits them, which is a weaker
-/// footing than "they are not there". A gesture that does — or a hand edit to a cell's source file —
-/// must make this read ref-aware or move containment into the source outright, which is what
-/// ADR-0041's #444 amendment already points at ("containment is the path").</para>
+/// <para><b>Ref-invariant in the sense that matters: no Head dimension, ever.</b> Unlike <c>records</c>,
+/// this table (alongside <see cref="PlacementRow"/>/<see cref="CellLocationRow"/>) carries no
+/// <see cref="RecordRef"/> column and never will — it names Effective containment only, the same
+/// documented contract <see cref="IRecordReads.GetPlacement"/> answers under. #453 and #461 below are
+/// about a different question: whether Effective's own rows stay <i>correct</i> as gestures land, not
+/// whether a Head/ref split gets added.</para>
 ///
-/// <para><b>#453 is the gesture that paragraph anticipated, and the footing held — deliberately.</b>
-/// A field edit can now reach a container's own document and an embedded child's fields, so a cell's
-/// source text really is edited in a live session. This table survives because that gesture never
-/// changes the <i>set</i> of children: <c>Edits.RecordEditService</c>'s own containment guard refuses
-/// the child-slot columns outright (<c>Cell.{Landscape,NavigationMeshes}</c> and
-/// <c>Worldspace.{TopCell,SubCells}</c> all reflect as ordinary writable columns, and writing one
-/// would swap a container's children through a JSON blob), so parentage and slot order stay untouched
-/// by anything on the write path.
+/// <para><b>#453 changed nothing here, deliberately.</b> A field edit can reach a container's own
+/// document and an embedded child's fields, so a cell's source text really is edited in a live
+/// session — but <c>Edits.RecordEditService</c>'s own containment guard refuses the child-slot columns
+/// outright (<c>Cell.{Landscape,NavigationMeshes}</c> and <c>Worldspace.{TopCell,SubCells}</c> all
+/// reflect as ordinary writable columns, and writing one would swap a container's children through a
+/// JSON blob), so no field edit can change a child <i>set</i> at all, and this table has nothing to
+/// re-derive on that path.</para>
 ///
-/// <para><b>#461 is the gesture that footing named, and it did not hold — by ruling, not by
-/// accident.</b> Delete and Renumber genuinely change the child set (removing an embedded child from
-/// its owner's inline list; changing one's FormKey in place), and this table (alongside
-/// <see cref="PlacementRow"/>/<see cref="CellLocationRow"/>) is <b>not</b> updated by either — they go
-/// through <c>IRecordIndex.ApplyWorkingTreeChanges</c>/<c>CreateWorkingTreeRecord</c>, which re-derive
-/// only <c>form_lookup</c>/<c>form_references</c>, the same as #427's <c>CreateRecord</c> already left
-/// unfixed. Deliberately out of #461's scope — extending the derivation machinery to cover these three
-/// tables is a bigger change than that ticket's mechanics warrant, and it does not affect <b>compile</b>,
-/// which stopped reading them at all back in #454 (it deserializes the on-disk source tree directly).
-/// It does affect any live read within the same session that consults these tables directly before a
-/// reload/re-Track re-ingests the tree — tracked as its own follow-up,
-/// <see href="https://github.com/WhiskyTangoFawks/ModBench/issues/488">#488</see>, rather than left to
-/// evaporate as an undocumented gap.</para>
+/// <para><b>#461 (Delete/Renumber) and #427 (Create) do change the set, and #488 closes the gap that
+/// opened — direction 1 of the two the issue posed, not direction 2.</b> <c>IRecordIndex.ApplyWorkingTreeChanges</c>/
+/// <c>CreateWorkingTreeRecord</c> now re-derive this table exactly the way they already did
+/// <c>form_lookup</c>/<c>form_references</c>: whenever a parent's own document is reserialized (an
+/// embedded delete or renumber splices/mutates its child list in place), <c>DuckDbRecordIndex</c>
+/// rebuilds every row for that parent from <c>Source.ContainerChildFields.EnumerateChildren</c> — the
+/// same collector ingest's own <c>AppendDocument</c> uses — so a stale or missing child is a
+/// contradiction the next write already repairs, not a state a reader has to defend against. A
+/// folder-split child (a Quest's DialogTopic, a DialogTopic's Response) has no parent document to
+/// reserialize at all, so its own slot is told explicitly instead, via
+/// <c>IRecordIndex.ReplaceContainerChildSlot</c>, computed the same way
+/// <c>SourceUnitResolver.RenormalizeGroupOrder</c> already closes the matching gap in the tree's own
+/// <c>"[N]"</c> file-name prefixes. Direction 2 — making every reader of this table existence-check
+/// against <c>records</c> instead — was considered and rejected: it would have turned "these tables
+/// track Effective" into a documented falsehood every future reader has to remember, rather than an
+/// invariant the write path upholds.</para>
 /// </summary>
 public readonly record struct ContainerChildRow(
     string ChildFormKey, string ParentFormKey, string ParentRecordType, string SlotName, int SlotIndex);

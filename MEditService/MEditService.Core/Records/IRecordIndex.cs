@@ -169,6 +169,24 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>
+    /// #488: replaces every <c>container_child</c> row for one (<paramref name="parentFormKey"/>,
+    /// <paramref name="slotName"/>) folder-split slot with exactly <paramref name="children"/> — the
+    /// counterpart to <see cref="MEditService.Core.Source.SourceUnitResolver.RenormalizeGroupOrder"/> for a slot whose child
+    /// <i>set</i> a delete or renumber changed. A folder-split child (a Quest's DialogTopic, a
+    /// DialogTopic's Response) has no file of its own the parent's document embeds
+    /// (<see cref="ApplyWorkingTreeChanges"/>'s own re-derivation only reaches an <b>embedded</b>
+    /// child's parent body), so its position has to be told here rather than re-read from a
+    /// reserialized owner.
+    ///
+    /// <para>A full delete-then-insert, matching every other extracted-table rebuild in this
+    /// interface: a removed child's row disappears for free because it is simply absent from
+    /// <paramref name="children"/>, and no caller has to diff against what was there before.</para>
+    /// </summary>
+    void ReplaceContainerChildSlot(
+        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
+        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
+
+    /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one
     /// door SQL crosses this seam through, since it is itself a published contract for user filter
     /// SQL (ADR-0041). Throws <see cref="ArgumentException"/> if the SQL doesn't return a
