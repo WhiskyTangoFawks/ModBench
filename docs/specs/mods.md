@@ -398,6 +398,20 @@ The extension owns the editing backend process
 - **Purge**: read the manifest, delete each listed hardlink, move `Data/` files that are
   neither in the manifest nor vanilla into `overwrite/` (F4SE outputs, MCM INI
   writes), then delete the manifest.
+- **Excluded from the conflict index and every deploy plan** (`fileConflictIndex.ts`'s walk,
+  #441, closing #438): any dot-prefixed file or directory, at any depth (a tracked mod's own
+  `.git/`, `.gitignore`, editor/OS droppings), and a root-level directory literally named
+  `source` (case-insensitive — Mod Management learns this by the fixed name mEdit's Track
+  writes, `source/<plugin>/…`, never by calling the backend). Root-anchored: a *nested*
+  directory that happens to share the name (Papyrus ships `Scripts/Source/…`, never at a mod's
+  own root) still deploys normally. Neither rule needs a plugin to exist alongside it — the
+  whole folder is excluded unconditionally, which is what keeps an orphaned tree (its plugin
+  renamed or deleted outside Modbench) from ever becoming deployable. A legacy per-plugin
+  `<plugin>.source/`/`<plugin>.ledger/` tree from before this layout (still on disk wherever a
+  mod was tracked earlier — no migration shipped) is excluded by its own separate, narrower
+  rule, unchanged. **Purge posture**: purge is manifest-exact (above), so a `.git/` that
+  reached `Data/` under a pre-fix Modbench is removed by the very next purge, with no special
+  recovery needed — the manifest never named it as vanilla or otherwise protected content.
 - **Deploy and Purge are explicit, and independent of launching anything.** Deployment is a
   *state* of the game directory, not a per-launch transient. MO2 can treat it as transient
   because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
