@@ -702,16 +702,10 @@ export interface components {
             fieldPath?: string | null;
             conditions?: components["schemas"]["ConditionDiff"][] | null;
         };
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        ConditionOperator: 0 | 1 | 2 | 3 | 4 | 5;
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        ConditionParamCategory: 0 | 1 | 2;
+        /** @enum {string} */
+        ConditionOperator: "EqualTo" | "NotEqualTo" | "GreaterThan" | "GreaterThanOrEqualTo" | "LessThan" | "LessThanOrEqualTo";
+        /** @enum {string} */
+        ConditionParamCategory: "Number" | "Form" | "Text";
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
         /** @enum {string} */
