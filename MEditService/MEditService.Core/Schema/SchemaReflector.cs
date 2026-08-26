@@ -106,12 +106,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // abstract base — GameSettingInt/Float/String/Bool/UInt are all GMST, GlobalInt/Float/
         // Short/Bool are all GLOB, DamageType/DamageTypeIndexed are both DMGT — because the type
         // discriminant lives on the record itself (an EditorID prefix, a subrecord, ...), never on
-        // the table. `discovered`/`seenTables` still record one winner per table (RecordType and
-        // the lifecycle delegates below stay bound to it, deliberately unchanged by this fix — see
-        // BuildLifecycleDelegates and BuildSchema), but `siblingsByTable` keeps every concrete type
-        // sharing a signature so BuildSchema can union their columns instead of the loser's shape
-        // being silently dropped (issue #263: that drop is why a GameSetting's Data column only
-        // ever worked for whichever subclass reflection happened to enumerate first).
+        // the table. `discovered`/`seenTables` still record one winner per table (RecordType stays
+        // bound to it, deliberately unchanged by this fix — see BuildSchema), but `siblingsByTable`
+        // keeps every concrete type sharing a signature so BuildSchema can union their columns
+        // instead of the loser's shape being silently dropped (issue #263: that drop is why a
+        // GameSetting's Data column only ever worked for whichever subclass reflection happened to
+        // enumerate first).
         var seenTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var discovered = new List<(string tableName, Type getterType)>();
         var siblingsByTable = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
@@ -148,8 +148,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
             .ToDictionary(x => x.Type, x => x.Table);
 
-        var modType = assembly.GetType($"Mutagen.Bethesda.{category}.{category}Mod");
-
         // #178: resolved once per category (condition codecs are stateless per-call factories,
         // and the codec itself doesn't vary per table) — passed into BuildSchema so it can skip
         // condition-shaped properties the same way baseSkip skips other fields, keeping the
@@ -167,22 +165,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
         {
-            var schema = BuildSchema(
+            schemas[tableName] = BuildSchema(
                 tableName, getterType, siblingsByTable[tableName],
                 getterTypeToTable, logger, conditionCodec, vmadInterfaceType);
-            var (addNew, remove, addExisting) = BuildLifecycleDelegates(modType, getterType);
-
-            schemas[tableName] = addNew == null ? schema : new RecordTableSchema
-            {
-                TableName = schema.TableName,
-                DisplayName = schema.DisplayName,
-                RecordType = schema.RecordType,
-                RecordColumns = schema.RecordColumns,
-                HasVmad = schema.HasVmad,
-                AddNew = addNew,
-                Remove = remove,
-                AddExisting = addExisting,
-            };
         }
 
         AddHeaderSchemaIfAvailable(schemas, category, assembly, getterTypeToTable, logger);
@@ -344,50 +329,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return null;
     }
 
-    // Builds the record-lifecycle delegates bound to the mod's typed group for this record
-    // type. Every delegate is null when the group or a mutable setter type cannot be resolved.
-    private static (Action<IMod, FormKey>? AddNew, Func<IMod, FormKey, bool>? Remove, Action<IMod, IMajorRecord>? AddExisting)
-        BuildLifecycleDelegates(Type? modType, Type getterType)
-    {
-        if (modType == null) return default;
-
-        var setterType = GetSetterType(getterType);
-        if (setterType == null) return default;
-
-        var targetGroupType = typeof(IGroup<>).MakeGenericType(setterType);
-        var groupProp = modType
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => targetGroupType.IsAssignableFrom(p.PropertyType));
-        if (groupProp == null) return default;
-
-        void AddNewToGroup(IMod mod, FormKey fk)
-        {
-            var group = (IGroup)groupProp.GetValue(mod)!;
-            group.AddNew(fk);
-        }
-        void AddExistingToGroup(IMod mod, IMajorRecord rec)
-        {
-            var group = (IGroup)groupProp.GetValue(mod)!;
-            group.AddUntyped(rec);
-        }
-
-        // Remove(FormKey) is on IGroup<T>, not the non-generic IGroup; resolve MethodInfo
-        // once at schema-build time and close over it to avoid per-call reflection.
-        Func<IMod, FormKey, bool>? remove = null;
-        var removeMethod = targetGroupType
-            .GetMethod("Remove", BindingFlags.Public | BindingFlags.Instance, [typeof(FormKey)]);
-        if (removeMethod != null)
-        {
-            remove = (mod, fk) =>
-            {
-                var grp = groupProp.GetValue(mod)!;
-                return removeMethod.Invoke(grp, [fk]) is true;
-            };
-        }
-
-        return (AddNewToGroup, remove, AddExistingToGroup);
-    }
-
     // #413: the three GRUP-timestamp properties join this list for the same reason
     // MajorRecordFlagsRaw and FormVersion are already on it — they are not record data. A timestamp
     // here belongs to the GRUP that contains the record, not to the record, so it stays out of the
@@ -416,23 +357,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
     };
 
-    // #263: RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) and the
-    // lifecycle delegates (AddNew/Remove/AddExisting, built from getterType just below) stay bound
-    // to the discovery winner, deliberately, even though RecordColumns below is unioned across
-    // every sibling. Two independent reasons:
-    //   - Enumeration already returns every sibling's records no matter which one's getter
-    //     interface is named — Mutagen's own EnumerateMajorRecords falls back through
-    //     InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the
-    //     group enumerator returns every element once the requested type is assignable to it. Rows
-    //     were never dropped; only the Data column's extraction was broken. So RecordType has
-    //     nothing to gain from pointing at the abstract base.
-    //   - GetSetterType(getterType) resolves the *instantiable* class AddNew/AddExisting need
-    //     (via ILoquiRegistration.SetterType). Pointing it at an abstract base's getter interface
-    //     resolves to the abstract class itself, and IGroup.AddNew(FormKey) needs something
-    //     constructible — that would turn "add a new GMST record" from quietly-wrong-but-working
-    //     (today it always creates whichever concrete subclass happens to be the winner) into a
-    //     hard throw. Record *creation* is unrelated to this ticket's display defect and is left
-    //     exactly as good (or bad) as it already was.
+    // #263: RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) stays bound to
+    // the discovery winner, deliberately, even though RecordColumns below is unioned across every
+    // sibling. Enumeration already returns every sibling's records no matter which one's getter
+    // interface is named — Mutagen's own EnumerateMajorRecords falls back through
+    // InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the group
+    // enumerator returns every element once the requested type is assignable to it. Rows were never
+    // dropped; only the Data column's extraction was broken. So RecordType has nothing to gain from
+    // pointing at the abstract base.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
@@ -760,16 +692,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             ? existing.SubFields.Select(fa =>
                 UnionEnumDomains(fa, siblingSpec.SubFields.First(fb => fb.Name == fa.Name))).ToList()
             : existing.SubFields;
-        var mergedEnumValues = existing.ApiType == "enum"
-            ? existing.EnumValues.Concat(siblingSpec.EnumValues).Distinct().ToList()
-            : existing.EnumValues;
 
         columns[existingIndex] = existing with
         {
             Extract = MergedExtract,
             ElementType = mergedElementType,
             SubFields = mergedSubFields,
-            EnumValues = mergedEnumValues,
+            // existing.EnumValues is left untouched here (never unioned): this function is only
+            // reached once IsSameColumnShapeExceptEnumDomain has confirmed existing.ApiType ==
+            // siblingSpec.ApiType, and both of this function's callers are themselves gated behind
+            // NonScalarApiTypes.Contains(existing.ApiType) — array or struct only, never "enum" — so
+            // the top-level column's own EnumValues has nothing to union here. The real per-leaf
+            // enum-domain union (OMOD's `property` sub-field) happens above, inside UnionEnumDomains.
             // Same reason WidenedExtract's own column sets this above: becoming dispatch-guarded
             // means every row of a non-matching sibling now legitimately reads null through this
             // column — false here would assert a guarantee the dispatch no longer keeps.
