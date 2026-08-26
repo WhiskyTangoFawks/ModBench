@@ -35,14 +35,13 @@ public sealed class SourceUnitResolverRenormalizeGroupOrderTests : IDisposable
     }
 
     [Fact]
-    public void NoGaps_RenamesNothing_AndReportsNoTouchedSiblings()
+    public void NoGaps_RenamesNothing()
     {
         WriteFile("[0] Alpha - 000001_Fixture.esp.json");
         WriteFile("[1] Beta - 000002_Fixture.esp.json");
 
-        var touched = SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
+        SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
 
-        Assert.Empty(touched);
         Assert.True(File.Exists(Path.Combine(_groupDirectory, "[0] Alpha - 000001_Fixture.esp.json")));
         Assert.True(File.Exists(Path.Combine(_groupDirectory, "[1] Beta - 000002_Fixture.esp.json")));
     }
@@ -55,10 +54,7 @@ public sealed class SourceUnitResolverRenormalizeGroupOrderTests : IDisposable
         WriteFile("[2] Beta - 000002_Fixture.esp.json");
         WriteFile("[5] Gamma - 000003_Fixture.esp.json");
 
-        var touched = SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
-
-        // Alpha was already at its correct rank (0) — untouched. Beta and Gamma both moved.
-        Assert.Equal(2, touched.Count);
+        SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
 
         var names = Directory.GetFiles(_groupDirectory).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
         Assert.Equal(3, names.Count);
@@ -103,32 +99,19 @@ public sealed class SourceUnitResolverRenormalizeGroupOrderTests : IDisposable
         var second = Directory.CreateDirectory(Path.Combine(_groupDirectory, "[3] CellB - 000002_Fixture.esp")).FullName;
         File.WriteAllText(Path.Combine(second, SourceUnitResolver.RecordDataFileName), "CellB-content");
 
-        var touched = SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
+        SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
 
-        Assert.Single(touched);
         var newSecond = Path.Combine(_groupDirectory, "[1] CellB - 000002_Fixture.esp");
         Assert.True(Directory.Exists(newSecond));
         Assert.Equal("CellB-content", File.ReadAllText(Path.Combine(newSecond, SourceUnitResolver.RecordDataFileName)));
     }
 
     [Fact]
-    public void ReturnsOldAndNewPaths_ForEveryTouchedSibling()
-    {
-        WriteFile("[0] Alpha - 000001_Fixture.esp.json");
-        var oldPath = WriteFile("[4] Beta - 000002_Fixture.esp.json");
-
-        var touched = SourceUnitResolver.RenormalizeGroupOrder(_groupDirectory);
-
-        var entry = Assert.Single(touched);
-        Assert.Equal(oldPath, entry.OldPath);
-        Assert.Equal(Path.Combine(_groupDirectory, "[1] Beta - 000002_Fixture.esp.json"), entry.NewPath);
-    }
-
-    [Fact]
-    public void MissingDirectory_ReturnsEmpty_RatherThanThrowing()
+    public void MissingDirectory_DoesNotThrow()
     {
         var missing = Path.Combine(_groupDirectory, "does-not-exist");
 
-        Assert.Empty(SourceUnitResolver.RenormalizeGroupOrder(missing));
+        var exception = Record.Exception(() => SourceUnitResolver.RenormalizeGroupOrder(missing));
+        Assert.Null(exception);
     }
 }

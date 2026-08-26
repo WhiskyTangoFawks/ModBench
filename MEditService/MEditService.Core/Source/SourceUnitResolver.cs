@@ -38,16 +38,6 @@ internal readonly record struct SourceUnit(
 }
 
 /// <summary>
-/// One sibling <see cref="SourceUnitResolver.RenormalizeGroupOrder"/> actually renamed to close a gap
-/// — named explicitly (#489) rather than left an inline local, because it is exactly the
-/// touched-record set #488's own <c>container_child.SlotIndex</c> re-derivation will need fed in
-/// (renumbering a container-nested sibling shifts its slot the same way a direct edit would). Only the
-/// leading <c>"[N] "</c> prefix ever changes between <see cref="OldPath"/> and <see cref="NewPath"/> —
-/// the EditorID/FormKey tail a caller already has cause to recognise is untouched.
-/// </summary>
-internal readonly record struct RenormalizedSibling(string OldPath, string NewPath);
-
-/// <summary>
 /// The record→source-unit question, answered for <b>every</b> record shape the Spriggit layout has
 /// (#453 scope 1; ADR-0041's #444 amendment, "one source unit = one file"). <see cref="SourceRecordPath"/>
 /// answers it for flat records by computing a path; this answers it for the rest — containers, whose
@@ -438,15 +428,15 @@ internal static class SourceUnitResolver
     /// true, rather than being merely restorable by a re-Track.
     ///
     /// <para><b>Renaming smallest-rank-first is always collision-free — the proof, so the next reader
-    /// (#488's own implementer very possibly among them) does not have to re-derive it.</b> Sort
-    /// survivors by their <i>current</i> index ascending; a survivor's rank <c>i</c> among them is its
-    /// new index. For the <c>i</c>-th smallest old index, there are exactly <c>i</c> other survivors
-    /// with a strictly smaller old index, all distinct non-negative integers, so the old index is always
-    /// <c>&gt;= i</c> — the new index (rank) can never exceed the old one. That means the destination
-    /// name <c>"[i] ..."</c> is, for every rename in ascending-rank order, either a genuine gap nothing
-    /// occupies yet, or the name an earlier (smaller-rank, already-processed) rename in this very pass
-    /// just vacated — never a name a still-to-be-renamed survivor is sitting on. No temp-name shuffle is
-    /// needed, and nothing here can produce a transient duplicate <c>"[i]"</c>.</para>
+    /// does not have to re-derive it.</b> Sort survivors by their <i>current</i> index ascending; a
+    /// survivor's rank <c>i</c> among them is its new index. For the <c>i</c>-th smallest old index,
+    /// there are exactly <c>i</c> other survivors with a strictly smaller old index, all distinct
+    /// non-negative integers, so the old index is always <c>&gt;= i</c> — the new index (rank) can
+    /// never exceed the old one. That means the destination name <c>"[i] ..."</c> is, for every rename
+    /// in ascending-rank order, either a genuine gap nothing occupies yet, or the name an earlier
+    /// (smaller-rank, already-processed) rename in this very pass just vacated — never a name a
+    /// still-to-be-renamed survivor is sitting on. No temp-name shuffle is needed, and nothing here can
+    /// produce a transient duplicate <c>"[i]"</c>.</para>
     ///
     /// <para>Survivors' relative order is preserved by construction: sorting by old index ascending and
     /// assigning ranks ascending cannot reorder anyone relative to anyone else, whether or not gaps
@@ -461,9 +451,9 @@ internal static class SourceUnitResolver
     /// what is on disk) — the same "re-Track to repair" recovery that gate has always offered, needing
     /// nothing new to keep offering it here.</para>
     /// </summary>
-    internal static IReadOnlyList<RenormalizedSibling> RenormalizeGroupOrder(string groupDirectory)
+    internal static void RenormalizeGroupOrder(string groupDirectory)
     {
-        if (!Directory.Exists(groupDirectory)) return [];
+        if (!Directory.Exists(groupDirectory)) return;
 
         var survivors = Directory.EnumerateFileSystemEntries(groupDirectory)
             .Select(entry => (Entry: entry, Index: TryGetOrderIndex(Path.GetFileName(entry))))
@@ -471,7 +461,6 @@ internal static class SourceUnitResolver
             .OrderBy(s => s.Index!.Value)
             .ToList();
 
-        var renamed = new List<RenormalizedSibling>();
         for (var newIndex = 0; newIndex < survivors.Count; newIndex++)
         {
             var (entry, oldIndex) = survivors[newIndex];
@@ -483,11 +472,7 @@ internal static class SourceUnitResolver
 
             if (Directory.Exists(entry)) Directory.Move(entry, newPath);
             else File.Move(entry, newPath);
-
-            renamed.Add(new RenormalizedSibling(entry, newPath));
         }
-
-        return renamed;
     }
 
     /// <summary>
