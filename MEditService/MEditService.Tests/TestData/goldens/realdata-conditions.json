@@ -6,11 +6,11 @@
           "ComparisonFloat": 1,
           "ComparisonGlobal": null,
           "Function": "GetIsID",
-          "Operator": 0,
+          "Operator": "EqualTo",
           "Or": false,
           "Parameters": [
             {
-              "Category": 1,
+              "Category": "Form",
               "DecodedValue": null,
               "FormKey": "000007:Fallout4.esm",
               "Number": null,
@@ -33,11 +33,11 @@
           "ComparisonFloat": 0,
           "ComparisonGlobal": null,
           "Function": "GetStageDone",
-          "Operator": 0,
+          "Operator": "EqualTo",
           "Or": false,
           "Parameters": [
             {
-              "Category": 1,
+              "Category": "Form",
               "DecodedValue": null,
               "FormKey": "0179F3:Fallout4.esm",
               "Number": null,
@@ -45,7 +45,7 @@
               "TypeName": "Quest"
             },
             {
-              "Category": 0,
+              "Category": "Number",
               "DecodedValue": null,
               "FormKey": null,
               "Number": 10,
@@ -61,11 +61,11 @@
           "ComparisonFloat": 130,
           "ComparisonGlobal": null,
           "Function": "GetStage",
-          "Operator": 4,
+          "Operator": "LessThan",
           "Or": false,
           "Parameters": [
             {
-              "Category": 1,
+              "Category": "Form",
               "DecodedValue": null,
               "FormKey": "01CC2A:Fallout4.esm",
               "Number": null,
@@ -86,11 +86,11 @@
           "ComparisonFloat": 1,
           "ComparisonGlobal": null,
           "Function": "GetStageDone",
-          "Operator": 0,
+          "Operator": "EqualTo",
           "Or": true,
           "Parameters": [
             {
-              "Category": 1,
+              "Category": "Form",
               "DecodedValue": null,
               "FormKey": "0229E5:Fallout4.esm",
               "Number": null,
@@ -98,7 +98,7 @@
               "TypeName": "Quest"
             },
             {
-              "Category": 0,
+              "Category": "Number",
               "DecodedValue": null,
               "FormKey": null,
               "Number": 20,
@@ -114,11 +114,11 @@
           "ComparisonFloat": 1,
           "ComparisonGlobal": null,
           "Function": "GetStageDone",
-          "Operator": 0,
+          "Operator": "EqualTo",
           "Or": true,
           "Parameters": [
             {
-              "Category": 1,
+              "Category": "Form",
               "DecodedValue": null,
               "FormKey": "0B1752:Fallout4.esm",
               "Number": null,
@@ -126,7 +126,7 @@
               "TypeName": "Quest"
             },
             {
-              "Category": 0,
+              "Category": "Number",
               "DecodedValue": null,
               "FormKey": null,
               "Number": 10,
@@ -149,11 +149,11 @@
           "ComparisonFloat": 0,
           "ComparisonGlobal": null,
           "Function": "GetStageDone",
-          "Operator": 0,
+          "Operator": "EqualTo",
           "Or": false,
           "Parameters": [
             {
-              "Category": 1,
+              "Category": "Form",
               "DecodedValue": null,
               "FormKey": "0229E5:Fallout4.esm",
               "Number": null,
@@ -161,7 +161,7 @@
               "TypeName": "Quest"
             },
             {
-              "Category": 0,
+              "Category": "Number",
               "DecodedValue": null,
               "FormKey": null,
               "Number": 30,

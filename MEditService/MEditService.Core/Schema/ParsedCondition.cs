@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
@@ -88,6 +89,11 @@ public sealed record ConditionOwner(string FieldPath, IReadOnlyList<ParsedCondit
 // every Bethesda game renders a condition from — not on any one game's Mutagen types. Per-game
 // IConditionCodec implementations map their divergent Mutagen shapes onto this. [ADR-0032]
 
+// [JsonConverter] on the enum itself (not just the global ConfigureHttpJsonOptions converter) is
+// what Swashbuckle's schema generator honors — without it the enum round-trips as a string at
+// runtime but the OpenAPI schema (and therefore generated api.ts) still describes it as an int,
+// same as ConflictThis/ConflictAll/FormKeyResolutionState (#332).
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ConditionOperator
 {
     EqualTo,
@@ -101,6 +107,9 @@ public enum ConditionOperator
 // How to render a parameter's value. Mirrors Mutagen's Condition.ParameterCategory: a Form is a
 // FormKey link, a Number a plain integer, a String a literal. None params are omitted from the
 // parsed model entirely (a function that doesn't use a slot yields no param for it).
+//
+// [JsonConverter] here for the same reason as ConditionOperator above (#332).
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ConditionParamCategory
 {
     Number,

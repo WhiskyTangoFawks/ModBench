@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -91,5 +92,23 @@ public sealed class SwaggerSchemaTests
         Assert.Equal("#/components/schemas/FieldMetadata", reference.GetString());
         Assert.False(prop.TryGetProperty("nullable", out _));
         Assert.False(prop.TryGetProperty("allOf", out _));
+    }
+
+    // #332: ConditionOperator/ConditionParamCategory carry no per-enum [JsonConverter] attribute,
+    // so Swashbuckle's schema generator (which only honors that attribute form, not the global
+    // ConfigureHttpJsonOptions converter Program.cs registers) describes them as numeric unions
+    // while the wire actually carries strings — same class of bug FormKeyResolutionState already
+    // fixed. Asserted against FormKeyResolutionState's own already-correct shape as the known-good
+    // reference, not a hand-derived expectation.
+    [Theory]
+    [InlineData("ConditionOperator", new[] { "EqualTo", "NotEqualTo", "GreaterThan", "GreaterThanOrEqualTo", "LessThan", "LessThanOrEqualTo" })]
+    [InlineData("ConditionParamCategory", new[] { "Number", "Form", "Text" })]
+    public async Task ConditionEnum_SerializesAsStringUnion(string schemaName, string[] expectedMembers)
+    {
+        var root = await GetSchemaAsync();
+        var schema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+
+        Assert.Equal("string", schema.GetProperty("type").GetString());
+        Assert.Equal(expectedMembers, schema.GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
     }
 }
