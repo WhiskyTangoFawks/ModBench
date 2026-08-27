@@ -371,6 +371,16 @@ plugins are never probed at all.
   round-trips re-parse clean (round-trip gate #369, permanent —
   `BinaryRoundTripGateTests`/`CompileRoundTripGateTests`,
   `MEditService.Tests/RealData/`, run in the ordinary `dotnet test`).
+- **Track's round-trip gate also catches subrecord loss the model can't see** (#514): Mutagen's
+  parse occasionally drops a subrecord silently (a malformed length field desyncing the parser,
+  a duplicate-slot collision) — invisible to the model-identity check, since the in-memory model
+  never held what was dropped. A byte-level walk (`MEditService.Core/Source/PluginBinaryWalk.cs`,
+  Mutagen-free) compares the original and recompiled binaries' subrecord signatures per record;
+  any signature occurring fewer times in the rewrite is refused naming the record type, FormID
+  and dropped signature(s) (more occurrences — a canonical marker insertion — is not a refusal).
+  Compile has no independent binary to diff against and gets no live version of this gate; the
+  guarantee is inherited transitively, since this loss class can only be introduced by
+  deserializing an external binary, which happens at Track, never Compile.
 - The dialog's paths are fixture-driven per #417's acceptance criteria, including the
   upstream fixture arriving the only way it can while `.git` survives (Merge install /
   manual overwrite).
