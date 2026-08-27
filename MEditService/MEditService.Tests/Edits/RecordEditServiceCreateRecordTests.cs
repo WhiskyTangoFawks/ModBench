@@ -209,6 +209,93 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
+    // #501: an ESL-flagged plugin's local FormID range is 0x000-0xFFF (12 bits) — the game engine
+    // cannot address a higher local ID from a light plugin's load-order slot, so the auto-allocator
+    // must refuse there rather than continuing on into the full 0xFFFFFF native range.
+    [Fact]
+    public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
+    {
+        using var mod = TrackedModFixture.TrackedLight();
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esp");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+    }
+
+    [Fact]
+    public void CreateRecord_OnALightEspPlugin_AllocatesUpToTheEslCap()
+    {
+        using var mod = TrackedModFixture.TrackedLight();
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "OneBelowTheEslCap", "000FFE:Fixture.esp");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal("000FFF:Fixture.esp", result.NewFormKey);
+    }
+
+    // Same two directions, plain-.esl-extension shape (PluginFlagPredicates.IsLight's
+    // extension-fallback branch) rather than the header-flagged-.esp shape above.
+    [Fact]
+    public void CreateRecord_OnAPlainEslPlugin_Refuses_WhenTheEslRangeIsExhausted()
+    {
+        using var mod = TrackedModFixture.TrackedLight("Fixture.esl");
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esl");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.CreateRecord(mod.Plugin, "npc_", "OneTooMany");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
+    }
+
+    [Fact]
+    public void CreateRecord_OnAPlainEslPlugin_AllocatesUpToTheEslCap()
+    {
+        using var mod = TrackedModFixture.TrackedLight("Fixture.esl");
+        var service = ServiceFor(mod.Sessions);
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "OneBelowTheEslCap", "000FFE:Fixture.esl");
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap");
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal("000FFF:Fixture.esl", result.NewFormKey);
+    }
+
+    // #501: the typed-FormID path (xEdit's own "type a FormID" gesture) must refuse the same range a
+    // light plugin's auto-allocator does — the record would exist in perfectly ordinary FormKey space,
+    // so this is its own refusal (LightPluginFormIdOutOfRange), not FormKeySpaceExhausted.
+    [Fact]
+    public void CreateRecord_TypedTarget_OnALightPlugin_Refuses_AboveTheEslCap()
+    {
+        using var mod = TrackedModFixture.TrackedLight();
+
+        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", "001000:Fixture.esp");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+    }
+
+    [Fact]
+    public void CreateRecord_TypedTarget_OnAnUnflaggedPlugin_AtTheSameId_Succeeds()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        const string requested = "001000:Fixture.esp";
+
+        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", requested);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Equal(requested, result.NewFormKey);
+    }
+
     [Fact]
     public void CreateRecord_WithAFreeRequestedFormKey_UsesItExactly()
     {

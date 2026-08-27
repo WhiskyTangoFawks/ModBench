@@ -108,6 +108,17 @@ public enum RecordEditRefusal
     /// one atomic value, never per-element) lost the user's edit with no signal at all.
     /// </summary>
     FieldValueShapeMismatch,
+
+    /// <summary>
+    /// #501: a caller-typed target FormKey (create's or renumber's own typed-FormID path) whose local
+    /// ID exceeds <c>0xFFF</c> on a plugin that is ESL-flagged (header <c>Small</c> flag, or a plain
+    /// <c>.esl</c> extension — <see cref="MEditService.Core.Session.PluginFlagPredicates.IsLight"/>).
+    /// The engine can only address a local FormID up to <c>0xFFF</c> from a light plugin's load-order
+    /// slot; above that, the record's FormKey exists in perfectly ordinary space, so
+    /// <see cref="FormKeySpaceExhausted"/> would be a lie — this is its own case because the way out is
+    /// different (a FormID inside the ESL range, or un-flagging the plugin), not "nothing left".
+    /// </summary>
+    LightPluginFormIdOutOfRange,
 }
 
 /// <summary>

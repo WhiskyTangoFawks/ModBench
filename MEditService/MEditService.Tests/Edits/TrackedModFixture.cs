@@ -42,7 +42,7 @@ public sealed class TrackedModFixture : IDisposable
     public FormKey Keyword { get; }
     public FormKey OtherNpc { get; }
 
-    private TrackedModFixture(bool track, string pluginName)
+    private TrackedModFixture(bool track, string pluginName, bool isLight = false)
     {
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
@@ -51,6 +51,7 @@ public sealed class TrackedModFixture : IDisposable
 
         var pluginPath = Path.Combine(ModFolder, pluginName);
         var mod = new Fallout4Mod(ModKey.FromFileName(pluginName), Fallout4Release.Fallout4);
+        mod.IsSmallMaster = isLight;
         var race = mod.Races.AddNew("FixtureRace");
         var keyword = mod.Keywords.AddNew("FixtureKeyword");
         var npc = mod.Npcs.AddNew("FixtureNpc");
@@ -75,6 +76,17 @@ public sealed class TrackedModFixture : IDisposable
     }
 
     public static TrackedModFixture Tracked() => new(track: true, PluginName);
+
+    /// <summary>#501: the same fixture, header-flagged as an ESL/light plugin
+    /// (<c>Fallout4Mod.IsSmallMaster = true</c>) before it is written — the real-tooling shape, not a
+    /// stub, since the flag is set on the header bytes themselves, not synthesized after the fact.
+    /// <paramref name="pluginName"/> defaults to the fixed <see cref="PluginName"/> (an ESL-flagged
+    /// <c>.esp</c>, the overwhelmingly common real-world shape) but a caller can pass a
+    /// <c>.esl</c>-extensioned name instead to exercise <c>PluginFlagPredicates.IsLight</c>'s
+    /// extension-fallback branch — real light plugins carry the header flag either way, so this always
+    /// sets it regardless of which name is passed.</summary>
+    public static TrackedModFixture TrackedLight(string pluginName = PluginName) =>
+        new(track: true, pluginName, isLight: true);
 
     /// <summary>The same mod folder with no <c>.git</c> in it — tracking *is* the presence of that
     /// directory (ADR-0041), so this is the whole of "untracked".</summary>

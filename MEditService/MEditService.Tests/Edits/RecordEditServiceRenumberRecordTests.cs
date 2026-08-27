@@ -48,6 +48,20 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(requested, result.NewFormKey);
     }
 
+    // #501: renumber's typed-target path shares CreateRecord's own ResolveTargetFormKey — a light
+    // plugin must refuse a renumber target above its 0xFFF ESL local-FormID range the same way create
+    // does.
+    [Fact]
+    public void RenumberRecord_OnALightPlugin_Refuses_WhenTheTargetExceedsTheEslCap()
+    {
+        using var mod = TrackedModFixture.TrackedLight();
+
+        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
+    }
+
     // #422: the renumbered record's editor_id is unchanged, but it lands under a brand-new FormKey
     // that _filter's snapshot never evaluated — the old FormKey (which did match) is gone, so without
     // re-materializing, the record vanishes from a filtered listing across the renumber entirely.

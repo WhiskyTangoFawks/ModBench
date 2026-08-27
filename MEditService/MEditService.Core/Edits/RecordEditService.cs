@@ -1097,9 +1097,11 @@ public sealed class RecordEditService(
     private RecordEditResult? ResolveTargetFormKey(
         IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey)
     {
+        var mod = sessions.Session!.GetMod(plugin.Name, plugin.Origin!);
+
         if (requestedFormKey != null)
         {
-            if (RefuseIfNotNativeTarget(requestedFormKey, plugin) is { } notNative)
+            if (RefuseIfNotNativeTarget(requestedFormKey, plugin, mod) is { } notNative)
             {
                 targetFormKey = "";
                 return notNative;
@@ -1115,7 +1117,7 @@ public sealed class RecordEditService(
             return null;
         }
 
-        var allocated = NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
+        var allocated = NextFreeNativeFormId(index, plugin, mod);
         if (allocated != null)
         {
             targetFormKey = allocated;
@@ -1123,7 +1125,8 @@ public sealed class RecordEditService(
         }
 
         targetFormKey = "";
-        return RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin));
+        return RecordEditResult.Refused(
+            RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, IsLightPlugin(mod, plugin)));
     }
 
     /// <summary>
@@ -1136,17 +1139,49 @@ public sealed class RecordEditService(
     /// a new restriction, only this seam refusing to silently accept what the UI never offered.
     /// Reuses <see cref="RecordEditRefusal.NotNativeRecord"/>: both cases are "this operation only
     /// ever touches this plugin's own native FormKey space."
+    ///
+    /// <para>#501: once a typed target is confirmed native, it must also fit
+    /// <paramref name="plugin"/>'s own addressable range — the full <c>0xFFFFFF</c> native space, or
+    /// only <c>0x000</c>-<c>0xFFF</c> when <paramref name="mod"/> is ESL-flagged
+    /// (<see cref="PluginFlagPredicates.IsLight"/>). Checked after ownership, not before: a FormKey
+    /// belonging to a different plugin is refused for that reason regardless of its magnitude.</para>
     /// </summary>
-    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin)
+    private static RecordEditResult? RefuseIfNotNativeTarget(string requestedFormKey, PluginKey plugin, IModGetter? mod)
     {
-        var requestedOwner = FormKey.Factory(requestedFormKey).ModKey.FileName.String;
-        if (requestedOwner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)) return null;
+        var parsed = FormKey.Factory(requestedFormKey);
+        var requestedOwner = parsed.ModKey.FileName.String;
+        if (!requestedOwner.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.NotNativeRecord,
+                $"{requestedFormKey} belongs to {requestedOwner}, not {plugin.Name} — a requested FormKey " +
+                "must be native to the plugin it is being created or renumbered into.");
+        }
 
-        return RecordEditResult.Refused(
-            RecordEditRefusal.NotNativeRecord,
-            $"{requestedFormKey} belongs to {requestedOwner}, not {plugin.Name} — a requested FormKey " +
-            "must be native to the plugin it is being created or renumbered into.");
+        if (IsLightPlugin(mod, plugin) && parsed.ID > 0xFFF)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.LightPluginFormIdOutOfRange,
+                $"{requestedFormKey} exceeds {plugin.Name}'s ESL local FormID range — a light-flagged " +
+                "plugin can only address local FormIDs up to 0xFFF. Choose a FormID within that range, " +
+                "or un-flag the plugin as ESL.");
+        }
+
+        return null;
     }
+
+    /// <summary>
+    /// #501: the shared ESL-flagged predicate (<see cref="PluginFlagPredicates.IsLight"/>) both the
+    /// typed-target range check and <see cref="NextFreeNativeFormId"/>'s cap need, bridged for the
+    /// nullable <paramref name="mod"/> both callers may hold (a session can resolve a
+    /// <see cref="PluginKey"/> whose <see cref="IModGetter"/> is not loaded) — falls back to the plain
+    /// extension check <see cref="PluginFlagPredicates.IsLight"/> itself would run when the header is
+    /// unavailable to inspect.
+    /// </summary>
+    private static bool IsLightPlugin(IModGetter? mod, PluginKey plugin) =>
+        mod != null
+            ? PluginFlagPredicates.IsLight(mod, plugin.Name)
+            : plugin.Name.EndsWith(".esl", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The next unused local FormID under <paramref name="plugin"/>'s own ModKey — unioning the
@@ -1158,8 +1193,11 @@ public sealed class RecordEditService(
     /// <c>SessionManager.SafeNextFormId</c>'s identical floor) when <paramref name="mod"/> is
     /// available, else the conservative literal floor every Bethesda game shares.
     ///
-    /// <para>Null means the plugin's FormKey space is exhausted (every local ID up to
-    /// <c>0xFFFFFF</c> already in use) — a typed refusal at both call sites
+    /// <para>Null means the plugin's FormKey space is exhausted — every local ID up to
+    /// <c>0xFFFFFF</c> already in use, or, for a plugin <see cref="IsLightPlugin"/> reports as
+    /// ESL-flagged (#501), up to <c>0xFFF</c>: the engine cannot address a higher local ID from a
+    /// light plugin's load-order slot, so this allocator can never hand one out regardless of native
+    /// space still free above it. A typed refusal at both call sites
     /// (<see cref="RecordEditRefusal.FormKeySpaceExhausted"/>), not an exception: a full plugin
     /// refusing a new record is an ordinary, expected outcome (review finding #1), the same doctrine
     /// as every other refusal on this write path, not a fault for the caller's generic exception
@@ -1174,11 +1212,16 @@ public sealed class RecordEditService(
             .DefaultIfEmpty(0u)
             .Max();
         var next = Math.Max(floor, highest + 1);
-        return next > 0xFFFFFF ? null : $"{next:X6}:{plugin.Name}";
+        var cap = IsLightPlugin(mod, plugin) ? 0xFFFu : 0xFFFFFFu;
+        return next > cap ? null : $"{next:X6}:{plugin.Name}";
     }
 
-    private static string FormKeySpaceExhaustedMessage(PluginKey plugin) =>
-        $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use.";
+    private static string FormKeySpaceExhaustedMessage(PluginKey plugin, bool isLight) =>
+        isLight
+            ? $"{plugin.Name} has exhausted its ESL FormKey space — every local FormID up to 0xFFF is " +
+              "already in use (a light-flagged plugin's addressable range). Un-flag it as ESL to use " +
+              "the full 0xFFFFFF range."
+            : $"{plugin.Name} has exhausted its FormKey space — every local FormID up to 0xFFFFFF is already in use.";
 
     private static uint LocalId(string formKey) =>
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
@@ -1204,10 +1247,12 @@ public sealed class RecordEditService(
         if (index == null)
             return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
 
-        var formKey = NextFreeNativeFormId(index, plugin, sessions.Session!.GetMod(plugin.Name, plugin.Origin!));
+        var mod = sessions.Session!.GetMod(plugin.Name, plugin.Origin!);
+        var formKey = NextFreeNativeFormId(index, plugin, mod);
         return formKey != null
             ? RecordEditResult.Success(formKey)
-            : RecordEditResult.Refused(RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin));
+            : RecordEditResult.Refused(
+                RecordEditRefusal.FormKeySpaceExhausted, FormKeySpaceExhaustedMessage(plugin, IsLightPlugin(mod, plugin)));
     }
 
     /// <summary>
