@@ -122,7 +122,7 @@ public sealed class RecordEditService(
 
         var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
         if (outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas);
+            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, value, schemas);
 
         // #453 scope 3: the file name carries the EditorID, so an EditorID edit is a rename as well as
         // a content change. Done before the write, deliberately — see RenameSourceUnit.
@@ -1351,7 +1351,7 @@ public sealed class RecordEditService(
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
     private static RecordEditResult RefuseFieldOutcome(
-        FieldApplyOutcome outcome, string fieldPath, string recordType,
+        FieldApplyOutcome outcome, string fieldPath, string recordType, JsonElement value,
         IReadOnlyDictionary<string, RecordTableSchema> schemas) => outcome switch
         {
             FieldApplyOutcome.ReadOnly =>
@@ -1359,7 +1359,7 @@ public sealed class RecordEditService(
             FieldApplyOutcome.ValueShapeMismatch =>
                 RecordEditResult.Refused(
                     RecordEditRefusal.FieldValueShapeMismatch,
-                    ComplexFieldShapeMessage(fieldPath, recordType, schemas)),
+                    ComplexFieldShapeMessage(fieldPath, recordType, value, schemas)),
             _ => RecordEditResult.Refused(
                 RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'."),
         };
@@ -1369,13 +1369,30 @@ public sealed class RecordEditService(
     /// value (CONTEXT.md), so the way out of this refusal is always the same — send the whole array or
     /// the whole struct with the one element/member changed, which is what the record editor now does
     /// for a per-element edit exactly as it always did for add/remove/move.
+    ///
+    /// <para>#531: an array field can also fail here while <paramref name="value"/> genuinely is a
+    /// JSON array — an element whose concrete type is abstract (OMOD's <c>properties</c> today) and
+    /// whose own payload carries no recognisable type discriminator
+    /// (<c>SchemaReflector.ResolveAbstractListElementType</c>). That is the *only* way an
+    /// already-array-shaped value reaches this method: every other list field always applies once
+    /// <c>ApplyListJson</c>'s own array-shape gate passes, so seeing an array here is itself the
+    /// signal, not a guess. Naming it separately from the "send the whole array" message above
+    /// matters — that message is actively wrong for this case (the caller already sent an array).</para>
     /// </summary>
     private static string ComplexFieldShapeMessage(
-        string fieldPath, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+        string fieldPath, string recordType, JsonElement value, IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         var apiType = schemas.TryGetValue(recordType, out var schema)
             ? schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath)?.ApiType
             : null;
+
+        if (apiType == "array" && value.ValueKind == JsonValueKind.Array)
+        {
+            return $"'{fieldPath}' has an element whose concrete type could not be determined from " +
+                   "its own payload — include that element's own type discriminator (e.g. " +
+                   "'value_type') to say which one it is.";
+        }
+
         return apiType switch
         {
             "array" => $"'{fieldPath}' is an array field: it takes the whole array as one value " +
