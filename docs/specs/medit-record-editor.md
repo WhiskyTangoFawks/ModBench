@@ -382,10 +382,13 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     own filename is what its title shows: `⟨Field⟩ [⟨Plugin⟩].txt` inside a directory named for the
     record (`⟨EditorID⟩ [⟨FormKey⟩]`, the same composite the header uses), so both which field and
     which record a tab belongs to are legible without opening it.
-  - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content through the
-    same `onEdit` path any other cell's commit uses — never on keystroke (would write on every
-    character typed) and never only on close (a user who saves twice while still editing expects
-    both saves written, the same as re-editing any other cell twice).
+  - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content — never on
+    keystroke (would write on every character typed) and never only on close (a user who saves
+    twice while still editing expects both saves written, the same as re-editing any other cell
+    twice). A string leaf nested inside a struct or array (any depth) commits through the same
+    whole-field reconstruction inline edits use (#503), not a bare value under the subtree root's
+    path — the trigger carries the row's own path and the subtree root's field alongside the saved
+    text (#533). A top-level string field's commit is unaffected — the same value either way.
   - **Trigger gesture**: right-click only (#258/ADR-0039). Before this, every `string` cell's
     second click and `F2` opened the inline editor while its double click opened this tab instead —
     the one type/gesture pair where second-click/F2's target and double-click's target genuinely
