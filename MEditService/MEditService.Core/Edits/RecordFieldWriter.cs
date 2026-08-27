@@ -17,6 +17,13 @@ internal enum FieldApplyOutcome
 
     /// <summary>No field of this name on this record type.</summary>
     NotFound,
+
+    /// <summary>#503: the field is writable, but the value is not the shape it takes — an array field
+    /// given something that is not a JSON array, or a struct field given something that is not a JSON
+    /// object. That is the shape a per-element edit sends when nothing reconstructed the whole complex
+    /// value first, and it used to be indistinguishable from success: the applier returned without
+    /// writing and <see cref="TryApply"/> answered <see cref="Applied"/> anyway.</summary>
+    ValueShapeMismatch,
 }
 
 /// <summary>
@@ -77,8 +84,11 @@ internal static class RecordFieldWriter
         if (col.Apply == null)
             return FieldApplyOutcome.ReadOnly;
 
-        col.Apply(record, value);
-        return FieldApplyOutcome.Applied;
+        // #503: the applier's own answer, not an assumption. `false` means it recognised the field and
+        // declined the value's shape — the whole point of the delegate returning anything at all.
+        return col.Apply(record, value)
+            ? FieldApplyOutcome.Applied
+            : FieldApplyOutcome.ValueShapeMismatch;
     }
 
     /// <summary>

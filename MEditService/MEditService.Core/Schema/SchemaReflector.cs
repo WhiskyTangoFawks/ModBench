@@ -874,7 +874,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string ApiType,
         string[] ValidFormKeyTypes,
         string[] EnumValues,
-        Action<IMajorRecord, JsonElement>? Apply,
+        Func<IMajorRecord, JsonElement, bool>? Apply,
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
@@ -1220,11 +1220,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         };
     }
 
-    private static Action<IMajorRecord, JsonElement> MakeColumnApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
+    // #503: answers `true` unconditionally. A scalar column takes a scalar, and every way this can
+    // fail to write — no such property on the runtime type, or a converter that could not read the
+    // value — is a silent no-op that predates #503 and is a different defect class from the complex-
+    // field shape guards below (which is what the `bool` exists for). Left as it stands deliberately,
+    // and filed separately rather than widened here.
+    private static Func<IMajorRecord, JsonElement, bool> MakeColumnApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
     {
         var applier = MakeApplier(pName, nullable, conv);
-        return (record, val) => applier(record, val);
+        return (record, val) => { applier(record, val); return true; };
     }
+
+    // Same #503 note as MakeColumnApplier: a FormLink column takes a scalar, and its own silent
+    // no-ops (an unparseable FormKey, a missing property) are that same separate defect — not the
+    // complex-field shape mismatch this bool reports.
+    private static Func<IMajorRecord, JsonElement, bool> FormLinkColumnApplier(string pName, ILogger logger) =>
+        (record, val) => { ApplyFormLinkJson(record, val, pName, logger); return true; };
 
     // ── Per-sub-field reflection (operates on object, not IMajorRecordGetter) ─
 
@@ -1350,10 +1361,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Action<IMajorRecord, JsonElement>? apply = leaf.Convert switch
+        Func<IMajorRecord, JsonElement, bool>? apply = leaf.Convert switch
         {
             { } c => MakeColumnApplier(pName, nullable, c),
-            null when IsFormLink(core) => (record, val) => ApplyFormLinkJson(record, val, pName, logger),
+            null when IsFormLink(core) => FormLinkColumnApplier(pName, logger),
             _ => null,
         };
         return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
@@ -1391,7 +1402,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var pName = prop.Name;
-        Action<IMajorRecord, JsonElement>? apply = isFl || isLoqui
+        Func<IMajorRecord, JsonElement, bool>? apply = isFl || isLoqui
             ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
             : null;
 
@@ -1399,11 +1410,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             ElementMeta: elemMeta);
     }
 
-    private static void ApplyListJson(
+    /// <summary>
+    /// Replaces an array field's whole value. #503: answers <c>false</c> for anything that is not
+    /// array-shaped — typically the bare value of a single element, which is what the record editor
+    /// used to send for a per-element edit. An array field is written as one atomic value (CONTEXT.md),
+    /// so there is no sensible merge to perform here and no way to guess where a lone element belongs;
+    /// the caller refuses instead, which is the difference between "your edit was rejected" and #503's
+    /// original "your edit reported success and vanished".
+    /// </summary>
+    private static bool ApplyListJson(
         IMajorRecord record, JsonElement json, string pName,
         bool isFl, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
     {
-        if (json.ValueKind != JsonValueKind.Array) return;
+        if (json.ValueKind != JsonValueKind.Array) return false;
         var rp = record.GetType()
             .GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
 
@@ -1418,6 +1437,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         rp.SetValue(record, newList);
+        return true;
     }
 
     private static object? BuildListElement(
@@ -1468,17 +1488,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var setterType = GetSetterType(core);
         var pName = prop.Name;
-        Action<IMajorRecord, JsonElement>? apply = null;
+        Func<IMajorRecord, JsonElement, bool>? apply = null;
         if (setterType != null)
         {
+            // #503: the struct half of ApplyListJson's own shape guard — a struct field is written as
+            // one atomic value, so a bare member value (what a per-member edit used to send) is
+            // refused rather than silently returning while the write path reported success.
             apply = (record, json) =>
             {
-                if (json.ValueKind != JsonValueKind.Object) return;
+                if (json.ValueKind != JsonValueKind.Object) return false;
                 var rp = record.GetType()
                     .GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
                 var obj = rp.GetValue(record) ?? Activator.CreateInstance(setterType)!;
                 ApplySubFields(obj, json, subFields);
                 if (rp.CanWrite) rp.SetValue(record, obj);
+                return true;
             };
         }
 

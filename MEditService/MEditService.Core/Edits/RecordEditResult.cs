@@ -98,6 +98,16 @@ public enum RecordEditRefusal
     /// and inventing one would put the record somewhere the tree does not say it belongs.
     /// </summary>
     SourceUnitNotFound,
+
+    /// <summary>
+    /// #503: the field exists and is writable, but the value's JSON shape is not the one it takes — an
+    /// array field given something that is not an array, or a struct field given something that is not
+    /// an object. Always a caller bug rather than a data question, and its own refusal because the
+    /// alternative is what #503 was: the applier returning without writing while the write path
+    /// reported success, so a per-element payload for a complex field (CONTEXT.md: always written as
+    /// one atomic value, never per-element) lost the user's edit with no signal at all.
+    /// </summary>
+    FieldValueShapeMismatch,
 }
 
 /// <summary>

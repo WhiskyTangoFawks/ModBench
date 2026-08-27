@@ -712,7 +712,8 @@ public class SchemaReflectorTests
         var kw2 = Mutagen.Bethesda.Plugins.FormKey.Factory("000020:Fallout4.esm");
 
         var json = $"[\"{kw1}\",\"{kw2}\"]";
-        col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement);
+        // #503: an array-shaped payload is written, and says so — the other side of the shape guard.
+        Assert.True(col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
 
         Assert.NotNull(npc.Keywords);
         Assert.Equal(2, npc.Keywords!.Count);
@@ -753,8 +754,11 @@ public class SchemaReflectorTests
             Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
 
-        col.Apply!(npc, System.Text.Json.JsonDocument.Parse("\"notanarray\"").RootElement);
+        // #503: "does nothing" is only half of it — the applier has to *say* it wrote nothing, or the
+        // write path reports the edit as applied and the user's change vanishes silently.
+        var applied = col.Apply!(npc, System.Text.Json.JsonDocument.Parse("\"notanarray\"").RootElement);
 
+        Assert.False(applied);
         Assert.Empty(npc.Factions);
     }
 
@@ -806,7 +810,8 @@ public class SchemaReflectorTests
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
 
         var json = """{"thin":0.5,"fat":0.8,"muscular":0.3}""";
-        col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement);
+        // #503: an object-shaped payload is written, and says so — the other side of the shape guard.
+        Assert.True(col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
 
         Assert.NotNull(npc.Weight);
         Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
@@ -824,8 +829,10 @@ public class SchemaReflectorTests
             Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
         var originalWeight = npc.Weight;
 
-        col.Apply!(npc, System.Text.Json.JsonDocument.Parse("[1,2,3]").RootElement);
+        // #503, struct half of the same rule: a non-object payload is reported as not written.
+        var applied = col.Apply!(npc, System.Text.Json.JsonDocument.Parse("[1,2,3]").RootElement);
 
+        Assert.False(applied);
         Assert.Equal(originalWeight, npc.Weight);
     }
 

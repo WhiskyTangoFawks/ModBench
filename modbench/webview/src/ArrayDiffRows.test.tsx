@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -484,5 +484,159 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     await new Promise(r => setTimeout(r, 0));
     expect((vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls
       .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
+  });
+});
+
+// #503: a *value* edit inside a complex field commits the whole field, exactly as the arity ops
+// (Add/Remove/Move, above) always did. CONTEXT.md: a complex field is "always edited as one atomic
+// value — a field-level write to the source document, never per-element". Before this, a leaf inside
+// an array or struct committed its own bare value under the array's/struct's field name, the backend
+// applier silently declined the shape, and the write path reported success — the edit vanished.
+describe('RecordPanel — a value edit inside a complex field commits the whole field (#503)', () => {
+  const editableIntArrayMeta: FieldMetadata = {
+    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  };
+
+  const editableIntArrayResult = {
+    conflictAll: 'NoConflict',
+    overrides: [
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: editableIntArrayMeta, value: [11, 22, 33] }], conflictThis: 'Master',
+      },
+    ],
+    diffs: [{
+      fieldName: 'Values',
+      values: { 'MyMod.esp': [11, 22, 33] },
+      winnerColumn: 'MyMod.esp', winnerValue: [11, 22, 33],
+      cellStates: {},
+      children: [
+        { fieldName: '[0]', values: { 'MyMod.esp': 11 }, winnerColumn: 'MyMod.esp', winnerValue: 11, cellStates: {} },
+        { fieldName: '[1]', values: { 'MyMod.esp': 22 }, winnerColumn: 'MyMod.esp', winnerValue: 22, cellStates: {} },
+        { fieldName: '[2]', values: { 'MyMod.esp': 33 }, winnerColumn: 'MyMod.esp', winnerValue: 33, cellStates: {} },
+      ],
+    }],
+  };
+
+  const scalarMeta: FieldMetadata = {
+    name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [],
+  };
+
+  const scalarResult = {
+    conflictAll: 'NoConflict',
+    overrides: [
+      {
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: scalarMeta, value: 4 }], conflictThis: 'Master',
+      },
+    ],
+    diffs: [{
+      fieldName: 'Level',
+      values: { 'MyMod.esp': 4 },
+      winnerColumn: 'MyMod.esp', winnerValue: 4,
+      cellStates: {},
+    }],
+  };
+
+  function renderEditablePanel() {
+    const client: RecordSessionClient = {
+      load: vi.fn().mockImplementation(() => Promise.resolve({
+        ok: true,
+        result: currentCompare,
+        immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
+        notInLoadOrderSet: new Set(),
+        trackedSet: new Set([columnKey('MyMod.esp', null)]),
+        conflictsComputed: true,
+      } as unknown as LoadResult)),
+      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
+    };
+    return { client, ...render(<RecordPanel client={client} />) };
+  }
+
+  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
+    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
+  }
+
+  // The editable column is the last one in every fixture here, so a row's own last cell is the one
+  // with somewhere to write — addressed by row rather than by value text, since the same number can
+  // appear in more than one column (and in a collapsed-array label).
+  function editLastCellOfRow(rowLabel: string, shownValue: string, typed: string) {
+    const row = screen.getByText(rowLabel).closest('tr')!;
+    const cells = row.querySelectorAll('td');
+    const cell = cells[cells.length - 1];
+    // xEdit's own gesture (ADR-0034): a double click opens the editor on a resting cell.
+    fireEvent.doubleClick(within(cell as HTMLElement).getByText(shownValue));
+    const input = (cell as HTMLElement).querySelector('input')!;
+    fireEvent.change(input, { target: { value: typed } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('editing one element of an array commits the whole array under the array\'s own field path', async () => {
+    currentCompare = editableIntArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    await waitFor(() => screen.getByText('[1]'));
+
+    editLastCellOfRow('[1]', '22', '99');
+
+    expect(lastEditField()?.fieldPath).toBe('Values');
+    expect(lastEditField()?.value).toEqual([11, 99, 33]);
+  });
+
+  it('editing one member of a struct commits the whole struct', async () => {
+    currentCompare = structCollapseExpandResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('ObjectBounds'));
+    fireEvent.click(screen.getAllByText('▶')[0]); // expand
+    await waitFor(() => screen.getByText('X1'));
+
+    editLastCellOfRow('X1', '5', '7');
+
+    expect(lastEditField()?.fieldPath).toBe('ObjectBounds');
+    expect(lastEditField()?.value).toEqual({ X1: 7, X2: 100 });
+  });
+
+  // The shape #503 was reported against (OMOD `Properties[i].step`): the edited leaf is a member of
+  // a struct that is itself an element of an array, so reconstruction has to run two hops deep.
+  it('editing a sub-field of a struct-element array commits the whole root value', async () => {
+    currentCompare = nestedStructArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Container'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('Entries'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getAllByText('[0]').find(el => el.tagName === 'TD'));
+    fireEvent.click(screen.getAllByText('▶')[0]);
+    await waitFor(() => screen.getByText('Weight'));
+
+    editLastCellOfRow('Weight', '1', '7');
+
+    expect(lastEditField()?.fieldPath).toBe('Container');
+    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'A', Weight: 7 }] });
+  });
+
+  // The other half of the same rule: a top-level row *is* the whole field, so its commit is the bare
+  // value — nothing to reconstruct, and wrapping it would corrupt every scalar edit in the grid.
+  it('editing a top-level scalar still commits the bare value', async () => {
+    currentCompare = scalarResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Level'));
+
+    editLastCellOfRow('Level', '4', '6');
+
+    expect(lastEditField()?.fieldPath).toBe('Level');
+    expect(lastEditField()?.value).toBe(6);
   });
 });
