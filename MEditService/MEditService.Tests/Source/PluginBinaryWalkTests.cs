@@ -152,6 +152,50 @@ public sealed class PluginBinaryWalkTests
         Assert.Equal(["RDMP"], loss!.Value.Signatures);
     }
 
+    /// <summary>A different record type or FormID at the same position is a different plugin
+    /// structurally, not a subrecord loss — that divergence belongs to the model-identity gate this
+    /// check runs beside, not this one. Also covers the sibling case (a compression-flag mismatch at
+    /// the same position) via the second assertion, since both share the same "return null, don't
+    /// misdiagnose" outcome in <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>.</summary>
+    [Fact]
+    public void FindFirstSubrecordLoss_AStructuralDivergence_ReturnsNullRatherThanMisdiagnosing()
+    {
+        var originalWeap = BuildRecordHeader("WEAP", 0x00000001, flags: 0,
+            subrecordBytes: Concat(Sub("EDID", "Gun"u8.ToArray()), Sub("FULL", "Name"u8.ToArray())));
+        var rewrittenArmo = BuildRecordHeader("ARMO", 0x00000001, flags: 0,
+            subrecordBytes: Concat(Sub("EDID", "Gun"u8.ToArray())));
+
+        Assert.Null(PluginBinaryWalk.FindFirstSubrecordLoss(Concat(originalWeap), Concat(rewrittenArmo)));
+
+        var uncompressed = BuildRecordHeader("REGN", 0x00000042, flags: 0,
+            subrecordBytes: Concat(Sub("EDID", "Region"u8.ToArray()), Sub("RDMP", [1])));
+        var compressedSamePayloadMinusRdmp = BuildRecordHeader("REGN", 0x00000042, flags: 0x00040000,
+            subrecordBytes: CompressedData(Concat(Sub("EDID", "Region"u8.ToArray()))));
+
+        Assert.Null(PluginBinaryWalk.FindFirstSubrecordLoss(Concat(uncompressed), Concat(compressedSamePayloadMinusRdmp)));
+    }
+
+    /// <summary>A compressed record whose declared payload isn't actually a valid zlib stream — real
+    /// corruption, or a compression-flag set on data that was never deflated — is not this check's job
+    /// to diagnose; <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/> skips the record rather than
+    /// letting <see cref="System.IO.InvalidDataException"/> propagate out of a diagnostic that is
+    /// supposed to be side-effect-free even when it can't answer. Verified failing without the
+    /// production <c>catch (InvalidDataException)</c>: removing it and rerunning this exact test threw
+    /// <c>System.IO.InvalidDataException: The archive entry was compressed using an unsupported
+    /// compression method.</c> straight out of <see cref="PluginBinaryWalk.Inflate"/>, uncaught.
+    /// Reverted; the shipped implementation (this test asserts) returns <see langword="null"/> instead.</summary>
+    [Fact]
+    public void FindFirstSubrecordLoss_AnUnreadableCompressedRecord_IsSkippedRatherThanThrowing()
+    {
+        const uint compressedFlag = 0x00040000;
+        byte[] notActuallyZlib = [0xDE, 0xAD, 0xBE, 0xEF, 0x00, 0x01, 0x02, 0x03];
+        var garbageRecord = BuildRecordHeader("REGN", 0x00000042, compressedFlag, notActuallyZlib);
+
+        var loss = PluginBinaryWalk.FindFirstSubrecordLoss(Concat(garbageRecord), Concat(garbageRecord));
+
+        Assert.Null(loss);
+    }
+
     // ---- byte builders --------------------------------------------------------------------
 
     private static byte[] BuildGrupHeader(string label, int groupSize)
