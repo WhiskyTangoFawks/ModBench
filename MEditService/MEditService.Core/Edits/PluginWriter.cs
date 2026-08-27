@@ -1,4 +1,5 @@
 using System.Globalization;
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
@@ -42,7 +43,11 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         IReadOnlyList<string>? loadOrder = null)
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
-        var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease);
+        // #515: same explicit strings parameters every other deep-parse call site now builds. This
+        // method has no session concept of its own (see its own doc comment) and so no origin to
+        // distinguish a mod folder from the game Data folder — the single-argument ForRead overload
+        // applies, the same as ExternalChangeAbsorber/ExternalChangeEditLander's identical call.
+        var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
         return PrepareFromModAsync(mod, pluginPath, loadOrder);
     }
 
