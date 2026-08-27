@@ -570,7 +570,9 @@ public sealed class SessionManager(
 
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
         var modPath = new ModPath(modKey, metadata.Path);
-        using var loaded = _modImporter.Import(modPath, gameRelease);
+        // #515: same explicit strings parameters every other deep-parse call site now builds.
+        using var loaded = _modImporter.Import(
+            modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _session!.DataFolderPath));
 
         lock (_lock)
         {
@@ -593,7 +595,9 @@ public sealed class SessionManager(
                 var (metadata, repository, gameRelease) = RequirePlugin(plugin);
                 var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
                 var modPath = new ModPath(modKey, metadata.Path);
-                loaded.Add((metadata, repository, _modImporter.Import(modPath, gameRelease)));
+                // #515: same explicit strings parameters every other deep-parse call site now builds.
+                var param = LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _session!.DataFolderPath);
+                loaded.Add((metadata, repository, _modImporter.Import(modPath, gameRelease, param)));
             }
 
             lock (_lock)

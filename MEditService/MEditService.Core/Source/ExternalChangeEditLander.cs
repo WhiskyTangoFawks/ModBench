@@ -42,7 +42,11 @@ public static class ExternalChangeEditLander
         var baselineByPath = SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, parkedRef)
             .ToDictionary(f => ToGitPath(f.RelativePath), f => Encoding.UTF8.GetString(f.Bytes), StringComparer.Ordinal);
 
-        var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease);
+        // #515: explicit strings parameters — this path always has a mod folder (Keep only ever runs
+        // against an already-tracked plugin), so LocalizedStrings.ForRead's single-argument overload
+        // applies, same as ExternalChangeAbsorber's own identical call.
+        var deepParsed = ModFactory.ImportSetter(
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(modFolder));
         var touched = new List<TouchedRecord>();
         // #459: SourceRecordPath.For now needs each record's position among its own group-folder
         // siblings. EnumerateMajorRecords walks the externally-changed binary's own deserialized
