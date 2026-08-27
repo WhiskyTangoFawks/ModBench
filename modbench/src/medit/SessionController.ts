@@ -331,9 +331,26 @@ export class SessionController {
   /** #414: the origin (mod folder identity) the session actually loaded this plugin name from —
    *  what the Track command needs to know which mod folder to track, resolved off the same
    *  already-fetched plugin list the tree itself reads, not a stale/current MO2 resolution.
-   *  `undefined` when the session has no plugin by this name at all. */
+   *  `undefined` when the session has no plugin by this name at all — the same outcome #505
+   *  gives a backend that isn't even running yet (Track/Rebase/compileAtMain, and Save &
+   *  Compile's own tree-row tier, all resolve their target through this call first —
+   *  {@link resolveCompileTarget}'s other tiers have their own #505 fix, `getRecordOwner`'s
+   *  own call site). `PluginRepository.getPlugins()` deliberately lets a transport failure
+   *  propagate as-is (its own doc comment); every other `SessionController` method already
+   *  catches that at this boundary — ADR-0026 background/recoverable tier, same posture the
+   *  poll-failure catches elsewhere in this file already cite — and degrades to a caught,
+   *  reported outcome (`track`, `compile`, `rebaseOntoMain`, …). This was the one method that
+   *  didn't, so a call before Launch mEdit surfaced as VS Code's own raw, uncaught "fetch failed"
+   *  toast instead of this codebase's own error surfacing. Degrading to the existing "not found"
+   *  `undefined` costs nothing new: every caller already turns it into a clear message. */
   async resolveOrigin(pluginName: string): Promise<string | undefined> {
-    const plugins = await this.deps.repository.getPlugins();
+    let plugins;
+    try {
+      plugins = await this.deps.repository.getPlugins();
+    } catch (e) {
+      this.log(`[SessionController] resolveOrigin(${pluginName}) failed: ${e instanceof Error ? e.message : String(e)}`);
+      return undefined;
+    }
     return plugins.find((p) => p.name === pluginName)?.origin;
   }
 

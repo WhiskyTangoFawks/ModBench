@@ -41,7 +41,14 @@ export async function resolveCompileTarget(
   }
 
   if (activeFormKey !== undefined) {
-    const owner = await deps.getRecordOwner(activeFormKey);
+    // #505: PluginRepository.getRecordOwner deliberately lets a transport failure (no backend to
+    // ask — ADR-0026 background/recoverable tier at the repository boundary, same posture
+    // SessionController.resolveOrigin's own #505 fix documents) propagate as-is; a legitimate
+    // "record no longer exists" already resolves to `undefined` here with no message of its own,
+    // falling through to the QuickPick fallback below. Treating a rejection the same way is exact
+    // parity with that existing case, not a new outcome: this priority tier's only contract is
+    // "resolved" or "try the next one," never a message of its own either way.
+    const owner = await deps.getRecordOwner(activeFormKey).catch(() => undefined);
     if (owner) return { name: owner.plugin, origin: owner.origin };
   }
 
