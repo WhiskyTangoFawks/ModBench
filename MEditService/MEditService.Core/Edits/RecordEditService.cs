@@ -122,7 +122,7 @@ public sealed class RecordEditService(
 
         var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
         if (outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas);
+            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, value, schemas);
 
         // #453 scope 3: the file name carries the EditorID, so an EditorID edit is a rename as well as
         // a content change. Done before the write, deliberately — see RenameSourceUnit.
@@ -1351,18 +1351,42 @@ public sealed class RecordEditService(
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
     private static RecordEditResult RefuseFieldOutcome(
-        FieldApplyOutcome outcome, string fieldPath, string recordType,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas) => outcome switch
+        FieldApplyOutcome outcome, string fieldPath, string recordType, JsonElement value,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (outcome == FieldApplyOutcome.ReadOnly)
+            return RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.");
+
+        if (outcome == FieldApplyOutcome.ValueShapeMismatch)
         {
-            FieldApplyOutcome.ReadOnly =>
-                RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only."),
-            FieldApplyOutcome.ValueShapeMismatch =>
-                RecordEditResult.Refused(
-                    RecordEditRefusal.FieldValueShapeMismatch,
-                    ComplexFieldShapeMessage(fieldPath, recordType, schemas)),
-            _ => RecordEditResult.Refused(
-                RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'."),
-        };
+            var apiType = schemas.TryGetValue(recordType, out var schema)
+                ? schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath)?.ApiType
+                : null;
+
+            // #531: an array field's own Apply (SchemaReflector.ApplyListJson) only ever returns
+            // false once past its own array-shape gate when an element's concrete type is abstract
+            // and the element's own payload carries no recognisable type discriminator
+            // (ResolveAbstractListElementType) — every other list field always applies once that
+            // gate passes, so seeing a genuine JSON array here is itself the signal, not a guess.
+            // Distinct RecordEditRefusal from FieldValueShapeMismatch below because the fix is
+            // different: naming a discriminator, not sending a differently shaped value — the "send
+            // the whole array" message that refusal carries would be actively wrong here, since the
+            // caller already did.
+            if (apiType == "array" && value.ValueKind == JsonValueKind.Array)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ListElementTypeUnresolved,
+                    $"'{fieldPath}' has an element whose concrete type could not be determined from " +
+                    "its own payload — include that element's own type discriminator (e.g. " +
+                    "'value_type') to say which one it is.");
+            }
+
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FieldValueShapeMismatch, ComplexFieldShapeMessage(fieldPath, apiType));
+        }
+
+        return RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
+    }
 
     /// <summary>
     /// #503: names the field and the JSON shape it takes. A complex field is written as one atomic
@@ -1370,21 +1394,14 @@ public sealed class RecordEditService(
     /// the whole struct with the one element/member changed, which is what the record editor now does
     /// for a per-element edit exactly as it always did for add/remove/move.
     /// </summary>
-    private static string ComplexFieldShapeMessage(
-        string fieldPath, string recordType, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    private static string ComplexFieldShapeMessage(string fieldPath, string? apiType) => apiType switch
     {
-        var apiType = schemas.TryGetValue(recordType, out var schema)
-            ? schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath)?.ApiType
-            : null;
-        return apiType switch
-        {
-            "array" => $"'{fieldPath}' is an array field: it takes the whole array as one value " +
-                       "(a JSON array), not a single element.",
-            "struct" => $"'{fieldPath}' is a struct field: it takes the whole struct as one value " +
-                        "(a JSON object), not a single member.",
-            _ => $"'{fieldPath}' did not accept a value of this JSON shape.",
-        };
-    }
+        "array" => $"'{fieldPath}' is an array field: it takes the whole array as one value " +
+                   "(a JSON array), not a single element.",
+        "struct" => $"'{fieldPath}' is a struct field: it takes the whole struct as one value " +
+                    "(a JSON object), not a single member.",
+        _ => $"'{fieldPath}' did not accept a value of this JSON shape.",
+    };
 
     /// <summary>
     /// The record has no flat source path, so <see cref="CreateRecord"/> — the one remaining

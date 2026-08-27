@@ -129,12 +129,13 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     /// what reaches this method is the whole array carrying it.
     ///
     /// <para><b>Not OMOD <c>properties</c>, which #503 named</b> — that field's element type is the
-    /// abstract <c>AObjectModProperty&lt;T&gt;</c>, and <c>SchemaReflector.BuildListElement</c> derives
-    /// its element type from the list's generic argument and calls <c>Activator.CreateInstance</c> on
-    /// it, which throws <c>MissingMethodException</c> for any abstract element type. That is
-    /// independent of #503 (the sanctioned array arity ops hit it too) and is filed separately; this
-    /// field is the same struct-element-array shape with a concrete element type, so it pins the
-    /// reconstruction contract without depending on that fix.</para>
+    /// abstract <c>AObjectModProperty&lt;T&gt;</c>, and <c>SchemaReflector.BuildListElement</c> used to
+    /// derive its element type from the list's generic argument and call <c>Activator.CreateInstance</c>
+    /// on it directly, which threw <c>MissingMethodException</c> for any abstract element type. That was
+    /// independent of #503 (the sanctioned array arity ops hit it too) and was filed separately as #531,
+    /// now fixed a few tests below in this same file; this field is the same struct-element-array shape
+    /// with a concrete element type, so it pinned the reconstruction contract without depending on that
+    /// fix while #531 was still open.</para>
     /// </summary>
     [Fact]
     public void FactionsStructArray_WholeArrayWriteWithAChangedSubField_LandsInTheSourceDocument()
@@ -156,6 +157,186 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.Contains("\"Rank\": 9", NpcBody(), StringComparison.Ordinal);
+    }
+
+    // ── #531: write-side polymorphism — OMOD properties' element type is abstract ─────────────
+
+    /// <summary>
+    /// The refusal AC #531 asks for: an abstract list element (OMOD's <c>AObjectModProperty&lt;T&gt;</c>)
+    /// whose payload carries no <c>value_type</c> discriminator can never be constructed — before this
+    /// fix, <c>SchemaReflector.BuildListElement</c> threw <see cref="MissingMethodException"/> straight
+    /// out of the write path (uncaught, not this refusal) for <i>any</i> write to this field, discriminator
+    /// or not. This is otherwise a well-formed whole-array write (an array, one well-shaped element) — the
+    /// only thing wrong with it is the missing discriminator, which is what the message must actually say
+    /// rather than repeating the "send an array" text #503's own per-element-payload refusal above uses.
+    /// Its own <see cref="RecordEditRefusal.ListElementTypeUnresolved"/> value, not
+    /// <see cref="RecordEditRefusal.FieldValueShapeMismatch"/> — the value genuinely is array-shaped, so
+    /// a caller branching on the enum (ADR-0026) needs a different discriminator to reach for a
+    /// different fix, not the "send an array" text.
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_MissingValueTypeDiscriminator_IsRefusedAndWritesNothing()
+    {
+        using var omod = new OmodFixture();
+        var before = omod.Body();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""[{"property":"BodyPart","step":1.0,"value":"5","value2":"6","function_type":"Set"}]"""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
+        Assert.Contains("properties", result.Message, StringComparison.Ordinal);
+        Assert.Contains("value_type", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, omod.Body());
+    }
+
+    /// <summary>
+    /// The same refusal, but the discriminator is <i>present</i> and simply names something that isn't
+    /// one of the seven leaves — distinct from the "missing entirely" case above, and worth its own test:
+    /// <c>ResolveObjectModPropertyConcreteType</c> has two separate ways to answer null
+    /// (<c>TryGetProperty</c> failing vs. <c>Array.Find</c> failing), and only the first was exercised
+    /// above.
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_UnrecognizedValueTypeDiscriminator_IsRefusedAndWritesNothing()
+    {
+        using var omod = new OmodFixture();
+        var before = omod.Body();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""[{"property":"BodyPart","step":1.0,"value_type":"NotARealValueType","value":"5"}]"""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
+        Assert.Contains("properties", result.Message, StringComparison.Ordinal);
+        Assert.Contains("value_type", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, omod.Body());
+    }
+
+    /// <summary>
+    /// #531 AC1: a whole-array write carrying one <c>ObjectModIntProperty</c>-shaped element (own
+    /// <c>value_type</c> discriminator plus its own <c>value</c>/<c>value2</c>/<c>function_type</c> data)
+    /// lands, with the concrete type <i>and</i> the data preserved on re-read — not just the type: giving
+    /// the discriminator a working resolution but leaving the leaf union fields <c>Apply: null</c> would
+    /// construct the right type and then silently drop every value onto it, which is the latent bug this
+    /// ticket also closes (see <c>ApplySubFields</c>).
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_WholeArrayWriteWithIntProperty_LandsWithConcreteTypeAndValuePreserved()
+    {
+        using var omod = new OmodFixture();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""[{"property":"BodyPart","step":1.0,"value_type":"Int","value":"42","value2":"7","function_type":"Set"}]"""));
+
+        Assert.True(result.Applied, result.Message);
+        var body = omod.Body();
+        Assert.Contains("ObjectModIntProperty", body, StringComparison.Ordinal);
+        Assert.Contains("\"Value\": 42", body, StringComparison.Ordinal);
+        Assert.Contains("\"Value2\": 7", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #531 AC2: a second concrete subtype round-trips too, proving the choice is read from each
+    /// element's own <c>value_type</c> rather than hardcoded to Int (the only leaf the fixture's binary
+    /// seed itself ever carries).
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_WholeArrayWriteWithFloatProperty_RoundTripsAsFloatNotHardcodedInt()
+    {
+        using var omod = new OmodFixture();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""[{"property":"Weight","step":2.0,"value_type":"Float","value":1.5,"value2":2.5,"function_type":"Set"}]"""));
+
+        Assert.True(result.Applied, result.Message);
+        var body = omod.Body();
+        Assert.Contains("ObjectModFloatProperty", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("ObjectModIntProperty", body, StringComparison.Ordinal);
+        Assert.Contains("\"Value\": 1.5", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #531 AC3 (Move Up/Move Down): reordering two elements of <i>different</i> concrete leaf types is
+    /// the one shape that would defeat a position-based "reuse the existing element's type by index"
+    /// design — the element now at index 0 is Float-shaped data, not the Int that used to be there. Each
+    /// element's own <c>value_type</c> is what has to drive this, not its position.
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_WholeArrayWriteReordered_PreservesEachElementsOwnConcreteType()
+    {
+        using var omod = new OmodFixture();
+        var seed = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
+            [
+                {"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"},
+                {"property":"Weight","step":2.0,"value_type":"Float","value":"1.5","value2":"2.5","function_type":"Set"}
+            ]
+            """));
+        Assert.True(seed.Applied, seed.Message);
+
+        // Move Up on the second element == the whole array resent with the same two elements swapped.
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
+            [
+                {"property":"Weight","step":2.0,"value_type":"Float","value":"1.5","value2":"2.5","function_type":"Set"},
+                {"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"}
+            ]
+            """));
+
+        Assert.True(result.Applied, result.Message);
+        var body = omod.Body();
+        var floatIdx = body.IndexOf("ObjectModFloatProperty", StringComparison.Ordinal);
+        var intIdx = body.IndexOf("ObjectModIntProperty", StringComparison.Ordinal);
+        Assert.True(floatIdx >= 0, body);
+        Assert.True(intIdx >= 0, body);
+        Assert.True(floatIdx < intIdx, $"Float element should now precede Int in:\n{body}");
+    }
+
+    /// <summary>#531 AC3 (Add): growing the array by one brand-new element alongside the existing one.</summary>
+    [Fact]
+    public void OmodPropertiesArray_WholeArrayWriteAddingANewElement_LandsAlongsideTheExisting()
+    {
+        using var omod = new OmodFixture();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
+            [
+                {"property":"BodyPart","step":1.0,"value_type":"Int","value":5,"value2":6,"function_type":"Set"},
+                {"property":"Value","step":3.0,"value_type":"Bool","value":true,"function_type":"Set"}
+            ]
+            """));
+
+        Assert.True(result.Applied, result.Message);
+        var body = omod.Body();
+        Assert.Contains("ObjectModIntProperty", body, StringComparison.Ordinal);
+        Assert.Contains("ObjectModBoolProperty", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #531 AC3 (Remove) and the data-loss regression guard for the latent <c>ApplySubFields</c> bug:
+    /// removing the second element must not reset the surviving first element's own <c>Value</c>/
+    /// <c>Value2</c> back to defaults — which is exactly what would happen if the leaf union fields kept
+    /// <c>Apply: null</c> while element construction itself got fixed.
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_RemoveShapedWholeArrayWrite_PreservesSurvivorsValue()
+    {
+        using var omod = new OmodFixture();
+        var seed = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties", Json("""
+            [
+                {"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"},
+                {"property":"Weight","step":2.0,"value_type":"Float","value":"1.5","value2":"2.5","function_type":"Set"}
+            ]
+            """));
+        Assert.True(seed.Applied, seed.Message);
+
+        // Remove on the second element == the whole array resent holding only the survivor, verbatim.
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""[{"property":"BodyPart","step":1.0,"value_type":"Int","value":"5","value2":"6","function_type":"Set"}]"""));
+
+        Assert.True(result.Applied, result.Message);
+        var body = omod.Body();
+        Assert.Contains("\"Value\": 5", body, StringComparison.Ordinal);
+        Assert.Contains("\"Value2\": 6", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -1021,15 +1021,25 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // would be machinery for a second consumer that doesn't exist yet; if one turns up, that
     // ticket can lift a general version out then, against two real call sites instead of one
     // imagined one.
-    private static readonly string[] ObjectModPropertyLeafNames =
+    //
+    // #531 pairs each leaf with Mutagen's own ObjectModProperty.ValueType member name (verified
+    // against Mutagen.Bethesda.Fallout4/Records/Common Subrecords/ObjectModProperty.cs — Int=0,
+    // Float=1, Bool=2, String=3, FormIdInt=4, Enum=5, FormIdFloat=6, reordered here to line up
+    // with the getter-interface list rather than the enum's own ordinal order) — the write-side
+    // discriminator (see ResolveObjectModPropertyConcreteType below), spelled the same way #360's
+    // own read side is extended to expose it (BuildObjectModPropertyLeafFields' `value_type`), not
+    // a second scheme. Bare strings, not a reference to one game's enum type, for the same reason
+    // the interface names are strings: this stays game-generic (Starfield's own ValueType enum
+    // carries the same seven members under its own namespace).
+    private static readonly (string InterfaceName, string ValueTypeName)[] ObjectModPropertyLeaves =
     [
-        "IObjectModIntPropertyGetter`1",
-        "IObjectModFloatPropertyGetter`1",
-        "IObjectModBoolPropertyGetter`1",
-        "IObjectModStringPropertyGetter`1",
-        "IObjectModEnumPropertyGetter`1",
-        "IObjectModFormLinkIntPropertyGetter`1",
-        "IObjectModFormLinkFloatPropertyGetter`1",
+        ("IObjectModIntPropertyGetter`1", "Int"),
+        ("IObjectModFloatPropertyGetter`1", "Float"),
+        ("IObjectModBoolPropertyGetter`1", "Bool"),
+        ("IObjectModStringPropertyGetter`1", "String"),
+        ("IObjectModEnumPropertyGetter`1", "Enum"),
+        ("IObjectModFormLinkIntPropertyGetter`1", "FormIdInt"),
+        ("IObjectModFormLinkFloatPropertyGetter`1", "FormIdFloat"),
     ];
 
     // Mutagen's own name for this member says everything: a reserved padding uint32 on
@@ -1055,13 +1065,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // declaring leaf agrees on the CLR type for becomes one typed, sparse sub-field (null on a
     // leaf that lacks it) — `record` (FormLink, FormLinkInt/FormLinkFloat only) and
     // `enum_int_value` (uint, Enum only). A name whose declaring leaves disagree on type becomes
-    // one read-only text field via the same FormatWidenedValue the #263 scalar-widen rung already
-    // uses — `value` (uint/float/bool/string across six leaves), `value2` (uint/float/bool across
+    // one text field via the same FormatWidenedValue the #263 scalar-widen rung already uses —
+    // `value` (uint/float/bool/string across six leaves), `value2` (uint/float/bool across
     // three), `function_type` (four distinct FunctionType CLR types across all seven — the
     // triage's own prose counted three; doesn't change the outcome, still collides, still text).
-    // Every result here is Apply: null — read-only by design, not an oversight: the write path for
-    // this element already throws today regardless (Activator.CreateInstance on the abstract
-    // AObjectModProperty<T>, #531), so nothing here is reachable from a write either way.
+    //
+    // #531: every result here now carries a real Apply. BuildTypedLeafUnionField reuses the
+    // ordinary per-field write routing #429 already gives every other sub-field. Its widened
+    // sibling gets a dedicated applier that resolves the already-constructed concrete object's own
+    // declared property type at write time rather than assuming one — the thing #360's read side
+    // structurally could not do, since nothing has committed to a concrete type yet there.
+    // Read-only was never an end in itself: it was true only because the write
+    // path for this element threw regardless (Activator.CreateInstance on the abstract
+    // AObjectModProperty<T>), which ApplyListJson's new discriminator-driven resolution now fixes.
+    // A plain `result.Add` below also gives the element a `value_type` discriminator sub-field —
+    // synthesized here, not one of the seven leaves' own declared members — which is what that
+    // resolution reads.
     private static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
         Type baseGetterInterface, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
@@ -1069,10 +1088,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var asm = baseGetterInterface.Assembly;
         var args = baseGetterInterface.GetGenericArguments();
 
-        var leaves = new List<Type>();
-        foreach (var name in ObjectModPropertyLeafNames)
+        var leaves = new List<(Type LeafType, string ValueTypeName)>();
+        foreach (var (interfaceName, valueTypeName) in ObjectModPropertyLeaves)
         {
-            var open = asm.GetType($"{ns}.{name}");
+            var open = asm.GetType($"{ns}.{interfaceName}");
             if (open == null)
             {
                 // Same convention as BuildHeaderSchema's own lookup-came-up-empty branches: this
@@ -1083,16 +1102,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 // rather than silently lose that leaf's fields.
                 logger.LogWarning(
                     "No {LeafName} type found in {Assembly}; OMOD Properties element omits that leaf's fields",
-                    name, asm.GetName().Name);
+                    interfaceName, asm.GetName().Name);
                 continue;
             }
-            leaves.Add(open.MakeGenericType(args));
+            leaves.Add((open.MakeGenericType(args), valueTypeName));
         }
 
         var members = leaves
-            .SelectMany(leaf => leaf.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .SelectMany(leaf => leaf.LeafType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => !ObjectModPropertyLeafSkip.Contains(p.Name))
-                .Select(p => (LeafType: leaf, Prop: p)))
+                .Select(p => (LeafType: leaf.LeafType, Prop: p)))
             .GroupBy(m => ToSnakeCase(m.Prop.Name), StringComparer.OrdinalIgnoreCase);
 
         var result = new List<SubFieldSpec>();
@@ -1105,21 +1124,49 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 .ToList();
 
             result.Add(distinctTypes.Count == 1
-                ? BuildTypedLeafUnionField(group.Key, list, getterTypeToTable)
-                : BuildWidenedLeafUnionField(group.Key, list));
+                ? BuildTypedLeafUnionField(group.Key, list, getterTypeToTable, logger)
+                : BuildWidenedLeafUnionField(group.Key, list, logger));
         }
+
+        result.Add(BuildObjectModValueTypeField(leaves));
         return result;
+    }
+
+    private const string ObjectModValueTypeDiscriminator = "value_type";
+
+    // #531: the write-side discriminator — which of the seven leaves a Properties element's own
+    // JSON should construct. Read: classifies the object's already-concrete runtime type the exact
+    // same way every Extract above does (`leafType.IsInstanceOfType`); nothing new is derived here,
+    // only exposed. Apply: null, deliberately — this cannot be applied to an *already-constructed*
+    // object the way every other sub-field can, because it is what decides which concrete type gets
+    // constructed in the first place. ApplyListJson (ResolveObjectModPropertyConcreteType) reads it
+    // directly off the incoming JsonElement, before any object exists to apply anything onto.
+    private static SubFieldSpec BuildObjectModValueTypeField(List<(Type LeafType, string ValueTypeName)> leaves)
+    {
+        object? Extract(object obj)
+        {
+            foreach (var (leafType, valueTypeName) in leaves)
+                if (leafType.IsInstanceOfType(obj)) return valueTypeName;
+            return null;
+        }
+
+        return new(ObjectModValueTypeDiscriminator, "string", Empty,
+            [.. leaves.Select(l => l.ValueTypeName)], Extract, Apply: null, AllowsNull: true);
     }
 
     private static SubFieldSpec BuildTypedLeafUnionField(
         string colName, List<(Type LeafType, PropertyInfo Prop)> members,
-        IReadOnlyDictionary<Type, string> getterTypeToTable)
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
         var perLeaf = members
             .Select(m => (m.LeafType, Leaf: ClassifyLeaf(m.Prop, core, getterTypeToTable)!))
             .ToList();
         var rep = perLeaf[0].Leaf;
+        // Every member in this group shares one CLR property name (that agreement is what put it
+        // in the typed union rather than the widened one below), so one applier — resolved off
+        // whichever concrete leaf ApplyListJson already constructed — covers every leaf.
+        var pName = members[0].Prop.Name;
 
         object? Extract(object obj)
         {
@@ -1128,15 +1175,27 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return null;
         }
 
+        // #531: the same MakeApplier/ApplyFormLinkJson routing ProjectSubField gives every other
+        // sub-field (#429) — it resolves the property off the target's own runtime type and is a
+        // silent no-op when that type doesn't declare it, which is exactly what a leaf that lacks
+        // this member needs.
+        Action<object, JsonElement>? apply = rep.Convert switch
+        {
+            { } c => MakeApplier(pName, nullable: true, c),
+            null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
+            _ => null,
+        };
+
         return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumValues, Extract,
-            Apply: null, // #360 is read-only by design — the write path for this element is #531's
+            apply,
             AllowsNull: true, IsBitmask: rep.IsBitmask, EnumBitValues: rep.EnumBitValues);
     }
 
     private static SubFieldSpec BuildWidenedLeafUnionField(
-        string colName, List<(Type LeafType, PropertyInfo Prop)> members)
+        string colName, List<(Type LeafType, PropertyInfo Prop)> members, ILogger logger)
     {
         var getters = members.Select(m => (m.LeafType, Get: SubGetter(m.Prop))).ToList();
+        var pName = members[0].Prop.Name;
 
         object? Extract(object obj)
         {
@@ -1145,7 +1204,73 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return null;
         }
 
-        return new(colName, "string", Empty, Empty, Extract, Apply: null, AllowsNull: true);
+        // #531: unlike the typed union above, these members disagree on CLR type across leaves —
+        // that disagreement is why #360 widened them to text on read in the first place. Apply
+        // therefore cannot share one converter the way MakeApplier's callers normally do; instead
+        // it resolves the target property's own declared type at write time, off whichever
+        // concrete leaf ApplyListJson already constructed, and converts into *that*.
+        return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName, logger), AllowsNull: true);
+    }
+
+    // #531: applies one of the widened OMOD leaf union fields (`value`, `value2`, `function_type`)
+    // onto whichever concrete leaf ApplyListJson already resolved. Silent no-op when the target
+    // object's runtime type doesn't declare the property at all (same convention as MakeApplier),
+    // and when the incoming JSON can't be converted into whatever type the property actually is —
+    // never a throw out of a per-element write, logged at Trace the same way ApplyFormLinkJson logs
+    // its own best-effort write failures.
+    private static Action<object, JsonElement> MakeWidenedApplier(string pName, ILogger logger)
+    {
+        var resolve = ResolveProperty(pName);
+        return (obj, val) =>
+        {
+            var rp = resolve(obj.GetType());
+            if (rp == null || val.ValueKind == JsonValueKind.Null) return;
+            var converted = ConvertWidenedJson(val, rp.PropertyType, pName, logger);
+            if (converted != null) rp.SetValue(obj, converted);
+        };
+    }
+
+    // The inverse of FormatWidenedValue: a bool leaf's own text is "true"/"false" (that method's
+    // own lowercase, JS-idiomatic spelling), an enum leaf's is one of its member names, and every
+    // other leaf's is an InvariantCulture-formatted number — so parsing back is exactly as
+    // straightforward as formatting was, no heuristics needed, because the property's actual
+    // declared type is already known by the time this runs (unlike #360's own read side, nothing
+    // here is guessing which leaf it might be — ApplyListJson resolved that before constructing the
+    // object this is now applying onto). A freshly-added element with no prior GET to round-trip
+    // may instead send a raw JSON number/bool rather than pre-formatted text; both are accepted.
+    private static object? ConvertWidenedJson(JsonElement val, Type targetType, string pName, ILogger logger)
+    {
+        if (targetType == typeof(bool))
+        {
+            return val.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.String when bool.TryParse(val.GetString(), out var b) => b,
+                _ => null,
+            };
+        }
+        if (targetType.IsEnum)
+        {
+            var s = val.ValueKind == JsonValueKind.String ? val.GetString() : null;
+            return s != null && Enum.TryParse(targetType, s, ignoreCase: true, out var e) ? e : null;
+        }
+        if (targetType == typeof(string))
+            return val.ValueKind == JsonValueKind.String ? val.GetString() : val.GetRawText();
+
+        var text = val.ValueKind == JsonValueKind.String ? val.GetString() : val.GetRawText();
+        if (text == null) return null;
+        try
+        {
+            return Convert.ChangeType(text, targetType, System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
+        {
+            // Same convention as ApplyFormLinkJson's own best-effort catch: a malformed value is a
+            // silent no-op to the write path, not a thrown exception, but not silent to the log either.
+            if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+            return null;
+        }
     }
 
     // Element metadata for use in FieldMetadata.ElementType.
@@ -1340,16 +1465,25 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral);
     }
 
+    // #531: shared by MakeApplier and MakeWidenedApplier — an applier's target *type* varies per
+    // call (a struct/array sub-field's own object can be any of several concrete runtime types,
+    // OMOD's seven leaves included), while the property *name* it looks for is fixed for the life
+    // of the closure, so the cache is keyed on the former and captured once per the latter.
+    private static Func<Type, PropertyInfo?> ResolveProperty(string pName)
+    {
+        var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
+        return t => cache.GetOrAdd(t, tt => tt.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
+    }
+
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
     // property, tolerating a missing property and (when nullable) a JSON null. Operates on
     // `object`; the column path adapts the IMajorRecord receiver via MakeColumnApplier.
     private static Action<object, JsonElement> MakeApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
     {
-        var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
+        var resolve = ResolveProperty(pName);
         return (obj, val) =>
         {
-            var rp = cache.GetOrAdd(obj.GetType(), t =>
-                t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
+            var rp = resolve(obj.GetType());
             if (rp == null) return;
             if (val.ValueKind == JsonValueKind.Null)
             {
@@ -1558,6 +1692,17 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// so there is no sensible merge to perform here and no way to guess where a lone element belongs;
     /// the caller refuses instead, which is the difference between "your edit was rejected" and #503's
     /// original "your edit reported success and vanished".
+    ///
+    /// <para>#531: the same refusal-not-silent-drop rule extends one level in, to an individual
+    /// element, when the list's own element type is abstract (OMOD's <c>AObjectModProperty&lt;T&gt;</c>
+    /// today — <see cref="IsListType"/>'s Getter-side element type is never abstract itself, only the
+    /// mutable Setter list's own generic argument can be). Which concrete leaf an element is depends
+    /// on that element's own data, so it is resolved per element from the payload
+    /// (<see cref="ResolveAbstractListElementType"/>) rather than assumed once for the whole field.
+    /// Unresolvable — no known discriminator scheme for this abstract type, or a discriminator value
+    /// this scheme doesn't recognise — refuses the whole write immediately, before <c>newList</c> is
+    /// ever attached to <paramref name="record"/>, so a partially-abstract array can never leave one
+    /// element applied and the rest silently missing.</para>
     /// </summary>
     private static bool ApplyListJson(
         IMajorRecord record, JsonElement json, string pName,
@@ -1571,9 +1716,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var newList = Activator.CreateInstance(listType)!;
         var addMethod = listType.GetMethod("Add")!;
 
+        // Derive the concrete element type from the mutable list's own generic argument, not from
+        // GetSetterType — which returns the setter *interface* (e.g. IRankPlacement), not the
+        // instantiable concrete class (RankPlacement). A FormLink list's own generic argument here
+        // is never used (BuildListElement's isFl branch works from elemCore instead), so it is safe
+        // to compute unconditionally.
+        var elemConcreteType = listType.GetGenericArguments()[0];
+
         foreach (var elem in json.EnumerateArray())
         {
-            var item = BuildListElement(elem, isFl, elemCore, listType, subFields);
+            var concreteType = elemConcreteType;
+            if (!isFl && concreteType.IsAbstract)
+            {
+                if (ResolveAbstractListElementType(concreteType, elem) is not { } resolved) return false;
+                concreteType = resolved;
+            }
+
+            var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields);
             if (item != null) addMethod.Invoke(newList, [item]);
         }
 
@@ -1581,8 +1740,48 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return true;
     }
 
+    // #531: one abstract list-element type has a known discriminator scheme today (OMOD's
+    // Properties, via ResolveObjectModPropertyConcreteType) — hardcoded to it, the same posture
+    // #360's own IsObjectModPropertyBase takes, rather than a general "any abstract element" lookup
+    // built for a second consumer that doesn't exist yet. A future abstract-element field with no
+    // scheme of its own falls straight through to the null below, which ApplyListJson turns into a
+    // refusal rather than a guess or a throw — the acceptance bar this ticket sets for *any* such
+    // field, not just this one.
+    private static Type? ResolveAbstractListElementType(Type elemConcreteType, JsonElement elem) =>
+        elemConcreteType.IsGenericType && elemConcreteType.GetGenericTypeDefinition().Name == "AObjectModProperty`1"
+            ? ResolveObjectModPropertyConcreteType(elemConcreteType, elem)
+            : null;
+
+    // Reads the `value_type` discriminator BuildObjectModValueTypeField exposes on read and maps it
+    // back to the one leaf getter interface that owns it (ObjectModPropertyLeaves — the exact same
+    // table BuildObjectModPropertyLeafFields resolves from, so read and write cannot name the seven
+    // leaves differently), then to that interface's own concrete Setter class (GetSetterType) closed
+    // over elemConcreteType's own T. Null for any reason — missing/unrecognized discriminator, a
+    // leaf interface or setter type that no longer resolves — is exactly the caller's one signal to
+    // refuse rather than guess.
+    private static Type? ResolveObjectModPropertyConcreteType(Type elemConcreteType, JsonElement elem)
+    {
+        if (!elem.TryGetProperty(ObjectModValueTypeDiscriminator, out var vt) || vt.ValueKind != JsonValueKind.String)
+            return null;
+
+        var match = Array.Find(ObjectModPropertyLeaves, l => l.ValueTypeName == vt.GetString());
+        if (match.InterfaceName == null) return null;
+
+        var typeArgs = elemConcreteType.GetGenericArguments();
+        var getterOpen = elemConcreteType.Assembly.GetType($"{elemConcreteType.Namespace}.{match.InterfaceName}");
+        if (getterOpen == null) return null;
+
+        // GetSetterType's own ClassType field answers with the *open* generic Setter class (e.g.
+        // ObjectModIntProperty<T>, T unbound) even off a closed getter interface — confirmed against
+        // real Fallout4 types, not assumed — so closing it over elemConcreteType's own T is this
+        // method's own job, not GetSetterType's.
+        var setterType = GetSetterType(getterOpen.MakeGenericType(typeArgs));
+        if (setterType is not { IsAbstract: false }) return null;
+        return setterType.IsGenericTypeDefinition ? setterType.MakeGenericType(typeArgs) : setterType;
+    }
+
     private static object? BuildListElement(
-        JsonElement elem, bool isFl, Type elemCore, Type listType, IReadOnlyList<SubFieldSpec>? subFields)
+        JsonElement elem, bool isFl, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields)
     {
         if (isFl)
         {
@@ -1592,10 +1791,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return Activator.CreateInstance(flType, fk);
         }
 
-        // Derive the concrete element type from the mutable list's generic argument,
-        // not from GetSetterType — which returns the setter *interface* (e.g.
-        // IRankPlacement), not the instantiable concrete class (RankPlacement).
-        var elemConcreteType = listType.GetGenericArguments()[0];
         var elemObj = Activator.CreateInstance(elemConcreteType)!;
         ApplySubFields(elemObj, elem, subFields!);
         return elemObj;
@@ -1605,8 +1800,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         foreach (var sf in subFields)
         {
-            if (json.TryGetProperty(sf.Name, out var sfVal))
-                sf.Apply!(target, sfVal);
+            // #531: a sub-field can be genuinely read-only (e.g. OMOD's own `value_type`
+            // discriminator, which decides the object's concrete type rather than being set on it)
+            // — skipped rather than a null-forgiving call, so resending a previously-read value for
+            // one of those never throws.
+            if (sf.Apply is { } apply && json.TryGetProperty(sf.Name, out var sfVal))
+                apply(target, sfVal);
         }
     }
 
