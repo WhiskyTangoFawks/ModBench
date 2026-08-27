@@ -163,6 +163,36 @@ public sealed class GameSessionPluginMetadataTests
         Assert.False(plugin.IsMaster);
     }
 
+    // #509: the overwhelmingly common light/master plugin in the wild is a header-flagged .esp, not
+    // a distinct extension — engine-authoritative light/master must follow the header flag, not just
+    // the filename.
+
+    [Fact]
+    public void Plugin_EslFlaggedEsp_HasIsLightTrue()
+    {
+        using var data = new PluginFixtureBuilder("gs-esl-flag")
+            .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
+            .Build();
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var plugin = session.Plugins.Single(p => p.Name == "EslFlagged.esp");
+        Assert.True(plugin.IsLight);
+        Assert.False(plugin.IsMaster);
+    }
+
+    [Fact]
+    public void Plugin_EsmFlaggedEsp_HasIsMasterTrue()
+    {
+        using var data = new PluginFixtureBuilder("gs-esm-flag")
+            .WithPlugin("EsmFlagged.esp", mod => mod.IsMaster = true)
+            .Build();
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+
+        var plugin = session.Plugins.Single(p => p.Name == "EsmFlagged.esp");
+        Assert.True(plugin.IsMaster);
+        Assert.False(plugin.IsLight);
+    }
+
     // ── RecordCount ────────────────────────────────────────────────────────────
 
     [Fact]
