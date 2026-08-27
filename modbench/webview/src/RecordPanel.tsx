@@ -128,31 +128,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     editField(formKey, override.plugin, override.origin, fieldPath, value);
   }, [result, formKey]);
 
-  // #426, retriggered by #258 / ADR-0039: a string cell's value, opened in a real editor tab.
-  // Reached only from the cell's right-click menu now (FIELD_OPEN_EXTENDED_EDITOR's own listener
-  // branch below) — no left-click gesture reaches it any more. Commits through the exact same
-  // handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
-  // identical write path, not a second one (extendedFieldEditor.ts's own doc comment).
-  //
-  // #503, knowingly not fixed here: this trigger commits the saved text under `fieldPath` alone, and
-  // FIELD_OPEN_EXTENDED_EDITOR carries no path within the field — so a `string` leaf *inside* a
-  // struct/array still sends a bare member value where its root belongs. It no longer loses the edit
-  // (the backend refuses the shape now and the refusal is surfaced) but it cannot land either until
-  // the row's path is threaded through stringValueContext and that broadcast; filed separately.
-  const handleOpenExtended = useCallback((plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => {
-    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
-    if (!override) return;
-    // Issue #218's own composite label — the same "EditorID [FormKey]" string the FormKey picker
-    // seeds with and the header displays, so the tab's directory names the record the same way
-    // every other identity-bearing surface here already does.
-    const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
-    const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
-    openExtendedFieldEditor(
-      { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
-      (v: string) => handleEditCell(plugin, fieldPath, v),
-    );
-  }, [result, formKey, handleEditCell]);
-
   const refresh = useCallback(async (fk: string) => {
     if (!fk) return;
     try {
@@ -280,6 +255,39 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value));
   }, [handleEditCell]);
 
+  // #426, retriggered by #258 / ADR-0039: a string cell's value, opened in a real editor tab.
+  // Reached only from the cell's right-click menu now (FIELD_OPEN_EXTENDED_EDITOR's own listener
+  // branch below) — no left-click gesture reaches it any more.
+  //
+  // #533: commits through the identical whole-field reconstruction handleCellCommit already gives
+  // every inline edit (#503), rather than the bare `handleEditCell(plugin, fieldPath, v)` this used
+  // before — `path`/`rootField` now travel the whole way from the row's own right-click context
+  // (stringValueContext, recordUtils.ts) through FIELD_OPEN_EXTENDED_EDITOR, so a string leaf
+  // nested inside a struct/array reconstructs the whole subtree exactly the way an inline edit on
+  // the same cell already does, instead of sending the saved text alone under the subtree's root
+  // path (the defect this closes). `rootDiff` is resolved by name across the flattened top-level
+  // diffs — the same lookup handleArrayOp above already uses, and the same known gap: a VMAD
+  // property's own FieldDiff is a child of its script row, never a top-level entry, so a VMAD
+  // string property's extended-editor save can't find its root here and silently no-ops — not a
+  // regression, since no trigger reached this shape at all before this ticket.
+  const handleOpenExtended = useCallback((
+    plugin: ColumnKey, fieldPath: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
+  ) => {
+    const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
+    if (!override) return;
+    // Issue #218's own composite label — the same "EditorID [FormKey]" string the FormKey picker
+    // seeds with and the header displays, so the tab's directory names the record the same way
+    // every other identity-bearing surface here already does.
+    const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
+    const recordLabel = displayId ? `${displayId} [${formKey}]` : formKey;
+    const rootDiff = [...(result?.diffs ?? []), ...vmadTree.diffs, ...conditionTree.diffs]
+      .find(d => (d.wirePath ?? d.fieldName) === rootField);
+    openExtendedFieldEditor(
+      { value, recordLabel, fieldName: fieldPath, plugin: override.plugin, origin: override.origin, readOnly },
+      (v: string) => { if (rootDiff) handleCellCommit(plugin, path, rootField, rootDiff, v); },
+    );
+  }, [result, vmadTree, conditionTree, formKey, handleCellCommit]);
+
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
     const map: Record<string, FieldMetadata> = {};
     for (const o of result?.overrides ?? []) {
@@ -325,9 +333,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
   // #258 / ADR-0039: FIELD_OPEN_EXTENDED_EDITOR's own commit reaches through handleOpenExtended —
   // same ref-for-a-mount-once-listener shape as handleEditCellRef/handleArrayOpRef above, for the
-  // same reason (handleOpenExtended closes over `result`/`formKey`/`handleEditCell`, all of which
-  // change). Previously this bridge call was reached directly from DiffRow's onDoubleClick prop;
-  // now it's reached only from this broadcast, the right-click menu's own trigger.
+  // same reason (handleOpenExtended closes over `result`/`vmadTree`/`conditionTree`/`formKey`/
+  // `handleCellCommit`, all of which change). Previously this bridge call was reached directly
+  // from DiffRow's onDoubleClick prop; now it's reached only from this broadcast, the right-click
+  // menu's own trigger.
   const handleOpenExtendedRef = useRef(handleOpenExtended);
   useLayoutEffect(() => { handleOpenExtendedRef.current = handleOpenExtended; }, [handleOpenExtended]);
 
@@ -391,7 +400,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         // formKey, same convention as every other right-click op above, then hand off to the exact
         // bridge call a double click used to reach directly.
         if (msg.formKey !== prevFormKeyRef.current) return;
-        handleOpenExtendedRef.current(columnKey(msg.plugin, msg.origin), msg.fieldName, msg.value, msg.readOnly);
+        handleOpenExtendedRef.current(
+          columnKey(msg.plugin, msg.origin), msg.fieldName, msg.path, msg.rootField, msg.value, msg.readOnly,
+        );
       }
     };
     window.addEventListener('message', handler);

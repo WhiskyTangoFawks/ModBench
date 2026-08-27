@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
@@ -487,60 +487,63 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
   });
 });
 
+// #533: hoisted out of the #503 describe block below (module scope, alongside
+// structCollapseExpandResult/nestedStructArrayResult above) so the #533 describe block further
+// down — same shapes, different trigger — can share them without duplicating fixtures.
+const editableIntArrayMeta: FieldMetadata = {
+  name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+  elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+};
+
+const editableIntArrayResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: editableIntArrayMeta, value: [11, 22, 33] }], conflictThis: 'Master',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Values',
+    values: { 'MyMod.esp': [11, 22, 33] },
+    winnerColumn: 'MyMod.esp', winnerValue: [11, 22, 33],
+    cellStates: {},
+    children: [
+      { fieldName: '[0]', values: { 'MyMod.esp': 11 }, winnerColumn: 'MyMod.esp', winnerValue: 11, cellStates: {} },
+      { fieldName: '[1]', values: { 'MyMod.esp': 22 }, winnerColumn: 'MyMod.esp', winnerValue: 22, cellStates: {} },
+      { fieldName: '[2]', values: { 'MyMod.esp': 33 }, winnerColumn: 'MyMod.esp', winnerValue: 33, cellStates: {} },
+    ],
+  }],
+};
+
+const scalarMeta: FieldMetadata = {
+  name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [],
+};
+
+const scalarResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+      loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
+      fields: [{ metadata: scalarMeta, value: 4 }], conflictThis: 'Master',
+    },
+  ],
+  diffs: [{
+    fieldName: 'Level',
+    values: { 'MyMod.esp': 4 },
+    winnerColumn: 'MyMod.esp', winnerValue: 4,
+    cellStates: {},
+  }],
+};
+
 // #503: a *value* edit inside a complex field commits the whole field, exactly as the arity ops
 // (Add/Remove/Move, above) always did. CONTEXT.md: a complex field is "always edited as one atomic
 // value — a field-level write to the source document, never per-element". Before this, a leaf inside
 // an array or struct committed its own bare value under the array's/struct's field name, the backend
 // applier silently declined the shape, and the write path reported success — the edit vanished.
 describe('RecordPanel — a value edit inside a complex field commits the whole field (#503)', () => {
-  const editableIntArrayMeta: FieldMetadata = {
-    name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
-    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
-  };
-
-  const editableIntArrayResult = {
-    conflictAll: 'NoConflict',
-    overrides: [
-      {
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: editableIntArrayMeta, value: [11, 22, 33] }], conflictThis: 'Master',
-      },
-    ],
-    diffs: [{
-      fieldName: 'Values',
-      values: { 'MyMod.esp': [11, 22, 33] },
-      winnerColumn: 'MyMod.esp', winnerValue: [11, 22, 33],
-      cellStates: {},
-      children: [
-        { fieldName: '[0]', values: { 'MyMod.esp': 11 }, winnerColumn: 'MyMod.esp', winnerValue: 11, cellStates: {} },
-        { fieldName: '[1]', values: { 'MyMod.esp': 22 }, winnerColumn: 'MyMod.esp', winnerValue: 22, cellStates: {} },
-        { fieldName: '[2]', values: { 'MyMod.esp': 33 }, winnerColumn: 'MyMod.esp', winnerValue: 33, cellStates: {} },
-      ],
-    }],
-  };
-
-  const scalarMeta: FieldMetadata = {
-    name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [],
-  };
-
-  const scalarResult = {
-    conflictAll: 'NoConflict',
-    overrides: [
-      {
-        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
-        loadOrderIndex: 1, isWinner: true, editorId: 'TestNPC',
-        fields: [{ metadata: scalarMeta, value: 4 }], conflictThis: 'Master',
-      },
-    ],
-    diffs: [{
-      fieldName: 'Level',
-      values: { 'MyMod.esp': 4 },
-      winnerColumn: 'MyMod.esp', winnerValue: 4,
-      cellStates: {},
-    }],
-  };
-
   function renderEditablePanel() {
     const client: RecordSessionClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
@@ -638,5 +641,123 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
 
     expect(lastEditField()?.fieldPath).toBe('Level');
     expect(lastEditField()?.value).toBe(6);
+  });
+});
+
+// #533: the extended editor's own trigger (right-click → FIELD_OPEN_EXTENDED_EDITOR → a real Ctrl+S
+// in the opened tab, simulated here as EXTENDED_EDITOR_COMMITTED per the pattern
+// RecordPanel.test.tsx's own extended-editor wiring tests already use) reconstructs the whole
+// complex field exactly the way an inline edit already does (#503, above) — before this, it
+// committed the saved text alone under the subtree root's own field path, and the backend's #503
+// shape guards refused it. Same fixtures, same four shapes as the #503 block above; only the
+// trigger differs.
+describe('RecordPanel — the extended editor commits the whole field, at any depth (#533)', () => {
+  function renderEditablePanel() {
+    const client: RecordSessionClient = {
+      load: vi.fn().mockImplementation(() => Promise.resolve({
+        ok: true,
+        result: currentCompare,
+        immutableSet: new Set(pluginsResponse.filter(p => p.isImmutable).map(p => columnKey(p.name, null))),
+        notInLoadOrderSet: new Set(),
+        trackedSet: new Set([columnKey('MyMod.esp', null)]),
+        conflictsComputed: true,
+      } as unknown as LoadResult)),
+      conditionRunOnTargets: vi.fn().mockResolvedValue([]),
+    };
+    return { client, ...render(<RecordPanel client={client} />) };
+  }
+
+  function lastEditField(): { fieldPath?: string; value?: unknown } | undefined {
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD);
+    return call?.[0] as { fieldPath?: string; value?: unknown } | undefined;
+  }
+
+  function lastOpenExtendedEditorRequestId(): string {
+    const calls = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls;
+    const call = [...calls].reverse().find(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR);
+    return (call?.[0] as { requestId: string }).requestId;
+  }
+
+  // Simulates the right-click command's own broadcast (FIELD_OPEN_EXTENDED_EDITOR), then the
+  // extension host's reply to a real Ctrl+S in the opened tab (EXTENDED_EDITOR_COMMITTED) — the
+  // full round trip RecordPanel.test.tsx's own "opens the extended editor bridge call" test already
+  // exercises the open half of.
+  function saveThroughExtendedEditor(
+    fieldName: string, path: { kind: string; name?: string; index?: number }[], rootField: string, value: string,
+  ) {
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
+          formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'Data',
+          fieldName, value: 'irrelevant seed value', readOnly: false, path, rootField,
+        },
+      }));
+    });
+    const requestId = lastOpenExtendedEditorRequestId();
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId, value },
+      }));
+    });
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    (vscode.postMessage as ReturnType<typeof vi.fn>).mockClear();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('saving an array element commits the whole array under the array\'s own field path', async () => {
+    currentCompare = editableIntArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Values'));
+
+    saveThroughExtendedEditor('Values', [{ kind: 'index', index: 1 }], 'Values', '99');
+
+    expect(lastEditField()?.fieldPath).toBe('Values');
+    expect(lastEditField()?.value).toEqual([11, '99', 33]);
+  });
+
+  it('saving a struct member commits the whole struct', async () => {
+    currentCompare = structCollapseExpandResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('ObjectBounds'));
+
+    saveThroughExtendedEditor('ObjectBounds', [{ kind: 'member', name: 'X1' }], 'ObjectBounds', '7');
+
+    expect(lastEditField()?.fieldPath).toBe('ObjectBounds');
+    expect(lastEditField()?.value).toEqual({ X1: '7', X2: 100 });
+  });
+
+  // The shape #503/#533 were both reported against (OMOD `Properties[i].step`): the edited leaf is
+  // a member of a struct that is itself an element of an array, two hops deep.
+  it('saving a sub-field of a struct-element array commits the whole root value', async () => {
+    currentCompare = nestedStructArrayResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Container'));
+
+    saveThroughExtendedEditor(
+      'Container',
+      [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' }],
+      'Container', 'Z',
+    );
+
+    expect(lastEditField()?.fieldPath).toBe('Container');
+    expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'Z', Weight: 1 }] });
+  });
+
+  // The other half of the same rule (#503's own both-directions pin): a top-level row *is* the
+  // whole field, so its commit stays the bare value — no double-wrap.
+  it('saving a top-level field still commits the bare value', async () => {
+    currentCompare = scalarResult;
+    renderEditablePanel();
+    await waitFor(() => screen.getByText('Level'));
+
+    saveThroughExtendedEditor('Level', [], 'Level', '6');
+
+    expect(lastEditField()?.fieldPath).toBe('Level');
+    expect(lastEditField()?.value).toBe('6');
   });
 });

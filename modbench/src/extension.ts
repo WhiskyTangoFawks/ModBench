@@ -493,7 +493,7 @@ function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode
       broadcastToRecordPanels(recordPanels, {
         type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
         formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
-        value: ctx.value, readOnly: ctx.readOnly,
+        value: ctx.value, readOnly: ctx.readOnly, path: ctx.path, rootField: ctx.rootField,
       });
     }),
   ];

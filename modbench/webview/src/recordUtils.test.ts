@@ -425,7 +425,7 @@ describe('headerCellContext', () => {
 // remaining trigger now that no left-click gesture reaches it.
 describe('stringValueContext', () => {
   it('carries the cell\'s own identity, current value and readOnly flag', () => {
-    expect(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false)).toEqual({
+    expect(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false, [], 'Name')).toEqual({
       webviewSection: 'stringValue',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
@@ -433,19 +433,34 @@ describe('stringValueContext', () => {
       fieldName: 'Name',
       value: 'Dogmeat',
       readOnly: false,
+      path: [],
+      rootField: 'Name',
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('carries readOnly: true for an immutable/untracked/not-in-load-order column unchanged', () => {
-    expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true).readOnly).toBe(true);
+    expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true, [], 'Name').readOnly).toBe(true);
+  });
+
+  // #533: a string leaf nested inside a struct/array carries its own path within the field and the
+  // subtree root's own wire path — the two coordinates RecordPanel's whole-field reconstruction
+  // needs, distinct from `fieldName` (the extended editor tab's own display path).
+  it('carries the row\'s own path and the subtree root\'s wire path for a nested string leaf', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Id' }];
+    const ctx = stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', 'A', false, path, 'Container');
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Container');
   });
 
   it('combines like every other context', () => {
-    const result = combineVscodeContexts(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false));
+    const result = combineVscodeContexts(
+      stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false, [], 'Name'),
+    );
     expect(JSON.parse(result!)).toEqual({
       webviewSection: 'stringValue', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
-      fieldName: 'Name', value: 'Dogmeat', readOnly: false, preventDefaultContextMenuItems: true,
+      fieldName: 'Name', value: 'Dogmeat', readOnly: false, path: [], rootField: 'Name',
+      preventDefaultContextMenuItems: true,
     });
   });
 });

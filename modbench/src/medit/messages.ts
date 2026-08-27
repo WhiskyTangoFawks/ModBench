@@ -225,6 +225,20 @@ export interface ColumnHeaderContext {
   preventDefaultContextMenuItems: true;
 }
 
+// Issue #231 (moved from webview/src/types.ts by #533): the chain from a row's own restage root
+// (a plain reflected field, or a wirePath-bearing VMAD/Condition subtree) down to a given row's
+// own value — a struct hop addressed by member name, an unsorted-array hop by position, a sorted
+// (pure FormLink) array hop by the element's own value (nothing addresses *beneath* a sortKey
+// hop). Lives here, not in a webview module, because #533 needs it on StringValueContext/
+// FIELD_OPEN_EXTENDED_EDITOR below, and this module is the one the extension host already imports
+// directly (extension.ts) — importing a webview type into the host would run the dependency the
+// wrong way. The webview re-exports this (webview/src/messages.ts, webview/src/types.ts) rather
+// than the reverse.
+export type PathSegment =
+  | { kind: 'member'; name: string }
+  | { kind: 'index'; index: number }
+  | { kind: 'sortKey'; key: string };
+
 // #258 / ADR-0039: a `string` value cell's own right-click identity — the extended editor's only
 // remaining trigger now that no left-click gesture reaches it. `value`/`readOnly` travel here
 // (computed at DiffRow's render time, the same computation the retired `onOpenExtended` callback
@@ -240,6 +254,14 @@ export interface StringValueContext {
   fieldName: string;
   value: string;
   readOnly: boolean;
+  // #533: the row's own path within the field (empty for a top-level field) and the subtree
+  // root's own wire path — together enough for the panel's commit to reconstruct the whole field
+  // exactly the way an inline edit already does (RecordPanel.tsx's handleCellCommit, #503),
+  // instead of committing the saved text alone under the root's own path (this ticket's defect).
+  // `fieldName` above keeps its existing role (the extended-editor tab's own display path) —
+  // `rootField` is the new field commit-resolution actually keys off.
+  path: PathSegment[];
+  rootField: string;
   preventDefaultContextMenuItems: true;
 }
 
@@ -260,4 +282,6 @@ export type ExtensionToWebview =
   | {
       type: typeof EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR; formKey: string; plugin: string; origin: string;
       fieldName: string; value: string; readOnly: boolean;
+      // #533: forwarded verbatim from StringValueContext — see its own doc comment above.
+      path: PathSegment[]; rootField: string;
     };

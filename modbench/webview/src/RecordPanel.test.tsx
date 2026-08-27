@@ -706,7 +706,7 @@ describe('RecordPanel — postMessage wiring', () => {
         data: {
           type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
           formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: null, fieldName: 'Name',
-          value: 'Override Name', readOnly: false,
+          value: 'Override Name', readOnly: false, path: [], rootField: 'Name',
         },
       }));
     });
@@ -724,6 +724,31 @@ describe('RecordPanel — postMessage wiring', () => {
     })));
   });
 
+  // #533: readOnly still travels through unchanged (the extension host's own OS-permission-based
+  // enforcement — extendedFieldEditor.ts's chmod 0o444 — is what actually refuses a save on this
+  // path; unaffected by this ticket, already covered there). This is the webview's own half: the
+  // right-click command must still open the tab read-only for an immutable/untracked column.
+  it('still opens the extended editor read-only when fieldOpenExtendedEditor arrives with readOnly: true', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
+          formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: null, fieldName: 'Name',
+          value: 'Original Name', readOnly: true, path: [], rootField: 'Name',
+        },
+      }));
+    });
+
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR,
+      value: 'Original Name',
+      readOnly: true,
+    })));
+  });
+
   it('ignores fieldOpenExtendedEditor for a different, background record', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
@@ -734,7 +759,7 @@ describe('RecordPanel — postMessage wiring', () => {
         data: {
           type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
           formKey: '000099:Fallout4.esm', plugin: 'MyMod.esp', origin: null, fieldName: 'Name',
-          value: 'Override Name', readOnly: false,
+          value: 'Override Name', readOnly: false, path: [], rootField: 'Name',
         },
       }));
     });

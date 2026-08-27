@@ -146,14 +146,13 @@ export interface CompareOverride extends RecordDetail {
 // wirePath-bearing VMAD/Condition subtree — see FieldDiff.wirePath below) down to a given row's
 // own value: a struct hop addressed by member name, an unsorted-array hop by position, a sorted
 // (pure FormLink) array hop by the element's own value (there is nothing to address *beneath* a
-// sortKey hop — a sorted array's elements are themselves the value, never a struct/array). Defined
-// here (not recordUtils.ts, where its own getAtPath/setAtPath live) because FieldDiff.commitOverride
-// needs the type too, and types.ts is the lower-level of the two modules — recordUtils.ts re-exports
-// it for every existing caller.
-export type PathSegment =
-  | { kind: 'member'; name: string }
-  | { kind: 'index'; index: number }
-  | { kind: 'sortKey'; key: string };
+// sortKey hop — a sorted array's elements are themselves the value, never a struct/array).
+// #533: moved to src/medit/messages.ts — the shared module the extension host already imports
+// directly (StringValueContext/FIELD_OPEN_EXTENDED_EDITOR now carry this too), so it can cross to
+// the extension host without importing a webview type the wrong way. Re-exported here since every
+// existing caller in this module (and recordUtils.ts's own re-export) already imports it from
+// './types'.
+export type { PathSegment } from './messages';
 
 export interface FieldDiff {
   fieldName: string;
