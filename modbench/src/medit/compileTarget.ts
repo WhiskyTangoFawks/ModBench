@@ -52,5 +52,15 @@ export async function resolveCompileTarget(
     if (owner) return { name: owner.plugin, origin: owner.origin };
   }
 
-  return deps.pickPlugin();
+  // #530: pickPlugin's body (repository.getPlugins(), then showQuickPick) has no further
+  // fallback tier below this one, unlike tier 2's getRecordOwner rejection above — so any
+  // rejection out of the picker (a transport failure before Launch mEdit, or anything else it
+  // throws) is reported through onError and resolves to no target, the same "report and do
+  // nothing" outcome as every other no-target case in this function, rather than propagating as
+  // a raw, uncaught toast.
+  return deps.pickPlugin().catch((error: unknown) => {
+    const detail = error instanceof Error ? error.message : String(error);
+    deps.onError(`Could not determine which plugin to compile: ${detail}`);
+    return undefined;
+  });
 }

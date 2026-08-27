@@ -70,4 +70,16 @@ describe('resolveCompileTarget (#416 review)', () => {
     expect(target).toEqual({ name: 'Picked.esp', origin: 'PickedMod' });
     expect(d.pickPlugin).toHaveBeenCalledOnce();
   });
+
+  // #530: unlike tier 2's getRecordOwner rejection above (which still has a fallback tier below
+  // it), tier 3 is the last tier — pickPlugin rejecting (e.g. repository.getPlugins() with no
+  // backend to ask, before Launch mEdit) has nowhere further to fall through to, so it must report
+  // through onError and resolve to no target instead of propagating as a raw, uncaught toast.
+  it('reports through onError and resolves to no target when pickPlugin itself is unreachable', async () => {
+    const d = deps({ pickPlugin: vi.fn().mockRejectedValue(new Error('fetch failed')) });
+    const target = await resolveCompileTarget(undefined, undefined, d);
+
+    expect(target).toBeUndefined();
+    expect(d.onError).toHaveBeenCalledOnce();
+  });
 });
