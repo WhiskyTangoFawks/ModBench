@@ -29,7 +29,10 @@ scope) are normal outcomes, not failures.
 
 - **Background the run and poll.** The C# run costs ~17 minutes and outlasts the
   foreground command cap; a foreground call killed partway looks exactly like a silent
-  failure.
+  failure. **Every check-in while waiting reports a progress figure** (mutants tested
+  so far / total, once the tool has printed one) — a bare "still running" is
+  indistinguishable from hung, and forces whoever's waiting on you to go verify the
+  process directly instead of trusting the report.
 - A diff touching both runtimes gets both runs, **sequentially** — a mutation run
   saturates memory as well as CPU, and two at once has OOM-killed the machine. The
   wrappers refuse to start beside a live run.
