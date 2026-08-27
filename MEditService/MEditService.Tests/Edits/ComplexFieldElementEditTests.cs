@@ -339,6 +339,31 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
     }
 
+    // ── #532: a declined member fails the whole struct/array write, not just that member ──────
+
+    /// <summary>
+    /// #532 AC4: <c>weight</c> is an ordinary (non-abstract-element) struct, so every one of its
+    /// sub-fields is reflected directly off <c>NpcWeight</c> — there is no leaf-union "doesn't apply
+    /// to this concrete type" case here, only "the value itself couldn't be converted"
+    /// (<c>thin</c>'s own float converter throwing on a non-numeric string). One bad member inside an
+    /// otherwise well-shaped object must refuse the <i>whole</i> write, not silently apply the two
+    /// good members and drop the bad one — the struct is one atomic value (CONTEXT.md), the same
+    /// reason a per-member payload is refused above.
+    /// </summary>
+    [Fact]
+    public void WeightStruct_OneMemberValueDeclined_RefusesTheWholeStructWrite()
+    {
+        var before = NpcBody();
+
+        var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "weight",
+            Json("""{"thin":"not-a-number","fat":0.5,"muscular":0.3}"""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Contains("weight", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, NpcBody());
+    }
+
     /// <summary>
     /// An OMOD carrying one <c>ObjectModIntProperty</c> — the struct-element array #503 was reported
     /// against, which <see cref="TrackedModFixture"/>'s three-record NPC shape has no equivalent of.

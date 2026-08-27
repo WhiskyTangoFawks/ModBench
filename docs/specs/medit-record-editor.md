@@ -342,6 +342,14 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
   scalar leaf, collapsed or expanded alike (#204).
+- **A declined write is always a refusal, never a silent no-op reported as success** (#532):
+  a scalar or FormLink cell edit that the backend can't honor — a converter rejecting the typed
+  value, an unparseable FormKey string, a property absent from the record's own concrete
+  subclass — refuses naming the field, the same contract complex-field writes already had
+  (#503/#531). A declined member inside an otherwise-valid struct/array write fails the whole
+  write, not just that member; a member legitimately absent from a record's own subclass (the
+  sparse leaf-union case, e.g. some OMOD property members) stays a silent no-op, since that's
+  correct round-tripping, not a defect.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
   (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); originally #230, ADR-0034
   divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
@@ -406,9 +414,9 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   that button's own rendering choice, not a functional rule. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
   sort key, so the entries are absent, not merely disabled. All three ops write the **whole
   array** as a single field edit — the atomic complex-field write CONTEXT.md describes — and only
-  on non-immutable columns. An element-**value** edit is offered on the same cell but does not
-  currently share this path: nothing reconstructs the array first, so the write is silently lost
-  rather than landing atomically (known defect, #503). There is no free drag-reorder
+  on non-immutable columns. An element-**value** edit is offered on the same cell and shares this
+  same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
+  it lands atomically rather than being silently lost (#503). There is no free drag-reorder
   and no auto-sort. A VMAD array-of-scalars
   property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
