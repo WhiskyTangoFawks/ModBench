@@ -26,13 +26,15 @@ if $BACKEND; then
   || { echo "--- BACKEND GATES FAILED ---"; FAILED=true; }
 fi
 
+# flock on the integration step: its mock backend binds a fixed port (15172), so concurrent
+# gate runs (a second worktree, a pipelined orchestrate slot) serialize on that step only.
 if $FRONTEND; then
   echo "=== Gate 4: Frontend lint ==="
   (cd "$ROOT/modbench" && npm run lint) && \
   echo "=== Gate 5: Frontend build (type-check) ===" && \
   (cd "$ROOT/modbench" && npm run build) && \
   echo "=== Gate 6: Frontend tests ===" && \
-  (cd "$ROOT/modbench" && npm run test:unit && npm run test:integration) \
+  (cd "$ROOT/modbench" && npm run test:unit && flock /tmp/modbench-itest.lock npm run test:integration) \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
 fi
 

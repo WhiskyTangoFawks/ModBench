@@ -14,8 +14,13 @@ relocated.
 ## Step 1 — Gates
 
 ```bash
+git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo current
 git diff --name-only HEAD && git diff --name-only --cached
 ```
+
+The first line must print `current`: HEAD on a branch that contains `main`. A detached HEAD
+or a branch behind `main` gates a tree that will not land — stop and say so (merge `main`
+into the branch first; a detached HEAD is the user's to resolve).
 
 Classify changed files → run matching gate (never review non-compiling code):
 

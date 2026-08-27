@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Edits;
@@ -62,10 +63,21 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         Directory.CreateDirectory(tmpDir);
 
+        // #506/ADR-0042: HEDR.NextObjectID and HEDR.NumRecords are written verbatim from the mod's
+        // own header, never recomputed. Mutagen's defaults (NextFormIDOption.Iterate,
+        // RecordCountOption.Iterate) re-derive both from the record set — NextObjectID as max
+        // self-authored FormID + 1 (or the game's initial value when there are none) — and real-world
+        // override/patch plugins routinely carry stored values that match neither (nothing in-game
+        // reads either field), so the defaults silently rewrite them on every save. No production
+        // path allocates a new FormKey today (the only AddNew is source deserialization, with the
+        // source's own key); one that does must allocate through Mutagen's GetNextFormKey, which
+        // advances the in-memory header, so the value written here keeps up.
         var writeBuilder = mod.BeginWrite
             .ToPath(tmpPath)
             .WithLoadOrderFromHeaderMasters()
-            .WithNoDataFolder();
+            .WithNoDataFolder()
+            .NoNextFormIDProcessing()
+            .WithRecordCount(RecordCountOption.NoCheck);
 
         // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every write —
         // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
