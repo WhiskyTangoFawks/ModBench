@@ -365,7 +365,9 @@ describe('DiffRow — flags cell wiring (#426)', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 
-  it('toggling a checkbox calls onEditCell with the field path and the new bitmask', () => {
+  // #503: the column and the value, and no field path — where the value goes is the row builder's
+  // to decide now (RecordPanel binds this per row), not something a row states alongside its value.
+  it('toggling a checkbox calls onEditCell with the column and the new bitmask', () => {
     const onEditCell = vi.fn();
     flagsRow({
       editableColumns: new Set([columnKey('MyMod.esp', null)]),
@@ -374,7 +376,7 @@ describe('DiffRow — flags cell wiring (#426)', () => {
     });
     fireEvent.click(screen.getAllByText('A')[1]);
     fireEvent.click(screen.getAllByRole('checkbox')[1]); // check B (bit 2): 1 ^ 2 = 3
-    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '3');
+    expect(onEditCell).toHaveBeenCalledWith(columnKey('MyMod.esp', null), '3');
   });
 });
 
@@ -408,7 +410,7 @@ describe('DiffRow — formKey cell wiring (#426)', () => {
     expect(pickFormKey).toHaveBeenCalledWith('000019:Fallout4.esm', ['race']);
   });
 
-  it('committing a picked FormKey calls onEditCell with the field path and the picked value', async () => {
+  it('committing a picked FormKey calls onEditCell with the column and the picked value', async () => {
     const onEditCell = vi.fn();
     pickFormKey.mockResolvedValueOnce('00001A:Fallout4.esm');
     fkRow({
@@ -418,7 +420,7 @@ describe('DiffRow — formKey cell wiring (#426)', () => {
     });
     fireEvent.click(screen.getAllByText('000019:Fallout4.esm')[1]);
     await vi.waitFor(() => expect(onEditCell)
-      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), 'Name', '00001A:Fallout4.esm'));
+      .toHaveBeenCalledWith(columnKey('MyMod.esp', null), '00001A:Fallout4.esm'));
   });
 });
 

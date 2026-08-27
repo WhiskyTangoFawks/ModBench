@@ -220,7 +220,15 @@ interface DiffRowProps {
   editableColumns: Set<ColumnKey>;
   // #415: commits an edited value for one column's cell on this row. Absent when this row cannot be
   // written at all (a synthesized read-only row, or a panel with no write path wired).
-  onEditCell?: (plugin: ColumnKey, fieldPath: string, value: unknown) => void;
+  //
+  // #503: takes the leaf value alone — no field path. It used to take one, and every caller passed
+  // `context.rootField`, which is exactly what the defect was: the wire path named the subtree's
+  // root while the value was this one leaf's, so an array/struct field received a single element,
+  // the backend applier declined the shape without saying so, and the edit vanished. *Where* an
+  // edited leaf goes is a question about the whole subtree (which root, and which path inside it),
+  // and only RecordPanel's row builder knows both halves — so it binds them per row and hands down
+  // a callback that needs neither. A row can no longer pair them wrongly because it holds neither.
+  onEditCell?: (plugin: ColumnKey, value: unknown) => void;
   // Issue #142/#227 (#426: restored): Add on this row — present only when this row is itself a
   // mutable, unsorted array's own row (RecordPanel's buildRows decides that; DiffRow only wires
   // whatever it's handed, per column, gated by editableColumns the same as onEditCell).
@@ -438,7 +446,7 @@ export function DiffRow({
               {renderCell(diff.values[key], meta, isFocused, onOpen, {
                 checkError, resolution: diff.resolutions?.[key],
                 summaryLabel: diff.collapsedSummary?.[key],
-                onCommit: cellEditable ? (v: unknown) => onEditCell(key, pendingLookupField, v) : undefined,
+                onCommit: cellEditable ? (v: unknown) => onEditCell(key, v) : undefined,
               })}
             </DiskCell>
           );

@@ -133,6 +133,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // branch below) — no left-click gesture reaches it any more. Commits through the exact same
   // handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
   // identical write path, not a second one (extendedFieldEditor.ts's own doc comment).
+  //
+  // #503, knowingly not fixed here: this trigger commits the saved text under `fieldPath` alone, and
+  // FIELD_OPEN_EXTENDED_EDITOR carries no path within the field — so a `string` leaf *inside* a
+  // struct/array still sends a bare member value where its root belongs. It no longer loses the edit
+  // (the backend refuses the shape now and the refusal is surfaced) but it cannot land either until
+  // the row's path is threaded through stringValueContext and that broadcast; filed separately.
   const handleOpenExtended = useCallback((plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => {
     const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
     if (!override) return;
@@ -251,6 +257,28 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (nextArray === currentArray) return; // boundary no-op — nothing to write
     handleEditCell(plugin, rootField, setAtPath(rootValue, arrayPath, nextArray));
   }, [result, vmadTree, conditionTree, handleEditCell]);
+
+  // #503: one *value* edit, committed the way the arity ops above already commit an arity change —
+  // the whole complex field, reconstructed. CONTEXT.md: a complex field is "always edited as one
+  // atomic value — a field-level write to the source document, never per-element". Before this, a
+  // leaf inside an array/struct sent its own bare value under the *root's* field path; the backend's
+  // list/struct applier declined that shape, said nothing (#503's other half, a refusal now), and
+  // the write path reported success over a document it had never touched.
+  //
+  // `rootDiff` is passed in rather than looked up the way handleArrayOp looks it up: buildRows
+  // already holds this row's own subtree root, and that by-name search over top-level diffs cannot
+  // find a VMAD property's diff at all (those are children of a script row, not top-level entries).
+  //
+  // `path.length === 0` is not an optimization — it is the whole VMAD/Condition story. A subtree
+  // root (an ordinary top-level field, a VMAD property, a Condition field) *is* the value it writes,
+  // so its commit stays the bare value, byte-identical to what it sent before this change.
+  const handleCellCommit = useCallback((
+    plugin: ColumnKey, path: PathSegment[], rootField: string, rootDiff: FieldDiff, value: unknown,
+  ) => {
+    handleEditCell(
+      plugin, rootField,
+      path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value));
+  }, [handleEditCell]);
 
   const fieldMetaMap = useMemo((): Record<string, FieldMetadata> => {
     const map: Record<string, FieldMetadata> = {};
@@ -462,7 +490,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         fieldMetaMap={fieldMetaMap}
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
-        onEditCell={handleEditCell}
+        onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
         onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType) : undefined}
         onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
         onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}

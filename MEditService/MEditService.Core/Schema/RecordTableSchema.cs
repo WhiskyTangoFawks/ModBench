@@ -13,7 +13,18 @@ public sealed record ColumnSpec(
     string ApiType,
     IReadOnlyList<string> ValidFormKeyTypes,
     IReadOnlyList<string> EnumValues,
-    Action<IMajorRecord, JsonElement>? Apply,
+    /// <summary>
+    /// Writes this column's whole value onto a record, or <c>null</c> when the column is read-only.
+    ///
+    /// <para>#503: returns whether the write happened. A complex field (CONTEXT.md: array or struct)
+    /// is written as one atomic value, so an applier handed something that is not array-/object-shaped
+    /// has nothing it could sensibly write and answers <c>false</c> — which
+    /// <c>RecordFieldWriter.TryApply</c> turns into a refusal naming the field. It used to be an
+    /// <c>Action</c> that simply returned, and the write path reported success regardless, so a
+    /// per-element payload lost the user's edit silently. A <c>bool</c> here is what makes that
+    /// unrepresentable rather than merely fixed: a future guard cannot no-op its way into "applied".</para>
+    /// </summary>
+    Func<IMajorRecord, JsonElement, bool>? Apply,
     bool IsArray = false,
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
