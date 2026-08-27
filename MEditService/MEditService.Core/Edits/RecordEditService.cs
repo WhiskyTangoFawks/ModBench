@@ -152,9 +152,12 @@ public sealed class RecordEditService(
         // #422: the new value can flip filter membership either way.
         sessions.ReapplyFilter();
 
-        logger.LogInformation(
-            "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
-            fieldPath, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Edited {FieldPath} on {FormKey} in {Plugin} ({Origin}) — working-tree change written to {SourcePath}",
+                fieldPath, formKey, plugin.Name, plugin.Origin, unit.RelativePath);
+        }
         return RecordEditResult.Success();
     }
 
@@ -277,16 +280,22 @@ public sealed class RecordEditService(
         if (isDirectoryPerRecord)
         {
             Directory.Move(oldLeafPath, newLeafPath);
-            logger.LogInformation(
-                "EditorID changed on {FormKey}; moved its source directory {Old} to {New}",
-                edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "EditorID changed on {FormKey}; moved its source directory {Old} to {New}",
+                    edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+            }
             return Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
         }
 
         File.Move(oldLeafPath, newLeafPath, overwrite: true);
-        logger.LogInformation(
-            "EditorID changed on {FormKey}; moved its source file {Old} to {New}",
-            edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "EditorID changed on {FormKey}; moved its source file {Old} to {New}",
+                edited.FormKey, Path.GetFileName(oldLeafPath), Path.GetFileName(newLeafPath));
+        }
         return newLeafPath;
     }
 
@@ -417,9 +426,12 @@ public sealed class RecordEditService(
         // #422: a deleted row can no longer match an active filter.
         sessions.ReapplyFilter();
 
-        logger.LogInformation(
-            "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath} ({Count} index row(s) removed)",
-            formKey, plugin.Name, plugin.Origin, unit.RelativePath, deltas.Count);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Deleted {FormKey} from {Plugin} ({Origin}) — working-tree deletion of {SourcePath} ({Count} index row(s) removed)",
+                formKey, plugin.Name, plugin.Origin, unit.RelativePath, deltas.Count);
+        }
         return RecordEditResult.Success();
     }
 
@@ -529,9 +541,12 @@ public sealed class RecordEditService(
         // #422: a brand-new row can newly match an active filter.
         sessions.ReapplyFilter();
 
-        logger.LogInformation(
-            "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source file at {SourcePath}",
-            recordType, targetFormKey, plugin.Name, plugin.Origin, relativePath);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Created {RecordType} {FormKey} in {Plugin} ({Origin}) — new working-tree source file at {SourcePath}",
+                recordType, targetFormKey, plugin.Name, plugin.Origin, relativePath);
+        }
         return RecordEditResult.Success(targetFormKey);
     }
 
@@ -594,10 +609,13 @@ public sealed class RecordEditService(
         // #422: a brand-new row can newly match an active filter.
         sessions.ReapplyFilter();
 
-        logger.LogInformation(
-            "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-            "({DestinationOrigin}) — new working-tree source file at {SourcePath}",
-            formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, relativePath);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+                "({DestinationOrigin}) — new working-tree source file at {SourcePath}",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin, relativePath);
+        }
         // NewFormKey is for a gesture that mints or suggests a FormKey the caller didn't already
         // have (RecordEditResult's own doc comment) — an override echoes the caller's own FormKey
         // back, same shape as DeleteRecord's "success, nothing new" below.
@@ -661,11 +679,14 @@ public sealed class RecordEditService(
         // #422: a brand-new row can newly match an active filter.
         sessions.ReapplyFilter();
 
-        logger.LogInformation(
-            "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
-            "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source file at {SourcePath}",
-            formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
-            destinationPlugin.Origin, relativePath);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as new record {NewFormKey} into " +
+                "{DestinationPlugin} ({DestinationOrigin}) — new working-tree source file at {SourcePath}",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, targetFormKey, destinationPlugin.Name,
+                destinationPlugin.Origin, relativePath);
+        }
         return RecordEditResult.Success(targetFormKey);
     }
 
@@ -865,9 +886,12 @@ public sealed class RecordEditService(
             sessions.ReapplyFilter();
         }
 
-        logger.LogInformation(
-            "Renumbered {OldFormKey} to {NewFormKey} in {Plugin} ({Origin}), rewriting {Count} referencing record(s)",
-            formKey, targetFormKey, plugin.Name, plugin.Origin, referencers.Count);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Renumbered {OldFormKey} to {NewFormKey} in {Plugin} ({Origin}), rewriting {Count} referencing record(s)",
+                formKey, targetFormKey, plugin.Name, plugin.Origin, referencers.Count);
+        }
         return RecordEditResult.Success(targetFormKey);
     }
 

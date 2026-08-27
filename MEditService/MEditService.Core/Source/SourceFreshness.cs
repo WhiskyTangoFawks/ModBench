@@ -108,9 +108,12 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
             // #422: a read-time self-heal is still a mutation — the row it just folded in can newly
             // (or no longer) match an active filter, same as an explicit edit would.
             sessions.ReapplyFilter();
-            logger.LogDebug(
-                "Source text for {FormKey} in {Plugin} changed outside Modbench; refreshed at read time",
-                formKey, entry.Plugin.Name);
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                logger.LogDebug(
+                    "Source text for {FormKey} in {Plugin} changed outside Modbench; refreshed at read time",
+                    formKey, entry.Plugin.Name);
+            }
         }
 
         RebaselineIfHeadMoved(index, entry, modFolder, relativePath, formKey);
@@ -141,8 +144,11 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
         if (string.Equals(headText, committedBody, StringComparison.Ordinal)) return;
 
         index.SetCommittedBaseline(entry.Plugin, [(formKey, headText)]);
-        logger.LogDebug(
-            "HEAD moved under {FormKey} in {Plugin}; committed baseline re-established at read time",
-            formKey, entry.Plugin.Name);
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug(
+                "HEAD moved under {FormKey} in {Plugin}; committed baseline re-established at read time",
+                formKey, entry.Plugin.Name);
+        }
     }
 }

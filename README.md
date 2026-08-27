@@ -13,13 +13,13 @@ See [CONTEXT-MAP.md](CONTEXT-MAP.md) for how the two views map to bounded contex
 
 | Tool | Version | Notes |
 |---|---|---|
-| [.NET SDK](https://dotnet.microsoft.com/download) | 9.x | Editing backend (`MEditService`) |
+| [.NET SDK](https://dotnet.microsoft.com/download) | 10.x | Editing backend (`MEditService`) |
 | [Node.js](https://nodejs.org/) | 20 LTS or later | VS Code extension build |
 | [VS Code](https://code.visualstudio.com/) | Latest | Required for the extension |
 
 On Ubuntu/Debian:
 ```bash
-sudo apt-get install -y dotnet-sdk-9.0 nodejs npm
+sudo apt-get install -y dotnet-sdk-10.0 nodejs npm
 ```
 
 ## Repository layout

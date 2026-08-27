@@ -91,8 +91,11 @@ public sealed class SessionManager(
 
     public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
     {
-        _logger.LogDebug("Session load starting. DataFolder={DataFolder} PluginsTxt={PluginsTxt} Game={Game}",
-            dataFolderPath, pluginsTxtPath, gameRelease);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Session load starting. DataFolder={DataFolder} PluginsTxt={PluginsTxt} Game={Game}",
+                dataFolderPath, pluginsTxtPath, gameRelease);
+        }
 
         RunLoad(
             gameRelease,
@@ -109,8 +112,11 @@ public sealed class SessionManager(
 
     private void LoadExplicitCore(string gameDirectory, int pluginCount, GameRelease gameRelease, Func<ILogger?, GameSession> buildSession)
     {
-        _logger.LogDebug("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
-            gameDirectory, pluginCount, gameRelease);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
+                gameDirectory, pluginCount, gameRelease);
+        }
 
         // No plugins.txt for an explicit session; the game directory is the implicit-master root.
         RunLoad(
@@ -139,7 +145,10 @@ public sealed class SessionManager(
         {
             var token = BeginLoad();
 
-            _logger.LogDebug("{Step}", buildingMessage);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("{Step}", buildingMessage);
+            }
             var session = buildSession(_logger);
             // IndexAndStore tears down a session it has already published; this covers the window
             // before that, where the failure belongs to nobody else.
@@ -156,7 +165,10 @@ public sealed class SessionManager(
             // be a real leak, just one this seam cannot pin with a red/green test.
             try { IndexAndStore(session, gameRelease, token); }
             catch { session.Dispose(); throw; }
-            _logger.LogDebug("{Step}", completeMessage);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("{Step}", completeMessage);
+            }
         }
         catch (Exception ex)
         {
@@ -251,7 +263,10 @@ public sealed class SessionManager(
 
             var mod = session.GetMod(plugin.Name, plugin.Origin)!;
 
-            _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
+            }
             PluginKey key;
             try
             {
@@ -289,8 +304,11 @@ public sealed class SessionManager(
 
         // #274: reported after the loop, not before it — the count is not knowable until the load
         // order has been walked, because opening is now what discovers it.
-        _logger.LogDebug("Game session indexed. {Count} plugin(s) loaded: {Names}",
-            session.Plugins.Count, string.Join(", ", session.Plugins.Select(p => p.Name)));
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Game session indexed. {Count} plugin(s) loaded: {Names}",
+                session.Plugins.Count, string.Join(", ", session.Plugins.Select(p => p.Name)));
+        }
 
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
         // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
@@ -337,7 +355,10 @@ public sealed class SessionManager(
 
         try
         {
-            _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
+            }
             SourceIngest.Ingest(
                 repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
                 plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease,
@@ -447,7 +468,10 @@ public sealed class SessionManager(
                 .DefaultIfEmpty(_session.Plugins.Count == 0 ? 0 : _session.Plugins.Max(p => p.LoadOrderIndex) + 1)
                 .First();
 
-            _logger.LogInformation("Loading unlisted plugin {Name} from {Origin} at load-order slot {Index}", name, origin, loadOrderIndex);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Loading unlisted plugin {Name} from {Origin} at load-order slot {Index}", name, origin, loadOrderIndex);
+            }
             var metadata = _session.AddUnlistedPlugin(path, origin, loadOrderIndex);
             var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
 
@@ -473,7 +497,10 @@ public sealed class SessionManager(
             if (!_session.RemoveUnlistedPlugin(plugin, origin))
                 throw new KeyNotFoundException($"No unlisted plugin '{plugin}' from origin '{origin}' is loaded.");
 
-            _logger.LogInformation("Unloading unlisted plugin {Plugin} from {Origin}", plugin, origin);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Unloading unlisted plugin {Plugin} from {Origin}", plugin, origin);
+            }
             _repository!.Unindex(new PluginKey(plugin, origin));
         }
     }
@@ -516,7 +543,10 @@ public sealed class SessionManager(
 
             var (previous, repository, _) = RequirePlugin(plugin);
 
-            _logger.LogInformation("Re-reading {Plugin}: {OldOrigin} → {NewOrigin}", plugin, previous.Origin, newOrigin);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Re-reading {Plugin}: {OldOrigin} → {NewOrigin}", plugin, previous.Origin, newOrigin);
+            }
 
             // Rebind first — it opens the new file, which is the failure-prone half, and it leaves
             // the session untouched if that open throws.

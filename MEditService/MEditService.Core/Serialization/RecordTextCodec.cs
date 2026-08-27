@@ -62,7 +62,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // RecordTextCodecInMemoryTests pins that the two produce identical bytes for a real record
         // — if that ever stops holding, the difference is a real one and shows up there.
         var bytes = await SerializeCoreAsync(record, gameRelease, directory: string.Empty, cancel).ConfigureAwait(false);
-        logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);
+        if (logger.IsEnabled(LogLevel.Trace))
+        {
+            logger.LogTrace("Serialized record {FormKey} to {ByteCount} bytes", record.FormKey, bytes.Length);
+        }
         return bytes;
     }
 
@@ -97,7 +100,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
             throw;
         }
 
-        logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
+        if (logger.IsEnabled(LogLevel.Trace))
+        {
+            logger.LogTrace("Serialized record {FormKey} to {FilePath}", record.FormKey, filePath);
+        }
     }
 
     /// <summary>
@@ -166,7 +172,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var record = await DeserializeCoreAsync(
             stream, Path.GetDirectoryName(filePath) ?? string.Empty, gameRelease, recordType, cancel).ConfigureAwait(false);
 
-        logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
+        if (logger.IsEnabled(LogLevel.Trace))
+        {
+            logger.LogTrace("Deserialized record {FormKey} from {FilePath}", record.FormKey, filePath);
+        }
         return record;
     }
 
@@ -198,7 +207,10 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         using var stream = new MemoryStream(bytes, writable: false);
         var record = await DeserializeCoreAsync(stream, string.Empty, gameRelease, recordType, cancel).ConfigureAwait(false);
 
-        logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
+        if (logger.IsEnabled(LogLevel.Trace))
+        {
+            logger.LogTrace("Deserialized record {FormKey} from {ByteCount} bytes", record.FormKey, bytes.Length);
+        }
         return record;
     }
 

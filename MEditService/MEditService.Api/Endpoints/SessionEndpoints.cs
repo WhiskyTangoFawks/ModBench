@@ -89,7 +89,10 @@ public static class SessionEndpoints
     internal static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
-        logger.LogInformation("Received LoadSession for {DataFolder}", req.DataFolderPath);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received LoadSession for {DataFolder}", req.DataFolderPath);
+        }
         if (!Directory.Exists(req.DataFolderPath))
             return Results.Problem($"Data folder not found: {req.DataFolderPath}", statusCode: 400);
         if (!File.Exists(req.PluginsTxtPath))
@@ -129,7 +132,10 @@ public static class SessionEndpoints
     internal static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
-        logger.LogInformation("Received LoadExplicitSession for {GameDirectory}", req.GameDirectory);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received LoadExplicitSession for {GameDirectory}", req.GameDirectory);
+        }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
 
@@ -181,7 +187,10 @@ public static class SessionEndpoints
     private static IResult SetFilter(SessionFilterRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
-        logger.LogInformation("Received SetFilter with {Sql}", req.Sql);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received SetFilter with {Sql}", req.Sql);
+        }
         if (req.Sql is null)
             return Results.Problem("SQL is required.", statusCode: 400);
         try

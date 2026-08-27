@@ -213,7 +213,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // #421: private — Unindex(PluginKey) above is the public seam member and delegates here.
     private void Unindex(string plugin, string origin)
     {
-        _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Unindexing {Plugin} from {Origin}", plugin, origin);
+        }
         using var tx = Connection.BeginTransaction();
 
         // #413: one delete where this used to walk every reflected table — the record rows are all
@@ -327,7 +330,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         if (records.Count == 0) return;
 
-        _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
+        }
 
         // ADR-0041 / #413: no per-type table to delete from or append to any more. This loop's whole
         // output is now one document per record plus the extracted index rows derived from it — the
@@ -339,8 +345,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease, containerChildRows);
                 CollectFormRefs(refs, record, tableName, schema);
                 lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
-                _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                    tableName, record.FormKey, record.EditorID, plugin);
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                        tableName, record.FormKey, record.EditorID, plugin);
+                }
             }
             catch (Exception ex)
             {
@@ -1732,8 +1741,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests
                 // pins them) — "indexed" still describes what happens to this record's VMAD, even
                 // though the destination is now the shared refs list rather than a side table.
-                _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
-                    record.FormKey, recordType, plugin);
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
+                        record.FormKey, recordType, plugin);
+                }
             }
             catch (NotImplementedException ex)
             {
@@ -1742,7 +1754,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     record.FormKey);
             }
         }
-        _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
+        }
     }
 
     // One record's VMAD Object-property refs — the body of the loop above, extracted so #415's
@@ -1857,11 +1872,17 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             count++;
             // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests pins
             // them) — see CollectVmadRefs's identical note.
-            _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
-                record.FormKey, recordType, plugin);
+            if (_logger.IsEnabled(LogLevel.Trace))
+            {
+                _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
+                    record.FormKey, recordType, plugin);
+            }
         }
 
-        _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", count, plugin);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", count, plugin);
+        }
     }
 
     // One record's condition refs — the body of the loop above, extracted so #415's per-record

@@ -161,9 +161,12 @@ internal static class SourceIngest
                 }
                 else
                 {
-                    logger.LogDebug(
-                        "Not a flat source record and not under {Plugin}'s own tree, so it carries no " +
-                        "Head state to reconcile here: {Path}", key.Name, gitPath);
+                    if (logger.IsEnabled(LogLevel.Debug))
+                    {
+                        logger.LogDebug(
+                            "Not a flat source record and not under {Plugin}'s own tree, so it carries no " +
+                            "Head state to reconcile here: {Path}", key.Name, gitPath);
+                    }
                 }
                 continue;
             }
@@ -286,9 +289,12 @@ internal static class SourceIngest
                 var recordType = SourceRecordType.Resolve(headRecord, schemas);
                 if (!schemas.ContainsKey(recordType))
                 {
-                    logger.LogDebug(
-                        "{FormKey} ({RecordType}) is not a schema-published record type, so its " +
-                        "working-tree deletion is not seeded at Head", formKey, recordType);
+                    if (logger.IsEnabled(LogLevel.Debug))
+                    {
+                        logger.LogDebug(
+                            "{FormKey} ({RecordType}) is not a schema-published record type, so its " +
+                            "working-tree deletion is not seeded at Head", formKey, recordType);
+                    }
                     continue;
                 }
 

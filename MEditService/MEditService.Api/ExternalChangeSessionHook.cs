@@ -51,14 +51,20 @@ internal static class ExternalChangeSessionHook
             switch (ExternalChangeClassifier.Classify(modFolder, plugin.Name, bytes))
             {
                 case ExternalChangeClassification.ExternalChange change:
-                    logger.LogInformation("External change detected at load for {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                    if (logger.IsEnabled(LogLevel.Information))
+                    {
+                        logger.LogInformation("External change detected at load for {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                    }
                     watcher.ReportExternalChange(modFolder, plugin.Name, change);
                     break;
                 case ExternalChangeClassification.CrashRecovery:
                     // #381: never watcher.ReportExternalChange — the two prompts must never both
                     // fire for one event (#417 comment 2 on the issue), and this one already routes
                     // to the repair offer below instead of the external-change dialog's queue.
-                    logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                    if (logger.IsEnabled(LogLevel.Information))
+                    {
+                        logger.LogInformation("Interrupted compile detected at load for {Plugin} ({Origin})", plugin.Name, plugin.Origin);
+                    }
                     offers.Add(new CrashRepairOffer(plugin.Name, plugin.Origin, CrashRepairReason.InterruptedCompile));
                     break;
             }

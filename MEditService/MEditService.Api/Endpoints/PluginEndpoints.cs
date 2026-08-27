@@ -35,7 +35,11 @@ public static class PluginEndpoints
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc, ILoggerFactory loggerFactory) =>
         {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetPluginRecordTypes for {Plugin} ({Origin})", plugin, origin);
+            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetPluginRecordTypes for {Plugin} ({Origin})", plugin, origin);
+            }
             var decoded = Uri.UnescapeDataString(plugin);
             return Results.Ok(svc.GetPluginRecordTypes(decoded, origin));
         })
@@ -151,7 +155,10 @@ public static class PluginEndpoints
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
             var decoded = Uri.UnescapeDataString(plugin);
-            logger.LogInformation("Received PeekNextFreeFormKey for {Plugin} ({Origin})", decoded, origin);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received PeekNextFreeFormKey for {Plugin} ({Origin})", decoded, origin);
+            }
             var result = edits.PeekNextFreeFormKey(new PluginKey(decoded, origin));
             return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : RecordEndpoints.Refusal(result);
         })
@@ -222,7 +229,10 @@ public static class PluginEndpoints
         app.MapGet(route, (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-            logger.LogInformation("Received {Name}", name);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received {Name}", name);
+            }
             try
             {
                 return Results.Ok(getCatalog(svc));
@@ -247,7 +257,10 @@ public static class PluginEndpoints
     internal static IResult LoadUnlistedPlugin(LoadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received LoadUnlistedPlugin for {Path} from {Origin}", req.Path, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received LoadUnlistedPlugin for {Path} from {Origin}", req.Path, req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin path and origin are required.", statusCode: 400);
 
@@ -270,7 +283,10 @@ public static class PluginEndpoints
     internal static IResult UnloadUnlistedPlugin(UnloadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received UnloadUnlistedPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received UnloadUnlistedPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
@@ -301,7 +317,10 @@ public static class PluginEndpoints
     internal static IResult RereadPlugin(RereadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received RereadPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received RereadPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin name, path and origin are required.", statusCode: 400);
 
@@ -353,7 +372,10 @@ public static class PluginEndpoints
         CreatePluginRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received CreatePlugin for {Name} at {Path} ({Origin})", req.Name, req.Path, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received CreatePlugin for {Name} at {Path} ({Origin})", req.Name, req.Path, req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.Problem("Plugin name is required.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
@@ -409,7 +431,10 @@ public static class PluginEndpoints
     internal static async Task<IResult> Track(TrackRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received Track for {Origin} ({Preset})", req.Origin, req.Preset);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received Track for {Origin} ({Preset})", req.Origin, req.Preset);
+        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
@@ -460,7 +485,10 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        logger.LogInformation("Received Compile for {Plugin} ({Origin}) at {Ref}", decoded, req.Origin, req.Ref ?? "(working tree)");
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received Compile for {Plugin} ({Origin}) at {Ref}", decoded, req.Origin, req.Ref ?? "(working tree)");
+        }
 
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
@@ -488,8 +516,11 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        logger.LogInformation(
-            "Received CreateRecord for {RecordType} in {Plugin} ({Origin})", req.RecordType, decoded, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received CreateRecord for {RecordType} in {Plugin} ({Origin})", req.RecordType, decoded, req.Origin);
+        }
 
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
@@ -539,7 +570,10 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        logger.LogInformation("Received AbsorbExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received AbsorbExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -568,7 +602,10 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        logger.LogInformation("Received KeepExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received KeepExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -600,7 +637,10 @@ public static class PluginEndpoints
     internal static IResult Rebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received RebaseEditBranch for {Origin}", req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received RebaseEditBranch for {Origin}", req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -614,7 +654,10 @@ public static class PluginEndpoints
     internal static IResult ContinueRebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        logger.LogInformation("Received ContinueRebaseEditBranch for {Origin}", req.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received ContinueRebaseEditBranch for {Origin}", req.Origin);
+        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 

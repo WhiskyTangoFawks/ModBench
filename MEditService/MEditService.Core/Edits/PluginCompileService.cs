@@ -124,8 +124,11 @@ public sealed class PluginCompileService(
         });
 
         var masters = index.GetEffectiveMasters(plugin);
-        logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
-            plugin.Name, plugin.Origin, mod.EnumerateMajorRecords().Count());
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Compiled {Plugin} ({Origin}) from {RecordCount} source records",
+                plugin.Name, plugin.Origin, mod.EnumerateMajorRecords().Count());
+        }
         return CompileResult.Success(diagnostics, masters);
     }
 
