@@ -129,12 +129,13 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     /// what reaches this method is the whole array carrying it.
     ///
     /// <para><b>Not OMOD <c>properties</c>, which #503 named</b> — that field's element type is the
-    /// abstract <c>AObjectModProperty&lt;T&gt;</c>, and <c>SchemaReflector.BuildListElement</c> derives
-    /// its element type from the list's generic argument and calls <c>Activator.CreateInstance</c> on
-    /// it, which throws <c>MissingMethodException</c> for any abstract element type. That is
-    /// independent of #503 (the sanctioned array arity ops hit it too) and is filed separately; this
-    /// field is the same struct-element-array shape with a concrete element type, so it pins the
-    /// reconstruction contract without depending on that fix.</para>
+    /// abstract <c>AObjectModProperty&lt;T&gt;</c>, and <c>SchemaReflector.BuildListElement</c> used to
+    /// derive its element type from the list's generic argument and call <c>Activator.CreateInstance</c>
+    /// on it directly, which threw <c>MissingMethodException</c> for any abstract element type. That was
+    /// independent of #503 (the sanctioned array arity ops hit it too) and was filed separately as #531,
+    /// now fixed a few tests below in this same file; this field is the same struct-element-array shape
+    /// with a concrete element type, so it pinned the reconstruction contract without depending on that
+    /// fix while #531 was still open.</para>
     /// </summary>
     [Fact]
     public void FactionsStructArray_WholeArrayWriteWithAChangedSubField_LandsInTheSourceDocument()
@@ -168,6 +169,10 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     /// or not. This is otherwise a well-formed whole-array write (an array, one well-shaped element) — the
     /// only thing wrong with it is the missing discriminator, which is what the message must actually say
     /// rather than repeating the "send an array" text #503's own per-element-payload refusal above uses.
+    /// Its own <see cref="RecordEditRefusal.ListElementTypeUnresolved"/> value, not
+    /// <see cref="RecordEditRefusal.FieldValueShapeMismatch"/> — the value genuinely is array-shaped, so
+    /// a caller branching on the enum (ADR-0026) needs a different discriminator to reach for a
+    /// different fix, not the "send an array" text.
     /// </summary>
     [Fact]
     public void OmodPropertiesArray_MissingValueTypeDiscriminator_IsRefusedAndWritesNothing()
@@ -179,7 +184,30 @@ public sealed class ComplexFieldElementEditTests : IDisposable
             Json("""[{"property":"BodyPart","step":1.0,"value":"5","value2":"6","function_type":"Set"}]"""));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldValueShapeMismatch, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
+        Assert.Contains("properties", result.Message, StringComparison.Ordinal);
+        Assert.Contains("value_type", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, omod.Body());
+    }
+
+    /// <summary>
+    /// The same refusal, but the discriminator is <i>present</i> and simply names something that isn't
+    /// one of the seven leaves — distinct from the "missing entirely" case above, and worth its own test:
+    /// <c>ResolveObjectModPropertyConcreteType</c> has two separate ways to answer null
+    /// (<c>TryGetProperty</c> failing vs. <c>Array.Find</c> failing), and only the first was exercised
+    /// above.
+    /// </summary>
+    [Fact]
+    public void OmodPropertiesArray_UnrecognizedValueTypeDiscriminator_IsRefusedAndWritesNothing()
+    {
+        using var omod = new OmodFixture();
+        var before = omod.Body();
+
+        var result = omod.Service().EditField(omod.Plugin, omod.ArmorMod.ToString(), "properties",
+            Json("""[{"property":"BodyPart","step":1.0,"value_type":"NotARealValueType","value":"5"}]"""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ListElementTypeUnresolved, result.Refusal);
         Assert.Contains("properties", result.Message, StringComparison.Ordinal);
         Assert.Contains("value_type", result.Message, StringComparison.Ordinal);
         Assert.Equal(before, omod.Body());

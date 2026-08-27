@@ -1125,7 +1125,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
             result.Add(distinctTypes.Count == 1
                 ? BuildTypedLeafUnionField(group.Key, list, getterTypeToTable, logger)
-                : BuildWidenedLeafUnionField(group.Key, list));
+                : BuildWidenedLeafUnionField(group.Key, list, logger));
         }
 
         result.Add(BuildObjectModValueTypeField(leaves));
@@ -1192,7 +1192,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private static SubFieldSpec BuildWidenedLeafUnionField(
-        string colName, List<(Type LeafType, PropertyInfo Prop)> members)
+        string colName, List<(Type LeafType, PropertyInfo Prop)> members, ILogger logger)
     {
         var getters = members.Select(m => (m.LeafType, Get: SubGetter(m.Prop))).ToList();
         var pName = members[0].Prop.Name;
@@ -1209,22 +1209,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // therefore cannot share one converter the way MakeApplier's callers normally do; instead
         // it resolves the target property's own declared type at write time, off whichever
         // concrete leaf ApplyListJson already constructed, and converts into *that*.
-        return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName), AllowsNull: true);
+        return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName, logger), AllowsNull: true);
     }
 
     // #531: applies one of the widened OMOD leaf union fields (`value`, `value2`, `function_type`)
     // onto whichever concrete leaf ApplyListJson already resolved. Silent no-op when the target
     // object's runtime type doesn't declare the property at all (same convention as MakeApplier),
     // and when the incoming JSON can't be converted into whatever type the property actually is —
-    // never a throw out of a per-element write.
-    private static Action<object, JsonElement> MakeWidenedApplier(string pName)
+    // never a throw out of a per-element write, logged at Trace the same way ApplyFormLinkJson logs
+    // its own best-effort write failures.
+    private static Action<object, JsonElement> MakeWidenedApplier(string pName, ILogger logger)
     {
-        var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
+        var resolve = ResolveProperty(pName);
         return (obj, val) =>
         {
-            var rp = cache.GetOrAdd(obj.GetType(), t => t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
+            var rp = resolve(obj.GetType());
             if (rp == null || val.ValueKind == JsonValueKind.Null) return;
-            var converted = ConvertWidenedJson(val, rp.PropertyType);
+            var converted = ConvertWidenedJson(val, rp.PropertyType, pName, logger);
             if (converted != null) rp.SetValue(obj, converted);
         };
     }
@@ -1237,7 +1238,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // here is guessing which leaf it might be — ApplyListJson resolved that before constructing the
     // object this is now applying onto). A freshly-added element with no prior GET to round-trip
     // may instead send a raw JSON number/bool rather than pre-formatted text; both are accepted.
-    private static object? ConvertWidenedJson(JsonElement val, Type targetType)
+    private static object? ConvertWidenedJson(JsonElement val, Type targetType, string pName, ILogger logger)
     {
         if (targetType == typeof(bool))
         {
@@ -1263,9 +1264,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         {
             return Convert.ChangeType(text, targetType, System.Globalization.CultureInfo.InvariantCulture);
         }
-        catch (FormatException) { return null; }
-        catch (OverflowException) { return null; }
-        catch (InvalidCastException) { return null; }
+        catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException)
+        {
+            // Same convention as ApplyFormLinkJson's own best-effort catch: a malformed value is a
+            // silent no-op to the write path, not a thrown exception, but not silent to the log either.
+            if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+            return null;
+        }
     }
 
     // Element metadata for use in FieldMetadata.ElementType.
@@ -1460,16 +1465,25 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral);
     }
 
+    // #531: shared by MakeApplier and MakeWidenedApplier — an applier's target *type* varies per
+    // call (a struct/array sub-field's own object can be any of several concrete runtime types,
+    // OMOD's seven leaves included), while the property *name* it looks for is fixed for the life
+    // of the closure, so the cache is keyed on the former and captured once per the latter.
+    private static Func<Type, PropertyInfo?> ResolveProperty(string pName)
+    {
+        var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
+        return t => cache.GetOrAdd(t, tt => tt.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
+    }
+
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
     // property, tolerating a missing property and (when nullable) a JSON null. Operates on
     // `object`; the column path adapts the IMajorRecord receiver via MakeColumnApplier.
     private static Action<object, JsonElement> MakeApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
     {
-        var cache = new ConcurrentDictionary<Type, PropertyInfo?>();
+        var resolve = ResolveProperty(pName);
         return (obj, val) =>
         {
-            var rp = cache.GetOrAdd(obj.GetType(), t =>
-                t.GetProperty(pName, BindingFlags.Public | BindingFlags.Instance));
+            var rp = resolve(obj.GetType());
             if (rp == null) return;
             if (val.ValueKind == JsonValueKind.Null)
             {

@@ -119,6 +119,18 @@ public enum RecordEditRefusal
     /// different (a FormID inside the ESL range, or un-flagging the plugin), not "nothing left".
     /// </summary>
     LightPluginFormIdOutOfRange,
+
+    /// <summary>
+    /// #531: distinct from <see cref="FieldValueShapeMismatch"/> — the value genuinely is the JSON
+    /// shape the field takes (an array field given an array), but at least one element's own concrete
+    /// type is abstract (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c> today, seven
+    /// concrete leaves) and could not be determined from that element's own payload. The way out is
+    /// naming the element's own type discriminator (e.g. <c>value_type</c>), not sending a differently
+    /// shaped value — which is why this is not folded into <see cref="FieldValueShapeMismatch"/>: the
+    /// two have different fixes, and a caller branching on the enum (ADR-0026) needs to tell them apart
+    /// the same way a human reading the message can.
+    /// </summary>
+    ListElementTypeUnresolved,
 }
 
 /// <summary>
