@@ -95,7 +95,23 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 // Reader-agnosticism between the two — that a deep-parsed record and an overlay
                 // serialize to the same bytes — is what RecordTextCodecRealDataTests protects at the
                 // codec seam.
-                var deepParsed = ModFactory.ImportSetter(new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease);
+                // #515: explicit strings parameters, not null — see LocalizedStrings' own doc
+                // comment for why "pass nothing" is not neutral for a Localized plugin.
+                var deepParsed = ModFactory.ImportSetter(
+                    new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease,
+                    LocalizedStrings.ForRead(modFolder, session.DataFolderPath));
+
+                // #515 AC2: refuse by name before anything else — never Mutagen's own listings-path
+                // exception (which the strings parameters above already prevent) and never a silent
+                // empty string (TranslatedString.TryLookup returns false for a missing file with no
+                // exception at all).
+                if (LocalizedStrings.FindMissingStringsFile(deepParsed, plugin.Name, modFolder, session.DataFolderPath, session.GameRelease) is { } missingFile)
+                {
+                    throw new MissingLocalizationStringsException(
+                        $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
+                        $"in {LocalizedStrings.FolderFor(modFolder, session.DataFolderPath)}. Restore the file, then track again.");
+                }
+
                 parsedDone++;
                 SetProgress(origin, TrackPhase.Parsing, parsedDone, plugins.Count);
 
@@ -330,6 +346,26 @@ public sealed class SourceRoundTripFailedException : Exception
     }
 
     public SourceRoundTripFailedException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+}
+
+/// <summary>Thrown by <see cref="TrackService.TrackAsync(IGameSession, string, SourcePreset, CancellationToken)"/>
+/// when a Localized plugin is missing one of its own <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c>
+/// files (#515, AC2) — named so the endpoint layer maps it to its own HTTP response, the same way
+/// <see cref="SourceRoundTripFailedException"/> is, rather than surfacing as a bare
+/// <see cref="InvalidOperationException"/>.</summary>
+public sealed class MissingLocalizationStringsException : Exception
+{
+    public MissingLocalizationStringsException()
+    {
+    }
+
+    public MissingLocalizationStringsException(string message) : base(message)
+    {
+    }
+
+    public MissingLocalizationStringsException(string message, Exception innerException) : base(message, innerException)
     {
     }
 }

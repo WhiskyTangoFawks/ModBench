@@ -36,9 +36,13 @@ public static class ExternalChangeAbsorber
     {
         // A fresh deep parse of the binary now on disk — not any cached/session view of the plugin,
         // which is exactly the state this method exists to react to (the binary changed out from
-        // under whatever a session last read).
+        // under whatever a session last read). #515: explicit strings parameters, same reason
+        // TrackService's own deep parse needs them — this path always has a mod folder (Absorb only
+        // ever runs against an already-tracked plugin), so LocalizedStrings.ForRead's single-argument
+        // overload applies.
         var deepParsed = ModFactory.ImportSetter(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), session.GameRelease);
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), session.GameRelease,
+            LocalizedStrings.ForRead(modFolder));
 
         var pristineFiles = TrackService
             .SerializeToPristineFiles(deepParsed, pluginName)

@@ -20,12 +20,11 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
     .CreateBootstrapLogger();
 
-// Mutagen resolves BSA/localized-string archive order via a plugin-listings path keyed off the
-// (case-sensitive) "LocalAppData" env var, which is unset on non-Windows hosts. Our sessions are
-// always explicit (ADR-0022) and never read this file, but Mutagen throws if it can't determine
-// even a hypothetical path, so give it a writable placeholder.
-if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
-    Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
+// #515: the "LocalAppData" env var default this used to set by hand now lives in
+// LocalizedStrings.EnsureLocalAppDataDefault, called from every Core deep-parse call site
+// (Source.LocalizedStrings.ForRead) before Mutagen ever needs it — no session loads (and no
+// Mutagen call at all) before this process's first plugin parse, so nothing here needs to set it
+// up front any more.
 
 try
 {

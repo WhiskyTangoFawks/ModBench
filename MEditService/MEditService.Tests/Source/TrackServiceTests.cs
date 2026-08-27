@@ -8,6 +8,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Serialization.Newtonsoft;
+using Mutagen.Bethesda.Strings;
 using Noggog.WorkEngine;
 
 namespace MEditService.Tests.Source;
@@ -378,6 +379,122 @@ public sealed class TrackServiceTests
             Assert.Contains("OriginalName", ex.Message);
             Assert.False(SourceRepository.IsTracked(modFolder));
             Assert.False(Directory.Exists(Path.Combine(modFolder, ".git")));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #515: a Localized plugin whose mod folder also ships a BSA archive — the actual repro shape
+    // (a real voice mod bundling its sound files in a .ba2). Deep-parsing/serializing this plugin
+    // forces Mutagen to resolve its strings, which by default also scans the plugin's own folder for
+    // archives; with one actually present, resolving BSA load-order priority needs a plugin-listings
+    // path that only exists on a real Windows game install, and throws outright without one.
+    //
+    // Rival observed by hand before this fix (not committed): with LocalizedStrings.ForRead's
+    // BinaryReadParameters removed from TrackAsync's ImportSetter call, this test throws
+    // Mutagen.Bethesda.Plugins.Exceptions.SubrecordException wrapping
+    // "System.InvalidOperationException: Could not determine plugin listings path for Fallout4. This
+    // typically occurs on non-Windows platforms where the LocalAppData environment variable is not
+    // set." — the exact defect #515 reports.
+    [Fact]
+    public async Task TrackAsync_LocalizedPluginWithABsaBesideIt_TracksAndMaterializesTheRealString()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-localized-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-localized-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            var door = mod.Doors.AddNew("MainDoor");
+            door.Name = new TranslatedString(Language.English, "The Big Door");
+            mod.UsingLocalization = true;
+            // Mutagen's own WriteToBinary auto-attaches a StringsWriter rooted at the plugin's own
+            // folder when UsingLocalization is set and none is supplied
+            // (PluginUtilityTranslation.SetStringsWriter) — the same shape a real mod tool produces.
+            mod.WriteToBinary(pluginPath);
+
+            // The dummy archive that forces the branch above. Mutagen's own archive-listing check
+            // (CachedArchiveListingDetailsProvider.IsIni) forces the plugin-listings-dependent lazy
+            // payload for *every* ".ba2" the scan finds, before it even asks whether the file is
+            // applicable to this plugin's own ModKey — so a name that deliberately does not match
+            // "Fixture" still reproduces the crash, while never being handed to the (real) BSA reader
+            // afterward, which a zero-byte file would fail to parse for an unrelated reason.
+            File.WriteAllBytes(Path.Combine(modFolder, "UnrelatedMod - Main.ba2"), []);
+
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(
+                gameDir,
+                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
+
+            Assert.True(SourceRepository.IsTracked(modFolder));
+
+            var sourceFile = SourceUnitResolver.FlatSourcePath(
+                modFolder, "Fixture.esp", "door", door.FormKey.ToString(), "MainDoor", GameRelease.Fallout4);
+            Assert.True(File.Exists(sourceFile), $"expected {sourceFile}");
+            var sourceText = await File.ReadAllTextAsync(sourceFile);
+            Assert.Contains("The Big Door", sourceText);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #515 AC2: the sibling of the test above with its strings deleted — must be refused by name,
+    // never silently (TranslatedString.TryLookup returns false for a missing file with no exception
+    // at all) and never with Mutagen's own listings-path exception.
+    //
+    // Rival observed by hand before this fix (not committed): with the strings parameters from the
+    // test above but no explicit FindMissingStringsFile check removed, TrackAsync does *not* throw
+    // MissingLocalizationStringsException — it throws SourceRoundTripFailedException instead ("does
+    // not round-trip through its own tracked source ... the divergence is in the plugin header or a
+    // container's own structure, not a record's content"), because the missing English string makes
+    // the pre-existing round-trip gate's own recompile diverge from the original. That is exactly the
+    // "unrelated-sounding error" #515's own title complains about, just a different one than the
+    // listings-path exception — confirming the explicit check below is load-bearing, not redundant
+    // with the round-trip gate.
+    [Fact]
+    public async Task TrackAsync_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-localized-missing-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-localized-missing-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            var door = mod.Doors.AddNew("MainDoor");
+            door.Name = new TranslatedString(Language.English, "The Big Door");
+            mod.UsingLocalization = true;
+            mod.WriteToBinary(pluginPath);
+
+            // The strings Mutagen just wrote, gone — as if the mod's Strings/ folder never shipped
+            // with the download, or was deleted by hand.
+            Directory.Delete(Path.Combine(modFolder, "Strings"), recursive: true);
+
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(
+                gameDir,
+                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var ex = await Assert.ThrowsAsync<MissingLocalizationStringsException>(
+                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits));
+
+            // Fallout4 names its strings files by ISO language code (GameConstants.Fallout4's own
+            // StringsLanguageFormat.Iso), not the full language name.
+            Assert.Contains("Fixture_en.STRINGS", ex.Message);
+            Assert.False(SourceRepository.IsTracked(modFolder));
         }
         finally
         {

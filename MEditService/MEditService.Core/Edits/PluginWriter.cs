@@ -4,6 +4,8 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
+using Mutagen.Bethesda.Strings;
+using Mutagen.Bethesda.Strings.DI;
 
 namespace MEditService.Core.Edits;
 
@@ -78,6 +80,23 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
             .WithNoDataFolder()
             .NoNextFormIDProcessing()
             .WithRecordCount(RecordCountOption.NoCheck);
+
+        // #515 AC1/AC3: a Localized mod's own strings must land beside the *real* plugin, not the
+        // temp file this method writes to and then discards the directory of. Mutagen's own default
+        // (PluginUtilityTranslation.SetStringsWriter, which only fires when nothing here supplies one)
+        // derives its write folder from the write path — the temp path here — and this class's own
+        // commit only renames the single plugin file, never a sibling folder, so the auto-written
+        // strings would be orphaned in a temp directory PreparedPluginSave.Dispose then fails to
+        // remove (non-recursive Directory.Delete on a non-empty folder) and silently swallows.
+        // Supplying our own, rooted at pluginPath's own folder, sidesteps that entirely: the strings
+        // land in their final home directly, with no move to forget.
+        if (mod.UsingLocalization)
+        {
+            writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
+                mod.GameRelease, mod.ModKey,
+                writeDirectory: Path.Combine(dir, "Strings"),
+                encodingProvider: MutagenEncoding.Default));
+        }
 
         // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every write —
         // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
