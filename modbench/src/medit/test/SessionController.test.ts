@@ -923,6 +923,27 @@ describe('SessionController.resolveOrigin', () => {
 
     expect(origin).toBeUndefined();
   });
+
+  // #505: before Launch mEdit, no backend exists to answer GET /plugins at all — a rejected
+  // repository call, not a 200 with an empty/mismatched list. Every sibling SessionController
+  // method (track, compile, rebaseOntoMain, …) already catches its own transport failure and
+  // degrades to a caught, logged outcome; resolveOrigin was the one method that didn't, so this
+  // rejection propagated out of Track/Rebase/Save & Compile's command callbacks uncaught — VS
+  // Code's own raw "Error running command … fetch failed" toast, not this codebase's error
+  // surfacing. Degrading to the same `undefined` "not found" already returns costs nothing new:
+  // every one of the four callers already turns that into a clear, existing message.
+  it('degrades to undefined — not a thrown rejection — when the backend itself is unreachable', async () => {
+    const repository = makeRepository({ plugins: makePlugins(2) });
+    repository.getPlugins = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    const log = vi.fn();
+    const deps = makeDeps({ repository, log });
+    const controller = new SessionController(deps);
+
+    const origin = await controller.resolveOrigin('Plugin1.esp');
+
+    expect(origin).toBeUndefined();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('resolveOrigin'));
+  });
 });
 
 // ── track (#414) ────────────────────────────────────────────────────────────

@@ -56,4 +56,18 @@ describe('resolveCompileTarget (#416 review)', () => {
     expect(d.onError).toHaveBeenCalledWith('Could not resolve which mod "Row.esp" belongs to.');
     expect(d.pickPlugin).not.toHaveBeenCalled();
   });
+
+  // #505: before Launch mEdit (or after Close mEdit, since exitToLoadout never resets
+  // ActiveRecordTracker/closes an open record panel — the same reachable path #530 documents for
+  // this priority tier), getRecordOwner has no backend to ask and rejects rather than answering
+  // 404. Exact parity with the already-tested "cannot be resolved to a plugin" case above: falls
+  // through to the palette fallback rather than letting the rejection propagate as a raw,
+  // uncaught toast.
+  it('falls back to the QuickPick, not a thrown rejection, when getRecordOwner itself is unreachable', async () => {
+    const d = deps({ getRecordOwner: vi.fn().mockRejectedValue(new Error('fetch failed')) });
+    const target = await resolveCompileTarget(undefined, 'AABBCC:Active.esp', d);
+
+    expect(target).toEqual({ name: 'Picked.esp', origin: 'PickedMod' });
+    expect(d.pickPlugin).toHaveBeenCalledOnce();
+  });
 });
