@@ -215,6 +215,13 @@ using git.
   with a message naming the Track command — except plugins with no mod folder (vanilla and
   DLC masters), whose refusal signposts the blessed path instead: author a patch plugin.
   No silent dead UI in either case.
+- **Localized plugins** (#515): Track, Compile and session ingest resolve `TranslatedString`
+  values from the plugin's own mod-folder `Strings/` folder first, then the game Data
+  folder — every deep parse passes an explicit strings lookup rather than relying on
+  Mutagen's own game-listings fallback (which throws on non-Windows hosts with no
+  `LocalAppData`). A Localized plugin missing an expected strings file is refused naming
+  the specific missing filename. Compile writes a tracked Localized plugin's strings back
+  beside the compiled plugin.
 
 ### Review & commit: the native Source Control panel
 
