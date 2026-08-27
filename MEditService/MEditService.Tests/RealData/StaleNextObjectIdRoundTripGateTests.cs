@@ -23,18 +23,17 @@ namespace MEditService.Tests.RealData;
 /// so its stored values already equal the recompute.
 ///
 /// Each fixture recomputes <c>NextObjectID</c> through a different branch, which is why all three
-/// stay. Checked in under space-free names (#510: git refuses a ref name with a space, so the
-/// originals' own filenames would fail Track for an unrelated reason); a plugin's name is not part of
-/// its bytes, so the fixtures are still the originals byte-for-byte:
+/// stay. Checked in under their real filenames, spaces included — the LitR Track theory therefore
+/// also exercises #433's ref-name encoding on a real mod name:
 /// <list type="bullet">
-/// <item><c>LitR-SettingsHolotapesSorting.esp</c> ("LitR - Settings Holotapes Sorting.esp") — 13
-/// overrides, zero self-authored, flat GRUPs; stored 2, recompute falls to
-/// <c>GetDefaultInitialNextFormID</c> (0). NumRecords stored 16, recompute 18.</item>
+/// <item><c>LitR - Settings Holotapes Sorting.esp</c> — 13 overrides, zero self-authored, flat GRUPs;
+/// stored 2, recompute falls to <c>GetDefaultInitialNextFormID</c> (0). NumRecords stored 16,
+/// recompute 18.</item>
 /// <item><c>RecruitSierra.esl</c> — 114 overrides, zero self-authored, nested WRLD/QUST GRUPs; stored
 /// 17098, same fallback (0). NumRecords stored 148, recompute 145.</item>
-/// <item><c>HitechTrashcansToBOS.esp</c> ("Hitech Trashcans to BOS.esp") — 84 overrides plus one
-/// self-authored CONT; stored 43, recompute takes the max-self-authored+1 branch (~0x19AC74)
-/// instead. NumRecords stored 150, recompute 149.</item>
+/// <item><c>Hitech Trashcans to BOS.esp</c> — 84 overrides plus one self-authored CONT; stored 43,
+/// recompute takes the max-self-authored+1 branch (~0x19AC74) instead. NumRecords stored 150,
+/// recompute 149.</item>
 /// </list>
 ///
 /// <para>Only the LitR fixture runs the full Track and Compile theories: the other two clear the
@@ -47,12 +46,12 @@ public sealed class StaleNextObjectIdRoundTripGateTests
 {
     public static TheoryData<string, uint, uint> Fixtures => new()
     {
-        { "LitR-SettingsHolotapesSorting.esp", 2, 16 },
+        { "LitR - Settings Holotapes Sorting.esp", 2, 16 },
         { "RecruitSierra.esl", 17098, 148 },
-        { "HitechTrashcansToBOS.esp", 43, 150 },
+        { "Hitech Trashcans to BOS.esp", 43, 150 },
     };
 
-    public static TheoryData<string> TrackAndCompileFixtures => new() { "LitR-SettingsHolotapesSorting.esp" };
+    public static TheoryData<string> TrackAndCompileFixtures => new() { "LitR - Settings Holotapes Sorting.esp" };
 
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
@@ -111,7 +110,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     [Fact]
     public async Task Track_WithAnExtraRecordInTheRecompiledPlugin_NamesThatRecord()
     {
-        using var scratch = new TrackedScratch("LitR-SettingsHolotapesSorting.esp");
+        using var scratch = new TrackedScratch("LitR - Settings Holotapes Sorting.esp");
         FormKey? extra = null;
 
         async Task<IFallout4Mod> DeserializeThenAddAnNpc(string folder, CancellationToken ct)
