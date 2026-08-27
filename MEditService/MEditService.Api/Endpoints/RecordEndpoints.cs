@@ -19,7 +19,10 @@ public static class RecordEndpoints
             int limit = 50,
             int offset = 0) =>
         {
-            logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Type} {Search}", plugin, origin, type, search);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetRecords for {Plugin} ({Origin}) {Type} {Search}", plugin, origin, type, search);
+            }
             var result = svc.GetRecords(type, plugin, search, limit, offset, origin);
             return Results.Ok(result);
         })
@@ -29,7 +32,10 @@ public static class RecordEndpoints
 
         app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
         {
-            logger.LogInformation("Received GetRecord for {FormKey}", formKey);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetRecord for {FormKey}", formKey);
+            }
             var decoded = Uri.UnescapeDataString(formKey);
             var detail = svc.GetRecord(decoded);
             return detail is null ? Results.NotFound() : Results.Ok(detail);
@@ -41,7 +47,10 @@ public static class RecordEndpoints
 
         app.MapGet("/records/{formKey}/compare", (string formKey, IRecordQueryService svc) =>
         {
-            logger.LogInformation("Received CompareRecord for {FormKey}", formKey);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received CompareRecord for {FormKey}", formKey);
+            }
             var decoded = Uri.UnescapeDataString(formKey);
             var result = svc.GetCompare(decoded);
             return result is null ? Results.NotFound() : Results.Ok(result);
@@ -180,9 +189,12 @@ public static class RecordEndpoints
         string formKey, RecordFieldEditRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        logger.LogInformation(
-            "Received EditRecordField for {FormKey}.{FieldPath} in {Plugin} ({Origin})",
-            decoded, request.FieldPath, request.Plugin, request.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received EditRecordField for {FormKey}.{FieldPath} in {Plugin} ({Origin})",
+                decoded, request.FieldPath, request.Plugin, request.Origin);
+        }
 
         if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
@@ -223,7 +235,10 @@ public static class RecordEndpoints
     internal static IResult DeleteRecord(string formKey, RecordDeleteRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        logger.LogInformation("Received DeleteRecord for {FormKey} in {Plugin} ({Origin})", decoded, request.Plugin, request.Origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received DeleteRecord for {FormKey} in {Plugin} ({Origin})", decoded, request.Plugin, request.Origin);
+        }
 
         if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
@@ -248,9 +263,12 @@ public static class RecordEndpoints
     internal static IResult RenumberRecord(string formKey, RecordRenumberRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        logger.LogInformation(
-            "Received RenumberRecord for {FormKey} in {Plugin} ({Origin}) to {NewFormKey}",
-            decoded, request.Plugin, request.Origin, request.NewFormKey ?? "(auto)");
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received RenumberRecord for {FormKey} in {Plugin} ({Origin}) to {NewFormKey}",
+                decoded, request.Plugin, request.Origin, request.NewFormKey ?? "(auto)");
+        }
 
         if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
@@ -280,9 +298,12 @@ public static class RecordEndpoints
         string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        logger.LogInformation(
-            "Received CopyRecordAsOverride for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
-            decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received CopyRecordAsOverride for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
+                decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+        }
 
         if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
             return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
@@ -314,9 +335,12 @@ public static class RecordEndpoints
         string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        logger.LogInformation(
-            "Received CopyRecordAsNewRecord for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
-            decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Received CopyRecordAsNewRecord for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
+                decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+        }
 
         if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
             return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
@@ -370,7 +394,10 @@ public static class RecordEndpoints
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
     {
-        logger.LogInformation("Received GetReferences for {FormKey}", formKey);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received GetReferences for {FormKey}", formKey);
+        }
         var decoded = Uri.UnescapeDataString(formKey);
         try
         {

@@ -17,7 +17,10 @@ public static class WorldspaceEndpoints
 
         app.MapGet("/plugins/{plugin}/worldspaces/{formKey}/blocks", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
         {
-            logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetWorldspaceBlocks for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
+            }
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -37,7 +40,10 @@ public static class WorldspaceEndpoints
 
         app.MapGet("/plugins/{plugin}/cells/{formKey}/references", (string plugin, string formKey, string? origin, IWorldspaceQueryService svc) =>
         {
-            logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetCellReferences for {Plugin} {FormKey} ({Origin})", plugin, formKey, origin);
+            }
             var decodedPlugin = Uri.UnescapeDataString(plugin);
             var decodedFk = Uri.UnescapeDataString(formKey);
             try
@@ -57,7 +63,10 @@ public static class WorldspaceEndpoints
 
         app.MapGet("/plugins/{plugin}/interior-cells", (string plugin, string? origin, IWorldspaceQueryService svc, int limit = 50, int offset = 0) =>
         {
-            logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetInteriorCells for {Plugin} ({Origin})", plugin, origin);
+            }
             var decoded = Uri.UnescapeDataString(plugin);
             try
             {
@@ -79,7 +88,10 @@ public static class WorldspaceEndpoints
 
     internal static IResult GetWorldspaces(string plugin, string? origin, IWorldspaceQueryService svc, ILogger logger)
     {
-        logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Received GetWorldspaces for {Plugin} ({Origin})", plugin, origin);
+        }
         var decoded = Uri.UnescapeDataString(plugin);
         try
         {

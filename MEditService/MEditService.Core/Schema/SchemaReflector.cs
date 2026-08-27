@@ -1283,7 +1283,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var link = rp.GetValue(obj);
             link?.GetType().GetMethod("SetTo", [typeof(FormKey)])?.Invoke(link, [fk]);
         }
-        catch (Exception ex) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+        catch (Exception ex)
+        {
+            if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+        }
     }
 
     private static SubFieldSpec? BuildStructSubField(

@@ -119,7 +119,10 @@ public sealed class TrackService(ILogger<TrackService> logger)
             SetProgress(origin, TrackPhase.Committing, plugins.Count, plugins.Count);
             var trailers = new TrackProvenance(MetaIni.ReadVersion(modFolder), MetaIni.ComputeSha256(modFolder), binaryHashesByPlugin);
 
-            logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Tracking {Origin}: {FileCount} source files across {PluginCount} plugin(s)", origin, pristineFiles.Count, plugins.Count);
+            }
             SourceRepository.Track(modFolder, preset, pristineFiles, trailers);
         }
         finally

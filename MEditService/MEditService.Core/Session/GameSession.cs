@@ -188,8 +188,11 @@ public sealed class GameSession : IGameSession
         DataFolderPath = dataFolderPath;
         GameRelease = gameRelease;
 
-        _logger.LogDebug("Load order: {Count} plugin(s) ({Implicit} immutable)",
-            ordered.Count, ordered.Count(p => p.IsImmutable));
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Load order: {Count} plugin(s) ({Implicit} immutable)",
+                ordered.Count, ordered.Count(p => p.IsImmutable));
+        }
     }
 
     /// <summary>
@@ -215,8 +218,11 @@ public sealed class GameSession : IGameSession
                 continue;
             }
 
-            _logger.LogInformation("[{Index}] Opening binary overlay: {FileName} (immutable={Immutable}, participates={Participates})",
-                i, fileName, isImmutable, participates);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("[{Index}] Opening binary overlay: {FileName} (immutable={Immutable}, participates={Participates})",
+                    i, fileName, isImmutable, participates);
+            }
 
             var modKey = ModKey.FromFileName(fileName);
             var modPath = new ModPath(modKey, filePath);
@@ -233,8 +239,11 @@ public sealed class GameSession : IGameSession
 
                 Register(mod, origin, fileName, metadata);
 
-                _logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
-                    i, fileName, metadata.RecordCount, string.Join(", ", metadata.Masters));
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
+                        i, fileName, metadata.RecordCount, string.Join(", ", metadata.Masters));
+                }
             }
             catch (Exception ex)
             {
@@ -249,7 +258,10 @@ public sealed class GameSession : IGameSession
             if (metadata != null) yield return metadata;
         }
 
-        _logger.LogDebug("GameSession ready: {Count} plugin(s) open", _plugins.Count);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("GameSession ready: {Count} plugin(s) open", _plugins.Count);
+        }
     }
 
     public PluginMetadata AddPlugin(string filePath)
@@ -398,8 +410,11 @@ public sealed class GameSession : IGameSession
             Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
         }
 
-        _logger.LogInformation("Rebound {FileName}: {OldOrigin} → {NewOrigin} ({Path})",
-            fileName, previous.Origin, newOrigin, newPath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Rebound {FileName}: {OldOrigin} → {NewOrigin} ({Path})",
+                fileName, previous.Origin, newOrigin, newPath);
+        }
         return metadata;
     }
 

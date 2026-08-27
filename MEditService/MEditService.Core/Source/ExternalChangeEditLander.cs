@@ -73,10 +73,13 @@ public static class ExternalChangeEditLander
                     // that places it, which this method does not have — logged and skipped, exactly
                     // like the old blanket container skip, but now only for the residual case that
                     // actually has no home to land in (tracked separately as a follow-up).
-                    logger.LogDebug(
-                        "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
-                        "the tree — landing a brand-new container isn't supported yet",
-                        record.FormKey, recordType, pluginName);
+                    if (logger.IsEnabled(LogLevel.Debug))
+                    {
+                        logger.LogDebug(
+                            "Skipping {FormKey} ({RecordType}) in {Plugin}: no existing source unit anywhere in " +
+                            "the tree — landing a brand-new container isn't supported yet",
+                            record.FormKey, recordType, pluginName);
+                    }
                     continue;
                 }
 
@@ -86,10 +89,13 @@ public static class ExternalChangeEditLander
                     // (#450), and that owner is itself walked by this same EnumerateMajorRecords loop,
                     // so its own pass (below, non-embedded) already serializes this child's current
                     // value as part of the owner's whole text. Nothing to separately write here.
-                    logger.LogTrace(
-                        "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
-                        "it is embedded, not its own source unit",
-                        record.FormKey, recordType, pluginName, unit.Value.OwnerFormKey);
+                    if (logger.IsEnabled(LogLevel.Trace))
+                    {
+                        logger.LogTrace(
+                            "Deferring {FormKey} ({RecordType}) in {Plugin} to its owner {OwnerFormKey}'s own pass — " +
+                            "it is embedded, not its own source unit",
+                            record.FormKey, recordType, pluginName, unit.Value.OwnerFormKey);
+                    }
                     continue;
                 }
 
