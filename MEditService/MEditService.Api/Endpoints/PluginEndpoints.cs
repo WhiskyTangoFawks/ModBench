@@ -14,11 +14,7 @@ public static class PluginEndpoints
 
     public static IEndpointRouteBuilder MapPluginEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/plugins", (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
-        {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogInformation("Received GetPlugins");
-            return Results.Ok(svc.GetPlugins());
-        })
+        app.MapGet("/plugins", (IRecordQueryService svc) => Results.Ok(svc.GetPlugins()))
             .WithName("GetPlugins")
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
@@ -33,13 +29,8 @@ public static class PluginEndpoints
         // game actually resolves (ConditionCodecRegistry), not a hardcoded frontend array.
         MapCatalog(app, "/condition-run-on-targets", "GetConditionRunOnTargets", svc => svc.GetConditionRunOnTargets());
 
-        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc, ILoggerFactory loggerFactory) =>
+        app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
         {
-            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("Received GetPluginRecordTypes for {Plugin} ({Origin})", plugin, origin);
-            }
             var decoded = Uri.UnescapeDataString(plugin);
             return Results.Ok(svc.GetPluginRecordTypes(decoded, origin));
         })
@@ -101,11 +92,7 @@ public static class PluginEndpoints
         // GET /session/status already established for the session load — always 200 (TrackProgress.
         // Idle when nothing is running), no session dependency, since progress lives on the
         // singleton TrackService itself.
-        app.MapGet("/plugins/track/status", (TrackService trackService, ILoggerFactory loggerFactory) =>
-        {
-            loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogTrace("Received GetTrackStatus");
-            return Results.Ok(trackService.Progress);
-        })
+        app.MapGet("/plugins/track/status", (TrackService trackService) => Results.Ok(trackService.Progress))
             .WithName("GetTrackStatus")
             .WithTags(Tag)
             .Produces<TrackProgress>();
@@ -151,14 +138,9 @@ public static class PluginEndpoints
         // FormKey space exhausted) via the same RecordEditResult/Refusal mapping they use, rather
         // than a bespoke nullable-string contract with no way to distinguish the two.
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
-            string plugin, string origin, RecordEditService edits, ILoggerFactory loggerFactory) =>
+            string plugin, string origin, RecordEditService edits) =>
         {
-            var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
             var decoded = Uri.UnescapeDataString(plugin);
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("Received PeekNextFreeFormKey for {Plugin} ({Origin})", decoded, origin);
-            }
             var result = edits.PeekNextFreeFormKey(new PluginKey(decoded, origin));
             return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : RecordEndpoints.Refusal(result);
         })
@@ -220,7 +202,7 @@ public static class PluginEndpoints
     }
 
     // Shared shape for the /record-types, /condition-functions and /condition-run-on-targets
-    // catalog endpoints (#244): log receipt, run the read against the loaded session, and map the
+    // catalog endpoints (#244): run the read against the loaded session, and map the
     // "no session loaded" failure (RequireSession()'s InvalidOperationException) to the same 503
     // CreatePlugin's own catch below uses.
     private static void MapCatalog(
@@ -229,10 +211,6 @@ public static class PluginEndpoints
         app.MapGet(route, (IRecordQueryService svc, ILoggerFactory loggerFactory) =>
         {
             var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("Received {Name}", name);
-            }
             try
             {
                 return Results.Ok(getCatalog(svc));
@@ -257,10 +235,6 @@ public static class PluginEndpoints
     internal static IResult LoadUnlistedPlugin(LoadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received LoadUnlistedPlugin for {Path} from {Origin}", req.Path, req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin path and origin are required.", statusCode: 400);
 
@@ -283,10 +257,6 @@ public static class PluginEndpoints
     internal static IResult UnloadUnlistedPlugin(UnloadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received UnloadUnlistedPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin name and origin are required.", statusCode: 400);
 
@@ -317,10 +287,6 @@ public static class PluginEndpoints
     internal static IResult RereadPlugin(RereadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received RereadPlugin for {Plugin} from {Origin}", req.Plugin, req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Plugin name, path and origin are required.", statusCode: 400);
 
@@ -372,10 +338,6 @@ public static class PluginEndpoints
         CreatePluginRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received CreatePlugin for {Name} at {Path} ({Origin})", req.Name, req.Path, req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Name))
             return Results.Problem("Plugin name is required.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
@@ -431,10 +393,6 @@ public static class PluginEndpoints
     internal static async Task<IResult> Track(TrackRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received Track for {Origin} ({Preset})", req.Origin, req.Preset);
-        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
@@ -492,11 +450,6 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received Compile for {Plugin} ({Origin}) at {Ref}", decoded, req.Origin, req.Ref ?? "(working tree)");
-        }
-
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -523,12 +476,6 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Received CreateRecord for {RecordType} in {Plugin} ({Origin})", req.RecordType, decoded, req.Origin);
-        }
-
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
         if (string.IsNullOrWhiteSpace(req.RecordType))
@@ -567,9 +514,8 @@ public static class PluginEndpoints
     // resolves to in the loaded session — a session that has since reloaded away from a plugin still
     // reports the question with an empty Origin rather than dropping it, since the question itself
     // is still real and unanswered regardless of what's loaded right now.
-    internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ISessionManager sessionManager)
     {
-        loggerFactory.CreateLogger(nameof(PluginEndpoints)).LogTrace("Received GetExternalChangeStatus");
         var session = sessionManager.Session;
         var responses = watcher.Pending().Select(p =>
         {
@@ -587,10 +533,6 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received AbsorbExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -619,10 +561,6 @@ public static class PluginEndpoints
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received KeepExternalChange for {Plugin} ({Origin})", decoded, req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -654,10 +592,6 @@ public static class PluginEndpoints
     internal static IResult Rebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received RebaseEditBranch for {Origin}", req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
@@ -671,10 +605,6 @@ public static class PluginEndpoints
     internal static IResult ContinueRebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received ContinueRebaseEditBranch for {Origin}", req.Origin);
-        }
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 

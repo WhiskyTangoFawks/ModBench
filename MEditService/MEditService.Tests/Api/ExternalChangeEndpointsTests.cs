@@ -51,10 +51,8 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var watcher = new ExternalChangeWatcher();
         watcher.ReportExternalChange(_mod.ModFolder, TrackedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(true, "1.0", "2.0"));
-        var (loggerFactory, _) = CapturingLoggerFactory();
-        using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Sessions, loggerFactory);
+        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Sessions);
 
         var ok = Assert.IsAssignableFrom<Ok<List<PendingExternalChangeResponse>>>(result);
         var pending = Assert.Single(ok.Value!);

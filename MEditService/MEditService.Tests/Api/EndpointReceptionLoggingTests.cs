@@ -1,14 +1,11 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
-using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Session;
-using MEditService.Core.Source;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
@@ -22,6 +19,12 @@ namespace MEditService.Tests.Api;
 // SessionEndpoints.LoadSession specifically, the entry still fires when the request fails
 // validation and returns early — proving the line isn't gated behind a success path. The remaining
 // handlers get the identical one-line addition without a dedicated test.
+//
+// #529 retired this pattern from PluginEndpoints specifically: its "Received ..." lines were
+// redundant with the per-request Serilog summary line (UseSerilogRequestLogging) and were deleted
+// rather than kept, taking this file's former PluginEndpoints.CreatePlugin coverage with them. The
+// #215 pattern (and this file's remaining tests) still stand for SessionEndpoints,
+// WorldspaceEndpoints and RecordEndpoints, which #529 was scoped away from.
 public sealed class EndpointReceptionLoggingTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()
@@ -75,33 +78,6 @@ public sealed class EndpointReceptionLoggingTests
         Assert.Equal(400, problem.StatusCode);
         Assert.False(sessionManager.LoadCalled); // confirms this is the pre-Load validation-failure path
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Z:\\does-not-exist"));
-    }
-
-    // --- PluginEndpoints.CreatePlugin ---
-
-    [Fact]
-    public async Task CreatePlugin_ValidRequest_LogsReceivedWithName()
-    {
-        var (loggerFactory, entries) = CapturingLoggerFactory();
-        using var _ = loggerFactory;
-        // Already-tracked destination (a bare .git dir is enough for SourceRepository.IsTracked):
-        // this test is only about the "received" log line, so it must not fall into the Track
-        // branch, which needs a real loaded session the stub doesn't provide.
-        var destination = Path.Combine(Path.GetTempPath(), $"medit-createplugin-log-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(Path.Combine(destination, ".git"));
-        try
-        {
-            var req = new CreatePluginRequest("NewPlugin.esp", destination, "SomeMod");
-            var trackService = new TrackService(NullLogger<TrackService>.Instance);
-
-            await PluginEndpoints.CreatePlugin(req, new StubSessionManager(), trackService, loggerFactory);
-
-            Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("NewPlugin.esp"));
-        }
-        finally
-        {
-            Directory.Delete(destination, recursive: true);
-        }
     }
 
     // --- WorldspaceEndpoints.GetWorldspaces ---
