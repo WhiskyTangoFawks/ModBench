@@ -42,6 +42,35 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 400);
     }
 
+    // #445: a syntactically valid GameRelease this build has no Mutagen assembly for (SkyrimSE,
+    // genuinely unreferenced — see SchemaReflectorAvailabilityTests) is a client error, not a
+    // server fault: 400 with the typed, actionable message, not a 500 wrapping an assembly-load
+    // exception. Data folder/plugins.txt are the fixture's real (FO4) paths, never actually read —
+    // SessionManager.RunLoad's BeginLoad unconditionally tears down whatever session was
+    // previously loaded before the new load's assembly-support probe even runs, so this uses its
+    // own isolated WebApplicationFactory (same pattern as Endpoint_NoSession_ReturnsProblemDetails
+    // below) rather than the shared LoadedApiFixture's client — reusing that client here would
+    // silently dispose the fixture's session out from under every other test in this class.
+    [Fact]
+    public async Task SessionLoad_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
+    {
+        await using var app = new WebApplicationFactory<Program>();
+        var client = app.CreateClient();
+
+        var resp = await client.PostAsJsonAsync("/session/load", new
+        {
+            dataFolderPath = _fixture.DataFolder,
+            pluginsTxtPath = _fixture.PluginsTxtPath,
+            gameRelease = "SkyrimSE",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+        AssertIsProblemDetails(resp, 400);
+        var body = await resp.Content.ReadAsStringAsync();
+        Assert.Contains("SkyrimSE", body);
+        Assert.Contains("Mutagen.Bethesda.Skyrim", body);
+    }
+
     // --- POST /plugins/create ---
 
     [Theory]

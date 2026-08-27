@@ -440,6 +440,33 @@ public class Fallout4ConditionCodecTests
         Assert.Equal(ConditionApplyResult.NotFound, result);
     }
 
+    // #401: the record-level overload (fieldPath -> live property, used by RecordFieldWriter — the
+    // list-level overload every other ApplyFieldValue test above exercises has no fieldPath to get
+    // wrong) skips gracefully rather than crashing when fieldPath names nothing on the record.
+    [Fact]
+    public void ApplyFieldValue_RecordLevel_UnknownFieldPath_ReturnsNotFound()
+    {
+        var cobj = new ConstructibleObject(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        cobj.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+
+        var result = Codec.ApplyFieldValue(cobj, "NotARealField", 0, "Operator", J("\"GreaterThan\""));
+
+        Assert.Equal(ConditionApplyResult.NotFound, result);
+    }
+
+    // Same graceful-skip, but fieldPath names a real property that isn't a condition list at all —
+    // the reflection lookup finds the member, the `is IList<Condition>` pattern match is what fails.
+    [Fact]
+    public void ApplyFieldValue_RecordLevel_FieldPathNotAConditionList_ReturnsNotFound()
+    {
+        var cobj = new ConstructibleObject(FormKey.Factory("001234:Test.esp"), Fallout4Release.Fallout4);
+        cobj.Conditions.Add(new ConditionFloat { Data = new FunctionConditionData { Function = Condition.Function.GetIsID } });
+
+        var result = Codec.ApplyFieldValue(cobj, "EditorID", 0, "Operator", J("\"GreaterThan\""));
+
+        Assert.Equal(ConditionApplyResult.NotFound, result);
+    }
+
     // ---- Parameter slots ----
 
     [Fact]

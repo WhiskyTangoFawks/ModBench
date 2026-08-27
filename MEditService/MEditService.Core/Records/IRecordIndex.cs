@@ -169,6 +169,79 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>
+    /// #488: replaces every <c>container_child</c> row for one (<paramref name="parentFormKey"/>,
+    /// <paramref name="slotName"/>) folder-split slot with exactly <paramref name="children"/> — the
+    /// counterpart to <see cref="MEditService.Core.Source.SourceUnitResolver.RenormalizeGroupOrder"/> for a slot whose child
+    /// <i>set</i> a delete or renumber changed. A folder-split child (a Quest's DialogTopic, a
+    /// DialogTopic's Response) has no file of its own the parent's document embeds
+    /// (<see cref="ApplyWorkingTreeChanges"/>'s own re-derivation only reaches an <b>embedded</b>
+    /// child's parent body), so its position has to be told here rather than re-read from a
+    /// reserialized owner.
+    ///
+    /// <para>A full delete-then-insert, matching every other extracted-table rebuild in this
+    /// interface: a removed child's row disappears for free because it is simply absent from
+    /// <paramref name="children"/>, and no caller has to diff against what was there before.</para>
+    /// </summary>
+    void ReplaceContainerChildSlot(
+        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
+        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
+
+    /// <summary>
+    /// #488 review: re-points every <c>container_child</c> row naming <paramref name="oldParentFormKey"/>
+    /// as <c>parent_form_key</c> to <paramref name="newParentFormKey"/> instead — an
+    /// <c>UPDATE</c>, deliberately not a delete-then-rebuild. A renumbered record's folder-split
+    /// children (a renumbered Quest's DialogTopics, a renumbered DialogTopic's Responses) keep their
+    /// own FormKeys and their own files untouched on disk (only the parent's directory name changes,
+    /// moved whole); re-deriving the renumbered record's own new document
+    /// (<see cref="CreateWorkingTreeRecord"/>) cannot recreate their rows, because a folder-split
+    /// child is never embedded in its parent's document for that re-derivation to find
+    /// (<see cref="Source.ContainerChildFields"/>'s own doc comment — the same fact
+    /// <see cref="CreateWorkingTreeRecord"/>'s own re-derivation is already bounded by). Called
+    /// before the old FormKey's row is torn down, so those children's rows are never left orphaned
+    /// even for one transaction.
+    ///
+    /// <para>Scoped to exactly the one column a rename invalidates for a record's own children —
+    /// not a general FormKey-rename sweep across every containment column (that broader question,
+    /// e.g. a renumbered container's own position within <i>its</i> parent's slot, is #488's own
+    /// declined tier 2, tracked as its own follow-up). Harmless to call for any renumbered record:
+    /// the <c>UPDATE</c> matches zero rows for one with no folder-split children of its own.</para>
+    /// </summary>
+    void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
+
+    /// <summary>
+    /// #493: re-points every <c>cell_location</c> row naming <paramref name="oldParentFormKey"/> as
+    /// <c>parent_worldspace</c> to <paramref name="newParentFormKey"/> instead — <see cref="RepointContainerChildParent"/>'s
+    /// own shape, for the sibling gap it explicitly declined: a renumbered Worldspace's <i>exterior</i>
+    /// cells (<c>SubCells</c>) rather than its own folder-split children. <c>Worldspace.SubCells</c>
+    /// holds <c>WorldspaceBlock</c>, which is not <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>
+    /// (<see cref="Source.ContainerChildFields"/>'s own doc comment), so
+    /// <c>DuckDbRecordIndex.RederiveContainmentForRecord</c> can never reach an exterior cell — it
+    /// only ever recurses one level, into <c>TopCell</c> — and <see cref="CreateWorkingTreeRecord"/>'s
+    /// re-derivation of the renumbered Worldspace's own new document cannot recreate those rows for
+    /// the same reason it cannot recreate a folder-split child's <c>container_child</c> row.
+    ///
+    /// <para><b>Position relative to <see cref="CreateWorkingTreeRecord"/> does not matter, and this
+    /// is called after it, alongside <see cref="RepointContainerChildParent"/> — verified, not
+    /// assumed: a rival that called this <i>before</i> <see cref="CreateWorkingTreeRecord"/> instead
+    /// was applied and still left exactly one row for the Worldspace's own <c>TopCell</c>, never two.</b>
+    /// <c>RederiveContainmentForRecord</c>'s own <c>cell_location</c> write for <c>TopCell</c>
+    /// deletes-then-inserts keyed by that cell's own unchanging <c>cell_form_key</c>, never by
+    /// <c>parent_worldspace</c> — so it unconditionally removes whatever row already exists for that
+    /// cell (whichever parent it currently names) and replaces it with a fresh, correct one, regardless
+    /// of whether this method ran before or after it. This method's own <c>UPDATE</c> and that
+    /// delete-then-insert therefore never contend for the same row: an exterior cell's row is never
+    /// touched by <c>CreateWorkingTreeRecord</c>'s re-derivation either way (the same reachability gap
+    /// this method exists to close), and <c>TopCell</c>'s row is never left for this method's
+    /// <c>WHERE parent_worldspace = oldParentFormKey</c> to match once <c>CreateWorkingTreeRecord</c>
+    /// has already run.</para>
+    ///
+    /// <para>Harmless to call for any renumbered record: the <c>UPDATE</c> matches zero rows for one
+    /// with no <c>cell_location</c> children of its own (every renumbered type other than
+    /// Worldspace).</para>
+    /// </summary>
+    void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
+
+    /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one
     /// door SQL crosses this seam through, since it is itself a published contract for user filter
     /// SQL (ADR-0041). Throws <see cref="ArgumentException"/> if the SQL doesn't return a

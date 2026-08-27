@@ -6,7 +6,14 @@ import type {
 import type { PluginRepository } from './PluginRepository';
 import { recordResourceUri } from './recordResourceUri';
 
+// #398: interior-cell listing is the only surface left that pages — record-type children (below)
+// load in one call now (measured no meaningful cost even at the realistic worst case; see
+// fetchRecords and docs/specs/plugins.md).
 const PAGE_SIZE = 50;
+
+// The backend's `/records` `limit` query param is a plain `int`, no upper bound enforced —
+// Int32.MaxValue as "no limit" fetches every record of a type in one call. #398.
+const UNLIMITED_RECORDS = 2147483647;
 
 function formId(formKey: string): string {
   return formKey.split(':')[0];
@@ -70,15 +77,6 @@ export class RecordNode extends vscode.TreeItem {
   }
 }
 
-export class LoadMoreNode extends vscode.TreeItem {
-  readonly kind = 'loadMore' as const;
-  constructor(public readonly parentNode: RecordTypeNode, remaining: number) {
-    super(`$(sync) Load more… (${remaining.toLocaleString()} remaining)`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'loadMore';
-    this.command = { command: 'modbench.loadMore', title: 'Load More', arguments: [this] };
-  }
-}
-
 // ── Phase 16: worldspace / cell / placed-object nodes ─────────────────────────
 
 // #305 / ADR-0036: every node in the spatial chain carries the same optional `origin` RecordTypeNode
@@ -102,10 +100,12 @@ export class WorldspaceNode extends vscode.TreeItem {
   }
 }
 
+// xEdit's TwbGroupRecord.GetShortName (wbImplementation.pas), group types 4/5: 'Block ' + Hi + ', '
+// + Lo / 'Sub-Block ' + Hi + ', ' + Lo — no parens, capital B in "Sub-Block".
 export class BlockNode extends vscode.TreeItem {
   readonly kind = 'block' as const;
   constructor(public readonly plugin: string, public readonly block: WorldspaceBlock, public readonly origin?: string) {
-    super(`Block (${block.x}, ${block.y})`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(`Block ${block.x}, ${block.y}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'block';
   }
 }
@@ -113,16 +113,48 @@ export class BlockNode extends vscode.TreeItem {
 export class SubBlockNode extends vscode.TreeItem {
   readonly kind = 'subBlock' as const;
   constructor(public readonly plugin: string, public readonly subBlock: WorldspaceSubBlock, public readonly origin?: string) {
-    super(`Sub-block (${subBlock.x}, ${subBlock.y})`, vscode.TreeItemCollapsibleState.Collapsed);
+    super(`Sub-Block ${subBlock.x}, ${subBlock.y}`, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'subBlock';
   }
+}
+
+// xEdit's StrRight (wbImplementation.pas) right-justifies each grid coordinate to width 3 with
+// leading spaces before wrapping it in the angle brackets — not a plain decimal string.
+function strRight3(n: number | null): string {
+  return String(n).padStart(3, ' ');
 }
 
 export class CellNode extends vscode.TreeItem {
   readonly kind = 'cell' as const;
   constructor(public readonly plugin: string, public readonly cell: CellSummary, public readonly origin?: string) {
-    const label = cell.editorId
-      ?? (cell.cellX != null ? `Cell (${cell.cellX}, ${cell.cellY})` : cell.formKey);
+    // xEdit's TwbMainRecord.GetDisplayName CELL branch (wbImplementation.pas), read directly (#497
+    // — #251's original version of this comment paraphrased the precedence and got it wrong; do
+    // not re-derive it from this comment either, go back to the source if it's ever in doubt):
+    //
+    //   Result := GetFullName;
+    //   if Result = '' then
+    //     if ... else if (GetSignature = 'CELL') then begin
+    //       if Supports(GetContainer, IwbGroupRecord, GroupRecord) and (GroupRecord.GroupType = 1) then
+    //         Result := '<Persistent Worldspace Cell>'
+    //       else
+    //         if GetGridCell(GridCell) then
+    //           Result := '<' + StrRight(GridCell.X.ToString, 3) + ', ' + StrRight(GridCell.Y.ToString, 3) + '>';
+    //     end else if ...
+    //
+    // GetFullName runs unconditionally, before any signature-specific branch — including CELL's
+    // own persistent-cell (group type 1) check. So FULL name wins even for the worldspace's own
+    // persistent cell; the placeholder and the grid format are both only reached when FULL is
+    // empty. EditorID is never referenced anywhere in this function, for any signature — an
+    // interior cell (no grid coordinates, out of scope for #251) keeps the EditorID-or-FormKey
+    // fallback below, but that is this file's own choice for the case xEdit's GetDisplayName
+    // resolves through its generic GetSummary fallback instead, not xEdit's own precedence.
+    const label = cell.fullName
+      ? cell.fullName
+      : cell.isPersistentWorldspaceCell
+        ? '<Persistent Worldspace Cell>'
+        : cell.cellX != null
+          ? `<${strRight3(cell.cellX)}, ${strRight3(cell.cellY)}>`
+          : cell.editorId ?? cell.formKey;
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.contextValue = 'cell';
     this.command = { command: 'modbench.openEditor', title: 'Open Record', arguments: [{ formKey: cell.formKey, label }] };
@@ -191,7 +223,7 @@ export class ErrorNode extends vscode.TreeItem {
 }
 
 export type PluginTreeNode =
-  | RecordTypeNode | RecordNode | LoadMoreNode
+  | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode | ErrorNode;
 
@@ -219,10 +251,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
-  // Last load-more failure per parent, keyed the same as pageCache/interiorCache
-  // (originKey + "::recordType" / originKey alone). Cleared on a successful retry; renders as an
-  // ErrorNode alongside the still-clickable LoadMoreNode/InteriorLoadMoreNode.
-  private readonly loadMoreFailures = new Map<string, string>();
+  // Last load-more failure per parent, keyed by originKey alone — interior cells are the only
+  // surface left that pages (#398 removed record-type pagination). Cleared on a successful retry;
+  // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
   // #281: lowercased filenames of the session's immutable plugins (the same set extension.ts
   // already hands PluginsTreeComposite.setSession as readOnlyFiles) — record/placed rows under
@@ -251,7 +282,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.pageCache.clear();
     this.interiorCache.clear();
     this.refCache.clear();
-    this.loadMoreFailures.clear();
     this.interiorLoadMoreFailures.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
@@ -341,25 +371,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return [];
   }
 
-  async loadMore(node: LoadMoreNode | InteriorLoadMoreNode): Promise<void> {
-    if (node instanceof InteriorLoadMoreNode) return this.loadMoreInterior(node);
-
-    const parent = node.parentNode;
-    const cacheKey = this.cacheKey(parent);
-    const cached = this.pageCache.get(cacheKey) ?? { items: [], total: 0 };
-    try {
-      const result = await this.repository.getRecords(parent.plugin, parent.recordType, cached.items.length, PAGE_SIZE, parent.origin);
-      this.pageCache.set(cacheKey, { items: [...cached.items, ...result.items], total: result.total });
-      this.loadMoreFailures.delete(cacheKey);
-    } catch (e) {
-      const message = this.err(e);
-      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}, ${parent.recordType}) failed: ${message}`);
-      this.loadMoreFailures.set(cacheKey, message);
-    }
-    this._onDidChangeTreeData.fire(parent);
-  }
-
-  private async loadMoreInterior(node: InteriorLoadMoreNode): Promise<void> {
+  // #398: the only pagination left in this provider — record-type children load in one
+  // getChildren call now (see fetchRecords).
+  async loadMore(node: InteriorLoadMoreNode): Promise<void> {
     const parent = node.parentNode;
     const cacheKey = this.originKey(parent.plugin, parent.origin);
     const cached = this.interiorCache.get(cacheKey) ?? { items: [], total: 0 };
@@ -369,7 +383,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       this.interiorLoadMoreFailures.delete(cacheKey);
     } catch (e) {
       const message = this.err(e);
-      this.log(`[PluginTreeProvider] loadMoreInterior(${parent.plugin}) failed: ${message}`);
+      this.log(`[PluginTreeProvider] loadMore(${parent.plugin}) failed: ${message}`);
       this.interiorLoadMoreFailures.set(cacheKey, message);
     }
     this._onDidChangeTreeData.fire(parent);
@@ -435,8 +449,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private async fetchWorldspaceChildren(node: WorldspaceNode): Promise<PluginTreeNode[]> {
     try {
       const data = await this.repository.getWorldspaceBlocks(node.plugin, node.worldspace.formKey, node.origin);
-      const nodes: PluginTreeNode[] = [];
-      if (data.topCell) nodes.push(new CellNode(node.plugin, data.topCell, node.origin));
+      const nodes: PluginTreeNode[] = data.topCells.map(c => new CellNode(node.plugin, c, node.origin));
       nodes.push(...data.blocks.map(b => new BlockNode(node.plugin, b, node.origin)));
       return nodes;
     } catch (e) {
@@ -492,7 +505,13 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     let cached = this.pageCache.get(cacheKey);
     if (!cached) {
       try {
-        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, PAGE_SIZE, node.origin);
+        // #398: every record of this type, one call, no "Load more…" step — measured no
+        // meaningful cost even at the realistic worst case (Fallout4.esm's own INFO records in a
+        // full FO4 load order, ~78k rows, ~500ms backend query + extension-host materialization
+        // combined; docs/specs/plugins.md). Matches xEdit's own record-type group nodes, which
+        // load unconditionally in full (xeMainForm.pas `vstNavInitChildren`:
+        // `ChildCount := Container.ElementCount`, no LIMIT).
+        cached = await this.repository.getRecords(node.plugin, node.recordType, 0, UNLIMITED_RECORDS, node.origin);
         this.pageCache.set(cacheKey, cached);
       } catch (e) {
         const message = this.err(e);
@@ -501,13 +520,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
 
-    const nodes: PluginTreeNode[] = cached.items.map(r =>
-      new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
-    if (cached.total > cached.items.length) {
-      nodes.push(new LoadMoreNode(node, cached.total - cached.items.length));
-    }
-    const failure = this.loadMoreFailures.get(cacheKey);
-    if (failure) nodes.push(new ErrorNode(failure));
-    return nodes;
+    return cached.items.map(r => new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
   }
 }

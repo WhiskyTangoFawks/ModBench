@@ -817,11 +817,158 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         CollectConditionRefsForRecord(record, recordType, refs);
 
         DeleteFormReferencesForRecord(key, formKey);
-        if (refs.Count == 0) return;
+        if (refs.Count > 0)
+        {
+            using var refAppender = Connection.CreateAppender("form_references");
+            foreach (var r in refs)
+                AppendFormReference(refAppender, r, key.Name, key.Origin!);
+        }
 
-        using var refAppender = Connection.CreateAppender("form_references");
-        foreach (var r in refs)
-            AppendFormReference(refAppender, r, key.Name, key.Origin!);
+        // #488: placement/cell_location/container_child now track Effective the same way
+        // form_lookup/form_references already did — rebuilt from this same deserialized record,
+        // through the same collectors ingest's own AppendDocument/IndexPlacement use.
+        RederiveContainmentForRecord(key, formKey, recordType, record);
+    }
+
+    /// <summary>
+    /// #488: rebuilds <c>container_child</c>/<c>placement</c>/<c>cell_location</c> for whatever
+    /// <paramref name="record"/>'s own document embeds — a container's child <i>set</i> and slot
+    /// order live entirely in the parent's own body (<see cref="ContainerChildFields.EnumerateChildren"/>
+    /// re-reads current positions on every call), so a delete or a renumber that spliced/mutated that
+    /// body is reflected here without any separate "what moved" bookkeeping. A full delete-then-insert
+    /// per (parent, table) — cheap (one record's children, never the whole plugin) and correct by
+    /// construction: the values are identical to what a fresh ingest of this same body would produce.
+    ///
+    /// <para>Recurses exactly one level, into a <c>Worldspace.TopCell</c> — the same bound
+    /// <c>ContainerChildFields.FindEmbeddedChildSlot</c> already documents
+    /// (<c>SpriggitEmbeddedSlots</c>): nothing else embeds a container inside a container, so a placed
+    /// reference two levels inside a worldspace's document (the shape
+    /// <c>EmbeddedChildEditTests.APlacedRefInsideAWorldspacesTopCell_IsEditable_TwoEmbedLevelsDeepInOneFile</c>
+    /// exercises) still gets a current <c>placement</c> row.</para>
+    ///
+    /// <para>Harmless to call for a non-container record (most calls): <see cref="ContainerChildFields.EnumerateChildren"/>
+    /// yields nothing, both deletes below match no rows, and nothing is inserted — the same
+    /// "unreachable by construction" posture <c>RecordEditService</c>'s own containment guard relies
+    /// on for the field-edit path.</para>
+    /// </summary>
+    private void RederiveContainmentForRecord(PluginKey key, string formKey, string recordType, IMajorRecordGetter record)
+    {
+        // Two different spellings of "what type is this", each answering to a different consumer:
+        // the CLR-name form (Cell, Worldspace) is what CoveredByPlacementTables and
+        // ContainerChildFields.EnumerateChildren key off; the schema-table-name form (cell, "cell") is
+        // what a stored ContainerChildRow.ParentRecordType must carry, because that is what
+        // AppendDocument's own ingest-time row already stores and what downstream readers
+        // (SourceUnitResolver.ScanSubtree's RecordTypeDispatch lookups) compare against.
+        var slotLookupType = ContainerChildFields.NormalizedTypeName(record.GetType());
+        var containerChildRows = new List<ContainerChildRow>();
+        var placementRows = new List<PlacementRow>();
+        CellLocationRow? topCellRow = null;
+        IMajorRecordGetter? topCellRecord = null;
+
+        foreach (var (slotName, slotIndex, child) in ContainerChildFields.EnumerateChildren(record))
+        {
+            if (!CoveredByPlacementTables.Contains((slotLookupType, slotName)))
+            {
+                containerChildRows.Add(new ContainerChildRow(
+                    child.FormKey.ToString(), formKey, recordType, slotName, slotIndex));
+                continue;
+            }
+
+            switch (slotName)
+            {
+                case "Persistent":
+                    placementRows.Add(_placementWalker.EmitPlacementRow(child, formKey, "persistent"));
+                    break;
+                case "Temporary":
+                    placementRows.Add(_placementWalker.EmitPlacementRow(child, formKey, "temporary"));
+                    break;
+                case "TopCell":
+                    // No block/sub and never interior, by construction — a worldspace's top cell is
+                    // not part of any exterior grid (PlacementWalker.WalkWorldspace's own ingest walk
+                    // uses these same three constants for the identical reason).
+                    topCellRow = _placementWalker.EmitCellLocationRow(
+                        child, formKey, blockX: null, blockY: null, subX: null, subY: null, isInterior: false);
+                    topCellRecord = child;
+                    break;
+                    // "SubCells": never yielded here — its items are WorldspaceBlock, which is not
+                    // IMajorRecordGetter (ContainerChildFields.EnumerateChildren's own doc comment).
+            }
+        }
+
+        ExecuteFor("DELETE FROM container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        if (containerChildRows.Count > 0)
+        {
+            using var appender = Connection.CreateAppender("container_child");
+            foreach (var row in containerChildRows)
+                AppendContainerChildRow(appender, row, key.Name, key.Origin!);
+        }
+
+        ExecuteFor("DELETE FROM placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        if (placementRows.Count > 0)
+        {
+            using var appender = Connection.CreateAppender("placement");
+            foreach (var row in placementRows)
+                AppendPlacementRow(appender, row, key.Name, key.Origin!);
+        }
+
+        if (topCellRow is not { } cellRow || topCellRecord == null) return;
+
+        ExecuteFor("DELETE FROM cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+            cellRow.CellFormKey, key.Name, key.Origin!);
+        using (var appender = Connection.CreateAppender("cell_location"))
+            AppendCellLocationRow(appender, cellRow, key.Name, key.Origin!);
+
+        // The top cell is itself a container (its own Persistent/Temporary/Landscape/
+        // NavigationMeshes), one level deeper in the very same document. "cell" is the schema
+        // table name a Cell's own GRUP signature ("CELL") always lowercases to — a TopCell slot can
+        // only ever hold a Cell, so this is not a guess the way a general record's recordType would be.
+        RederiveContainmentForRecord(key, cellRow.CellFormKey, "cell", topCellRecord);
+    }
+
+    private static void AppendContainerChildRow(DuckDBAppender appender, ContainerChildRow row, string plugin, string origin)
+    {
+        var r = appender.CreateRow();
+        r.AppendValue(row.ChildFormKey);
+        r.AppendValue(plugin);
+        r.AppendValue(origin);
+        r.AppendValue(row.ParentFormKey);
+        r.AppendValue(row.ParentRecordType);
+        r.AppendValue(row.SlotName);
+        r.AppendValue(row.SlotIndex);
+        r.EndRow();
+    }
+
+    private static void AppendPlacementRow(DuckDBAppender appender, PlacementRow row, string plugin, string origin)
+    {
+        var r = appender.CreateRow();
+        r.AppendValue(row.FormKey);
+        r.AppendValue(plugin);
+        r.AppendValue(origin);
+        r.AppendValue(row.ParentCell);
+        r.AppendValue(row.PlacementGroup);
+        DuckDbAppend.Nullable(r, row.PosX);
+        DuckDbAppend.Nullable(r, row.PosY);
+        DuckDbAppend.Nullable(r, row.PosZ);
+        r.EndRow();
+    }
+
+    private static void AppendCellLocationRow(DuckDBAppender appender, CellLocationRow row, string plugin, string origin)
+    {
+        var r = appender.CreateRow();
+        r.AppendValue(row.CellFormKey);
+        r.AppendValue(plugin);
+        r.AppendValue(origin);
+        DuckDbAppend.Nullable(r, row.ParentWorldspace);
+        DuckDbAppend.Nullable(r, row.BlockX);
+        DuckDbAppend.Nullable(r, row.BlockY);
+        DuckDbAppend.Nullable(r, row.SubX);
+        DuckDbAppend.Nullable(r, row.SubY);
+        DuckDbAppend.Nullable(r, row.GridX);
+        DuckDbAppend.Nullable(r, row.GridY);
+        r.AppendValue(row.IsInterior);
+        r.EndRow();
     }
 
     private void DeleteDerivationsForRecord(PluginKey key, string formKey)
@@ -829,12 +976,37 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         ExecuteFor("DELETE FROM form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         DeleteFormReferencesForRecord(key, formKey);
+        DeleteContainmentForRecord(key, formKey);
     }
 
     private void DeleteFormReferencesForRecord(PluginKey key, string formKey) =>
         ExecuteFor(
             "DELETE FROM form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
             formKey, key.Name, key.Origin!);
+
+    /// <summary>
+    /// #488: the three side tables' rows for a record that just stopped existing at Effective — its
+    /// own facts (a placed ref's <c>placement</c> row, a cell's <c>cell_location</c> row, a
+    /// folder-split child's <c>container_child</c> row), plus, defensively, whatever names it as a
+    /// parent. The defensive half is a backstop, not the primary mechanism: <c>DeleteRecord</c>'s own
+    /// descendant cascade (<c>EnumerateDescendantFormKeys</c>) already gives every descendant its own
+    /// null-body delta, which reaches this same method for each of them individually — so a deleted
+    /// container's children lose their rows via their <i>own</i> deletion, not by this record's
+    /// parent-side cleanup alone.
+    /// </summary>
+    private void DeleteContainmentForRecord(PluginKey key, string formKey)
+    {
+        ExecuteFor("DELETE FROM placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        ExecuteFor("DELETE FROM placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        ExecuteFor("DELETE FROM cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        ExecuteFor("DELETE FROM container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+        ExecuteFor("DELETE FROM container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
+            formKey, key.Name, key.Origin!);
+    }
 
     private string? ScalarString(string sql, params string[] values)
     {
@@ -1083,10 +1255,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         AddParams(countCmd, paramValues);
         var total = (long)countCmd.ExecuteScalar()!;
 
+        // #458: editor_id alone is not unique — blank/duplicate EditorIDs are ordinary, and overrides
+        // of one record across plugins share one by definition — so LIMIT/OFFSET paging over it with
+        // no tiebreak lets DuckDB place tied rows on either side of a page boundary differently
+        // across calls, silently skipping some and repeating others. (form_key, plugin, origin) is
+        // this table's own identity (see CreateRecordsTable's doc comment), so appending it makes the
+        // order total and paging stable.
         using var dataCmd = Connection.CreateCommand();
         dataCmd.CommandText = $"""
             SELECT {cols} FROM {records} r{where}
-            ORDER BY editor_id
+            ORDER BY editor_id, form_key, plugin, origin
             LIMIT {query.Limit} OFFSET {query.Offset}
             """;
         AddParams(dataCmd, paramValues);
@@ -1827,8 +2005,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private List<CellLocationSummary> GetWorldspaceCells(string records, string plugin, string worldspaceFormKey, string origin)
     {
         using var cmd = Connection.CreateCommand();
+        // #497: full_name is read straight out of the joined row's own JSON body rather than a
+        // stored column the way editor_id is — this is the only consumer today, c.body is already
+        // in scope on every relation {records} resolves to, and promoting it to a stored column
+        // (mirroring editor_id's INSERT/UPDATE plumbing across every working-tree write path) is
+        // easy to do later if a second consumer ever needs it. '$.Name.Value' is what the codec
+        // emits for an *unlocalized* plugin's FULL subrecord (Mutagen's TranslatedString with a
+        // direct string) — a localized plugin (STRINGS-backed, e.g. an official master) serializes
+        // to '$.Name.Values' (a per-language array) instead, which this misses; the FULL name then
+        // reads as absent and this falls back to the grid/EditorID label, same as a cell with no
+        // FULL name at all, rather than surfacing the wrong string.
         cmd.CommandText = $"""
-            SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
+            SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
+                   json_extract_string(c.body, '$.Name.Value')
             FROM cell_location cl
             LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
@@ -1848,7 +2037,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 reader.IsDBNull(4) ? null : reader.GetInt32(4),
                 reader.IsDBNull(5) ? null : reader.GetInt32(5),
                 reader.IsDBNull(6) ? null : reader.GetInt32(6),
-                reader.IsDBNull(7) ? null : reader.GetInt32(7)));
+                reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8)));
         }
 
         return rows;
@@ -1866,13 +2056,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         countCmd.Parameters.Add(new DuckDBParameter { Value = origin });
         var total = (long)countCmd.ExecuteScalar()!;
 
+        // #458: same non-unique-ordering shape as Search's above — c.editor_id alone gives DuckDB no
+        // tiebreak for LIMIT/OFFSET paging, so ties can land on either side of a page boundary
+        // differently across calls. The WHERE clause already scopes this query to one plugin+origin,
+        // so cl.cell_form_key alone (cell_location's own identity within that scope) is a sufficient
+        // tiebreak — no need to repeat the already-constant plugin/origin columns.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
             FROM cell_location cl
             LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
             WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
-            ORDER BY c.editor_id
+            ORDER BY c.editor_id, cl.cell_form_key
             LIMIT {limit} OFFSET {offset}
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
@@ -2064,6 +2259,48 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             result.Add(reader.GetString(0));
         return result;
     }
+
+    /// <summary>See <see cref="IRecordIndex.ReplaceContainerChildSlot"/>.</summary>
+    public void ReplaceContainerChildSlot(
+        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
+        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children)
+    {
+        ExecuteFor(
+            """
+            DELETE FROM container_child
+            WHERE parent_form_key = $1 AND slot_name = $2 AND plugin = $3 AND origin = $4
+            """,
+            parentFormKey, slotName, key.Name, key.Origin!);
+
+        if (children.Count == 0) return;
+
+        using var appender = Connection.CreateAppender("container_child");
+        foreach (var (childFormKey, slotIndex) in children)
+        {
+            AppendContainerChildRow(
+                appender,
+                new ContainerChildRow(childFormKey, parentFormKey, parentRecordType, slotName, slotIndex),
+                key.Name, key.Origin!);
+        }
+    }
+
+    /// <summary>See <see cref="IRecordIndex.RepointContainerChildParent"/>.</summary>
+    public void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        ExecuteFor(
+            """
+            UPDATE container_child SET parent_form_key = $1
+            WHERE parent_form_key = $2 AND plugin = $3 AND origin = $4
+            """,
+            newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
+
+    /// <summary>See <see cref="IRecordIndex.RepointCellLocationParent"/>.</summary>
+    public void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        ExecuteFor(
+            """
+            UPDATE cell_location SET parent_worldspace = $1
+            WHERE parent_worldspace = $2 AND plugin = $3 AND origin = $4
+            """,
+            newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
 
     public void SetFilter(string? sql)
     {

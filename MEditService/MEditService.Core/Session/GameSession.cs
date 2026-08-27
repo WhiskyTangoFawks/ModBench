@@ -101,17 +101,25 @@ public sealed class GameSession : IGameSession
         string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, ILogger? logger = null)
     {
         var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
+        var creationClubNames = ResolveCreationClubNames(gameDirectory, gameRelease);
+        // Both forced sources dedupe the same way: a name either of them claims is forced on from
+        // the block below regardless of what the caller's own list says about it (#434) — a CC
+        // plugin Mod Management also sent as an ordinary plugins.txt line (the repro's three
+        // already-*-listed ESLs) loads exactly once, from the forced block, never from its own line.
+        var forcedNames = new HashSet<string>(implicitKeys, StringComparer.OrdinalIgnoreCase);
+        forcedNames.UnionWith(creationClubNames);
 
         // The explicit list is every plugins.txt line, enabled and disabled alike (#270 /
         // ADR-0035) — the caller states participation per plugin, because the `*` prefix is the
         // only thing that carries it and there is no plugins.txt on this path to read it from.
-        // Implicit masters are forced on: they have no line to be disabled by. They are also
-        // always resolved from the game directory itself, never a mod, so their origin is always
-        // the reserved Data-directory value regardless of what the caller supplied.
-        var ordered = implicitKeys
+        // Implicit masters and #434's Creation Club catalog are both forced on: neither has a line
+        // to be disabled by. Both are also always resolved from the game directory itself, never a
+        // mod, so their origin is always the reserved Data-directory value regardless of what the
+        // caller supplied.
+        var ordered = implicitKeys.Concat(creationClubNames)
             .Select(name => new ResolvedPlugin(name, Path.Combine(gameDirectory, name), IsImmutable: true, Participates: true, Origin: PluginOrigin.DataDirectory))
             .Concat(plugins
-                .Where(p => !implicitKeys.Contains(p.Name))
+                .Where(p => !forcedNames.Contains(p.Name))
                 .Select(p => new ResolvedPlugin(p.Name, p.Path, IsImmutable: false, Participates: p.Participates, Origin: p.Origin)))
             .ToList();
 
@@ -124,21 +132,49 @@ public sealed class GameSession : IGameSession
             .Where(name => File.Exists(Path.Combine(folder, name)))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// #434: names cataloged in the game's own <c>[Category].ccc</c> — Creation Club content the
+    /// game loads independent of <c>plugins.txt</c>'s `*` toggles, the same way DLC `.esm`s always
+    /// load. Mutagen's own reader already filters to entries whose file exists in
+    /// <paramref name="folder"/>, so a stale or hand-edited catalog entry naming a file that isn't
+    /// there contributes nothing — no re-check needed here. <see cref="CreationClubListings.GetListingsPath"/>
+    /// is per-<see cref="GameCategory"/>, not this game specifically, so a category with no CC
+    /// concept (or an install with no catalog file) yields empty rather than throwing:
+    /// <c>LoadOrderListingsFromPath</c>'s own <c>Get()</c> throws if the file it's given doesn't
+    /// exist, which is exactly why existence is checked first rather than left to it. Order is the
+    /// catalog's own file order — not alphabetized, not re-sorted — because catalog order is what
+    /// the caller places the block in relative to <c>plugins.txt</c>.
+    /// </summary>
+    private static List<string> ResolveCreationClubNames(string folder, GameRelease gameRelease)
+    {
+        var cccPath = CreationClubListings.GetListingsPath(gameRelease.ToCategory(), folder);
+        if (cccPath is not { } path || !File.Exists(path.Path)) return [];
+
+        return CreationClubListings.LoadOrderListingsFromPath(path, folder)
+            .Select(l => l.FileName.ToString())
+            .ToList();
+    }
+
     private static List<ResolvedPlugin> ResolveFromDataFolder(
         string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
     {
         var implicitKeys = ResolveImplicitKeys(dataFolderPath, gameRelease);
+        var creationClubNames = ResolveCreationClubNames(dataFolderPath, gameRelease);
+        // #434: see LoadExplicit's identical forcedNames — a plugins.txt line for a CC-cataloged
+        // plugin (the repro's three already-*-listed ESLs) loads once, from the forced block.
+        var forcedNames = new HashSet<string>(implicitKeys, StringComparer.OrdinalIgnoreCase);
+        forcedNames.UnionWith(creationClubNames);
 
         // #267 / ADR-0035: every non-comment, non-blank plugins.txt entry is indexed — enabled and
         // disabled alike. The `*` prefix (Enabled) becomes Participates, not a filter on presence.
         var explicitListings = PluginListings.RawLoadOrderListingsFromPath(pluginsTxtPath, gameRelease)
-            .Where(l => !implicitKeys.Contains(l.FileName));
+            .Where(l => !forcedNames.Contains(l.FileName));
 
         // Every plugin here is physically inside dataFolderPath — there is no MO2 VFS in this
         // constructor path, so every plugin's origin is the reserved Data-directory value (#269 / ADR-0036).
         return
         [
-            .. implicitKeys
+            .. implicitKeys.Concat(creationClubNames)
                         .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: true, Participates: true, Origin: PluginOrigin.DataDirectory)),
             .. explicitListings
                     .Select(l => new ResolvedPlugin(l.FileName, Path.Combine(dataFolderPath, l.FileName), IsImmutable: false, Participates: l.Enabled, Origin: PluginOrigin.DataDirectory)),
@@ -203,7 +239,7 @@ public sealed class GameSession : IGameSession
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "[{Index}] Failed to load plugin {FileName}; skipping", i, fileName);
-                AddLoadFailure(new PluginLoadFailure(fileName, ex.Message));
+                AddLoadFailure(new PluginLoadFailure(fileName, PluginLoadFailure.ReasonFor(ex)));
                 mod?.Dispose();
             }
 

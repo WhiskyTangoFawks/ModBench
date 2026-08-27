@@ -578,7 +578,9 @@ public static class PluginEndpoints
 
         try
         {
-            var result = ExternalChangeEditLander.Keep(modFolder, decoded, pluginPath!, session!.GameRelease, reflector, logger);
+            var result = ExternalChangeEditLander.Keep(
+                modFolder, new PluginKey(decoded, req.Origin), pluginPath!, session!.GameRelease,
+                sessionManager.Index!, reflector, logger);
             if (result.Applied)
             {
                 watcher.ClearPending(modFolder, decoded);

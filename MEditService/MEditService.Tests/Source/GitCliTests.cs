@@ -48,4 +48,41 @@ public sealed class GitCliTests
             Directory.Delete(Path.GetDirectoryName(gitDir)!, recursive: true);
         }
     }
+
+    /// <summary>
+    /// #405: a failing git invocation must not put the absolute paths its own <c>args</c> carried
+    /// (e.g. a scratch-spill path passed via <c>-m</c>) onto the exception message, since that
+    /// message reaches the wire verbatim via the endpoint convention's <c>Results.Problem(ex.Message)</c>.
+    /// <c>commit-tree</c> against a made-up tree-ish isolates this from the separate, out-of-scope
+    /// question of what git's own stderr says: the failure here is "not a valid object name
+    /// &lt;bogus-sha&gt;" — a reason wholly independent of the <c>-m</c> value — so stderr never
+    /// echoes the path back; only the interpolated args vector could leak it.
+    /// </summary>
+    [Fact]
+    public void Run_FailureWhoseArgsCarryAnAbsolutePath_OmitsThatPathButKeepsSubcommandAndStderr()
+    {
+        var workTree = Directory.CreateTempSubdirectory("medit-gitcli-worktree-").FullName;
+        var gitDir = Path.Combine(Directory.CreateTempSubdirectory("medit-gitcli-gitdir-").FullName, "gitdir");
+        try
+        {
+            Directory.CreateDirectory(gitDir);
+            GitCli.Run(gitDir, workTree, "init", "-q", "-b", "main");
+            GitCli.Run(gitDir, workTree, "config", "user.email", "test@example.com");
+            GitCli.Run(gitDir, workTree, "config", "user.name", "Test");
+
+            var absolutePath = Path.Combine(workTree, "medit-run-proposal-scratch", "spill.json");
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => GitCli.Run(gitDir, workTree, "commit-tree", "not-a-real-tree-sha", "-m", absolutePath));
+
+            Assert.DoesNotContain(absolutePath, ex.Message);
+            Assert.Contains("commit-tree", ex.Message);
+            Assert.Contains("not a valid object name", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(workTree, recursive: true);
+            Directory.Delete(Path.GetDirectoryName(gitDir)!, recursive: true);
+        }
+    }
 }

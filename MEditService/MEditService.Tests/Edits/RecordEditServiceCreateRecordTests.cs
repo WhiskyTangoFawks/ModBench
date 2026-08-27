@@ -45,15 +45,16 @@ public sealed class RecordEditServiceCreateRecordTests
     }
 
     /// <summary>
-    /// #459: the new sibling's order index is one past the highest <c>"[N] "</c> already on disk, not
-    /// the sibling <i>count</i> — count would collide the moment an earlier delete left a gap. The
-    /// fixture's own Npcs group starts at <c>[0] FixtureNpc</c>/<c>[1] UntouchedNpc</c>; deleting
-    /// <c>[0]</c> leaves a one-sibling folder whose highest index is still 1, so the naive "count"
-    /// rival would mint a second, colliding <c>[1]</c> for the new record where the correct answer is
-    /// <c>[2]</c>.
+    /// #459 originally, superseded by #489: a delete used to leave a permanent gap (<c>[0],[1]</c> →
+    /// delete <c>[0]</c> → <c>[1]</c> alone), and this test pinned that <see cref="RecordEditService.CreateRecord"/>
+    /// landed past it (<c>[2]</c>) rather than colliding with it at the naive sibling <i>count</i>
+    /// (<c>[1]</c>). #489 retired the gap itself: <see cref="RecordEditService.DeleteRecord"/> now
+    /// renormalizes its own group folder to contiguous <c>[0..k]</c> as its own last file-system act,
+    /// so by the time <c>CreateRecord</c> runs here there is no gap left to land past at all — the
+    /// surviving sibling has already renumbered down to <c>[0]</c>, and count and max+1 coincide.
     /// </summary>
     [Fact]
-    public void CreateRecord_AfterAnEarlierSiblingWasDeleted_LandsPastTheGap_NotAtTheSiblingCount()
+    public void CreateRecord_AfterAnEarlierSiblingWasDeleted_LandsContiguously_NoGapSurvivesToLandPast()
     {
         using var mod = TrackedModFixture.Tracked();
         var service = ServiceFor(mod.Sessions);
@@ -64,14 +65,15 @@ public sealed class RecordEditServiceCreateRecordTests
         var created = service.CreateRecord(mod.Plugin, "npc_", "AfterTheGap");
         Assert.True(created.Applied, created.Message);
 
-        var npcsDir = Path.Combine(mod.ModFolder, $"{TrackedModFixture.PluginName}{SourceRecordPath.SourceSuffix}", "Npcs");
+        var npcsDir = Path.Combine(mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
         var names = Directory.GetFiles(npcsDir).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
 
-        // The surviving original sibling ([1] UntouchedNpc) plus the new one, landed one past the
-        // highest index still on disk — never colliding with [1].
+        // The delete's own renormalization already closed the gap — the surviving sibling now carries
+        // [0], not the [1] it started at, and the new record appends at the true next contiguous slot,
+        // [1], not [2].
         Assert.Equal(2, names.Count);
-        Assert.Contains(names, n => n!.StartsWith("[1] UntouchedNpc", StringComparison.Ordinal));
-        Assert.Contains(names, n => n!.StartsWith("[2] AfterTheGap", StringComparison.Ordinal));
+        Assert.Contains(names, n => n!.StartsWith("[0] UntouchedNpc", StringComparison.Ordinal));
+        Assert.Contains(names, n => n!.StartsWith("[1] AfterTheGap", StringComparison.Ordinal));
     }
 
     [Fact]

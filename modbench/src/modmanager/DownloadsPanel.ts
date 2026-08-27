@@ -292,8 +292,8 @@ export function registerDownloadsSortCommand(downloadsProvider: DownloadsProvide
 }
 
 /** Register the Show/Hide-hidden title-bar toggle: the same two-command-one-context-key
- *  shape as the Mods tree's Sort Direction toggle (extension.ts' modbench.modList.sortDescending/
- *  sortAscending) — state lives on DownloadsProvider, the command handler owns the
+ *  shape as the Mods tree's Sort Direction toggle (extension.ts' modbench.modList.view.winningAtTop/
+ *  view.losingAtTop) — state lives on DownloadsProvider, the command handler owns the
  *  `modbench.downloads.showHidden` context key that package.json's `when` clauses gate on. */
 export function registerDownloadsHiddenToggleCommands(downloadsProvider: DownloadsProvider): vscode.Disposable[] {
   return [

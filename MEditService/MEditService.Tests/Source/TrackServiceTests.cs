@@ -51,7 +51,7 @@ public sealed class TrackServiceTests
 
             // AC1: key paths from the spike doc's own layout sketch — root header, and each flat NPC
             // under its own group folder.
-            var sourceRoot = Path.Combine(modFolder, "Fixture.esp.source");
+            var sourceRoot = Path.Combine(modFolder, SourceRecordPath.RootFor("Fixture.esp"));
             var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
             Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
 
@@ -211,7 +211,7 @@ public sealed class TrackServiceTests
             // content doesn't matter for this test: only IsTracked's answer does.
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
-                [new PristineFile("Fixture.esp.source/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
+                [new PristineFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
             // The session already parsed a good copy; the file on disk is corrupted afterward —

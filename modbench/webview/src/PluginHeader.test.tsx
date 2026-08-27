@@ -4,6 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 
 import { PluginHeader } from './PluginHeader';
+import { headerCellContext, combineVscodeContexts } from './recordUtils';
 import type { RecordDetail } from './types';
 
 function override(partial: Partial<RecordDetail> = {}): RecordDetail {
@@ -131,11 +132,22 @@ describe('PluginHeader', () => {
     expect(screen.getByText('MyMod.esp')).toHaveAttribute('title', expect.stringContaining('ModA'));
   });
 
-  // Issue #176: the standalone button is retired in favor of the "Copy as Override…" item on
-  // the record grid's right-click context menu.
-  it('does not render a Copy as Override… button', () => {
-    render(<PluginHeader {...baseProps()} />);
-    expect(screen.queryByText('Copy as Override…')).not.toBeInTheDocument();
+  // Issue #176/#494: the standalone button is retired in favor of "Copy as Override Into…"/"Copy
+  // as New Record Into…" on the header's own native right-click menu — there is no rendered
+  // button to assert on (ADR-0027/0033), so this pins the `data-vscode-context` payload
+  // `contributes.menus["webview/context"]` gates those commands on instead.
+  it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
+    const vscodeContext = combineVscodeContexts(headerCellContext('000001:MyMod.esp', 'MyMod.esp', 'Data'));
+    const { container } = render(<PluginHeader {...baseProps()} vscodeContext={vscodeContext} />);
+    expect(JSON.parse(container.firstElementChild!.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'recordHeader', formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', origin: 'Data',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+
+  it('renders no data-vscode-context attribute at all when the caller supplies none', () => {
+    const { container } = render(<PluginHeader {...baseProps()} />);
+    expect(container.firstElementChild).not.toHaveAttribute('data-vscode-context');
   });
 
   // Issue #209: Add Master… moved into the column header's native right-click menu (ADR-0033:

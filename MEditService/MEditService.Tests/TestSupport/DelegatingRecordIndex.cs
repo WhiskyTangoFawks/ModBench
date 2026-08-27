@@ -34,6 +34,14 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.MarkWorkingTreeOnly(key, formKeys);
     public virtual void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records) =>
         Inner.SeedCommittedOnly(key, records);
+    public virtual void ReplaceContainerChildSlot(
+        PluginKey key, string parentFormKey, string parentRecordType, string slotName,
+        IReadOnlyList<(string ChildFormKey, int SlotIndex)> children) =>
+        Inner.ReplaceContainerChildSlot(key, parentFormKey, parentRecordType, slotName, children);
+    public virtual void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        Inner.RepointContainerChildParent(key, oldParentFormKey, newParentFormKey);
+    public virtual void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
+        Inner.RepointCellLocationParent(key, oldParentFormKey, newParentFormKey);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
@@ -48,7 +56,10 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.GetPluginsWithMatchingRecords(tableNames);
     public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => Inner.GetNativeFormKeys(plugin);
     public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => Inner.GetEffectiveMasters(plugin);
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
+    // #496: virtual — the first read-path member intercepted on this class (every other override so
+    // far is write-path) — so a test can inject an anomalous second block-less cell-location row
+    // without reimplementing the rest of the wide IRecordIndex surface.
+    public virtual IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
         Inner.GetWorldspaceCells(plugin, worldspaceFormKey);
     public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
         Inner.GetInteriorCells(plugin, limit, offset);

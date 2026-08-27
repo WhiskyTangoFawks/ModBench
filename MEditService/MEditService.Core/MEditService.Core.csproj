@@ -44,6 +44,14 @@
          exists at this exact 1.37.1 version, matching the other two pins here. -->
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.Newtonsoft" Version="1.37.1" />
+    <!-- #405: GitCli logs a git failure's full argument vector via Serilog's ambient Log.Logger
+         (the same gateway MEditService.Api/Program.cs already sets for the whole process) rather
+         than take an ILogger — there is no injected logger reaching this static class, and this is
+         a single fire-and-forget diagnostic line at one throw site, not a case for wiring ILogger
+         through GitCli and every SourceRepository call site above it. Version pinned to the
+         transitive resolution Serilog.AspNetCore already brings into MEditService.Api, so this adds
+         no second Serilog version to the solution. -->
+    <PackageReference Include="Serilog" Version="4.3.0" />
     <PackageReference Include="Mutagen.Bethesda.Serialization.SourceGenerator" Version="1.37.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

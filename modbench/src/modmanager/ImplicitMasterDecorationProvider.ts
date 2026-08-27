@@ -13,12 +13,15 @@ import * as vscode from 'vscode';
  *  lazily (live, not a snapshot) — `PluginListProvider.implicitMasterNames()`. */
 export class ImplicitMasterDecorationProvider implements vscode.FileDecorationProvider {
   constructor(
-    private readonly dataFolder: Promise<string | undefined>,
+    // #357: a getter, not a settled Promise — `modbench.mods.gameDirectory` is editable while
+    // Modbench runs, so a value captured once at construction could go stale for the life of the
+    // provider. Each call re-reads through the single game-directory resolver.
+    private readonly dataFolder: () => Promise<string | undefined>,
     private readonly implicitMasterNames: () => ReadonlySet<string>,
   ) {}
 
   async provideFileDecoration(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {
-    const dataFolder = await this.dataFolder;
+    const dataFolder = await this.dataFolder();
     if (!dataFolder || !uri.fsPath.startsWith(dataFolder + '/')) return undefined;
     const name = uri.fsPath.slice(dataFolder.length + 1);
     if (!this.implicitMasterNames().has(name.toLowerCase())) return undefined;

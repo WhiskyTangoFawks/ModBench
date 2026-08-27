@@ -299,6 +299,8 @@ describe('modbench command registration', () => {
     'modbench.vmad.removeProperty',
     'modbench.vmad.setScriptFlags',
     'modbench.vmad.setPropertyFlags',
+    // #258 / ADR-0039: the string cell's own right-click command (record editor's field grid).
+    'modbench.field.openExtended',
     'modbench.closeMedit',
     'modbench.reloadSession',
     // #247: one Refresh for every Mod-Management source, replacing modbench.refreshTree,
@@ -319,8 +321,8 @@ describe('modbench command registration', () => {
     'modbench.modList.clearFilter',
     'modbench.modList.switchProfile',
     'modbench.modList.launchMedit',
-    'modbench.modList.sortDescending',
-    'modbench.modList.sortAscending',
+    'modbench.modList.view.winningAtTop',
+    'modbench.modList.view.losingAtTop',
     'modbench.modList.deploy',
     'modbench.modList.purge',
     'modbench.launch',
@@ -383,6 +385,11 @@ describe('modbench command registration', () => {
     'modbench.record.create',
     'modbench.record.delete',
     'modbench.record.renumber',
+    // #436/#494: Copy as Override Into…/Copy as New Record Into… — restored on both the plugins-
+    // tree record row and the record editor's own column header, sharing one implementation path.
+    // Gated and hidden from the palette the same way, for the same reason.
+    'modbench.record.copyAsOverride',
+    'modbench.record.copyAsNewRecord',
   ];
 
   it('registers all expected commands on activation', async () => {
@@ -586,6 +593,59 @@ describe('Overwrite row (#82)', () => {
     p.invalidate();
     const roots = await p.getChildren();
     assert.ok(!roots.some((n) => n.kind === 'overwrite'), 'Overwrite row should disappear when the folder is empty');
+  });
+});
+
+// ── External-change poller lifecycle is gated on the backend, not activation (#432) ─────────────
+// Deliberately placed here, before any other describe below ever calls Launch mEdit — this suite
+// activates the extension exactly once (the file's own top-level before()), so "no poll before
+// Launch mEdit" is only provable at the one point in the run where that is still true.
+
+describe('External-change poller starts/stops with the backend, never before Launch mEdit (#432)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  let gameDir = '';
+  const pollRequests = (log: string[]) => log.filter((r) => r.includes('external-changes/status'));
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-game-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '*TestMod.esp\n');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(path.join(root, 'profiles', 'Default', 'plugins.txt'), '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+  });
+
+  it('polls only between a successful Launch mEdit and Close mEdit', async function () {
+    if (!root) this.skip();
+    this.timeout(20000);
+
+    // Wait past one full poll interval (EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000ms) with no Launch
+    // mEdit run — the pre-#432 wiring (unconditional start at activation) would already have
+    // ticked at least once by now.
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.strictEqual(pollRequests(requestLog).length, 0,
+      'no external-change poll should fire before Launch mEdit has ever run');
+
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.ok(pollRequests(requestLog).length > 0,
+      'expected the poller to start once Launch mEdit confirms the backend is up');
+
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    const countAtClose = pollRequests(requestLog).length;
+    await new Promise((r) => setTimeout(r, 3500));
+    assert.strictEqual(pollRequests(requestLog).length, countAtClose,
+      'expected no further external-change polls after Close mEdit');
   });
 });
 
@@ -1100,17 +1160,23 @@ describe('Reload Session actually reloads (#295)', () => {
   });
 
   // #278 review finding 1 (Standards): matchingPlugins used to be refreshed only by
-  // SessionController.setFilter/clearFilter, so a plugin a filter suppressed the chevron of
-  // stayed suppressed through a Reload Session that came up with no filter at all — the exact
-  // "map outlives the filter state it describes" bug this ticket exists to prevent, in mirror
-  // image. Fixed by routing GET /plugins' hasMatchingRecords through the same completion hand-off
+  // SessionController.setFilter/clearFilter, so a plugin a filter suppressed the row of stayed
+  // suppressed through a Reload Session that came up with no filter at all — the exact "map
+  // outlives the filter state it describes" bug this ticket exists to prevent, in mirror image.
+  // Fixed by routing GET /plugins' hasMatchingRecords through the same completion hand-off
   // (applyLoadedSessionToTree) every session (re)load already reaches downstream of
   // SessionController.syncFilterState — modbench.reloadSession included, since it re-runs the
   // identical makeEnterEditing closure Launch mEdit uses. The first reload below stands in for
   // "a filter was active"; the second is the regression case (reload with no filter must clear
   // it) and is what would have stayed red without the fix — before it, matchingPlugins had no
   // path back to `true` short of an in-session setFilter/clearFilter call.
-  it('clears a chevron a filter suppressed once a reload comes up with no filter, not just applies the suppression (#278 review)', async () => {
+  //
+  // #396 / ADR-0035's dated §Filters amendment reverses what "suppressed" means here: a plugin
+  // with no matching records used to keep its row and lose only its chevron; now the row itself
+  // is omitted from getChildren() entirely. The regression this test guards is unchanged (a stale
+  // `false` must not survive a filter-free reload) — only the observable effect of the stale value
+  // is different, hence asserting absence/presence of the row rather than its collapsibleState.
+  it('hides a plugin a filter suppresses, and restores it once a reload comes up with no filter (#396 / #278 review)', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(before).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
@@ -1120,16 +1186,16 @@ describe('Reload Session actually reloads (#295)', () => {
     // session loaded" — GetPlugins() reports it, unprompted by any setFilter call on this side.
     mockPluginsOverride = MOCK_PLUGINS.map((p) => p.name === 'TestMod.esp' ? { ...p, hasMatchingRecords: false } : p);
     await vscode.commands.executeCommand('modbench.reloadSession');
-    const suppressed = findRow(await tree.getChildren(), 'TestMod.esp');
-    assert.strictEqual(tree.getTreeItem(suppressed).collapsibleState, vscode.TreeItemCollapsibleState.None,
-      'sanity: the mechanism reaches the tree — a filter with no matches on this plugin suppresses its chevron');
+    const hidden = (await tree.getChildren()).find((r) => rowName(r) === 'TestMod.esp');
+    assert.strictEqual(hidden, undefined,
+      'sanity: the mechanism reaches the tree — #396: a filter with no matches on this plugin hides its row entirely, not just its chevron');
 
     // The next load — a plain reload, reporting no filter at all — must restore it.
     mockPluginsOverride = null;
     await vscode.commands.executeCommand('modbench.reloadSession');
     const restored = findRow(await tree.getChildren(), 'TestMod.esp');
     assert.strictEqual(tree.getTreeItem(restored).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
-      'a reload that comes up with no filter must restore a chevron an earlier filter suppressed, not leave it permanently unexpandable');
+      'a reload that comes up with no filter must restore a row an earlier filter hid, not leave it permanently gone');
   });
 
   // AC4: a failed reload must not leave the tree claiming a session the backend has already

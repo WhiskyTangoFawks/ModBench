@@ -91,6 +91,37 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         Assert.Contains("42", body, StringComparison.Ordinal);
     }
 
+    // #401: malformed struct-op payloads never crash, they fall back to NotFound like any other
+    // shape RecordFieldWriter.ApplyVmadField doesn't recognize.
+
+    // No "op" member at all, targeting a script-level path — TryGetOpName answers false (not an op
+    // envelope), and a script-level path has no scalar "whole script" value to fall back to, so the
+    // scalar branch's own VmadPath.TryParse also fails. Distinct from
+    // EditField_PlainScalarVmadWrite_IsUnaffectedByTheOpEnvelopeCheck above, which targets a
+    // script+property path where the same non-envelope object *is* a legal scalar Struct write.
+    [Fact]
+    public void EditField_ObjectValueMissingOpMember_OnScriptLevelPath_RefusesAsFieldNotFound_NeverThrows()
+    {
+        var result = Service().EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\NewScript", Json("""{"flags":"Local"}"""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+    }
+
+    // A well-formed op envelope (valid "op" string) whose path is neither a script+property path nor
+    // a bare script path — here, the bare "VMAD\" prefix with nothing after it, which fails both
+    // VmadPath.TryParse and VmadPath.TryParseScript.
+    [Fact]
+    public void EditField_OpEnvelope_OnUnparseableVmadPath_RefusesAsFieldNotFound_NeverThrows()
+    {
+        var result = Service().EditField(
+            _mod.Plugin, _mod.Npc.ToString(), @"VMAD\", Json("""{"op":"add_script"}"""));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+    }
+
     // ── Guard inheritance (#417's carried requirement) ─────────────────────────────────────────
     // The new op-envelope dispatch above still enters through the one guarded door
     // (RecordEditService.EditField), never IRecordIndex.ApplyWorkingTreeChanges directly, so both

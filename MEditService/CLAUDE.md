@@ -6,7 +6,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 
 - **A tracked plugin's source tree is the source of truth; the binary is for untracked plugins**
   (#452 / ADR-0041's #444 amendment). Session load ingests a tracked plugin by deserializing
-  `<plugin>.source/` whole (`Source/SourceIngest`, a designated whole-mod door) — working tree →
+  `source/<plugin>/` whole (#441; `Source/SourceIngest`, a designated whole-mod door) — working tree →
   Effective, git `HEAD` → Head — and never consults the binary for its *content*. Untracked plugins
   keep the binary-overlay ingest unchanged; both paths end in the same `IRecordIndex.Index` over the
   same `IModGetter`, so the read model never sees a dialect. The binary is still opened for a tracked
@@ -80,10 +80,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     `RealData/DialogueOrderDamageTests` (0 permuted parents / 0 moved slots, reproducing #464's own
     harness against the tree Track actually writes). No longer allowlisted by
     `SourceIngestParityTests` — that tolerance is gone, not widened. Point writes
-    (`Edits/RecordEditService` create/delete/renumber/rename) keep the prefix consistent: create/renumber
-    assign the next free index (never the sibling count, which would collide after a gap), delete
-    leaves gaps rather than renumbering survivors, and an EditorID rename carries its own old index
-    forward unchanged.
+    (`Edits/RecordEditService` create/delete/renumber/rename) keep the prefix consistent: create,
+    delete and renumber all renormalize their touched group folder to contiguous `[0..k]` as their own
+    last file-system act (**#489** — survivors keep their relative order; no persistent gaps survive a
+    write), and an EditorID rename carries its own old index forward unchanged.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
 - **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
@@ -106,10 +106,12 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - **FormLinks validate at edit time**, against effective state (ADR-0020 kept, relocated from
     stage time). The check is `CheckErrorBuilder` over the incoming value — the same builder the
     read model renders check errors from — so "what the editor flags" and "what it refuses to
-    create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; note
-    that a top-level FormLink *column* has no write delegate at all in the reflected schema
-    (`SchemaReflector`: "read-only as a column, `ApplyFormLinkJson` as a sub-field"), so the
-    writable form of a FormLink today is an array or a struct sub-field.
+    create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; #429
+    gave a top-level FormLink *column* the same `ApplyFormLinkJson` write delegate its struct/array
+    sub-field sibling already had (`SchemaReflector`'s `ProjectColumn`/`ProjectSubField`), so every
+    reflected FormLink shape — top-level column, struct/array sub-field — is writable through this
+    one door. VMAD Object properties and condition Form params still carry FormKeys outside the
+    reflected schema and are still not checked here; that stays its own, unwidened, change.
   - **Reads validate source freshness** (`Source/SourceFreshness`, #413 D3 deferred here). Point
     reads re-check the source text before answering, catching `git restore`, checkout, rebase,
     terminal commits and hand edits — no watcher, because Modbench owns the `.git` folder and git

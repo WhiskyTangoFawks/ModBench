@@ -1,9 +1,11 @@
 using System.Text;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
 namespace MEditService.Core.Source;
@@ -49,7 +51,7 @@ internal static class SourceIngest
         if (ModFolders.Of(origin, pluginPath) is not { } modFolder) return null;
         if (!SourceRepository.IsTracked(modFolder)) return null;
 
-        var tree = Path.Combine(modFolder, $"{pluginName}{SourceRecordPath.SourceSuffix}");
+        var tree = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName));
         return Directory.Exists(tree) ? tree : null;
     }
 
@@ -70,14 +72,15 @@ internal static class SourceIngest
     /// </summary>
     internal static void Ingest(
         IRecordIndex index, string modFolder, string sourceTree, int loadOrderIndex, bool participates,
-        PluginKey key, GameRelease gameRelease, ILogger logger, CancellationToken cancel = default)
+        PluginKey key, GameRelease gameRelease, ISchemaReflector schemaReflector, ILogger logger,
+        CancellationToken cancel = default)
     {
         var mod = RecordTextCodecGeneratorSeed
             .DeserializeWholeMod(sourceTree, InlineWorkDropoff.Instance, cancel)
             .GetAwaiter().GetResult();
 
         index.Index(mod, loadOrderIndex, participates, key);
-        ReconcileHead(index, modFolder, key, gameRelease, logger);
+        ReconcileHead(index, modFolder, key, gameRelease, schemaReflector, logger, mod);
     }
 
     /// <summary>
@@ -98,9 +101,21 @@ internal static class SourceIngest
     /// refs" fast path, and the state almost every tracked plugin in a load order is in. Cost past
     /// that is bounded by dirt, never by load order, the same bound <see cref="SourceFreshness"/>
     /// already holds itself to.</para>
+    ///
+    /// <para><b>#463: a container path falls through to a structural diff instead of being dropped.</b>
+    /// <see cref="SourceRecordPath.TryParse"/> only understands the flat, single-file shape — it fails
+    /// closed on a container's own directory (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
+    /// <c>Quests/&lt;n&gt;/DialogTopics/&lt;n&gt;/RecordData.json</c>) by design (ADR-0041's 2026-08-23
+    /// amendment: no container-path grammar, ever — declined twice already, #453 and #454, for the same
+    /// reason each time). When at least one dirty path under this plugin's own tree fails that parse,
+    /// <see cref="ReconcileHeadStructurally"/> runs once for the whole call: it deserializes <c>HEAD</c>
+    /// the same whole-mod way <paramref name="effectiveMod"/> already was, and diffs the two mod objects
+    /// by FormKey — the same amendment's answer, needing no path identity at all. Gated on dirt exactly
+    /// like the flat loop above: a clean tree never reaches this paragraph.</para>
     /// </summary>
     private static void ReconcileHead(
-        IRecordIndex index, string modFolder, PluginKey key, GameRelease gameRelease, ILogger logger)
+        IRecordIndex index, string modFolder, PluginKey key, GameRelease gameRelease,
+        ISchemaReflector schemaReflector, ILogger logger, IModGetter effectiveMod)
     {
         // This early-out *is* the clean fast path — and note it is a structural guarantee, not a
         // tested one. Reconciling every record instead of just the dirty ones would still produce
@@ -116,6 +131,13 @@ internal static class SourceIngest
         var baselines = new List<(string FormKey, string Body)>();
         var workingTreeOnly = new List<string>();
         var deletedInWorkingTree = new List<(string FormKey, string RecordType, string Body)>();
+        var needsStructuralFallback = false;
+
+        // Recognizes "is this dirty path under my own plugin's tree at all" — the same prefix the
+        // successful-parse branch below already checks via identity.PluginFileName, just needed one
+        // parse earlier here. Not a container-path grammar: it says nothing about record type or
+        // position, only which plugin's own subtree the path sits under (#463; ADR-0041 amendment).
+        var ownTreePrefix = $"{SourceRecordPath.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
 
         foreach (var gitPath in dirty)
         {
@@ -127,13 +149,22 @@ internal static class SourceIngest
             {
                 // Fails closed for everything that is not a flat record file: the root RecordData.json,
                 // .gitignore — and every *container* path
-                // (Cells/<b>/<sb>/<name>/RecordData.json, Quests/<name>/...). A container's Head
-                // divergence is genuinely out of reach here: recovering a record type from a container
-                // path needs a reader nothing has built: #454 declined the grammar (compile hands the
-                // whole tree to the deserializer instead), so this gap is #463's, not a leftover of the
-                // arc. Logged rather than silently dropped, so it stays observable.
-                logger.LogDebug(
-                    "Not a flat source record, so its Head state is not reconciled at load: {Path}", gitPath);
+                // (Cells/<b>/<sb>/<name>/RecordData.json, Quests/<name>/...). Recovering a record type
+                // from a container path would need a reader nothing has built, and ADR-0041's amendment
+                // rules that reader out permanently — so a path under this plugin's own tree instead
+                // defers to the structural pass below, once, after this loop; a path outside it (a
+                // different plugin's tree in the same mod folder, .gitignore, an unrelated file) carries
+                // nothing to reconcile either way and is just logged.
+                if (relativePath.StartsWith(ownTreePrefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    needsStructuralFallback = true;
+                }
+                else
+                {
+                    logger.LogDebug(
+                        "Not a flat source record and not under {Plugin}'s own tree, so it carries no " +
+                        "Head state to reconcile here: {Path}", key.Name, gitPath);
+                }
                 continue;
             }
 
@@ -175,6 +206,13 @@ internal static class SourceIngest
 
         PairRenamedSourceUnits(baselines, workingTreeOnly, deletedInWorkingTree);
 
+        if (needsStructuralFallback)
+        {
+            ReconcileHeadStructurally(
+                modFolder, key, gameRelease, schemaReflector, codec, effectiveMod, logger,
+                baselines, workingTreeOnly, deletedInWorkingTree);
+        }
+
         // Applied only once the whole dirty set has been read, never per iteration. A path that throws
         // mid-loop therefore leaves Head untouched rather than half-moved — which matters because the
         // caller's response to that throw is to re-ingest this same key from the binary, and a Head
@@ -185,6 +223,131 @@ internal static class SourceIngest
         index.SetCommittedBaseline(key, baselines);
         index.MarkWorkingTreeOnly(key, workingTreeOnly);
         index.SeedCommittedOnly(key, deletedInWorkingTree);
+    }
+
+    /// <summary>
+    /// #463's structural half: deserializes <c>HEAD</c>'s own tree the same whole-mod way
+    /// <paramref name="effectiveMod"/> already was, then diffs the two mod objects by FormKey —
+    /// added/changed/removed, the three set operations the flat loop above expresses per-path. Needs no
+    /// path identity at all (ADR-0041's 2026-08-23 amendment), which is what lets it answer for a
+    /// container and an embedded child alike: <c>EnumerateMajorRecords</c> walks into both mod objects'
+    /// containers the same way <see cref="IRecordIndex.Index"/>'s own ingest does, so a placed reference
+    /// nested inside a Cell is just another FormKey in each dictionary below.
+    ///
+    /// <para><b>No SQL, no git blob read per record.</b> Both dictionaries come from mod objects already
+    /// fully in memory (<paramref name="effectiveMod"/> from the caller, <c>headMod</c> freshly
+    /// deserialized here), and comparison is a codec re-serialize plus a byte compare — the same
+    /// operation <c>DuckDbRecordIndex.AppendDocument</c> already does for every record at ingest, not a
+    /// new per-record cost class. Only the FormKeys that actually differ are handed to the three output
+    /// lists, which is what keeps the DB-touching side of this (<see cref="IRecordIndex.SetCommittedBaseline"/>'s
+    /// own per-record compare) bounded by genuine dirt rather than by how many records the container
+    /// subtree holds.</para>
+    ///
+    /// <para><b>A schema-unpublished record type is skipped on the deletion side only.</b>
+    /// <c>SchemaReflector</c> deliberately excludes a handful of types from the read model
+    /// (<c>land</c>/<c>navm</c>/<c>navi</c>, the rare REFR-flavour placement variants) — they are never
+    /// independently queryable, so seeding a Head-only row for one would create a
+    /// <c>records_committed</c> entry <see cref="IRecordIndex.GetDocument(string, PluginKey)"/> could
+    /// never read back. The edit and create branches need no equivalent guard: their targets
+    /// (<see cref="IRecordIndex.SetCommittedBaseline"/>, <see cref="IRecordIndex.MarkWorkingTreeOnly"/>)
+    /// already no-op for a FormKey the index never indexed, the same missing-data rule the flat path
+    /// already relies on.</para>
+    /// </summary>
+    private static void ReconcileHeadStructurally(
+        string modFolder, PluginKey key, GameRelease gameRelease, ISchemaReflector schemaReflector,
+        RecordTextCodec codec, IModGetter effectiveMod, ILogger logger,
+        List<(string FormKey, string Body)> baselines,
+        List<string> workingTreeOnly,
+        List<(string FormKey, string RecordType, string Body)> deletedInWorkingTree)
+    {
+        var headMod = DeserializeHeadTree(modFolder, key.Name);
+        var schemas = schemaReflector.GetSchemas(gameRelease);
+
+        var alreadyHandled = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (formKey, _) in baselines) alreadyHandled.Add(formKey);
+        foreach (var formKey in workingTreeOnly) alreadyHandled.Add(formKey);
+        foreach (var (formKey, _, _) in deletedInWorkingTree) alreadyHandled.Add(formKey);
+
+        var effectiveByFormKey = effectiveMod.EnumerateMajorRecords()
+            .ToDictionary(r => r.FormKey.ToString(), StringComparer.Ordinal);
+        var headFormKeys = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var headRecord in headMod.EnumerateMajorRecords())
+        {
+            var formKey = headRecord.FormKey.ToString();
+            headFormKeys.Add(formKey);
+            if (alreadyHandled.Contains(formKey)) continue;
+
+            var headBody = Encoding.UTF8.GetString(
+                codec.SerializeToBytesAsync(headRecord, gameRelease).GetAwaiter().GetResult());
+
+            if (!effectiveByFormKey.TryGetValue(formKey, out var effectiveRecord))
+            {
+                var recordType = SourceRecordType.Resolve(headRecord, schemas);
+                if (!schemas.ContainsKey(recordType))
+                {
+                    logger.LogDebug(
+                        "{FormKey} ({RecordType}) is not a schema-published record type, so its " +
+                        "working-tree deletion is not seeded at Head", formKey, recordType);
+                    continue;
+                }
+
+                deletedInWorkingTree.Add((formKey, recordType, headBody));
+                continue;
+            }
+
+            var effectiveBody = Encoding.UTF8.GetString(
+                codec.SerializeToBytesAsync(effectiveRecord, gameRelease).GetAwaiter().GetResult());
+            if (!string.Equals(effectiveBody, headBody, StringComparison.Ordinal))
+                baselines.Add((formKey, headBody));
+        }
+
+        foreach (var formKey in effectiveByFormKey.Keys)
+        {
+            if (headFormKeys.Contains(formKey) || alreadyHandled.Contains(formKey)) continue;
+            workingTreeOnly.Add(formKey);
+        }
+    }
+
+    /// <summary>
+    /// Materializes <paramref name="pluginName"/>'s tree exactly as <c>HEAD</c> holds it into a scratch
+    /// directory (no checkout — the same no-checkout read <see cref="SourceRepository.EnumerateSourceAtRef"/>
+    /// already gives <c>PluginCompileService</c>'s own parked-ref compile), then hands that directory to
+    /// the same whole-mod door <see cref="Ingest"/> used for the working tree.
+    ///
+    /// <para>Deliberately not <c>Edits.SourceCheckout</c>, which already does this exact thing for
+    /// compile-at-ref: reusing it would make <c>Source</c> depend on <c>Edits</c>, and today the
+    /// dependency runs the other way (<c>PluginCompileService</c>/<c>RecordEditService</c> both depend on
+    /// <c>Source</c>) — introducing the reverse edge would be a cycle. Duplicating this small a
+    /// materialization is cheaper than that.</para>
+    /// </summary>
+    private static IModGetter DeserializeHeadTree(string modFolder, string pluginName)
+    {
+        var scratchRoot = Directory.CreateTempSubdirectory("medit-reconcile-head-").FullName;
+        try
+        {
+            foreach (var (relativePath, bytes) in SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, "HEAD"))
+            {
+                var destination = Path.Combine(scratchRoot, relativePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.WriteAllBytes(destination, bytes);
+            }
+
+            var treeRoot = Path.Combine(scratchRoot, SourceRecordPath.RootFor(pluginName));
+            return RecordTextCodecGeneratorSeed
+                .DeserializeWholeMod(treeRoot, InlineWorkDropoff.Instance, CancellationToken.None)
+                .GetAwaiter().GetResult();
+        }
+        finally
+        {
+            // Best-effort, mirroring SourceCheckout.Dispose's own guard: a scratch directory this
+            // process itself created and is done with, so a delete failure here (another process
+            // still touching it, permissions) is never worth letting mask whatever the try block
+            // actually threw.
+            try { Directory.Delete(scratchRoot, recursive: true); }
+            catch (IOException) { /* scratch, best-effort */ }
+            catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
+        }
     }
 
     /// <summary>
@@ -204,10 +367,13 @@ internal static class SourceIngest
     /// <c>HEAD</c> holds the old ones at the old path. That is a committed baseline, so the pair
     /// collapses into <paramref name="baselines"/> and leaves both other lists.</para>
     ///
-    /// <para><b>Only flat records reach this</b>, because only flat paths parse
-    /// (<see cref="SourceRecordPath.TryParse"/> fails closed on container paths). A renamed container's
-    /// Head therefore still goes unreconciled — the same bounded gap
-    /// <c>SourceIngestContainerTests</c> pins for #463, not a new one this introduces.</para>
+    /// <para><b>Only flat records reach this pairing.</b> A flat record's own file name carries its
+    /// EditorID, so a rename shows up as this exact create+delete pair; <see cref="SourceRecordPath.TryParse"/> fails
+    /// closed on container paths, so a renamed container's two file-system halves never reach this
+    /// method at all. That is not the same as "a renamed container's Head goes unreconciled", though —
+    /// #463's structural pass (<see cref="ReconcileHeadStructurally"/>) diffs by FormKey, not by path, so
+    /// a container rename lands there as an ordinary edit (old bytes at Head, new bytes at Effective,
+    /// same FormKey throughout) without ever needing this pairing step.</para>
     /// </summary>
     private static void PairRenamedSourceUnits(
         List<(string FormKey, string Body)> baselines,

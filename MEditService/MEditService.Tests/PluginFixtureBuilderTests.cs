@@ -62,6 +62,22 @@ public class PluginFixtureBuilderTests
     }
 
     [Fact]
+    public void Build_WithCreationClubCatalog_WritesCccFile()
+    {
+        // Written one directory above DataFolder (#434) — where Mutagen's own
+        // CreationClubListings.GetListingsPath expects it relative to the Data path a session is
+        // given, not inside DataFolder itself.
+        using var data = new PluginFixtureBuilder()
+            .WithPlugin("ccTest.esl", listed: false)
+            .WithCreationClubCatalog("ccTest.esl")
+            .Build();
+
+        var cccPath = Path.Combine(data.CleanupRoot, "Fallout4.ccc");
+        Assert.True(File.Exists(cccPath));
+        Assert.Equal("ccTest.esl", File.ReadAllText(cccPath).Trim());
+    }
+
+    [Fact]
     public void Dispose_DeletesDataFolder()
     {
         var data = new PluginFixtureBuilder()

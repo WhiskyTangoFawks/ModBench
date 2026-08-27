@@ -19,8 +19,9 @@ export interface PluginMetadata {
   // never a transitive fact about a master's own masters. Empty for a plugin with none.
   masterIssues: MasterIssue[];
   // #278 / ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
-  // owns at least one record the filter matches — the fact PluginsTreeComposite's chevron reads,
-  // since GetPlugins() itself never drops a plugin for having none.
+  // owns at least one record the filter matches — GetPlugins() itself never drops a plugin for
+  // having none. #396 / ADR-0035's dated §Filters amendment is what PluginsTreeComposite does
+  // with a `false`: omits the row entirely rather than only suppressing its chevron.
   hasMatchingRecords: boolean;
 }
 
@@ -167,6 +168,16 @@ export interface CellSummary {
   editorId: string | null;
   cellX: number | null;
   cellY: number | null;
+  // #251: xEdit's "<Persistent Worldspace Cell>" — the tree provider's label logic reads this
+  // instead of inferring it from which field of WorldspaceBlocks a cell arrived in. Required, like
+  // its siblings above: the backend always emits it (toCellSummary normalizes the generated
+  // schema's own optional field to a concrete boolean at the repository boundary).
+  isPersistentWorldspaceCell: boolean;
+  // #497: the CELL record's own FULL name, independent of isPersistentWorldspaceCell — xEdit's
+  // TwbMainRecord.GetDisplayName checks FULL name first, unconditionally, before even the
+  // persistent-cell placeholder, so the tree provider needs both facts separately rather than one
+  // pre-resolved label. null when the cell has no FULL name set.
+  fullName: string | null;
 }
 
 export interface PlacedSummary {
@@ -195,7 +206,10 @@ export interface WorldspaceBlock {
 
 export interface WorldspaceBlocks {
   blocks: WorldspaceBlock[];
-  topCell: CellSummary | null;
+  // #251: a list, not a single nullable cell — a worldspace is only ever supposed to have one
+  // block-less cell row (its TopCell), but the backend surfaces every one it finds rather than
+  // discarding anything past the first.
+  topCells: CellSummary[];
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

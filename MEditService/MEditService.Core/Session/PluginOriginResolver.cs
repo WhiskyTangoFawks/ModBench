@@ -23,15 +23,15 @@ public static class PluginOriginResolver
     public static string Resolve(IGameSession? session, string plugin) =>
         session.LoadOrderPlugin(plugin)?.Origin ?? PluginOrigin.DataDirectory;
 
-    // #306: the same scoping Resolve depends on, exposed directly for the six write-path guards
-    // that need the metadata itself (IsImmutable) rather than just the origin string. Null means
-    // "no load-order member of this name" — callers must treat that as a refusal, never as "not
-    // immutable". Written as an extension rather than an IGameSession member so it doesn't force a
-    // mechanical edit onto every hand-written IGameSession test double; every guard reads
-    // `session.LoadOrderPlugin(plugin) is not { IsImmutable: false } meta` — a positive pattern
-    // that only reaches "proceed" through one affirmative match, so null and IsImmutable:true fall
-    // through the same branch by construction instead of relying on each call site remembering a
-    // separate null check.
+    // #306: the same scoping Resolve depends on, exposed directly for callers that need the full
+    // plugin metadata rather than just the origin string. Resolve, in this file, is currently the
+    // only production caller. Null means "no load-order member of this name" — callers must treat
+    // that as a refusal. Written as an extension rather than an IGameSession member so it doesn't
+    // force a mechanical edit onto every hand-written IGameSession test double.
+    //
+    // Write gestures are gated elsewhere and not by this method: RecordEditService.RefuseIfBlocked,
+    // via ModFolders.TrackedOf/ModFolders.Of, keyed on PluginKey.Origin (specifically, whether it
+    // equals PluginOrigin.DataDirectory).
     public static PluginMetadata? LoadOrderPlugin(this IGameSession? session, string plugin) =>
         session?.Plugins.FirstOrDefault(p =>
             p.InLoadOrder && p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase));

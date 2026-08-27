@@ -246,11 +246,19 @@ public sealed class PluginCompileService(
     /// separate step only paid for on failure) but names the differing source file's own path rather
     /// than a record via <c>Equals</c> — there is no independent object to compare against here
     /// either, only the regenerated text and the real text.</para>
+    ///
+    /// <para><b>Unchanged by #489, deliberately.</b> A structural write's own group-folder
+    /// renormalization (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>) is what keeps a
+    /// gap-leaving delete/renumber from ever reaching this comparison mismatched — this method's own
+    /// byte-exact, per-path comparison stays exactly as it was. One case it still correctly refuses
+    /// because of that: a crash mid-renormalization, which leaves a group folder half-renumbered —
+    /// this gate catches that the same way it catches any other genuine divergence, pointing at
+    /// re-Track, with no new recovery machinery needed.</para>
     /// </summary>
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
         var regeneratedFiles = TrackService.SerializeToPristineFiles(mod, pluginName).GetAwaiter().GetResult();
-        var rootHeaderPath = Path.Combine($"{pluginName}{SourceRecordPath.SourceSuffix}", SourceUnitResolver.RecordDataFileName);
+        var rootHeaderPath = Path.Combine(SourceRecordPath.RootFor(pluginName), SourceUnitResolver.RecordDataFileName);
 
         foreach (var file in regeneratedFiles)
         {
@@ -271,7 +279,7 @@ public sealed class PluginCompileService(
 /// The directory <see cref="PluginCompileService"/> reads a plugin's source tree from, for either
 /// <see cref="CompileSource"/>.
 ///
-/// <para>The working tree is the plain files on disk under <c>&lt;plugin&gt;.source/</c> — no git
+/// <para>The working tree is the plain files on disk under <c>source/&lt;plugin&gt;/</c> (#441) — no git
 /// involved, the same way <see cref="RecordEditService"/> reads a single record's source file. A named
 /// ref (#416 S8) is that ref's blobs written into a scratch directory laid out identically, so the
 /// whole-mod reader — which takes a folder, not a byte stream — can read it without a checkout: HEAD,
@@ -285,7 +293,7 @@ internal sealed class SourceCheckout : IDisposable
     private SourceCheckout(string treeRoot, string resolverRoot, string description, string? scratchRoot) =>
         (TreeRoot, ResolverRoot, Description, _scratchRoot) = (treeRoot, resolverRoot, description, scratchRoot);
 
-    /// <summary>The <c>&lt;plugin&gt;.source/</c> directory itself — what the whole-mod reader takes.</summary>
+    /// <summary>The <c>source/&lt;plugin&gt;/</c> directory itself (#441) — what the whole-mod reader takes.</summary>
     internal string TreeRoot { get; }
 
     /// <summary>Its parent — the mod folder for a working-tree compile, the scratch root for a ref.
@@ -299,7 +307,7 @@ internal sealed class SourceCheckout : IDisposable
 
     internal static SourceCheckout Of(string modFolder, string pluginName, CompileSource source)
     {
-        var treeName = $"{pluginName}{SourceRecordPath.SourceSuffix}";
+        var treeName = SourceRecordPath.RootFor(pluginName);
 
         if (source is CompileSource.AtRef atRef)
         {

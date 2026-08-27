@@ -1,6 +1,7 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,12 +15,18 @@ namespace MEditService.Core.Session;
 public sealed class SessionManager(
     IRecordIndexFactory repositoryFactory,
     ILogger<SessionManager>? logger = null,
-    IModImporter? modImporter = null) : ISessionManager, IDisposable
+    IModImporter? modImporter = null,
+    ISchemaReflector? schemaReflector = null) : ISessionManager, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<SessionManager> _logger = logger ?? NullLogger<SessionManager>.Instance;
     private readonly IRecordIndexFactory _repositoryFactory = repositoryFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
+    // #463: the same reflector ReconcileHeadStructurally's SourceRecordType.Resolve needs for a
+    // container's Head-only deletion — DI already registers ISchemaReflector as its own singleton
+    // (Program.cs), so this is a direct constructor parameter rather than routed through
+    // IRecordIndexFactory, which has no other reason to carry it.
+    private readonly ISchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
     private GameSession? _session;
     private IRecordIndex? _repository;
     // #274: the load's own progress. Guarded by _lock like _session/_repository — written by the
@@ -136,6 +143,17 @@ public sealed class SessionManager(
             var session = buildSession(_logger);
             // IndexAndStore tears down a session it has already published; this covers the window
             // before that, where the failure belongs to nobody else.
+            //
+            // #400: session.Dispose() here has no unit-observable effect — GameSession is sealed
+            // with no injectable importer (OpenAll/Open call ModFactory.ImportGetter directly), so a
+            // test can neither substitute a spy nor prove the OS file handles it opened were
+            // released (confirmed empirically: opening the same plugin file twice through
+            // ModFactory.ImportGetter without disposing the first does not throw — there is no
+            // exclusive lock to probe from outside). Same category of gap as GameSession.Dispose()'s
+            // own per-mod loop, which says as much directly. Accepted as an invariant rather than
+            // tested: the call stays because leaking every mod overlay a build opened on a
+            // pre-publish failure (a bad GameRelease, a repository that fails to initialize) would
+            // be a real leak, just one this seam cannot pin with a red/green test.
             try { IndexAndStore(session, gameRelease, token); }
             catch { session.Dispose(); throw; }
             _logger.LogDebug("{Step}", completeMessage);
@@ -250,7 +268,7 @@ public sealed class SessionManager(
                 // failures, extended to this later indexing stage (Index() runs in its own DuckDB
                 // transaction, so the rollback on throw leaves no partial rows behind).
                 _logger.LogWarning(ex, "Failed to index {Plugin}; its records will not be queryable this session", plugin.Name);
-                session.RecordIndexFailure(plugin.Name, ex.Message);
+                session.RecordIndexFailure(plugin.Name, PluginLoadFailure.ReasonFor(ex));
                 continue;
             }
 
@@ -322,7 +340,8 @@ public sealed class SessionManager(
             _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
             SourceIngest.Ingest(
                 repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
-                plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease, _logger, token);
+                plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease,
+                _schemaReflector, _logger, token);
             return;
         }
         catch (OperationCanceledException)
@@ -341,8 +360,8 @@ public sealed class SessionManager(
             _logger.LogWarning(ex,
                 "Could not ingest {Plugin} from its source tree; falling back to the binary", plugin.Name);
             session.RecordIndexFailure(plugin.Name,
-                $"Could not read this plugin's source tree ({ex.Message}). Showing the compiled binary " +
-                "instead — edits made since the last compile are not reflected.");
+                $"Could not read this plugin's source tree ({PluginLoadFailure.ReasonFor(ex)}). Showing the " +
+                "compiled binary instead — edits made since the last compile are not reflected.");
         }
 
         repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key);

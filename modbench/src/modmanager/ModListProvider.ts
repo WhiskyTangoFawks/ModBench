@@ -28,18 +28,22 @@ class DropMutationError extends Error {
 }
 
 /** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
- *  the constructor so it isn't a fresh async operation per instance. */
-const NO_DATA_FOLDER: Promise<string | undefined> = Promise.resolve(undefined);
+ *  the constructor so it isn't a fresh closure per instance. */
+const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
 
 /** Constructor options for {@link ModListProvider}. Field order matches
  *  PluginListProvider's identically-shaped options so the two siblings read the
- *  same (issue #80: replaces five positional args whose order diverged). */
+ *  same (issue #80: replaces five positional args whose order diverged).
+ *
+ *  #357: `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
+ *  while Modbench runs, so a value captured once at construction could go stale for the life of
+ *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface ModListProviderOptions {
   source: IModlistSource;
   log?: (msg: string) => void;
   reporter?: Reporter;
   instanceRoot?: string;
-  dataFolder?: Promise<string | undefined>;
+  dataFolder?: () => Promise<string | undefined>;
 }
 
 /** 'ok'/undefined -&gt; default package icon; warn for conflicts, error for broken. */
@@ -174,17 +178,17 @@ export class ModListProvider
   private readonly log: (msg: string) => void;
   private readonly reporter?: Reporter;
   private readonly instanceRoot?: string;
-  private readonly dataFolder: Promise<string | undefined>;
+  private readonly dataFolder: () => Promise<string | undefined>;
 
   /** `instanceRoot`, when provided, enables status badges (Modbench-3):
    *  file-conflict index + missing-master/missing-mod checks against real
    *  files on disk. Omitted in tests that use an in-memory-only source.
    *  `reporter`, when provided, surfaces a status-computation failure as a
    *  warning (ADR-0026: badges silently absent would otherwise look
-   *  identical to "no conflicts"). `dataFolder` is the game's resolved Data
-   *  folder (the single GameDirectory resolved once at the composition root,
-   *  #78) — its vanilla/DLC masters seed the missing-master check; a resolved
-   *  `Promise<undefined>` degrades that check to an empty set. */
+   *  identical to "no conflicts"). `dataFolder` reads the game's resolved
+   *  Data folder through the single game-directory resolver (#357) — its
+   *  vanilla/DLC masters seed the missing-master check; an undefined
+   *  resolution degrades that check to an empty set. */
   constructor(options: ModListProviderOptions) {
     this.source = options.source;
     this.log = options.log ?? (() => {});
@@ -430,7 +434,7 @@ export class ModListProvider
 
   /** Flip the view direction (losing-at-top &lt;-&gt; winning-at-top) and refresh
    *  the tree. Presentation only — never changes which mod wins a conflict. */
-  toggleSortOrder(): void {
+  toggleViewDirection(): void {
     this.winningAtTop = !this.winningAtTop;
     this.invalidate();
   }
@@ -456,7 +460,7 @@ export class ModListProvider
       try {
         const [index, vanillaMasters] = await Promise.all([
           buildFileConflictIndex(entries, this.instanceRoot, this.log),
-          this.dataFolder.then((df) => readVanillaMasters(df, this.log)),
+          this.dataFolder().then((df) => readVanillaMasters(df, this.log)),
         ]);
         this.statuses = await computeModStatuses(entries, this.instanceRoot, index, vanillaMasters, this.log);
       } catch (e) {

@@ -23,10 +23,10 @@ with an owner per axis.
 uses the disambiguated terms throughout — see [CONTEXT-MAP.md](../../CONTEXT-MAP.md) and each
 context's `CONTEXT.md`:
 
-- **Mod load order** — `modlist.txt` order (the **Modlist**, owned by the Mods tree); later
-  position wins **file** conflicts.
-- **Plugin load order** — `plugins.txt` order (owned by this surface); later position wins
-  **record-override** conflicts (an Editing-context concern this surface's artifact feeds).
+- **Mod override order** — `modlist.txt` order (the **Modlist**, owned by the Mods tree); the mod
+  nearer the **winning end** (top of file) wins **file** conflicts — never "later position".
+- **Plugin load order** — `plugins.txt` order (owned by this surface); the **last-loaded** plugin
+  wins **record-override** conflicts (an Editing-context concern this surface's artifact feeds).
 
 ## Purpose
 
@@ -137,8 +137,10 @@ there is no separate load-session step.
 
 ### Record navigation (Editing, once a backend session is running)
 
-15. As a user, I want to expand a plugin row and see its record types, then its records
-    (paginated, with a "Load more…" step), so that browsing a large plugin stays responsive.
+15. As a user, I want to expand a plugin row and see its record types, then every record under a
+    type in one step, so that browsing works the way it does in xEdit — no manual "Load more…" click
+    (#398: measured no meaningful cost even at the realistic worst case; see Record navigation
+    below).
 16. As a user, I want each record labeled with its EditorID and FormKey (or just the FormKey
     when it has no EditorID), so that I can recognize records the way I do in xEdit.
 17. As a user, I want to select multiple tree nodes with Ctrl/Shift-click and run a batch
@@ -244,7 +246,8 @@ there is no separate load-session step.
   Closing the session returns every row to a leaf. Neither transition re-reads `plugins.txt`, so
   the load order, the name filter, row expansion and scroll position all survive it.
 - **Expanding a row browses that plugin's records** — record types, the spatial
-  worldspace/interior-cell hierarchy, and paginated record nodes (see Record navigation below).
+  worldspace/interior-cell hierarchy (the interior-cell listing itself still pages), and record
+  nodes, every one of a type in a single call (see Record navigation below).
 - **A row expands only if the session actually holds its plugin.** A row whose plugin is not in
   the session stays a leaf rather than opening onto an empty list, which would read as "this
   plugin has no records" (ADR-0026).
@@ -338,18 +341,45 @@ without saying what is not yet known would make that worse, not better.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache
-  keys, `contextValue`, commands, API `type`). Children are paginated record nodes with a
-  "Load more…" node at the end of a page.
+  keys, `contextValue`, commands, API `type`). Children are **every record of that type, loaded in
+  one `getChildren` call — no pagination, no "Load more…" step** (#398, amending the earlier,
+  never-maintainer-approved 50-per-page design this replaced). Measured before removing it: the
+  backend's `/records` query has no artificial limit, and the realistic worst case a Bethesda load
+  order can put in front of this surface — a single plugin's own contribution to one record type,
+  since that's the unit a `RecordTypeNode` scopes to — is vanilla `Fallout4.esm`'s own `INFO`
+  (Dialog response) records, ~78,000 of them in a full real-world FO4 modlist (`/home/wayne/Games/
+  FO4/LitR`, 592 active plugins; every mod plugin checked, including the largest quest mod in that
+  list, stayed under 13,000 for its own biggest type — vanilla dwarfs mods here). At that count:
+  ~125-280ms for the full backend query (DuckDB, `LIMIT`/`OFFSET` with no artificial cap) plus an
+  estimated ~280ms to materialize and hand off the `TreeItem` batch extension-host-side (synthetic
+  benchmark, upper-bound proxy) — comfortably sub-second end to end, one dev machine, Debug build.
+  VS Code's own `TreeView` already virtualizes rendering, so row count alone was never the
+  limitation pagination solved; xEdit itself shows a record-type group's full child list
+  unconditionally (`xeMainForm.pas`'s `vstNavInitChildren`: `ChildCount := Container.ElementCount`,
+  no `LIMIT`), so this also removes an ADR-0034 divergence that never had a demonstrated platform
+  limitation behind it.
 - **Record nodes** (`contextValue: "record"`, or `"recordImmutable"` for a row whose plugin is
   read-only for editing — an immutable plugin or a shadowed copy, which hides Remove/Change
-  FormID…; #427): labeled `{EditorID}  [{RecordType}:{FormID}]` (FormKey only when no EditorID).
-  Single-click (or Open Record) opens the editor; the context menu adds Remove (a confirmation
-  listing every selected record, deleting the whole selection as one batch; the Delete key also
-  triggers it) and Change FormID… (renumber), with xEdit's own captions, per
-  [medit-version-control.md](medit-version-control.md) — Add lives on the record-type row above
-  a plugin's records. Removing a record deletes its source file as an ordinary working-tree
-  change (#427); an uncommitted create has no special-cased handling — its source file is simply
-  removed the same way, since it was never committed to begin with.
+  FormID… (though not Copy — see below); #427): labeled `{EditorID}  [{RecordType}:{FormID}]`
+  (FormKey only when no EditorID). Single-click (or Open Record) opens the editor; the context
+  menu adds Remove (a confirmation listing every selected record, deleting the whole selection as
+  one batch; the Delete key also triggers it) and Change FormID… (renumber), with xEdit's own
+  captions, per [medit-version-control.md](medit-version-control.md) — Add lives on the
+  record-type row above a plugin's records. Removing a record deletes its source file as an
+  ordinary working-tree change (#427); an uncommitted create has no special-cased handling — its
+  source file is simply removed the same way, since it was never committed to begin with.
+- **Copy as Override Into…/Copy as New Record Into…** (#281 shipped this; ADR-0041's
+  pending-change sweep tore it out along with the storage layer it sat on; #436/#494 restored it):
+  available on both `"record"` and `"recordImmutable"` rows — unlike Remove/Change FormID…,
+  copying *from* an immutable or shadowed source is the ordinary case here, not an exception — and
+  identically from the record editor's own column header context menu, both entry points sharing
+  one implementation path. A native QuickPick picks the destination plugin, filtered to mutable
+  plugins only; Copy as Override additionally excludes every plugin that already carries the
+  record (xEdit parity, `xeMainForm.pas`'s `CopyInto` — a plugin cannot hold two overrides of the
+  same FormKey), which Copy as New Record does not apply, since its fresh FormKey always coexists
+  with the source. Copy as New Record prompts for neither an EditorID nor a FormKey: it lands
+  immediately under the source's own EditorID and the next free local FormID, renamed afterward
+  like any freshly created record (Add's own posture, above).
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
   the record browser for everything a row expands into (`"recordType"`, `"record"` /
@@ -359,10 +389,13 @@ without saying what is not yet known would make that worse, not better.
 
 - The record tree is filtered by a **filter file** — a plain `.sql` file containing a DuckDB
   `SELECT` returning `form_key`. While active, record types and records with no matching
-  records are pruned. **A plugin row is never hidden by this filter** — it stays visible and
-  simply does not expand, since this tree is also the load order and hiding a plugin would make
-  it unviewable and unreorderable mid-patch (ADR-0035 amends
-  [ADR-0018](../adr/0018-sql-file-based-record-filter.md) on this point).
+  records are pruned, and **a plugin with zero matching records is hidden entirely** — including
+  a load-failed or missing-master plugin, which is otherwise always visible. `GET /plugins`
+  itself never drops a plugin row (`HasMatchingRecords` is an additive per-plugin fact, backend-
+  tested); the hiding is a presentation decision in the Plugins tree, made only while a filter is
+  active. Clearing the filter restores every hidden row immediately, in load order. (ADR-0035
+  amends [ADR-0018](../adr/0018-sql-file-based-record-filter.md) on record/record-type pruning,
+  and its own dated §Filters amendment on plugin-row hiding, #396.)
 - Entry points: a title-bar funnel (opens a `setFilter` quick pick of `.sql` files in
   `modbench.scriptsPath` plus "New filter…"), a funnel-slash to clear (shown only while a
   filter is active), command-palette equivalents, and **Code Lens** on open `.sql` files under
@@ -598,9 +631,9 @@ overflow, then native **Collapse All** last.
   pluginDrifted`) — see Drift below. Absent on an undrifted row (nothing to re-read) and on a
   drifted row whose name resolves to nothing (nowhere to read from). Destructive, so no icon and
   no inline variant — overflow plus a modal confirm, per `modbench/CLAUDE.md` rule 4.
-- Record-scope context menu entries (Copy as Override Into…, Copy as New Record Into…, Remove,
-  Create Placed…) are described under Record navigation above — they apply to this tree's
-  expanded rows the same way regardless of which side of the composite built the row above them.
+- Record-scope context menu entries (Remove, Change FormID…, Copy as Override Into…, Copy as New
+  Record Into…) are described under Record navigation above — they apply to this tree's expanded
+  rows the same way regardless of which side of the composite built the row above them.
 
 ### Write mechanism
 
@@ -638,9 +671,10 @@ overflow, then native **Collapse All** last.
   populate it) but handled for completeness: a single informational node, "No plugins," the same
   fetch-failure-is-an-error-node/empty-is-a-known-fact convention every tree in this product
   follows.
-- Per `modbench/CLAUDE.md`: this holds for **load-more (pagination) fetches** on the
-  record-browsing side too — a failed "Load more…" surfaces an error node for that parent while
-  keeping the already-loaded pages and the retry affordance, and the error clears on a
+- Per `modbench/CLAUDE.md`: this holds for **load-more (pagination) fetches on the interior-cell
+  listing** too (#398 removed record-type pagination; the interior-cell listing is the only
+  surface left here that pages) — a failed "Load more…" surfaces an error node for that parent
+  while keeping the already-loaded pages and the retry affordance, and the error clears on a
   successful retry.
 
 ### Architecture / seams
@@ -677,8 +711,8 @@ overflow, then native **Collapse All** last.
 - **Good tests assert external behavior, not implementation details** — same standard as every
   other surface spec in this directory: given `plugins.txt` text + a mutation, assert the
   resulting text; given a plugin's masters + the ordered plugin list, assert the verdict; given a
-  session, assert the rendered node shape, labels, `contextValue`s, and pagination through
-  `getChildren`/`getTreeItem` against a stubbed repository. Never construct nodes directly.
+  session, assert the rendered node shape, labels, `contextValue`s, and interior-cell pagination
+  through `getChildren`/`getTreeItem` against a stubbed repository. Never construct nodes directly.
 - **Primary unit seam — `pluginsText.ts`** (Vitest, `npm run test:unit`, no backend):
   - parse: line → row mapping, comments/blanks ignored but preserved on write.
   - toggle: `*` prefix set/cleared, byte-faithful (CRLF/BOM/comments untouched).
@@ -727,11 +761,12 @@ overflow, then native **Collapse All** last.
   `plugins.txt` with no session; checkbox toggle, drag-reorder and the name filter round-trip
   with and without a session running; starting/stopping a session puts chevrons on and takes
   them off without disturbing the load order; navigation opens a record panel; a plugin
-  `GET /plugins` reports with no matching records keeps its row and loses only its chevron,
-  restored once a reload reports no filter at all rather than staying stuck suppressed (#278) —
-  the pruning rule itself (record types and records pruned, a plugin row never removed) is
-  backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock backend
-  drives `GET /plugins` directly rather than through a real `POST /session/filter`; Reveal in
+  `GET /plugins` reports with no matching records is hidden from the tree entirely (#396),
+  restored once a reload reports no filter at all rather than staying stuck hidden (#278's own
+  "map outlives the filter state" regression, in the row-hiding form #396 gave it) — the pruning
+  rule itself (record types and records pruned, a plugin row never removed by `GetPlugins()`
+  itself) is backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock
+  backend drives `GET /plugins` directly rather than through a real `POST /session/filter`; Reveal in
   Explorer dispatches; read failure renders the error tree node. Add new command id(s) to
   `EXPECTED_COMMANDS` (`modbench/CLAUDE.md`).
 
@@ -768,7 +803,7 @@ overflow, then native **Collapse All** last.
 
 - **Glossary** — `CONTEXT.md` (Editing) and
   [modmanager `CONTEXT.md`](../../modbench/src/modmanager/CONTEXT.md) distinguish **Plugin
-  load order** (this surface's subject, `plugins.txt`, record-level) from **Mod load order**
+  load order** (this surface's subject, `plugins.txt`, record-level) from **Mod override order**
   (the Modlist, `modlist.txt`, file-level) — previously conflated under one ambiguous "load
   order" term. [CONTEXT-MAP.md](../../CONTEXT-MAP.md)'s Mod-Management→Editing relationship
   description matches: the Editing session's plugin *order* comes from Plugin load order, not

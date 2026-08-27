@@ -17,7 +17,7 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new PristineFile("Test.esp.source/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var trailers = new TrackProvenance(
                 UpstreamVersion: "1.2.3",
                 MetaSha256: "META0001",
@@ -45,8 +45,8 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
         {
             var files = new[]
             {
-                new PristineFile("A.esp.source/npc_/A.esp/000001.json", "{}"u8.ToArray()),
-                new PristineFile("B.esp.source/npc_/B.esp/000001.json", "{}"u8.ToArray()),
+                new PristineFile("source/A.esp/npc_/A.esp/000001.json", "{}"u8.ToArray()),
+                new PristineFile("source/B.esp/npc_/B.esp/000001.json", "{}"u8.ToArray()),
             };
             var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { ["A.esp"] = "AAAA", ["B.esp"] = "BBBB" });
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
@@ -69,7 +69,7 @@ public sealed class SourceRepositoryLatestBaselineTrailersTests
         var modFolder = NewModFolder();
         try
         {
-            var files = new[] { new PristineFile("Test.esp.source/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
+            var files = new[] { new PristineFile("source/Test.esp/npc_/Test.esp/000001.json", "{}"u8.ToArray()) };
             var trailers = new TrackProvenance("9.9.9", null, new Dictionary<string, string> { ["Test.esp"] = "X" });
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 

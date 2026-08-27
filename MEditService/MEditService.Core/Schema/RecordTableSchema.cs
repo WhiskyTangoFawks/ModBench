@@ -92,24 +92,6 @@ public sealed class RecordTableSchema
     public required bool HasVmad { get; init; }
 
     /// <summary>
-    /// Adds a new blank record with the given FormKey to the correct group on <paramref name="mod"/>.
-    /// Null when the group property could not be resolved via reflection.
-    /// </summary>
-    public Action<IMod, FormKey>? AddNew { get; init; }
-
-    /// <summary>
-    /// Removes the record with the given FormKey from the correct group on <paramref name="mod"/>.
-    /// Returns true when removed, false when not found. Null when the group property could not be resolved via reflection.
-    /// </summary>
-    public Func<IMod, FormKey, bool>? Remove { get; init; }
-
-    /// <summary>
-    /// Adds an already-constructed record to the correct group on <paramref name="mod"/>.
-    /// Null when the group property could not be resolved via reflection.
-    /// </summary>
-    public Action<IMod, IMajorRecord>? AddExisting { get; init; }
-
-    /// <summary>
     /// Per-plugin column extractors for the synthetic "header" table only (null for every
     /// other schema). A mod header is never an <see cref="IMajorRecordGetter"/>, so
     /// <see cref="ColumnSpec.Extract"/> is structurally unusable for it — this is the real

@@ -240,7 +240,14 @@ async function linkWinners(
     const relativePath = entry.relativePath;
     // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
     // Deploying them into Data/root/ would be wrong; skip (deferred — see modbench-4).
-    if (relativePath === 'root' || relativePath.startsWith('root/')) continue;
+    // Folder only, deliberately — a mod file literally named `root` (no slash) is not
+    // this convention and deploys normally (#324). Checked references/modorganizer/:
+    // Root Builder itself isn't vendored there (it's a third-party plugin, not part of
+    // the ModOrganizer2 org's own repos per its readme's repo list), and the core VFS/
+    // directory-entry code that is vendored (directoryentry.cpp, fileentry.cpp, etc.)
+    // uses "root" only as a walk-origin parameter name, never as a special-cased
+    // filename. No MO2 basis for skipping a bare `root` file was found.
+    if (relativePath.startsWith('root/')) continue;
 
     const foldedKey = foldPath(relativePath);
     const priorPath = previousLinks.get(foldedKey);

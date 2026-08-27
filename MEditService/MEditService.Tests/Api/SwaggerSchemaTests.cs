@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 
@@ -61,6 +62,23 @@ public sealed class SwaggerSchemaTests
         Assert.Equal(new HashSet<string> { "200", "400", "409", "500", "503" }, declared);
     }
 
+    // #436: the same declared-vs-thrown audit CreatePluginRoute's own test above runs, for the two
+    // restored Copy routes — RecordEndpoints.Refusal only ever emits 409/422/404, and each handler's
+    // own catch blocks add 500/503, so an undeclared status here would mean Swashbuckle silently
+    // emitting `content?: never` for whichever one a client actually hits (MEditService/CLAUDE.md's
+    // endpoint invariant).
+    [Theory]
+    [InlineData("/records/{formKey}/copy-as-override")]
+    [InlineData("/records/{formKey}/copy-as-new-record")]
+    public async Task CopyRoute_DeclaresEveryStatusItsHandlerCanReturn(string path)
+    {
+        var root = await GetSchemaAsync();
+        var responses = root.GetProperty("paths").GetProperty(path).GetProperty("post").GetProperty("responses");
+
+        var declared = responses.EnumerateObject().Select(p => p.Name).ToHashSet();
+        Assert.Equal(new HashSet<string> { "200", "400", "404", "409", "422", "500", "503" }, declared);
+    }
+
     // Slice 2: a non-nullable object-typed property (required ref) must stay a bare $ref — the
     // filter must not wrap indiscriminately, only genuinely-nullable properties.
     [Fact]
@@ -74,5 +92,23 @@ public sealed class SwaggerSchemaTests
         Assert.Equal("#/components/schemas/FieldMetadata", reference.GetString());
         Assert.False(prop.TryGetProperty("nullable", out _));
         Assert.False(prop.TryGetProperty("allOf", out _));
+    }
+
+    // #332: ConditionOperator/ConditionParamCategory carry no per-enum [JsonConverter] attribute,
+    // so Swashbuckle's schema generator (which only honors that attribute form, not the global
+    // ConfigureHttpJsonOptions converter Program.cs registers) describes them as numeric unions
+    // while the wire actually carries strings — same class of bug FormKeyResolutionState already
+    // fixed. expectedMembers below is modeled on FormKeyResolutionState's already-fixed shape
+    // (string-enum member names, not the numeric form), not read from it at runtime.
+    [Theory]
+    [InlineData("ConditionOperator", new[] { "EqualTo", "NotEqualTo", "GreaterThan", "GreaterThanOrEqualTo", "LessThan", "LessThanOrEqualTo" })]
+    [InlineData("ConditionParamCategory", new[] { "Number", "Form", "Text" })]
+    public async Task ConditionEnum_SerializesAsStringUnion(string schemaName, string[] expectedMembers)
+    {
+        var root = await GetSchemaAsync();
+        var schema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+
+        Assert.Equal("string", schema.GetProperty("type").GetString());
+        Assert.Equal(expectedMembers, schema.GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
     }
 }

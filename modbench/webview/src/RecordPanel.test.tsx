@@ -520,6 +520,40 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
   });
 });
 
+// #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as the column header's
+// own native right-click menu — proves the real end-to-end wiring (RecordPanel → PluginHeader),
+// not just PluginHeader.test.tsx's own component-level pin, the same two-layer treatment VMAD's
+// own contexts got (recordUtils.test.ts's builder test + VmadStructuralOps.test.tsx's panel test).
+describe('RecordPanel — column header native right-click menu (#494)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('the header cell carries the recordHeader context, naming this column\'s own record identity', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    const compare = {
+      conflictAll: 'OnlyOne',
+      overrides: [{
+        formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+        loadOrderIndex: 0, isWinner: true, editorId: 'TestNPC',
+        fields: [{ metadata: strMeta, value: 'Test Name' }], conflictThis: 'OnlyOne',
+      }],
+      diffs: [{
+        fieldName: 'Name', values: { 'MyMod.esp': 'Test Name' },
+        winnerColumn: 'MyMod.esp', winnerValue: 'Test Name', cellStates: {},
+      }],
+    };
+    const { container } = renderPanel(compare);
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+
+    // Same `th > div` query the #304 dimming test above uses — the context lives on
+    // PluginHeader's own root div, nested inside RecordPanel's <th>.
+    const headerRoot = container.querySelector('th > div');
+    expect(JSON.parse(headerRoot!.getAttribute('data-vscode-context')!)).toEqual({
+      webviewSection: 'recordHeader', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA',
+      preventDefaultContextMenuItems: true,
+    });
+  });
+});
+
 describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -657,6 +691,55 @@ describe('RecordPanel — postMessage wiring', () => {
     });
 
     await waitFor(() => expect(client.load).toHaveBeenCalledWith('000002:Fallout4.esm'));
+  });
+
+  // #258 / ADR-0039: the string cell's right-click command reaches the extended editor only
+  // through this broadcast now — no left-click gesture in the webview calls openExtendedFieldEditor
+  // any more. Rival this guards against: pre-#258 code has no listener branch for this message
+  // type at all, so nothing would be posted here.
+  it('opens the extended editor bridge call when fieldOpenExtendedEditor arrives for the open record', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
+          formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: null, fieldName: 'Name',
+          value: 'Override Name', readOnly: false,
+        },
+      }));
+    });
+
+    // origin deliberately unasserted — compareResult's own fixture overrides omit it (undefined,
+    // not the message's `null`), and this test's job is the wiring, not origin's own semantics
+    // (columnKey resolves both the same way, ADR-0036).
+    await waitFor(() => expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR,
+      value: 'Override Name',
+      recordLabel: 'TestNPC [000001:Fallout4.esm]',
+      fieldName: 'Name',
+      plugin: 'MyMod.esp',
+      readOnly: false,
+    })));
+  });
+
+  it('ignores fieldOpenExtendedEditor for a different, background record', async () => {
+    renderPanel(compareResult);
+    await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
+          formKey: '000099:Fallout4.esm', plugin: 'MyMod.esp', origin: null, fieldName: 'Name',
+          value: 'Override Name', readOnly: false,
+        },
+      }));
+    });
+
+    expect(vscode.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR }));
   });
 });
 

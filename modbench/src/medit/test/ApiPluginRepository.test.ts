@@ -474,6 +474,55 @@ describe('ApiPluginRepository.peekNextFreeFormKey', () => {
   });
 });
 
+// #494: the destination picker's "who already carries this FormKey" question — no dedicated
+// backend endpoint, GET /records/{formKey}/compare's own Overrides[].Plugin already answers it.
+describe('ApiPluginRepository.getRecordOverridePlugins', () => {
+  it('calls GET /records/{formKey}/compare and returns every override plugin name', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: { overrides: [{ plugin: 'Fallout4.esm' }, { plugin: 'MyPatch.esp' }] },
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const plugins = await repo.getRecordOverridePlugins('000801:Fallout4.esm');
+
+    expect(plugins).toEqual(['Fallout4.esm', 'MyPatch.esp']);
+    expect(client.GET).toHaveBeenCalledWith('/records/{formKey}/compare', {
+      params: { path: { formKey: '000801:Fallout4.esm' } },
+    });
+  });
+
+  it('drops a null plugin name rather than passing one through', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: { overrides: [{ plugin: 'Fallout4.esm' }, { plugin: null }] },
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    expect(await repo.getRecordOverridePlugins('000801:Fallout4.esm')).toEqual(['Fallout4.esm']);
+  });
+
+  // A record with no compare entry at all (404) is not a fault — treated the same as "nothing
+  // carries it yet", matching getRecordOwner's own 404-is-legitimate posture.
+  it('returns an empty list on a 404 rather than throwing', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: undefined, error: 'not found', response: { ok: false, status: 404 } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    expect(await repo.getRecordOverridePlugins('000801:Fallout4.esm')).toEqual([]);
+  });
+
+  it('throws on a genuine non-OK response rather than degrading to an empty list', async () => {
+    await expect(new ApiPluginRepository(nonOkClient()).getRecordOverridePlugins('000801:Fallout4.esm'))
+      .rejects.toThrow(/500/);
+  });
+});
+
 describe('ApiPluginRepository.getWorldspaces', () => {
   it('maps worldspace summaries on an OK response', async () => {
     const client = {
@@ -500,7 +549,7 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: {
-          topCell: { formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null },
+          topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
           blocks: [{
             x: 1,
             y: -1,
@@ -519,14 +568,14 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const result = await repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C');
 
     expect(result).toEqual({
-      topCell: { formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null },
+      topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, fullName: null }],
       blocks: [{
         x: 1,
         y: -1,
         subBlocks: [{
           x: 2,
           y: -2,
-          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5 }],
+          cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, fullName: null }],
         }],
       }],
     });
@@ -589,7 +638,7 @@ describe('ApiPluginRepository.getInteriorCells', () => {
     const result = await repo.getInteriorCells('Plugin.esp', 50, 25);
 
     expect(result).toEqual({
-      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null }],
+      items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, fullName: null }],
       total: 42,
     });
     expect(client.GET).toHaveBeenCalledWith(
@@ -651,7 +700,7 @@ describe('ApiPluginRepository origin threading', () => {
   });
 
   it('sends origin as a query param on getWorldspaceBlocks', async () => {
-    const client = { GET: vi.fn().mockResolvedValue({ data: { blocks: [], topCell: null }, response: { ok: true } }) } as any;
+    const client = { GET: vi.fn().mockResolvedValue({ data: { blocks: [], topCells: [] }, response: { ok: true } }) } as any;
 
     await new ApiPluginRepository(client).getWorldspaceBlocks('Shared.esp', 'Fallout4.esm:00003C', 'ModB');
 

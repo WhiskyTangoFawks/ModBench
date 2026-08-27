@@ -2,12 +2,14 @@
 
 BACKEND=false
 FRONTEND=false
+API_DRIFT=false
 FAILED=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-    --backend)  BACKEND=true;  shift ;;
-    --frontend) FRONTEND=true; shift ;;
+    --backend)   BACKEND=true;   shift ;;
+    --frontend)  FRONTEND=true;  shift ;;
+    --api-drift) API_DRIFT=true; shift ;;
     *) echo "Unknown flag: $1"; exit 1 ;;
   esac
 done
@@ -34,6 +36,11 @@ if $FRONTEND; then
   echo "=== Gate 6: Frontend tests ===" && \
   (cd "$ROOT/modbench" && npm run test:unit && flock /tmp/modbench-itest.lock npm run test:integration) \
   || { echo "--- FRONTEND GATES FAILED ---"; FAILED=true; }
+fi
+
+if $API_DRIFT; then
+  bash "$ROOT/.claude/skills/validate/check-api-drift.sh" \
+  || { echo "--- API DRIFT GATE FAILED ---"; FAILED=true; }
 fi
 
 if $FAILED; then

@@ -1,5 +1,7 @@
 using MEditService.Core.Records;
 using MEditService.Core.Session;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Core.Queries;
 
@@ -19,11 +21,13 @@ public interface IWorldspaceQueryService
 /// placement / cell_location side tables — everything that plugin declares (its own records and
 /// overrides), never a cross-plugin winner. See ADR-0023.
 /// </summary>
-public sealed class WorldspaceQueryService(ISessionManager session) : IWorldspaceQueryService
+public sealed class WorldspaceQueryService(ISessionManager session, ILogger<WorldspaceQueryService>? logger = null)
+    : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
     private readonly ISessionManager _session = session;
+    private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
     {
@@ -42,10 +46,22 @@ public sealed class WorldspaceQueryService(ISessionManager session) : IWorldspac
         var cells = RequireRepository().GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
 
         // A worldspace's TopCell (persistent interior cell) has no block/sub-block coordinates.
-        var topCellRow = cells.FirstOrDefault(c => c.BlockX == null);
-        var topCell = topCellRow == null
-            ? null
-            : new CellSummary(topCellRow.FormKey, topCellRow.EditorId, topCellRow.CellX, topCellRow.CellY);
+        // #251: normally there is exactly one such row — the worldspace's own TopCell slot — but
+        // every block-less row is surfaced rather than keeping only the first and discarding the
+        // rest. The data can't say which of several is the "real" TopCell, so the first (existing
+        // deterministic order) is the one treated as the persistent cell; anything past it is
+        // still shown, just not labeled as persistent, and is genuinely anomalous — worth a warning.
+        var topCellRows = cells.Where(c => c.BlockX == null).ToList();
+        if (topCellRows.Count > 1)
+        {
+            _logger.LogWarning(
+                "Worldspace {WorldspaceFormKey} in {Plugin} ({Origin}) has {Count} block-less cell rows; " +
+                "expected at most one TopCell. Surfacing all, but only the first is treated as the persistent cell.",
+                worldspaceFormKey, plugin, origin, topCellRows.Count);
+        }
+        var topCells = topCellRows
+            .Select((c, i) => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, IsPersistentWorldspaceCell: i == 0, FullName: c.FullName))
+            .ToList();
 
         var blocks = cells
             .Where(c => c.BlockX != null)
@@ -58,10 +74,10 @@ public sealed class WorldspaceQueryService(ISessionManager session) : IWorldspac
                     .OrderBy(g => g.Key.X).ThenBy(g => g.Key.Y)
                     .Select(subGroup => new WorldspaceSubBlockDto(
                         subGroup.Key.X, subGroup.Key.Y,
-                        [.. subGroup.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY))]))]))
+                        [.. subGroup.Select(c => new CellSummary(c.FormKey, c.EditorId, c.CellX, c.CellY, FullName: c.FullName))]))]))
             .ToList();
 
-        return new WorldspaceBlocks(blocks, topCell);
+        return new WorldspaceBlocks(blocks, topCells);
     }
 
     public CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null)

@@ -14,6 +14,9 @@ vi.mock('vscode', () => ({
     }
   },
   ThemeIcon: class {
+    constructor(public id: string, public color?: unknown) {}
+  },
+  ThemeColor: class {
     constructor(public id: string) {}
   },
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
@@ -201,20 +204,20 @@ describe('PluginsTreeComposite when a session starts', () => {
   });
 });
 
-// #278 / ADR-0035 amending ADR-0018: a record filter prunes records and record types, never a
-// plugin row. The row stays exactly where the load order put it; the only thing an active filter
-// with no matches on this plugin is allowed to change is the chevron.
-describe('PluginsTreeComposite — a record filter suppresses the chevron, never the row (#278 / ADR-0035)', () => {
-  it('leaves a plugin with no matching records visible, but not expandable', async () => {
+// #396 / ADR-0035's dated §Filters amendment (reversing part of #278's own amendment): while a
+// record filter is active, a plugin with zero matching records is hidden entirely, not merely
+// left unexpandable — a visible-but-inert row is still noise, and the point of a filter is to cut
+// noise. Row omission and the chevron read the same fact (`hasMatchingRecords`), so a hidden row
+// never gets far enough to have a chevron opinion at all.
+describe('PluginsTreeComposite — a record filter hides a plugin with no matches (#396 / ADR-0035)', () => {
+  it('omits a plugin with no matching records from the row set entirely', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp');
     composite.setSession(new Set(['A.esp', 'B.esp']));
-    await render();
 
-    expect(await composite.getChildren()).toEqual([PLUGIN_ROW, OTHER_ROW]);
-    expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
+    expect(await render()).toEqual([OTHER_ROW]);
   });
 
-  it('keeps the chevron on a plugin the filter still matches', async () => {
+  it('keeps a plugin the filter still matches visible and expandable', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp');
     composite.setSession(new Set(['A.esp', 'B.esp']));
     await render();
@@ -223,14 +226,82 @@ describe('PluginsTreeComposite — a record filter suppresses the chevron, never
   });
 
   // No filter machinery wired (the accessor absent) has to read the same as "no filter active" —
-  // every existing session-start test above already asserts a chevron with no third argument at
-  // all, so this only has to hold the line rather than prove it fresh.
-  it('keeps every session row expandable when hasMatchingRecords is not wired', async () => {
+  // every existing session-start test above already asserts a visible, expandable row with no
+  // third argument at all, so this only has to hold the line rather than prove it fresh.
+  it('keeps every session row present and expandable when hasMatchingRecords is not wired', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     composite.setSession(new Set(['A.esp']));
-    await render();
 
+    expect(await render()).toEqual([PLUGIN_ROW]);
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
+  });
+
+  // A row that stands for no plugin file (an error/empty-state row) has nothing for a record
+  // filter to have an opinion about, so it is never a candidate for hiding — same as it was never
+  // a candidate for the chevron.
+  it('never hides a row that stands for no plugin file', async () => {
+    const { composite, render } = make([PLUGIN_ROW, ERROR_ROW], new FakeChildren(), undefined, () => false);
+    composite.setSession(new Set(['A.esp']));
+
+    expect(await render()).toEqual([ERROR_ROW]);
+  });
+
+  it('restores a hidden plugin immediately, in load order, once the filter clears', async () => {
+    let matches = false;
+    const { composite, render } = make(
+      [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp' || matches,
+    );
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    expect(await render()).toEqual([OTHER_ROW]);
+
+    // Stands in for SessionController.clearFilter's real hand-off: refreshMatchingPlugins flips
+    // the per-plugin fact, then fires the same re-render refreshDecorations does.
+    matches = true;
+    composite.refreshDecorations();
+
+    expect(await composite.getChildren()).toEqual([PLUGIN_ROW, OTHER_ROW]);
+  });
+
+  // Drag/drop reorders through PluginListProvider directly — extension.ts wires
+  // `dragAndDropController: pluginListProvider`, not this composite — and the composite itself
+  // never caches row order (see the "does not re-read the load order" test above): every
+  // getChildren() re-derives the visible set from a fresh rows.getChildren() call plus the
+  // current hasMatchingRecords answer. So a reorder that happens while a row is hidden must still
+  // land in its new position once the filter clears, not the position it had when hidden.
+  it('restores a hidden row in its new position when the underlying order changed while it was hidden', async () => {
+    let matches = false;
+    const { composite, rowSource, render } = make(
+      [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp' || matches,
+    );
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+    expect(await render()).toEqual([OTHER_ROW]);
+
+    rowSource.rows.reverse();
+    matches = true;
+    composite.refreshDecorations();
+
+    expect(await composite.getChildren()).toEqual([OTHER_ROW, PLUGIN_ROW]);
+  });
+
+  // Issue #396's own explicit AC: "this applies even to a plugin with a load error / missing
+  // master that would normally always stay visible — the maintainer's explicit call". Both facts
+  // ride the same setSession hand-off as hasMatchingRecords (extension.ts's SessionPluginFiles),
+  // and isHiddenByFilter reads only pluginFileOf/hasMatchingRecords — never masterIssues or
+  // loadFailures — so a plugin flagged either way is hidden right along with an ordinary one.
+  it('hides a plugin with a missing-master flag while the filter matches none of its records', async () => {
+    const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), undefined, () => false);
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    expect(await render()).toEqual([]);
+  });
+
+  it('hides a plugin that failed to load while the filter matches none of its records', async () => {
+    const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), undefined, () => false);
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+
+    expect(await render()).toEqual([]);
   });
 });
 
@@ -418,6 +489,9 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
+    // #395: the same red the Problems panel uses, not the plain foreground color a colorless
+    // ThemeIcon renders in — otherwise indistinguishable at a glance in a large load order.
+    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
     expect(item.tooltip).toContain('Missing master: Ghost.esm');
   });
 
@@ -519,11 +593,16 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    // #395: the reason can be a multi-line exception-chain summary (GameSession.PluginLoadFailure
+    // now joins outer through innermost message) — the tooltip must carry every line, readably.
+    const reason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
+    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', reason]]));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
-    expect(item.tooltip).toContain('Failed to load: Malformed record');
+    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
+    expect(item.tooltip).toContain('Failed to load: InvalidOperationException: Malformed record');
+    expect(item.tooltip).toContain('FormatException: bad subrecord at offset 12');
   });
 
   // AC2: the row stays put — plugins.txt still lists it — but it never got indexed, so it's

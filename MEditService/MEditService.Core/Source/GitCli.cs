@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Serilog;
 
 namespace MEditService.Core.Source;
 
@@ -38,8 +39,7 @@ internal static class GitCli
     internal static string Run(string gitDir, string workTree, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, null, args);
-        if (exitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({exitCode}): {stderr}");
+        if (exitCode != 0) throw Failed(args, exitCode, stderr);
         return stdout;
     }
 
@@ -63,9 +63,24 @@ internal static class GitCli
     internal static string RunWithIndex(string gitDir, string workTree, string indexFile, params string[] args)
     {
         var (exitCode, stdout, stderr) = Execute(gitDir, workTree, indexFile, args);
-        if (exitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({exitCode}): {stderr}");
+        if (exitCode != 0) throw Failed(args, exitCode, stderr);
         return stdout;
+    }
+
+    /// <summary>
+    /// #405: the thrown message names only the subcommand (<c>args[0]</c>), exit code and stderr —
+    /// never the full argument vector, which can carry absolute scratch/spill paths (e.g. a
+    /// commit message or a hash-object target) straight onto the wire via the endpoint convention's
+    /// <c>Results.Problem(ex.Message)</c>. The full vector is not lost, only moved: it goes to the
+    /// log via Serilog's ambient <see cref="Log"/> gateway (the same one <c>Program.cs</c> already
+    /// configures for the whole process) rather than an injected <c>ILogger</c> — this static class
+    /// has none to take, and this is one diagnostic line at one throw site, not a reason for Core to
+    /// start reaching for the ambient gateway generally.
+    /// </summary>
+    private static InvalidOperationException Failed(string[] args, int exitCode, string stderr)
+    {
+        Log.Warning("git {Args} failed ({ExitCode}): {Stderr}", args, exitCode, stderr);
+        return new InvalidOperationException($"git {args[0]} failed ({exitCode}): {stderr}");
     }
 
     private static (int ExitCode, string Stdout, string Stderr) Execute(string gitDir, string workTree, string? indexFile, string[] args)

@@ -104,6 +104,8 @@ function toCellSummary(c: GenCell): CellSummary {
     editorId: c.editorId ?? null,
     cellX: c.cellX ?? null,
     cellY: c.cellY ?? null,
+    isPersistentWorldspaceCell: c.isPersistentWorldspaceCell ?? false,
+    fullName: c.fullName ?? null,
   };
 }
 
@@ -155,6 +157,11 @@ export interface PluginRepository {
   // multi-mod session. undefined for an unknown FormKey (404) — never thrown, since "the actively
   // open record just isn't resolvable" is the caller's own fallback path, not a failure to report.
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
+  // #494: the Copy as Override destination picker's own exclusion data — every plugin already
+  // holding an override (or the native/winning copy) of this FormKey, straight off GET
+  // /records/{formKey}/compare's existing Overrides list; no dedicated endpoint needed. Empty for
+  // an unknown FormKey (404), the same "not a fault" posture getRecordOwner's own 404 case uses.
+  getRecordOverridePlugins(formKey: string): Promise<string[]>;
   // #427: the Renumber gesture's FormID input box's suggested default — the same both-refs
   // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
   // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
@@ -302,6 +309,17 @@ export class ApiPluginRepository implements PluginRepository {
     return data?.plugin && data.origin ? { plugin: data.plugin, origin: data.origin } : undefined;
   }
 
+  // #494: see the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
+  // yet", not a fault, same posture as getRecordOwner's own 404 case above.
+  async getRecordOverridePlugins(formKey: string): Promise<string[]> {
+    const { data, error, response } = await this.client.GET('/records/{formKey}/compare', {
+      params: { path: { formKey } },
+    });
+    if (response.status === 404) return [];
+    this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
+    return (data?.overrides ?? []).flatMap((o) => (o.plugin ? [o.plugin] : []));
+  }
+
   async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/records/next-form-key', {
       params: { path: { plugin }, query: { origin } },
@@ -397,7 +415,7 @@ export class ApiPluginRepository implements PluginRepository {
     });
     this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
     return {
-      topCell: data?.topCell ? toCellSummary(data.topCell) : null,
+      topCells: (data?.topCells ?? []).map(toCellSummary),
       blocks: (data?.blocks ?? []).map(b => ({
         x: b.x ?? 0,
         y: b.y ?? 0,

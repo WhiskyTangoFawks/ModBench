@@ -161,17 +161,6 @@ describe('openExtendedFieldEditor', () => {
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ plugin: 'Shared.esp', origin: 'ModB' }));
   });
 
-  // Issue #242: the pending column's own call site passes `column: 'pending'` — forwarded as-is
-  // so the extension host can key the temp file/tab independently of the disk cell's.
-  it('posts OPEN_EXTENDED_EDITOR with column: "pending" when the caller passes it', () => {
-    openExtendedFieldEditor(
-      { value: 'staged value', recordLabel: 'Deacon [000123:Fallout4.esm]', fieldName: 'Description', plugin: 'MyMod.esp', origin: 'Data', readOnly: false, column: 'pending' },
-      vi.fn(),
-    );
-
-    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({ column: 'pending' }));
-  });
-
   it('calls onCommit with each EXTENDED_EDITOR_COMMITTED reply, not just the first', () => {
     const onCommit = vi.fn();
     openExtendedFieldEditor({ value: '', recordLabel: '', fieldName: '', plugin: '', origin: 'Data', readOnly: false }, onCommit);

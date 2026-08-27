@@ -49,19 +49,56 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private readonly ConcurrentDictionary<GameCategory, GameSchemaCache> _cache = new();
 
-    public IReadOnlyDictionary<string, RecordTableSchema> GetSchemas(GameRelease release) =>
-        GetCache(release.ToCategory()).Schemas;
+    // #445: keyed by category (not release) because the assembly is category-wide — a `null` entry
+    // means that category's assembly was probed once and found unreferenced, cached so a repeated
+    // ask never re-attempts the load or re-logs the warning below.
+    private readonly ConcurrentDictionary<GameCategory, Assembly?> _assemblyByCategory = new();
 
-    private GameSchemaCache GetCache(GameCategory category) =>
-        _cache.GetOrAdd(category, c => BuildForCategory(c, _logger));
-
-    private static GameSchemaCache BuildForCategory(GameCategory category, ILogger logger)
+    public IReadOnlyDictionary<string, RecordTableSchema> GetSchemas(GameRelease release)
     {
-        var assemblyName = $"Mutagen.Bethesda.{category}";
-        var assembly = AppDomain.CurrentDomain.GetAssemblies()
-                           .FirstOrDefault(a => a.GetName().Name == assemblyName)
-                       ?? Assembly.Load(assemblyName);
+        var category = release.ToCategory();
+        var assembly = ResolveAssembly(release, category)
+            ?? throw new UnsupportedGameReleaseException(release, AssemblyNameFor(category));
+        return GetCache(category, assembly).Schemas;
+    }
 
+    /// <inheritdoc />
+    public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
+
+    private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
+
+    // The one place that probes whether a category's Mutagen assembly is loadable. Never throws:
+    // a `FileNotFoundException` from `Assembly.Load` means "not referenced in this build", which is
+    // reported (cached `null`, one warning) rather than propagated — GetSchemas is what turns an
+    // unsupported category into a typed refusal for a caller that actually needs one.
+    private Assembly? ResolveAssembly(GameRelease release, GameCategory category) =>
+        _assemblyByCategory.GetOrAdd(category, c => ProbeAssembly(release, c, _logger));
+
+    private static Assembly? ProbeAssembly(GameRelease release, GameCategory category, ILogger logger)
+    {
+        var assemblyName = AssemblyNameFor(category);
+        var loaded = AppDomain.CurrentDomain.GetAssemblies()
+            .FirstOrDefault(a => a.GetName().Name == assemblyName);
+        if (loaded != null) return loaded;
+
+        try
+        {
+            return Assembly.Load(assemblyName);
+        }
+        catch (FileNotFoundException ex)
+        {
+            logger.LogWarning(ex,
+                "Game release {Release} is unavailable: Mutagen assembly {AssemblyName} is not referenced in this build",
+                release, assemblyName);
+            return null;
+        }
+    }
+
+    private GameSchemaCache GetCache(GameCategory category, Assembly assembly) =>
+        _cache.GetOrAdd(category, c => BuildForCategory(c, assembly, _logger));
+
+    private static GameSchemaCache BuildForCategory(GameCategory category, Assembly assembly, ILogger logger)
+    {
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
@@ -69,12 +106,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // abstract base — GameSettingInt/Float/String/Bool/UInt are all GMST, GlobalInt/Float/
         // Short/Bool are all GLOB, DamageType/DamageTypeIndexed are both DMGT — because the type
         // discriminant lives on the record itself (an EditorID prefix, a subrecord, ...), never on
-        // the table. `discovered`/`seenTables` still record one winner per table (RecordType and
-        // the lifecycle delegates below stay bound to it, deliberately unchanged by this fix — see
-        // BuildLifecycleDelegates and BuildSchema), but `siblingsByTable` keeps every concrete type
-        // sharing a signature so BuildSchema can union their columns instead of the loser's shape
-        // being silently dropped (issue #263: that drop is why a GameSetting's Data column only
-        // ever worked for whichever subclass reflection happened to enumerate first).
+        // the table. `discovered`/`seenTables` still record one winner per table (RecordType stays
+        // bound to it, deliberately unchanged by this fix — see BuildSchema), but `siblingsByTable`
+        // keeps every concrete type sharing a signature so BuildSchema can union their columns
+        // instead of the loser's shape being silently dropped (issue #263: that drop is why a
+        // GameSetting's Data column only ever worked for whichever subclass reflection happened to
+        // enumerate first).
         var seenTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var discovered = new List<(string tableName, Type getterType)>();
         var siblingsByTable = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
@@ -111,8 +148,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
             .ToDictionary(x => x.Type, x => x.Table);
 
-        var modType = assembly.GetType($"Mutagen.Bethesda.{category}.{category}Mod");
-
         // #178: resolved once per category (condition codecs are stateless per-call factories,
         // and the codec itself doesn't vary per table) — passed into BuildSchema so it can skip
         // condition-shaped properties the same way baseSkip skips other fields, keeping the
@@ -130,22 +165,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var schemas = new Dictionary<string, RecordTableSchema>();
         foreach (var (tableName, getterType) in discovered)
         {
-            var schema = BuildSchema(
+            schemas[tableName] = BuildSchema(
                 tableName, getterType, siblingsByTable[tableName],
                 getterTypeToTable, logger, conditionCodec, vmadInterfaceType);
-            var (addNew, remove, addExisting) = BuildLifecycleDelegates(modType, getterType);
-
-            schemas[tableName] = addNew == null ? schema : new RecordTableSchema
-            {
-                TableName = schema.TableName,
-                DisplayName = schema.DisplayName,
-                RecordType = schema.RecordType,
-                RecordColumns = schema.RecordColumns,
-                HasVmad = schema.HasVmad,
-                AddNew = addNew,
-                Remove = remove,
-                AddExisting = addExisting,
-            };
         }
 
         AddHeaderSchemaIfAvailable(schemas, category, assembly, getterTypeToTable, logger);
@@ -307,50 +329,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return null;
     }
 
-    // Builds the record-lifecycle delegates bound to the mod's typed group for this record
-    // type. Every delegate is null when the group or a mutable setter type cannot be resolved.
-    private static (Action<IMod, FormKey>? AddNew, Func<IMod, FormKey, bool>? Remove, Action<IMod, IMajorRecord>? AddExisting)
-        BuildLifecycleDelegates(Type? modType, Type getterType)
-    {
-        if (modType == null) return default;
-
-        var setterType = GetSetterType(getterType);
-        if (setterType == null) return default;
-
-        var targetGroupType = typeof(IGroup<>).MakeGenericType(setterType);
-        var groupProp = modType
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .FirstOrDefault(p => targetGroupType.IsAssignableFrom(p.PropertyType));
-        if (groupProp == null) return default;
-
-        void AddNewToGroup(IMod mod, FormKey fk)
-        {
-            var group = (IGroup)groupProp.GetValue(mod)!;
-            group.AddNew(fk);
-        }
-        void AddExistingToGroup(IMod mod, IMajorRecord rec)
-        {
-            var group = (IGroup)groupProp.GetValue(mod)!;
-            group.AddUntyped(rec);
-        }
-
-        // Remove(FormKey) is on IGroup<T>, not the non-generic IGroup; resolve MethodInfo
-        // once at schema-build time and close over it to avoid per-call reflection.
-        Func<IMod, FormKey, bool>? remove = null;
-        var removeMethod = targetGroupType
-            .GetMethod("Remove", BindingFlags.Public | BindingFlags.Instance, [typeof(FormKey)]);
-        if (removeMethod != null)
-        {
-            remove = (mod, fk) =>
-            {
-                var grp = groupProp.GetValue(mod)!;
-                return removeMethod.Invoke(grp, [fk]) is true;
-            };
-        }
-
-        return (AddNewToGroup, remove, AddExistingToGroup);
-    }
-
     // #413: the three GRUP-timestamp properties join this list for the same reason
     // MajorRecordFlagsRaw and FormVersion are already on it — they are not record data. A timestamp
     // here belongs to the GRUP that contains the record, not to the record, so it stays out of the
@@ -379,23 +357,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
     };
 
-    // #263: RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) and the
-    // lifecycle delegates (AddNew/Remove/AddExisting, built from getterType just below) stay bound
-    // to the discovery winner, deliberately, even though RecordColumns below is unioned across
-    // every sibling. Two independent reasons:
-    //   - Enumeration already returns every sibling's records no matter which one's getter
-    //     interface is named — Mutagen's own EnumerateMajorRecords falls back through
-    //     InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the
-    //     group enumerator returns every element once the requested type is assignable to it. Rows
-    //     were never dropped; only the Data column's extraction was broken. So RecordType has
-    //     nothing to gain from pointing at the abstract base.
-    //   - GetSetterType(getterType) resolves the *instantiable* class AddNew/AddExisting need
-    //     (via ILoquiRegistration.SetterType). Pointing it at an abstract base's getter interface
-    //     resolves to the abstract class itself, and IGroup.AddNew(FormKey) needs something
-    //     constructible — that would turn "add a new GMST record" from quietly-wrong-but-working
-    //     (today it always creates whichever concrete subclass happens to be the winner) into a
-    //     hard throw. Record *creation* is unrelated to this ticket's display defect and is left
-    //     exactly as good (or bad) as it already was.
+    // #263: RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) stays bound to
+    // the discovery winner, deliberately, even though RecordColumns below is unioned across every
+    // sibling. Enumeration already returns every sibling's records no matter which one's getter
+    // interface is named — Mutagen's own EnumerateMajorRecords falls back through
+    // InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the group
+    // enumerator returns every element once the requested type is assignable to it. Rows were never
+    // dropped; only the Data column's extraction was broken. So RecordType has nothing to gain from
+    // pointing at the abstract base.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
@@ -723,16 +692,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             ? existing.SubFields.Select(fa =>
                 UnionEnumDomains(fa, siblingSpec.SubFields.First(fb => fb.Name == fa.Name))).ToList()
             : existing.SubFields;
-        var mergedEnumValues = existing.ApiType == "enum"
-            ? existing.EnumValues.Concat(siblingSpec.EnumValues).Distinct().ToList()
-            : existing.EnumValues;
 
         columns[existingIndex] = existing with
         {
             Extract = MergedExtract,
             ElementType = mergedElementType,
             SubFields = mergedSubFields,
-            EnumValues = mergedEnumValues,
+            // existing.EnumValues is left untouched here (never unioned): this function is only
+            // reached once IsSameColumnShapeExceptEnumDomain has confirmed existing.ApiType ==
+            // siblingSpec.ApiType, and both of this function's callers are themselves gated behind
+            // NonScalarApiTypes.Contains(existing.ApiType) — array or struct only, never "enum" — so
+            // the top-level column's own EnumValues has nothing to union here. The real per-leaf
+            // enum-domain union (OMOD's `property` sub-field) happens above, inside UnionEnumDomains.
             // Same reason WidenedExtract's own column sets this above: becoming dispatch-guarded
             // means every row of a non-matching sibling now legitimately reads null through this
             // column — false here would assert a guarantee the dispatch no longer keeps.
@@ -1138,8 +1109,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // ── Shared leaf classification (column ⇄ sub-field) ───────────────────────
     // The neutral facts a leaf field carries, independent of whether it becomes a top-level
     // column or a struct/array sub-field. Get reads the raw value from any instance; Convert
-    // turns a JSON token into the value to write — null means "no generic applier" (form-links
-    // supply their own per context: read-only as a column, ApplyFormLinkJson as a sub-field).
+    // turns a JSON token into the value to write — null means "no generic applier" (a form-link
+    // instead gets ApplyFormLinkJson, #429: identically for a top-level column and a sub-field).
     private sealed record LeafSpec(
         string ApiType,
         string DuckDbType,
@@ -1280,7 +1251,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // Projects a shared LeafSpec into a sub-field. Generic leaves (primitive / enum / translated-
     // string) use the shared applier; a form-link (its Convert is null) gets ApplyFormLinkJson —
-    // the one place a sub-field form-link differs from its read-only column counterpart.
+    // the same routing ProjectColumn gives a top-level FormLink column (#429).
     private static SubFieldSpec ProjectSubField(
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
@@ -1363,23 +1334,33 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
-            { } leaf => ProjectColumn(prop, nullable, leaf),
+            { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
             _ => null,
         };
     }
 
-    // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) yields a
-    // null Apply — top-level form-link columns are read-only in the index.
-    private static ColumnInfoResult ProjectColumn(PropertyInfo prop, bool nullable, LeafSpec leaf) =>
-        new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
-            leaf.Convert is { } c ? MakeColumnApplier(prop.Name, nullable, c) : null,
+    // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) gets
+    // ApplyFormLinkJson (#429) — the same routing ProjectSubField gives its sub-field sibling, so a
+    // top-level column is no longer the one FormLink shape without a write path.
+    private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
+    {
+        var pName = prop.Name;
+        Action<IMajorRecord, JsonElement>? apply = leaf.Convert switch
+        {
+            { } c => MakeColumnApplier(pName, nullable, c),
+            null when IsFormLink(core) => (record, val) => ApplyFormLinkJson(record, val, pName, logger),
+            _ => null,
+        };
+        return new(leaf.DuckDbType, r => leaf.Get(r), leaf.ApiType, leaf.ValidFormKeyTypes, leaf.EnumValues,
+            apply,
             AllowsNull: leaf.AllowsNull, IsBitmask: leaf.IsBitmask, EnumBitValues: leaf.EnumBitValues,
             IsFlagsEnum: leaf.IsFlagsEnum,
             // A nullable property genuinely can be absent-meaning-null, so it keeps NULL rather than
             // being coalesced to a default it never had.
             ViewDefaultLiteral: nullable ? null : leaf.ViewDefaultLiteral);
+    }
 
     // ── IReadOnlyList<T> ──────────────────────────────────────────────────────
 
@@ -1513,4 +1494,38 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     [GeneratedRegex("(?<=[a-z0-9])([A-Z])")]
     private static partial Regex SnakeCaseBoundary();
+}
+
+/// <summary>
+/// Thrown by <see cref="ISchemaReflector.GetSchemas"/> when a game release's backing Mutagen
+/// record-type assembly is not referenced by this build (#445) — e.g. requesting Skyrim before
+/// #423 adds <c>Mutagen.Bethesda.Skyrim</c>. Distinguishes "this release isn't compiled in" from
+/// Mutagen's own <see cref="FileNotFoundException"/>, which is not an actionable message for a
+/// caller. <see cref="ISchemaReflector.IsSupported"/> is the non-throwing check discovery should
+/// use instead of catching this.
+/// </summary>
+public sealed class UnsupportedGameReleaseException : Exception
+{
+    // RCS1194: the three standard exception constructors, for well-behaved rethrow/serialization
+    // callers generally — not how SchemaReflector itself throws this (see the release-based
+    // constructor below), which builds a specific, actionable message naming the missing assembly.
+    public UnsupportedGameReleaseException()
+    {
+    }
+
+    public UnsupportedGameReleaseException(string message) : base(message)
+    {
+    }
+
+    public UnsupportedGameReleaseException(string message, Exception innerException) : base(message, innerException)
+    {
+    }
+
+    internal UnsupportedGameReleaseException(GameRelease release, string assemblyName)
+        : base($"Game release '{release}' is not supported by this build: the Mutagen assembly '{assemblyName}' is not referenced.")
+    {
+        Release = release;
+    }
+
+    public GameRelease Release { get; }
 }

@@ -13,10 +13,11 @@ specified single-click-to-edit, which xEdit does not do. In the field grid, a si
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
 cell shows a `grab` cursor (#222). Editing is off single click: a second click on the focused
 cell, `F2`, or a double click opens a mutable cell's editor; double-clicking the label column
-expands/collapses that node; the editor selects its whole text on focus (#223). A `string` cell's
-double click diverges from its second-click/F2 target: it opens the extended editor, a real editor
-tab, rather than the inline text box (#230) — see *Editing* below for the vehicle, commit trigger,
-and immutable-column behaviour. `Ctrl+C` copies
+expands/collapses that node; the editor selects its whole text on focus (#223). Every scalar type,
+`string` included, agrees on this: second click, `F2` and double click all open the same inline
+editor, immediately, with no debounce (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)
+— no left-click gesture may relocate the user out of the record panel, which a `string` cell's
+double click used to do by opening a real editor tab). `Ctrl+C` copies
 the focused cell's model value in both column kinds (#224); `Ctrl+X`/`Ctrl+V` are the mutating half
 of that same contract — clipboard read/write both round-trip through the extension host, and both
 commit through the ordinary onEdit path, coercing the pasted string the same way the typed-editor
@@ -26,9 +27,9 @@ ops (Add/Remove/Move Up/Move Down) live on the right-click
 menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, and the inline ▲▼✕/＋ buttons #142
 shipped before ADR-0034 are gone (#227). The read-only value surface ADR-0033 introduced is gone
 too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click —
-**except a `string` cell's double click**, which opens the extended editor read-only rather than
-opening nothing (#230; a read-only tab is still the only way to read a long value in full) — with
-Ctrl+C on the focused cell (#224) as every immutable cell's copy path regardless. Everything in
+**a `string` cell included, now** (#258/ADR-0039) — with Ctrl+C on the focused cell (#224) as every
+immutable cell's copy path regardless, and the right-click menu's **Open in Editor…** entry (see
+*Editing* below) as a long immutable value's own read path, read-only. Everything in
 *Interaction model* below
 describes the target, not the build. VMAD and Conditions now render as ordinary rows in this same
 tree and inherit its focus model in full (#231 — see *VMAD and Conditions are ordinary rows in the
@@ -131,12 +132,13 @@ better idea.
   the whole reason click is spent on focus rather than on editing.
 - **Left-click on the already-focused cell** — open its inline editor. The Explorer
   "click, then click again to rename" pattern, and xEdit's `toEditOnClick`.
-- **Double-click a value cell** — open the fullest editor that type has: the inline editor for
-  numeric and flag types, the extended editor for `string` (#230). A FormKey's double click stays
-  on the native QuickPick, same as its second click/F2 — that QuickPick is already its richest
-  editor (ADR-0034's divergence #1), not a second surface layered on top of it (divergence #2, the
-  extended editor); the two divergences are independent, and only one of them applies per type.
-  **Double-click the label column** — expand/collapse that node.
+- **Double-click a value cell** — open the same inline editor a second click/`F2` on the
+  already-focused cell would: numeric and flag types inline, `string` inline too
+  (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md) — no left-click gesture
+  may reach the extended editor, which used to be `string`'s own double-click target). A FormKey's
+  double click stays on the native QuickPick, same as its second click/F2 — that QuickPick is
+  already its richest editor (ADR-0034's divergence #1). **Double-click the label column** —
+  expand/collapse that node.
 - **The keyboard acts on the focused cell** — `F2` edit · `Ctrl+C` copy · `Ctrl+X` cut ·
   `Ctrl+V` paste · `Insert` add a list entry · `Delete` remove the entry or clear the value ·
   `Ctrl+↑`/`Ctrl+↓` reorder within an unsorted list. **Clipboard operations carry the cell's model
@@ -154,7 +156,9 @@ better idea.
   list structure ops (**Add** / **Remove** / **Clear** / **Move Up** / **Move Down**), which are
   also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
-  ▲▼✕ controls**, per the no-second-route rule below. The column-header menu is VS Code's own
+  ▲▼✕ controls**, per the no-second-route rule below. On a **`string` value cell**, right-click also
+  offers **Open in Editor…** (#258/ADR-0039) — the extended editor's only remaining trigger, on
+  mutable and immutable columns alike; see *Editing* below for what opens. The column-header menu is VS Code's own
   native context menu (`contributes.menus["webview/context"]`, gated on a `data-vscode-context`
   attribute the header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
   native-first precedent applied inside the webview) rather than a rendered overlay. #335/ADR-0038:
@@ -181,24 +185,29 @@ through DOM text selection, and they close when the clipboard carries the model 
 
 #### Uniform across every value cell, both column kinds
 
-Focus on click · drag out · `Ctrl+C` copy · right-click menu · default arrow cursor.
+Focus on click · drag out · `Ctrl+C` copy · right-click menu · default arrow cursor. Every scalar
+type's second click, `F2` and double click now agree on the same (inline) editor —
+`string` included (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)) — so
+there is no per-type exception left in this table at all.
 Drop in and all mutating operations (`Ctrl+V`, `Ctrl+X`, `F2`, `Insert`, `Delete`, `Ctrl+↑`/`↓`,
 editing of any kind) are **mutable columns only** — an immutable cell simply refuses, showing no
-distinct affordance beforehand, exactly as xEdit does.
+distinct affordance beforehand, exactly as xEdit does. A `string` cell's right-click menu is the
+one exception offered on **both** column kinds — **Open in Editor…** opens the extended editor,
+read-only on an immutable/untracked/not-in-load-order column (#258/ADR-0039).
 
 #### By cell
 
-| Cell | Second click / `F2` opens | Double-click opens |
-| --- | --- | --- |
-| `string` | text editor | extended editor |
-| `int`, `float` | number editor | number editor (inline — matches xEdit's `dtInteger`/`dtFloat`) |
-| `bool` | checkbox | checkbox |
-| `enum` | dropdown | dropdown |
-| `flags` | multi-select checklist | multi-select checklist (xEdit's `dtFlag` is inline) |
-| `formKey` | native QuickPick | native QuickPick |
-| empty (`—`) | the type's editor (mutable only) | as second click |
-| struct / array summary | nothing | expand/collapse |
-| label column | — | expand/collapse |
+| Cell | Second click / `F2` / double-click opens |
+| --- | --- |
+| `string` | text editor (right-click: **Open in Editor…**, the extended editor — #258) |
+| `int`, `float` | number editor (inline — matches xEdit's `dtInteger`/`dtFloat`) |
+| `bool` | checkbox |
+| `enum` | dropdown |
+| `flags` | multi-select checklist (xEdit's `dtFlag` is inline) |
+| `formKey` | native QuickPick |
+| empty (`—`) | the type's editor (mutable only) |
+| struct / array summary | nothing (double-click: expand/collapse) |
+| label column | — (double-click: expand/collapse) |
 
 The only cells that open *nothing* are struct and array summary rows, which render a placeholder
 (`{…}`, `[3]`) rather than a value. They remain focusable, copyable and draggable — dragging one
@@ -333,15 +342,25 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
   scalar leaf, collapsed or expanded alike (#204).
-- **A `string` cell's double click opens the extended editor** (#230; ADR-0034 divergence #2) —
-  xEdit's own answer for this gesture is `TfrmViewElements`, a separate modeless window; a
-  modeless Delphi form has no analogue worth reproducing in a webview (reproducing one would be
-  exactly the chrome [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md) forbids),
-  so the vehicle is substituted for a real **editor tab**, opened `ViewColumn.Beside` so the grid
-  stays visible, non-preview so it isn't silently replaced by the next single-click preview
-  elsewhere. xEdit's window also shows the value across every compared record; the grid already
-  does that (one row, one column per plugin), so that half of `TfrmViewElements` isn't ported —
-  the tab holds one plugin's value.
+- **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
+  (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); originally #230, ADR-0034
+  divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
+  window; a modeless Delphi form has no analogue worth reproducing in a webview (reproducing one
+  would be exactly the chrome [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)
+  forbids), so the vehicle is substituted for a real **editor tab**, opened `ViewColumn.Beside` so
+  the grid stays visible, non-preview so it isn't silently replaced by the next single-click
+  preview elsewhere. xEdit's window also shows the value across every compared record; the grid
+  already does that (one row, one column per plugin), so that half of `TfrmViewElements` isn't
+  ported — the tab holds one plugin's value. That much is unchanged since #230; what changed is the
+  *trigger*, per ADR-0039: xEdit's own gesture for this (`EditTips`: *"Double click on text fields
+  in the right pane to open multiline editor"*) opens its modeless form **over** the grid, leaving
+  the tree and the user's place untouched — but the substituted vehicle is a VS Code tab, which
+  **relocates** the user (the record panel loses focus, the active editor changes), an interaction
+  xEdit itself never has. No amount of left-clicking may cost the user their place in the panel, so
+  the trigger is now right-click only, on mutable and immutable columns alike — a native
+  `webview/context` contribution (`modbench.field.openExtended`, gated on the cell's own
+  `stringValue` `data-vscode-context`, `recordUtils.ts`'s `stringValueContext`), the same mechanism
+  every other row-level menu in this grid already uses.
   - **Vehicle**: a real OS temp file (`vscode.workspace.openTextDocument`/`showTextDocument`), not
     a `FileSystemProvider` and not an `untitled:` document. A real file gets genuine dirty-tracking
     and VS Code's own "Save changes to *X*? Save / Don't Save / Cancel" prompt on close-with-edits
@@ -350,37 +369,30 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     so it's **read-only, not absent** — VS Code shows a locked, uneditable editor for a
     non-writable local file natively, matching AC's "read-only over absent, if it's a coin toss": a
     read-only tab is still the only way to read a long value in full. Path is deterministic (keyed
-    by record + field + plugin, not random), so re-double-clicking the same cell reveals the
-    already-open tab rather than opening a duplicate — VS Code's own per-URI reuse. The tab's own
-    filename is what its title shows: `⟨Field⟩ [⟨Plugin⟩].txt` inside a directory named for the
+    by record + field + plugin, not random), so re-invoking the command on the same cell reveals
+    the already-open tab rather than opening a duplicate — VS Code's own per-URI reuse. The tab's
+    own filename is what its title shows: `⟨Field⟩ [⟨Plugin⟩].txt` inside a directory named for the
     record (`⟨EditorID⟩ [⟨FormKey⟩]`, the same composite the header uses), so both which field and
     which record a tab belongs to are legible without opening it.
   - **Commit trigger**: on save. Each `Ctrl+S` writes the tab's full current content through the
     same `onEdit` path any other cell's commit uses — never on keystroke (would write on every
     character typed) and never only on close (a user who saves twice while still editing expects
     both saves written, the same as re-editing any other cell twice).
-  - **Trigger gesture**: kept as **double-click**, not moved to the right-click menu, for two
-    independent reasons that agree: xEdit already trains its users on exactly this gesture
-    (`EditTips`: *"Double click on text fields in the right pane to open multiline editor"*), and
-    it is simultaneously VS Code's own idiom — Explorer's single-click-preview vs.
-    double-click-permanent-tab is the same "double click commits you to a fuller, more permanent
-    view" shape. Because a second click on an already-focused `string` cell opens the *inline*
-    editor while double-click opens this *different* surface — the one type/gesture pair where
-    second-click/F2's target and double-click's target genuinely differ (every other type's second
-    click and double click already agree, so this doesn't apply to them) — a genuine double click
-    must not be preempted by the second click of the same two-click sequence already having opened
-    the inline editor first. Resolved with a short (~300ms) debounce on the second click's own
-    "open inline" action, cancelled by a following native `dblclick` event, which redirects to the
-    extended editor instead — a standard, well-established click/dblclick disambiguation pattern.
-    `F2` is unaffected and stays immediate for every type including `string`: it dispatches its
-    open via a real `element.click()` call (`DiskCell`), which the DOM spec gives `detail: 0`, and
-    the debounce only ever applies to a real mouse click (`detail >= 1`).
+  - **Trigger gesture**: right-click only (#258/ADR-0039). Before this, every `string` cell's
+    second click and `F2` opened the inline editor while its double click opened this tab instead —
+    the one type/gesture pair where second-click/F2's target and double-click's target genuinely
+    differed — which meant the second click's own "open inline" action had to run behind a short
+    debounce so a following native `dblclick` could still cancel it and redirect here. That debounce
+    (and the dblclick redirect itself) is gone: a `string` cell's second click, `F2` and double click
+    now all agree with every other scalar type on the inline editor, immediately, with no
+    disambiguation needed, because there is no longer a second left-click target to disambiguate
+    against.
   - **Scope**: every plugin column (`ScalarCell`/`DiffRow`). A plain `string`-typed row reaches the
     extended editor regardless of whether it's an ordinary field or a VMAD property (#231 folds
     both onto the same `ScalarCell`). A composite leaf's own inner string widget (a condition
     parameter's Text category, `conditionParam`) doesn't yet — its outer `FieldMetadata.type` isn't
-    `'string'`, which is what this gesture keys on (#231's own noted gap). A `string` cell that
-    doesn't reach it keeps opening its inline editor on double click, unchanged.
+    `'string'`, which is what this menu entry keys on (#231's own noted gap). A `string` cell that
+    doesn't reach it keeps its inline editor on every left-click gesture, unchanged.
 - **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
   with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
   appending a default-valued element (#142). They live in the **right-click menu**, with
@@ -393,8 +405,10 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the array's expand state, matching xEdit — the retired "+" button's expanded-only visibility was
   that button's own rendering choice, not a functional rule. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
   sort key, so the entries are absent, not merely disabled. All three ops write the **whole
-  array** as a single field edit (same path as an element-value edit — a complex field is always
-  edited atomically, CONTEXT.md), and only on non-immutable columns. There is no free drag-reorder
+  array** as a single field edit — the atomic complex-field write CONTEXT.md describes — and only
+  on non-immutable columns. An element-**value** edit is offered on the same cell but does not
+  currently share this path: nothing reconstructs the array first, so the write is silently lost
+  rather than landing atomically (known defect, #503). There is no free drag-reorder
   and no auto-sort. A VMAD array-of-scalars
   property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
@@ -651,10 +665,11 @@ withheld outright there rather than writing a wrong-shaped instance (Remove/Move
 neither needs a default, and both go through `commitOverride`'s own whole-array passthrough
 correctly); a **not-yet-compiled** `add_script`/`add_property` structural op has no synthetic-row
 visibility in the grid until it lands as real data (it's still fully valid to write and revert
-through the native Source Control panel in the meantime); and the extended editor (double-click,
-#230) reaches every plain `string`-typed row (including VMAD's own plain String properties) but not yet a
-composite-typed leaf's own inner string widget (a condition parameter's Text category) — its
-outer `FieldMetadata.type` isn't `'string'`, which is what that gesture keys on.
+through the native Source Control panel in the meantime); and the extended editor (right-click,
+Open in Editor…, #258/ADR-0039) reaches every plain `string`-typed row (including VMAD's own plain
+String properties) but not yet a composite-typed leaf's own inner string widget (a condition
+parameter's Text category) — its outer `FieldMetadata.type` isn't `'string'`, which is what that
+menu entry keys on.
 
 Condition lists nested one array level below the record (e.g. a magic Effect's own
 `Effects[i].Conditions` on Ingestible/Ingredient/Spell/ObjectEffect, a Message's
@@ -718,12 +733,18 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    resolution, not a well-formedness proxy, so a dangling reference (one pointing outside the
    index) no longer looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
-   per-session, not persisted across restarts. Array **element values** are editable
-   everywhere. Array **arity and order** are editable for **unsorted** arrays (add / remove /
-   move-up / move-down, swap-based, on non-immutable columns) and **absent** for sorted
-   (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — a VMAD array-of-scalars property
-   reuses this exact machinery (#231); VMAD's own struct/structList element ops are described
-   under *VMAD and Conditions are ordinary rows in the one tree* above.
+   per-session, not persisted across restarts. Array **element values** offer the inline-edit
+   gesture everywhere (plain and struct-element arrays alike), but committing one is a **known
+   defect** (#503): the cell accepts the value and reports success, yet the write never reaches
+   the source document — silently, with no error and no working-tree change. Nothing on the
+   current write path reconstructs the array's (or struct-array element's) whole value before
+   the commit, the reconstruction CONTEXT.md's Complex-field entry's atomic-write model requires
+   for a per-element gesture. Array **arity and order** are editable for **unsorted** arrays (add
+   / remove / move-up / move-down, swap-based, on non-immutable columns) and **absent** for
+   sorted (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — these ops are unaffected
+   by #503, since they already reconstruct the whole array before writing. A VMAD array-of-scalars
+   property reuses this exact machinery (#231); VMAD's own struct/structList element
+   ops are described under *VMAD and Conditions are ordinary rows in the one tree* above.
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
    change already overlaid (#413); there is no separate pending/dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control

@@ -8,11 +8,11 @@ import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer } from './medit/ApiClient';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
-import { detectGamePaths } from './medit/GamePathDetector';
+import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
 import {
-  LoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, headerFormKeyFor,
+  InteriorLoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, headerFormKeyFor,
 } from './medit/PluginTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
@@ -21,14 +21,16 @@ import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
 import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
-import { startExternalChangePolling, runRebase, type OpenMergeEditor } from './medit/externalChangeCoordinator';
+import { startExternalChangePolling, runRebase, gateExternalChangePolling, type OpenMergeEditor } from './medit/externalChangeCoordinator';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { buildWebviewHtml } from './medit/webviewHtml';
 import {
   EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type ArrayElementContext, type ArrayParentContext,
-  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext,
+  type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext,
+  type StringValueContext,
 } from './medit/messages';
+import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { RecordDecorationProvider } from './medit/RecordDecorationProvider';
 import { recordResourceUri } from './medit/recordResourceUri';
@@ -43,7 +45,8 @@ import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListN
 import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { createDriftTracker, type DriftTracker } from './pluginDrift';
 import { rereadDriftedPlugin } from './medit/rereadPlugin';
-import { resolveGameDirectory, type GameDirectory, type DetectPaths } from './modmanager/gameDirectory';
+import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
+import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
 import { buildExplicitPluginsWithOrigin, resolveCurrentPluginOrigins } from './modmanager/explicitSession';
@@ -413,14 +416,14 @@ export function activate(context: vscode.ExtensionContext) {
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
 
+  wireExternalChangePolling(repository, controller, outputChannel, log);
+
   context.subscriptions.push(
     referencedByTreeView,
     activeRecordSubscription,
     vscode.languages.registerCodeLensProvider({ language: 'sql' }, filterProvider),
     ...registerPluginRowCommands(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCreatePluginCommand(controller, modlistSource, instanceRoot, pluginListProvider, outputChannel),
-    // #417: started once at activation, not per session — see the function's own doc comment.
-    { dispose: startExternalChangeDialogPolling(repository, controller, outputChannel, log) },
     ...registerEditorCommands({
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, log, outputChannel,
     }),
@@ -471,6 +474,28 @@ function registerEditorCommands(deps: EditorCommandDeps): vscode.Disposable[] {
     ...registerRecordViewCommands(deps),
     ...registerArrayOpCommands(deps.recordPanels),
     ...registerVmadOpCommands(deps.recordPanels),
+    ...registerFieldOpCommands(deps.recordPanels),
+  ];
+}
+
+// #258 / ADR-0039: the string cell's right-click menu — same broadcast-and-self-filter shape as
+// registerArrayOpCommands/registerVmadOpCommands above and for the identical reason (the
+// extension host has no live reference into any open panel's own React state, which alone holds
+// the record's current display label). Unlike those two, there's nothing to compute here beyond
+// forwarding `ctx` — `stringValueContext` (recordUtils.ts) already carries the cell's own current
+// value and readOnly flag, computed webview-side at right-click time, so the matching panel's own
+// listener can call `handleOpenExtended` directly with no further webview-side computation
+// (RecordPanel.tsx's FIELD_OPEN_EXTENDED_EDITOR branch).
+function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
+  return [
+    vscode.commands.registerCommand('modbench.field.openExtended', (ctx?: StringValueContext) => {
+      if (!ctx) return;
+      broadcastToRecordPanels(recordPanels, {
+        type: EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR,
+        formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
+        value: ctx.value, readOnly: ctx.readOnly,
+      });
+    }),
   ];
 }
 
@@ -660,7 +685,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
         { routerDeps, recordPanels, activeRecordTracker });
     }),
-    vscode.commands.registerCommand('modbench.loadMore', (node: LoadMoreNode) => treeProvider.loadMore(node)),
+    vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node)),
     ...registerFilterCommands(scriptsPath, controller),
     // #273: reaches every plugin-bearing merged-tree row (modmanager's PluginListNode, not
     // medit's own PluginNode) via pluginFileOf() — the same row-agnostic adapter the composite
@@ -805,13 +830,13 @@ interface ModListCoreDeps {
 function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[] {
   const { modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel } = deps;
   return [
-      vscode.commands.registerCommand('modbench.modList.sortDescending', () => {
-        modListProvider.toggleSortOrder();
-        void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', true);
+      vscode.commands.registerCommand('modbench.modList.view.winningAtTop', () => {
+        modListProvider.toggleViewDirection();
+        void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', true);
       }),
-      vscode.commands.registerCommand('modbench.modList.sortAscending', () => {
-        modListProvider.toggleSortOrder();
-        void vscode.commands.executeCommand('setContext', 'modbench.modList.sortDescending', false);
+      vscode.commands.registerCommand('modbench.modList.view.losingAtTop', () => {
+        modListProvider.toggleViewDirection();
+        void vscode.commands.executeCommand('setContext', 'modbench.modList.winningAtTop', false);
       }),
       vscode.commands.registerCommand('modbench.modList.switchProfile', async () => {
         const [profiles, active] = await Promise.all([
@@ -1031,7 +1056,15 @@ interface PluginListDeps {
   outputChannel: vscode.LogOutputChannel;
   reporter: Reporter;
   instanceRoot: string;
-  dataFolder: Promise<string | undefined>;
+  // #357: a getter through the single game-directory resolver, not a Promise settled once —
+  // see ModListProviderOptions/PluginListProviderOptions for why. Folds a resolution failure to
+  // undefined (degrading vanilla-master lookups/badges), unlike `gameDirResolver` below.
+  dataFolder: () => Promise<string | undefined>;
+  // #357: the same resolver `dataFolder` reads through, passed through raw (not folded to
+  // undefined on failure) for the drift tracker below — #334 relies on a thrown resolution
+  // reaching its own try/catch so a failed refresh keeps the last known drift state rather than
+  // reading a misconfigured directory as "nothing resolves".
+  gameDirResolver: GameDirectoryResolver;
   /** The record browser that supplies a plugin row's children (#270). Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
@@ -1048,9 +1081,9 @@ interface PluginListDeps {
  *  records. The composite is built here, at the composition root, because it is the only place
  *  that may know both; `PluginListProvider` is unchanged and still owns everything about a row. */
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser, controller } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel);
+  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel, gameDirResolver);
   driftTracker = tracker;
   const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
@@ -1153,6 +1186,7 @@ function registerPluginRowCommands(
     registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
     ...registerRecordLifecycleCommands(controller, repository, outputChannel),
+    ...registerRecordCopyCommands(controller, repository, outputChannel),
   ];
 }
 
@@ -1330,14 +1364,7 @@ function registerCreatePluginCommand(
 function registerRecordLifecycleCommands(
   controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
-  const resolveOriginOrReport = async (node: { origin?: string; pluginName: string }): Promise<string | undefined> => {
-    const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
-    if (!origin) {
-      outputChannel.error(`[extension] record lifecycle command could not resolve an origin for "${node.pluginName}"`);
-      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${node.pluginName}" belongs to.`);
-    }
-    return origin;
-  };
+  const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
 
   return [
     // xEdit's own "Add": zero friction, no prompt — a blank record appears immediately, named
@@ -1397,6 +1424,130 @@ function registerRecordLifecycleCommands(
       if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Renumbered to ${newFormKey}.`);
     }),
   ];
+}
+
+/** #427: shared by `registerRecordLifecycleCommands` and `registerRecordCopyCommands` — a node's
+ *  own `origin` when the row already carries it (ADR-0036), else `controller.resolveOrigin`;
+ *  reports and returns undefined when neither answers (there is no ambient fallback worth a
+ *  QuickPick, which is why every command that needs this is palette-gated). */
+function makeResolveOriginOrReport(
+  controller: SessionController, outputChannel: vscode.LogOutputChannel,
+): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
+  return async (node) => {
+    const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
+    if (!origin) {
+      outputChannel.error(`[extension] record lifecycle command could not resolve an origin for "${node.pluginName}"`);
+      void vscode.window.showErrorMessage(`Modbench: Could not resolve which mod "${node.pluginName}" belongs to.`);
+    }
+    return origin;
+  };
+}
+
+/** #436/#494 (xEdit parity: xeMainForm.pas's CopyInto, reached from both mniNavCopyIntoClick — the
+ *  tree row — and mniViewHeaderCopyIntoClick — the column header): one command per gesture,
+ *  registered once, reached from either entry point. `arg` is a plugins-tree RecordNode or the
+ *  column header's own ColumnHeaderContext (its data-vscode-context payload) — resolved to the
+ *  same {formKey, plugin, origin} identity either way (recordCopyIdentity below), so everything
+ *  past that point is one implementation path regardless of which row was right-clicked (#281's
+ *  original unification, preserved). Split out of registerRecordLifecycleCommands purely for that
+ *  function's own line budget, same reason registerArrayOpCommands/registerVmadOpCommands split
+ *  off registerEditorCommands. */
+function registerRecordCopyCommands(
+  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable[] {
+  const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
+
+  return [
+    vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: RecordNode | ColumnHeaderContext) => {
+      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport);
+    }),
+    vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: RecordNode | ColumnHeaderContext) => {
+      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport);
+    }),
+  ];
+}
+
+/** #436/#494: the plugins-tree row and column-header entry points' shared identity — a
+ *  `RecordNode` names it via its own `record.plugin`, a `ColumnHeaderContext` (the header's
+ *  `data-vscode-context` payload) names it directly. Undefined for anything else (a `RecordNode`
+ *  whose `kind` isn't `'record'` — the command is only ever contributed on a record row, but a
+ *  stale/mistyped invocation should still resolve to nothing rather than throw). */
+function recordCopyIdentity(
+  arg: RecordNode | ColumnHeaderContext | undefined,
+): { formKey: string; plugin: string; origin?: string } | undefined {
+  if (!arg) return undefined;
+  if ('kind' in arg) return arg.kind === 'record' ? { formKey: arg.record.formKey, plugin: arg.record.plugin, origin: arg.origin } : undefined;
+  return { formKey: arg.formKey, plugin: arg.plugin, origin: arg.origin };
+}
+
+/** #436/#494: the destination QuickPick both copy commands share — candidates are
+ *  `copyTargetPlugins`' own gesture-aware filter (immutable always excluded; every plugin already
+ *  carrying the record excluded too, but only for 'copy-as-override' — xEdit parity,
+ *  xeMainForm.pas:3023-3042). No "New Plugin…" entry, unlike #209's own retired picker: "copy into
+ *  a new file" is out of scope (#494). Returns the picked `PluginMetadata` (not just its name) so
+ *  the caller reads `.origin` straight off it — a second `resolveOrigin` round trip for the
+ *  destination would be redundant, `repository.getPlugins()` already answers it. */
+async function pickCopyDestination(
+  repository: PluginRepository, gesture: CopyGesture, formKey: string,
+): Promise<{ name: string; origin: string } | undefined> {
+  const allPlugins = await repository.getPlugins();
+  const carrying = gesture === 'copy-as-override' ? await repository.getRecordOverridePlugins(formKey) : [];
+  const candidates = copyTargetPlugins(allPlugins, gesture, carrying);
+  if (candidates.length === 0) {
+    void vscode.window.showInformationMessage('Modbench: No eligible destination plugin for this copy.');
+    return undefined;
+  }
+  const items = candidates.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]`, plugin: p }));
+  const picked = await vscode.window.showQuickPick(items, {
+    placeHolder: gesture === 'copy-as-override' ? 'Copy as Override Into…' : 'Copy as New Record Into…',
+  });
+  return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
+}
+
+/** #436/#494: the shared body behind both `modbench.record.copyAsOverride`/`copyAsNewRecord` —
+ *  resolve which record was right-clicked and from where, pick a destination, call the matching
+ *  `SessionController` method, toast on success. No confirmation modal (xEdit's own CopyInto asks
+ *  nothing before an override copy, only before an EditorID-changing copy-as-new — and Copy as New
+ *  Record here prompts for neither an EditorID nor a FormKey, the same "land immediately, rename
+ *  via the grid afterward" posture `record.create` already established for a blank creation). */
+async function runCopyRecordCommand(
+  gesture: CopyGesture, arg: RecordNode | ColumnHeaderContext | undefined,
+  controller: SessionController, repository: PluginRepository,
+  resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
+): Promise<void> {
+  const identity = recordCopyIdentity(arg);
+  if (!identity) return;
+  const sourceOrigin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
+  if (!sourceOrigin) return;
+
+  const destination = await pickCopyDestination(repository, gesture, identity.formKey);
+  if (!destination) return;
+
+  if (gesture === 'copy-as-override') {
+    const ok = await controller.copyRecordAsOverride(identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin);
+    if (ok) void vscode.window.showInformationMessage(`Modbench: Copied ${identity.formKey} into ${destination.name}.`);
+  } else {
+    const newFormKey = await controller.copyRecordAsNewRecord(
+      identity.formKey, identity.plugin, sourceOrigin, destination.name, destination.origin,
+    );
+    if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Copied as ${newFormKey} into ${destination.name}.`);
+  }
+}
+
+/** #432: the poller has no backend to answer it until Launch mEdit's spawn succeeds — gated on
+ *  BackendManager's own 'status'/isHealthy signal (`gateExternalChangePolling`'s own doc comment),
+ *  the same idiom `clearSessionWhenBackendDies` already reacts to. Pulled out of `activate()`
+ *  purely for that function's own line budget. No disposable to register: a deliberate Close mEdit
+ *  and this file's own deactivate() (backendManager.dispose()) both already emit 'stopped', which
+ *  this reacts to like any other transition. */
+function wireExternalChangePolling(
+  repository: PluginRepository, controller: SessionController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+): void {
+  gateExternalChangePolling({
+    onBackendStatusChange: (cb) => backendManager!.on('status', cb),
+    isBackendHealthy: () => backendManager!.isHealthy,
+    startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel, log),
+  });
 }
 
 /** #417: polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and
@@ -1629,6 +1780,7 @@ function makeDriftTracker(
   modlistSource: Mo2ModlistSource,
   instanceRoot: string,
   outputChannel: vscode.LogOutputChannel,
+  gameDirResolver: GameDirectoryResolver,
 ): DriftTracker {
   return createDriftTracker({
     log: (msg) => outputChannel.debug(msg),
@@ -1636,13 +1788,11 @@ function makeDriftTracker(
       names,
       await buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot, (msg) => outputChannel.debug(msg)),
       instanceRoot,
-      // Resolved here, per refresh, and *not* taken from the `dataFolder` promise the views share:
-      // that one is resolved once at activation, while the session resolves its own at launch
-      // (`makeEnterEditing`). The two can name different folders — the setting is editable while
-      // Modbench runs — and drift compares against what the session actually loaded, so it has to
-      // ask the same question the same way. Caught by the integration suite, which changes the
-      // setting after activation and saw every Data-origin plugin flagged as resolving to nothing.
-      (await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths()))?.dataFolder,
+      // #357: read through the single game-directory resolver every other consumer (views,
+      // session launch, deploy) shares — memoised and invalidated only when
+      // modbench.mods.gameDirectory changes, so this always agrees with what the session actually
+      // loaded even though the setting is editable while Modbench runs.
+      (await gameDirResolver.resolve())?.dataFolder,
     ),
   });
 }
@@ -1934,27 +2084,32 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
   void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', true);
     const modListReporter = makeReporter(outputChannel, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
-    // Resolve the game's Data folder ONCE (#78): the single GameDirectory resolver
-    // (config override → ini gamePath → autodetect) is kicked off here and its
-    // dataFolder threaded to the providers, replacing their per-refresh ini re-reads.
-    // Non-blocking (keeps registration synchronous) and never rejects — a null
-    // resolution or a misconfigured explicit setting both fold to undefined, so the
-    // consumers degrade exactly as before (empty vanilla masters, badges absent).
-    const dataFolder: Promise<string | undefined> = resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths())
-      .then((gd) => gd?.dataFolder)
-      .catch((e: unknown) => {
-        outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`);
-        return undefined;
-      });
+    // #357: the single GameDirectory resolver (config override → ini gamePath → autodetect),
+    // memoised and invalidated only when modbench.mods.gameDirectory changes — the one thing every
+    // consumer of the game directory (these views, the drift tracker, session launch, deploy)
+    // reads through, so none of them can disagree about which folder is current. Replaces the old
+    // activation-scoped `dataFolder: Promise<string | undefined>`, which was resolved once here and
+    // then frozen for the life of the window regardless of later edits to the setting.
+    const gameDirResolver = createGameDirectoryResolver(instanceRoot, meditConfig, makeDetectPaths(), detectWinePrefix, vscode.workspace.onDidChangeConfiguration);
+    // Non-blocking (keeps registration synchronous) and never rejects — a null resolution or a
+    // misconfigured explicit setting both fold to undefined, so the consumers degrade exactly as
+    // before (empty vanilla masters, badges absent). A rejection is re-thrown by every other
+    // consumer of `gameDirResolver` directly; only the views degrade to undefined.
+    // #357 AC5: `dataFolderFrom` memoises the fold (and its error log) by the resolver's own cache
+    // generation, so a stuck-broken setting logs once — `ImplicitMasterDecorationProvider` alone
+    // reads this once per visible file, and a naive `.then()/.catch()` per call would re-log on
+    // every one of those reads instead of once for the life of the resolution.
+    const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
+      outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser, controller });
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
 
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
     const enterEditing = makeEnterEditing({
-      instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers,
+      instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
     // #295: the one assignment — see the module-level declaration's comment for why this can't
     // be threaded as a parameter instead.
@@ -1971,8 +2126,9 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       modListFilter,
       modListView.onDidChangeCheckboxState((e) => onModCheckboxChanged(e, modListProvider, outputChannel)),
       ...registerModListCoreCommands({ modListProvider, modlistSource, updateProfileDescription, enterEditing, outputChannel }),
-      ...registerDeployCommands(instanceRoot, modlistSource, outputChannel),
+      ...registerDeployCommands(instanceRoot, modlistSource, outputChannel, gameDirResolver),
       registerLaunchCommand(outputChannel),
+      gameDirResolver,
       ...registerModInstallCommands({ modlistSource, runModAction, promptModName, warnIfFomod }),
       ...registerModContextCommands({ instanceRoot, modlistSource, outputChannel, runModAction }),
       ...registerSeparatorCommands({ modlistSource, runModAction }),
@@ -2226,6 +2382,10 @@ interface EnterEditingDeps {
   revealLog: () => void;
   /** #381: run once a load completes, for whatever crash-repair offers it reported. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
+  /** #357: the single game-directory resolver, shared with the views and the drift tracker —
+   *  memoised and invalidated only when modbench.mods.gameDirectory changes, so a session launch
+   *  always agrees with what they currently show. */
+  gameDirResolver: GameDirectoryResolver;
 }
 /** Build the enter-editing action: spawn/attach the backend and load the active
  *  modlist as a load-explicit session, then reveal the editing view. Also the
@@ -2237,13 +2397,13 @@ interface EnterEditingDeps {
 function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
   const {
     instanceRoot, modlistSource, controller,
-    outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers,
+    outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
   } = deps;
   const enter = async (): Promise<void> => {
       const { signal, abandoned } = armLoadAbort(outputChannel);
       const treeProgress = makeTreeProgressHandler();
       revealLog(); // the load can take a while; let the user watch the step log
-      const gd = await resolveGameDirectory(instanceRoot, meditConfig(), makeDetectPaths());
+      const gd = await gameDirResolver.resolve();
       if (abandoned()) return;
       if (!gd) {
         exitToLoadout(); // don't strand the UI in an empty editing view
@@ -2330,13 +2490,20 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
  *  `fetch` only recognizes its own — handed a global `Request`, it falls back to coercing it to a
  *  URL string and fails with "Failed to parse URL from [object Request]". Unpacked into a plain
  *  url/method/headers/body call instead. Lives here, not in ApiClient.ts: that module is also
- *  imported by the webview bundle (RecordSessionClient.ts), which has no `undici`/Node runtime. */
+ *  imported by the webview bundle (RecordSessionClient.ts), which has no `undici`/Node runtime.
+ *
+ *  #495: `input.signal` is part of that unpacking too, deliberately — it is the *other* half of
+ *  the "own deliberate abort signal" this comment already promises above (#307 AC7's mid-load
+ *  close). Dropping it here silently disconnects that abort from the network layer: the caller's
+ *  `AbortController.abort()` still flips `signal.aborted`, but nothing downstream ever rejects
+ *  the fetch on it, so the abandoned load just runs to completion against a session nobody wants
+ *  any more. If a future rewrite unpacks this request shape again, carry `signal` with it. */
 function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
   return async (input) => {
     const hasBody = input.method !== 'GET' && input.method !== 'HEAD';
     const body = hasBody ? await input.clone().arrayBuffer() : undefined;
-    return undiciFetch(input.url, { method: input.method, headers: [...input.headers], body, dispatcher });
+    return undiciFetch(input.url, { method: input.method, headers: [...input.headers], body, dispatcher, signal: input.signal });
   };
 }
 
@@ -2417,6 +2584,7 @@ function registerDeployCommands(
   instanceRoot: string,
   modlistSource: Mo2ModlistSource,
   outputChannel: vscode.LogOutputChannel,
+  gameDirResolver: GameDirectoryResolver,
 ): vscode.Disposable[] {
   const config = meditConfig;
   const detectPaths = makeDetectPaths();
@@ -2424,7 +2592,9 @@ function registerDeployCommands(
   const reporter = makeReporter(outputChannel, 'deploy');
 
   const resolveGd = async () => {
-    const gd = await resolveGameDirectory(instanceRoot, config(), detectPaths);
+    // #357: the single game-directory resolver, shared with the views/drift tracker/session
+    // launch — memoised and invalidated only when modbench.mods.gameDirectory changes.
+    const gd = await gameDirResolver.resolve();
     if (!gd) {
       reporter.report('error', 'No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.');
     }

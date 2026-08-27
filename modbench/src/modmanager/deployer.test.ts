@@ -82,6 +82,27 @@ describe('deploy', () => {
     expect(manifest.links).toEqual(['MyMod.esp']);
   });
 
+  // #441/#438 (AC): a tracked mod's ".git" and its current-layout root "source/" folder never
+  // reach a deploy plan — end to end through the real walk, not just the index-level assertion
+  // fileConflictIndex.test.ts already covers, so "never appears in a deploy plan" is checked at
+  // the deployer's own seam too.
+  it('deploys neither .git nor the root source/ folder, even though both exist in the mod', async () => {
+    fx = await makeDeployerFixture();
+    await fx.writeModFile('ModA', 'MyMod.esp', 'PLUGINBYTES');
+    await fx.writeModFile('ModA', '.git/HEAD', 'ref: refs/heads/main');
+    await fx.writeModFile('ModA', '.git/objects/pack/pack-abc.pack', 'binary-ish');
+    await fx.writeModFile('ModA', 'source/MyMod.esp/npc_/000800.json', '{}');
+    const entries: ModlistEntry[] = [{ kind: 'mod', name: 'ModA', enabled: true }];
+    const index = await buildFileConflictIndex(entries, fx.instanceRoot, () => {});
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
+
+    const deployedFiles = await listRelativeFiles(fx.gameDirectory.dataFolder);
+    expect(deployedFiles).toEqual(['MyMod.esp']);
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual(['MyMod.esp']);
+  });
+
   // #374 (AC2): "manifest hashing yields identical results... before and after a mod acquires a
   // repo" — there is no manifest hashing anywhere in Mod Management today (#388 owns hashing
   // pristine binaries for provenance, a different job), so this reads the criterion as *manifest
@@ -158,6 +179,18 @@ describe('deploy', () => {
     await expect(stat(join(fx.gameDirectory.dataFolder, 'root/f4se_loader.exe'))).rejects.toThrow();
     const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
     expect(manifest.links).toEqual(['textures/foo.dds']);
+  });
+
+  it('deploys a mod file literally named "root" (no slash) normally into Data/root — #324', async () => {
+    fx = await makeDeployerFixture();
+    const rootFile = await fx.writeModFile('ModA', 'root', 'ROOTFILE');
+    const index = makeIndex({ root: rootFile });
+
+    await deploy(fx.instanceRoot, fx.gameDirectory, index, fakeReporter());
+
+    expect(await readFile(join(fx.gameDirectory.dataFolder, 'root'), 'utf8')).toBe('ROOTFILE');
+    const manifest = JSON.parse(await readFile(join(fx.instanceRoot, ...MANIFEST), 'utf8'));
+    expect(manifest.links).toEqual(['root']);
   });
 
   it('copies the active profile\'s load-order file to the resolved target and purge removes it', async () => {

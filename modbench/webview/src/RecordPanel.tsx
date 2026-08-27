@@ -4,6 +4,7 @@ import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, parseElementIndex, collidingFilenames,
   getAtPath, setAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultElementValue,
+  headerCellContext, combineVscodeContexts,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
 import { mono, fg, headerCell, getConflictBg, DIMMED_OPACITY } from './gridStyles';
@@ -80,12 +81,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // already computes for each DiffRow's own `key=` below. Deliberately reset on LOAD_RECORD (a
   // different record has no "same cell" to keep focused — mirrors the result/allChanges resets
   // there) but left untouched by refresh() (same-record reload from staging or a background
-  // refresh, where the focused cell should survive — AC3). Issue #232: covers a pending-column
-  // cell too now, disambiguated from its same-plugin disk companion by FocusedCell's own
-  // `column` discriminant — handleFocusCell just forwards whatever DiffRow passes.
+  // refresh, where the focused cell should survive — AC3).
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
-  function handleFocusCell(rowKey: string, plugin: ColumnKey, column?: 'pending') {
-    setFocusedCell({ rowKey, plugin, column });
+  function handleFocusCell(rowKey: string, plugin: ColumnKey) {
+    setFocusedCell({ rowKey, plugin });
   }
   // Issue #3: collapsed plugin columns, keyed by column identity (#272: ColumnKey, not the bare
   // plugin name — two same-filename columns must collapse independently). Deliberately NOT reset
@@ -129,8 +128,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     editField(formKey, override.plugin, override.origin, fieldPath, value);
   }, [result, formKey]);
 
-  // #426: a string cell's double click, opened in a real editor tab. Commits through the exact
-  // same handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
+  // #426, retriggered by #258 / ADR-0039: a string cell's value, opened in a real editor tab.
+  // Reached only from the cell's right-click menu now (FIELD_OPEN_EXTENDED_EDITOR's own listener
+  // branch below) — no left-click gesture reaches it any more. Commits through the exact same
+  // handleEditCell every other gesture's onCommit does — this is a second *trigger* onto the
   // identical write path, not a second one (extendedFieldEditor.ts's own doc comment).
   const handleOpenExtended = useCallback((plugin: ColumnKey, fieldPath: string, value: string, readOnly: boolean) => {
     const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
@@ -294,6 +295,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // same reason (handleEditCell closes over `result`/`formKey`, both of which change).
   const handleEditCellRef = useRef(handleEditCell);
   useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
+  // #258 / ADR-0039: FIELD_OPEN_EXTENDED_EDITOR's own commit reaches through handleOpenExtended —
+  // same ref-for-a-mount-once-listener shape as handleEditCellRef/handleArrayOpRef above, for the
+  // same reason (handleOpenExtended closes over `result`/`formKey`/`handleEditCell`, all of which
+  // change). Previously this bridge call was reached directly from DiffRow's onDoubleClick prop;
+  // now it's reached only from this broadcast, the right-click menu's own trigger.
+  const handleOpenExtendedRef = useRef(handleOpenExtended);
+  useLayoutEffect(() => { handleOpenExtendedRef.current = handleOpenExtended; }, [handleOpenExtended]);
 
   // Listen for loadRecord messages from the extension (panel reuse), the session's own
   // conflicts-computed signal, and the array-op right-click commands (#426 Track 4) — the one
@@ -350,6 +358,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
         if (msg.formKey !== prevFormKeyRef.current) return;
         setAddPropertyDialog({ scriptName: msg.scriptName, plugin: columnKey(msg.plugin, msg.origin) });
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR) {
+        // #258 / ADR-0039: the string-cell right-click command's own broadcast — self-filter on
+        // formKey, same convention as every other right-click op above, then hand off to the exact
+        // bridge call a double click used to reach directly.
+        if (msg.formKey !== prevFormKeyRef.current) return;
+        handleOpenExtendedRef.current(columnKey(msg.plugin, msg.origin), msg.fieldName, msg.value, msg.readOnly);
       }
     };
     window.addEventListener('message', handler);
@@ -449,7 +463,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={handleEditCell}
-        onOpenExtendedEditor={handleOpenExtended}
         onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType) : undefined}
         onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
         onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
@@ -554,6 +567,13 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
+                        // #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as
+                        // this column's native right-click menu — unconditional on isImmutable/
+                        // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
+                        // case, not one to gate out.
+                        vscodeContext={combineVscodeContexts(
+                          headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
+                        )}
                       />
                     </th>
                   );

@@ -63,6 +63,15 @@ export const EXTENSION_TO_WEBVIEW = {
   // fieldPath/value itself and commits through the ordinary write path, the same as every other
   // gesture — no reply travels back through this message.
   VMAD_OPEN_ADD_PROPERTY: 'vmadOpenAddProperty',
+  // #258 / ADR-0039: the string-cell right-click menu's own entry — same broadcast-and-self-filter
+  // shape as the array/VMAD ops above, and for the identical reason: the extension host has no
+  // live reference into the webview's own React state, which alone knows the record's own display
+  // label (RecordPanel's handleOpenExtended builds it). This message carries everything the
+  // stringValueContext (recordUtils.ts) already captured at right-click time — identity, current
+  // value, readOnly — so the matching panel can call handleOpenExtended exactly as it always has
+  // been able to (previously reached only by a `string` cell's double click, now retired per
+  // ADR-0039); no new webview-side computation, only a new trigger onto the same bridge call.
+  FIELD_OPEN_EXTENDED_EDITOR: 'fieldOpenExtendedEditor',
 } as const;
 
 export const WEBVIEW_TO_EXTENSION = {
@@ -137,9 +146,6 @@ export type WebviewToExtension =
       // segment) so two same-filename columns never alias onto one file.
       origin: string;
       readOnly: boolean;
-      // Issue #242: FocusedCell's own disk/pending discriminant (#232) — absent (disk cell) is
-      // every call site's own meaning unless it's the pending column's own.
-      column?: 'pending';
     };
 
 // Issue #227 (#426 Track 4: restored): the shape of a `data-vscode-context` payload VS Code
@@ -204,6 +210,39 @@ export interface VmadPropertyContext {
   preventDefaultContextMenuItems: true;
 }
 
+// #494 (name revived from #209, pre-ADR-0041): the record editor's own column header — one
+// override column's identity, carried the same way every other native-menu context here is.
+// Unlike the row-scoped contexts above, resolving the command this feeds (Copy as Override Into…/
+// Copy as New Record Into…) never round-trips back through the webview at all: since ADR-0041 the
+// mutation is an ordinary `SessionController` HTTP call the extension host already owns, the same
+// as the plugins-tree row entry point for the identical two commands — this context exists only
+// to tell the host *which* record/plugin/origin was right-clicked.
+export interface ColumnHeaderContext {
+  webviewSection: 'recordHeader';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  preventDefaultContextMenuItems: true;
+}
+
+// #258 / ADR-0039: a `string` value cell's own right-click identity — the extended editor's only
+// remaining trigger now that no left-click gesture reaches it. `value`/`readOnly` travel here
+// (computed at DiffRow's render time, the same computation the retired `onOpenExtended` callback
+// used) rather than being re-derived host-side, since only the webview knows the cell's own
+// current model value and editability. Offered on every string cell, mutable or immutable alike —
+// a read-only tab is still the only way to read a long immutable value in full (unchanged from
+// before this ticket, only the trigger moved).
+export interface StringValueContext {
+  webviewSection: 'stringValue';
+  formKey: string;
+  plugin: string;
+  origin: string;
+  fieldName: string;
+  value: string;
+  readOnly: boolean;
+  preventDefaultContextMenuItems: true;
+}
+
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
@@ -217,4 +256,8 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP; formKey: string; plugin: string; origin: string; fieldPath: string; value: unknown }
-  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string };
+  | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string }
+  | {
+      type: typeof EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR; formKey: string; plugin: string; origin: string;
+      fieldName: string; value: string; readOnly: boolean;
+    };
