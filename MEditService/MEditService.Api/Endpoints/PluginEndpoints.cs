@@ -539,6 +539,16 @@ public static class PluginEndpoints
             logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
             return Results.Problem($"Could not write the source file for the new record: {ex.Message}", statusCode: 500);
         }
+        // #502: xEdit's own typed-FormID path (req.FormKey) reaches Mutagen's FormKey.Factory
+        // (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a malformed value
+        // (wrong shape, non-hex, missing ':') throws ArgumentException there. Malformed syntax, not a
+        // well-formed-but-refused RecordEditRefusal, so this is CreatePlugin's own catch shape (400),
+        // never RecordEndpoints.Refusal's 422.
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Malformed FormKey creating a {RecordType} in {Plugin}", req.RecordType, decoded);
+            return Results.Problem(ex.Message, statusCode: 400);
+        }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable session while creating a record in {Plugin}", decoded);
