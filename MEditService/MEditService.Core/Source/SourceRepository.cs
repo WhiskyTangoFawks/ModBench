@@ -22,7 +22,12 @@ public static class SourceRepository
     /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> at that same commit for every plugin
     /// <paramref name="trailers"/> names, then create and check out the edit branch. One
     /// transaction from the caller's view — a failure anywhere in this sequence leaves no
-    /// half-repo; <see cref="SourceRecordPath"/>/<see cref="Serialization.RecordTextCodec"/> already
+    /// half-repo <b>and no orphaned files</b>: the catch block removes <c>.git</c>, the
+    /// <c>.gitignore</c> written directly into <paramref name="modFolder"/>, and the
+    /// <c>pristineFiles</c> tree already written under the one root <c>source/</c> folder, since
+    /// all three land in <paramref name="modFolder"/> before the commit that is meant to make them
+    /// real (#508 — the original cleanup deleted only <c>.git</c>).
+    /// <see cref="SourceRecordPath"/>/<see cref="Serialization.RecordTextCodec"/> already
     /// did the serialization this method just commits, so it never invents record content, and it
     /// never invents provenance content either (comment 1, #414) — <paramref name="trailers"/> is
     /// an input, not computed here.
@@ -76,8 +81,17 @@ public static class SourceRepository
         {
             // One transaction from the caller's view (comment 1, #414): a failure anywhere above
             // must not leave a half-initialized repo behind for IsTracked to wrongly report as
-            // tracked, or for a later Track retry to collide with.
+            // tracked, or for a later Track retry to collide with. #508: `.git` was the only thing
+            // ever cleaned up here, orphaning the `.gitignore` written above and any of
+            // `pristineFiles`' tree already written under the one root `source/` folder — both land
+            // directly in modFolder *before* the commit that is supposed to make them real. Uniform
+            // by construction: one catch block covers every step above (init through checkout), so
+            // this cleanup runs the same way no matter which line threw.
             if (Directory.Exists(gitDir)) Directory.Delete(gitDir, recursive: true);
+            var gitignorePath = Path.Combine(modFolder, ".gitignore");
+            if (File.Exists(gitignorePath)) File.Delete(gitignorePath);
+            var sourceRoot = Path.Combine(modFolder, SourceRecordPath.RootFolderName);
+            if (Directory.Exists(sourceRoot)) Directory.Delete(sourceRoot, recursive: true);
             throw;
         }
     }
