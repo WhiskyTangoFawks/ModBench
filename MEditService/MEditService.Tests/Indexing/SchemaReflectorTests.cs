@@ -279,6 +279,242 @@ public class SchemaReflectorTests
         Assert.Equal(propertyField.EnumValues.Count, propertyField.EnumValues.Distinct().Count());
     }
 
+    // ── #360: OMOD's Properties element never surfaced the property's actual Value ─────────────
+    // IAObjectModPropertyGetter<T> (walked above) declares only Property/Step. The real payload —
+    // Value, Value2, Record, FunctionType, EnumIntValue — lives on seven separate leaf getter
+    // interfaces BuildSubSchema never descended into (IObjectMod{Int,Float,Bool,String,Enum,
+    // FormLinkInt,FormLinkFloat}PropertyGetter<T>), confirmed against the real
+    // ObjectMod*Property_Generated.cs sources, not assumed. Read-only by design: the write path
+    // for this element is #531's own defect (Activator.CreateInstance on the abstract
+    // AObjectModProperty<T> already throws for every write today), not this ticket's.
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_ExposesSevenLeafUnionFields()
+    {
+        // Schema-shape half of the fix; the seven extraction tests below are the value half —
+        // this alone doesn't prove any leaf's own data actually reaches these fields.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var fields = properties.ElementType!.Fields!;
+
+        var value = fields.Single(f => f.Name == "value");
+        var value2 = fields.Single(f => f.Name == "value2");
+        var record = fields.Single(f => f.Name == "record");
+        var functionType = fields.Single(f => f.Name == "function_type");
+        var enumIntValue = fields.Single(f => f.Name == "enum_int_value");
+
+        // value/value2/function_type collide in CLR type across the seven leaves (e.g. value is
+        // uint on Int, float on Float, bool on Bool, string on String) -> the #263 read-only-text
+        // rung. record (FormLink, only FormLinkInt/FormLinkFloat) and enum_int_value (uint, only
+        // Enum) don't collide across the leaves that declare them at all -> stay typed.
+        Assert.Equal("string", value.Type);
+        Assert.Equal("string", value2.Type);
+        Assert.Equal("string", functionType.Type);
+        Assert.Equal("formKey", record.Type);
+        Assert.Equal("int", enumIntValue.Type);
+
+        // Every one of these is sparse — declared by some leaves, not all — so every row of a
+        // non-declaring leaf's type legitimately reads null through it.
+        Assert.True(value.AllowsNull);
+        Assert.True(value2.AllowsNull);
+        Assert.True(record.AllowsNull);
+        Assert.True(functionType.AllowsNull);
+        Assert.True(enumIntValue.AllowsNull);
+
+        // Unused (String/Enum leaves' own reserved padding uint32) is deliberately excluded —
+        // Mutagen's own name for it, and xEdit's own definition (wbUnused(3)/wbUnused(2) in
+        // wbDefinitionsFO4.pas — never rendered as a field at all), both agree it carries no
+        // product-visible data.
+        Assert.DoesNotContain(fields, f => f.Name == "unused");
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_IntLeaf_ExposesValueValue2FunctionType()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360Int.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360Int"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360Int" };
+        armor.Properties.Add(new ObjectModIntProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            Value = 10,
+            Value2 = 20,
+            FunctionType = ObjectModProperty.FloatFunctionType.Add,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal("10", element["value"].GetString());
+        Assert.Equal("20", element["value2"].GetString());
+        Assert.Equal("Add", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["record"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["enum_int_value"].ValueKind);
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_FloatLeaf_ExposesValueValue2FunctionType()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360Float.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360Float"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360Float" };
+        armor.Properties.Add(new ObjectModFloatProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            Value = 1.5f,
+            Value2 = 2.5f,
+            FunctionType = ObjectModProperty.FloatFunctionType.MultAndAdd,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal("1.5", element["value"].GetString());
+        Assert.Equal("2.5", element["value2"].GetString());
+        Assert.Equal("MultAndAdd", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["record"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["enum_int_value"].ValueKind);
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_BoolLeaf_ExposesValueValue2FunctionType()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360Bool.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360Bool"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360Bool" };
+        armor.Properties.Add(new ObjectModBoolProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            Value = true,
+            Value2 = false,
+            FunctionType = ObjectModProperty.BoolFunctionType.Or,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal("true", element["value"].GetString());
+        Assert.Equal("false", element["value2"].GetString());
+        Assert.Equal("Or", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["record"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["enum_int_value"].ValueKind);
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_StringLeaf_ExposesValueFunctionType_NoValue2()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360String.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360String"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360String" };
+        armor.Properties.Add(new ObjectModStringProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            Value = "Hello360",
+            FunctionType = ObjectModProperty.FloatFunctionType.Set,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal("Hello360", element["value"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["value2"].ValueKind);
+        Assert.Equal("Set", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["record"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["enum_int_value"].ValueKind);
+        // Reserved padding, not a product-visible field on any leaf — never a key at all.
+        Assert.False(element.ContainsKey("unused"));
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_EnumLeaf_ExposesEnumIntValueFunctionType()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360Enum.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360Enum"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360Enum" };
+        armor.Properties.Add(new ObjectModEnumProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            EnumIntValue = 7,
+            FunctionType = ObjectModProperty.EnumFunctionType.Set,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal(7, element["enum_int_value"].GetInt32());
+        Assert.Equal("Set", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["value"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["value2"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["record"].ValueKind);
+        Assert.False(element.ContainsKey("unused"));
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_FormLinkIntLeaf_ExposesRecordValueFunctionType()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360FormLinkInt.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360FLInt"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360FLInt" };
+        var target = FormKey.Factory("000ABC:Test.esp");
+        armor.Properties.Add(new ObjectModFormLinkIntProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            Record = new FormLink<IFallout4MajorRecordGetter>(target),
+            Value = 42,
+            FunctionType = ObjectModProperty.FormLinkFunctionType.Add,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal(target.ToString(), element["record"].GetString());
+        Assert.Equal("42", element["value"].GetString());
+        Assert.Equal("Add", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["value2"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["enum_int_value"].ValueKind);
+    }
+
+    [Fact]
+    public void GetSchemas_Omod_PropertiesElement_FormLinkFloatLeaf_ExposesRecordValueFunctionType()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Omod360FormLinkFloat.esp"), Fallout4Release.Fallout4);
+        var armor = new ArmorModification(mod.GetNextFormKey("ArmorMod360FLFloat"), Fallout4Release.Fallout4) { EditorID = "ArmorMod360FLFloat" };
+        var target = FormKey.Factory("000DEF:Test.esp");
+        armor.Properties.Add(new ObjectModFormLinkFloatProperty<Armor.Property>
+        {
+            Property = Armor.Property.BodyPart,
+            Step = 1f,
+            Record = new FormLink<IFallout4MajorRecordGetter>(target),
+            Value = 3.5f,
+            FunctionType = ObjectModProperty.FloatFunctionType.Set,
+        });
+
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var properties = schemas["omod"].RecordColumns.Single(c => c.Name == "properties");
+        var element = ExtractFirstElement(properties, armor);
+
+        Assert.Equal(target.ToString(), element["record"].GetString());
+        Assert.Equal("3.5", element["value"].GetString());
+        Assert.Equal("Set", element["function_type"].GetString());
+        Assert.Equal(JsonValueKind.Null, element["value2"].ValueKind);
+        Assert.Equal(JsonValueKind.Null, element["enum_int_value"].ValueKind);
+    }
+
+    private static Dictionary<string, JsonElement> ExtractFirstElement(ColumnSpec properties, IMajorRecordGetter record)
+    {
+        var json = properties.Extract(record) as string;
+        Assert.NotNull(json);
+        var items = JsonSerializer.Deserialize<List<Dictionary<string, JsonElement>>>(json);
+        Assert.NotNull(items);
+        return Assert.Single(items);
+    }
+
     [Fact]
     public void GetSchemas_Dmgt_SplitsIntoPerShapeColumns_EachDispatchGuardedToOwnSubclass()
     {
