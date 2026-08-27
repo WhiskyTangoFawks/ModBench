@@ -466,8 +466,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static readonly HashSet<string> NonScalarApiTypes = new(StringComparer.Ordinal) { "array", "struct" };
 
     // #339: distinguishes OMOD's Properties (mergeable — every sibling's element is the same
-    // struct{property: enum, step: float}, only the enum's own member-name domain differs per
-    // sibling) from DMGT's DamageTypes (not mergeable — DamageType's element is a struct of two
+    // struct{property: enum, step: float, plus #360's sparse union of the seven leaf types' own
+    // value/value2/record/function_type/enum_int_value}, only the enum's own member-name domain
+    // differs per sibling — #360's own union is independent of T, so it's identical across every
+    // sibling too) from DMGT's DamageTypes (not mergeable — DamageType's element is a struct of two
     // formlinks, DamageTypeIndexed's is a bare uint, no field names in common at all). Two enum
     // leaves are always considered compatible here — their domains get unioned by the caller, not
     // by this check — everything else (Type, IsArray, AllowsNull, IsBitmask, and recursively
@@ -529,10 +531,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     //     try/catch swallow every non-winning subclass's value to null.
     //   - present already, conflicting NON-scalar shape, structurally identical except which enum
     //     member names the shared "which property" leaf allows (OMOD's Properties — every sibling's
-    //     element is struct{property: enum, step: float}, only the enum's own domain differs):
-    //     merge into one column, keeping the typed shape and dispatching Extract to whichever
-    //     sibling's own (already-correct) reflected Extract matches the record's runtime type —
-    //     never a foreign one. See MergeNonScalarByEnumDomain.
+    //     element is the same struct, #360's own seven-leaf sparse union included, only the "which
+    //     property" enum's own domain differs): merge into one column, keeping the typed shape and
+    //     dispatching Extract to whichever sibling's own (already-correct) reflected Extract
+    //     matches the record's runtime type — never a foreign one. See MergeNonScalarByEnumDomain.
     //   - present already, conflicting NON-scalar shape, structurally different (DMGT's
     //     DamageTypes — DamageType's element is a struct of two formlinks, DamageTypeIndexed's is a
     //     bare uint, no field names in common): split into two columns, one per shape, each
@@ -647,9 +649,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         };
     }
 
-    // #339: OMOD's Properties rung — every sibling's element is the exact same
-    // struct{property: enum, step: float} (IsSameShapeExceptEnumDomain already confirmed this),
-    // so unlike the scalar-widen rung above there is no need to give up the typed shape at all.
+    // #339: OMOD's Properties rung — every sibling's element is the exact same struct shape
+    // (IsSameShapeExceptEnumDomain already confirmed this, #360's own union included — see that
+    // method's own comment), so unlike the scalar-widen rung above there is no need to give up the
+    // typed shape at all.
     // Each sibling's own ReflectColumns call already built a fully self-consistent, correctly-typed
     // Extract for *that* sibling's own runtime type (BuildSchema calls ReflectColumns once per
     // sibling independently) — the defect was only ever that the merged schema kept calling the
@@ -972,17 +975,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // ── Sub-schema building ───────────────────────────────────────────────────
 
-    // #360: this walks only the properties declared on getterInterface and the interfaces it
+    // This walks only the properties declared on getterInterface and the interfaces it
     // implements/inherits — never a more-derived sibling interface. OMOD's Properties element
     // type, IAObjectModPropertyGetter<T>, declares only Property/Step; the real per-element data
-    // (Value) lives on 7 separate leaf getter interfaces (IObjectModIntPropertyGetter<T>,
+    // lives on 7 separate leaf getter interfaces (IObjectModIntPropertyGetter<T>,
     // IObjectModFloatPropertyGetter<T>, ...), each implementing IAObjectModPropertyGetter<T>
-    // rather than the other way around, so Value is never descended into here. Confirmed by
-    // dumping the real reflected shape, not assumed: today's "structured" omod Properties column —
-    // winner and every #339-merged sibling alike — surfaces property + step only, never value.
-    // Predates #339 and is unaffected by it (whose AC only requires parity with what the winner
-    // already showed) — this affects every subclass, discovery winner included, so nobody reads
-    // "structured list" here and assumes the value is in it.
+    // rather than the other way around, so none of their own members are ever reached by this
+    // walk alone. #360 closes that gap for OMOD specifically, immediately below — see
+    // BuildObjectModPropertyLeafFields for the rule.
     private static List<SubFieldSpec> BuildSubSchema(
         Type getterInterface,
         IReadOnlyDictionary<Type, string> getterTypeToTable,
@@ -1004,7 +1004,148 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var spec = GetSubFieldInfo(prop, getterTypeToTable, depth + 1, logger);
             if (spec != null) result.Add(spec);
         }
+
+        if (IsObjectModPropertyBase(getterInterface))
+            result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, getterTypeToTable, logger));
+
         return result;
+    }
+
+    // ── #360: OMOD's Properties element's seven leaf getter interfaces ─────────────────────────
+    // Hardcoded to these seven names, not discovered by scanning the assembly for anything else
+    // shaped like this: IAObjectModPropertyGetter<T> is, today, the only base Getter interface in
+    // the schema whose real per-element payload lives entirely on named sibling leaves it never
+    // inherits from (confirmed against the real ObjectMod*Property_Generated.cs sources — the one
+    // other generic Getter interface in the Fallout4 assembly, IObjectTemplateGetter<T>, has no
+    // such siblings at all). Building a general "discover a base's leaf siblings" mechanism here
+    // would be machinery for a second consumer that doesn't exist yet; if one turns up, that
+    // ticket can lift a general version out then, against two real call sites instead of one
+    // imagined one.
+    private static readonly string[] ObjectModPropertyLeafNames =
+    [
+        "IObjectModIntPropertyGetter`1",
+        "IObjectModFloatPropertyGetter`1",
+        "IObjectModBoolPropertyGetter`1",
+        "IObjectModStringPropertyGetter`1",
+        "IObjectModEnumPropertyGetter`1",
+        "IObjectModFormLinkIntPropertyGetter`1",
+        "IObjectModFormLinkFloatPropertyGetter`1",
+    ];
+
+    // Mutagen's own name for this member says everything: a reserved padding uint32 on
+    // ObjectModStringProperty/ObjectModEnumProperty. xEdit's own definition agrees — the
+    // corresponding bytes are wbUnused(3)/wbUnused(2) in wbDefinitionsFO4.pas's
+    // wbObjectModProperties, never rendered as a field there either. Excluded here rather than
+    // surfaced as a meaningless "unused" column just because both leaves happen to declare it
+    // with the same uint32 shape.
+    private static readonly HashSet<string> ObjectModPropertyLeafSkip =
+        new(StringComparer.OrdinalIgnoreCase) { "Unused" };
+
+    private static bool IsObjectModPropertyBase(Type getterInterface) =>
+        getterInterface.IsGenericType &&
+        getterInterface.GetGenericTypeDefinition().Name == "IAObjectModPropertyGetter`1";
+
+    // Builds the sparse union of the seven leaves' own members (never Property/Step — those are
+    // already reached by the ordinary walk above). Resolved by name off getterInterface's own
+    // namespace/assembly rather than a compile-time reference to one game's types, so this still
+    // works whichever category's Mutagen assembly is actually loaded (Starfield ships the exact
+    // same seven type names under its own namespace).
+    //
+    // Decision (2026-08-27 triage): group the leaves' own declared members by name. A name every
+    // declaring leaf agrees on the CLR type for becomes one typed, sparse sub-field (null on a
+    // leaf that lacks it) — `record` (FormLink, FormLinkInt/FormLinkFloat only) and
+    // `enum_int_value` (uint, Enum only). A name whose declaring leaves disagree on type becomes
+    // one read-only text field via the same FormatWidenedValue the #263 scalar-widen rung already
+    // uses — `value` (uint/float/bool/string across six leaves), `value2` (uint/float/bool across
+    // three), `function_type` (four distinct FunctionType CLR types across all seven — the
+    // triage's own prose counted three; doesn't change the outcome, still collides, still text).
+    // Every result here is Apply: null — read-only by design, not an oversight: the write path for
+    // this element already throws today regardless (Activator.CreateInstance on the abstract
+    // AObjectModProperty<T>, #531), so nothing here is reachable from a write either way.
+    private static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
+        Type baseGetterInterface, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
+        var ns = baseGetterInterface.Namespace;
+        var asm = baseGetterInterface.Assembly;
+        var args = baseGetterInterface.GetGenericArguments();
+
+        var leaves = new List<Type>();
+        foreach (var name in ObjectModPropertyLeafNames)
+        {
+            var open = asm.GetType($"{ns}.{name}");
+            if (open == null)
+            {
+                // Same convention as BuildHeaderSchema's own lookup-came-up-empty branches: this
+                // runs once per category at schema-build time, not per record, so it's not the
+                // per-call accessor-lambda case MEditService/CLAUDE.md's logging section carves
+                // silence out for — never seen missing in a real category, but a category whose
+                // Mutagen assembly renamed or dropped one of these seven leaves should say so
+                // rather than silently lose that leaf's fields.
+                logger.LogWarning(
+                    "No {LeafName} type found in {Assembly}; OMOD Properties element omits that leaf's fields",
+                    name, asm.GetName().Name);
+                continue;
+            }
+            leaves.Add(open.MakeGenericType(args));
+        }
+
+        var members = leaves
+            .SelectMany(leaf => leaf.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => !ObjectModPropertyLeafSkip.Contains(p.Name))
+                .Select(p => (LeafType: leaf, Prop: p)))
+            .GroupBy(m => ToSnakeCase(m.Prop.Name), StringComparer.OrdinalIgnoreCase);
+
+        var result = new List<SubFieldSpec>();
+        foreach (var group in members)
+        {
+            var list = group.ToList();
+            var distinctTypes = list
+                .Select(m => Nullable.GetUnderlyingType(m.Prop.PropertyType) ?? m.Prop.PropertyType)
+                .Distinct()
+                .ToList();
+
+            result.Add(distinctTypes.Count == 1
+                ? BuildTypedLeafUnionField(group.Key, list, getterTypeToTable)
+                : BuildWidenedLeafUnionField(group.Key, list));
+        }
+        return result;
+    }
+
+    private static SubFieldSpec BuildTypedLeafUnionField(
+        string colName, List<(Type LeafType, PropertyInfo Prop)> members,
+        IReadOnlyDictionary<Type, string> getterTypeToTable)
+    {
+        var core = Nullable.GetUnderlyingType(members[0].Prop.PropertyType) ?? members[0].Prop.PropertyType;
+        var perLeaf = members
+            .Select(m => (m.LeafType, Leaf: ClassifyLeaf(m.Prop, core, getterTypeToTable)!))
+            .ToList();
+        var rep = perLeaf[0].Leaf;
+
+        object? Extract(object obj)
+        {
+            foreach (var (leafType, leaf) in perLeaf)
+                if (leafType.IsInstanceOfType(obj)) return leaf.Get(obj);
+            return null;
+        }
+
+        return new(colName, rep.ApiType, rep.ValidFormKeyTypes, rep.EnumValues, Extract,
+            Apply: null, // #360 is read-only by design — the write path for this element is #531's
+            AllowsNull: true, IsBitmask: rep.IsBitmask, EnumBitValues: rep.EnumBitValues);
+    }
+
+    private static SubFieldSpec BuildWidenedLeafUnionField(
+        string colName, List<(Type LeafType, PropertyInfo Prop)> members)
+    {
+        var getters = members.Select(m => (m.LeafType, Get: SubGetter(m.Prop))).ToList();
+
+        object? Extract(object obj)
+        {
+            foreach (var (leafType, get) in getters)
+                if (leafType.IsInstanceOfType(obj)) return FormatWidenedValue(get(obj));
+            return null;
+        }
+
+        return new(colName, "string", Empty, Empty, Extract, Apply: null, AllowsNull: true);
     }
 
     // Element metadata for use in FieldMetadata.ElementType.
