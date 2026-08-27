@@ -43,13 +43,16 @@ Fix all failures, rerun.
 ## Step 2 — Review
 
 1. Run `/code-review` **report-only** (no `--fix`; `high`/`ultra` for large/risky).
-2. Triage every finding — all axes' — (first match):
+2. Triage every finding — all axes' — (first match). A filed ticket re-buys the
+   whole pipeline — triage, queue, a fresh executor re-acquiring the context the
+   finder already has, review, land — so weigh the fix against that price, not
+   against the originating issue's scope:
 
 | Outcome | When → Action |
 |---|---|
-| **Fix now** | in scope, or cheap + adjacent → apply |
-| **Defer** | valid, out of scope/large → `gh issue create` (`tech debt` + `ready-for-agent`\|`needs-triage`); body = finding + analysis + rec; link it |
-| **Escalate** | ambiguous / wide blast radius → ask dev: fix / ignore / issue |
+| **Fix now** | correct fix is unambiguous and stays within files this branch already touches (or their immediate surface) → apply, even if the issue never asked for it — a fix smaller than its ticket ships now |
+| **Escalate** | real, but value uncertain or blast radius wide → a second opinion is a question, never a ticket: ask dev (interactive) or the advisor (orchestrated); verdict is fix / reject / defer |
+| **Defer** | genuinely a work item — needs its own design or plan, or touches surface outside this branch → `gh issue create` (`tech debt` + `ready-for-agent`\|`needs-triage`); body = finding + analysis + rec; link it |
 | **Reject** | not real → note why |
 
 3. Rerun Step 1 gates if any fix changed logic.
