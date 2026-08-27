@@ -387,6 +387,99 @@ public sealed class TrackServiceTests
         }
     }
 
+    // #514 AC2: the mirror image of the test above — a rewrite that only *adds* subrecords must not
+    // be refused by the new subrecord-inventory check. Mutagen's own Furniture writer
+    // (FurnitureBinaryWriteTranslation.WriteBinaryFlagsCustom/WriteBinaryFlags2Custom, verified by
+    // reading it) unconditionally emits FNAM/MNAM on every write regardless of whether the source it
+    // read ever had them — Mutagen can never itself *author* a FURN missing them, so the "original"
+    // here is hand-stripped from a real Mutagen-written one (the CK/community-tool shape the #511
+    // survey actually observed for FURN), not built through the object API.
+    //
+    // This plugin *is* still refused by Track overall — a pre-existing, unrelated behavior: adding
+    // FNAM/MNAM changes the file's bytes, so the outer byte-identity check (line ~198 above) still
+    // trips, exactly as it would for any of the #511 survey's other harmless canonical insertions
+    // (WRLD ONAM/DATA, INNR KSIZ). What AC2 asks is narrower and is what this test actually checks:
+    // that refusal is not attributed to *this* check — the message must be the old model-identity
+    // fallback, not one naming FNAM/MNAM as "missing". Verified by hand while building this test:
+    // Track threw `SourceRoundTripFailedException` with exactly the fallback text asserted below, not
+    // a #514-shaped one.
+    [Fact]
+    public async Task TrackAsync_WithARecordThatOnlyGainsSubrecordsOnRewrite_IsNotRefusedBySubrecordInventory()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-furn-insert-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-furn-insert-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Furniture.AddNew("TestFurn");
+            mod.WriteToBinary(pluginPath);
+            await File.WriteAllBytesAsync(pluginPath, StripFnamAndMnamFromTheOnlyFurnRecord(await File.ReadAllBytesAsync(pluginPath)));
+
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(
+                gameDir,
+                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
+                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits));
+
+            Assert.DoesNotContain("is missing", ex.Message);
+            Assert.DoesNotContain("FNAM", ex.Message);
+            Assert.DoesNotContain("MNAM", ex.Message);
+            Assert.Contains("but every individual record matched", ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    /// <summary>Removes the <c>FNAM</c>/<c>MNAM</c> subrecords Mutagen's own write unconditionally adds
+    /// to a <c>FURN</c> record, fixing up the record's own declared size and its enclosing GRUP's
+    /// declared size to match — producing a still-valid, still-parseable plugin that genuinely lacks
+    /// them, the shape a rewrite then adds back.</summary>
+    private static byte[] StripFnamAndMnamFromTheOnlyFurnRecord(byte[] original)
+    {
+        var records = PluginBinaryWalk.WalkRecords(original);
+        var furnIndex = records.FindIndex(r => r.Type == "FURN");
+        var furn = records[furnIndex];
+        var grup = records[furnIndex - 1];
+
+        var furnData = original.AsSpan(furn.DataStart, furn.DataLen).ToArray();
+        var toRemove = PluginBinaryWalk.WalkSubrecords(furnData)
+            .Where(s => s.Sig is "FNAM" or "MNAM")
+            .OrderByDescending(s => s.Start)
+            .ToList();
+        var newFurnData = furnData.ToList();
+        var removedBytes = 0;
+        foreach (var s in toRemove)
+        {
+            newFurnData.RemoveRange(s.Start, s.Len);
+            removedBytes += s.Len;
+        }
+
+        var result = original.ToList();
+        result.RemoveRange(furn.DataStart, furn.DataLen);
+        result.InsertRange(furn.DataStart, newFurnData);
+        WriteUInt32(result, furn.Start + 4, (uint)newFurnData.Count);
+
+        var oldGrupSize = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(original.AsSpan(grup.Start + 4, 4));
+        WriteUInt32(result, grup.Start + 4, oldGrupSize - (uint)removedBytes);
+
+        return [.. result];
+    }
+
+    private static void WriteUInt32(List<byte> bytes, int offset, uint value)
+    {
+        var span = BitConverter.GetBytes(value);
+        for (var i = 0; i < 4; i++) bytes[offset + i] = span[i];
+    }
+
     // #515: a Localized plugin whose mod folder also ships a BSA archive — the actual repro shape
     // (a real voice mod bundling its sound files in a .ba2). Deep-parsing/serializing this plugin
     // forces Mutagen to resolve its strings, which by default also scans the plugin's own folder for

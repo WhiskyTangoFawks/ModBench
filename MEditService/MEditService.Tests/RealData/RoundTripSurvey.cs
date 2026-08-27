@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
-using System.IO.Compression;
 using System.Text;
+using MEditService.Core.Source;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Binary.Parameters;
@@ -12,11 +12,13 @@ namespace MEditService.Tests.RealData;
 /// #511 survey (2026-08-27): how far does a real, mixed-tool plugin population sit from
 /// <c>write(parse(plugin)) == plugin</c>, and why? Deep-parses every mod-root plugin under
 /// <c>MEDIT_SURVEY_MODS</c>, writes it back with the #506 header options, then walks both
-/// binaries' record structures in parallel and classifies each differing record:
-/// <c>header</c> (TES4 subrecord), <c>compressed-only</c> (decompressed payloads equal),
-/// <c>negzero</c> (only -0.0 → +0.0 word changes), <c>grup-size</c> (derived group sizes), or
-/// <c>other:TYPE/SIG</c> — the bucket that answers "what else is out there". Report: CSV per
-/// plugin plus a category tally, at <c>MEDIT_SURVEY_OUT</c>. Gated like
+/// binaries' record structures in parallel (<see cref="PluginBinaryWalk"/> — this harness is
+/// where that walker started, #514 promoted it into Core, and this class was refactored to call
+/// the promoted copy rather than keep its own, so there is exactly one) and classifies each
+/// differing record: <c>header</c> (TES4 subrecord), <c>compressed-only</c> (decompressed
+/// payloads equal), <c>negzero</c> (only -0.0 → +0.0 word changes), <c>grup-size</c> (derived
+/// group sizes), or <c>other:TYPE/SIG</c> — the bucket that answers "what else is out there".
+/// Report: CSV per plugin plus a category tally, at <c>MEDIT_SURVEY_OUT</c>. Gated like
 /// <see cref="RealInstallSmokeTests"/>: never part of a normal run.
 /// </summary>
 public sealed class RoundTripSurvey
@@ -141,7 +143,7 @@ public sealed class RoundTripSurvey
     /// subrecords as hex, original vs rewritten, both walked in parallel by signature.</summary>
     private static void DumpFirst(byte[] a, byte[] b, string category, StringBuilder o)
     {
-        var ra = Walk(a); var rb = Walk(b);
+        var ra = PluginBinaryWalk.WalkRecords(a); var rb = PluginBinaryWalk.WalkRecords(b);
         var n = Math.Min(ra.Count, rb.Count);
         var wantType = category.Contains(':') ? category.Split(':')[1].Split('/')[0].Split('(')[0] : "";
         for (int i = 0; i < n; i++)
@@ -154,9 +156,9 @@ public sealed class RoundTripSurvey
             var db = b.AsSpan(y.DataStart, Math.Min(y.DataLen, b.Length - y.DataStart)).ToArray();
             var hdrEq = a.AsSpan(x.Start, 24).SequenceEqual(b.AsSpan(y.Start, 24));
             if (hdrEq && da.AsSpan().SequenceEqual(db)) continue;
-            if ((x.Flags & CompressedFlag) != 0) { try { da = Inflate(da); db = Inflate(db); } catch (Exception) { o.AppendLine("  inflate failed"); return; } }
+            if ((x.Flags & CompressedFlag) != 0) { try { da = PluginBinaryWalk.Inflate(da); db = PluginBinaryWalk.Inflate(db); } catch (Exception) { o.AppendLine("  inflate failed"); return; } }
             o.AppendLine(CultureInfo.InvariantCulture, $"  {x.Type} {x.FormId:X8} flags {x.Flags:X8}->{y.Flags:X8}  hdr {Convert.ToHexString(a, x.Start, 24)} / {Convert.ToHexString(b, y.Start, 24)}");
-            var sa = Subrecords(da); var sb = Subrecords(db);
+            var sa = PluginBinaryWalk.WalkSubrecords(da); var sb = PluginBinaryWalk.WalkSubrecords(db);
             o.AppendLine(CultureInfo.InvariantCulture, $"  original order : {string.Join(" ", sa.Select(t => t.Sig))}");
             o.AppendLine(CultureInfo.InvariantCulture, $"  rewritten order: {string.Join(" ", sb.Select(t => t.Sig))}");
             var bySigA = sa.GroupBy(t => t.Sig).ToDictionary(g => g.Key, g => g.Select(t => da.AsSpan(t.Start, t.Len).ToArray()).ToList());
@@ -202,40 +204,21 @@ public sealed class RoundTripSurvey
     private static string Csv(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
 
     // ---- structure walk -------------------------------------------------------------------
-
-    private readonly record struct Rec(string Type, uint FormId, uint Flags, int Start, int DataStart, int DataLen, bool IsGrup);
+    // The walk itself (record/GRUP/subrecord, XXXX-extended length, zlib inflate) lives in
+    // MEditService.Core.Source.PluginBinaryWalk — promoted from here by #514 so there is exactly
+    // one implementation, not two to keep in sync by hand (docs/specs/medit-repair.md's own
+    // Implementation Decisions: "one walker" shared by #514/#519/#525). What stays here is this
+    // survey's own classification on top of it.
 
     private const uint CompressedFlag = 0x00040000;
-
-    private static List<Rec> Walk(byte[] b)
-    {
-        var list = new List<Rec>();
-        int pos = 0;
-        while (pos + 24 <= b.Length)
-        {
-            var type = Encoding.ASCII.GetString(b, pos, 4);
-            var size = BinaryPrimitives.ReadUInt32LittleEndian(b.AsSpan(pos + 4));
-            if (type == "GRUP")
-            {
-                list.Add(new Rec("GRUP", 0, 0, pos, pos + 24, 0, true));
-                pos += 24; // descend: children follow inline
-                continue;
-            }
-            var flags = BinaryPrimitives.ReadUInt32LittleEndian(b.AsSpan(pos + 8));
-            var formId = BinaryPrimitives.ReadUInt32LittleEndian(b.AsSpan(pos + 12));
-            list.Add(new Rec(type, formId, flags, pos, pos + 24, (int)size, false));
-            pos += 24 + (int)size;
-        }
-        return list;
-    }
 
     private static Dictionary<string, int> Classify(byte[] a, byte[] b)
     {
         var cats = new Dictionary<string, int>(StringComparer.Ordinal);
         void Add(string k) => cats[k] = cats.GetValueOrDefault(k) + 1;
 
-        var ra = Walk(a);
-        var rb = Walk(b);
+        var ra = PluginBinaryWalk.WalkRecords(a);
+        var rb = PluginBinaryWalk.WalkRecords(b);
         bool mastersPruned = false;
         if (ra.Count != rb.Count)
         {
@@ -272,8 +255,8 @@ public sealed class RoundTripSurvey
             if (x.Type == "TES4")
             {
                 var rawA = dataA.ToArray(); var rawB = dataB.ToArray();
-                var ha = Subrecords(rawA).Select(t => (t.Sig, Bytes: rawA.AsSpan(t.Start, t.Len).ToArray())).ToList();
-                var hb = Subrecords(rawB).Select(t => (t.Sig, Bytes: rawB.AsSpan(t.Start, t.Len).ToArray())).ToList();
+                var ha = PluginBinaryWalk.WalkSubrecords(rawA).Select(t => (t.Sig, Bytes: rawA.AsSpan(t.Start, t.Len).ToArray())).ToList();
+                var hb = PluginBinaryWalk.WalkSubrecords(rawB).Select(t => (t.Sig, Bytes: rawB.AsSpan(t.Start, t.Len).ToArray())).ToList();
                 var mastersA = ha.Count(t => t.Sig == "MAST"); var mastersB = hb.Count(t => t.Sig == "MAST");
                 if (mastersA != mastersB) { Add($"header:masters-pruned({mastersA}->{mastersB})"); mastersPruned = true; }
                 var removed = ha.Select(t => t.Sig).Except(hb.Select(t => t.Sig)).Where(sg => sg != "MAST" && sg != "DATA").ToList();
@@ -291,7 +274,7 @@ public sealed class RoundTripSurvey
             {
                 if (compA != compB) { Add($"other:{x.Type}/compressed-flag"); continue; }
                 byte[] pa, pb;
-                try { pa = Inflate(dataA); pb = Inflate(dataB); }
+                try { pa = PluginBinaryWalk.Inflate(dataA); pb = PluginBinaryWalk.Inflate(dataB); }
                 catch (Exception) { Add($"other:{x.Type}/inflate-failed"); continue; }
                 if (pa.AsSpan().SequenceEqual(pb))
                 {
@@ -347,23 +330,13 @@ public sealed class RoundTripSurvey
     /// is null when the (sig, bytes) multisets are identical too (pure reordering), else names the signatures whose bytes differ.</summary>
     private static bool SameSubrecordsAnyOrder(byte[] a, byte[] b, out string? contentDiff)
     {
-        var sa = Subrecords(a).Select(t => (t.Sig, Bytes: a.AsSpan(t.Start, t.Len).ToArray())).OrderBy(t => t.Sig, StringComparer.Ordinal).ToList();
-        var sb = Subrecords(b).Select(t => (t.Sig, Bytes: b.AsSpan(t.Start, t.Len).ToArray())).OrderBy(t => t.Sig, StringComparer.Ordinal).ToList();
+        var sa = PluginBinaryWalk.WalkSubrecords(a).Select(t => (t.Sig, Bytes: a.AsSpan(t.Start, t.Len).ToArray())).OrderBy(t => t.Sig, StringComparer.Ordinal).ToList();
+        var sb = PluginBinaryWalk.WalkSubrecords(b).Select(t => (t.Sig, Bytes: b.AsSpan(t.Start, t.Len).ToArray())).OrderBy(t => t.Sig, StringComparer.Ordinal).ToList();
         contentDiff = null;
         if (!sa.Select(t => t.Sig).SequenceEqual(sb.Select(t => t.Sig))) return false;
         var diff = sa.Zip(sb).Where(p => !p.First.Bytes.AsSpan().SequenceEqual(p.Second.Bytes)).Select(p => p.First.Sig).Distinct().ToList();
         if (diff.Count > 0) contentDiff = string.Join("+", diff);
         return true;
-    }
-
-    private static byte[] Inflate(ReadOnlySpan<byte> data)
-    {
-        // compressed record data = uint32 decompressed length + zlib stream
-        using var input = new MemoryStream(data.Slice(4).ToArray());
-        using var z = new ZLibStream(input, CompressionMode.Decompress);
-        using var output = new MemoryStream();
-        z.CopyTo(output);
-        return output.ToArray();
     }
 
     /// <summary>Every differing 4-byte-aligned word is 0x80000000 in <paramref name="a"/> and 0 in <paramref name="b"/>.</summary>
@@ -386,7 +359,7 @@ public sealed class RoundTripSurvey
     /// to a positional label if the subrecord streams desynchronise.</summary>
     private static List<string> DifferingSubrecords(byte[] a, byte[] b)
     {
-        var sa = Subrecords(a); var sb = Subrecords(b);
+        var sa = PluginBinaryWalk.WalkSubrecords(a); var sb = PluginBinaryWalk.WalkSubrecords(b);
         var sigs = new List<string>();
         if (sa.Count != sb.Count) sigs.Add($"count{sa.Count}v{sb.Count}");
         var n = Math.Min(sa.Count, sb.Count);
@@ -397,21 +370,5 @@ public sealed class RoundTripSurvey
             if (lA != lB || !a.AsSpan(sA, lA).SequenceEqual(b.AsSpan(sB, lB))) sigs.Add(sigA);
         }
         return sigs.Distinct().ToList();
-    }
-
-    private static List<(string Sig, int Start, int Len)> Subrecords(byte[] d)
-    {
-        var list = new List<(string, int, int)>();
-        int pos = 0; int xxxx = -1;
-        while (pos + 6 <= d.Length)
-        {
-            var sig = Encoding.ASCII.GetString(d, pos, 4);
-            int len = BinaryPrimitives.ReadUInt16LittleEndian(d.AsSpan(pos + 4));
-            if (sig == "XXXX") { xxxx = (int)BinaryPrimitives.ReadUInt32LittleEndian(d.AsSpan(pos + 6)); pos += 10; continue; }
-            if (xxxx >= 0) { len = xxxx; xxxx = -1; }
-            list.Add((sig, pos, Math.Min(6 + len, d.Length - pos)));
-            pos += 6 + len;
-        }
-        return list;
     }
 }
