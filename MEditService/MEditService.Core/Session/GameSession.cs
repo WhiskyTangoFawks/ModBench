@@ -1,3 +1,4 @@
+using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -234,7 +235,10 @@ public sealed class GameSession : IGameSession
             PluginMetadata? metadata = null;
             try
             {
-                mod = ModFactory.ImportGetter(modPath, GameRelease);
+                // #515: session ingest's binary path — the "binary is for untracked plugins"
+                // overlay (ADR-0041's #452 amendment) — needs the same explicit strings parameters
+                // Track does, or a Localized untracked plugin throws instead of opening.
+                mod = ModFactory.ImportGetter(modPath, GameRelease, LocalizedStrings.ForRead(ModFolders.Of(origin, filePath), DataFolderPath));
                 metadata = BuildPluginMetadata(mod, _ordered[i], i);
 
                 Register(mod, origin, fileName, metadata);
@@ -376,7 +380,7 @@ public sealed class GameSession : IGameSession
         // Opened before anything is torn down, so a file that cannot be opened or parsed leaves the
         // session exactly as it was — still serving the copy it loaded, rather than holding neither.
         // That is the whole reason the open is not folded into the swap below.
-        var mod = ModFactory.ImportGetter(new ModPath(modKey, newPath), GameRelease);
+        var mod = ModFactory.ImportGetter(new ModPath(modKey, newPath), GameRelease, LocalizedStrings.ForRead(ModFolders.Of(newOrigin, newPath), DataFolderPath));
         var metadata = BuildPluginMetadata(
             mod,
             new ResolvedPlugin(fileName, newPath, previous.IsImmutable, previous.Participates, newOrigin),
@@ -424,7 +428,7 @@ public sealed class GameSession : IGameSession
         var fileName = Path.GetFileName(filePath);
         var modKey = ModKey.FromFileName(fileName);
         var modPath = new ModPath(modKey, filePath);
-        var mod = ModFactory.ImportGetter(modPath, GameRelease);
+        var mod = ModFactory.ImportGetter(modPath, GameRelease, LocalizedStrings.ForRead(ModFolders.Of(origin, filePath), DataFolderPath));
 
         // No Mutagen LoadOrder or link cache is built here or anywhere else in this class: reads
         // answer from the DuckDB index (ADR-0025), and the write path builds its own typed cache

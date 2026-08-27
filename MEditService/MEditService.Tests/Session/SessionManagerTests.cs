@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Session;
@@ -787,9 +788,9 @@ public class SessionManagerTests(TestPluginFixture fixture)
         private readonly List<SpyLoadedMod> _mods = [];
         public IReadOnlyList<SpyLoadedMod> LoadedMods => _mods;
 
-        public ILoadedMod Import(ModPath modPath, GameRelease gameRelease)
+        public ILoadedMod Import(ModPath modPath, GameRelease gameRelease, BinaryReadParameters? param = null)
         {
-            var real = ModFactory.ImportGetter(modPath, gameRelease);
+            var real = ModFactory.ImportGetter(modPath, gameRelease, param);
             var spy = new SpyLoadedMod(real);
             _mods.Add(spy);
             return spy;

@@ -470,6 +470,13 @@ public static class PluginEndpoints
             logger.LogWarning(ex, "Refused to track {Origin}: round-trip gate failed", req.Origin);
             return Results.Problem(ex.Message, statusCode: 422);
         }
+        // #515 AC2: same status as the round-trip gate above — a data-quality problem with the
+        // plugin itself (a missing strings file), not a state conflict.
+        catch (MissingLocalizationStringsException ex)
+        {
+            logger.LogWarning(ex, "Refused to track {Origin}: missing localization strings", req.Origin);
+            return Results.Problem(ex.Message, statusCode: 422);
+        }
         catch (GitUnavailableException ex)
         {
             logger.LogError(ex, "git unavailable while tracking {Origin}", req.Origin);

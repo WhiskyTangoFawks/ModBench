@@ -1,3 +1,4 @@
+using MEditService.Core.Source;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Installs;
@@ -46,9 +47,8 @@ public sealed class CutDownPluginGenerator
 
         // Fallout4.esm is localized (strings packed in BA2s). DeepCopy enumerates every language
         // source; on Linux that path resolves a plugin-listings path that needs the (case-sensitive)
-        // "LocalAppData" env var, so set one if absent.
-        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LocalAppData")))
-            Environment.SetEnvironmentVariable("LocalAppData", Path.GetTempPath());
+        // "LocalAppData" env var. #515 centralized this default (it used to live here by hand).
+        LocalizedStrings.EnsureLocalAppDataDefault();
 
         using var source = Fallout4Mod.CreateFromBinaryOverlay(
             new ModPath(ModKey.FromFileName("Fallout4.esm"), sourcePath), Fallout4Release.Fallout4,
