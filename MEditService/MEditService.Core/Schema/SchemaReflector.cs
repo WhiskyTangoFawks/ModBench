@@ -1212,19 +1212,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName, logger), AllowsNull: true);
     }
 
-    // #531/#532: applies one of the widened OMOD leaf union fields (`value`, `value2`,
-    // `function_type`) onto whichever concrete leaf ApplyListJson already resolved.
-    //
-    // <see cref="ApplyOutcome.PropertyNotFound"/> when the target object's runtime type doesn't
-    // declare the property at all — an expected, silent outcome one layer up in ApplySubFields (same
-    // convention as MakeApplier): a leaf that lacks this member is exactly what this shape is for.
-    // A JSON <c>null</c> is likewise Applied-as-a-no-op — it means "this leaf's own Extract had
-    // nothing to read back for this member", not a value to reject.
-    //
-    // <see cref="ApplyOutcome.ValueRejected"/> — #532, no longer a silent no-op — when the property
-    // *does* exist but the incoming JSON can't be converted into whatever type it actually is:
-    // ApplySubFields now folds that into a refusal of the whole element/struct write rather than
-    // constructing the right concrete type and then silently dropping a value onto it.
+    /// <summary>
+    /// #531/#532: applies one of the widened OMOD leaf union fields (<c>value</c>, <c>value2</c>,
+    /// <c>function_type</c>) onto whichever concrete leaf <c>ApplyListJson</c> already resolved.
+    ///
+    /// <para><see cref="ApplyOutcome.PropertyNotFound"/> when the target object's runtime type
+    /// doesn't declare the property at all — an expected, silent outcome one layer up in
+    /// <c>ApplySubFields</c> (same convention as <c>MakeApplier</c>): a leaf that lacks this member
+    /// is exactly what this shape is for. A JSON <c>null</c> is likewise Applied-as-a-no-op — it
+    /// means "this leaf's own Extract had nothing to read back for this member", not a value to
+    /// reject.</para>
+    ///
+    /// <para><see cref="ApplyOutcome.ValueRejected"/> — #532, no longer a silent no-op — when the
+    /// property *does* exist but the incoming JSON can't be converted into whatever type it actually
+    /// is: <c>ApplySubFields</c> now folds that into a refusal of the whole element/struct write
+    /// rather than constructing the right concrete type and then silently dropping a value onto
+    /// it.</para>
+    /// </summary>
     private static Func<object, JsonElement, ApplyOutcome> MakeWidenedApplier(string pName, ILogger logger)
     {
         var resolve = ResolveProperty(pName);
