@@ -287,6 +287,16 @@ public static class RecordEndpoints
             logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
             return Results.Problem(ex.Message, statusCode: 500);
         }
+        // #502: request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
+        // FormKey.Factory (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a
+        // malformed value throws ArgumentException there. Malformed syntax, not a well-formed-but-
+        // refused RecordEditRefusal, so this matches PluginEndpoints.CreatePlugin's own catch shape
+        // (400), never this file's own Refusal's 422.
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Malformed FormKey renumbering {FormKey}", decoded);
+            return Results.Problem(ex.Message, statusCode: 400);
+        }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable session while renumbering {FormKey}", decoded);
@@ -360,6 +370,16 @@ public static class RecordEndpoints
         {
             logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
             return Results.Problem($"Could not write the source file for the copy: {ex.Message}", statusCode: 500);
+        }
+        // #502: request.RequestedFormKey is xEdit's own typed-FormID path, sharing
+        // RecordEditService.CreateRecord/RenumberRecord's own ResolveTargetFormKey/
+        // RefuseIfNotNativeTarget resolution — reaches Mutagen's FormKey.Factory with no TryFactory
+        // guard, so a malformed value throws ArgumentException there too. Same 400 shape as the other
+        // two typed-FormID endpoints, never this file's own Refusal's 422.
+        catch (ArgumentException ex)
+        {
+            logger.LogError(ex, "Malformed FormKey copying {FormKey} as a new record", decoded);
+            return Results.Problem(ex.Message, statusCode: 400);
         }
         catch (InvalidOperationException ex)
         {
