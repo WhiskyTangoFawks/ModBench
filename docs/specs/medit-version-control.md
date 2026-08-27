@@ -3,7 +3,7 @@
 **Status: Implemented.** Track (#414), the text-first edit path (#415), Save & Compile
 (#416), external-change handling (#417), the editor gesture inventory (#426), the
 lifecycle gestures (#427), record-row Modified/Added badges (#428), the closeout
-truing (#418), crash repair (#381), and New Plugin (#288) have all shipped.
+truing (#418), crash recovery (#381), and New Plugin (#288) have all shipped.
 Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
 `main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
 branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
@@ -306,7 +306,9 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
   untracked, per ADR-0041.
 
-### Crash repair (#381)
+### Crash recovery (#381)
+
+(Glossary term: *Crash recovery* — "crash repair" survives as the code/API name. *Repair* now means malformed-plugin repair, [medit-repair.md](medit-repair.md).)
 
 Live: the load-time hash check (`ExternalChangeSessionHook`, shared with #417) covers two
 states on every tracked plugin, both detected only at session load — the only moment either
