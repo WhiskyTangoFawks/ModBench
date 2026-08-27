@@ -155,9 +155,24 @@ public sealed class TrackService(ILogger<TrackService> logger)
     /// just produced from <paramref name="original"/>) into a scratch tree, reads it back through
     /// <paramref name="deserialize"/>, recompiles that to a scratch binary, and refuses unless it is
     /// byte-identical to <paramref name="originalPluginPath"/>'s own bytes. Byte identity is the
-    /// gate; <see cref="DescribeFirstDivergence"/>'s per-record model equality is only reached to
-    /// name the offending record once the gate has already failed, so a passing Track pays one
-    /// extra deserialize and one extra binary write per plugin, never a record-by-record diff.
+    /// gate; naming the offender is only reached once the gate has already failed, so a passing
+    /// Track pays one extra deserialize and one extra binary write per plugin, never a diagnostic.
+    ///
+    /// <para><b>#514: two independent diagnoses, tried in order.</b> <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>
+    /// runs first, straight over the same two byte buffers this method already has in hand — no
+    /// extra parse, no extra write. It exists because Mutagen's own model can be lossy on the way
+    /// *in*: a record whose original bytes and recompiled bytes both parse into equal objects can
+    /// still differ on disk, when the parser silently dropped a subrecord neither model ever held
+    /// (observed on a real plugin, <c>LitR - TrueStorms.esp</c> REGN <c>001D2AF4</c> — a malformed
+    /// 6-byte <c>RDAT</c> where the format wants 8 desyncs Mutagen's own parse, which then silently
+    /// drops every subrecord after it in that record; see <c>docs/specs/medit-repair.md</c>'s R2 for
+    /// the byte-level diagnosis, and its own note that "second same-type RDAT" — an earlier, now
+    /// retracted theory for this same plugin — was never the real defect). Model equality
+    /// (<see cref="DescribeFirstDivergence"/>) cannot name that record: both sides of its comparison
+    /// come from the same lossy parse, so they agree. Only a byte-level count comparison can, which
+    /// is what makes this check independent of, not a replacement for, the model-identity one below —
+    /// a content or reordering difference the byte walk correctly ignores still needs
+    /// <see cref="DescribeFirstDivergence"/> to name it.</para>
     /// </summary>
     private static async Task VerifyRoundTrip(
         IMod original,
@@ -197,6 +212,14 @@ public sealed class TrackService(ILogger<TrackService> logger)
             var recompiledBytes = await File.ReadAllBytesAsync(recompiledPath, cancel);
             if (originalBytes.AsSpan().SequenceEqual(recompiledBytes))
                 return;
+
+            if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
+            {
+                throw new SourceRoundTripFailedException(
+                    $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
+                    "present in the original — dropped during parsing, before Track ever wrote its source.");
+            }
 
             throw new SourceRoundTripFailedException(DescribeFirstDivergence(original, recompiled, pluginName));
         }

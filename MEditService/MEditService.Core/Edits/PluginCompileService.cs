@@ -257,6 +257,21 @@ public sealed class PluginCompileService(
     /// because of that: a crash mid-renormalization, which leaves a group folder half-renumbered —
     /// this gate catches that the same way it catches any other genuine divergence, pointing at
     /// re-Track, with no new recovery machinery needed.</para>
+    ///
+    /// <para><b>#514 gets no live gate here, deliberately — not an oversight.</b> #514's subrecord-
+    /// inventory check (<see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, wired into
+    /// <see cref="TrackService.VerifyRoundTrip"/>) needs the same "independent original" this method's
+    /// own doc comment above says Compile doesn't have — every candidate "before" binary at Compile
+    /// time (the plugin's current on-disk bytes, an older Track-time snapshot) is exactly as
+    /// indistinguishable from a legitimate field-clear edit as this method's own text-level check
+    /// would be, and picking an older baseline doesn't fix that, it just moves the same ambiguity back
+    /// one hop. That is also why Compile does not need one: the loss class #514 targets is introduced
+    /// only when an external binary is *deserialized* — Track's own parse, or a future read-time
+    /// diagnosis (#519) — never by Compile, which only ever writes from a source that already passed
+    /// this method's own self-consistency check. Once Track's gate refuses a plugin carrying that
+    /// defect, no Compile downstream of a successful Track can encounter it — the source cannot hold
+    /// what the model never captured. Compile's obligation is satisfied by sharing the one walker, not
+    /// by a second live check.</para>
     /// </summary>
     private static string? RefuseIfSourceDoesNotRoundTrip(IMod mod, string pluginName, string resolverRoot)
     {
