@@ -1006,7 +1006,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         if (IsObjectModPropertyBase(getterInterface))
-            result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, getterTypeToTable));
+            result.AddRange(BuildObjectModPropertyLeafFields(getterInterface, getterTypeToTable, logger));
 
         return result;
     }
@@ -1063,7 +1063,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // this element already throws today regardless (Activator.CreateInstance on the abstract
     // AObjectModProperty<T>, #531), so nothing here is reachable from a write either way.
     private static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
-        Type baseGetterInterface, IReadOnlyDictionary<Type, string> getterTypeToTable)
+        Type baseGetterInterface, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         var ns = baseGetterInterface.Namespace;
         var asm = baseGetterInterface.Assembly;
@@ -1073,7 +1073,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         foreach (var name in ObjectModPropertyLeafNames)
         {
             var open = asm.GetType($"{ns}.{name}");
-            if (open == null) continue; // defensive only — never seen missing in a real category
+            if (open == null)
+            {
+                // Same convention as BuildHeaderSchema's own lookup-came-up-empty branches: this
+                // runs once per category at schema-build time, not per record, so it's not the
+                // per-call accessor-lambda case MEditService/CLAUDE.md's logging section carves
+                // silence out for — never seen missing in a real category, but a category whose
+                // Mutagen assembly renamed or dropped one of these seven leaves should say so
+                // rather than silently lose that leaf's fields.
+                logger.LogWarning(
+                    "No {LeafName} type found in {Assembly}; OMOD Properties element omits that leaf's fields",
+                    name, asm.GetName().Name);
+                continue;
+            }
             leaves.Add(open.MakeGenericType(args));
         }
 
