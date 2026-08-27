@@ -23,7 +23,11 @@ public enum RecordEditRefusal
     /// <summary>The plugin holds no such record at the effective ref.</summary>
     RecordNotFound,
 
-    /// <summary>No field of that name on this record type.</summary>
+    /// <summary>No field of that name on this record type — or (#532) the schema names one (a
+    /// #263 sibling-merge column, e.g. GLOB's <c>output_char</c>, declared only on one of several
+    /// concrete subclasses sharing the table) but this particular record's own runtime type doesn't
+    /// declare the backing property. Both read the same to a caller: this record genuinely has no
+    /// such field.</summary>
     FieldNotFound,
 
     /// <summary>The field exists but is not writable — masters (derived at compile, ADR-0038), a
@@ -106,6 +110,14 @@ public enum RecordEditRefusal
     /// alternative is what #503 was: the applier returning without writing while the write path
     /// reported success, so a per-element payload for a complex field (CONTEXT.md: always written as
     /// one atomic value, never per-element) lost the user's edit with no signal at all.
+    ///
+    /// <para>#532: reused for the scalar/FormLink half of the identical defect — a converter that
+    /// threw or declined (an unrecognised enum member, a non-numeric string), a JSON <c>null</c> into
+    /// a non-nullable column, or an unparseable/wrongly-shaped FormKey. Not split into its own value:
+    /// unlike <see cref="ListElementTypeUnresolved"/> below (whose fix is a specific, different
+    /// action — name a discriminator), every one of these cases has the same fix as #503's own —
+    /// send a value this field actually accepts — which is exactly what the message this refusal
+    /// already carries says.</para>
     /// </summary>
     FieldValueShapeMismatch,
 

@@ -218,7 +218,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             columns.Add(new ColumnSpec("author", authorProp.Name, authorLeaf.DuckDbType, _ => null,
                 authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
-            applies.Add(HeaderPropertyApply(modHeaderProp, authorProp.Name, nullable: true, authorLeaf.Convert));
+            applies.Add(HeaderPropertyApply(modHeaderProp, authorProp.Name, nullable: true, authorLeaf.Convert, logger));
         }
         else
         {
@@ -242,7 +242,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames, Apply: null,
                 IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
-            applies.Add(HeaderPropertyApply(modHeaderProp, flagsProp.Name, nullable: false, flagsLeaf.Convert));
+            applies.Add(HeaderPropertyApply(modHeaderProp, flagsProp.Name, nullable: false, flagsLeaf.Convert, logger));
         }
         else
         {
@@ -292,10 +292,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // and applies the converted JSON onto its property (reusing MakeApplier's by-name set + null
     // handling). Convert is never null for the header's author/flags leaves (primitive / enum).
     private static Action<IMod, JsonElement>? HeaderPropertyApply(
-        PropertyInfo modHeaderProp, string propName, bool nullable, Func<JsonElement, object?>? convert)
+        PropertyInfo modHeaderProp, string propName, bool nullable, Func<JsonElement, object?>? convert, ILogger logger)
     {
         if (convert == null) return null;
-        var applier = MakeApplier(propName, nullable, convert);
+        var applier = MakeApplier(propName, nullable, convert, logger);
         return (mod, json) => { if (modHeaderProp.GetValue(mod) is { } header) applier(header, json); };
     }
 
@@ -877,7 +877,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string ApiType,
         string[] ValidFormKeyTypes,
         string[] EnumValues,
-        Func<IMajorRecord, JsonElement, bool>? Apply,
+        Func<IMajorRecord, JsonElement, ApplyOutcome>? Apply,
         FieldMetadata? ElementMeta = null,
         IReadOnlyList<FieldMetadata>? SubFieldMetas = null,
         bool AllowsNull = false,
@@ -894,7 +894,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         string[] ValidFormKeyTypes,
         string[] EnumValues,
         Func<object, object?> Extract,
-        Action<object, JsonElement>? Apply,
+        Func<object, JsonElement, ApplyOutcome>? Apply,
         IReadOnlyList<SubFieldSpec>? SubFields = null,
         SubFieldSpec? ElementSpec = null,
         bool AllowsNull = false,
@@ -1176,12 +1176,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         // #531: the same MakeApplier/ApplyFormLinkJson routing ProjectSubField gives every other
-        // sub-field (#429) — it resolves the property off the target's own runtime type and is a
-        // silent no-op when that type doesn't declare it, which is exactly what a leaf that lacks
-        // this member needs.
-        Action<object, JsonElement>? apply = rep.Convert switch
+        // sub-field (#429) — it resolves the property off the target's own runtime type and answers
+        // ApplyOutcome.PropertyNotFound when that type doesn't declare it, which ApplySubFields
+        // treats as a silent no-op, exactly what a leaf that lacks this member needs (#532).
+        Func<object, JsonElement, ApplyOutcome>? apply = rep.Convert switch
         {
-            { } c => MakeApplier(pName, nullable: true, c),
+            { } c => MakeApplier(pName, nullable: true, c, logger),
             null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
             _ => null,
         };
@@ -1212,21 +1212,35 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return new(colName, "string", Empty, Empty, Extract, Apply: MakeWidenedApplier(pName, logger), AllowsNull: true);
     }
 
-    // #531: applies one of the widened OMOD leaf union fields (`value`, `value2`, `function_type`)
-    // onto whichever concrete leaf ApplyListJson already resolved. Silent no-op when the target
-    // object's runtime type doesn't declare the property at all (same convention as MakeApplier),
-    // and when the incoming JSON can't be converted into whatever type the property actually is —
-    // never a throw out of a per-element write, logged at Trace the same way ApplyFormLinkJson logs
-    // its own best-effort write failures.
-    private static Action<object, JsonElement> MakeWidenedApplier(string pName, ILogger logger)
+    /// <summary>
+    /// #531/#532: applies one of the widened OMOD leaf union fields (<c>value</c>, <c>value2</c>,
+    /// <c>function_type</c>) onto whichever concrete leaf <c>ApplyListJson</c> already resolved.
+    ///
+    /// <para><see cref="ApplyOutcome.PropertyNotFound"/> when the target object's runtime type
+    /// doesn't declare the property at all — an expected, silent outcome one layer up in
+    /// <c>ApplySubFields</c> (same convention as <c>MakeApplier</c>): a leaf that lacks this member
+    /// is exactly what this shape is for. A JSON <c>null</c> is likewise Applied-as-a-no-op — it
+    /// means "this leaf's own Extract had nothing to read back for this member", not a value to
+    /// reject.</para>
+    ///
+    /// <para><see cref="ApplyOutcome.ValueRejected"/> — #532, no longer a silent no-op — when the
+    /// property *does* exist but the incoming JSON can't be converted into whatever type it actually
+    /// is: <c>ApplySubFields</c> now folds that into a refusal of the whole element/struct write
+    /// rather than constructing the right concrete type and then silently dropping a value onto
+    /// it.</para>
+    /// </summary>
+    private static Func<object, JsonElement, ApplyOutcome> MakeWidenedApplier(string pName, ILogger logger)
     {
         var resolve = ResolveProperty(pName);
         return (obj, val) =>
         {
             var rp = resolve(obj.GetType());
-            if (rp == null || val.ValueKind == JsonValueKind.Null) return;
+            if (rp == null) return ApplyOutcome.PropertyNotFound;
+            if (val.ValueKind == JsonValueKind.Null) return ApplyOutcome.Applied;
             var converted = ConvertWidenedJson(val, rp.PropertyType, pName, logger);
-            if (converted != null) rp.SetValue(obj, converted);
+            if (converted == null) return ApplyOutcome.ValueRejected;
+            rp.SetValue(obj, converted);
+            return ApplyOutcome.Applied;
         };
     }
 
@@ -1476,41 +1490,74 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     // The one applier shared by columns and sub-fields: writes a converted JSON value onto a
-    // property, tolerating a missing property and (when nullable) a JSON null. Operates on
-    // `object`; the column path adapts the IMajorRecord receiver via MakeColumnApplier.
-    private static Action<object, JsonElement> MakeApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
+    // property. Operates on `object`; the column path adapts the IMajorRecord receiver via
+    // MakeColumnApplier.
+    //
+    // #532: used to be an Action that swallowed every way this can fail to write — no such property
+    // on the runtime type, a JSON null into a non-nullable column, a converter that threw or (the
+    // dead branch this replaces) declined by returning null — and both its column and sub-field
+    // callers reported success regardless. Now answers ApplyOutcome so each caller can tell a real
+    // refusal (ValueRejected, PropertyNotFound at the top-level-column layer) from the sub-field
+    // layer's own expected silent no-op (PropertyNotFound there — see ApplySubFields).
+    private static Func<object, JsonElement, ApplyOutcome> MakeApplier(
+        string pName, bool nullable, Func<JsonElement, object?> conv, ILogger logger)
     {
         var resolve = ResolveProperty(pName);
         return (obj, val) =>
         {
             var rp = resolve(obj.GetType());
-            if (rp == null) return;
+            if (rp == null) return ApplyOutcome.PropertyNotFound;
             if (val.ValueKind == JsonValueKind.Null)
             {
-                if (nullable) rp.SetValue(obj, null);
-                return;
+                if (!nullable) return ApplyOutcome.ValueRejected;
+                rp.SetValue(obj, null);
+                return ApplyOutcome.Applied;
             }
-            var v = conv(val);
-            if (v != null) rp.SetValue(obj, v);
+
+            object? v;
+            try
+            {
+                v = conv(val);
+            }
+            // #532 finding: none of PrimitiveMap's or ClassifyEnumLeaf's converters ever return null
+            // on invalid input — GetInt32/GetBoolean/GetString throw InvalidOperationException for
+            // the wrong JSON token kind, Enum.Parse throws ArgumentException for an unrecognised
+            // member, and the bitmask branch's long.Parse throws FormatException — so the previous
+            // null-return guard below was dead: every declining converter threw straight out of
+            // RecordEditService.EditField uncaught instead of triggering it. Same catch list
+            // ConvertWidenedJson already uses, widened with ArgumentException/InvalidOperationException
+            // for the two dispatch shapes that method doesn't need to cover.
+            catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException
+                                           or ArgumentException or InvalidOperationException)
+            {
+                if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+                return ApplyOutcome.ValueRejected;
+            }
+
+            if (v == null) return ApplyOutcome.ValueRejected;
+            rp.SetValue(obj, v);
+            return ApplyOutcome.Applied;
         };
     }
 
-    // #503: answers `true` unconditionally. A scalar column takes a scalar, and every way this can
-    // fail to write — no such property on the runtime type, or a converter that could not read the
-    // value — is a silent no-op that predates #503 and is a different defect class from the complex-
-    // field shape guards below (which is what the `bool` exists for). Left as it stands deliberately,
-    // and filed separately rather than widened here.
-    private static Func<IMajorRecord, JsonElement, bool> MakeColumnApplier(string pName, bool nullable, Func<JsonElement, object?> conv)
+    // #532: no longer answers `true` unconditionally — MakeApplier's own ApplyOutcome carries
+    // straight through to the column, since a top-level scalar column's failure modes (no such
+    // property on the runtime type, a converter that threw or declined) are real refusals at this
+    // layer, not the sub-field layer's "shared leaf-union member absent on this concrete leaf"
+    // no-op. RecordFieldWriter.TryApply is what translates PropertyNotFound/ValueRejected into their
+    // own named refusals.
+    private static Func<IMajorRecord, JsonElement, ApplyOutcome> MakeColumnApplier(
+        string pName, bool nullable, Func<JsonElement, object?> conv, ILogger logger)
     {
-        var applier = MakeApplier(pName, nullable, conv);
-        return (record, val) => { applier(record, val); return true; };
+        var applier = MakeApplier(pName, nullable, conv, logger);
+        return (record, val) => applier(record, val);
     }
 
-    // Same #503 note as MakeColumnApplier: a FormLink column takes a scalar, and its own silent
-    // no-ops (an unparseable FormKey, a missing property) are that same separate defect — not the
-    // complex-field shape mismatch this bool reports.
-    private static Func<IMajorRecord, JsonElement, bool> FormLinkColumnApplier(string pName, ILogger logger) =>
-        (record, val) => { ApplyFormLinkJson(record, val, pName, logger); return true; };
+    // #532: no longer answers `true` unconditionally — a FormLink column's own failure modes (an
+    // unparseable FormKey, a missing property) now surface as ApplyOutcome.ValueRejected /
+    // .PropertyNotFound the same way MakeColumnApplier's scalar siblings do.
+    private static Func<IMajorRecord, JsonElement, ApplyOutcome> FormLinkColumnApplier(string pName, ILogger logger) =>
+        (record, val) => ApplyFormLinkJson(record, val, pName, logger);
 
     // ── Per-sub-field reflection (operates on object, not IMajorRecordGetter) ─
 
@@ -1542,9 +1589,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Action<object, JsonElement>? apply = leaf.Convert switch
+        Func<object, JsonElement, ApplyOutcome>? apply = leaf.Convert switch
         {
-            { } c => MakeApplier(pName, nullable, c),
+            { } c => MakeApplier(pName, nullable, c, logger),
             null when IsFormLink(core) => (obj, val) => ApplyFormLinkJson(obj, val, pName, logger),
             _ => null,
         };
@@ -1556,22 +1603,39 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static Func<object, object?> SubGetter(PropertyInfo prop) =>
         obj => { try { return prop.GetValue(obj); } catch { return null; } };
 
-    private static void ApplyFormLinkJson(object obj, JsonElement val, string pName, ILogger logger)
+    // #532: used to be void, silently discarding every one of its own failure modes (a missing
+    // property, an unparseable FormKey string, a JSON value that wasn't even a string) behind a
+    // blanket try/catch — both its callers (FormLinkColumnApplier, ProjectSubField) then reported
+    // success unconditionally. Now answers ApplyOutcome the same way MakeApplier does, so a top-level
+    // FormLink column's own malformed-value write is a real refusal rather than a silent no-op that
+    // still re-serializes the record unchanged and calls it applied.
+    private static ApplyOutcome ApplyFormLinkJson(object obj, JsonElement val, string pName, ILogger logger)
     {
         try
         {
             var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
-            if (rp == null) return;
+            if (rp == null) return ApplyOutcome.PropertyNotFound;
             if (val.ValueKind == JsonValueKind.Null)
-            { (rp.GetValue(obj))?.GetType().GetMethod("Clear")?.Invoke(rp.GetValue(obj), []); return; }
+            {
+                (rp.GetValue(obj))?.GetType().GetMethod("Clear")?.Invoke(rp.GetValue(obj), []);
+                return ApplyOutcome.Applied;
+            }
+            // GetString() throws InvalidOperationException for any JSON token kind other than string
+            // (e.g. a bare number sent for a nullable FormLink column, which ValidateFormLinks itself
+            // treats as "no reference" and lets through) — caught below, same as every other
+            // conversion failure this method can hit.
             var fkStr = val.GetString();
-            if (fkStr == null || !FormKey.TryFactory(fkStr, out var fk)) return;
+            if (fkStr == null || !FormKey.TryFactory(fkStr, out var fk)) return ApplyOutcome.ValueRejected;
             var link = rp.GetValue(obj);
-            link?.GetType().GetMethod("SetTo", [typeof(FormKey)])?.Invoke(link, [fk]);
+            var setTo = link?.GetType().GetMethod("SetTo", [typeof(FormKey)]);
+            if (setTo == null) return ApplyOutcome.ValueRejected;
+            setTo.Invoke(link, [fk]);
+            return ApplyOutcome.Applied;
         }
         catch (Exception ex)
         {
             if (logger.IsEnabled(LogLevel.Trace)) { logger.LogTrace(ex, "Apply skipped for property {Property}", pName); }
+            return ApplyOutcome.ValueRejected;
         }
     }
 
@@ -1636,9 +1700,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, bool>? apply = leaf.Convert switch
+        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = leaf.Convert switch
         {
-            { } c => MakeColumnApplier(pName, nullable, c),
+            { } c => MakeColumnApplier(pName, nullable, c, logger),
             null when IsFormLink(core) => FormLinkColumnApplier(pName, logger),
             _ => null,
         };
@@ -1677,7 +1741,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, bool>? apply = isFl || isLoqui
+        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui
             ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
             : null;
 
@@ -1686,12 +1750,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     /// <summary>
-    /// Replaces an array field's whole value. #503: answers <c>false</c> for anything that is not
-    /// array-shaped — typically the bare value of a single element, which is what the record editor
-    /// used to send for a per-element edit. An array field is written as one atomic value (CONTEXT.md),
-    /// so there is no sensible merge to perform here and no way to guess where a lone element belongs;
-    /// the caller refuses instead, which is the difference between "your edit was rejected" and #503's
-    /// original "your edit reported success and vanished".
+    /// Replaces an array field's whole value. #503: answers <see cref="ApplyOutcome.ValueRejected"/>
+    /// for anything that is not array-shaped — typically the bare value of a single element, which is
+    /// what the record editor used to send for a per-element edit. An array field is written as one
+    /// atomic value (CONTEXT.md), so there is no sensible merge to perform here and no way to guess
+    /// where a lone element belongs; the caller refuses instead, which is the difference between
+    /// "your edit was rejected" and #503's original "your edit reported success and vanished".
     ///
     /// <para>#531: the same refusal-not-silent-drop rule extends one level in, to an individual
     /// element, when the list's own element type is abstract (OMOD's <c>AObjectModProperty&lt;T&gt;</c>
@@ -1700,15 +1764,29 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// on that element's own data, so it is resolved per element from the payload
     /// (<see cref="ResolveAbstractListElementType"/>) rather than assumed once for the whole field.
     /// Unresolvable — no known discriminator scheme for this abstract type, or a discriminator value
-    /// this scheme doesn't recognise — refuses the whole write immediately, before <c>newList</c> is
-    /// ever attached to <paramref name="record"/>, so a partially-abstract array can never leave one
-    /// element applied and the rest silently missing.</para>
+    /// this scheme doesn't recognise — answers <see cref="ApplyOutcome.ListElementTypeUnresolved"/>
+    /// immediately, before <c>newList</c> is ever attached to <paramref name="record"/>, so a
+    /// partially-abstract array can never leave one element applied and the rest silently missing.
+    /// Its own outcome value rather than <c>ValueRejected</c> because the fix is different (name a
+    /// discriminator, not resend a differently-shaped value) and, since #532, because the two are no
+    /// longer reliably tellable apart from the value's shape alone — see the next paragraph.</para>
+    ///
+    /// <para>#532: the same "before <c>newList</c> is ever attached" guarantee now also covers a
+    /// well-formed element whose own sub-field value was declined (<see cref="ApplySubFields"/>'s
+    /// <c>ValueRejected</c> fold, as opposed to a sub-field simply not applying to this element's own
+    /// concrete leaf, which stays silent) — a struct-array write with one bad member refuses the whole
+    /// array rather than landing every other element and dropping the bad one. This is exactly why
+    /// <see cref="ApplyOutcome.ListElementTypeUnresolved"/> had to become its own outcome rather than
+    /// staying inferred from "a rejection, and the value happens to be a genuine JSON array"
+    /// (<c>RecordEditService.RefuseFieldOutcome</c>'s old heuristic): once a well-typed element could
+    /// also fail this way, that inference started misclassifying a declined sub-field value as an
+    /// unresolved element type.</para>
     /// </summary>
-    private static bool ApplyListJson(
+    private static ApplyOutcome ApplyListJson(
         IMajorRecord record, JsonElement json, string pName,
         bool isFl, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
     {
-        if (json.ValueKind != JsonValueKind.Array) return false;
+        if (json.ValueKind != JsonValueKind.Array) return ApplyOutcome.ValueRejected;
         var rp = record.GetType()
             .GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
 
@@ -1728,16 +1806,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             var concreteType = elemConcreteType;
             if (!isFl && concreteType.IsAbstract)
             {
-                if (ResolveAbstractListElementType(concreteType, elem) is not { } resolved) return false;
+                if (ResolveAbstractListElementType(concreteType, elem) is not { } resolved)
+                    return ApplyOutcome.ListElementTypeUnresolved;
                 concreteType = resolved;
             }
 
-            var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields);
+            var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields, out var rejected);
+            if (rejected) return ApplyOutcome.ValueRejected;
             if (item != null) addMethod.Invoke(newList, [item]);
         }
 
         rp.SetValue(record, newList);
-        return true;
+        return ApplyOutcome.Applied;
     }
 
     // #531: one abstract list-element type has a known discriminator scheme today (OMOD's
@@ -1781,8 +1861,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     private static object? BuildListElement(
-        JsonElement elem, bool isFl, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields)
+        JsonElement elem, bool isFl, Type elemCore, Type elemConcreteType, IReadOnlyList<SubFieldSpec>? subFields,
+        out bool rejected)
     {
+        rejected = false;
         if (isFl)
         {
             var fkStr = elem.GetString();
@@ -1792,21 +1874,38 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var elemObj = Activator.CreateInstance(elemConcreteType)!;
-        ApplySubFields(elemObj, elem, subFields!);
+        rejected = !ApplySubFields(elemObj, elem, subFields!);
         return elemObj;
     }
 
-    private static void ApplySubFields(object target, JsonElement json, IReadOnlyList<SubFieldSpec> subFields)
+    /// <summary>
+    /// Applies every sub-field's own value onto <paramref name="target"/>, folding each member's
+    /// <see cref="ApplyOutcome"/> into one whole-object result for the struct/array-element caller.
+    ///
+    /// <para>#531: a sub-field can be genuinely read-only (e.g. OMOD's own <c>value_type</c>
+    /// discriminator, which decides the object's concrete type rather than being set on it) or absent
+    /// from the incoming JSON — both skipped, not applied at all.</para>
+    ///
+    /// <para>#532: of the members that <i>are</i> applied, <see cref="ApplyOutcome.PropertyNotFound"/>
+    /// stays a silent no-op here — a sub-field shared across several concrete sibling leaf types that
+    /// don't all declare it (OMOD's own sparse leaf-union: <c>value</c>, <c>value2</c>, <c>record</c>,
+    /// <c>enum_int_value</c>, <c>function_type</c>) is *expected* to miss on some of them, by design,
+    /// every time an element of that shape round-trips. Only <see cref="ApplyOutcome.ValueRejected"/>
+    /// — the property exists on this concrete leaf but the value itself couldn't be converted — fails
+    /// the whole object, which <see cref="BuildListElement"/> and the struct column's own apply both
+    /// turn into a refusal of the entire array/struct write before it ever reaches the record
+    /// (<see cref="ApplyListJson"/>'s "before <c>newList</c> is attached" guarantee, extended one
+    /// level in).</para>
+    /// </summary>
+    private static bool ApplySubFields(object target, JsonElement json, IReadOnlyList<SubFieldSpec> subFields)
     {
+        var allAccepted = true;
         foreach (var sf in subFields)
         {
-            // #531: a sub-field can be genuinely read-only (e.g. OMOD's own `value_type`
-            // discriminator, which decides the object's concrete type rather than being set on it)
-            // — skipped rather than a null-forgiving call, so resending a previously-read value for
-            // one of those never throws.
-            if (sf.Apply is { } apply && json.TryGetProperty(sf.Name, out var sfVal))
-                apply(target, sfVal);
+            if (sf.Apply is not { } apply || !json.TryGetProperty(sf.Name, out var sfVal)) continue;
+            if (apply(target, sfVal) == ApplyOutcome.ValueRejected) allAccepted = false;
         }
+        return allAccepted;
     }
 
     // ── Loqui struct (sub-record) ─────────────────────────────────────────────
@@ -1828,21 +1927,26 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
         var setterType = GetSetterType(core);
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, bool>? apply = null;
+        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = null;
         if (setterType != null)
         {
             // #503: the struct half of ApplyListJson's own shape guard — a struct field is written as
             // one atomic value, so a bare member value (what a per-member edit used to send) is
             // refused rather than silently returning while the write path reported success.
+            //
+            // #532: the same refusal now also covers a well-formed object whose own member value was
+            // declined (ApplySubFields' ValueRejected fold) — SetValue is skipped in that case too, so
+            // a struct write with one bad member never attaches its partially-built value to the
+            // record, matching ApplyListJson's own "before newList is attached" guarantee.
             apply = (record, json) =>
             {
-                if (json.ValueKind != JsonValueKind.Object) return false;
+                if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
                 var rp = record.GetType()
                     .GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
                 var obj = rp.GetValue(record) ?? Activator.CreateInstance(setterType)!;
-                ApplySubFields(obj, json, subFields);
+                if (!ApplySubFields(obj, json, subFields)) return ApplyOutcome.ValueRejected;
                 if (rp.CanWrite) rp.SetValue(record, obj);
-                return true;
+                return ApplyOutcome.Applied;
             };
         }
 

@@ -122,7 +122,7 @@ public sealed class RecordEditService(
 
         var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
         if (outcome != FieldApplyOutcome.Applied)
-            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, value, schemas);
+            return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas);
 
         // #453 scope 3: the file name carries the EditorID, so an EditorID edit is a rename as well as
         // a content change. Done before the write, deliberately — see RenameSourceUnit.
@@ -1351,35 +1351,30 @@ public sealed class RecordEditService(
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
     private static RecordEditResult RefuseFieldOutcome(
-        FieldApplyOutcome outcome, string fieldPath, string recordType, JsonElement value,
+        FieldApplyOutcome outcome, string fieldPath, string recordType,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (outcome == FieldApplyOutcome.ReadOnly)
             return RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.");
+
+        // #531 named this its own outcome; #532 made answering it directly (rather than inferring it
+        // one layer up from "a rejection whose value happens to be a genuine JSON array") load-bearing
+        // — a well-typed element's own declined sub-field value is now a second way to reach exactly
+        // that shape, which the old heuristic could not tell apart from an unresolved element type.
+        if (outcome == FieldApplyOutcome.ListElementTypeUnresolved)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ListElementTypeUnresolved,
+                $"'{fieldPath}' has an element whose concrete type could not be determined from " +
+                "its own payload — include that element's own type discriminator (e.g. " +
+                "'value_type') to say which one it is.");
+        }
 
         if (outcome == FieldApplyOutcome.ValueShapeMismatch)
         {
             var apiType = schemas.TryGetValue(recordType, out var schema)
                 ? schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath)?.ApiType
                 : null;
-
-            // #531: an array field's own Apply (SchemaReflector.ApplyListJson) only ever returns
-            // false once past its own array-shape gate when an element's concrete type is abstract
-            // and the element's own payload carries no recognisable type discriminator
-            // (ResolveAbstractListElementType) — every other list field always applies once that
-            // gate passes, so seeing a genuine JSON array here is itself the signal, not a guess.
-            // Distinct RecordEditRefusal from FieldValueShapeMismatch below because the fix is
-            // different: naming a discriminator, not sending a differently shaped value — the "send
-            // the whole array" message that refusal carries would be actively wrong here, since the
-            // caller already did.
-            if (apiType == "array" && value.ValueKind == JsonValueKind.Array)
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.ListElementTypeUnresolved,
-                    $"'{fieldPath}' has an element whose concrete type could not be determined from " +
-                    "its own payload — include that element's own type discriminator (e.g. " +
-                    "'value_type') to say which one it is.");
-            }
 
             return RecordEditResult.Refused(
                 RecordEditRefusal.FieldValueShapeMismatch, ComplexFieldShapeMessage(fieldPath, apiType));
