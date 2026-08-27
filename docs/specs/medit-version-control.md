@@ -215,6 +215,11 @@ using git.
   with a message naming the Track command — except plugins with no mod folder (vanilla and
   DLC masters), whose refusal signposts the blessed path instead: author a patch plugin.
   No silent dead UI in either case.
+- **No half-repo on failure** (#414, cleanup broadened by #508): a Track that fails partway
+  leaves the mod folder exactly as if Track were never attempted — `.git`, `.gitignore` and
+  the partially-written `source/` tree are all removed on any failure, not just `.git`. One
+  catch block wraps the whole init→checkout sequence, so cleanup is uniform regardless of
+  which step failed.
 - **Localized plugins** (#515): Track, Compile and session ingest resolve `TranslatedString`
   values from the plugin's own mod-folder `Strings/` folder first, then the game Data
   folder — every deep parse passes an explicit strings lookup rather than relying on
