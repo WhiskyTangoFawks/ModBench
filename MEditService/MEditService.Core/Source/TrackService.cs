@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
 using Noggog.WorkEngine;
 
@@ -162,10 +163,15 @@ public sealed class TrackService(ILogger<TrackService> logger)
             // mirrors BinaryRoundTripGateTests' own precedent for exactly this "reproduce the
             // original's own bytes" shape (as opposed to PluginCompileService's session-derived
             // load order, which answers a different question: what should the masters be now).
+            // NoNextFormIDProcessing/RecordCountOption.NoCheck mirror PluginWriter (#506): the
+            // source's own stored HEDR.NextObjectID/NumRecords are the bytes to reproduce, not
+            // Mutagen's recompute of them.
             await recompiled.BeginWrite
                 .ToPath(recompiledPath)
                 .WithLoadOrderFromHeaderMasters()
                 .WithNoDataFolder()
+                .NoNextFormIDProcessing()
+                .WithRecordCount(RecordCountOption.NoCheck)
                 .WriteAsync();
 
             var originalBytes = await File.ReadAllBytesAsync(originalPluginPath, cancel);
@@ -191,8 +197,10 @@ public sealed class TrackService(ILogger<TrackService> logger)
     private static string DescribeFirstDivergence(IMod original, IFallout4Mod recompiled, string pluginName)
     {
         var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
+        var originalFormKeys = new HashSet<FormKey>();
         foreach (var originalRecord in original.EnumerateMajorRecords())
         {
+            originalFormKeys.Add(originalRecord.FormKey);
             if (!recompiledByFormKey.TryGetValue(originalRecord.FormKey, out var recompiledRecord))
             {
                 return $"{pluginName} does not round-trip through its own tracked source: " +
@@ -205,6 +213,17 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 return $"{pluginName} does not round-trip through its own tracked source: " +
                     $"{originalRecord.GetType().Name} {originalRecord.FormKey} (EditorID '{originalRecord.EditorID}') " +
                     "differs after being recompiled from its own tracked source.";
+            }
+        }
+
+        // #506: the other direction — a record the recompile produced that the original never had.
+        foreach (var recompiledRecord in recompiled.EnumerateMajorRecords())
+        {
+            if (!originalFormKeys.Contains(recompiledRecord.FormKey))
+            {
+                return $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"{recompiledRecord.GetType().Name} {recompiledRecord.FormKey} (EditorID '{recompiledRecord.EditorID}') " +
+                    "is present in the recompiled plugin but not present in the original.";
             }
         }
 
