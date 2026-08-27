@@ -14,6 +14,17 @@ triggers "Launch mEdit" from the Loadout view. There is no more manual `dotnet r
 no `--data-folder`/`--plugins-txt` flags; the backend is driven by `load-explicit` (the active
 modlist's enabled plugins + vanilla masters), not a standalone data-folder scan.
 
+## 0 — Confirm the checkout is current
+
+```bash
+git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo current
+```
+
+Both must hold — HEAD on a branch (a detached HEAD silently strands every commit made on
+it) and that branch containing `main`. Anything else: stop and say so — a manual test on a
+stale tree verifies behavior `main` no longer has (an `/orchestrate` run once left the
+checkout detached four days behind `main`, and a whole test session ran against it).
+
 ## 1 — Build the extension (if needed)
 
 ```bash
