@@ -15,15 +15,42 @@ internal enum FieldApplyOutcome
     /// FormKey, the #263 widened text columns). Never a silent no-op: the caller refuses.</summary>
     ReadOnly,
 
-    /// <summary>No field of this name on this record type.</summary>
+    /// <summary>No field of this name on this record type schema, <i>or</i> (#532) the schema names
+    /// one but this particular record's own runtime type doesn't declare the backing property — the
+    /// sibling-merge case, e.g. GLOB's <c>output_char</c> column exists only on <c>GlobalFloat</c>
+    /// among the four GLOB subclasses (<see cref="ColumnSpec.Apply"/> answering
+    /// <c>ApplyOutcome.PropertyNotFound</c>). Both read the same to a caller: this record genuinely
+    /// has no such field.</summary>
     NotFound,
 
     /// <summary>#503: the field is writable, but the value is not the shape it takes — an array field
     /// given something that is not a JSON array, or a struct field given something that is not a JSON
     /// object. That is the shape a per-element edit sends when nothing reconstructed the whole complex
     /// value first, and it used to be indistinguishable from success: the applier returned without
-    /// writing and <see cref="TryApply"/> answered <see cref="Applied"/> anyway.</summary>
+    /// writing and <see cref="TryApply"/> answered <see cref="Applied"/> anyway.
+    ///
+    /// <para>#532: also covers a scalar or FormLink column whose <see cref="ColumnSpec.Apply"/>
+    /// answered <c>ApplyOutcome.ValueRejected</c> — a converter that threw or declined (an
+    /// unrecognised enum member, a non-numeric string), a JSON <c>null</c> into a non-nullable
+    /// column, or an unparseable/wrongly-shaped FormKey. Reused deliberately rather than given its
+    /// own <c>RecordEditRefusal</c> member: unlike #531's <c>ListElementTypeUnresolved</c> (whose fix
+    /// is a specific, different action — name a discriminator), there is no more specific actionable
+    /// fix here beyond "send a value this field accepts", which is exactly what this outcome's
+    /// existing generic message already says.</para>
+    /// </summary>
     ValueShapeMismatch,
+
+    /// <summary>
+    /// #531/#532: mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.ListElementTypeUnresolved"/>
+    /// one-for-one — an array field given an array, where at least one element's own concrete type is
+    /// abstract and couldn't be determined from its own payload. Its own value rather than folded into
+    /// <see cref="ValueShapeMismatch"/> because <see cref="RecordEditService"/> used to infer this case
+    /// from "the outcome was a rejection and the value happens to be a genuine JSON array" — a
+    /// heuristic #532 broke, once a well-typed element's own declined sub-field value became a second
+    /// way to reach a rejection with a genuine JSON array. Answering the real outcome directly removes
+    /// the guess.
+    /// </summary>
+    ListElementTypeUnresolved,
 }
 
 /// <summary>
@@ -84,11 +111,16 @@ internal static class RecordFieldWriter
         if (col.Apply == null)
             return FieldApplyOutcome.ReadOnly;
 
-        // #503: the applier's own answer, not an assumption. `false` means it recognised the field and
-        // declined the value's shape — the whole point of the delegate returning anything at all.
-        return col.Apply(record, value)
-            ? FieldApplyOutcome.Applied
-            : FieldApplyOutcome.ValueShapeMismatch;
+        // #503/#531/#532: the applier's own answer, not an assumption — each of these is a different
+        // reason with a different fix (see FieldApplyOutcome's own docs), so each translates to its
+        // own outcome rather than one undifferentiated refusal.
+        return col.Apply(record, value) switch
+        {
+            ApplyOutcome.Applied => FieldApplyOutcome.Applied,
+            ApplyOutcome.PropertyNotFound => FieldApplyOutcome.NotFound,
+            ApplyOutcome.ListElementTypeUnresolved => FieldApplyOutcome.ListElementTypeUnresolved,
+            _ => FieldApplyOutcome.ValueShapeMismatch,
+        };
     }
 
     /// <summary>

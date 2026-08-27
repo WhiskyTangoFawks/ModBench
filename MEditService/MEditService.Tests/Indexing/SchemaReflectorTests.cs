@@ -652,6 +652,32 @@ public class SchemaReflectorTests
         Assert.Contains("race", col.ValidFormKeyTypes);
     }
 
+    /// <summary>
+    /// #532: the mechanism-level proof, independent of <c>RecordEditService.ValidateFormLinks</c>
+    /// (which already refuses most malformed FormKey strings before <c>ColumnSpec.Apply</c> is ever
+    /// reached at the public <c>EditField</c> door — see <c>ScalarFieldApplierRefusalTests</c>'s own
+    /// note on this). Calling <c>Apply</c> directly is what actually exercises
+    /// <c>SchemaReflector.ApplyFormLinkJson</c>'s own behaviour: a malformed string used to be a
+    /// silent no-op reported as <c>ApplyOutcome.Applied</c> (via the pre-#532 unconditional-<c>true</c>
+    /// contract) regardless of a caller that reaches this column without going through
+    /// <c>ValidateFormLinks</c> first.
+    /// </summary>
+    [Fact]
+    public void GetSchemas_Npc_FormLinkColumn_Apply_MalformedFormKeyString_IsRejected()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["npc_"].RecordColumns.First(c => c.Name == "race");
+        var npc = new Mutagen.Bethesda.Fallout4.Npc(
+            Mutagen.Bethesda.Plugins.FormKey.Factory("000001:Fallout4.esm"),
+            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
+        var originalRace = npc.Race.FormKeyNullable;
+
+        var outcome = col.Apply!(npc, System.Text.Json.JsonDocument.Parse("\"not-a-formkey\"").RootElement);
+
+        Assert.Equal(ApplyOutcome.ValueRejected, outcome);
+        Assert.Equal(originalRace, npc.Race.FormKeyNullable);
+    }
+
     [Fact]
     public void GetSchemas_Npc_Race_IsNonNullableFormLink()
     {
@@ -949,7 +975,7 @@ public class SchemaReflectorTests
 
         var json = $"[\"{kw1}\",\"{kw2}\"]";
         // #503: an array-shaped payload is written, and says so — the other side of the shape guard.
-        Assert.True(col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
+        Assert.Equal(ApplyOutcome.Applied, col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
 
         Assert.NotNull(npc.Keywords);
         Assert.Equal(2, npc.Keywords!.Count);
@@ -994,7 +1020,7 @@ public class SchemaReflectorTests
         // write path reports the edit as applied and the user's change vanishes silently.
         var applied = col.Apply!(npc, System.Text.Json.JsonDocument.Parse("\"notanarray\"").RootElement);
 
-        Assert.False(applied);
+        Assert.Equal(ApplyOutcome.ValueRejected, applied);
         Assert.Empty(npc.Factions);
     }
 
@@ -1047,7 +1073,7 @@ public class SchemaReflectorTests
 
         var json = """{"thin":0.5,"fat":0.8,"muscular":0.3}""";
         // #503: an object-shaped payload is written, and says so — the other side of the shape guard.
-        Assert.True(col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
+        Assert.Equal(ApplyOutcome.Applied, col.Apply(npc, System.Text.Json.JsonDocument.Parse(json).RootElement));
 
         Assert.NotNull(npc.Weight);
         Assert.Equal(0.5f, npc.Weight!.Thin, precision: 3);
@@ -1068,7 +1094,7 @@ public class SchemaReflectorTests
         // #503, struct half of the same rule: a non-object payload is reported as not written.
         var applied = col.Apply!(npc, System.Text.Json.JsonDocument.Parse("[1,2,3]").RootElement);
 
-        Assert.False(applied);
+        Assert.Equal(ApplyOutcome.ValueRejected, applied);
         Assert.Equal(originalWeight, npc.Weight);
     }
 

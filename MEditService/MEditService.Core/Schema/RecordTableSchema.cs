@@ -5,6 +5,70 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Schema;
 
+/// <summary>
+/// What one write attempt against a single leaf property came to — shared by
+/// <see cref="ColumnSpec.Apply"/> (record-level) and <c>SchemaReflector</c>'s own sub-field appliers
+/// (a struct member or array element, one level down from a column).
+///
+/// <para>#532: replaces a bare <c>bool</c> that could only ever mean "the outer JSON shape didn't
+/// match" (#503's array-vs-single-element / struct-vs-single-member guard). <see cref="PropertyNotFound"/>
+/// and <see cref="ValueRejected"/> answer "no" for two different reasons with two different fixes — a
+/// caller needs to tell them apart rather than collapsing both into one undifferentiated
+/// <c>false</c>, the same reasoning #531's own <c>RecordEditRefusal.ListElementTypeUnresolved</c>
+/// applied a level up. The two are not merely a top-level-column distinction, either: one level down,
+/// inside a sub-field shared by several concrete sibling leaf types that don't all declare it (OMOD's
+/// own sparse leaf-union — <c>SchemaReflector.BuildObjectModPropertyLeafFields</c>), <see cref="PropertyNotFound"/>
+/// is an <i>expected, silent</i> outcome (see <c>SchemaReflector.ApplySubFields</c>), while
+/// <see cref="ValueRejected"/> there still fails the whole struct/array write — the same distinction,
+/// with different consequences depending on which layer answers it.</para>
+/// </summary>
+public enum ApplyOutcome
+{
+    /// <summary>The value was converted and written onto the target.</summary>
+    Applied,
+
+    /// <summary>No property of this name exists on the target's own runtime type.
+    ///
+    /// <para>Reached directly against a top-level column (<c>RecordFieldWriter.TryApply</c>, in
+    /// <c>MEditService.Core.Edits</c> — not referenced from here so this stays a leaf schema type),
+    /// this is a real refusal: the record's runtime type genuinely has no such field (e.g. GLOB's
+    /// <c>output_char</c> column, declared only on <c>GlobalFloat</c> among the four GLOB
+    /// subclasses — real per <c>GetSchemas_Glob_OutputCharColumn_ExclusiveToGlobalFloat_NullOnOtherSubclasses</c>,
+    /// not a hypothetical). One level down, inside a sub-field shared across several concrete sibling
+    /// leaf types that don't all declare it (OMOD's sparse leaf-union — <c>value</c>, <c>value2</c>,
+    /// <c>record</c>, <c>enum_int_value</c>, <c>function_type</c>), the identical outcome is an
+    /// expected, silent no-op: the property simply does not apply to <i>this</i> element's concrete
+    /// leaf, by design, not a defect — <c>SchemaReflector.ApplySubFields</c> is what tells the two
+    /// apart, since only it knows which layer it is answering for.</para>
+    /// </summary>
+    PropertyNotFound,
+
+    /// <summary>The property exists, but the value could not be turned into what it needs — a
+    /// converter that threw or declined (an unrecognised enum member, a non-numeric string, an
+    /// unparseable or wrongly-shaped FormKey), a JSON <c>null</c> into a non-nullable column, or (one
+    /// level up, for a struct/array column) the whole value not being the JSON shape the field takes
+    /// at all. Always a refusal, at every level: a struct/array column with a rejected member never
+    /// attaches its partially-built value to the record, the same "before <c>SetValue</c>" invariant
+    /// #503/#531 already established for the outer shape guards.</summary>
+    ValueRejected,
+
+    /// <summary>
+    /// #531/#532: the array <i>is</i> the JSON shape the field takes, but at least one element's own
+    /// concrete type is abstract (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c> today)
+    /// and could not be determined from that element's own payload
+    /// (<c>SchemaReflector.ResolveAbstractListElementType</c>). Its own value, distinct from
+    /// <see cref="ValueRejected"/>, because it used to be inferred one layer up in
+    /// <c>RecordEditService.RefuseFieldOutcome</c> from "the outcome was a rejection and the value
+    /// happens to be a genuine JSON array" — a heuristic that #532 broke: a well-typed element whose
+    /// own <i>sub-field</i> value is declined (<c>ApplySubFields</c>' fold, still
+    /// <see cref="ValueRejected"/>) is now also "a rejection with a genuine JSON array", and the two
+    /// need different messages (name a discriminator vs. send a value this field accepts). Answering
+    /// the fix's own outcome directly, rather than reconstructing it from the value's shape, is what
+    /// makes the two unambiguous again.
+    /// </summary>
+    ListElementTypeUnresolved,
+}
+
 public sealed record ColumnSpec(
     string Name,
     string PropertyName,
@@ -16,15 +80,22 @@ public sealed record ColumnSpec(
     /// <summary>
     /// Writes this column's whole value onto a record, or <c>null</c> when the column is read-only.
     ///
-    /// <para>#503: returns whether the write happened. A complex field (CONTEXT.md: array or struct)
-    /// is written as one atomic value, so an applier handed something that is not array-/object-shaped
-    /// has nothing it could sensibly write and answers <c>false</c> — which
-    /// <c>RecordFieldWriter.TryApply</c> turns into a refusal naming the field. It used to be an
-    /// <c>Action</c> that simply returned, and the write path reported success regardless, so a
-    /// per-element payload lost the user's edit silently. A <c>bool</c> here is what makes that
-    /// unrepresentable rather than merely fixed: a future guard cannot no-op its way into "applied".</para>
+    /// <para>#503: originally a plain <c>bool</c> — returns whether the write happened. A complex
+    /// field (CONTEXT.md: array or struct) is written as one atomic value, so an applier handed
+    /// something that is not array-/object-shaped has nothing it could sensibly write and answered
+    /// <c>false</c> — which <c>RecordFieldWriter.TryApply</c> turned into a refusal naming the field.
+    /// It used to be an <c>Action</c> that simply returned, and the write path reported success
+    /// regardless, so a per-element payload lost the user's edit silently. A <c>bool</c> here was what
+    /// made that unrepresentable rather than merely fixed: a future guard cannot no-op its way into
+    /// "applied".</para>
+    ///
+    /// <para>#532: widened from that <c>bool</c> to <see cref="ApplyOutcome"/> for the scalar and
+    /// FormLink appliers, which had exactly this same silent-<c>true</c> defect one layer down — a
+    /// missing property on the record's runtime type, a converter that threw or declined, an
+    /// unparseable FormKey — see <see cref="ApplyOutcome"/> for why a second bool state was not
+    /// enough.</para>
     /// </summary>
-    Func<IMajorRecord, JsonElement, bool>? Apply,
+    Func<IMajorRecord, JsonElement, ApplyOutcome>? Apply,
     bool IsArray = false,
     FieldMetadata? ElementType = null,
     IReadOnlyList<FieldMetadata>? SubFields = null,
