@@ -451,6 +451,11 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
       fieldName: 'Name',
       value: 'disk-value',
       readOnly: false,
+      // #533: a top-level row's own path is always empty, and its rootField is always its diff's
+      // own fieldName (baseProps' own default context, above) — see the nested-path test below for
+      // a row inside a struct/array.
+      path: [],
+      rootField: 'Name',
       preventDefaultContextMenuItems: true,
     });
   });
@@ -460,6 +465,24 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
     const ctx = stringContext('disk-value', 0);
     expect(ctx.webviewSection).toBe('stringValue');
     expect(ctx.readOnly).toBe(true);
+  });
+
+  // #533: a string leaf nested inside a struct/array must carry its own path within the field
+  // (not just the subtree root's) — without this, the right-click context looks identical to a
+  // top-level field's and RecordPanel's commit has nothing to reconstruct with.
+  it('a nested string cell carries the row\'s own path and the subtree root\'s wire path, not just the root', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }];
+    renderRow({
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      context: { path, rootField: 'Struct' },
+    });
+    const ctx = stringContext('disk-value', 1);
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Struct');
+    // fieldName keeps its own existing role (the extended-editor tab's own display path) — same
+    // value as rootField at this call site, unchanged from before this ticket.
+    expect(ctx.fieldName).toBe('Struct');
   });
 
   it('double click opens the inline editor, never a tab — DiffRow no longer has any callback to call', () => {

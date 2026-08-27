@@ -196,10 +196,20 @@ export function headerCellContext(formKey: string, plugin: string, origin: strin
 // `when` clause (and the tab it opens) act on, not the cell's mere presence here. `value` is the
 // cell's own current model value (DiffRow already computes this identically for display/copy), so
 // the extension host never needs to re-derive it.
+//
+// #533: `path`/`rootField` are the row's own restage coordinates (RowContext, DiffRow.tsx) — both
+// already in scope at every call site (DiffRow already builds `context.path`/`context.rootField`
+// for its own array/VMAD contexts), so a save from the extended editor can reach RecordPanel's
+// whole-field reconstruction (handleCellCommit, the same one an inline edit already goes through,
+// #503) instead of committing the saved text alone under `rootField` — the defect this closes.
 export function stringValueContext(
   formKey: string, plugin: string, origin: string, fieldName: string, value: string, readOnly: boolean,
+  path: PathSegment[], rootField: string,
 ): StringValueContext {
-  return { webviewSection: 'stringValue', formKey, plugin, origin, fieldName, value, readOnly, preventDefaultContextMenuItems: true };
+  return {
+    webviewSection: 'stringValue', formKey, plugin, origin, fieldName, value, readOnly, path, rootField,
+    preventDefaultContextMenuItems: true,
+  };
 }
 
 // Issue #231 (review): combines every context object sharing one row into the single
@@ -301,11 +311,12 @@ export function aggregateConflictAll(
 // A row's own value can sit at any depth inside the field/wire-path it writes as one atomic
 // unit (a complex field is always written as one atomic unit, CONTEXT.md — an edit anywhere in a
 // struct/array writes the whole thing). `PathSegment[]`
-// (defined in types.ts — FieldDiff.commitOverride needs it too, and types.ts is the lower-level
-// module of the two) is the chain from that root down to a given row — a struct hop addressed by
-// member name, an unsorted-array hop by position, a sorted (pure FormLink) array hop by the
-// element's own value (there is nothing to address *beneath* a sortKey hop: a sorted array's
-// elements are themselves the value, never a struct/array). getAtPath/setAtPath are the one
+// (#533: defined in src/medit/messages.ts — StringValueContext/FIELD_OPEN_EXTENDED_EDITOR need it
+// too, and that module is the one the extension host already imports directly; re-exported from
+// types.ts, which re-exports it here) is the chain from that root down to a given row — a struct
+// hop addressed by member name, an unsorted-array hop by position, a sorted (pure FormLink) array
+// hop by the element's own value (there is nothing to address *beneath* a sortKey hop: a sorted
+// array's elements are themselves the value, never a struct/array). getAtPath/setAtPath are the one
 // generic implementation every nesting depth shares — the same recursion VmadSection already
 // needed for arbitrarily-deep struct/structList members (nodeAt/setNodeValue/removeAt) generalized
 // here to the one shared row model instead of staying a VMAD-only duplicate, and replacing

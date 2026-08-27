@@ -260,8 +260,9 @@ export function DiffRow({
   // Issue #231: rootField replaces the old kind-based pendingLookupField ternary — every row in
   // one subtree (root, struct-child, array-element, grandchild, and now any deeper hop) shares the
   // same wire path/pendingFields key, so RecordPanel hands it down unchanged at every depth rather
-  // than DiffRow re-deriving "top-level or not."
-  const pendingLookupField = context.rootField;
+  // than DiffRow re-deriving "top-level or not." #533: renamed from `pendingLookupField` — that
+  // name predates ADR-0041's pending-change removal and no longer describes what this is.
+  const rootField = context.rootField;
   // Issue #231: showActions (the checkError icon) was "top-level or struct-child" under the old
   // union — generalizes to "every hop on this row's path is a struct member," which reproduces
   // that exact rule (path.length === 0 is vacuously true; a single array-index or sortKey hop, or
@@ -331,7 +332,7 @@ export function DiffRow({
             return <td key={`disk:${key}`} style={cellStyle} />;
           }
           const checkError = showActions
-            ? overrideMap[key]?.fields.find(f => f.metadata.name === pendingLookupField)?.checkError
+            ? overrideMap[key]?.fields.find(f => f.metadata.name === rootField)?.checkError
             : undefined;
           // Issue #231: a synthesized row (e.g. the Condition section's AND/OR gate) can mark
           // itself unconditionally read-only regardless of column mutability — `meta.readOnly` is
@@ -377,11 +378,11 @@ export function DiffRow({
           // in full (unchanged from before this ticket; only the trigger moved off double click).
           const vscodeContext = (arrayEditable || vmadEditable || meta.type === 'string') ? combineVscodeContexts(
             isUnsortedArrayParentRow
-              ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField)
+              ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField)
               : undefined,
             isUnsortedArrayElementRow && lastPathSegment?.kind === 'index'
               ? arrayElementContext(
-                  col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField,
+                  col.override.formKey, col.override.plugin, col.override.origin, rootField,
                   lastPathSegment.index, Number.MAX_SAFE_INTEGER,
                 )
               : undefined,
@@ -402,8 +403,8 @@ export function DiffRow({
               : undefined,
             meta.type === 'string'
               ? stringValueContext(
-                  col.override.formKey, col.override.plugin, col.override.origin, pendingLookupField,
-                  modelValue(diff.values[key], meta), !cellEditable,
+                  col.override.formKey, col.override.plugin, col.override.origin, rootField,
+                  modelValue(diff.values[key], meta), !cellEditable, context.path, rootField,
                 )
               : undefined,
           ) : undefined;
