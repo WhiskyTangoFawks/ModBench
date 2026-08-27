@@ -734,17 +734,19 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    index) no longer looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-session, not persisted across restarts. Array **element values** offer the inline-edit
-   gesture everywhere (plain and struct-element arrays alike), but committing one is a **known
-   defect** (#503): the cell accepts the value and reports success, yet the write never reaches
-   the source document — silently, with no error and no working-tree change. Nothing on the
-   current write path reconstructs the array's (or struct-array element's) whole value before
-   the commit, the reconstruction CONTEXT.md's Complex-field entry's atomic-write model requires
-   for a per-element gesture. Array **arity and order** are editable for **unsorted** arrays (add
-   / remove / move-up / move-down, swap-based, on non-immutable columns) and **absent** for
-   sorted (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — these ops are unaffected
-   by #503, since they already reconstruct the whole array before writing. A VMAD array-of-scalars
-   property reuses this exact machinery (#231); VMAD's own struct/structList element
-   ops are described under *VMAD and Conditions are ordinary rows in the one tree* above.
+   gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
+   array's (or struct-array element's) whole value before the write, per the reconstruction
+   CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture
+   (#503). Array **arity and order** are editable for **unsorted** arrays (add / remove /
+   move-up / move-down, swap-based, on non-immutable columns) and **absent** for sorted
+   (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — these ops use the same
+   whole-array reconstruction. A VMAD array-of-scalars property reuses this exact machinery
+   (#231); VMAD's own struct/structList element ops are described under *VMAD and Conditions
+   are ordinary rows in the one tree* above. A list whose element's concrete type is
+   polymorphic (OMOD `properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
+   each element's own type from a `value_type` discriminator sub-field at write time; an
+   element whose discriminator is missing or unrecognized refuses naming the field, rather
+   than guessing or crashing (#531; #360 landed the same polymorphism read-side).
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
    change already overlaid (#413); there is no separate pending/dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
