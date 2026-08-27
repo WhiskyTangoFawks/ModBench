@@ -36,56 +36,19 @@ namespace MEditService.Tests.RealData;
 /// <item><b>Determinism</b> (<see cref="BinaryRoundTripGateTests"/>'s write1==write2 shape, applied
 /// to this path): compiling the same source tree twice produces byte-identical binaries.</item>
 /// </list>
+///
+/// <para><b>#512: one Track, not ten.</b> Every read-only fact below shares the single Track that
+/// <see cref="CompileRoundTripGateFixture"/> performs once per class (<c>IClassFixture&lt;T&gt;</c>).
+/// The two mutating facts (<c>RecordEditService.EditField</c> writes its record's source file back to
+/// disk) instead <c>cp -r</c> the fixture's already-Tracked template into a private scratch copy —
+/// see <see cref="MutationScope"/> — so they get the same untouched-tree guarantee the old
+/// per-test-constructor shape gave every test, without paying for a second Track. Which of the two
+/// paths a given fact uses is a static, per-method choice (call <c>fixture.*</c>, or open a
+/// <see cref="MutationScope"/>) — nothing here decides it at runtime.</para>
 /// </summary>
-public sealed class CompileRoundTripGateTests : IDisposable
+public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixture)
+    : IClassFixture<CompileRoundTripGateFixture>
 {
-    private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-compile-roundtrip-").FullName;
-    private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
-    private readonly SessionManager _sessions;
-    private readonly PluginKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
-
-    public CompileRoundTripGateTests()
-    {
-        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
-        File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
-
-        _sessions = new SessionManager(
-            new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
-            _gameDirectory,
-            [new ExplicitPluginInput(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, true)],
-            GameRelease.Fallout4);
-
-        new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
-            .GetAwaiter().GetResult();
-    }
-
-    public void Dispose()
-    {
-        _sessions.Dispose();
-        TryDelete(_modFolder);
-        TryDelete(_gameDirectory);
-    }
-
-    private static void TryDelete(string path)
-    {
-        try { Directory.Delete(path, recursive: true); }
-        catch (IOException) { /* scratch, best-effort */ }
-        catch (UnauthorizedAccessException) { /* scratch, best-effort */ }
-    }
-
-    private PluginCompileService CompileService() =>
-        new(_sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
-
-    private string SourceRoot => Path.Combine(_modFolder, SourceRecordPath.RootFor(CutDownPluginFixture.PluginFileName));
-
-    /// <summary>The tree Track wrote, keyed exactly the way <see cref="DeriveSourceTreeFromBinary"/>
-    /// keys its own, so the two dictionaries are directly comparable.</summary>
-    private Dictionary<string, byte[]> ReadSourceTree() =>
-        Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
-            .ToDictionary(f => Path.GetRelativePath(_modFolder, f), File.ReadAllBytes);
-
     /// <summary>
     /// Deep-parses <paramref name="pluginPath"/> and re-derives the source tree it would produce,
     /// through the same whole-mod door Track itself writes through.
@@ -124,7 +87,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
         }
         finally
         {
-            TryDelete(scratch);
+            CompileRoundTripGateFixture.TryDelete(scratch);
         }
     }
 
@@ -134,7 +97,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
 
     // #451 review, finding 5 (AC1 gap): the spike doc's own layout sketch names Cells/<block>/
     // <subblock>/... and Worldspaces/<ws>/<X, Y>/<X, Y>/... nesting, and nothing anywhere asserted
-    // either exists after a real Track — even though this class's own constructor Tracks exactly the
+    // either exists after a real Track — even though this class's own fixture Tracks exactly the
     // one fixture with real populated cells/worldspaces (mEditTestSubset.esm) this suite has.
     // TrackServiceTests' own fixture is flat-only (two NPCs) and structurally cannot exercise this.
     // Key paths only, per AC1's own wording, via pattern match rather than a hardcoded block/
@@ -143,8 +106,8 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Track_OfTheRealFixture_WritesTheSpriggitContainerLayout()
     {
-        var allFiles = Directory.EnumerateFiles(SourceRoot, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(SourceRoot, f).Replace('\\', '/'))
+        var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
             .ToList();
         Assert.NotEmpty(allFiles);
 
@@ -172,7 +135,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Track_OfTheRealFixture_PrefixesDialogTopicResponseFileNamesInGrupOrder()
     {
-        var responseDirs = Directory.EnumerateDirectories(SourceRoot, "Responses", SearchOption.AllDirectories)
+        var responseDirs = Directory.EnumerateDirectories(fixture.SourceRoot, "Responses", SearchOption.AllDirectories)
             .ToList();
         Assert.NotEmpty(responseDirs);
 
@@ -204,20 +167,20 @@ public sealed class CompileRoundTripGateTests : IDisposable
 
     /// <summary>#468: Tracking the committed fixture writes a root document with no Spriggit package
     /// stamp and no sidecar beside the tree (ADR-0042, "Spriggit has no role in v1") — checked against
-    /// the real, curated #369 fixture this whole class Tracks in its constructor, not a synthetic
+    /// the real, curated #369 fixture this whole class Tracks once in its fixture, not a synthetic
     /// stand-in.</summary>
     [Fact]
     public void Track_OfTheRealFixture_WritesNoSpriggitStampOrSidecar()
     {
-        var allFiles = Directory.EnumerateFiles(SourceRoot, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(SourceRoot, f).Replace('\\', '/'))
+        var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
             .ToList();
         Assert.NotEmpty(allFiles);
 
         Assert.DoesNotContain(".spriggit", allFiles);
         Assert.DoesNotContain("spriggit-meta.json", allFiles);
 
-        var rootText = File.ReadAllText(Path.Combine(SourceRoot, "RecordData.json"));
+        var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
         Assert.DoesNotContain("SpriggitSource", rootText, StringComparison.Ordinal);
     }
 
@@ -240,7 +203,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Track_OfTheRealFixture_WritesCellTimestampData()
     {
-        var cellFile = Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
+        var cellFile = Directory.EnumerateFiles(fixture.SourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => f.Contains("03C0F0", StringComparison.Ordinal));
         var cellText = File.ReadAllText(cellFile);
 
@@ -271,12 +234,12 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Track_OfTheRealFixture_WritesConditionUnknown1AndHeaderStats()
     {
-        var responseFile = Directory.EnumerateFiles(SourceRoot, "*.json", SearchOption.AllDirectories)
+        var responseFile = Directory.EnumerateFiles(fixture.SourceRoot, "*.json", SearchOption.AllDirectories)
             .Single(f => f.Contains("01AACD_Fallout4.esm.json", StringComparison.Ordinal));
         var responseText = File.ReadAllText(responseFile);
         Assert.Contains("\"Unknown1\": \"0x1D9D68\"", responseText, StringComparison.Ordinal);
 
-        var rootText = File.ReadAllText(Path.Combine(SourceRoot, "RecordData.json"));
+        var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
         Assert.Contains("\"NumRecords\": 4743", rootText, StringComparison.Ordinal);
         Assert.Contains("\"NextFormID\": 2049", rootText, StringComparison.Ordinal);
     }
@@ -284,7 +247,7 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Compile_OfTheRealFixture_Succeeds()
     {
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = fixture.CompileService().Compile(fixture.Plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
     }
@@ -292,13 +255,13 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Compile_OfTheRealFixture_PreservesEveryRecordsSourceContent()
     {
-        var before = ReadSourceTree();
+        var before = fixture.ReadSourceTree();
         Assert.NotEmpty(before);
 
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = fixture.CompileService().Compile(fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
+        var pluginPath = Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName);
         var after = DeriveSourceTreeFromBinary(pluginPath, GameRelease.Fallout4);
 
         Assert.Equal(before.Count, after.Count);
@@ -314,13 +277,13 @@ public sealed class CompileRoundTripGateTests : IDisposable
     [Fact]
     public void Compile_OfTheRealFixture_IsDeterministic()
     {
-        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
+        var pluginPath = Path.Combine(fixture.ModFolder, CutDownPluginFixture.PluginFileName);
 
-        var result1 = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result1 = fixture.CompileService().Compile(fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result1.Succeeded, result1.RefusalReason);
         var write1 = File.ReadAllBytes(pluginPath);
 
-        var result2 = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result2 = fixture.CompileService().Compile(fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(result2.Succeeded, result2.RefusalReason);
         var write2 = File.ReadAllBytes(pluginPath);
 
@@ -344,29 +307,35 @@ public sealed class CompileRoundTripGateTests : IDisposable
     /// <para>A flat NPC is the subject on purpose: its source unit is one file, so "exactly one file"
     /// has an unambiguous expected value. An embedded child's edit would legitimately change its
     /// <i>parent's</i> file, which is a different (and weaker) assertion.</para>
+    ///
+    /// <para>#512: mutates, so it runs against its own <see cref="MutationScope"/> copy of the
+    /// fixture's already-Tracked template rather than the shared, read-only <see cref="fixture"/>
+    /// tree.</para>
     /// </summary>
     [Fact]
     public void Compile_AfterOneFieldEdit_ChangesExactlyThatRecordsFileInTheReserializedTree()
     {
-        var npc = _sessions.Index!
-            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: _plugin, Limit: 1))
+        using var scope = new MutationScope(fixture);
+
+        var npc = scope.Sessions.Index!
+            .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
             .Items[0];
         // #459: SourceUnitResolver rather than SourceRecordPath.For directly — For now needs an order
         // index this test would otherwise have to reverse-engineer from Track's own output.
-        var expectedPath = Path.GetRelativePath(_modFolder, SourceUnitResolver.FlatSourcePath(
-            _modFolder, CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4));
+        var expectedPath = Path.GetRelativePath(scope.ModFolder, SourceUnitResolver.FlatSourcePath(
+            scope.ModFolder, CutDownPluginFixture.PluginFileName, "npc_", npc.FormKey, npc.EditorId, GameRelease.Fallout4));
 
-        var before = ReadSourceTree();
+        var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);
         Assert.Contains(expectedPath, before.Keys);
 
-        var edit = new RecordEditService(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(_plugin, npc.FormKey, "height_max", JsonDocument.Parse("0.75").RootElement);
+        var edit = new RecordEditService(scope.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(scope.Plugin, npc.FormKey, "height_max", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = scope.CompileService().Compile(scope.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
+        var pluginPath = Path.Combine(scope.ModFolder, CutDownPluginFixture.PluginFileName);
         var after = DeriveSourceTreeFromBinary(pluginPath, GameRelease.Fallout4);
 
         Assert.Equal(before.Keys.Order(), after.Keys.Order());
@@ -386,6 +355,9 @@ public sealed class CompileRoundTripGateTests : IDisposable
     /// — must not perturb its siblings' GRUP order. Deliberately renames the <b>middle</b> response of
     /// a 3-or-more-response topic, so a renumbering-on-rename bug (shifting later siblings) would show
     /// up as a moved FormKey rather than being masked by renaming an edge slot.
+    ///
+    /// <para>#512: mutates, so it runs against its own <see cref="MutationScope"/> copy — see that
+    /// class's own doc comment.</para>
     /// </summary>
     [Fact]
     public void Compile_AfterRenamingAResponsesEditorId_PreservesTheDialogTopicsInfoOrder()
@@ -399,15 +371,17 @@ public sealed class CompileRoundTripGateTests : IDisposable
         var expectedOrder = topic.Responses.Select(r => r.FormKey).ToList();
         var responseToRename = topic.Responses[1];
 
-        var edit = new RecordEditService(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
-            .EditField(_plugin, responseToRename.FormKey.ToString(), "editor_id",
+        using var scope = new MutationScope(fixture);
+
+        var edit = new RecordEditService(scope.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            .EditField(scope.Plugin, responseToRename.FormKey.ToString(), "editor_id",
                 JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
-        var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
+        var result = scope.CompileService().Compile(scope.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
+        var pluginPath = Path.Combine(scope.ModFolder, CutDownPluginFixture.PluginFileName);
         using var compiled = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(CutDownPluginFixture.PluginFileName), pluginPath), GameRelease.Fallout4);
         var compiledTopic = ((IFallout4ModGetter)compiled).Quests
@@ -417,5 +391,50 @@ public sealed class CompileRoundTripGateTests : IDisposable
         // The rename actually landed (not just "order held because nothing changed").
         Assert.Equal(responseToRename.EditorID + "Renamed", compiledTopic.Responses[1].EditorID);
         Assert.Equal(expectedOrder, compiledTopic.Responses.Select(r => r.FormKey).ToList());
+    }
+
+    /// <summary>
+    /// #512: the per-test half of the split — a fresh, disposable scratch copy for the 2 mutating
+    /// facts above, so a field edit's write-back to disk can never be seen by anything else. Built by
+    /// <c>cp -r</c>'ing <see cref="CompileRoundTripGateFixture.TrackedTemplateFolder"/> (the fixture's
+    /// pristine, post-Track, pre-any-Compile snapshot) into a new temp folder, then a fresh
+    /// <see cref="SessionManager"/> <c>LoadExplicit</c>'d against that copy's plugin — the same two
+    /// steps the old per-test constructor did, minus the ~36s <c>TrackService.TrackAsync</c> call the
+    /// copy makes unnecessary. <see cref="CompileRoundTripGateFixture.GameDirectory"/> is shared,
+    /// read-only across every scope (and the fixture itself) rather than rebuilt per copy: nothing on
+    /// this path ever writes to it, only <c>LoadExplicit</c> reads master stubs from it, and there are
+    /// none for this fixture's plugin to read.
+    /// </summary>
+    private sealed class MutationScope : IDisposable
+    {
+        public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
+        public SessionManager Sessions { get; }
+        public PluginKey Plugin { get; }
+
+        public MutationScope(CompileRoundTripGateFixture fixture)
+        {
+            CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, ModFolder);
+            Plugin = fixture.Plugin;
+
+            Sessions = new SessionManager(
+                new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ((ISessionManager)Sessions).LoadExplicit(
+                fixture.GameDirectory,
+                [new ExplicitPluginInput(
+                    CutDownPluginFixture.PluginFileName,
+                    Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName),
+                    Plugin.Origin!,
+                    true)],
+                GameRelease.Fallout4);
+        }
+
+        public PluginCompileService CompileService() =>
+            new(Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+
+        public void Dispose()
+        {
+            Sessions.Dispose();
+            CompileRoundTripGateFixture.TryDelete(ModFolder);
+        }
     }
 }
