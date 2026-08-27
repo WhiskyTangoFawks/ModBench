@@ -107,14 +107,24 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// <para>Also the one place that sets <see cref="ExternalChangeDeferral"/>'s marker (#417 exit
     /// path 3: the plugin is refused for editing from the instant a question is detected, not only
     /// after an explicit Esc) — both triggers land here, so both get the refusal without either
-    /// remembering to set it themselves.</para>
+    /// remembering to set it themselves. Set <i>inside</i> the same lock, before <see cref="_pending"/>
+    /// is updated (#500): the lock's exit barrier is what makes "refused from the instant a question
+    /// is detected" true for another thread, not merely likely — without it, a caller reacting to
+    /// <see cref="Pending"/> going non-empty (e.g. the live-watch test's own polling loop) can
+    /// observe that before the marker file is durably written, since a plain file write has no
+    /// ordering relationship with a separate, unlocked dictionary write. Sharing the lock also
+    /// serializes two plugins in the same mod folder being reported near-simultaneously, which would
+    /// otherwise race on the same marker JSON file's read-modify-write.</para>
     /// </summary>
     public void ReportExternalChange(string modFolder, string pluginName, ExternalChangeClassification.ExternalChange classification)
     {
-        lock (_gate) _pending[Key(modFolder, pluginName)] = new PendingExternalChange(modFolder, pluginName, classification);
-        ExternalChangeDeferral.Set(modFolder, pluginName,
-            $"{pluginName} (in {Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))}) changed outside " +
-            "Modbench and is awaiting an answer — Absorb Upstream Update or Keep as My Edit.");
+        lock (_gate)
+        {
+            ExternalChangeDeferral.Set(modFolder, pluginName,
+                $"{pluginName} (in {Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))}) changed outside " +
+                "Modbench and is awaiting an answer — Absorb Upstream Update or Keep as My Edit.");
+            _pending[Key(modFolder, pluginName)] = new PendingExternalChange(modFolder, pluginName, classification);
+        }
     }
 
     private static void Restart(Timer debounceTimer)
