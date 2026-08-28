@@ -152,4 +152,37 @@ public sealed class PartialFormCompareTests : IDisposable
         Assert.Single(compare.Overrides);
         Assert.Equal("Partial.esp", compare.Overrides[0].Plugin);
     }
+
+    // ── Slice 5: golden capture (mirrors CompareGoldenTests' own Project shape) ─────────────
+
+    private static object Project(CompareResult r) => new
+    {
+        r.ConflictAll,
+        Overrides = r.Overrides.Select(o => new
+        {
+            o.FormKey,
+            o.Plugin,
+            o.Origin,
+            o.LoadOrderIndex,
+            o.IsWinner,
+            o.EditorId,
+            o.RecordType,
+            o.ConflictThis,
+            o.IsPartialForm,
+            Fields = o.Fields.ToDictionary(f => f.Metadata.Name, f => f.Value),
+        }).ToList(),
+        Diffs = r.Diffs.Where(d => d.CellStates.Count > 0 || d.FieldName == "water_height").ToList(),
+    };
+
+    [Fact]
+    public void Compare_MasterCellAndPartialFormOverride_MatchesGolden()
+    {
+        var captured = new Dictionary<string, object?>
+        {
+            ["cell"] = Project(_service.GetCompare(CellKey.ToString())!),
+            ["ref"] = Project(_service.GetCompare(RefKey.ToString())!),
+        };
+
+        Golden.Verify("compare-partial-form-cell", captured);
+    }
 }
