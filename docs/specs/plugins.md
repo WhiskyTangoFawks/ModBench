@@ -577,7 +577,52 @@ that existing index, not a second disk walk.
   needs the badge above as the signal that a Stack node exists at all. Delta compare (Effective
   vs Effective, "Compare with winner" on a peer) is its own split,
   [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet built. Compile-pending
-  decoration is its own split too, [#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449).
+  decoration is its own split too — see Compile-pending decoration, below.
+
+### Compile-pending decoration ([#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449))
+
+Split (d) of #397's design record — the state level of the Resolution stack (`CONTEXT.md`): within
+a tracked plugin, source stacks on the compiled binary, and this is the always-on signal that the
+two have diverged. Where the file-override decoration above is a Mod-Management fact about which
+physical file a name resolves to, this is an Editing fact about a tracked plugin's own git state —
+"the game can't see your edits yet."
+
+- **Trigger.** A plugin row is compile-pending exactly when its source (the working tree, or a
+  commit landed since — commit stays ungated, ADR-0042's amendment) has moved past what
+  `refs/medit/last-compile/<plugin>` parked (`Save & Compile`, `CONTEXT.md`) — computed backend-side
+  (`ModFolders.CompileFreshnessOf`, `PluginResponse.CompilePending`/`LastCompiledAt` on every
+  `GET /plugins`), cheap and bounded by dirt per the freshness philosophy
+  ([medit-version-control.md](medit-version-control.md)): two git calls scoped to the plugin's own
+  `source/<plugin>/` subtree, never touching record count or load order. Never shown for an
+  untracked plugin, or a tracked plugin Track never parked a ref for (New Plugin into an
+  already-tracked mod folder, before its first compile) — both degrade to "nothing to compare
+  against" rather than a false positive.
+- **Visual encoding — session-derived, the same machinery as the missing-master/load-failure
+  decorations above (`PluginsTreeComposite`, icon/description/tooltip, append-never-replace),
+  not the file-override family's `FileDecorationProvider` tint:** this is a git-tracked-state fact
+  requiring a session, not a filesystem one. A **description hint** (`⟳ Compile pending`) and a
+  **tooltip** ("Source ahead of binary — last compiled `<when>`", or "last compiled unknown" for a
+  ref with no readable timestamp) are appended after (never replacing) whatever the row already
+  carries. Deliberately **never claims the icon slot** — it never steals `iconPath` from a
+  higher-severity decoration already on the row (a load failure or a master issue), and renders no
+  icon of its own when neither of those claimed it either: the description hint is the primary
+  signal here, not an icon.
+- **Coexists with every other decoration on this tree.** A plugin can be compile-pending and carry
+  a master issue, a load failure, or be a file override, all at once, and every decoration remains
+  legible — append-only by construction, the same convention the file-override and read-only-note
+  decorations above already establish.
+- **Refresh.** No watcher (freshness philosophy: read/refresh time, never a watcher). Seeded at
+  session (re)load off the same `GET /plugins` answer every other session-derived fact in this
+  hand-off already reads, and re-derived — without a session reload — after a successful
+  **Save & Compile**, riding the same refresh `SessionController.setFilter`/`clearFilter` already
+  trigger (`refreshMatchingPlugins`, extended for this) rather than a second poller. A refused
+  compile changes nothing about any plugin's git state and triggers no refresh.
+- **Scope.** Plugin rows only, tracked plugins only — an untracked plugin has no state layer to
+  diverge (`CONTEXT.md`: "Editing requires tracking; viewing never does").
+- **Out of scope here.** Any auto-compile behavior. The Stack node's own binary-entry state split
+  (source/binary as two expandable rows, [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448),
+  below) is the sibling "investigate the stack" surface — this is only the always-on row-level
+  signal that something there is worth investigating.
 
 ### Stack node ([#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448))
 

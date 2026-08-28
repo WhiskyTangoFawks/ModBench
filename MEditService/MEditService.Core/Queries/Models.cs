@@ -44,16 +44,27 @@ public record PluginResponse(
     //
     // Derived on every read, never cached: tracking *is* the presence of that directory, and it can
     // appear or vanish outside Modbench between one response and the next.
-    bool IsTracked = false)
+    bool IsTracked = false,
+    // CompilePending / LastCompiledAt (#449): whether this plugin's tracked source has moved past
+    // what refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet" — and that
+    // ref's own commit timestamp for the tooltip that names it. Both false/null for an untracked
+    // plugin or one Track never parked a ref for (Source.ModFolders.CompileFreshnessOf's own
+    // degrade-safe answer) — same "derived on every read, never cached" posture as IsTracked above.
+    bool CompilePending = false,
+    DateTimeOffset? LastCompiledAt = null)
 {
     public static PluginResponse FromMetadata(
-        PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true) =>
-        new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
+        PluginMetadata m, IReadOnlyList<MasterIssue>? masterIssues = null, bool hasMatchingRecords = true)
+    {
+        // Computed here rather than passed in by each of the several call sites: a default would be
+        // a *wrong* value (an editable plugin reported as read-only, or a dirty plugin reported
+        // clean), not a missing one, and the metadata already carries every fact both rules need.
+        var freshness = Source.ModFolders.CompileFreshnessOf(m.Origin, m.Path, m.Name);
+        return new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
             masterIssues ?? [], m.InLoadOrder, hasMatchingRecords,
-            // Computed here rather than passed in by each of the several call sites: a default would
-            // be a *wrong* value (an editable plugin reported as read-only), not a missing one, and
-            // the metadata already carries both facts the rule needs.
-            Source.ModFolders.IsEditable(m.Origin, m.Path));
+            Source.ModFolders.IsEditable(m.Origin, m.Path),
+            freshness.Pending, freshness.LastCompiledAt);
+    }
 }
 
 // #428: the Plugins-tree listing's own working-tree fact — a tri-state rather than a pair of

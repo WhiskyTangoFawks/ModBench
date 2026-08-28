@@ -896,6 +896,9 @@ export interface components {
             inLoadOrder?: boolean;
             hasMatchingRecords?: boolean;
             isTracked?: boolean;
+            compilePending?: boolean;
+            /** Format: date-time */
+            lastCompiledAt?: string | null;
         };
         ProblemDetails: {
             type?: string | null;

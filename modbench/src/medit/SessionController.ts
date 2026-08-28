@@ -490,6 +490,9 @@ export class SessionController {
         return undefined;
       }
       this.deps.refreshTree();
+      // #449: a create is a working-tree change to a tracked plugin's source — the compile-pending
+      // decoration needs the same re-derive refreshTree's sibling facts already get here.
+      this.deps.refreshMatchingPlugins();
       return data?.formKey ?? undefined;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -516,6 +519,8 @@ export class SessionController {
         return false;
       }
       this.deps.refreshTree();
+      // #449: same reason as createRecord above — a delete is a working-tree change too.
+      this.deps.refreshMatchingPlugins();
       return true;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -543,6 +548,9 @@ export class SessionController {
         return undefined;
       }
       this.deps.refreshTree();
+      // #449: same reason as createRecord above — a renumber (delete+create) is a working-tree
+      // change too.
+      this.deps.refreshMatchingPlugins();
       return data?.newFormKey ?? undefined;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -573,6 +581,9 @@ export class SessionController {
         return false;
       }
       this.deps.refreshTree();
+      // #449: a copy lands as a working-tree change on the destination plugin's own source, same
+      // reason createRecord/deleteRecord/renumberRecord above refresh it.
+      this.deps.refreshMatchingPlugins();
       return true;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -607,6 +618,8 @@ export class SessionController {
         return undefined;
       }
       this.deps.refreshTree();
+      // #449: same reason as copyRecordAsOverride above — a copy is a working-tree change too.
+      this.deps.refreshMatchingPlugins();
       return data?.newFormKey ?? undefined;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -661,7 +674,10 @@ export class SessionController {
         return null;
       }
       const result = data ? toExternalChangeActionResult(data) : null;
-      if (result?.succeeded) this.deps.refreshTree();
+      // #449: absorbing a new baseline moves the source under this plugin the same way a track
+      // does — the compile-pending decoration needs the same re-derive refreshTree's sibling
+      // facts already get here.
+      if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
       return result;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -686,7 +702,9 @@ export class SessionController {
         return null;
       }
       const result = data ? toExternalChangeActionResult(data) : null;
-      if (result?.succeeded) this.deps.refreshTree();
+      // #449: keeping an external change deserializes into working-tree dirt — same reason as
+      // absorbUpstreamUpdate above.
+      if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
       return result;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -723,6 +741,10 @@ export class SessionController {
       }
       const result = data ? toRebaseResult(data) : null;
       this.deps.refreshTree();
+      // #449: a rebase moves the branch (or leaves it mid-conflict), either of which can change a
+      // tracked plugin's compile-freshness answer — same reason absorbUpstreamUpdate/keepAsMyEdit
+      // above refresh it, and unconditional here for the same reason refreshTree above already is.
+      this.deps.refreshMatchingPlugins();
       return result;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
