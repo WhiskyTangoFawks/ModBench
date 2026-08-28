@@ -43,9 +43,6 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
  *  symlink (only `Directory.CreateDirectory`, a real directory), so unlike the plugin side, there
  *  is no genuine shape here to support. */
 const SOURCE_TREE_SUFFIX = '.source';
-/** Pre-#437 name of the same legacy tree, still on disk wherever a mod was tracked before that
- *  rename (no migration shipped — never assume exclusive ownership, root CLAUDE.md). */
-const LEGACY_SOURCE_TREE_SUFFIX = '.ledger';
 
 function sourceTreeDirNames(dirents: Dirent[]): Set<string> {
   const fileNames = new Set(
@@ -53,10 +50,8 @@ function sourceTreeDirNames(dirents: Dirent[]): Set<string> {
   );
   const names = new Set<string>();
   for (const dirent of dirents) {
-    if (!dirent.isDirectory()) continue;
-    const suffix = [SOURCE_TREE_SUFFIX, LEGACY_SOURCE_TREE_SUFFIX].find((s) => dirent.name.endsWith(s));
-    if (suffix === undefined) continue;
-    const pluginFileName = dirent.name.slice(0, -suffix.length);
+    if (!dirent.isDirectory() || !dirent.name.endsWith(SOURCE_TREE_SUFFIX)) continue;
+    const pluginFileName = dirent.name.slice(0, -SOURCE_TREE_SUFFIX.length);
     if (fileNames.has(foldPath(pluginFileName))) names.add(dirent.name);
   }
   return names;
