@@ -946,6 +946,11 @@
           "group": "recordTypeActions@1"
         },
         {
+          "command": "modbench.openEditorBeside",
+          "when": "view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)",
+          "group": "modbench@1"
+        },
+        {
           "command": "modbench.record.delete",
           "when": "view == modbench.pluginListTree && viewItem == record",
           "group": "recordActions@1"
