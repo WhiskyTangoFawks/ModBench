@@ -338,6 +338,40 @@ export class ModListProvider
     return element;
   }
 
+  /** #448: this row's own parent — the `SeparatorNode` whose group holds it, or undefined for a
+   *  root-level (ungrouped) mod or a non-mod row. `vscode.TreeView.reveal()` needs `getParent` to
+   *  walk the ancestor chain for any element that isn't already at the tree's root, and a Mods
+   *  tree row can be grouped under a separator (the grouping toggle), so "Reveal in Mods tree"
+   *  (a Stack peer's own context command, #448) needs this to land on a grouped mod, not only an
+   *  ungrouped one. Re-derived from the already-cached tree on each call — the same "rare explicit
+   *  action, cheap fresh read" precedent `resolvePluginPath` (PluginListProvider's own reveal
+   *  gesture) already sets, rather than tracked incrementally as the tree is built. */
+  getParent(element: ModlistNode): ModlistNode | undefined {
+    if (element.kind !== 'mod' || !this.tree) return undefined;
+    const group = this.tree.groups.find((g) => g.mods.some((m) => m.name === element.mod.name));
+    return group ? new SeparatorNode(group.separator, this.orderedMods(group.mods)) : undefined;
+  }
+
+  /** #448: resolves a mod name to the actual `ModNode` this provider's own `getChildren` produced
+   *  (root-level or nested under a group) — `TreeView.reveal()` needs the very node the tree
+   *  handed out, not a freshly constructed lookalike. Case-insensitive, matching every other
+   *  mod-name comparison in this module. Undefined when the tree hasn't loaded yet or no mod of
+   *  that name is present — never thrown, the same "explicit action degrades to a reported
+   *  failure, not a crash" posture `resolvePluginPath` already takes. */
+  async findModNode(name: string): Promise<ModNode | undefined> {
+    const needle = name.toLowerCase();
+    const roots = await this.getChildren();
+    for (const root of roots) {
+      if (root.kind === 'mod' && root.mod.name.toLowerCase() === needle) return root;
+      if (root.kind === 'separator') {
+        const children = await this.getChildren(root);
+        const match = children.find((c): c is ModNode => c.kind === 'mod' && c.mod.name.toLowerCase() === needle);
+        if (match) return match;
+      }
+    }
+    return undefined;
+  }
+
   async getChildren(element?: ModlistNode): Promise<ModlistNode[]> {
     if (element instanceof SeparatorNode) return this.separatorChildren(element);
     if (element) return [];

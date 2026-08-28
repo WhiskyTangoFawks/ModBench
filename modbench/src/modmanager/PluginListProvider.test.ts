@@ -829,6 +829,31 @@ describe('PluginListProvider — file-override decoration (#447)', () => {
     expect(overrides.get('shared.esp')?.providers.sort()).toEqual(['ModA', 'ModB']);
     expect(overrides.has('solo.esp')).toBe(false);
   });
+
+  // #448: the Stack node's own peer list — the file-level losers a contested plugin's row hands
+  // off to Editing (origin + physical path, ADR-0036's boundary object), reusing #34's existing
+  // findUnlistedPlugins rather than computing anything new.
+  it('#448: stackPeers() lists the file-level loser(s) for a contested plugin, keyed like fileOverrides()', async () => {
+    const p = provider();
+    await pluginNodes(p); // populate the cache
+    const peers = p.stackPeers();
+
+    expect(peers.has('shared.esp')).toBe(true);
+    const sharedPeers = peers.get('shared.esp')!;
+    expect(sharedPeers).toHaveLength(1);
+    expect(sharedPeers[0]).toEqual({ name: 'Shared.esp', origin: 'ModB', path: join(dir, 'mods', 'ModB', 'Shared.esp') });
+  });
+
+  it('#448: stackPeers() is empty for an uncontested plugin — no Stack node to build', async () => {
+    const p = provider();
+    await pluginNodes(p);
+    expect(p.stackPeers().has('solo.esp')).toBe(false);
+  });
+
+  it('#448: stackPeers() is empty before the first render, same convention as fileOverrides()', () => {
+    const p = provider();
+    expect(p.stackPeers().size).toBe(0);
+  });
 });
 
 describe('PluginListProvider — resolvePluginPath (Reveal in Explorer, issue #69)', () => {

@@ -41,7 +41,7 @@ import { PluginsTreeComposite } from '../PluginsTreeComposite';
 // is whatever the record provider hands back. Both fakes are structural — the real providers
 // satisfy the same shapes without an adapter.
 
-interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[] }
+interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[]; stackPeers?: FakeStackPeer[] }
 interface FakeChild { id: string }
 
 class FakeRows {
@@ -69,14 +69,20 @@ class FakeRows {
   private items?: Map<FakeRow, vscode.TreeItem>;
 }
 
+interface FakeStackPeer { name: string; path: string; origin: string }
+
 class FakeChildren {
   private readonly emitter = new vscode.EventEmitter<FakeChild | undefined | null>();
   readonly onDidChangeTreeData = this.emitter.event;
   pluginChildrenCalls: string[] = [];
+  // #448: the (file, peers) pair each call arrived with — pluginChildrenCalls above stays as the
+  // pre-#448 shape so every existing assertion here keeps reading it unchanged.
+  pluginChildrenCallsWithPeers: { file: string; peers: FakeStackPeer[] | undefined }[] = [];
   getChildrenCalls: FakeChild[] = [];
   constructor(private readonly byPlugin: Record<string, FakeChild[]> = {}) {}
-  getPluginChildren(file: string): Promise<FakeChild[]> {
+  getPluginChildren(file: string, peers?: FakeStackPeer[]): Promise<FakeChild[]> {
     this.pluginChildrenCalls.push(file);
+    this.pluginChildrenCallsWithPeers.push({ file, peers });
     return Promise.resolve(this.byPlugin[file] ?? []);
   }
   getChildren(child: FakeChild): Promise<FakeChild[]> {
@@ -100,6 +106,7 @@ function make(
     children,
     pluginFileOf: (row) => row.file,
     orderIssueMastersOf: (row) => row.orderIssueMasters,
+    stackPeersOf: (row) => row.stackPeers,
     hasMatchingRecords,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
@@ -360,6 +367,51 @@ describe('PluginsTreeComposite expansion', () => {
     rowSource.fire(undefined);
 
     expect(fired).toEqual([undefined]);
+  });
+
+  // #448: the Stack node's own peer list crosses the boundary the same way order-aware master
+  // names do (`orderIssueMastersOf`) — an optional row-level accessor the composite reads and
+  // hands straight to the record provider's `getPluginChildren`, never interpreting it itself
+  // (CONTEXT-MAP.md: the composite's whole knowledge of either domain is a plugin filename; the
+  // peer list is the boundary object ADR-0036 already names — origin + physical path, nothing
+  // richer).
+  it('#448: hands a row\'s stack peers to getPluginChildren when expanding it', async () => {
+    const peers: FakeStackPeer[] = [{ name: 'A.esp', path: '/mods/ModB/A.esp', origin: 'ModB' }];
+    const row: FakeRow = { file: 'A.esp', kind: 'plugin', stackPeers: peers };
+    const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
+    const { composite, render } = make([row], children);
+    await render();
+    composite.setSession(new Set(['A.esp']));
+
+    await composite.getChildren(row);
+
+    expect(children.pluginChildrenCallsWithPeers).toEqual([{ file: 'A.esp', peers }]);
+  });
+
+  it('#448: hands undefined through for an uncontested row (no stackPeersOf entry)', async () => {
+    const row: FakeRow = { file: 'A.esp', kind: 'plugin' };
+    const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
+    const { composite, render } = make([row], children);
+    await render();
+    composite.setSession(new Set(['A.esp']));
+
+    await composite.getChildren(row);
+
+    expect(children.pluginChildrenCallsWithPeers).toEqual([{ file: 'A.esp', peers: undefined }]);
+  });
+
+  it('#448: works without a wired stackPeersOf at all — degrades to undefined, never throws', async () => {
+    const rowSource = new FakeRows([PLUGIN_ROW]);
+    const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
+    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
+      rows: rowSource, children, pluginFileOf: (row) => row.file,
+    });
+    await composite.getChildren();
+    composite.setSession(new Set(['A.esp']));
+
+    await composite.getChildren(PLUGIN_ROW);
+
+    expect(children.pluginChildrenCallsWithPeers).toEqual([{ file: 'A.esp', peers: undefined }]);
   });
 });
 

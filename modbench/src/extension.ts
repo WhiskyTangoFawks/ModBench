@@ -13,6 +13,7 @@ import { SessionController, type SessionLoadProgress } from './medit/SessionCont
 import { makeLoadProgressHandler } from './medit/sessionProgress';
 import {
   InteriorLoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode, headerFormKeyFor,
+  StackPeerNode, StackBinaryStateNode,
 } from './medit/PluginTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
@@ -20,7 +21,7 @@ import {
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
-import { trackedModFoldersOf, registerTrackedRepositories } from './medit/trackedRepositories';
+import { trackedModFoldersOf, registerTrackedRepositories, isTracked } from './medit/trackedRepositories';
 import { startExternalChangePolling, runRebase, gateExternalChangePolling, type OpenMergeEditor } from './medit/externalChangeCoordinator';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
@@ -195,6 +196,11 @@ interface SessionPluginFiles {
    *  last left behind — reaches `matchingPlugins`. That is what keeps the map from outliving a
    *  session it no longer describes. */
   matches: Map<string, boolean>;
+  /** #448: every plugin whose own physical folder is tracked (`isTracked`, `trackedRepositories.ts`
+   *  — `.git` present) — the Stack node's own state-entry gate (CONTEXT.md: "Editing requires
+   *  tracking; viewing never does"). Computed the same fs check `trackedModFoldersOf` already
+   *  performs per distinct folder, just keyed back to the plugin name here instead. */
+  trackedPlugins: Set<string>;
 }
 
 function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
@@ -210,6 +216,7 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues ?? []] as const)),
       origins: new Map(plugins.map((p) => [p.name, p.origin] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
+      trackedPlugins: new Set(plugins.filter((p) => isTracked(path.dirname(p.path))).map((p) => p.name)),
     };
   };
 }
@@ -301,6 +308,10 @@ function exitToLoadout(): void {
   // which plugins *this* session's records matched, same reasoning as drift just above.
   matchingPlugins = undefined;
   recordBrowserProvider?.setImmutablePlugins([]);
+  // #448: no session means nothing is tracked or origin-known any more either — the Stack node's
+  // own state entries clear along with everything else this reset already clears.
+  recordBrowserProvider?.setTrackedPlugins([]);
+  recordBrowserProvider?.setPluginOrigins(new Map());
   backendManager?.stop();
 }
 
@@ -1111,14 +1122,27 @@ interface PluginListDeps {
  *  the record browser's children — so that with a session running each row expands into its
  *  records. The composite is built here, at the composition root, because it is the only place
  *  that may know both; `PluginListProvider` is unchanged and still owns everything about a row. */
-function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller } = deps;
-  const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel, gameDirResolver, controller);
-  driftTracker = tracker;
-  const composite = new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
+/** The Plugins tree's own `PluginsTreeComposite` construction, pulled out of
+ *  `registerPluginListView` (#448, which pushed that function over the lint budget) purely to stay
+ *  under it — no other reason to split it out, same as `registerRevealInExplorerCommand` alongside
+ *  it. */
+function buildPluginsTreeComposite(
+  pluginListProvider: PluginListProvider, recordBrowser: PluginTreeProvider,
+): PluginsTreeComposite<PluginListNode, PluginTreeNode> {
+  return new PluginsTreeComposite<PluginListNode, PluginTreeNode>({
     rows: pluginListProvider,
-    children: recordBrowser,
+    // #448: a thin positional adapter, not `recordBrowser` passed directly — the composite's own
+    // `getPluginChildren(pluginFile, stackPeers?)` contract has no `origin` slot (a root row never
+    // has one to give; only a peer's own *recursive* expansion inside PluginTreeProvider ever
+    // supplies one, entirely internal to that class), while `PluginTreeProvider.getPluginChildren`
+    // keeps its existing three-parameter shape for that recursion and its own test suite. Nothing
+    // else about `recordBrowser`'s identity is used as `children` outside this call.
+    children: {
+      getPluginChildren: (file, stackPeers) => recordBrowser.getPluginChildren(file, undefined, stackPeers),
+      getChildren: (child) => recordBrowser.getChildren(child),
+      getTreeItem: (child) => recordBrowser.getTreeItem(child),
+      onDidChangeTreeData: recordBrowser.onDidChangeTreeData,
+    },
     pluginFileOf,
     // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with session state
     // by master name, instead of two decorations that can disagree.
@@ -1128,7 +1152,22 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
     hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
+    // #448: hands a contested row's file-level peers through to the record browser, which builds
+    // the pinned-first Stack node from them — live against PluginListProvider's own stackPeers()
+    // for the same "never drifts from what the tree rendered" reason fileOverrides() above is.
+    stackPeersOf: (row) => {
+      const file = pluginFileOf(row);
+      return file === undefined ? undefined : pluginListProvider.stackPeers().get(file.toLowerCase());
+    },
   });
+}
+
+function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller } = deps;
+  const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
+  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel, gameDirResolver, controller);
+  driftTracker = tracker;
+  const composite = buildPluginsTreeComposite(pluginListProvider, recordBrowser);
   pluginsTree = composite;
   clearSessionWhenBackendDies(composite, recordBrowser, tracker);
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
@@ -1175,6 +1214,13 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     }),
     registerRevealInExplorerCommand(pluginListProvider, outputChannel),
     pluginsNameFilter,
+    // #448 / #34: a Stack peer's collapse is the unlisted-plugin door's own mirror of its
+    // expand-time load — dropping the loaded copy so a browsed-then-abandoned peer never lingers
+    // in the session ("hidden means absent"). `unloadStackPeer` is itself a no-op for a peer that
+    // was never expanded, so this fires for every collapse without first checking which kind.
+    pluginListView.onDidCollapseElement((e) => {
+      if (e.element instanceof StackPeerNode) void recordBrowser.unloadStackPeer(e.element);
+    }),
   ] };
 }
 
@@ -1203,6 +1249,35 @@ function registerRevealInExplorerCommand(
   });
 }
 
+/** `modbench.pluginListTree.revealInModsTree` (#448 AC5): a Stack peer's own "jump to the
+ *  providing mod" gesture — changing the winner is mod reordering, the Mods tree's own
+ *  jurisdiction, so this only ever selects/focuses a row there, never offers a reorder from the
+ *  Plugins tree. `modListProvider.findModNode` resolves the peer's `origin` to the actual node
+ *  the Mods tree's own `getChildren` produced (root-level or nested under a separator);
+ *  `modListView.reveal` needs that exact node, plus `ModListProvider.getParent` (#448), to walk
+ *  the ancestor chain for a grouped mod. */
+function registerRevealInModsTreeCommand(
+  modListProvider: ModListProvider, modListView: vscode.TreeView<ModlistNode>, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.revealInModsTree', async (node?: StackPeerNode) => {
+    if (!(node instanceof StackPeerNode)) return;
+    const modName = node.peer.origin;
+    try {
+      const target = await modListProvider.findModNode(modName);
+      if (!target) {
+        // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+        outputChannel.error(`[extension] revealInModsTree could not find a mod row for "${modName}"`);
+        void vscode.window.showErrorMessage(`Modbench: Could not find "${modName}" in the Mods tree.`);
+        return;
+      }
+      await modListView.reveal(target, { select: true, focus: true, expand: true });
+    } catch (err) {
+      outputChannel.error(`[extension] revealInModsTree for "${modName}" failed: ${err instanceof Error ? err.message : String(err)}`);
+      void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${modName}" in the Mods tree.`);
+    }
+  });
+}
+
 /** Every plugin-row command (Track, Save & Compile, compile-at-ref, Rebase, the #427 lifecycle
  *  gestures) grouped so `activate()` stays under its own size budget — same reasoning as
  *  `registerEditorCommands`'s own grouping, one level up (plugin-tree rows rather than the record
@@ -1221,6 +1296,10 @@ function registerPluginRowCommands(
     registerRebaseCommand(controller, repository, outputChannel),
     ...registerRecordLifecycleCommands(controller, repository, outputChannel),
     ...registerRecordCopyCommands(controller, repository, outputChannel),
+    // #448 AC4: the Stack node's own binary-entry action — Save & Compile is already reachable
+    // there via the widened modbench.saveAndCompile handler above, registered once for every
+    // caller.
+    registerDiffAgainstSourceCommand(repository, outputChannel),
   ];
 }
 
@@ -1694,6 +1773,66 @@ function makeMergeEditorOpener(repository: PluginRepository, outputChannel: vsco
  *  multi-mod session), and the command palette (QuickPick fallback only when neither a tree row nor
  *  an active record is in hand — see `resolveCompileTarget` in `./medit/compileTarget` for the exact
  *  order). */
+/** Builds the `git:` scheme URI VS Code's own built-in git extension resolves a file's content at
+ *  an arbitrary ref through — the stable, documented convention (`{path, ref}` JSON in the query)
+ *  used by many extensions without importing the git extension's own types, the same "structural,
+ *  not a dependency" posture this file already takes with `openRepository` (`trackedRepositories.ts`).
+ *  Requires the file's own repo to already be registered with `vscode.git` — true for every tracked
+ *  mod folder here (`registerTrackedRepositories`, called at the same session-load hand-off this
+ *  command's own target reads its plugin list from). */
+function gitRefUri(fsPath: string, ref: string): vscode.Uri {
+  return vscode.Uri.file(fsPath).with({ scheme: 'git', query: JSON.stringify({ path: fsPath, ref }) });
+}
+
+/** #448 AC4: "Diff against source" — the Stack node's binary entry opens a native diff of the
+ *  working tree against `refs/medit/last-compile/<plugin>` (`SourceRepository`'s own parked
+ *  snapshot, `MEditService.Core/Source/SourceRepository.cs` — "Save & Compile" in CONTEXT.md).
+ *  Pure git/VS Code: no backend call, matching "commit/revert stay in the native SCM panel" — the
+ *  maintainer's own "map + links, not duplicated function" decision for this entry.
+ *
+ *  Scoped to the plugin's own root source file (`source/<plugin>/RecordData.json`) — CONTEXT.md's
+ *  "one *source unit* = one file" invariant guarantees this file always exists for a tracked
+ *  plugin, holding the mod header's own fields — rather than every file the compile touched. A
+ *  plugin with group-folder content (records under `Weapons/`, `Cells/`, …) can have changes this
+ *  diff does not show; a whole-tree multi-file diff is `vscode.changes` (VS Code 1.94+, unlike this
+ *  extension's current `^1.85.0` floor) and is a natural follow-up once that floor decision is
+ *  made, not built here. */
+function registerDiffAgainstSourceCommand(
+  repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+): vscode.Disposable {
+  return vscode.commands.registerCommand('modbench.pluginListTree.diffAgainstSource', async (node?: StackBinaryStateNode) => {
+    if (!(node instanceof StackBinaryStateNode)) return;
+    const { plugin, origin } = node;
+    try {
+      const plugins = await repository.getPlugins();
+      const winner = plugins.find((p) => p.name === plugin && p.origin === origin);
+      if (!winner) {
+        outputChannel.error(`[extension] diffAgainstSource: "${plugin}" (${origin}) is not in the current session`);
+        void vscode.window.showErrorMessage(`Modbench: "${plugin}" is not in the current session.`);
+        return;
+      }
+      const sourceRoot = path.join(path.dirname(winner.path), 'source', plugin, 'RecordData.json');
+      if (!fs.existsSync(sourceRoot)) {
+        outputChannel.error(`[extension] diffAgainstSource: no source file at "${sourceRoot}"`);
+        void vscode.window.showErrorMessage(`Modbench: "${plugin}" has no tracked source to diff.`);
+        return;
+      }
+      const ref = `refs/medit/last-compile/${plugin}`;
+      await vscode.commands.executeCommand(
+        'vscode.diff', gitRefUri(sourceRoot, ref), vscode.Uri.file(sourceRoot), `${plugin} (last compile ↔ working tree)`,
+      );
+    } catch (err) {
+      // ADR-0026: an explicit user action failed — notify + log, never a silent no-op. Covers
+      // both a transport failure and the ref not existing yet (never compiled) — the git content
+      // provider reports that as a rejection, not a distinguishable error code, so both read the
+      // same to the user: nothing to diff against yet.
+      const message = err instanceof Error ? err.message : String(err);
+      outputChannel.error(`[extension] diffAgainstSource("${plugin}") failed: ${message}`);
+      void vscode.window.showErrorMessage(`Modbench: Could not diff "${plugin}" against its last compile — has it been compiled yet?`);
+    }
+  });
+}
+
 function registerSaveAndCompileCommand(
   controller: SessionController,
   repository: PluginRepository,
@@ -1701,7 +1840,14 @@ function registerSaveAndCompileCommand(
   outputChannel: vscode.LogOutputChannel,
   diagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode) => {
+  return vscode.commands.registerCommand('modbench.saveAndCompile', async (node?: PluginListNode | StackBinaryStateNode) => {
+    // #448: the Stack node's own binary entry already carries its exact (plugin, origin) — no
+    // resolveCompileTarget round trip needed, the same reason a plugin row's own name is tier 1
+    // there instead of falling through to the active-record/QuickPick tiers.
+    if (node instanceof StackBinaryStateNode) {
+      await compileAndReport(controller, diagnostics, { name: node.plugin, origin: node.origin }, undefined);
+      return;
+    }
     const target = await resolveCompileTarget(
       node?.kind === 'plugin' ? node.plugin.name : undefined,
       activeRecordTracker.current(),
@@ -1881,6 +2027,10 @@ function clearSessionWhenBackendDies(
     if (backendManager?.isHealthy) return;
     composite.setSession(undefined);
     recordBrowser.setImmutablePlugins([]);
+    // #448: same reasoning as setImmutablePlugins above — a dead session's Stack-node state
+    // entries must not survive it.
+    recordBrowser.setTrackedPlugins([]);
+    recordBrowser.setPluginOrigins(new Map());
     tracker.setLoaded(undefined);
     // #278 / ADR-0035 amending ADR-0018: same reasoning as the three above — a statement about
     // which plugins the dead session's records matched must not seed the next one.
@@ -2040,7 +2190,10 @@ function createModListView(
   modListProvider: ModListProvider,
   modlistSource: Mo2ModlistSource,
   outputChannel: vscode.LogOutputChannel,
-): { modListView: vscode.TreeView<ModlistNode>; modListFilter: NameFilter; updateProfileDescription: () => Promise<void> } {
+): {
+  modListView: vscode.TreeView<ModlistNode>; modListFilter: NameFilter; updateProfileDescription: () => Promise<void>;
+  revealInModsTreeCommand: vscode.Disposable;
+} {
   const modListView = vscode.window.createTreeView('modbench.modList', {
     treeDataProvider: modListProvider,
     showCollapseAll: true,
@@ -2064,7 +2217,10 @@ function createModListView(
     }
   };
   void updateProfileDescription();
-  return { modListView, modListFilter, updateProfileDescription };
+  // #448 AC5: built here (not registerLoadoutView, which the addition pushed over the lint
+  // budget) since it needs exactly the modListView this function already constructs.
+  const revealInModsTreeCommand = registerRevealInModsTreeCommand(modListProvider, modListView, outputChannel);
+  return { modListView, modListFilter, updateProfileDescription, revealInModsTreeCommand };
 }
 
 interface LoadoutViewDeps {
@@ -2130,9 +2286,8 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
     const { pluginListProvider, disposables: pluginListDisposables } =
       registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller });
-    const { modListView, modListFilter, updateProfileDescription } =
+    const { modListView, modListFilter, updateProfileDescription, revealInModsTreeCommand } =
       createModListView(modListProvider, modlistSource, outputChannel);
-
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
     const enterEditing = makeEnterEditing({
       instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
@@ -2161,6 +2316,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
       ...registerOverwriteView(instanceRoot, modListProvider, outputChannel),
       registerModsAutoRegisterWatcher(instanceRoot, modlistSource, modListProvider, outputChannel),
       ...pluginListDisposables,
+      revealInModsTreeCommand,
     );
 
     const { downloadsProvider, disposables: downloadsDisposables } = registerDownloadsView(instanceRoot, log);
@@ -2326,6 +2482,12 @@ async function applyLoadedSessionToTree(
     // #281: the same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note (#276).
     recordBrowserProvider?.setImmutablePlugins(session.readOnly);
+    // #448: the Stack node's own state-entry facts — tracked-ness (a filesystem check only the
+    // composition root can make) and each plugin's own loaded origin (the same fact driftTracker
+    // just consumed above), from the same GET /plugins answer everything else in this hand-off
+    // already reads.
+    recordBrowserProvider?.setTrackedPlugins(session.trackedPlugins);
+    recordBrowserProvider?.setPluginOrigins(session.origins);
   } catch (err) {
     // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
     // did load, so the tree would be telling the user editing is unavailable when it is

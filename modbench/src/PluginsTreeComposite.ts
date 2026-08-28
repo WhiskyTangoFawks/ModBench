@@ -22,9 +22,11 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
     getTreeItem(row: TRow): vscode.TreeItem;
     onDidChangeTreeData: vscode.Event<TRow | undefined>;
   };
-  /** Editing's record browser. Satisfied structurally by `PluginTreeProvider`. */
+  /** Editing's record browser. Satisfied structurally by `PluginTreeProvider`. `getPluginChildren`'s
+   *  second parameter is #448's Stack-node hand-off — see `stackPeersOf` below; the composite
+   *  never interprets it, only relays it. */
   children: {
-    getPluginChildren(pluginFile: string): Promise<TChild[]>;
+    getPluginChildren(pluginFile: string, stackPeers?: StackPeer[]): Promise<TChild[]>;
     getChildren(child: TChild): Promise<TChild[]> | TChild[];
     getTreeItem(child: TChild): vscode.TreeItem;
     onDidChangeTreeData: vscode.Event<TChild | undefined | null>;
@@ -46,6 +48,14 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  accessor's own return (as opposed to the accessor being unwired) means the same as `true` —
    *  no filter machinery to ask means nothing has been ruled out. */
   hasMatchingRecords?(pluginFile: string): boolean | undefined;
+  /** #448: this row's own file-level peers — the losers a contested plugin's `fileOverrides()`
+   *  entry names (`PluginListProvider.stackPeers()`), or undefined for an uncontested row (no
+   *  Stack node to build). Optional, same convention as `orderIssueMastersOf`: a test that
+   *  doesn't wire it just never hands a peer list through, which `getPluginChildren` already
+   *  treats as "no Stack node" on the Editing side. Read fresh on every expansion, never cached
+   *  here — the composite holds no state of its own about the Stack node, exactly like every
+   *  other row-level fact in this file. */
+  stackPeersOf?(row: TRow): StackPeer[] | undefined;
 }
 
 /** A plugin's own declared master, absent from the session (#277 / ADR-0037). Structurally
@@ -55,6 +65,13 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
  *  transitive fact about a further master; see MasterResolution.Classify (backend) for why
  *  there is nothing to cascade. */
 type MasterIssue = { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' };
+
+/** #448: one Stack-node peer — a file-level loser's own (origin, physical path) pair. Structurally
+ *  matches `modmanager/unlistedPlugins.ts`'s `UnlistedPlugin` without importing it, the same
+ *  precedent `MasterIssue` above already sets — CONTEXT-MAP.md's boundary object (origin +
+ *  physical plugin path, ADR-0036) is exactly this shape and nothing richer, so there is nothing
+ *  for a structural duplicate to omit. */
+export type StackPeer = { name: string; path: string; origin: string };
 
 export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvider<TRow | TChild> {
   private readonly emitter = new vscode.EventEmitter<TRow | TChild | undefined | null>();
@@ -95,7 +112,8 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     }
     if (!this.isRow(element)) return this.deps.children.getChildren(element as TChild);
     const file = this.expandableFile(element as TRow);
-    return file === undefined ? [] : this.deps.children.getPluginChildren(file);
+    if (file === undefined) return [];
+    return this.deps.children.getPluginChildren(file, this.deps.stackPeersOf?.(element as TRow));
   }
 
   getTreeItem(element: TRow | TChild): vscode.TreeItem {

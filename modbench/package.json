@@ -447,6 +447,16 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.pluginListTree.revealInModsTree",
+        "title": "Reveal in Mods Tree",
+        "category": "Modbench"
+      },
+      {
+        "command": "modbench.pluginListTree.diffAgainstSource",
+        "title": "Diff against Source",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.pluginListTree.track",
         "title": "Track…",
         "category": "Modbench"
@@ -626,6 +636,14 @@
         },
         {
           "command": "modbench.pluginListTree.revealInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.revealInModsTree",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.diffAgainstSource",
           "when": "false"
         },
         {
@@ -939,6 +957,21 @@
           "command": "modbench.pluginListTree.filterToSelected",
           "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "pluginActions@6"
+        },
+        {
+          "command": "modbench.pluginListTree.revealInModsTree",
+          "when": "view == modbench.pluginListTree && viewItem == stackPeer",
+          "group": "stackPeerActions@1"
+        },
+        {
+          "command": "modbench.pluginListTree.diffAgainstSource",
+          "when": "view == modbench.pluginListTree && viewItem == stackBinaryState",
+          "group": "stackBinaryActions@1"
+        },
+        {
+          "command": "modbench.saveAndCompile",
+          "when": "view == modbench.pluginListTree && viewItem == stackBinaryState",
+          "group": "stackBinaryActions@2"
         },
         {
           "command": "modbench.record.create",

@@ -363,6 +363,14 @@ describe('modbench command registration', () => {
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.clearFilter',
     'modbench.pluginListTree.revealInExplorer',
+    // #448 AC5: a Stack peer's own "jump to the providing mod" gesture. Gated to
+    // `viewItem == stackPeer` in package.json and hidden from the palette, same posture as
+    // revealInExplorer — it needs the clicked peer row's own origin.
+    'modbench.pluginListTree.revealInModsTree',
+    // #448 AC4: the Stack node's binary entry's own "diff working tree vs last compile" gesture.
+    // Gated to `viewItem == stackBinaryState` and hidden from the palette — it needs the clicked
+    // entry's own (plugin, origin), no ambient fallback.
+    'modbench.pluginListTree.diffAgainstSource',
     // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin` in package.json and hidden
     // from the palette — it needs the clicked row's plugin name.
     'modbench.pluginListTree.track',

@@ -195,6 +195,16 @@ export interface PluginRepository {
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
 
+  // #448 / #34: the unlisted-plugin door — loads a file-level peer the load order doesn't name so
+  // its own Stack-node entry can lazy-load its records, read-only, on first expansion. Idempotent
+  // in effect (the backend re-serves an already-loaded copy rather than erroring — SessionManager's
+  // own LoadUnlistedPlugin doc comment), so a caller never has to track "have I already loaded
+  // this" itself.
+  loadUnlistedPlugin(path: string, origin: string): Promise<void>;
+  // #448 / #34: the mirror of loadUnlistedPlugin above — drops a peer's loaded copy, called when
+  // its Stack-node row collapses, so a browsed-then-abandoned peer doesn't linger in the session
+  // (#34 AC: "hidden means absent").
+  unloadUnlistedPlugin(plugin: string, origin: string): Promise<void>;
 }
 
 export class ApiPluginRepository implements PluginRepository {
@@ -448,6 +458,16 @@ export class ApiPluginRepository implements PluginRepository {
       items: (data?.items ?? []).map(toCellSummary),
       total: data?.total ?? 0,
     };
+  }
+
+  async loadUnlistedPlugin(path: string, origin: string): Promise<void> {
+    const { error, response } = await this.client.POST('/plugins/load', { body: { path, origin } });
+    this.ensureOk(`loadUnlistedPlugin(${path}, ${origin})`, response, error);
+  }
+
+  async unloadUnlistedPlugin(plugin: string, origin: string): Promise<void> {
+    const { error, response } = await this.client.POST('/plugins/unload', { body: { plugin, origin } });
+    this.ensureOk(`unloadUnlistedPlugin(${plugin}, ${origin})`, response, error);
   }
 
 }
