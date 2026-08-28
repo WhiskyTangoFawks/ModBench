@@ -131,10 +131,10 @@ requires a deploy.**
 31. As a user, I want every write Modbench makes to `modlist.txt` and `ModOrganizer.ini` to
     change only the bytes that need changing, so that my comments, CRLF line endings,
     unmanaged (`*`) lines, and separators survive verbatim and MO2 still reads the files.
-32. As a user, I want a "Launch mEdit" action in the Loadout header (its own view since
-    #247 — see [loadout-header.md](loadout-header.md)) that switches to the
-    editing views and spins up the record editor against my active loadout, so that I can
-    move from managing mods to editing records without a manual setup step.
+32. As a user, I want a "Launch mEdit" action reachable from the Plugins view's title bar
+    (moved there from the Loadout header by #352 — see [plugins.md](plugins.md)) that switches
+    to the editing views and spins up the record editor against my active loadout, so that I
+    can move from managing mods to editing records without a manual setup step.
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
     integration lands, so that I can tell when an installed mod is behind its Nexus
     version.

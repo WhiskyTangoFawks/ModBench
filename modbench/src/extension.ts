@@ -381,6 +381,7 @@ export function activate(context: vscode.ExtensionContext) {
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
   backendManager = createBackendManager(port, outputChannel, statusBarItem);
+  wireSessionRunningContext(backendManager);
 
   const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
@@ -1817,6 +1818,20 @@ function makeDriftTracker(
   });
 }
 
+/** #352: modbench.sessionRunning drives the Launch mEdit / Close mEdit toggle on the Plugins
+ *  view's title bar — the same two-command/context-key toggle shape as sort direction and
+ *  show-hidden, just contributed to overflow instead of a navigation icon slot. Explicit
+ *  initial value, not left implicitly falsy, matching modbench.workspaceIsMo2Instance's own
+ *  "every exit path sets it" convention. Every backend lifecycle transition — attach,
+ *  disconnect, crash, and a deliberate stop — moves it, the same set of transitions
+ *  clearSessionWhenBackendDies below reacts to. */
+function wireSessionRunningContext(manager: BackendManager): void {
+  void vscode.commands.executeCommand('setContext', 'modbench.sessionRunning', false);
+  manager.on('status', () => {
+    void vscode.commands.executeCommand('setContext', 'modbench.sessionRunning', manager.isHealthy);
+  });
+}
+
 /** A backend that dies takes the session with it, and `exitToLoadout` is not on that path — a
  *  crash or a lost connection reaches us only as a status change. Without this the rows keep their
  *  chevrons and expanding one fetches against a backend that is gone (#270), the record rows keep
@@ -2211,7 +2226,6 @@ function registerLoadoutHeaderView(deps: LoadoutHeaderDepsWiring): void {
         return undefined;
       }
     },
-    sessionRunning: () => backendManager?.isHealthy ?? false,
     deployment: async () => {
       if (!isStandaloneDeployment() || !instanceRoot) return 'external';
       return (await isDeployed(instanceRoot)) ? 'deployed' : 'notDeployed';
@@ -2228,9 +2242,9 @@ function registerLoadoutHeaderView(deps: LoadoutHeaderDepsWiring): void {
       provider.refresh();
     }),
   );
-  // Every backend lifecycle transition — attach, disconnect, crash, and (since #247) a
-  // deliberate stop — moves the session row, so one subscription covers all of them.
-  backendManager?.on('status', () => provider.refresh());
+  // #352: the header's rows (profile, deployment) no longer read backend/session state — the
+  // mEdit row moved to the Plugins view — so there is nothing here left for a backend status
+  // transition to invalidate.
 }
 
 /** Downloads sidebar tree (#233): a native TreeView over downloads/, replacing the editor-tab

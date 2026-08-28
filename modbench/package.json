@@ -717,6 +717,16 @@
           "group": "navigation@3"
         },
         {
+          "command": "modbench.modList.launchMedit",
+          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.sessionRunning",
+          "group": "1_medit"
+        },
+        {
+          "command": "modbench.closeMedit",
+          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.sessionRunning",
+          "group": "1_medit"
+        },
+        {
           "command": "modbench.modList.filter",
           "when": "view == modbench.modList && !modbench.modList.filterActive",
           "group": "navigation@1"
