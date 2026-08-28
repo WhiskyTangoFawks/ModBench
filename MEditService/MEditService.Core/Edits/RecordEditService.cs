@@ -305,7 +305,7 @@ public sealed class RecordEditService(
     /// (the mechanism #415 landed and tested in both flip directions) takes it from there: gone at
     /// Effective, still served at Head until this is committed and compiled. No reference cascade —
     /// a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary
-    /// compile diagnostic, exactly like any other dangling link (ADR-0020).
+    /// compile diagnostic, exactly like any other dangling link (ADR-0041).
     ///
     /// <para><b>#461 widened this off the flat-only path onto <see cref="SourceUnitResolver"/></b>,
     /// the same resolution <see cref="EditField"/> already uses, so a container's own record (its
@@ -1256,7 +1256,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// AC3 / ADR-0020 (kept, relocated): Dangling and Type-Mismatched FormLinks are blocked at edit
+    /// AC3 / ADR-0041: Dangling and Type-Mismatched FormLinks are blocked at edit
     /// time, before anything is written. Returns the diagnostic, or null when the value is clean.
     ///
     /// <para><b>Effective state is what this resolves against</b>, which is what AC3 requires: a

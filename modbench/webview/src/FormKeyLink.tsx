@@ -79,7 +79,7 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 // back to the bare FormKey string when it doesn't (or when the caller has no resolution to offer
 // yet — VMAD/pending wiring land in #158/#159). The composite supersedes #157's bare EditorID: a
 // FormKey is the identity and the EditorID is decoration, so labelling with the decoration alone
-// left the cell unable to hand the user its own value — which under ADR-0033's cursor contract is
+// left the cell unable to hand the user its own value — which under the pre-ADR-0034 cursor contract was
 // the whole of copy. It is also the format the picker's own items have always used
 // (`toFormKeyQuickPickItem`), so a reference now reads back exactly as it was chosen.
 export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
@@ -115,7 +115,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         background: 'none',
         border: 'none',
         color: 'var(--vscode-textLink-foreground, #3794ff)',
-        // Issue #218 / ADR-0033 (and #204's rule, applied to the leaf it missed): no resting
+        // Issue #218 / ADR-0034 (and #204's rule, applied to the leaf it missed): no resting
         // cursor override — the parent DiskCell's `grab` is this cell's resting affordance, since
         // it is a drag source the whole time. `pointer` is asserted only while the reference is
         // hot-tracked, where it is the navigation gesture's own affordance, not a mask.

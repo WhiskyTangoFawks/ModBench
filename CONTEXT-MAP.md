@@ -20,8 +20,7 @@ Each UI surface has a living spec in [docs/specs/](./docs/specs/) — a surface 
 - **Process ownership**: the extension owns the Editing backend's lifecycle — it spawns the backend for a session and tears it down. See [ADR-0022](./docs/adr/0022-extension-owns-backend-lifecycle.md).
 - **Language boundary**: "mod" is forbidden in Editing and central in Mod Management; "record/FormKey" is central in Editing and absent in Mod Management. The shared boundary object is a **plugin file at a physical path**.
 - **Tracking is Editing-internal; nothing new crosses the boundary**
-  ([ADR-0041](./docs/adr/0041-manual-git-tracking-compile-from-text.md), superseding
-  ADR-0040's provenance-payload amendment): a tracked mod is one whose folder contains
+  ([ADR-0041](./docs/adr/0041-manual-git-tracking-compile-from-text.md)): a tracked mod is one whose folder contains
   a `.git` repository, created by an explicit user Track gesture and operated entirely
   by Editing (repos, branches, commits, compile — Mod Management never touches git,
   never calls the backend, and never learns the source exists). The boundary object

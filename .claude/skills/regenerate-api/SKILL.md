@@ -13,17 +13,19 @@ the restart because a backend "looks up".
 # kill stale backend
 pkill -f "MEditService.Api" 2>/dev/null; sleep 1
 
-# fresh start — no args needed (--data-folder optional; web host + /health boot regardless)
-# use Bash run_in_background: true instead of &
-cd /home/wayne/Games/FO4/mEdit/MEditService/MEditService.Api && dotnet run &
+# fresh start — no args needed (--data-folder optional; web host + /health boot regardless).
+# Run this one with Bash run_in_background: true, from the repo root:
+dotnet run --project MEditService/MEditService.Api
 
 # wait for boot (rebuilds, so slow)
 until curl -sf http://localhost:5172/health >/dev/null 2>&1; do sleep 1; done
 
 # regen, then stop
-cd /home/wayne/Games/FO4/mEdit/modbench && npm run generate-api
+cd modbench && npm run generate-api
 pkill -f "MEditService.Api"
 ```
+
+Paths are relative to the repo root (`git rev-parse --show-toplevel`).
 
 - `until` hangs → compile error; check backend output.
 - Leaves backend stopped. Commit api.ts with the C# changes.

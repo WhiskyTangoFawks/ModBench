@@ -591,7 +591,7 @@ describe('package.json per-plugin Track (#414)', () => {
   });
 });
 
-// #410/ADR-0041: the pending-change model, the Pending Changes tree (ADR-0029) and the aggregate
+// #410/ADR-0041: the pending-change model, the Pending Changes tree and the aggregate
 // SCM provider are retired, so nothing may still be contributed for them. Read as an absence
 // assertion this would pass just as happily against an empty or mis-shaped manifest, so each check
 // pairs with a positive control drawn from the same collection — a surviving contribution that must

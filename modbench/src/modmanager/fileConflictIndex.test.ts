@@ -245,7 +245,7 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
 });
 
 // #374: MEditService's per-plugin source text tree lands inside the mod folder itself
-// (`<pluginFileName>.source/...`, ADR-0040) and must not deploy or appear as mod content.
+// (`<pluginFileName>.source/...`, the pre-#441 layout — #540 deletes it) and must not deploy or appear as mod content.
 // Three-outcome
 // shape mirrors the #324 hazard-class pattern: the real thing is excluded, a look-alike with no
 // sibling plugin is not (over-match guard), and a plain file sharing the name is not

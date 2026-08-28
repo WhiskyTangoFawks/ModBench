@@ -17,7 +17,7 @@ public interface IConditionCodec
     // Schema-level (instance-free) twin of Extract's per-property discovery (#154): does
     // recordType have a condition-owning field named fieldPath? Callers that only have a record's
     // CLR type (not yet a loaded instance) — PluginWriter's read-only/apply-dispatch checks,
-    // EditOrchestrator's whole-list-restage supersession — use this instead of hardcoding a single
+    // RecordEditService's whole-list field reconstruction — use this instead of hardcoding a single
     // field name, so any of a record's condition-owning fields (not just "Conditions") is
     // recognized consistently everywhere.
     bool IsConditionListField(Type recordType, string fieldPath);
@@ -26,7 +26,7 @@ public interface IConditionCodec
     // "Effects[2].Conditions" one level deep, or "Effects[2].Conditions[1].Conditions" two levels
     // deep — the numeric indices are write-time-only, per #169's AC — existence/range are enforced
     // at write, not here). Takes the raw composed field path rather than pre-parsed pieces: every
-    // production caller (PluginWriter, EditOrchestrator) only ever wanted the yes/no answer, never
+    // production caller (PluginWriter, RecordEditService) only ever wanted the yes/no answer, never
     // the parsed segments themselves, so parsing an arbitrary number of "<name>[<index>]." segments
     // is entirely this codec's job now — callers just gate on fieldPath.Contains('[') before
     // delegating here. A distinct method from IsConditionListField rather than an extension of it:

@@ -48,9 +48,8 @@ Placement:
 - Context menu availability = tree node `contextValue`. Plugin rows carry Mod Management's own
   values (`"plugin"`, `"pluginImplicit"` — `PluginListProvider.ts`); everything a row expands into
   (once a session is running) carries the record browser's, from backend metadata (`"recordType"`,
-  `"record"`, …). `pluginImmutable` doesn't exist any more — #273 deleted the standalone editing
-  Plugins tree that built it; read-only-for-editing on the merged tree's plugin rows is a tooltip
-  `PluginsTreeComposite` appends, not a contextValue (#276, `docs/specs/plugins.md`).
+  `"record"`, …). Read-only-for-editing on a plugin row is a tooltip `PluginsTreeComposite`
+  appends, never a contextValue (ADR-0035, `docs/specs/plugins.md`).
 - New commands: prompt in `extension.ts`, delegate to `SessionController` (explicit args, no VS Code types).
 - New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
 - New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-referenced-by.md`, `medit-version-control.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — #273/ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.

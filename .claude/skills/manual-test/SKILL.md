@@ -8,11 +8,9 @@ description: Build the extension and launch a VS Code Extension Development Host
 Build the extension if needed, then launch a VS Code Extension Development Host pointed at
 a real MO2 instance directory. Do all steps proactively without waiting to be asked.
 
-Since [ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md), the extension
-owns the editing backend's lifecycle — it spawns the bundled binary itself when the user
-triggers "Launch mEdit" from the Loadout view. There is no more manual `dotnet run` step and
-no `--data-folder`/`--plugins-txt` flags; the backend is driven by `load-explicit` (the active
-modlist's enabled plugins + vanilla masters), not a standalone data-folder scan.
+The extension spawns the backend itself on "Launch mEdit"
+([ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md)) — there is no manual
+`dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
 
 ## 0 — Confirm the checkout is current
 
@@ -40,25 +38,20 @@ changed.
 F5 doesn't reliably work in this environment — use the CLI directly:
 
 ```bash
-code --extensionDevelopmentPath="/home/wayne/Games/FO4/mEdit/modbench" \
+code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
      "<path-to-an-MO2-instance-directory>" &
 ```
 
-**The workspace root must be a real MO2 instance directory** (contains `ModOrganizer.ini`,
-`mods/`, `profiles/`) — per `modbench/CLAUDE.md`, the mod manager reads these relative to
-the workspace folder; there is no separate "instance path" setting. Do not open the mEdit
-source repo itself as the workspace — it has no `ModOrganizer.ini` and the Loadout view will
-have nothing to show. A known local instance: `/home/wayne/Games/FO4/LitR`.
+**The workspace root must be a real MO2 instance directory** (`modbench/CLAUDE.md` § Invariants:
+workspace root = MO2 instance, no separate setting). Do not open the Modbench source repo itself
+as the workspace — the Loadout view will have nothing to show. Ask the user which instance to
+use if none was named.
 
 ## 3 — Activate the extension
 
 `activationEvents` is intentionally `[]` — the extension does not auto-activate on startup
-(see `src/test/integration/extension.test.ts`). The Modbench activity bar icon stays hidden
-until something activates the extension, because every contributed view had a `when` clause and
-none defaulted to true; #273 retired that gate (`modbench.viewMode`) along with the second
-Plugins view it existed to disambiguate, so the loadout views (Mods, Plugins, Downloads) are
-contributed unconditionally now — activation is still required to populate them, just not a
-context key to reveal them.
+(see `src/test/integration/extension.test.ts`). The loadout views (Mods, Plugins, Downloads)
+are contributed unconditionally, but activation is still required to populate them.
 
 Force activation once per session by running any Modbench command from the Command Palette,
 e.g. **Modbench: Refresh Mod List**. The activity bar icon then appears (Loadout view). From

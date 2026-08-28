@@ -348,7 +348,7 @@ public class Fallout4ConditionCodecTests
         Assert.True(Codec.IsNestedConditionListField(typeof(IQuestGetter), "Aliases[0].Conditions"));
     }
 
-    // Setter-class form (record.GetType(), as EditOrchestrator.TryApplyField's dispatch uses it) —
+    // Setter-class form (record.GetType(), as RecordEditService's apply dispatch uses it) —
     // AQuestAlias (the setter-side abstract base) is just as bare as its getter-side marker
     // interface, so the same fallback must apply here too.
     [Fact]

@@ -29,12 +29,12 @@
          ModFactory.ImportGetter overlay this bug lives in, so this isn't a defect confined to an
          unused code path. Move only once #385 confirms the regression is fixed upstream. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />
-    <!-- #367: library-level integration of Spriggit's codec (ADR-0040), not the Spriggit tool
+    <!-- #367: library-level integration of Spriggit's codec (ADR-0041), not the Spriggit tool
          itself: avoids its exe-per-version machinery and its exact Mutagen [0.54.0] pin, which
          this repo cannot take (see the 0.53.1 pin comment above). Serialization 1.37.1 depends on
          Mutagen.Bethesda.Core >= 0.51.3 (a floor, not Spriggit's exact pin), so it is compatible
          with 0.53.1, confirmed via the nuspec; restores with zero NuGet warnings.
-         #412: the JSON kernel (ADR-0041, superseding ADR-0040's YAML kernel) is the Newtonsoft
+         #412: the JSON kernel (ADR-0041) is the Newtonsoft
          translation package, not a package literally named ".Json" — confirmed on nuget.org; it
          exists at this exact 1.37.1 version, matching the other two pins here. -->
     <PackageReference Include="Mutagen.Bethesda.Serialization" Version="1.37.1" />

@@ -16,7 +16,7 @@ const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, e
 // Issue #218: #157's label choice (the EditorID *instead of* the FormKey) is superseded. It
 // dropped the identity and kept the decoration, so the format a reference is chosen in (the
 // picker's own items, "EditorID [FormKey]") and the format it is read back in disagreed — and
-// under ADR-0033's cursor contract, where copying a value is selecting the text a cell displays,
+// under the pre-ADR-0034 cursor contract, where copying a value is selecting the text a cell displays,
 // a cell that does not display its own identity cannot hand it to the user at all.
 describe('FormKeyLink — label', () => {
   it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
@@ -77,7 +77,7 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
     expect(link.style.cursor).toBe('pointer');
   });
 
-  // Issue #218 / ADR-0033: same defect #204 fixed in ScalarCell, in the leaf it missed — the link
+  // Issue #218 / ADR-0034: same defect #204 fixed in ScalarCell, in the leaf it missed — the link
   // must not assert a resting cursor, because DiskCell sets `grab` on the parent <td> and the cell
   // is a drag source the whole time. An inline `cursor: 'default'` here painted an arrow over that,
   // so the one gesture always available on the cell was the one it never advertised. jsdom can't

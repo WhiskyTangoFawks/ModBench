@@ -681,7 +681,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker });
     }),
-    // Issue #213: Referenced By's named "Open to the Side" (ADR-0033), not a right-click side effect.
+    // Issue #213: Referenced By's named "Open to the Side" (ADR-0034), not a right-click side effect.
     vscode.commands.registerCommand('modbench.openEditorBeside', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.Beside, { routerDeps, recordPanels, activeRecordTracker });
@@ -807,7 +807,7 @@ function registerReloadSessionCommand(controller: SessionController, outputChann
 // its line budget, same reasoning as createReferencedByTree's own split from `activate`. A
 // keybinding (Ctrl+C while focused) and a view/item/context entry both invoke this one command
 // (package.json), the same "keybinding + menu, one command" shape modbench.deleteRecord already
-// uses; ADR-0033's "no action reachable two ways" is about redundant *affordances* for one action
+// uses; ADR-0034's "no action reachable two ways" is about redundant *affordances* for one action
 // (e.g. an inline button duplicating a menu item), not a command having both a keybinding and a
 // menu entry. Selection resolution mirrors modbench.deleteRecord: the multi-select array VS Code
 // passes when several rows are selected, else the view's own current selection, else the single

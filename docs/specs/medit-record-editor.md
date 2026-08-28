@@ -8,7 +8,7 @@ Control panel, one repo per tracked mod — see
 [Version control — Track, branch, compile](medit-version-control.md) for that surface; this
 document covers the grid and its gestures only.
 The **gesture model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)
-replaced ADR-0033 after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had
+was adopted after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had
 specified single-click-to-edit, which xEdit does not do. In the field grid, a single click focuses
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
 cell shows a `grab` cursor (#222). Editing is off single click: a second click on the focused
@@ -25,7 +25,7 @@ path does (#225). A pasted reference into a FormKey cell still goes through its 
 not a closed-cell paste of its own — see the FormKey paste note below. Unsorted-array arity/order
 ops (Add/Remove/Move Up/Move Down) live on the right-click
 menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, and the inline ▲▼✕/＋ buttons #142
-shipped before ADR-0034 are gone (#227). The read-only value surface ADR-0033 introduced is gone
+shipped before ADR-0034 are gone (#227). The read-only value surface the earlier click-to-edit model introduced is gone
 too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click —
 **a `string` cell included, now** (#258/ADR-0039) — with Ctrl+C on the focused cell (#224) as every
 immutable cell's copy path regardless, and the right-click menu's **Open in Editor…** entry (see
@@ -120,8 +120,7 @@ in [medit-version-control.md](medit-version-control.md).
 
 **xEdit's model, ported** — the one compare grid, whose rows include VMAD and Condition data as
 ordinary rows (#231 — see below)
-([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md), which supersedes
-ADR-0033; the behaviour being matched is catalogued in
+([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md); the behaviour being matched is catalogued in
 [the xEdit UX audit](../research/xedit-ux-audit.md)). Every user of this panel arrives fluent in
 xEdit, so it is the reference, and divergence needs a platform limitation to justify it — not a
 better idea.
@@ -149,8 +148,8 @@ better idea.
   Available from any cell regardless of the *source* column's mutability (only the drop target's
   mutability gates the drop); applies to compound (struct/array) fields via their header/summary
   row exactly as it applies to a scalar leaf's value. **The cursor does not advertise it** — a
-  resting cell shows the default arrow, as in xEdit. `grab` on every value cell was ADR-0033's
-  attempt to make one cursor state two gestures at once; with click meaning focus there is nothing
+  resting cell shows the default arrow, as in xEdit. `grab` on every value cell was the earlier
+  model's attempt to make one cursor state two gestures at once; with click meaning focus there is nothing
   for the cursor to disambiguate.
 - **Right-click** — the only place a named, discrete action lives. On a **value cell** that is the
   list structure ops (**Add** / **Remove** / **Clear** / **Move Up** / **Move Down**), which are
@@ -172,7 +171,7 @@ better idea.
   undecided — see Further Notes.
 
 No cell shows an affordance for an action it cannot perform. With click meaning focus, that is a
-much smaller claim than it was under ADR-0033: the cursor is the default arrow everywhere, drag is
+much smaller claim than it was under the earlier click-to-edit model: the cursor is the default arrow everywhere, drag is
 unadvertised (as in xEdit), and the only resting affordance is the Ctrl-hover link underline on a
 reference that actually resolves.
 
@@ -727,7 +726,7 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    the format a reference is *chosen* in and the format it is *read back* in are identical.
    Labelling with the EditorID alone (as #157 shipped) is superseded: a FormKey is the identity and
    the EditorID is decoration, and a cell that does not display its own identity cannot hand it to
-   the user by any mechanism — which under ADR-0033's cursor contract is the whole of copy. Where
+   the user by any mechanism. Where
    the composite is too wide for its column it is truncated with an ellipsis, which does not
    truncate what a selection copies. The **link
    affordance** (underline, pointer) appears only while `Ctrl` is held and the pointer is over
@@ -847,8 +846,8 @@ new value, so a large array or struct edit can't flood the panel.
   cells were never told which columns were immutable, so a read-only column rendered inputs
   the backend then rejected with a 409.
 - **Open question: does `Ctrl+click`-to-follow survive alongside a right-click "Go to Record"?**
-  [ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md) acknowledges `Ctrl+click`
-  as a fourth gesture for now without resolving this. The tension: it's undiscoverable (no visible
+  [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)'s gesture table lists
+  `Ctrl+click` without resolving this. The tension: it's undiscoverable (no visible
   UI element hints at it) but is also shipped, xEdit-familiar muscle memory: removing it costs
   existing users a gesture they already rely on; keeping it alongside a menu item means two ways
   to do the same thing, the exact redundancy this ADR otherwise rules out everywhere else in this

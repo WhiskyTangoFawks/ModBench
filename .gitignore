@@ -10,14 +10,16 @@ logs/
 # Node
 node_modules/
 dist/
-bethesda-plugin-editor/out/
 *.vsix
+
+# Python
+__pycache__/
 
 # Vitest cache
 .vite/
 
-# Stryker mutation test reports (keep baseline/ tracked)
-MEditService/StrykerOutput/[0-9]*/
+# Stryker mutation test reports
+MEditService/StrykerOutput/
 modbench/reports/mutation/
 modbench/.stryker-tmp/
 

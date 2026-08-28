@@ -3,7 +3,7 @@ namespace MEditService.Core.Source;
 /// <summary>
 /// Reserved values for the <c>records.ref</c> column — which git ref a document's bytes came from.
 /// ADR-0041 spells <c>ref</c> into the published documents-table shape as an identity column,
-/// replacing ADR-0025's committed/staged view split with a ref dimension.
+/// the ref dimension.
 ///
 /// #413 ingested everything from a plugin binary, which is the committed baseline by definition, so
 /// the column carried exactly one value; #415 gives it the second, which is where the dimension
@@ -20,8 +20,7 @@ namespace MEditService.Core.Source;
 /// dirt. The committed bytes of a diverged record live in the <c>records_committed</c> difference
 /// table (<c>TableDdlBuilder</c>), which is not a second copy of the read model.</para>
 ///
-/// The names follow the vocabulary already in the codebase for exactly this distinction —
-/// ADR-0025's <c>&lt;type&gt;_committed</c> tables and spike-359's "non-committed ref".
+/// The names follow CONTEXT.md's committed / working-tree vocabulary.
 /// </summary>
 internal static class SourceRef
 {
