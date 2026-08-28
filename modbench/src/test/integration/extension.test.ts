@@ -1632,3 +1632,56 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     );
   });
 });
+
+// #534: pickCopyDestination (behind both copy commands) opens with an unguarded
+// repository.getPlugins() — a rejection there escaped the command callback as VS Code's raw
+// "fetch failed" toast rather than a Modbench-authored one. The real exposure window is the
+// backend dying *after* the copy surfaces (record row / record-header context menu) have
+// rendered — those are only reachable with a live session, so the pre-launch repro this test
+// actually drives is not itself reachable through the UI (established by #530's triage). It
+// stands in for that real window on purpose: `resetMockBackend()` below leaves the mock
+// session-less, so GET /plugins answers its existing 503 "No session loaded" — a rejection out
+// of the exact same unguarded `pickCopyDestination` awaits a post-load backend death would
+// produce. The fix's catch is deliberately untargeted (any rejection out of the
+// destination-picking step, not just a transport failure), so this stand-in exercises the same
+// code path as the literal scenario without needing new mock machinery to simulate a mid-session
+// crash.
+describe('Copy destination picking degrades to a reported error, never an uncaught rejection (#534)', () => {
+  // A record-editor column header's own data-vscode-context payload (ColumnHeaderContext) —
+  // always carries `origin`, so runCopyRecordCommand's origin-resolution step short-circuits
+  // with no HTTP call, and pickCopyDestination's getPlugins() is the first thing to reach the
+  // (refusing) backend. A plugins-tree RecordNode would work identically; the header is picked
+  // because it is the shape most immediately in hand with no tree lookup.
+  const headerArg = {
+    webviewSection: 'recordHeader',
+    formKey: 'TestMod.esp:000001',
+    plugin: 'TestMod.esp',
+    origin: 'Data',
+    preventDefaultContextMenuItems: true,
+  };
+
+  beforeEach(() => resetMockBackend());
+
+  for (const command of ['modbench.record.copyAsOverride', 'modbench.record.copyAsNewRecord']) {
+    it(`${command} resolves (not rejects) and shows a Modbench-authored error when the plugins request is refused`, async () => {
+      const errors: string[] = [];
+      const realShowError = vscode.window.showErrorMessage;
+      (vscode.window as { showErrorMessage: unknown }).showErrorMessage =
+        (message: string) => { errors.push(message); return Promise.resolve(undefined); };
+      try {
+        // The assertion this bug is about: an escaped rejection out of the command callback
+        // fails executeCommand's own returned promise. Awaiting it with no try/catch is the
+        // point — a raw rejection here fails the test on its own, with no assertion needed.
+        await vscode.commands.executeCommand(command, headerArg);
+
+        assert.ok(requestLog.some((l) => l === 'GET /plugins'),
+          'the command must have actually reached pickCopyDestination\'s getPlugins() call');
+        assert.strictEqual(errors.length, 1, `expected exactly one error toast, got: ${JSON.stringify(errors)}`);
+        assert.ok(errors[0].startsWith('Modbench:'), `expected a Modbench-authored toast, got: ${errors[0]}`);
+        assert.ok(!errors[0].includes('fetch failed'), `must not surface the raw fetch error verbatim, got: ${errors[0]}`);
+      } finally {
+        (vscode.window as { showErrorMessage: unknown }).showErrorMessage = realShowError;
+      }
+    });
+  }
+});

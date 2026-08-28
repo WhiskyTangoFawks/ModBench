@@ -1461,10 +1461,10 @@ function registerRecordCopyCommands(
 
   return [
     vscode.commands.registerCommand('modbench.record.copyAsOverride', async (arg?: RecordNode | ColumnHeaderContext) => {
-      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport);
+      await runCopyRecordCommand('copy-as-override', arg, controller, repository, resolveOriginOrReport, outputChannel);
     }),
     vscode.commands.registerCommand('modbench.record.copyAsNewRecord', async (arg?: RecordNode | ColumnHeaderContext) => {
-      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport);
+      await runCopyRecordCommand('copy-as-new', arg, controller, repository, resolveOriginOrReport, outputChannel);
     }),
   ];
 }
@@ -1488,22 +1488,39 @@ function recordCopyIdentity(
  *  xeMainForm.pas:3023-3042). No "New Plugin…" entry, unlike #209's own retired picker: "copy into
  *  a new file" is out of scope (#494). Returns the picked `PluginMetadata` (not just its name) so
  *  the caller reads `.origin` straight off it — a second `resolveOrigin` round trip for the
- *  destination would be redundant, `repository.getPlugins()` already answers it. */
+ *  destination would be redundant, `repository.getPlugins()` already answers it.
+ *
+ *  #534: unlike `resolveOriginOrReport`'s call above it in `runCopyRecordCommand` (which the
+ *  invoking row's own carried `origin` usually lets it skip entirely), this step's two repository
+ *  calls are unconditional — the real exposure window is the backend dying after the copy
+ *  surfaces (a record row, or the record-header webview) have already rendered, which needs a
+ *  live session and so isn't reachable pre-launch. Either awaited call rejecting is deliberately
+ *  caught wholesale — this destination-picking step has no further fallback tier below it, the
+ *  same "no tier left, so report and resolve to no target" posture `resolveCompileTarget`'s own
+ *  #530 fix gives its `pickPlugin` tier — and any rejection gets the same treatment, not just a
+ *  transport failure, since nothing past this point can tell the two apart usefully. */
 async function pickCopyDestination(
-  repository: PluginRepository, gesture: CopyGesture, formKey: string,
+  repository: PluginRepository, gesture: CopyGesture, formKey: string, outputChannel: vscode.LogOutputChannel,
 ): Promise<{ name: string; origin: string } | undefined> {
-  const allPlugins = await repository.getPlugins();
-  const carrying = gesture === 'copy-as-override' ? await repository.getRecordOverridePlugins(formKey) : [];
-  const candidates = copyTargetPlugins(allPlugins, gesture, carrying);
-  if (candidates.length === 0) {
-    void vscode.window.showInformationMessage('Modbench: No eligible destination plugin for this copy.');
+  try {
+    const allPlugins = await repository.getPlugins();
+    const carrying = gesture === 'copy-as-override' ? await repository.getRecordOverridePlugins(formKey) : [];
+    const candidates = copyTargetPlugins(allPlugins, gesture, carrying);
+    if (candidates.length === 0) {
+      void vscode.window.showInformationMessage('Modbench: No eligible destination plugin for this copy.');
+      return undefined;
+    }
+    const items = candidates.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]`, plugin: p }));
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: gesture === 'copy-as-override' ? 'Copy as Override Into…' : 'Copy as New Record Into…',
+    });
+    return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    outputChannel.error(`[extension] pickCopyDestination (${gesture}): ${detail}`);
+    void vscode.window.showErrorMessage(`Modbench: Could not look up destination plugins: ${detail}`);
     return undefined;
   }
-  const items = candidates.map((p) => ({ label: p.name, description: `[${p.loadOrderIndex}]`, plugin: p }));
-  const picked = await vscode.window.showQuickPick(items, {
-    placeHolder: gesture === 'copy-as-override' ? 'Copy as Override Into…' : 'Copy as New Record Into…',
-  });
-  return picked && { name: picked.plugin.name, origin: picked.plugin.origin };
 }
 
 /** #436/#494: the shared body behind both `modbench.record.copyAsOverride`/`copyAsNewRecord` —
@@ -1516,13 +1533,14 @@ async function runCopyRecordCommand(
   gesture: CopyGesture, arg: RecordNode | ColumnHeaderContext | undefined,
   controller: SessionController, repository: PluginRepository,
   resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
+  outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
   const identity = recordCopyIdentity(arg);
   if (!identity) return;
   const sourceOrigin = await resolveOriginOrReport({ origin: identity.origin, pluginName: identity.plugin });
   if (!sourceOrigin) return;
 
-  const destination = await pickCopyDestination(repository, gesture, identity.formKey);
+  const destination = await pickCopyDestination(repository, gesture, identity.formKey, outputChannel);
   if (!destination) return;
 
   if (gesture === 'copy-as-override') {
