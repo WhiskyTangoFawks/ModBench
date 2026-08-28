@@ -419,8 +419,12 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   array** as a single field edit — the atomic complex-field write CONTEXT.md describes — and only
   on non-immutable columns. An element-**value** edit is offered on the same cell and shares this
   same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
-  it lands atomically rather than being silently lost (#503). There is no free drag-reorder
-  and no auto-sort. A VMAD array-of-scalars
+  it lands atomically rather than being silently lost (#503). The context-menu ops' wire payload
+  carries the element's full `path` + `rootField` (#533's addressing contract), so ops on an
+  array nested inside a struct or another array land at the element's real depth, and Add
+  resolves its default element from the nested array's own element type via `metaAtPath` — the
+  pre-#535 payload carried only a bare element index, which truncated both. There is no free
+  drag-reorder and no auto-sort. A VMAD array-of-scalars
   property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
   Conditions are ordinary rows in the one tree* below.

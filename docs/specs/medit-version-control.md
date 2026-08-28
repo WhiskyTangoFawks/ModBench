@@ -226,7 +226,14 @@ using git.
   Mutagen's own game-listings fallback (which throws on non-Windows hosts with no
   `LocalAppData`). A Localized plugin missing an expected strings file is refused naming
   the specific missing filename. Compile writes a tracked Localized plugin's strings back
-  beside the compiled plugin.
+  beside the compiled plugin — through the same temp-write-then-rename discipline as the
+  `.esp`/`.esm` itself (#537): strings are produced into the plugin's temp dir during prepare
+  (a failed prepare never touches the real `Strings/` files) and moved into place only by the
+  same commit step that renames the plugin. The move step is per-file, not a cross-file
+  transaction — a crash mid-commit can still pair a committed plugin with partially-updated
+  strings, a documented residual gap (full atomicity was rejected as overengineering in
+  ADR-0008's single-file case already). No `.bak` is taken for strings files; ADR-0008's
+  backup discipline stays scoped to the target plugin.
 
 ### Review & commit: the native Source Control panel
 
