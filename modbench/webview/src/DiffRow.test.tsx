@@ -491,3 +491,97 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
     expect(screen.getByDisplayValue('disk-value')).toBeInTheDocument();
   });
 });
+
+// #535: the array context-menu payload must carry the row's own full path/rootField, not just the
+// subtree root plus a bare scalar index — a nested array's element is more than one hop from its
+// subtree root, which the old scalar-index shape could never express. Mirrors the #533 string-cell
+// block above (top-level case unchanged, a nested case pins the new behavior).
+describe('DiffRow — array parent/element right-click context (#535)', () => {
+  function vscodeContextFor(text: string, index = 0): Record<string, unknown> {
+    const td = screen.getAllByText(text)[index].closest('td');
+    const attr = td?.getAttribute('data-vscode-context');
+    expect(attr).toBeTruthy();
+    return JSON.parse(attr!) as Record<string, unknown>;
+  }
+
+  const intArrayMeta: FieldMetadata = {
+    name: 'Items', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
+    elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
+  };
+  const intMetaLeaf: FieldMetadata = { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+
+  function arrayDiff(partial: Partial<FieldDiff> = {}): FieldDiff {
+    return {
+      fieldName: 'Items',
+      values: { 'Fallout4.esm': [1, 2], 'MyMod.esp': [1, 2] },
+      winnerColumn: 'Fallout4.esm', winnerValue: [1, 2],
+      cellStates: {},
+      ...partial,
+    };
+  }
+
+  it('a top-level array-parent row\'s context carries an empty path and its own field as rootField', () => {
+    renderRow({
+      diff: arrayDiff(),
+      fieldMetaMap: { Items: intArrayMeta },
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      context: { path: [], rootField: 'Items' },
+      hasChildren: true, isExpanded: false,
+    });
+    const ctx = vscodeContextFor('[2]', 1);
+    expect(ctx.webviewSection).toBe('arrayParent');
+    expect(ctx.path).toEqual([]);
+    expect(ctx.rootField).toBe('Items');
+    expect(ctx.index).toBeUndefined();
+    expect(ctx.fieldName).toBeUndefined();
+  });
+
+  // The defect this closes: a nested array's own "Add" context must address the array itself (the
+  // row's own path from the subtree root), not just carry the subtree root's field name — the
+  // pre-#535 shape meant "the root field is the array," false here.
+  it('a nested array-parent row\'s context carries the row\'s own path from the subtree root', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Items' }];
+    renderRow({
+      diff: arrayDiff(),
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      context: { path, rootField: 'Container', overrideMeta: intArrayMeta },
+      hasChildren: true, isExpanded: false,
+    });
+    const ctx = vscodeContextFor('[2]', 1);
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Container');
+  });
+
+  it('a top-level array-element row\'s context carries a one-hop index path', () => {
+    const path: PathSegment[] = [{ kind: 'index', index: 1 }];
+    renderRow({
+      diff: diff({ fieldName: '[1]', values: { 'Fallout4.esm': 2, 'MyMod.esp': 2 } }),
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      context: { path, rootField: 'Items', overrideMeta: intMetaLeaf },
+    });
+    const ctx = vscodeContextFor('2', 1);
+    expect(ctx.webviewSection).toBe('arrayElement');
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Items');
+    expect(ctx.index).toBeUndefined();
+  });
+
+  // The defect this closes: a nested array's own element ops must address the element's real
+  // (multi-hop) path — before #535, the payload carried only the trailing index, truncating every
+  // hop before it.
+  it('a nested array-element row\'s context carries every hop of its own path', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }];
+    renderRow({
+      diff: diff({ fieldName: '[0]', values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }),
+      editableColumns: new Set([columnKey('MyMod.esp', null)]),
+      onEditCell: vi.fn(),
+      context: { path, rootField: 'Container', overrideMeta: intMetaLeaf },
+    });
+    const ctx = vscodeContextFor('5', 1);
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Container');
+  });
+});

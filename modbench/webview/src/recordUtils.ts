@@ -135,17 +135,23 @@ import type {
 // presence is the gate, so no separate immutable/isSortable flag travels in the payload the way
 // ColumnHeaderContext's `immutable` once did (Track 5/#427, if that surface returns). `arrayLength`
 // only exists to derive canMoveUp/canMoveDown (package.json's `when`-clause gate for Move Up/Move
-// Down, mirroring `immutable`'s old role) — Remove has no boundary condition, so `index` alone
-// still gates it.
+// Down, mirroring `immutable`'s old role) — Remove has no boundary condition, so the last path
+// segment's index alone still gates it.
 //
-// Keyed by `fieldName` = the row's own wire identity (`context.rootField`), not its display label
-// — the two only coincide for an ordinary top-level array; a VMAD/Condition array's own wire path
-// is a separate string (Track 5's own "wire paths differ" friction).
+// #535: `path` is the row's own restage coordinates (RowContext, DiffRow.tsx) — the element's full
+// chain of hops from the subtree root, replacing the old bare scalar `index` (a top-level array's
+// element is still a one-hop path, but a nested array's element needs every hop, which a scalar
+// index could never carry — the truncation this ticket closes). `rootField` replaces the old
+// `fieldName`: that parameter's own pre-#535 doc comment already said it *was* `context.rootField`
+// (the two only ever coincided, no distinct display role the way StringValueContext's `fieldName`
+// has), so this renames rather than carrying two always-identical fields.
 export function arrayElementContext(
-  formKey: string, plugin: string, origin: string, fieldName: string, index: number, arrayLength: number,
+  formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[], arrayLength: number,
 ): ArrayElementContext {
+  const lastSeg = path[path.length - 1];
+  const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   return {
-    webviewSection: 'arrayElement', formKey, plugin, origin, fieldName, index,
+    webviewSection: 'arrayElement', formKey, plugin, origin, rootField, path,
     // Issue #168: `canMoveUp` must also check hasElementAt (this plugin's own real length), or
     // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
     // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
@@ -154,8 +160,12 @@ export function arrayElementContext(
   };
 }
 
-export function arrayParentContext(formKey: string, plugin: string, origin: string, fieldName: string): ArrayParentContext {
-  return { webviewSection: 'arrayParent', formKey, plugin, origin, fieldName, preventDefaultContextMenuItems: true };
+// #535: `path` addresses the array itself (the row's own path when it *is* the array — a top-level
+// array's is `[]`, matching the pre-#535 "the root field is the array" shape exactly).
+export function arrayParentContext(
+  formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[],
+): ArrayParentContext {
+  return { webviewSection: 'arrayParent', formKey, plugin, origin, rootField, path, preventDefaultContextMenuItems: true };
 }
 
 // Issue #231 (resurrected #426 Track 5): same mechanism as arrayElementContext/arrayParentContext
@@ -355,6 +365,23 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
   // current value matches the segment's own key.
   const arr = Array.isArray(root) ? [...(root as unknown[])] : [];
   return arr.map(e => (e === seg.key ? value : e));
+}
+
+// #535: getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value —
+// needed by the array-op broadcast handler (RecordPanel.tsx), which has only the wire's
+// rootField/path to work with, never a render-time `context.overrideMeta` the way DiffRow's own
+// buildRows resolves a row's meta by hand (member → `.fields`, index/sortKey → `.elementType`,
+// the same two hops this mirrors). Reading `fieldMetaMap[rootField].elementType` directly (the
+// pre-#535 shape) only found the right element type when the array itself was the subtree root —
+// for a *nested* array it named the wrong node's (or, off a struct root, no) elementType, and
+// defaultElementValue built a malformed added element from the fallback.
+export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathSegment[]): FieldMetadata | undefined {
+  let cur = meta;
+  for (const seg of path) {
+    if (!cur) return undefined;
+    cur = seg.kind === 'member' ? cur.fields?.find(f => f.name === seg.name) : cur.elementType;
+  }
+  return cur;
 }
 
 // mirrors VmadSection's defaultElementValue/defaultNode pair, but keyed off the compare grid's

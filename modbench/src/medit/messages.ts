@@ -38,9 +38,11 @@ export const EXTENSION_TO_WEBVIEW = {
   // reference into the webview's own React state (which alone holds the record's current values),
   // so the actual mutation (moveArrayElement/removeArrayElement/appendArrayElement, then writing
   // through the ordinary EDIT_FIELD write path) happens webview-side, the same computation the
-  // keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use. `fieldName`
-  // is the row's own wire identity (context.rootField), matching arrayParentContext/
-  // arrayElementContext's own convention.
+  // keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use. `rootField`/
+  // `path` are the row's own wire identity and restage coordinates (#535), matching
+  // arrayParentContext/arrayElementContext's own convention — `path` addresses the array itself
+  // for ARRAY_ADD, the element for the other three; a top-level array's is a one-hop (or empty)
+  // path, a nested array's carries every hop from `rootField`.
   ARRAY_ADD: 'arrayAdd',
   ARRAY_REMOVE: 'arrayRemove',
   ARRAY_MOVE_UP: 'arrayMoveUp',
@@ -154,24 +156,36 @@ export type WebviewToExtension =
 // need them for typing `ctx`. `recordUtils.ts`'s `arrayElementContext`/`arrayParentContext` build
 // these; `combineVscodeContexts` there turns one (or several, once Track 5's VMAD contexts join
 // them) into the actual attribute string.
+// #535: `path`/`rootField` replace the old bare scalar `index` (plus ArrayParentContext's old
+// implicit-root addressing, "the root field is the array") — see PathSegment's own doc comment
+// below and recordUtils.ts's arrayElementContext/arrayParentContext, which build these. A
+// top-level array's element is still a one-hop path; a nested array's needs every hop, which the
+// scalar `index` this replaces could never carry (the truncation issue #535 closes). `fieldName`
+// is gone too — its own pre-#535 doc comment already said it *was* `context.rootField` (unlike
+// StringValueContext's `fieldName`, which keeps a genuinely distinct display role below), so this
+// renames rather than carrying two always-identical fields.
 export interface ArrayElementContext {
   webviewSection: 'arrayElement';
   formKey: string;
   plugin: string;
   origin: string;
-  fieldName: string;
-  index: number;
+  rootField: string;
+  path: PathSegment[];
   canMoveUp: boolean;
   canMoveDown: boolean;
   preventDefaultContextMenuItems: true;
 }
 
+// #535: `path` addresses the array itself — `[]` for a top-level array (matching the pre-#535
+// "the root field is the array" shape exactly), the row's own path within the subtree root for a
+// nested one.
 export interface ArrayParentContext {
   webviewSection: 'arrayParent';
   formKey: string;
   plugin: string;
   origin: string;
-  fieldName: string;
+  rootField: string;
+  path: PathSegment[];
   preventDefaultContextMenuItems: true;
 }
 
@@ -273,10 +287,12 @@ export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED; requestId: string; value: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED; requestId: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; origin: string; fieldName: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
-  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; fieldName: string; index: number }
+  // #535: `rootField`/`path` replace `fieldName`/`index` — forwarded verbatim from
+  // ArrayElementContext/ArrayParentContext (see their own doc comments above).
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_ADD; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_REMOVE; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
+  | { type: typeof EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN; formKey: string; plugin: string; origin: string; rootField: string; path: PathSegment[] }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP; formKey: string; plugin: string; origin: string; fieldPath: string; value: unknown }
   | { type: typeof EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY; formKey: string; plugin: string; origin: string; scriptName: string }
   | {

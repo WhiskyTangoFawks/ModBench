@@ -377,13 +377,18 @@ export function DiffRow({
           // writable column. A read-only tab is still the only way to read a long immutable value
           // in full (unchanged from before this ticket; only the trigger moved off double click).
           const vscodeContext = (arrayEditable || vmadEditable || meta.type === 'string') ? combineVscodeContexts(
+            // #535: `context.path` addresses the array itself here (this row *is* the array) —
+            // `[]` for a top-level array, matching the pre-#535 shape exactly.
             isUnsortedArrayParentRow
-              ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField)
+              ? arrayParentContext(col.override.formKey, col.override.plugin, col.override.origin, rootField, context.path)
               : undefined,
+            // #535: `context.path` addresses this row's own element (ends in the `index` hop that
+            // gates isUnsortedArrayElementRow) — every hop from `rootField`, not just the trailing
+            // index the pre-#535 shape truncated to.
             isUnsortedArrayElementRow && lastPathSegment?.kind === 'index'
               ? arrayElementContext(
                   col.override.formKey, col.override.plugin, col.override.origin, rootField,
-                  lastPathSegment.index, Number.MAX_SAFE_INTEGER,
+                  context.path, Number.MAX_SAFE_INTEGER,
                 )
               : undefined,
             vmadEditable && isVmadWrapperRow
