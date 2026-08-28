@@ -60,6 +60,14 @@ export class PluginNode extends vscode.TreeItem {
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
+    // #345 (xEdit parity — vstNavChange/TryViewOrCompareSelectedRecords, xeMainForm.pas: selecting
+    // a plugin node shows its File Header as a matter of course, no separate affordance): opening
+    // the header panel is routed through the existing modbench.openHeader bridge command, never
+    // built directly here — this row provider is forbidden Editing's own vocabulary
+    // (contextBoundary.test.ts), and openHeader already owns the plugin-name-to-header-panel
+    // translation on the composition-root side of that boundary (extension.ts), singleton-
+    // retargeting per #284.
+    this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
       : vscode.TreeItemCheckboxState.Unchecked;
@@ -127,6 +135,9 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');
     this.tooltip = [name, "This plugin can't be disabled or moved (enforced by the game)."].join('\n');
+    // #345 — see PluginNode's own comment above for why this routes through the modbench.openHeader
+    // bridge command rather than building the header panel's target directly here.
+    this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
   }
 }
