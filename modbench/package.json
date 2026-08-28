@@ -473,6 +473,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.pluginListTree.filterToSelected",
+        "title": "Filter to Selected Plugins…",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.record.create",
         "title": "Add",
         "category": "Modbench"
@@ -642,6 +647,10 @@
         },
         {
           "command": "modbench.pluginListTree.rebase",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.filterToSelected",
           "when": "false"
         },
         {
@@ -939,6 +948,11 @@
           "command": "modbench.pluginListTree.rebase",
           "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
           "group": "pluginActions@6"
+        },
+        {
+          "command": "modbench.pluginListTree.filterToSelected",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)",
+          "group": "pluginActions@7"
         },
         {
           "command": "modbench.record.create",

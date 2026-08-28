@@ -38,7 +38,10 @@ vi.mock('vscode', () => ({
   },
 }));
 
-import { PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf, orderIssueMastersOf } from './PluginListProvider';
+import {
+  PluginListProvider, PluginNode, ImplicitMasterNode, ErrorNode, EmptyNode, pluginFileOf, orderIssueMastersOf,
+  pluginNamesInSelection,
+} from './PluginListProvider';
 
 /** Minimal IModlistSource stub: only the two plugin read methods matter here;
  *  everything else throws to prove PluginListProvider never touches them. */
@@ -437,6 +440,44 @@ describe('PluginListProvider — drag-and-drop reorder', () => {
     expect(pluginFileOf(new ImplicitMasterNode('Fallout4.esm'))).toBe('Fallout4.esm');
     expect(pluginFileOf(new EmptyNode())).toBeUndefined();
     expect(pluginFileOf(new ErrorNode('boom'))).toBeUndefined();
+  });
+
+  // #363: Filter to Selected Plugins' own selection-extractor.
+  describe('pluginNamesInSelection', () => {
+    it('collapses a multi-selection of plugin rows to their deduped names', () => {
+      expect(pluginNamesInSelection(node('A.esp'), [node('A.esp'), node('B.esp')])).toEqual(['A.esp', 'B.esp']);
+    });
+
+    it('dedupes a repeated name across the selection', () => {
+      expect(pluginNamesInSelection(node('A.esp'), [node('A.esp'), node('A.esp')])).toEqual(['A.esp']);
+    });
+
+    it('includes an implicit-master row', () => {
+      expect(pluginNamesInSelection(undefined, [new ImplicitMasterNode('Fallout4.esm'), node('A.esp')]))
+        .toEqual(['Fallout4.esm', 'A.esp']);
+    });
+
+    // #363's own, deliberate divergence from xEdit's mniNavFilterApplySelected (which resolves a
+    // selected element up to its owning file): a row this provider doesn't own — standing in for
+    // one of Editing's child rows (a record type, a record, the spatial hierarchy) — contributes
+    // no name, dropped rather than rolled up.
+    it('drops a non-plugin row from a mixed selection rather than rolling it up to a plugin', () => {
+      expect(pluginNamesInSelection(node('A.esp'), [node('A.esp'), { kind: 'record' }]))
+        .toEqual(['A.esp']);
+    });
+
+    it('falls back to the clicked row alone when no selection array is passed', () => {
+      expect(pluginNamesInSelection(node('A.esp'), undefined)).toEqual(['A.esp']);
+      expect(pluginNamesInSelection(node('A.esp'), [])).toEqual(['A.esp']);
+    });
+
+    it('is empty when neither a clicked row nor a selection is given', () => {
+      expect(pluginNamesInSelection(undefined, undefined)).toEqual([]);
+    });
+
+    it('is empty for a selection that never names a plugin', () => {
+      expect(pluginNamesInSelection(undefined, [new EmptyNode(), new ErrorNode('boom')])).toEqual([]);
+    });
   });
 
   it('drop onto a row this tree does not own is refused, not treated as the end of the list', async () => {

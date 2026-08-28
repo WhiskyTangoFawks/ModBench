@@ -41,7 +41,10 @@ import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
 import { createModlistWatcher } from './modmanager/modlistWatcher';
 import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
-import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode } from './modmanager/PluginListProvider';
+import {
+  PluginListProvider, pluginFileOf, orderIssueMastersOf, pluginNamesInSelection, type PluginListNode,
+} from './modmanager/PluginListProvider';
+import { buildSelectedPluginsFilterSql } from './medit/filterSelectedPluginsSql';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { createDriftTracker, type DriftTracker } from './pluginDrift';
 import { rereadDriftedPlugin } from './medit/rereadPlugin';
@@ -747,6 +750,18 @@ function registerFilterCommands(scriptsPath: string, controller: SessionControll
       await controller.setFilter(sql, editor.document.isUntitled ? 'document' : path.basename(editor.document.fileName));
     }),
     vscode.commands.registerCommand('modbench.clearFilter', () => controller.clearFilter()),
+    // #363: Filter to Selected Plugins — the ordinary record filter (above), pre-restricted to
+    // the tree selection (adopted from xEdit's mniNavFilterApplySelected). VS Code's own
+    // `view/item/context` invocation shape: (clicked, selected[]) — pluginNamesInSelection
+    // collapses that to the deduped plugin-name set; a selection that names none (e.g. a
+    // records-only selection reached via the palette rather than this row's own context menu)
+    // is a no-op, since there is nothing to scope the filter to.
+    vscode.commands.registerCommand('modbench.pluginListTree.filterToSelected',
+      async (clicked?: PluginListNode, selected?: unknown[]) => {
+        const names = pluginNamesInSelection(clicked, selected);
+        if (names.length === 0) return;
+        await controller.setFilter(buildSelectedPluginsFilterSql(names), 'Selected Plugins');
+      }),
   ];
 }
 
