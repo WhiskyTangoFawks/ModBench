@@ -379,7 +379,11 @@ without saying what is not yet known would make that worse, not better.
   same FormKey), which Copy as New Record does not apply, since its fresh FormKey always coexists
   with the source. Copy as New Record prompts for neither an EditorID nor a FormKey: it lands
   immediately under the source's own EditorID and the next free local FormID, renamed afterward
-  like any freshly created record (Add's own posture, above).
+  like any freshly created record (Add's own posture, above). Any rejection out of the
+  destination-picking step — not just transport failures — degrades to a Modbench-authored
+  error notification plus an output-channel log, then ends the command quietly like a cancelled
+  QuickPick (#534, the backend-died-after-render exposure; same disposition as Save & Compile's
+  #530).
 - Context menu availability is driven by node `contextValue`, sourced from whichever side of
   the composite built the row: Mod Management for plugin rows (`"plugin"`, `"pluginImplicit"`),
   the record browser for everything a row expands into (`"recordType"`, `"record"` /
