@@ -656,6 +656,12 @@ overflow, then native **Collapse All** last.
 - Record-scope context menu entries (Remove, Change FormID…, Copy as Override Into…, Copy as New
   Record Into…) are described under Record navigation above — they apply to this tree's expanded
   rows the same way regardless of which side of the composite built the row above them.
+- **Open Editor to the Side** (record rows and placed-reference rows, single or multi-select) —
+  opens the selected record(s) in a fresh, non-retargeting editor, distinct from the singleton
+  editor plain "Open" reuses and retargets. A multi-selection opens every selected record, each in
+  its own such editor, landing as tabs in one new editor group beside the active one (#284).
+  Previously reachable only from the Referenced By tree's group rows; that entry point is
+  unchanged.
 
 ### Write mechanism
 
