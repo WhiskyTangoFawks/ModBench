@@ -21,9 +21,10 @@ import {
   vmadPropertyContext,
   headerCellContext,
   stringValueContext,
+  metaAtPath,
   type PathSegment,
 } from './recordUtils';
-import type { CompareOverride } from './types';
+import type { CompareOverride, FieldMetadata } from './types';
 
 function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): CompareOverride {
   return {
@@ -286,15 +287,23 @@ describe('appendArrayElement', () => {
   });
 });
 
+// #535: `path` (the row's own restage coordinates, PathSegment[]) replaces the old bare scalar
+// `index` — a top-level array's element is still a one-hop path (`[{kind:'index',index:N}]`), but
+// an array nested inside a struct/array needs every hop from the subtree root, which a scalar
+// index could never carry. `rootField` replaces `fieldName` (its own pre-#535 doc comment already
+// said `fieldName` *was* `context.rootField` — no distinct role like StringValueContext's
+// `fieldName`/`rootField` pair has, so this renames rather than adding a second, always-identical
+// field). `canMoveUp`/`canMoveDown` are still derived from an index, now the *last* path segment's.
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element (can move either way)', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 1, 3)).toEqual({
+    const path: PathSegment[] = [{ kind: 'index', index: 1 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3)).toEqual({
       webviewSection: 'arrayElement',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'ModA',
-      fieldName: 'Items',
-      index: 1,
+      rootField: 'Items',
+      path,
       canMoveUp: true,
       canMoveDown: true,
       preventDefaultContextMenuItems: true,
@@ -302,29 +311,58 @@ describe('arrayElementContext', () => {
   });
 
   it('canMoveUp is false for the first element', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 0, 3).canMoveUp).toBe(false);
+    const path: PathSegment[] = [{ kind: 'index', index: 0 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3).canMoveUp).toBe(false);
   });
 
   it('canMoveDown is false for the last element', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 2, 3).canMoveDown).toBe(false);
+    const path: PathSegment[] = [{ kind: 'index', index: 2 }];
+    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', path, 3).canMoveDown).toBe(false);
   });
 
   it('canMoveUp is false when index is at or past this plugin\'s own array length', () => {
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 1, 1).canMoveUp).toBe(false);
-    expect(arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', 2, 1).canMoveUp).toBe(false);
+    expect(arrayElementContext(
+      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', [{ kind: 'index', index: 1 }], 1,
+    ).canMoveUp).toBe(false);
+    expect(arrayElementContext(
+      '000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', [{ kind: 'index', index: 2 }], 1,
+    ).canMoveUp).toBe(false);
+  });
+
+  // #535: the defect this closes — a top-level array's element path is one hop, but a nested
+  // array's is longer; canMoveUp/canMoveDown must key off the *last* hop, not path.length, and the
+  // full chain must survive onto the payload rather than collapsing to the trailing index alone.
+  it('a nested element carries every hop of its own path, and canMoveUp/canMoveDown read the last one', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Sub' }, { kind: 'index', index: 0 }];
+    const ctx = arrayElementContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path, 2);
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Container');
+    expect(ctx.canMoveUp).toBe(false); // last hop's index is 0
+    expect(ctx.canMoveDown).toBe(true);
   });
 });
 
 describe('arrayParentContext', () => {
-  it('produces the data-vscode-context object for an array-parent cell', () => {
-    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items')).toEqual({
+  it('produces the data-vscode-context object for a top-level array-parent cell (empty path)', () => {
+    expect(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', [])).toEqual({
       webviewSection: 'arrayParent',
       formKey: '000001:Fallout4.esm',
       plugin: 'MyMod.esp',
       origin: 'ModA',
-      fieldName: 'Items',
+      rootField: 'Items',
+      path: [],
       preventDefaultContextMenuItems: true,
     });
+  });
+
+  // #535: a nested array's own "Add" context must address the array itself (the row's own path),
+  // not the subtree root — the pre-#535 shape (`fieldName` alone) meant "the root field is the
+  // array," which is only true for a top-level array.
+  it('carries the row\'s own path for a nested array-parent cell', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];
+    const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path);
+    expect(ctx.path).toEqual(path);
+    expect(ctx.rootField).toBe('Container');
   });
 });
 
@@ -338,21 +376,21 @@ describe('combineVscodeContexts', () => {
   });
 
   it('passes a single context through, still as a JSON string (an unchanged call site contract)', () => {
-    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'));
+    const result = combineVscodeContexts(arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', []));
     expect(JSON.parse(result!)).toEqual({
-      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', fieldName: 'Items',
+      webviewSection: 'arrayParent', formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', origin: 'ModA', rootField: 'Items', path: [],
       preventDefaultContextMenuItems: true,
     });
   });
 
   it('skips an absent context among present ones', () => {
-    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items'), undefined);
+    const result = combineVscodeContexts(undefined, arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Items', []), undefined);
     expect(JSON.parse(result!).webviewSection).toBe('arrayParent');
   });
 
   it('combines two contexts\' webviewSection into one space-separated token list', () => {
     const result = combineVscodeContexts(
-      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`),
+      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`, []),
       vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
     );
     const parsed = JSON.parse(result!);
@@ -361,13 +399,13 @@ describe('combineVscodeContexts', () => {
 
   it('merges every other key from both contexts (so package.json\'s when clauses can read either)', () => {
     const result = combineVscodeContexts(
-      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`),
+      arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', String.raw`VMAD\S\Levels`, []),
       vmadPropertyContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'S', 'Levels'),
     );
     const parsed = JSON.parse(result!);
     expect(parsed.scriptName).toBe('S');
     expect(parsed.propName).toBe('Levels');
-    expect(parsed.fieldName).toBe(String.raw`VMAD\S\Levels`);
+    expect(parsed.rootField).toBe(String.raw`VMAD\S\Levels`);
   });
 });
 
@@ -503,5 +541,56 @@ describe('setAtPath', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Outer' }, { kind: 'index', index: 0 }, { kind: 'member', name: 'Inner' }];
     setAtPath(root, path, 'z');
     expect(root).toEqual({ Outer: [{ Inner: 'a' }] });
+  });
+});
+
+// #535: getAtPath/setAtPath's metadata-side counterpart — the array-op broadcast handler
+// (RecordPanel.tsx) has only the wire's rootField/path, never a render-time `context.overrideMeta`
+// the way DiffRow's own buildRows does, so it needs the same descent over FieldMetadata that
+// buildRows already does by hand (member → `.fields`, index/sortKey → `.elementType`) to find a
+// *nested* array's own element type — reading `fieldMetaMap[rootField].elementType` directly (the
+// pre-#535 shape) only works when the array itself is the subtree root.
+describe('metaAtPath', () => {
+  const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
+  const entryMeta: FieldMetadata = {
+    name: '', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [idMeta, weightMeta],
+  };
+  const entriesMeta: FieldMetadata = {
+    name: 'Entries', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [], elementType: entryMeta,
+  };
+  const containerMeta: FieldMetadata = {
+    name: 'Container', type: 'struct', isArray: false, validFormKeyTypes: [], enumValues: [], fields: [entriesMeta],
+  };
+
+  it('returns the root meta itself for an empty path', () => {
+    expect(metaAtPath(entriesMeta, [])).toBe(entriesMeta);
+  });
+
+  it('descends a struct member via .fields', () => {
+    expect(metaAtPath(containerMeta, [{ kind: 'member', name: 'Entries' }])).toBe(entriesMeta);
+  });
+
+  it('descends an array index via .elementType', () => {
+    expect(metaAtPath(entriesMeta, [{ kind: 'index', index: 0 }])).toBe(entryMeta);
+  });
+
+  it('descends a sortKey hop via .elementType, same as index', () => {
+    expect(metaAtPath(entriesMeta, [{ kind: 'sortKey', key: 'anything' }])).toBe(entryMeta);
+  });
+
+  // The shape this ticket exists for: a nested array's own element type, reached through a
+  // member → member chain from the subtree root.
+  it('finds a nested array\'s own element type through a member chain', () => {
+    const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];
+    expect(metaAtPath(containerMeta, path)?.elementType).toBe(entryMeta);
+  });
+
+  it('returns undefined when a member is missing, rather than throwing', () => {
+    expect(metaAtPath(containerMeta, [{ kind: 'member', name: 'Missing' }])).toBeUndefined();
+  });
+
+  it('returns undefined when the root meta itself is undefined', () => {
+    expect(metaAtPath(undefined, [{ kind: 'member', name: 'X' }])).toBeUndefined();
   });
 });

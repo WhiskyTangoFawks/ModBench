@@ -508,28 +508,30 @@ function registerFieldOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode
 // EDIT_FIELD) the keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓, pure in-webview) already use.
 function registerArrayOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.Disposable[] {
   return [
+    // #535: forwards ctx.rootField/ctx.path verbatim (renamed from fieldName/index) — see
+    // ArrayParentContext/ArrayElementContext's own doc comments (medit/messages.ts).
     vscode.commands.registerCommand('modbench.array.add', (ctx?: ArrayParentContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_ADD, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
       });
     }),
     vscode.commands.registerCommand('modbench.array.remove', (ctx?: ArrayElementContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_REMOVE, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
       });
     }),
     vscode.commands.registerCommand('modbench.array.moveUp', (ctx?: ArrayElementContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
       });
     }),
     vscode.commands.registerCommand('modbench.array.moveDown', (ctx?: ArrayElementContext) => {
       if (!ctx) return;
       broadcastToRecordPanels(recordPanels, {
-        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, fieldName: ctx.fieldName, index: ctx.index,
+        type: EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN, formKey: ctx.formKey, plugin: ctx.plugin, origin: ctx.origin, rootField: ctx.rootField, path: ctx.path,
       });
     }),
   ];

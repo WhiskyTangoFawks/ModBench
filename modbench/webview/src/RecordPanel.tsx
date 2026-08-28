@@ -3,7 +3,7 @@ import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
   buildColumns, parseElementIndex, collidingFilenames,
-  getAtPath, setAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultElementValue,
+  getAtPath, setAtPath, metaAtPath, appendArrayElement, removeArrayElement, moveArrayElement, defaultElementValue,
   headerCellContext, combineVscodeContexts,
 } from './recordUtils';
 import type { PathSegment } from './recordUtils';
@@ -381,11 +381,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         // stale/background panel showing a different record ignores it.
         if (msg.formKey !== prevFormKeyRef.current) return;
         const plugin = columnKey(msg.plugin, msg.origin);
-        const path: PathSegment[] = msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD ? [] : [{ kind: 'index', index: msg.index }];
         const op = msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD ? 'add'
           : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE ? 'remove'
           : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP ? 'moveUp' : 'moveDown';
-        handleArrayOpRef.current(plugin, path, msg.fieldName, op, fieldMetaMapRef.current[msg.fieldName]?.elementType);
+        // #535: `msg.path` is the carried path (the array itself for 'add', the element for every
+        // other op) — no more re-synthesizing a one-hop path from a bare scalar index, which only
+        // ever addressed a top-level array correctly. `metaAtPath` resolves the *array's own*
+        // element type from the subtree root's meta, walking the same hops the value itself sits
+        // behind — reading `fieldMetaMapRef.current[msg.rootField]?.elementType` directly (the
+        // pre-#535 shape) only found the right element type when the array was itself the subtree
+        // root; for a nested array it named the wrong node's (or no) elementType, and Add appended
+        // a malformed element.
+        const arrayPath = op === 'add' ? msg.path : msg.path.slice(0, -1);
+        const arrayMeta = metaAtPath(fieldMetaMapRef.current[msg.rootField], arrayPath);
+        handleArrayOpRef.current(plugin, msg.path, msg.rootField, op, arrayMeta?.elementType);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
         // #426 Track 5: same self-filter-and-commit shape as the array-op branch above, except the
         // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
