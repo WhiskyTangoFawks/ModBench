@@ -42,4 +42,43 @@ public class PartialFormFlagTests
 
         Assert.False(PartialFormFlag.IsSet(npc));
     }
+
+    // #539: IsPartialFormable is the same container-type gate IsSet already uses, split out so the
+    // write path can ask "is this type eligible" independent of the bit's current state.
+    [Fact]
+    public void IsPartialFormable_Cell_ReturnsTrue()
+    {
+        Assert.True(PartialFormFlag.IsPartialFormable(typeof(Cell)));
+    }
+
+    [Fact]
+    public void IsPartialFormable_Npc_ReturnsFalse()
+    {
+        Assert.False(PartialFormFlag.IsPartialFormable(typeof(Npc)));
+    }
+
+    // #539 AC2's rival, at the unit level: a full-overwrite implementation of Set
+    // (`MajorRecordFlagsRaw = value ? Bit : 0`) would silently drop this pre-existing, unrelated bit
+    // (Persistent, 0x0400) — the correct implementation only ever touches bit 14.
+    [Fact]
+    public void Set_True_OnlyFlipsBit14_PreservesOtherBits()
+    {
+        var mod = MakeMod();
+        var cell = new Cell(mod) { EditorID = "SomeCell", MajorRecordFlagsRaw = 0x0000_0400 };
+
+        PartialFormFlag.Set(cell, true);
+
+        Assert.Equal(0x0000_0400 | PartialFormBit, cell.MajorRecordFlagsRaw);
+    }
+
+    [Fact]
+    public void Set_False_OnlyFlipsBit14_PreservesOtherBits()
+    {
+        var mod = MakeMod();
+        var cell = new Cell(mod) { EditorID = "SomeCell", MajorRecordFlagsRaw = 0x0000_0400 | PartialFormBit };
+
+        PartialFormFlag.Set(cell, false);
+
+        Assert.Equal(0x0000_0400, cell.MajorRecordFlagsRaw);
+    }
 }

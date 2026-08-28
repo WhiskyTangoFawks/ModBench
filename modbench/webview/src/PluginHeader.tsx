@@ -28,6 +28,14 @@ interface PluginHeaderProps {
   // gates Copy as Override Into…/Copy as New Record Into… on — same shape as DiskCell's own
   // `vscodeContext` prop, computed by the caller (RecordPanel) rather than derived in here.
   vscodeContext?: string;
+  // #539: dispatches the sanctioned is_partial_form write (EDIT_FIELD, via RecordPanel's own
+  // handleEditCell) — never called directly from here, since the record editor has exactly one
+  // write path (ADR-0041) and this component's job is only to render the state and report the
+  // gesture. Absent entirely from RecordPanel.editableColumns' own writability gate (that gate
+  // deliberately excludes a Partial Form column's *body* fields — o.isPartialForm's own doc
+  // comment — but the header write is what clears the flag in the first place, so it cannot be
+  // gated on the very state it exists to change).
+  onTogglePartialForm: (next: boolean) => void;
 }
 
 // #304: the on-screen wording for each read-only reason, plus the tooltip that explains it.
@@ -102,10 +110,24 @@ const READ_ONLY_TEXT: Record<'vanillaMaster' | 'notInLoadOrder' | 'untracked', {
 // #335/ADR-0038: that native menu entry is gone too now — nothing may declare a master directly
 // any more; the header record's masters field still renders through the ordinary compare-grid
 // rows below, read-only.
+// #539: CONTEXT.md's own Partial Form glossary entry, quoted for the checkbox's tooltip — the
+// record editor's own vocabulary for what the flag means, not a paraphrase that could drift from
+// it.
+const PARTIAL_FORM_TITLE =
+  'Partial Form: marks an override that exists only to carry children. Its own fields are ignored '
+  + 'for conflict resolution and read-only here except this checkbox — clear it to make the '
+  + 'record’s own fields editable again.';
+
 export function PluginHeader({
-  override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse, vscodeContext,
+  override: o, isImmutable, inLoadOrder, isTracked, showOriginInline, collapsed, onToggleCollapse,
+  vscodeContext, onTogglePartialForm,
 }: PluginHeaderProps) {
   const reason = readOnlyReason(isImmutable, inLoadOrder, isTracked);
+  // #539: the same three facts that decide every other field's writability on this column — an
+  // immutable, not-in-load-order or untracked column offers no affordance that could ever land, so
+  // the checkbox is disabled (never hidden — AC3's own "view" half still needs the current state
+  // visible) rather than a silent dead control (AC4's own no-silent-dead-UI doctrine).
+  const canWrite = !isImmutable && inLoadOrder && isTracked;
   return (
     <div data-vscode-context={vscodeContext}>
       {/* Issue #3: left-click the plugin-name chip collapses/expands this column. ADR-0036:
@@ -130,6 +152,20 @@ export function PluginHeader({
             >
               {READ_ONLY_TEXT[reason].label}
             </div>
+          )}
+          {o.isPartialFormable && (
+            <label
+              style={{ display: 'block', marginTop: 3, fontSize: '10px', opacity: 0.85 }}
+              title={PARTIAL_FORM_TITLE}
+            >
+              <input
+                type="checkbox"
+                checked={o.isPartialForm ?? false}
+                disabled={!canWrite}
+                onChange={e => onTogglePartialForm(e.target.checked)}
+              />
+              {' '}Partial Form
+            </label>
           )}
         </>
       )}

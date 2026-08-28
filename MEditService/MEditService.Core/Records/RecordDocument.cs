@@ -14,6 +14,14 @@ namespace MEditService.Core.Records;
 /// <para><see cref="IsPartialForm"/> (#491): <see cref="Schema.PartialFormFlag.IsSet"/> read off the
 /// live deserialized record at the same point <see cref="Fields"/> is extracted — always false for
 /// the header (a <c>ModHeader</c> can never carry the flag).</para>
+///
+/// <para><see cref="IsPartialFormable"/> (#539): <see cref="Schema.PartialFormFlag.IsPartialFormable"/>
+/// on this record's own concrete type — independent of <see cref="IsPartialForm"/>'s current bit
+/// state, this is "could this record ever carry the flag at all." The webview needs this to decide
+/// whether to render its own Partial Form toggle at all (<c>PluginHeader.tsx</c>) without
+/// hand-duplicating <see cref="Source.ContainerChildFields"/>'s own container-type table client-side
+/// — the exact shape of drift that table's own completeness sweep exists to guard against
+/// (<c>ContainerChildFieldsCompletenessTests</c>).</para>
 /// </summary>
 public record RecordDocument(
     string FormKey,
@@ -24,7 +32,8 @@ public record RecordDocument(
     string RecordType,
     string? Body,
     IReadOnlyList<FieldValue> Fields,
-    bool IsPartialForm = false);
+    bool IsPartialForm = false,
+    bool IsPartialFormable = false);
 
 /// <summary>
 /// One plugin's position in a record's override stack. <see cref="Effective"/> and

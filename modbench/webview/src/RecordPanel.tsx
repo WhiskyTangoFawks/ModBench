@@ -105,8 +105,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // or DLC master), the load order actually names this copy (editing a shadowed one changes nothing
   // anywhere), the plugin's mod is tracked (editing requires tracking; viewing never does), and
   // (#491) the column's own override is not a Partial Form record — its fields are read-only on
-  // the single write path (RecordEditRefusal.PartialFormFieldReadOnly) until #539 lands a header
-  // write path to exempt, so no field on this column is offered as editable yet.
+  // the single write path (RecordEditRefusal.PartialFormFieldReadOnly) with no exemption here.
+  // #539's own header write (is_partial_form) is exempt from that refusal, but is dispatched
+  // straight from PluginHeader's own checkbox rather than through this body-field gate — clearing
+  // the flag is what lifts this gate for every other field, so it cannot itself be gated by it.
   //
   // Derived rather than asked of the backend per cell: the panel already holds all four facts from
   // its own load()/result, and a per-cell round trip would make editability lag the grid it decorates.
@@ -633,6 +635,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
                         )}
+                        // #539: the one sanctioned header-flag write, through the same handleEditCell
+                        // every other field edit on this panel already goes through — is_partial_form
+                        // is exempt from RecordEditService's own Partial Form read-only guard
+                        // (RecordEditService.cs), so this reaches the backend regardless of the
+                        // column's current isPartialForm state.
+                        onTogglePartialForm={next => handleEditCell(col.key, 'is_partial_form', next)}
                       />
                     </th>
                   );

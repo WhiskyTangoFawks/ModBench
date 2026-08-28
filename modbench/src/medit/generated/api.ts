@@ -651,6 +651,7 @@ export interface components {
             origin?: string | null;
             recordType?: string | null;
             isPartialForm?: boolean;
+            isPartialFormable?: boolean;
             conflictThis?: components["schemas"]["ConflictThis"];
         };
         CompareResult: {
@@ -930,6 +931,7 @@ export interface components {
             origin?: string | null;
             recordType?: string | null;
             isPartialForm?: boolean;
+            isPartialFormable?: boolean;
         };
         RecordFieldEditRequest: {
             plugin?: string | null;

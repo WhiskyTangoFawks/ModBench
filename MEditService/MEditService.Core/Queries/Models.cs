@@ -120,6 +120,10 @@ public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckErr
 // (Schema.PartialFormFlag), independent of any field's own value — always false for a synthesized
 // row (e.g. the header table, which has no such flag). Drives ConflictClassifier's field-exclusion
 // rule and the compare grid's column dimming (CompareOverride below).
+// IsPartialFormable (#539): whether this record's own type could ever carry the flag at all —
+// independent of IsPartialForm's current state. Lets the webview decide whether to render its own
+// Partial Form toggle (PluginHeader.tsx) without hand-duplicating Source.ContainerChildFields'
+// container-type table client-side.
 public record RecordDetail(
     string FormKey,
     string Plugin,
@@ -129,7 +133,8 @@ public record RecordDetail(
     IReadOnlyList<FieldValue> Fields,
     string Origin,
     string RecordType = "",
-    bool IsPartialForm = false);
+    bool IsPartialForm = false,
+    bool IsPartialFormable = false);
 
 public record CompareOverride(
     string FormKey,
@@ -141,8 +146,11 @@ public record CompareOverride(
     ConflictThis ConflictThis,
     string Origin,
     string RecordType = "",
-    bool IsPartialForm = false)
-    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm);
+    bool IsPartialForm = false,
+    bool IsPartialFormable = false)
+    : RecordDetail(
+        FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm,
+        IsPartialFormable);
 
 // Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
 // Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a

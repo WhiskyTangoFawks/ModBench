@@ -164,6 +164,25 @@ public enum RecordEditRefusal
     /// </para>
     /// </summary>
     PartialFormFieldReadOnly,
+
+    /// <summary>
+    /// #539: a field write reached header flag bit 14 (Partial Form, <c>0x4000</c>) through some
+    /// field path other than <c>is_partial_form</c> — a generic reflected column that happens to
+    /// alias the same underlying <c>MajorRecordFlagsRaw</c> int (Mutagen's own
+    /// <c>&lt;Game&gt;MajorRecordFlags</c>/per-type <c>MajorFlags</c> passthrough-property
+    /// convention; FO4's own instances are <c>major_flags</c> and
+    /// <c>fallout4_major_record_flags</c>), on a record type where that bit carries Partial Form
+    /// meaning. <c>is_partial_form</c> is meant to be the one sanctioned door onto that bit — refused,
+    /// and nothing is written, rather than letting a second, uncoordinated path silently set or clear
+    /// the flag as a side effect of an edit that was never about it.
+    ///
+    /// <para>Its own value rather than <see cref="FieldReadOnly"/> or
+    /// <see cref="PartialFormFieldReadOnly"/>: the field itself is not read-only (writing it to a
+    /// value that leaves bit 14 unchanged still succeeds), and the record need not already carry the
+    /// flag for this to fire — the way out is the same either way, though: write
+    /// <c>is_partial_form</c> instead.</para>
+    /// </summary>
+    PartialFormFlagIndirectWrite,
 }
 
 /// <summary>
