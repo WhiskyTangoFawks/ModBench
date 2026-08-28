@@ -667,8 +667,9 @@ drives anything on this tree — Axis 2 stays the compare grid's own concern
   node absent, not present-with-nothing-in-it) while `SessionStatus.conflictsComputed` is false.
   Wired from `SessionController`'s `notifyConflictsComputed` dep — the same load-completing
   false→true transition point the incompleteness message and the record panel's own comparison
-  refetch already use, and the same documented forward-coupling gap: a live-mutation re-sweep
-  (#97) does not yet call it again on the way *out* of settled.
+  refetch already use. A live-mutation re-sweep now re-fires it too for a participation toggle
+  (#97, reusing the same signal rather than adding a second state-machine step); reorder's own
+  re-sweep doesn't yet, pending #545.
 - **Children: `GetConflicts()`** (`RecordQueryService`, `GET /records/conflicts`) — every FormKey
   with more than one override entry (`IRecordReads.GetContestedFormKeys`) whose record-wide
   `ConflictAll` is not `OnlyOne`/`NoConflict`, classified through the same `ClassifyStack` helper
@@ -698,7 +699,8 @@ drives anything on this tree — Axis 2 stays the compare grid's own concern
 
 ### Automatic origin absorption ([#279](https://github.com/WhiskyTangoFawks/ModBench/issues/279) / [#356](https://github.com/WhiskyTangoFawks/ModBench/issues/356), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) § Live mutation)
 
-Reorder, enable and disable are SQL-only and apply live. Installing, uninstalling or
+Enable and disable are SQL-only and apply live (#97); reorder's own live mutation is #545,
+not yet landed — see Write mechanism above for the current split. Installing, uninstalling or
 reprioritising a mod can change which physical file a plugin name resolves to — a mod-level
 change, not a load-order one — and **that is absorbed the same way**: the session re-reads the
 affected plugin automatically, with no decoration, no confirmation and no command. There is no
@@ -854,16 +856,25 @@ overflow, then native **Collapse All** last.
 - `IModlistSource` gains the write-side counterparts to its read-only `readPluginOrder()`/
   `readEnabledPlugins()`: toggle a line's `*` prefix, and reorder lines — mirroring the shape of
   the existing `modlist.txt` mutators (`moveModToSeparator`, `reorderSeparatorBlock`).
-- **Current mutation path**: reorder, enable and disable apply immediately and unprompted via
-  the surgical splice write above — a direct `plugins.txt` edit, nothing else. `PluginListProvider`
-  makes no backend call to do this (root `CLAUDE.md`: Mod Management never calls the C# backend),
-  so there is no session reload and no server round trip to wait on.
-- **Not yet built.** ADR-0035 describes a *different*, backend-driven mutation model for later —
-  reorder/enable/disable as a SQL `UPDATE` of `load_order_idx`/the participation flag plus a
-  winner re-sweep, with a view-header progress indicator as the only feedback, once the
-  participation predicate lands (#97/#279). None of that exists yet: no code path calls the
-  backend for a Plugin load order mutation, and no progress indicator is wired to the checkbox or
-  the drag handler. Stated here as the destination, not as current behavior.
+- **Current mutation path**: reorder, enable and disable all still apply immediately and
+  unprompted via the surgical splice write above — a direct `plugins.txt` edit, nothing else.
+  `PluginListProvider` makes no backend call to do this itself (root `CLAUDE.md`: Mod Management
+  never calls the C# backend); the composition root (`extension.ts`) is what bridges a mutation to
+  the running session, per the next bullet.
+- **Checkbox participation is live (#97).** Ticking or unticking a plugin's checkbox, once a
+  backend session is loaded, also drives `SessionManager.SetPluginParticipation` — a SQL-only flag
+  flip plus one `UpdateWinners()` sweep, no reload and no re-index (proved by a test: the toggle
+  still succeeds after the plugin file is deleted from disk mid-session). Winner status, conflict
+  badges and any open record editor all reflect the change via the same `notifyConflictsComputed`
+  broadcast a completed load already fires; a view-header progress indicator (`withPluginsViewProgress`)
+  is the only feedback — no modal, no notification. A Mod-Management-only session (no backend
+  loaded) makes no network call at all (`PluginsTreeComposite.hasSession()` gate) — the ordinary
+  case is unaffected.
+- **Drag-reorder is not yet built.** The same live-mutation treatment for reorder — a SQL `UPDATE`
+  of `load_order_idx` (denormalized onto five tables) plus a re-sweep, multi-row block drag as one
+  recompute, and correct positioning while a filter is active — is #545, built on #97's plumbing.
+  Until it lands, dragging a plugin only ever writes `plugins.txt`; the running session's load
+  order is unaffected until a reload.
 
 ### Entry point
 
