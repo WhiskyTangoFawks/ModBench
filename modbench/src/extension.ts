@@ -104,6 +104,14 @@ let loadAbort: AbortController | undefined;
 // it's consulted — the same safe default PluginsTreeComposite.hasMatchingRecords itself falls
 // back to when the accessor has nothing to say.
 let matchingPlugins: Map<string, boolean> | undefined;
+// #449: per-plugin compile freshness, lowercased filename → PluginMetadata's own
+// {compilePending, lastCompiledAt}. Module level for the same reason as matchingPlugins above —
+// it changes on its own independent trigger (Save & Compile lands a new binary; the record filter
+// changes nothing about it) rather than through setSession's once-per-load bundle, and
+// refreshMatchingPlugins below already re-fetches GET /plugins for the same reason, so this rides
+// that fetch rather than a second one. `undefined` reads as "nothing to show" — PluginsTreeComposite
+// .compilePendingOf's own safe default when the accessor has nothing to say.
+let compilePending: Map<string, { pending: boolean; lastCompiledAt: string | null }> | undefined;
 
 /** #307: the Plugins view's own statement about what it is doing, or what it does not yet know
  *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
@@ -201,6 +209,12 @@ interface SessionPluginFiles {
    *  tracking; viewing never does"). Computed the same fs check `trackedModFoldersOf` already
    *  performs per distinct folder, just keyed back to the plugin name here instead. */
   trackedPlugins: Set<string>;
+  /** #449: lowercased filename → this plugin's own compile-freshness answer, off the same
+   *  `GET /plugins` call as everything else in this hand-off — seeds the module-level
+   *  `compilePending` at session (re)load, the same way `matches` seeds `matchingPlugins`; the
+   *  independent post-compile refresh (`refreshMatchingPlugins`, extended for #449) updates it
+   *  again without a session reload. */
+  compilePending: Map<string, { pending: boolean; lastCompiledAt: string | null }>;
 }
 
 function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
@@ -217,6 +231,8 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
       origins: new Map(plugins.map((p) => [p.name, p.origin] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
       trackedPlugins: new Set(plugins.filter((p) => isTracked(path.dirname(p.path))).map((p) => p.name)),
+      compilePending: new Map(plugins.map((p) =>
+        [p.name.toLowerCase(), { pending: p.compilePending, lastCompiledAt: p.lastCompiledAt }] as const)),
     };
   };
 }
@@ -231,14 +247,25 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
  *  failure here degrades to "no data" (matches everywhere) rather than throwing — a chevron guess
  *  is wrong in the same direction `hasMatchingRecords` already treats as safe, and a record
  *  filter's whole *point* is to be applied and inspected, so silently freezing every chevron would
- *  be a far worse failure than briefly over-showing them. */
-async function refreshMatchingPlugins(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
+ *  be a far worse failure than briefly over-showing them.
+ *
+ *  #449: also re-derives `compilePending` off the same `GET /plugins` call, and is now called
+ *  after a successful Save & Compile too (`compileAndReport`) — not just after a filter change.
+ *  Riding the fetch this function already makes rather than adding a second near-identical one:
+ *  both facts change on their own independent trigger, neither through `setSession`'s once-per-
+ *  load bundle, so one shared "re-derive everything GET /plugins alone can answer, and re-render"
+ *  function covers both. A read failure degrades `compilePending` to "no data" (nothing decorated)
+ *  the same safe direction `matchingPlugins` already takes. */
+async function refreshMatchingPlugins(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
     const plugins = await repository.getPlugins();
     matchingPlugins = new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const));
+    compilePending = new Map(plugins.map((p) =>
+      [p.name.toLowerCase(), { pending: p.compilePending, lastCompiledAt: p.lastCompiledAt }] as const));
   } catch (err) {
     outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
     matchingPlugins = undefined;
+    compilePending = undefined;
   }
   pluginsTree?.refreshDecorations();
 }
@@ -452,7 +479,7 @@ export function activate(context: vscode.ExtensionContext) {
     notifyConflictsComputed: makeNotifyConflictsComputed(treeProvider, recordPanels, repository, outputChannel),
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
+  const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics, repository, outputChannel);
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
 
   wireExternalChangePolling(repository, controller, outputChannel, log);
@@ -1194,6 +1221,11 @@ function buildPluginsTreeComposite(
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
     hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
+    // #449: refreshed off the same module-level refreshMatchingPlugins function above (extended
+    // for this), seeded at session (re)load and re-derived after a successful Save & Compile.
+    // Undefined reads as "nothing to show" — the composite's own fallback for an accessor with
+    // nothing to say.
+    compilePendingOf: (file) => compilePending?.get(file.toLowerCase()),
     // #448: hands a contested row's file-level peers through to the record browser, which builds
     // the pinned-first Stack node from them — live against PluginListProvider's own stackPeers()
     // for the same "never drifts from what the tree rendered" reason fileOverrides() above is.
@@ -1359,7 +1391,7 @@ function registerPluginRowCommands(
   return [
     registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
     registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
-    registerCompileAtRefCommand(controller, outputChannel, compileDiagnostics),
+    registerCompileAtRefCommand(controller, repository, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
     ...registerRecordLifecycleCommands(controller, repository, outputChannel),
     ...registerRecordCopyCommands(controller, repository, outputChannel),
@@ -1771,11 +1803,14 @@ function startExternalChangeDialogPolling(
  *  comment for why a session load is the only moment either offer reason can newly arise. */
 function makeCrashRepairOffersPresenter(
   controller: SessionController, diagnostics: vscode.DiagnosticCollection,
+  repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
 ): (offers: CrashRepairOffer[]) => Promise<void> {
   return (offers) => presentCrashRepairOffers(
     offers,
     (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
-    (offer, atRef) => compileAndReport(controller, diagnostics, { name: offer.plugin, origin: offer.origin }, atRef),
+    (offer, atRef) => compileAndReport(
+      controller, diagnostics, { name: offer.plugin, origin: offer.origin }, atRef, repository, outputChannel,
+    ),
   );
 }
 
@@ -1912,7 +1947,7 @@ function registerSaveAndCompileCommand(
     // resolveCompileTarget round trip needed, the same reason a plugin row's own name is tier 1
     // there instead of falling through to the active-record/QuickPick tiers.
     if (node instanceof StackBinaryStateNode) {
-      await compileAndReport(controller, diagnostics, { name: node.plugin, origin: node.origin }, undefined);
+      await compileAndReport(controller, diagnostics, { name: node.plugin, origin: node.origin }, undefined, repository, outputChannel);
       return;
     }
     const target = await resolveCompileTarget(
@@ -1939,7 +1974,7 @@ function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(controller, diagnostics, target, undefined);
+    await compileAndReport(controller, diagnostics, target, undefined, repository, outputChannel);
   });
 }
 
@@ -1951,7 +1986,8 @@ function registerSaveAndCompileCommand(
  *  palette with no plugin in hand isn't a gesture worth a QuickPick, so `pickPlugin` here is a no-op
  *  (`resolveCompileTarget`'s third tier never fires without a tree row). */
 function registerCompileAtRefCommand(
-  controller: SessionController, outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
+  controller: SessionController, repository: PluginRepository,
+  outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -1974,7 +2010,7 @@ function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(controller, diagnostics, target, 'main');
+    await compileAndReport(controller, diagnostics, target, 'main', repository, outputChannel);
   });
 }
 
@@ -1986,10 +2022,18 @@ function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, comman
 /** The shared tail both compile commands share once they have a target: call through
  *  `SessionController.compile`, publish diagnostics, and report the one of two outcomes
  *  (`CompileResult.succeeded`) the user got. `SessionController.compile` already surfaces a
- *  transport/HTTP failure itself (`null`), so this has nothing to report in that case. */
+ *  transport/HTTP failure itself (`null`), so this has nothing to report in that case.
+ *
+ *  #449: a successful compile re-parks `refs/medit/last-compile/<plugin>` on the backend, which
+ *  the Plugins tree's compile-pending decoration has no other way to learn about — nothing here
+ *  watches that ref, per the freshness philosophy (read/refresh time, never a watcher), so this is
+ *  the refresh-time trigger. Rides `refreshMatchingPlugins` (extended for #449) rather than a
+ *  second `GET /plugins` fetch — same call the record-filter toggle already makes. Never run on a
+ *  refusal: nothing about any plugin's git state changed. */
 async function compileAndReport(
   controller: SessionController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
+  repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
   const result = await controller.compile(target.name, target.origin, atRef);
   if (!result) return;
@@ -2006,6 +2050,7 @@ async function compileAndReport(
       ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
       : `Modbench: Compiled "${target.name}"${refSuffix}.`,
   );
+  void refreshMatchingPlugins(repository, outputChannel);
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
@@ -2542,6 +2587,9 @@ async function applyLoadedSessionToTree(
     // the fix for a stale `matchingPlugins` surviving a session (re)load, `modbench.reloadSession`
     // included, since that command re-runs this exact hand-off (`makeEnterEditing`'s `enter()`).
     matchingPlugins = session.matches;
+    // #449: same fix, same reason — a stale compilePending surviving a session (re)load would
+    // decorate rows off the previous session's git state.
+    compilePending = session.compilePending;
     pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
     // #279: the loaded half of the drift comparison. Handed over at the same moment as everything
     // else the completed load reports, then computed once against the loadout as it stands — so a

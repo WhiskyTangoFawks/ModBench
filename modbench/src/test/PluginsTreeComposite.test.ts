@@ -109,6 +109,7 @@ function make(
   rows: FakeRow[],
   children = new FakeChildren(),
   hasMatchingRecords?: (file: string) => boolean | undefined,
+  compilePendingOf?: (file: string) => { pending: boolean; lastCompiledAt: string | null } | undefined,
 ) {
   const rowSource = new FakeRows(rows);
   const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
@@ -118,6 +119,7 @@ function make(
     orderIssueMastersOf: (row) => row.orderIssueMasters,
     stackPeersOf: (row) => row.stackPeers,
     hasMatchingRecords,
+    compilePendingOf,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
   // the root first — which is what VS Code does, and what its TreeDataProvider contract
@@ -729,6 +731,89 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBeUndefined();
     expect(item.iconPath).toBeUndefined();
+  });
+});
+
+// #449: a tracked plugin whose source has moved past refs/medit/last-compile/<plugin> — "the game
+// can't see your edits yet". Session-derived, same family as the master-issue/load-failure
+// decorations above (icon/description/tooltip, append-never-replace, never the leading slot) rather
+// than the file-override family's FileDecorationProvider tint — this is a git-tracked-state fact,
+// not a filesystem one, and it must coexist with whatever else already decorated the row.
+describe('PluginsTreeComposite — compile-pending decoration (#449)', () => {
+  it('appends a description hint and tooltip to a compile-pending row', async () => {
+    const { composite, render } = make([PLUGIN_ROW], undefined, undefined, (file) =>
+      file === 'a.esp' ? { pending: true, lastCompiledAt: '2026-08-20T12:00:00Z' } : undefined);
+    await render();
+    composite.setSession(new Set(['A.esp']));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+
+    expect(item.description).toContain('Compile pending');
+    expect(item.tooltip).toContain('Source ahead of binary');
+    expect(item.tooltip).toContain('last compiled');
+  });
+
+  it('never claims the icon slot — the description hint is the primary signal', async () => {
+    const { composite, render } = make([PLUGIN_ROW], undefined, undefined, () => ({ pending: true, lastCompiledAt: null }));
+    await render();
+    composite.setSession(new Set(['A.esp']));
+
+    expect(composite.getTreeItem(PLUGIN_ROW).iconPath).toBeUndefined();
+  });
+
+  it('leaves an unaffected plugin\'s row undecorated', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], undefined, undefined, (file) =>
+      file === 'a.esp' ? { pending: true, lastCompiledAt: null } : { pending: false, lastCompiledAt: null });
+    await render();
+    composite.setSession(new Set(['A.esp', 'B.esp']));
+
+    const item = composite.getTreeItem(OTHER_ROW);
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  // AC8-style reconciliation, but there is nothing to reconcile here — this appends alongside
+  // whatever the master-issue decoration already put on the row, never clobbering its icon or
+  // overwriting (only extending) its description/tooltip text.
+  it('coexists with an existing master-issue decoration on the same row, without stealing its icon', async () => {
+    const { composite, render } = make([PLUGIN_ROW], undefined, undefined, () => ({ pending: true, lastCompiledAt: null }));
+    await render();
+    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+      ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
+    ]));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.tooltip).toContain('Missing master: Ghost.esm');
+    expect(item.tooltip).toContain('Source ahead of binary');
+    expect(item.description).toContain('Master issue');
+    expect(item.description).toContain('Compile pending');
+    expect((item.iconPath as vscode.ThemeIcon).color).toEqual(new vscode.ThemeColor('problemsErrorIcon.foreground'));
+  });
+
+  it('clears once the plugin is recompiled (reused-row hazard, same as #276)', async () => {
+    let pending = true;
+    const { composite, render } = make([PLUGIN_ROW], undefined, undefined, () =>
+      pending ? { pending: true, lastCompiledAt: null } : { pending: false, lastCompiledAt: null });
+    await render();
+    composite.setSession(new Set(['A.esp']));
+    expect(composite.getTreeItem(PLUGIN_ROW).description).toContain('Compile pending');
+
+    pending = false;
+    composite.refreshDecorations();
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
+  });
+
+  it('never decorates when the accessor has nothing to say (untracked plugin, or not wired)', async () => {
+    const { composite, render } = make([PLUGIN_ROW]);
+    await render();
+    composite.setSession(new Set(['A.esp']));
+
+    const item = composite.getTreeItem(PLUGIN_ROW);
+    expect(item.description).toBeUndefined();
+    expect(item.tooltip).toBeUndefined();
   });
 });
 

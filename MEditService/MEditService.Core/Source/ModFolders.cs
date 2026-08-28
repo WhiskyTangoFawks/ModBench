@@ -53,4 +53,12 @@ public static class ModFolders
     /// plugin has source text to read or write at all.</summary>
     public static string? TrackedOf(IGameSession? session, PluginKey plugin) =>
         Of(session, plugin) is { } modFolder && SourceRepository.IsTracked(modFolder) ? modFolder : null;
+
+    /// <summary>#449: this plugin's own compile-freshness answer — "source ahead of binary" — or the
+    /// degrade-safe empty answer for a plugin with no mod folder at all (a Data-directory master).
+    /// The same rule stated over the two facts it needs, mirroring <see cref="IsEditable"/>.</summary>
+    public static CompileFreshness CompileFreshnessOf(string origin, string pluginPath, string pluginFileName) =>
+        Of(origin, pluginPath) is { } modFolder
+            ? SourceRepository.CompileFreshnessOf(modFolder, pluginFileName)
+            : new CompileFreshness(false, null);
 }

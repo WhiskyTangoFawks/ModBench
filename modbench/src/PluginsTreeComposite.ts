@@ -65,6 +65,13 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  here — the composite holds no state of its own about the Stack node, exactly like every
    *  other row-level fact in this file. */
   stackPeersOf?(row: TRow): StackPeer[] | undefined;
+  /** #449: this plugin's own compile-freshness answer — "source ahead of binary" — keyed the same
+   *  way `hasMatchingRecords` is (a plugin filename, not the row), because it changes on its own
+   *  independent trigger (Save & Compile) rather than through `setSession`'s once-per-load bundle,
+   *  the same reason `hasMatchingRecords` itself lives here rather than in that bundle. Undefined
+   *  (accessor not wired, or the plugin isn't in whatever map backs it) reads as "nothing to show"
+   *  — the same safe default `hasMatchingRecords` itself falls back to. */
+  compilePendingOf?(pluginFile: string): { pending: boolean; lastCompiledAt: string | null } | undefined;
 }
 
 /** A plugin's own declared master, absent from the session (#277 / ADR-0037). Structurally
@@ -214,11 +221,33 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       item.description = '✗ Failed to load';
       const note = `Failed to load: ${failureReason}`;
       item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
-      return;
+    } else {
+      const issues = file !== undefined ? (this.masterIssues?.get(file) ?? []) : [];
+      if (issues.length > 0) this.applyMasterIssueDecoration(item, row, issues);
     }
 
-    const issues = file !== undefined ? (this.masterIssues?.get(file) ?? []) : [];
-    if (issues.length > 0) this.applyMasterIssueDecoration(item, row, issues);
+    // #449: unconditional, unlike the two branches above — it never steals the icon slot from a
+    // higher-severity decoration (orchestrator ruling), so it has nothing to be mutually exclusive
+    // with. It only ever appends to whatever description/tooltip text this row already carries,
+    // including text either branch above just set.
+    this.applyCompilePendingDecoration(item, file);
+  }
+
+  /** #449: a tracked plugin whose source has moved past `refs/medit/last-compile/<plugin>` —
+   *  "the game can't see your edits yet". Session-derived like the master-issue/load-failure
+   *  decorations above (append-only, never the leading slot), but never claims `iconPath` — the
+   *  description hint is the primary signal, and the icon slot stays reserved for whichever
+   *  higher-severity decoration (if any) already claimed it above. */
+  private applyCompilePendingDecoration(item: vscode.TreeItem, file: string | undefined): void {
+    const freshness = file !== undefined ? this.deps.compilePendingOf?.(file) : undefined;
+    if (!freshness?.pending) return;
+
+    const when = freshness.lastCompiledAt ? new Date(freshness.lastCompiledAt).toLocaleString() : 'unknown';
+    const note = `Source ahead of binary — last compiled ${when}`;
+    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
+
+    const hint = '⟳ Compile pending';
+    item.description = item.description ? `${item.description} · ${hint}` : hint;
   }
 
   /** AC1/AC2/AC4/AC8: one decoration, not two that can disagree. A master name the backend also

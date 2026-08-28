@@ -56,6 +56,15 @@ function hasMatchingRecords(r: PluginResponse): boolean {
   return r.hasMatchingRecords ?? true;
 }
 
+// #449: the generated type is `boolean | undefined`/`string | null | undefined` for the same
+// NRT-unawareness (#297) every other optional-looking field on this wire shape already degrades
+// around — a backend predating this field reports "not pending", never a stale true. Its own
+// function, same reason hasMatchingRecords above is one: keeps toPluginMetadata under its
+// complexity budget.
+function compileFreshnessOf(r: PluginResponse): { compilePending: boolean; lastCompiledAt: string | null } {
+  return { compilePending: r.compilePending ?? false, lastCompiledAt: r.lastCompiledAt ?? null };
+}
+
 function toPluginMetadata(r: PluginResponse): PluginMetadata {
   return {
     name: r.name ?? '',
@@ -69,6 +78,7 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
     origin: requireOrigin(r),
     masterIssues: (r.masterIssues ?? []).map(toMasterIssue),
     hasMatchingRecords: hasMatchingRecords(r),
+    ...compileFreshnessOf(r),
   };
 }
 
