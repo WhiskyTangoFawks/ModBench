@@ -650,7 +650,20 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
-        if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
+
+        // #440 Slices 6/7: a placed reference (a Cell's Persistent/Temporary child) has its own,
+        // parent-chain-aware handling — it never reaches RefuseIfCopySourceHasNoContainerOfItsOwn's
+        // blanket refusal below at all. GetPlacement answering is exactly what distinguishes "a placed
+        // reference" from every other embedded/folder-split type that predicate still refuses
+        // (Landscape, NavigationMesh, DialogTopic, Scene — out of this ticket's scope).
+        if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
+            && index.GetPlacement(formKey, sourcePlugin) is { } placement)
+        {
+            return CopyPlacedReferenceAsOverride(
+                sourcePlugin, formKey, document, placement, destinationPlugin, destinationModFolder, index, release);
+        }
+
+        if (RefuseIfCopySourceHasNoContainerOfItsOwn(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
         if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
         {
@@ -659,13 +672,40 @@ public sealed class RecordEditService(
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
         }
 
+        var isCell = RecordTypeDispatch.For(release).ConcreteFor(document.RecordType)?.Name == "Cell";
+        if (isCell && index.GetCellLocation(sourcePlugin, formKey)?.IsInterior != true)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ContainerParentMissingInDestination,
+                $"{formKey} is an exterior cell — copying it as override needs spatial placement " +
+                "(worldspace block/sub-block) this write path does not compute yet, tracked separately.");
+        }
+
         var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
 
-        // Same shape as CreateRecord's own write: next order index in the destination's own group
-        // folder for this record type, a brand-new file there, and the same #489 renormalize pass as
-        // this method's own last file-system act.
-        var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
-        var relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release, orderIndex);
+        // #440: a flat type keeps CreateRecord's own shape (next order index in the destination's own
+        // group folder, a brand-new file there). A directory-per-record container's own top-level
+        // record needs its own RecordData.json directory instead — an interior Cell nests two GRUP
+        // levels deeper than Worldspace/Quest do (InteriorCellDestinationPath's own doc comment), which
+        // is why it is not just another call to ContainerOwnDirectoryPath.
+        string relativePath;
+        var isFlat = RecordTypeDispatch.For(release).FolderNameFor(document.RecordType) is not null;
+        if (isFlat)
+        {
+            var orderIndex = SourceUnitResolver.NextOrderIndexFor(destinationModFolder, destinationPlugin.Name, document.RecordType, release);
+            relativePath = SourceRecordPath.For(destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release, orderIndex);
+        }
+        else
+        {
+            // #440 AC3: a plain Copy as Override is own-fields-only for every record type — for a
+            // container whose document embeds its own children inline (Cell, Worldspace) that means
+            // stripping them here, rather than the verbatim-bytes fast path a flat record keeps. A
+            // no-op in practice for Quest (its folder-split children were never inlined to begin with).
+            body = StripEmbeddedChildrenForShallowCopy(body, document.RecordType, release);
+            relativePath = isCell
+                ? InteriorCellDestinationPath(destinationModFolder, destinationPlugin.Name, formKey, document.EditorId, release)
+                : ContainerOwnDirectoryPath(destinationModFolder, destinationPlugin.Name, document.RecordType, formKey, document.EditorId, release);
+        }
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
 
@@ -688,6 +728,129 @@ public sealed class RecordEditService(
         // have (RecordEditResult's own doc comment) — an override echoes the caller's own FormKey
         // back, same shape as DeleteRecord's "success, nothing new" below.
         return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// #440 Slices 6/7 (AC2): Copy as Override for a placed reference — appends
+    /// <paramref name="formKey"/> into the destination's existing override of its own Cell
+    /// (<paramref name="placement"/>'s <see cref="PlacementRow.ParentCell"/>) when one already exists,
+    /// touching nothing else about that Cell (not even its Partial Form flag). When the destination has
+    /// no override of that Cell yet and the Cell is interior, one is auto-created first — bare fields,
+    /// Partial Form flagged, xEdit's own <c>AddIfMissingInternal</c> parity (Q2's answer: mirror it
+    /// exactly, not "safer"). An exterior Cell with no destination override refuses before this method
+    /// is even reached (<see cref="CopyRecordAsOverride"/>'s own <c>ContainerParentMissingInDestination</c>
+    /// check runs first): #549's own scope, not this one's.
+    /// </summary>
+    private RecordEditResult CopyPlacedReferenceAsOverride(
+        PluginKey sourcePlugin, string formKey, RecordDocument document, PlacementRow placement,
+        PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
+    {
+        if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FormKeyCollision,
+                $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
+        }
+
+        var cellFormKey = placement.ParentCell;
+        var cellDocument = index.GetDocument(cellFormKey, destinationPlugin);
+        if (cellDocument == null)
+        {
+            if (index.GetCellLocation(sourcePlugin, cellFormKey)?.IsInterior != true)
+            {
+                return RecordEditResult.Refused(
+                    RecordEditRefusal.ContainerParentMissingInDestination,
+                    $"{destinationPlugin.Name} has no override of {cellFormKey}, the cell {formKey} belongs to, " +
+                    "and it is an exterior cell — auto-creating one needs spatial placement (worldspace " +
+                    "block/sub-block) this write path does not compute yet, tracked separately.");
+            }
+
+            cellDocument = CreateInteriorCellParent(sourcePlugin, cellFormKey, destinationPlugin, destinationModFolder, index, release);
+        }
+
+        var cellUnit = SourceUnitResolver.Resolve(
+            index, destinationPlugin, destinationModFolder, cellFormKey, cellDocument.RecordType, cellDocument.EditorId, release)
+            ?? throw new InvalidOperationException(
+                $"{cellFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
+
+        var cellRecord = ReadRecordFromSource(cellUnit.FullPath, cellDocument, release);
+        var childRecord = _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
+            .GetAwaiter().GetResult();
+        var slotName = placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
+        ContainerChildFields.AddChildToSlot(cellRecord, slotName, childRecord);
+
+        var newCellBody = _codec.SerializeToBytesAsync(cellRecord, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(cellRecord, cellUnit.FullPath, release).GetAwaiter().GetResult();
+
+        // Two rows change: the child's own (new — CreateWorkingTreeRecord, the same "exists at neither
+        // ref yet" shape every other copy-as-override uses) and the Cell's own existing row (its body
+        // moved — ApplyWorkingTreeChanges, the same shape EditField's own embedded-child write uses).
+        // Child first, so nothing ever transiently points a placement/container_child row at a FormKey
+        // with no records row of its own.
+        index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
+        index.ApplyWorkingTreeChanges(destinationPlugin, [(cellFormKey, Encoding.UTF8.GetString(newCellBody))]);
+        sessions.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
+                "({DestinationOrigin}) — appended into {CellFormKey}'s {SlotName} slot",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
+                cellFormKey, slotName);
+        }
+        return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// #440 Slice 7: silently creates <paramref name="cellFormKey"/> as a Partial Form override in
+    /// <paramref name="destinationPlugin"/> — the parent-chain auto-create AC1/AC2's sibling shapes
+    /// need when a copied child's own Cell has no destination override yet. Bare, default-constructed
+    /// fields (<see cref="MajorRecordInstantiator.Activator"/>, the same factory <see cref="CreateRecord"/>
+    /// uses) rather than a copy of the source's own fields — xEdit's own <c>AddIfMissingInternal</c>
+    /// (<c>wbImplementation.pas:17069-17094</c>) skips its own <c>Assign()</c> call for exactly this
+    /// case, and ADR-0034 makes that binding here rather than a "safer" divergence (Q2, 2026-08-28
+    /// grilling session: "avoids a surprise blank record" is exactly the "seems nicer" reasoning ADR-0034
+    /// rules out). <see cref="PartialFormFlag.Set"/> is #539's own write surface, called directly here
+    /// since there is no source file yet for <see cref="RecordEditService.EditField"/>'s own
+    /// <c>is_partial_form</c> door to reach.
+    /// </summary>
+    private RecordDocument CreateInteriorCellParent(
+        PluginKey sourcePlugin, string cellFormKey, PluginKey destinationPlugin, string destinationModFolder,
+        IRecordIndex index, GameRelease release)
+    {
+        var sourceCellDocument = index.GetDocument(cellFormKey, sourcePlugin)
+            ?? throw new InvalidOperationException(
+                $"{sourcePlugin.Name} does not hold {cellFormKey} — CopyPlacedReferenceAsOverride resolved this FormKey from its own placement row.");
+
+        var cellSchema = schemaReflector.GetSchemas(release)["cell"];
+        var record = MajorRecordInstantiator.Activator(FormKey.Factory(cellFormKey), release, cellSchema.RecordType);
+        PartialFormFlag.Set(record, true);
+
+        var relativePath = InteriorCellDestinationPath(
+            destinationModFolder, destinationPlugin.Name, cellFormKey, editorId: null, release);
+        var sourcePath = Path.Combine(destinationModFolder, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
+
+        var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
+        _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
+
+        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
+
+        var bodyText = Encoding.UTF8.GetString(newBody);
+        index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, sourceCellDocument.RecordType, bodyText);
+        sessions.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Auto-created {FormKey} as a Partial Form override in {DestinationPlugin} ({DestinationOrigin}) " +
+                "— parent chain for a copied child",
+                cellFormKey, destinationPlugin.Name, destinationPlugin.Origin);
+        }
+
+        return index.GetDocument(cellFormKey, destinationPlugin)!;
     }
 
     /// <summary>
@@ -721,6 +884,7 @@ public sealed class RecordEditService(
         }
 
         var release = sessions.Session!.GameRelease;
+        if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
         if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
         if (ResolveTargetFormKey(index, destinationPlugin, requestedFormKey, out var targetFormKey) is { } refusedTarget)
@@ -1496,6 +1660,154 @@ public sealed class RecordEditService(
             "scene). Editing its fields works, and so do deleting and renumbering it; creating one from " +
             "scratch does not yet (#462) — a brand-new record has no containment for anything to place " +
             "it into.");
+    }
+
+    /// <summary>
+    /// #440 Slice 8: <see cref="CopyRecordAsNewRecord"/>'s own permanent blacklist — xEdit itself
+    /// refuses Copy as New Record for CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI, in both its UI and its
+    /// engine, because a fresh FormKey would leave the copy structurally homeless: a container's
+    /// children only exist in a plugin that also carries the container, and duplicating the container
+    /// itself under a new identity does not create a group for a copy to sit in. Only <c>cell</c>/
+    /// <c>wrld</c> are checked by name here — the other five have no schema table at all
+    /// (<see cref="ISchemaReflector"/> does not surface Landscape/NavigationMesh etc. as record types),
+    /// so a copy naming one has already refused earlier as <see cref="RecordEditRefusal.RecordNotFound"/>;
+    /// listing them again here would be dead code, not a second line of defence.
+    /// </summary>
+    private static RecordEditResult? RefuseIfDisallowedForCopyAsNewRecord(string recordType)
+    {
+        if (recordType is not ("cell" or "wrld")) return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.CopyAsNewRecordDisallowedForType,
+            $"'{recordType}' cannot be copied as a new record — xEdit itself refuses this for container " +
+            "types (CELL, WRLD, LAND, NAVM, PGRD, ROAD, NAVI), since a fresh FormKey would leave the copy " +
+            "with no group to belong to. Copy as Override, instead.");
+    }
+
+    /// <summary>
+    /// #440: <see cref="CopyRecordAsOverride"/>'s own container gate — narrower than
+    /// <see cref="RefuseIfContainerType"/>, which <see cref="CreateRecord"/> keeps unchanged. A
+    /// container's own top-level record (Cell, Worldspace, Quest) has somewhere to land — its own
+    /// directory, minted the same way any other structural write's group folder is — so only a record
+    /// with no container of its own anywhere in the tree still refuses here: an embedded child (a
+    /// placed reference, a landscape, a navmesh) or a folder-split child with no independent top-level
+    /// existence (a dialog topic, a scene, a response). That is a different question from
+    /// <see cref="CreateRecord"/>'s own reason to refuse every container type — a brand-new record has
+    /// no containment for anything to resolve to yet (#462) — which is why the two gestures use
+    /// different predicates rather than sharing this one.
+    /// </summary>
+    private static RecordEditResult? RefuseIfCopySourceHasNoContainerOfItsOwn(string recordType, GameRelease release)
+    {
+        if (RecordTypeDispatch.For(release).GroupFolderNameFor(recordType) is not null) return null;
+
+        return RecordEditResult.Refused(
+            RecordEditRefusal.ContainerRecordNotYetSupported,
+            $"'{recordType}' has no container of its own anywhere in the tree — it is a record embedded " +
+            "in a container (a placed reference, a landscape, a navmesh) or a folder-split child with no " +
+            "independent top-level existence (a dialog topic, a scene, a response).");
+    }
+
+    /// <summary>
+    /// #440: the destination path for a directory-per-record container's own top-level record —
+    /// Worldspace or Quest, whose directory sits directly under its own group folder with no further
+    /// nesting (verified against a real Track output: <c>Worldspaces/[0] &lt;name&gt;/RecordData.json</c>).
+    /// Cell is deliberately not handled here: its directory nests under an interior block/sub-block
+    /// path (or an exterior worldspace one, #549's own scope), which this simple "next index in one
+    /// flat group folder" scheme does not compute.
+    /// </summary>
+    private static string ContainerOwnDirectoryPath(
+        string modFolder, string pluginName, string recordType, string formKey, string? editorId, GameRelease release)
+    {
+        var groupFolder = RecordTypeDispatch.For(release).GroupFolderNameFor(recordType)
+            ?? throw new InvalidOperationException(
+                $"'{recordType}' has no group folder at all — RefuseIfCopySourceHasNoContainerOfItsOwn should have refused this first.");
+        var groupDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), groupFolder);
+        var orderIndex = SourceUnitResolver.NextOrderIndex(groupDirectory);
+        var leafName = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true);
+        var fullPath = Path.Combine(groupDirectory, $"[{orderIndex}] {leafName}", RecordDataFileName);
+        return Path.GetRelativePath(modFolder, fullPath);
+    }
+
+    // The whole-mod door's own directory-per-record file name — SourceRecordPath keeps its own copy of
+    // this literal private, so this restates the same well-known constant rather than exposing it.
+    private const string RecordDataFileName = "RecordData.json";
+
+    /// <summary>
+    /// #440 Slices 2/7: the destination path for an interior Cell — the one directory-per-record type
+    /// <see cref="ContainerOwnDirectoryPath"/> does not handle, since its own directory nests two GRUP
+    /// levels deep (<c>Cells/&lt;block&gt;/&lt;sub-block&gt;/&lt;name&gt;/RecordData.json</c>, verified
+    /// against a real Track output) rather than sitting directly under its group folder. Interior
+    /// placement carries no gameplay meaning at all — <c>PlacementWalker.Walk</c>'s own interior branch
+    /// never records a block/sub number in <c>cell_location</c> (verified by reading it: every interior
+    /// cell's row carries null block/sub, the same as CONTEXT.md's own "the plugin's own single
+    /// interior bucket" framing) — so this reuses whichever block/sub-block directory the destination
+    /// already has (any one; the number is never meaningful), minting a fresh <c>[0] 0/[0] 0</c> pair
+    /// only the first time a destination plugin gets an interior cell at all.
+    /// </summary>
+    private static string InteriorCellDestinationPath(
+        string modFolder, string pluginName, string formKey, string? editorId, GameRelease release)
+    {
+        var cellsFolder = RecordTypeDispatch.For(release).GroupFolderNameFor("cell")
+            ?? throw new InvalidOperationException(
+                "This game's schema has no Cell group folder — RefuseIfCopySourceHasNoContainerOfItsOwn should have refused this first.");
+        var cellsDirectory = Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName), cellsFolder);
+        Directory.CreateDirectory(cellsDirectory);
+        WriteMinimalGroupRecordDataIfMissing(cellsDirectory, groupType: null);
+
+        var blockDirectory = FindOrMintGroupDirectory(cellsDirectory, "InteriorCellBlock");
+        var subBlockDirectory = FindOrMintGroupDirectory(blockDirectory, "InteriorCellSubBlock");
+
+        var orderIndex = SourceUnitResolver.NextOrderIndex(subBlockDirectory);
+        var leafName = SourceUnitResolver.LeafNameFor(FormKey.Factory(formKey), editorId, isDirectory: true);
+        var fullPath = Path.Combine(subBlockDirectory, $"[{orderIndex}] {leafName}", RecordDataFileName);
+        return Path.GetRelativePath(modFolder, fullPath);
+    }
+
+    /// <summary>The first existing <c>"[N] &lt;number&gt;"</c> child directory of
+    /// <paramref name="parentDirectory"/>, or a freshly-minted <c>"[0] 0"</c> one carrying
+    /// <paramref name="groupType"/>'s own minimal <c>GroupRecordData.json</c> when none exists yet —
+    /// interior placement's own "reuse whatever bucket already exists" rule
+    /// (<see cref="InteriorCellDestinationPath"/>'s own doc comment).</summary>
+    private static string FindOrMintGroupDirectory(string parentDirectory, string groupType)
+    {
+        var existing = Directory.EnumerateDirectories(parentDirectory)
+            .FirstOrDefault(d => SourceUnitResolver.TryGetOrderIndex(Path.GetFileName(d)) is not null);
+        if (existing != null) return existing;
+
+        var directory = Path.Combine(parentDirectory, "[0] 0");
+        Directory.CreateDirectory(directory);
+        WriteMinimalGroupRecordDataIfMissing(directory, groupType);
+        return directory;
+    }
+
+    /// <summary>
+    /// A GRUP's own tiny metadata file — never a "record" the codec has a schema for, so this writes
+    /// the JSON directly rather than through <see cref="RecordTextCodec"/>. <paramref name="groupType"/>
+    /// null writes <c>{}</c> (the top-level Cells group's own shape, verified against a real Track
+    /// output); otherwise <c>{"GroupType": "&lt;value&gt;"}</c> — <c>BlockNumber</c> is always omitted
+    /// here because every group this method mints is numbered <c>0</c>, and a real Track output omits a
+    /// <c>BlockNumber</c> of exactly <c>0</c> rather than writing the literal (also verified).
+    /// </summary>
+    private static void WriteMinimalGroupRecordDataIfMissing(string directory, string? groupType)
+    {
+        var path = Path.Combine(directory, "GroupRecordData.json");
+        if (File.Exists(path)) return;
+        var json = groupType == null ? "{}" : $$"""{"GroupType": "{{groupType}}"}""";
+        File.WriteAllText(path, json);
+    }
+
+    /// <summary>
+    /// #440 AC3: deserializes <paramref name="body"/>, clears every child-major slot
+    /// (<see cref="ContainerChildFields.ClearAllChildSlots"/>) and reserializes — the one place a
+    /// plain Copy as Override deserializes at all, since every other record type's own fields-only
+    /// copy is already the verbatim bytes (nothing embedded to strip).
+    /// </summary>
+    private string StripEmbeddedChildrenForShallowCopy(string body, string recordType, GameRelease release)
+    {
+        var record = _codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, recordType).GetAwaiter().GetResult();
+        ContainerChildFields.ClearAllChildSlots(record);
+        var stripped = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(stripped);
     }
 
     /// <summary>

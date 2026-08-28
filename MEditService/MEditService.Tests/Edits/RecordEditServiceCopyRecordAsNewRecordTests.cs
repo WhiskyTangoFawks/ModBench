@@ -130,12 +130,41 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
+    // #440 Slice 8: a Cell is xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —
+    // refused forever, not "not yet built" — distinct from the Quest/DialogTopic/INFO family below,
+    // which #550 is what actually widens.
     [Fact]
-    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAContainerFamilyRecord_ReadingNotYetSupported()
+    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsACell_PermanentlyDisallowed()
     {
         using var fixture = new ContainerModFixture();
 
         var result = ServiceFor(fixture.Sessions).CopyRecordAsNewRecord(fixture.Plugin, fixture.Cell.ToString(), fixture.Plugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
+    }
+
+    [Fact]
+    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAWorldspace_PermanentlyDisallowed()
+    {
+        using var fixture = new ContainerModFixture();
+
+        var result = ServiceFor(fixture.Sessions).CopyRecordAsNewRecord(fixture.Plugin, fixture.Worldspace.ToString(), fixture.Plugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
+    }
+
+    // #440 Slice 8: a Quest is not on xEdit's permanent blacklist — DIAL/INFO/QUST allow a fresh
+    // FormKey per xEdit itself — but #550, not this ticket, is what actually builds that allowance, so
+    // it still refuses today. The distinct "not yet" flavor is the point of this test: a caller sees a
+    // different refusal here than for the permanently-disallowed types above.
+    [Fact]
+    public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAQuest_NotYetSupported()
+    {
+        using var fixture = new ContainerModFixture();
+
+        var result = ServiceFor(fixture.Sessions).CopyRecordAsNewRecord(fixture.Plugin, fixture.Quest.ToString(), fixture.Plugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
