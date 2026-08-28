@@ -147,8 +147,9 @@ export class BackendManager extends EventEmitter {
     }
     this._isHealthy = false;
     // #247: emitted rather than written straight to the status bar, so a deliberate stop is
-    // observable — the Loadout header's session row subscribes to 'status' and would
-    // otherwise keep reading "running" until something else happened to fire.
+    // observable — wireSessionRunningContext (extension.ts, #352) subscribes to 'status' to
+    // drive the Plugins view's Launch/Close mEdit toggle and would otherwise keep reading
+    // "running" until something else happened to fire.
     if (wasRunning) this.emitStatus('stopped');
   }
 

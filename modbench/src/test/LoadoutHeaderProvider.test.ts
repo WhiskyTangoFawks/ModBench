@@ -1,11 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// #247: the Loadout header is the home for workspace-scope actions — profile, session,
-// deployment — none of which belong to any one tree's domain. It spans both bounded
-// contexts (it starts Editing from a Mod-Management readout), so it may not import either
-// context's internals: every piece of state arrives as an injected getter. That constraint
-// is what makes it unit-testable here without a VS Code harness (`vi.mock('vscode')`, the
-// reporter.test.ts precedent).
+// #247: the Loadout header is the home for workspace-scope actions — profile, deployment —
+// none of which belong to any one tree's domain. It spans both bounded contexts, so it may
+// not import either context's internals: every piece of state arrives as an injected getter.
+// That constraint is what makes it unit-testable here without a VS Code harness
+// (`vi.mock('vscode')`, the reporter.test.ts precedent).
 vi.mock('vscode', () => ({
   TreeItem: class {
     label: string;
@@ -35,7 +34,6 @@ function makeProvider(overrides: Partial<LoadoutHeaderDeps> = {}) {
   return new LoadoutHeaderProvider({
     hasLoadout: () => true,
     activeProfile: () => Promise.resolve('Default'),
-    sessionRunning: () => false,
     deployment: () => Promise.resolve('external' as const),
     ...overrides,
   });
@@ -54,6 +52,14 @@ describe('LoadoutHeaderProvider', () => {
     expect(rows).toEqual([]);
   });
 
+  // #352: Launch mEdit / Close mEdit moved to the Plugins view — the header carries no mEdit
+  // row at all any more.
+  it('never renders an mEdit row', async () => {
+    const rows = await makeProvider().getChildren();
+
+    expect(rows.some((r) => r.label === 'mEdit')).toBe(false);
+  });
+
   it('reads the active profile as a row that activates Switch Profile', async () => {
     const [profile] = await makeProvider({ activeProfile: () => Promise.resolve('Survival') }).getChildren();
 
@@ -61,38 +67,24 @@ describe('LoadoutHeaderProvider', () => {
     expect((profile.command as { command: string }).command).toBe('modbench.modList.switchProfile');
   });
 
-  it('offers Launch mEdit while no session is running', async () => {
-    const [, session] = await makeProvider({ sessionRunning: () => false }).getChildren();
-
-    expect(session.description).toBe('not running');
-    expect((session.command as { command: string }).command).toBe('modbench.modList.launchMedit');
-  });
-
-  it('offers Close mEdit once a session is running — one row, one meaning, both directions', async () => {
-    const [, session] = await makeProvider({ sessionRunning: () => true }).getChildren();
-
-    expect(session.description).toBe('running');
-    expect((session.command as { command: string }).command).toBe('modbench.closeMedit');
-  });
-
   it('says nothing about deployment when an external manager owns it — no row, no launch affordance', async () => {
     const rows = await makeProvider({ deployment: () => Promise.resolve('external') }).getChildren();
 
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(1);
   });
 
   it('offers Deploy from the deployment row while nothing is deployed', async () => {
     const rows = await makeProvider({ deployment: () => Promise.resolve('notDeployed') }).getChildren();
 
-    expect(rows).toHaveLength(3);
-    expect(rows[2].description).toBe('not deployed');
-    expect((rows[2].command as { command: string }).command).toBe('modbench.modList.deploy');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].description).toBe('not deployed');
+    expect((rows[1].command as { command: string }).command).toBe('modbench.modList.deploy');
   });
 
   it('reads out a live deployment without offering Purge from the row — destructive actions stay in overflow behind a modal', async () => {
     const rows = await makeProvider({ deployment: () => Promise.resolve('deployed') }).getChildren();
 
-    expect(rows[2].description).toBe('deployed');
-    expect(rows[2].command).toBeUndefined();
+    expect(rows[1].description).toBe('deployed');
+    expect(rows[1].command).toBeUndefined();
   });
 });

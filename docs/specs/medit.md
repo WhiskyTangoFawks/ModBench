@@ -50,12 +50,13 @@ session over the active loadout:
 | **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
 | **Status bar item** | Backend/session state | This document |
 
-**Launch mEdit** (from the Loadout header) spawns the backend and builds the session from every
-line of the active profile's `plugins.txt` — disabled entries included, carrying their
-participation (#270 / ADR-0035) — plus vanilla masters (`load-explicit`); **Close mEdit** tears
-the session down. The Plugins tree's rows gain chevrons once the session is ready — no other
-surface swap happens: the Loadout views (Mods, Plugins, Downloads) are always visible regardless
-of session state, and Referenced By is always-present-and-following rather than gated on a mode.
+**Launch mEdit** (from the [Plugins view](plugins.md)'s title-bar overflow, #352) spawns the
+backend and builds the session from every line of the active profile's `plugins.txt` — disabled
+entries included, carrying their participation (#270 / ADR-0035) — plus vanilla masters
+(`load-explicit`); **Close mEdit** tears the session down. The Plugins tree's rows gain chevrons
+once the session is ready — no other surface swap happens: the Loadout views (Mods, Plugins,
+Downloads) are always visible regardless of session state, and Referenced By is
+always-present-and-following rather than gated on a mode.
 Editing writes records to the working-tree source text of tracked plugins (ADR-0041); writing the
 physical plugin file is a separate Save & Compile gesture, and neither requires a deploy.
 
@@ -93,10 +94,11 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   once a session exists (ADR-0035), and Referenced By is always present, following the active
   record editor ([medit-referenced-by.md](medit-referenced-by.md)). **Launch mEdit** spawns the
   backend and loads the active modlist as the session; **Close mEdit** tears it down. Both are
-  reached from the **mEdit row of the [Loadout header](loadout-header.md)** (#247) — one row
-  carrying whichever direction applies — and neither appears on any tree's title bar: starting
-  and stopping a session is workspace-scope, and with every view always on screen there is no
-  single tree it could sensibly belong to.
+  reached from the **[Plugins view](plugins.md)'s title-bar overflow** ([#352](https://github.com/WhiskyTangoFawks/ModBench/issues/352))
+  — a two-command/context-key toggle (`modbench.sessionRunning`) showing whichever direction
+  applies, gated on `modbench.workspaceIsMo2Instance` — superseding the original #247 placement
+  on the Loadout header's own mEdit row, which this ticket removed: the maintainer's ruling was
+  that mEdit is "an option on the plugins view", not a workspace action.
 - The mEdit view is composed of the five surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.
