@@ -121,6 +121,25 @@ describe('ImplicitMasterNode — leading slot (#276)', () => {
   });
 });
 
+// #345: clicking a plugin row opens its file header (xEdit parity — vstNavChange/
+// TryViewOrCompareSelectedRecords, xeMainForm.pas — selecting a plugin node shows its File Header
+// as a matter of course, no separate affordance). Routed through the existing modbench.openHeader
+// bridge command (extension.ts) rather than reaching for headerFormKeyFor/formKey directly here —
+// this file is forbidden record vocabulary (contextBoundary.test.ts), and openHeader already does
+// the pluginFileOf -> headerFormKeyFor -> modbench.openEditor(singleton) translation on the
+// composition-root side of that boundary.
+describe('PluginNode / ImplicitMasterNode — row click opens the plugin header (#345)', () => {
+  it('PluginNode wires .command to modbench.openHeader, passing itself', () => {
+    const node = new PluginNode({ name: 'TestMod.esp', enabled: true });
+    expect(node.command).toEqual({ command: 'modbench.openHeader', title: 'Open Header', arguments: [node] });
+  });
+
+  it('ImplicitMasterNode wires .command to modbench.openHeader, passing itself', () => {
+    const node = new ImplicitMasterNode('Fallout4.esm');
+    expect(node.command).toEqual({ command: 'modbench.openHeader', title: 'Open Header', arguments: [node] });
+  });
+});
+
 // AC3: a row that stands for no plugin file in the load order at all — today that's only the
 // sentinel ErrorNode/EmptyNode rows, since #34's non-participating rows don't exist yet — renders
 // neither a checkbox nor a lock. Guards against exactly the mistake Slice A could make: giving the

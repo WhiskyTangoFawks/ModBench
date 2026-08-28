@@ -148,7 +148,6 @@
       {
         "command": "modbench.openHeader",
         "title": "Open Header",
-        "icon": "$(file-text)",
         "category": "Modbench"
       },
       {
@@ -803,16 +802,6 @@
         }
       ],
       "view/item/context": [
-        {
-          "command": "modbench.openHeader",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
-          "group": "modbench@1"
-        },
-        {
-          "command": "modbench.openHeader",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
-          "group": "inline"
-        },
         {
           "command": "modbench.openEditor",
           "when": "view == modbench.referencedByTree && viewItem == referencedByGroup",

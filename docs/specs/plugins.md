@@ -235,10 +235,10 @@ there is no separate load-session step.
   contexts — once a session reports it, as a tooltip appended to whatever tooltip the row already
   carries (e.g. the missing-master badge below). It is never a `contextValue`: no per-row editing
   command exists yet to gate off one, and adding that plumbing before a command needs it would be
-  exactly the speculative scaffolding this project's conventions rule out. **Open Header stays
-  reachable on an immutable plugin, ungated** — viewing a plugin's header is not an editing action,
-  only the fields inside it are (see Record navigation below); an immutable plugin's row otherwise
-  has no editing action to hide today, since none is contributed on a plugin row yet.
+  exactly the speculative scaffolding this project's conventions rule out. **Selecting an immutable
+  plugin's row still opens its header, ungated** — viewing a plugin's header is not an editing
+  action, only the fields inside it are (see Record navigation below); an immutable plugin's row
+  otherwise has no editing action to hide today, since none is contributed on a plugin row yet.
 
 ### Row children ([#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
@@ -334,12 +334,21 @@ without saying what is not yet known would make that worse, not better.
 
 - **Plugin nodes** (`contextValue: "plugin"`, or `"pluginImplicit"` for an implicitly-loaded
   vanilla/DLC master not named in `plugins.txt` — see Row model above; read-only-for-editing is a
-  tooltip `PluginsTreeComposite` appends, never a third `contextValue`, per Row model above). An
-  **Open Header** action (context menu; also available inline) opens the
-  plugin's **header record** — author, masters, flags — as a single-column record panel. A
-  plugin's context menu also exposes New Plugin…, Track… (untracked plugins), and — on editable
-  plugins only — Save & Compile, Add New Record…, Convert to ESL/ESM, and Run Script…. Each is a
-  confirmation or picker as appropriate; destructive ones confirm.
+  tooltip `PluginsTreeComposite` appends, never a third `contextValue`, per Row model above).
+  **Clicking/selecting the row opens its header record** — author, masters, flags — as a
+  single-column record panel, retargeting the singleton editor panel
+  ([#284](https://github.com/WhiskyTangoFawks/ModBench/issues/284)'s plain-`modbench.openEditor`
+  policy). This is xEdit parity, not an invention: `vstNavChange` /
+  `TryViewOrCompareSelectedRecords` (`xeMainForm.pas`) show a selected file node's File Header in
+  the view pane as a side effect of selection alone, with no separate affordance — so there is no
+  "Open Header" button here either
+  ([#345](https://github.com/WhiskyTangoFawks/ModBench/issues/345)) — `PluginNode` and
+  `ImplicitMasterNode` (`modmanager/PluginListProvider.ts`) each wire their own `.command` to the
+  `modbench.openHeader` bridge command that used to back the retired button, so the gesture is
+  reachable identically from both plugin-bearing row kinds. A plugin's context menu also exposes
+  New Plugin…, Track… (untracked plugins), and — on editable plugins only — Save & Compile, Add
+  New Record…, Convert to ESL/ESM, and Run Script…. Each is a confirmation or picker as
+  appropriate; destructive ones confirm.
 - **Record-type nodes** (`contextValue: "recordType"`): labeled by the type's **human-readable
   name** (e.g. "Activator" for `ACTI`, "Game Setting" for `GMST`), matching xEdit's naming from
   `wbDefinitionsFO4.pas` (#110); the raw 4-char signature remains the internal identifier (cache

@@ -152,17 +152,23 @@ describe('package.json New Plugin / record filter reachable from the merged tree
   });
 });
 
-// Old modbench.pluginTree reached Open Header on 'plugin' and 'pluginImmutable' (medit's own
-// read-only-master contextValue) rows. The merged tree's rows are modmanager/PluginListProvider's
-// instead, whose two plugin-bearing contextValues are 'plugin' and 'pluginImplicit' — not the
-// same string as 'pluginImmutable', and deliberately not reconciled with it here (#276's job).
-describe('package.json Open Header reachable from every plugin-bearing row (#273 Slice E)', () => {
+// #345: the Open Header button (context menu entry + inline icon) is retired — xEdit parity
+// (vstNavChange / TryViewOrCompareSelectedRecords, xeMainForm.pas: selecting a plugin node shows
+// its File Header as a matter of course, no separate affordance) means selecting/clicking a
+// plugin row opens its header directly now (PluginNode/ImplicitMasterNode wire `.command` to
+// modbench.openHeader themselves — modmanager/PluginListProvider.ts). The command survives, as
+// the row-click's own bridge implementation, palette-gated (see PALETTE_GATED below) — only its
+// former UI affordance is gone.
+describe('package.json Open Header has no button of its own — row click replaces it (#345)', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
 
-  it.each(['modbench@1', 'inline'])('targets the merged tree, both plugin row kinds, group %s', (group) => {
-    const entry = contextMenus().find((e) => e.command === 'modbench.openHeader' && e.group === group);
-    expect(entry, `expected an openHeader entry in group ${group}`).toBeTruthy();
-    expect(entry!.when).toBe('view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)');
+  it('contributes no context-menu or inline entry for modbench.openHeader', () => {
+    expect(contextMenus().filter((e) => e.command === 'modbench.openHeader')).toEqual([]);
+  });
+
+  it('modbench.openHeader itself is still declared — the row-click bridge command, not a button', () => {
+    const commands = pkg.contributes.commands as { command: string }[];
+    expect(commands.some((c) => c.command === 'modbench.openHeader')).toBe(true);
   });
 });
 
@@ -560,18 +566,19 @@ describe('package.json has no trace of the retired drift gesture (#356)', () => 
   });
 
   // The D3 enumeration, kept honest: every command reachable from a plugin row, listed, now with
-  // exactly one contextValue (`plugin`) standing in for what used to be two.
+  // exactly one contextValue (`plugin`) standing in for what used to be two. #345: Open Header's
+  // two entries are gone — it opens via row click now (PluginNode/ImplicitMasterNode's own
+  // `.command`), not a context/inline menu entry, so it no longer appears in this enumeration.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
-      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
-      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
       ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.pluginListTree.track', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.saveAndCompile', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.pluginListTree.rebase', 'view == modbench.pluginListTree && viewItem == plugin'],
-      // Filter to Selected Plugins (#363): a read-only record-filter scoping, so — like Open
-      // Header — it applies to an implicit master too, not just a togglable plugin row.
+      // Filter to Selected Plugins (#363): a read-only record-filter scoping, so it applies to an
+      // implicit master too, not just a togglable plugin row (Open Header used to be the other
+      // such command; #345 retired its menu entry, this one stays).
       ['modbench.pluginListTree.filterToSelected', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
     ]);
   });
@@ -631,8 +638,9 @@ describe('package.json contributes nothing for the retired pending-change model 
     const menus = Object.entries(pkg.contributes.menus as Record<string, { command?: string; when?: string }[]>)
       .flatMap(([menu, entries]) => entries.map((e) => ({ menu, ...e })));
 
-    // Positive control, same flattened list.
-    expect(menus.some((m) => m.command === 'modbench.openHeader')).toBe(true);
+    // Positive control, same flattened list. modbench.openHeader itself no longer contributes a
+    // menu entry (#345: row click replaces the button) — revealInExplorer still does.
+    expect(menus.some((m) => m.command === 'modbench.pluginListTree.revealInExplorer')).toBe(true);
 
     expect(menus.filter((m) => RETIRED.test(m.command ?? '') || RETIRED.test(m.when ?? ''))).toEqual([]);
   });
