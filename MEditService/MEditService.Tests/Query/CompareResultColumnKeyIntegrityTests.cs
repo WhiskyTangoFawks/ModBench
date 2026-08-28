@@ -177,6 +177,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
         public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
+        public PluginResponse SetPluginParticipation(string plugin, bool participates) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();

@@ -513,6 +513,30 @@ describe('PluginsTreeComposite when the session closes', () => {
   });
 });
 
+// #97 / ADR-0035 § Live mutation: the composition root's gate for whether a load-order mutation
+// (a checkbox toggle) has a running backend session to apply itself to at all.
+describe('PluginsTreeComposite.hasSession', () => {
+  it('is false before any session is set', () => {
+    const { composite } = make([PLUGIN_ROW]);
+    expect(composite.hasSession()).toBe(false);
+  });
+
+  it('is true once a session is set, even an empty one', () => {
+    const { composite } = make([PLUGIN_ROW]);
+    composite.setSession(new Set());
+    expect(composite.hasSession()).toBe(true);
+  });
+
+  it('is false again once the session closes', () => {
+    const { composite } = make([PLUGIN_ROW]);
+    composite.setSession(new Set(['A.esp']));
+
+    composite.setSession(undefined);
+
+    expect(composite.hasSession()).toBe(false);
+  });
+});
+
 // #276 / ADR-0035: read-only-for-editing (Editing's "Immutable plugin", medit/ApiClient.ts
 // PluginMetadata.isImmutable) is decided and rendered here — the one place already exempted from
 // contextBoundary.test.ts's import scan because it has to be able to say in prose what it joins —

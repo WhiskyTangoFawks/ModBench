@@ -396,6 +396,40 @@ export class SessionController {
     return true;
   }
 
+  /** #97 / ADR-0035 § Live mutation: the checkbox gesture — flips a load-order member's
+   *  participation flag (the `plugins.txt` `*` prefix) in the running session, no re-index, one
+   *  winner re-sweep. No origin: Mod Management's own plugin-list model carries none (`plugins.txt`
+   *  has none to read), and the backend resolves the load-order member by bare name.
+   *
+   *  Returns whether it happened, same posture as `rereadPlugin` — a 409 (a load still in flight)
+   *  is the ordinary "retry once it lands" answer, worth telling the user precisely because
+   *  retrying will work. */
+  async setPluginParticipation(plugin: string, participates: boolean): Promise<boolean> {
+    try {
+      const { error, response } = await this.deps.client.POST('/plugins/{plugin}/participation', {
+        params: { path: { plugin } },
+        body: { participates },
+      });
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[SessionController] setPluginParticipation(${plugin}) failed (${response.status}): ${text}`);
+        this.deps.showError(`mEdit: Could not update "${plugin}" — ${text}`);
+        return false;
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[SessionController] setPluginParticipation(${plugin}) threw: ${message}`);
+      this.deps.showError(`mEdit: Could not update "${plugin}" — ${message}`);
+      return false;
+    }
+    // Winners were re-swept synchronously inside the POST above (same contract RereadPlugin's own
+    // comment cites), so every cached page for this plugin and every conflict badge in the tree is
+    // stale — and reaching here *is* "conflicts are now computed" again.
+    this.deps.refreshTree();
+    this.deps.notifyConflictsComputed();
+    return true;
+  }
+
   /** #414/ADR-0041: the Track gesture. Origin names the mod folder — every loaded plugin sharing
    *  it is tracked together, resolved backend-side, same division of labour as `rereadPlugin`.
    *

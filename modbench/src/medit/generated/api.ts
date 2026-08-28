@@ -117,6 +117,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/participation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetPluginParticipation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/track": {
         parameters: {
             query?: never;
@@ -1036,6 +1052,9 @@ export interface components {
             conflictsComputed?: boolean;
             failures?: components["schemas"]["PluginLoadFailure"][] | null;
         };
+        SetPluginParticipationRequest: {
+            participates?: boolean;
+        };
         /**
          * Format: int32
          * @enum {integer}
@@ -1382,6 +1401,59 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SetPluginParticipation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPluginParticipationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginResponse"];
                 };
             };
             /** @description Not Found */

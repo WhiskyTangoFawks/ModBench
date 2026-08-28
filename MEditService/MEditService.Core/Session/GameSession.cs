@@ -422,6 +422,39 @@ public sealed class GameSession : IGameSession
         return metadata;
     }
 
+    /// <summary>
+    /// Flips a load-order member's participation flag in place — the session half of #97's live
+    /// mutation (ADR-0035 § Live mutation). Mirrors <see cref="RebindPlugin"/>'s shape: the caller
+    /// (<c>SessionManager.SetPluginParticipation</c>) already resolved which <see cref="PluginMetadata"/>
+    /// this is via <c>RequirePlugin</c>, and this method's only job is to publish the flip through
+    /// the same copy-on-write snapshot every other mutator in this class uses. Nothing here opens or
+    /// re-reads the plugin file — participation is a fact about whether a load-order member competes
+    /// for winner, not about what its content is.
+    /// </summary>
+    public PluginMetadata SetParticipation(PluginMetadata previous, bool participates)
+    {
+        var metadata = previous with { Participates = participates };
+
+        lock (_mutation)
+        {
+            var index = _plugins.FindIndex(p =>
+                p.InLoadOrder == previous.InLoadOrder
+                && p.Name.Equals(previous.Name, StringComparison.OrdinalIgnoreCase)
+                && p.Origin.Equals(previous.Origin, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+                throw new KeyNotFoundException($"No plugin '{previous.Name}' from origin '{previous.Origin}' is loaded.");
+
+            _plugins[index] = metadata;
+            Volatile.Write(ref _pluginsSnapshot, [.. _plugins]);
+        }
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Set {FileName} participation: {Participates}", previous.Name, participates);
+        }
+        return metadata;
+    }
+
     private PluginMetadata Open(
         string filePath, string origin, int loadOrderIndex, bool isImmutable, bool participates, bool inLoadOrder = true)
     {

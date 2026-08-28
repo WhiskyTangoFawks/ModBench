@@ -211,6 +211,18 @@ export function pluginNamesInSelection(clicked: PluginListNode | undefined, sele
   return [...new Set(names)];
 }
 
+/** #97 / ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
+ *  and its new `plugins.txt` `*` state, exactly as `setPluginEnabled` just wrote it. Fired only
+ *  from a real toggle, never from `invalidate()`'s generic re-render (a filter keystroke, an
+ *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend session
+ *  to apply. The composition root (`extension.ts`) is the only subscriber: Mod Management itself
+ *  never calls the backend (root CLAUDE.md), so this event is as far as this module's own
+ *  knowledge of the mutation goes. */
+export interface PluginParticipationChange {
+  plugin: string;
+  enabled: boolean;
+}
+
 /** Sidebar Plugin List (Loadout) tree: one row per plugins.txt line, in Plugin
  *  load order (top = loads first). Toggling a row's checkbox writes plugins.txt
  *  immediately via `setPluginEnabled`. */
@@ -222,6 +234,11 @@ export class PluginListProvider
 
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginListNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
+
+  // #97 / ADR-0035 § Live mutation: see PluginParticipationChange's own doc comment for why this
+  // is a distinct event from onDidChangeTreeData rather than reusing it.
+  private readonly _onDidChangeParticipation = new vscode.EventEmitter<PluginParticipationChange>();
+  readonly onDidChangeParticipation = this._onDidChangeParticipation.event;
 
   private readonly source: IModlistSource;
   private readonly log: (msg: string) => void;
@@ -284,10 +301,13 @@ export class PluginListProvider
   }
 
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
-   *  invalidate so the tree re-reads the persisted state. */
+   *  invalidate so the tree re-reads the persisted state. Fires `onDidChangeParticipation`
+   *  after the write succeeds (#97 / ADR-0035 § Live mutation) — the composition root's cue to
+   *  apply the same change to a running backend session, live. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
+    this._onDidChangeParticipation.fire({ plugin: pluginName, enabled });
   }
 
   /** Resolve a plugin NAME to its winning physical path — the MO2-priority
