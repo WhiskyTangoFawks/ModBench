@@ -136,6 +136,10 @@ export interface RecordDetail {
   // from — parallel sibling to `plugin`, never parsed out of a ColumnKey (see columnKey()'s own
   // doc comment). Required (#275) — every construction must say which origin.
   origin: string;
+  // #491: this override's own record-header Partial Form flag — its own fields are excluded from
+  // conflict detection and (until #539 lands the header write path) read-only entirely. Optional
+  // so existing fixtures/callers don't break; always populated by the real backend response.
+  isPartialForm?: boolean;
 }
 
 export interface CompareOverride extends RecordDetail {
