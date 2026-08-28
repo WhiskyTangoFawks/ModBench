@@ -21,7 +21,7 @@ On ship: fold outcome into the surface spec — spec always = current behavior.
 - Epic narrative = **milestone description**. Unscheduled roadmap items = real issues under the epic, not prose.
 
 Traverse with `gh`:
-- **List epics**: `gh api repos/WhiskyTangoFawks/ModBench/milestones --jq 'sort_by(.title)[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
+- **List epics** (numeric prefix order — a plain title sort puts "10" before "2"): `gh api repos/WhiskyTangoFawks/ModBench/milestones --jq 'sort_by(.title | [scan("^[0-9]+")] | if length > 0 then (.[0] | tonumber) else infinite end)[] | "\(.title): \(.open_issues)o/\(.closed_issues)c"'`
 - **Epic's issues**: `gh issue list --milestone "1 — Mod-management maturity"`
 - **Assign/move**: `gh issue edit <n> --milestone "<title>"`; **create epic**: `gh api --method POST repos/…/milestones -f title=… -f description=…`.
 
@@ -34,6 +34,11 @@ Traverse with `gh`:
 - **List**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`; add `--label`/`--state` as needed.
 - **Comment**: `gh issue comment <number> --body "..."`
 - **Labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
+- **Blocking links**: dependency is tracker state, not a label or prose. Link the moment a
+  dependency is known — at filing, triage, or queue rejection: `gh issue edit <n> --add-blocked-by <m>`
+  (`--remove-blocked-by` to undo); read via `--json blockedBy` (nodes carry `state`). Blocked =
+  any `OPEN` node; queue tooling (`/orchestrate`) excludes blocked issues automatically and
+  readmits them when the blocker closes — no label churn, no re-triage.
 - **Close**: `gh issue close <number> --comment "..."`
 
 `gh` auto-detects repo via `git remote -v`.
