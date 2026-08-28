@@ -571,6 +571,43 @@ public sealed class SessionManager(
         }
     }
 
+    // #97 / ADR-0035 § Live mutation: flips a load-order member's participation flag (the
+    // plugins.txt `*` prefix) in the running session — SQL-only, no re-read, no re-index. Mirrors
+    // RereadPlugin's lock/busy-guard shape exactly: the check-and-act shares one lock acquisition
+    // (see that method's own comment for why splitting it is a crash-class hazard), and a load in
+    // flight refuses with the same SessionBusyException rather than racing the loading thread's own
+    // writes to this repository.
+    public PluginResponse SetPluginParticipation(string plugin, bool participates)
+    {
+        lock (_lock)
+        {
+            if (_loadCancellation is not null)
+            {
+                throw new SessionBusyException(
+                    "A session load is still in flight; change this plugin's participation once it has finished.");
+            }
+
+            var (previous, repository, _) = RequirePlugin(plugin);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Setting {Plugin} participation: {Participates}", plugin, participates);
+            }
+
+            var metadata = _session!.SetParticipation(previous, participates);
+            repository.SetPluginParticipation(new PluginKey(metadata.Name, metadata.Origin), participates);
+            // AC2/AC6: the whole-set sweep, so winner status, conflict badges and any open record
+            // editor describe the new participation — the same re-sweep RereadPlugin's own AC7
+            // comment cites, for the same reason.
+            repository.UpdateWinners();
+            // #422: a plugin that stops participating stops contributing is_winner rows a filter
+            // referencing that column could match — same reasoning as every other mutation path.
+            ReapplyFilter();
+
+            return PluginResponse.FromMetadata(metadata);
+        }
+    }
+
     public Task ReindexPlugin(string plugin)
     {
         var (metadata, repository, gameRelease) = RequirePlugin(plugin);

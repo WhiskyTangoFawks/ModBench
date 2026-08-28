@@ -85,6 +85,7 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);
         public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => inner.RereadPlugin(plugin, newPath, newOrigin);
+        public PluginResponse SetPluginParticipation(string plugin, bool participates) => inner.SetPluginParticipation(plugin, participates);
         public void SetFilter(string sql) => inner.SetFilter(sql);
         public void ClearFilter() => inner.ClearFilter();
         public void ReapplyFilter() => inner.ReapplyFilter();

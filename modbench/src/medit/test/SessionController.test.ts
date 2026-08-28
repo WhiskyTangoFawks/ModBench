@@ -917,6 +917,69 @@ describe('SessionController.rereadPlugin', () => {
   });
 });
 
+// ── setPluginParticipation (#97) ─────────────────────────────────────────────
+
+describe('SessionController.setPluginParticipation', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('POSTs the plugin (as a route param, no origin) and the new participation, and refreshes the tree', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    const ok = await controller.setPluginParticipation('A.esp', false);
+
+    expect(ok).toBe(true);
+    expect(deps.client.POST).toHaveBeenCalledWith('/plugins/{plugin}/participation', {
+      params: { path: { plugin: 'A.esp' } },
+      body: { participates: false },
+    });
+    // Participation changes what competes for winner, so every conflict badge and any open
+    // record editor's stale-comparison banner needs the same refresh a re-read gets.
+    expect(deps.refreshTree).toHaveBeenCalled();
+  });
+
+  // Same signal rereadPlugin's own POST fires — the backend re-sweeps winners synchronously
+  // inside SessionManager.SetPluginParticipation, so reaching here *is* "conflicts are now
+  // computed" again.
+  it('notifies that conflicts are computed, the same signal a completed load fires', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    await controller.setPluginParticipation('A.esp', true);
+
+    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
+  });
+
+  // ADR-0026 "explicit action failed" tier: the user (via the checkbox) asked for this, so a
+  // failure is a notification, not a log line — and nothing is refreshed, because nothing changed.
+  it('surfaces a failure and reports that it did not happen', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockResolvedValue(drainedError(409, 'A session load is still in flight'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.setPluginParticipation('A.esp', false);
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('A session load is still in flight'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
+  });
+
+  it('surfaces a thrown request the same way', async () => {
+    const client = makeClient();
+    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+    const deps = makeDeps({ client });
+    const controller = new SessionController(deps);
+
+    const ok = await controller.setPluginParticipation('A.esp', false);
+
+    expect(ok).toBe(false);
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
+  });
+});
+
 // ── resolveOrigin (#414) ─────────────────────────────────────────────────────
 
 describe('SessionController.resolveOrigin', () => {

@@ -155,6 +155,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) =>
             inner.RereadPlugin(plugin, newPath, newOrigin);
+        public PluginResponse SetPluginParticipation(string plugin, bool participates) =>
+            inner.SetPluginParticipation(plugin, participates);
         public Task ReindexPlugin(string plugin) => inner.ReindexPlugin(plugin);
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => inner.ReindexPlugins(plugins);
         public void SetFilter(string sql) => inner.SetFilter(sql);

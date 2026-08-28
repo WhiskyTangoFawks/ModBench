@@ -104,4 +104,57 @@ public sealed class GameSessionParticipationTests
 
         Assert.True(session.Plugins.Single(p => p.Name == "Fallout4.esm").Participates);
     }
+
+    // #97 / ADR-0035 § Live mutation: the session half of the checkbox gesture — flips an
+    // already-loaded plugin's Participates flag in place, with no re-open and no re-read of the
+    // plugin file (the record content is unchanged; only whether it competes for winner is).
+    [Fact]
+    public void SetParticipation_FlipsTheFlag_AndPublishesItThroughPlugins()
+    {
+        using var data = new PluginFixtureBuilder("gs-setparticipation-flip")
+            .WithPlugin("Enabled.esp")
+            .Build();
+
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        var previous = session.Plugins.Single(p => p.Name == "Enabled.esp");
+        Assert.True(previous.Participates);
+
+        var updated = session.SetParticipation(previous, false);
+
+        Assert.False(updated.Participates);
+        Assert.False(session.Plugins.Single(p => p.Name == "Enabled.esp").Participates);
+    }
+
+    // Rival named: an implementation that mutates `_plugins[index]` without republishing
+    // `_pluginsSnapshot` would leave `session.Plugins` (the copy-on-write reader) serving the
+    // pre-flip snapshot forever — this is the test that would catch it, since it reads `Plugins`
+    // fresh rather than trusting the returned metadata alone.
+    [Fact]
+    public void SetParticipation_LeavesOtherPlugins_Untouched()
+    {
+        using var data = new PluginFixtureBuilder("gs-setparticipation-others")
+            .WithPlugin("A.esp")
+            .WithPlugin("B.esp")
+            .Build();
+
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        var previous = session.Plugins.Single(p => p.Name == "A.esp");
+
+        session.SetParticipation(previous, false);
+
+        Assert.True(session.Plugins.Single(p => p.Name == "B.esp").Participates);
+    }
+
+    [Fact]
+    public void SetParticipation_PluginNotLoaded_ThrowsKeyNotFound()
+    {
+        using var data = new PluginFixtureBuilder("gs-setparticipation-unknown")
+            .WithPlugin("A.esp")
+            .Build();
+
+        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        var ghost = session.Plugins.Single(p => p.Name == "A.esp") with { Name = "Ghost.esp" };
+
+        Assert.Throws<KeyNotFoundException>(() => session.SetParticipation(ghost, false));
+    }
 }

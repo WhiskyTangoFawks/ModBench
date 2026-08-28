@@ -1255,6 +1255,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
       }
     }),
     registerRevealInExplorerCommand(pluginListProvider, outputChannel),
+    registerParticipationLiveMutation(pluginListProvider, controller),
     pluginsNameFilter,
     // #448 / #34: a Stack peer's collapse is the unlisted-plugin door's own mirror of its
     // expand-time load — dropping the loaded copy so a browsed-then-abandoned peer never lingers
@@ -1288,6 +1289,30 @@ function registerRevealInExplorerCommand(
       outputChannel.error(`[extension] revealInExplorer for "${name}" failed: ${err instanceof Error ? err.message : String(err)}`);
       void vscode.window.showErrorMessage(`Modbench: Failed to reveal "${name}" in Explorer.`);
     }
+  });
+}
+
+/** #97 / ADR-0035 § Live mutation: the checkbox gesture's other half — applies the same
+ *  participation change `PluginListProvider.setPluginEnabled` just wrote to `plugins.txt` onto a
+ *  running backend session, live, with the Plugins view's own header progress indicator as the
+ *  only feedback (`withPluginsViewProgress`, AC7). A no-op when no backend session is loaded
+ *  (`pluginsTree.hasSession()`) — Mod Management works with no backend running, and that is the
+ *  ordinary case, not a failure to report (`PluginsTreeComposite.hasSession`'s own doc comment) —
+ *  so this never even attempts the call rather than surfacing it as a network-error toast.
+ *  `pluginsTree` is read fresh on every event rather than closed over at registration time,
+ *  since it is reassigned by every `enterEditing`/`exitToLoadout` cycle a session's whole
+ *  lifetime after this listener is wired.
+ *
+ *  Pulled out of `registerPluginListView` purely to keep that function under the lint line
+ *  budget, same as `registerRevealInExplorerCommand` alongside it. */
+function registerParticipationLiveMutation(
+  pluginListProvider: PluginListProvider, controller: SessionController,
+): vscode.Disposable {
+  return pluginListProvider.onDidChangeParticipation(({ plugin, enabled }) => {
+    if (!pluginsTree?.hasSession()) return;
+    void withPluginsViewProgress(async () => {
+      await controller.setPluginParticipation(plugin, enabled);
+    });
   });
 }
 

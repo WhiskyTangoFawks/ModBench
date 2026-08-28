@@ -77,6 +77,19 @@ public static class PluginEndpoints
             .ProducesProblem(409)
             .ProducesProblem(503);
 
+        // #97 / ADR-0035 § Live mutation: the checkbox gesture — flips a load-order member's
+        // participation flag live, no re-index, one winner re-sweep. `plugin` alone (no origin) is
+        // enough: Mod Management's plugin-list model carries no origin (plugins.txt has none to
+        // read), and RequirePlugin's own load-order-member lookup already resolves by bare name —
+        // there is exactly one load-order member per name.
+        app.MapPost("/plugins/{plugin}/participation", SetPluginParticipation)
+            .WithName("SetPluginParticipation")
+            .WithTags(Tag)
+            .Produces<PluginResponse>()
+            .ProducesProblem(404)
+            .ProducesProblem(409)
+            .ProducesProblem(503);
+
         app.MapPost("/plugins/track", Track)
             .WithName("Track")
             .WithTags(Tag)
@@ -319,6 +332,36 @@ public static class PluginEndpoints
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No session when re-reading {Plugin}", req.Plugin);
+            return Results.Problem(ex.Message, statusCode: 503);
+        }
+    }
+
+    // #97 / ADR-0035 § Live mutation: the checkbox gesture's own door. Same status mapping as
+    // RereadPlugin's own catch block — 409 while a load is in flight, 404 for a name the load order
+    // does not have, 503 with no session — since the refusal reasons are the same shape.
+    internal static IResult SetPluginParticipation(
+        string plugin, SetPluginParticipationRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    {
+        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
+        var decoded = Uri.UnescapeDataString(plugin);
+
+        try
+        {
+            return Results.Ok(sessionManager.SetPluginParticipation(decoded, req.Participates));
+        }
+        catch (SessionBusyException ex)
+        {
+            logger.LogWarning(ex, "Refused to set {Plugin} participation while a load is in flight", decoded);
+            return Results.Problem(ex.Message, statusCode: 409);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            logger.LogWarning(ex, "No load-order plugin {Plugin} to set participation on", decoded);
+            return Results.Problem(ex.Message, statusCode: 404);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "No session when setting {Plugin} participation", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -665,6 +708,12 @@ public record UnloadPluginRequest(string Plugin, string Origin);
 // #279: Path and Origin are the copy the plugin name resolves to *now*, resolved by Mod
 // Management. Plugin is the filename, which is what the load order names and what does not change.
 public record RereadPluginRequest(string Plugin, string Path, string Origin);
+
+// #97: no Origin — the plugin name rides the route (matching CompileRequest's own shape), and
+// unlike RereadPluginRequest there is no second physical copy to resolve; Mod Management's own
+// plugin-list model carries no origin at all (plugins.txt has none to read), so this is the only
+// participation-toggle shape that matches what the caller actually has.
+public record SetPluginParticipationRequest(bool Participates);
 
 // #414: Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — Plugin/Path
 // aren't needed here, unlike RereadPluginRequest's: Origin alone is enough for TrackService to

@@ -224,6 +224,36 @@ describe('PluginListProvider', () => {
     expect(source.readPluginOrderCalls).toBeGreaterThan(callsAfterFirstRead);
   });
 
+  // #97 / ADR-0035 § Live mutation: the composition root's cue to apply the same participation
+  // change to a running backend session. Named plugin/enabled must match exactly what was
+  // written, since the backend call the composition root makes off this carries no other source
+  // of truth for which plugin or which state.
+  it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
+    const source = new FakeSource(['A.esp']);
+    const provider = new PluginListProvider({ source });
+    const seen: { plugin: string; enabled: boolean }[] = [];
+    provider.onDidChangeParticipation((e) => seen.push(e));
+
+    await provider.setPluginEnabled('A.esp', false);
+
+    expect(seen).toEqual([{ plugin: 'A.esp', enabled: false }]);
+  });
+
+  // Rival named: an implementation that fires onDidChangeParticipation from invalidate() itself
+  // (reusing onDidChangeTreeData's own generic "something changed" firing) would also fire it for
+  // a filter keystroke or an external plugins.txt edit picked up by a watcher — neither is a
+  // participation change a backend session should be told about. This is the test that would
+  // catch that: invalidate() alone must never fire it.
+  it('invalidate() alone does not fire onDidChangeParticipation', () => {
+    const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
+    let fired = false;
+    provider.onDidChangeParticipation(() => { fired = true; });
+
+    provider.invalidate();
+
+    expect(fired).toBe(false);
+  });
+
   it('invalidate() fires onDidChangeTreeData so the Refresh button can re-read', () => {
     const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
     let fired = false;

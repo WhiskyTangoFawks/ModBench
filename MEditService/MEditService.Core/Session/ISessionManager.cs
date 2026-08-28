@@ -96,6 +96,17 @@ public interface ISessionManager
     PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin);
 
     /// <summary>
+    /// Flips <paramref name="plugin"/>'s participation flag (the <c>plugins.txt</c> <c>*</c> prefix)
+    /// in the running session and recomputes winners — #97 / ADR-0035 § Live mutation's checkbox
+    /// gesture. SQL-only: no re-read, no re-index, and the DuckDB connection never changes, which is
+    /// what makes this safe to apply live and unprompted.
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// Throws <see cref="SessionBusyException"/> if a session load is in flight.
+    /// Throws <see cref="KeyNotFoundException"/> if the load order does not name the plugin.
+    /// </summary>
+    PluginResponse SetPluginParticipation(string plugin, bool participates);
+
+    /// <summary>
     /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record repository,
     /// then recomputes winners. Call after committing a prepared save to disk.
     /// Throws <see cref="InvalidOperationException"/> if no session is loaded.

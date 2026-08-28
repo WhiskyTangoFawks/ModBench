@@ -255,6 +255,17 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     return this.rowsSeen.has(element as object);
   }
 
+  /** #97 / ADR-0035 § Live mutation: whether a backend session is currently loaded — the same fact
+   *  `expandableFile` below already gates the chevron on, exposed so the composition root can
+   *  decide whether a load-order mutation (a checkbox toggle) has a running session to apply
+   *  itself to at all, before ever attempting the call. Mod Management works with no backend
+   *  running (root CLAUDE.md), which is the ordinary case, not a failure — so this is checked
+   *  rather than let a doomed request surface as a network-error toast for an entirely normal
+   *  loadout-only session. */
+  hasSession(): boolean {
+    return this.sessionFiles !== undefined;
+  }
+
   /** The plugin file this row can browse, or undefined when it can't be expanded — no session, no
    *  plugin file, or a file the session doesn't hold. A row whose filter match is `false` never
    *  reaches here at all (#396: `getChildren()` omits it before `getTreeItem`/`getChildren(row)`
