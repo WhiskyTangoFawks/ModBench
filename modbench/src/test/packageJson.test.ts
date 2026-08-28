@@ -301,12 +301,14 @@ describe('package.json title-bar rubric (#247)', () => {
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter(Boolean) as string[]);
 
   // Rule 1, scope first: an action that isn't about this tree's own domain doesn't go on this
-  // tree. These six are workspace-scope — they swap the modlist, change the mode, or act on the
-  // whole deployment — and each landed on whichever view happened to exist when it shipped.
+  // tree. These four are workspace-scope — they swap the modlist, act on the whole deployment,
+  // or reload the session — and each landed on whichever view happened to exist when it
+  // shipped. Launch mEdit / Close mEdit dropped out of this list under #352: the maintainer's
+  // ruling there was that mEdit is *not* workspace-scope, it is an option on the Plugins view's
+  // own domain — see 'package.json Launch/Close mEdit on the Plugins view (#352)' below for its
+  // placement assertions.
   const WORKSPACE_ACTIONS = [
     'modbench.modList.switchProfile',
-    'modbench.modList.launchMedit',
-    'modbench.closeMedit',
     'modbench.modList.deploy',
     'modbench.modList.purge',
     'modbench.reloadSession',
@@ -359,6 +361,47 @@ describe('package.json title-bar rubric (#247)', () => {
     expect(sidebar).toContain('modbench.modList');
     expect(sidebar).toContain('modbench.pluginListTree');
   });
+});
+
+// #352: "launch mEdit should be an option on the plugins view — mEdit isn't a universal
+// option, it's an option on the plugins view" (maintainer's ruling, sliced out of #346). The
+// command ids are unchanged; only the affordance moves, off the Loadout header and onto the
+// one Plugins tree. Placement is overflow, not a navigation icon: rule 2's own ceiling test
+// above already measures modbench.pluginListTree at its 4-icon maximum before this pair is
+// added — a two-command toggle still "counts as one icon" per rule 2, but that accounting
+// only matters once there is a free slot to spend it on, and rule 5's own slot sequence ends
+// "then overflow" for whatever arrives once domain-action slots are exhausted.
+describe('package.json Launch/Close mEdit on the Plugins view (#352)', () => {
+  const titleMenus = () => pkg.contributes.menus['view/title'] as { command: string; when: string; group: string }[];
+  const entriesFor = (command: string) => titleMenus().filter((e) => e.command === command);
+
+  it.each(['modbench.modList.launchMedit', 'modbench.closeMedit'])(
+    '%s is contributed only to the Plugins view, nowhere else', (command) => {
+      const entries = entriesFor(command);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].when).toContain('view == modbench.pluginListTree');
+    });
+
+  it('is exactly one context-key toggle pair — only ever one of the two visible', () => {
+    const launch = entriesFor('modbench.modList.launchMedit')[0];
+    const close = entriesFor('modbench.closeMedit')[0];
+    expect(launch.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.sessionRunning');
+    expect(close.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.sessionRunning');
+  });
+
+  it('carries the same MO2-instance gating the header withheld it behind', () => {
+    for (const command of ['modbench.modList.launchMedit', 'modbench.closeMedit']) {
+      expect(entriesFor(command)[0].when).toContain('modbench.workspaceIsMo2Instance');
+    }
+  });
+
+  // Overflow, not navigation: modbench.pluginListTree is already at rule 2's 4-icon ceiling
+  // (see the rubric test above), so this pair lands in the `…` menu, per rule 5's own "then
+  // overflow" landing spot for whatever arrives once a view's icon budget is spent.
+  it.each(['modbench.modList.launchMedit', 'modbench.closeMedit'])(
+    '%s stays in overflow, never a navigation icon', (command) => {
+      expect(entriesFor(command)[0].group.startsWith('navigation')).toBe(false);
+    });
 });
 
 describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => {

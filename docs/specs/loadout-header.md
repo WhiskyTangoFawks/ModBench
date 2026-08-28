@@ -1,13 +1,14 @@
 # Loadout header — Surface Specification
 
 **Status: Implemented** (#247). Launch… is a placed affordance whose wiring is deferred —
-see *Launch…* below.
+see *Launch…* below. [#352](https://github.com/WhiskyTangoFawks/ModBench/issues/352) moved
+Launch mEdit / Close mEdit off this surface onto the [Plugins view](plugins.md) — see *mEdit
+moved to the Plugins view (#352)* below.
 
-A cross-context surface. It reads Mod-Management state (profile, deployment) and starts and
-stops an Editing session, so it belongs to neither bounded context and lives at the
-composition root ([CONTEXT-MAP.md](../../CONTEXT-MAP.md)). It carries no domain vocabulary of
-its own: it names *profiles*, a *session*, and a *deployment*, and never records, FormKeys,
-mods or files.
+A cross-context surface. It reads Mod-Management state (profile, deployment), so it belongs to
+neither bounded context and lives at the composition root
+([CONTEXT-MAP.md](../../CONTEXT-MAP.md)). It carries no domain vocabulary of its own: it names
+*profiles* and a *deployment*, and never records, FormKeys, mods or files.
 
 Siblings: [Mods](mods.md), [Plugins load order](plugins.md), [Downloads](downloads.md),
 [mEdit](medit.md).
@@ -54,14 +55,10 @@ stays quiet rather than repeating it.
 | Row | Description | Activates |
 | --- | --- | --- |
 | Profile | active profile name, or `—` when unreadable | Switch Profile |
-| mEdit | `running` / `not running` | Close mEdit / Launch mEdit |
 | Deployment | `deployed` / `not deployed` | Deploy, when not deployed |
 
 - The **Profile** row degrades to `—` and logs rather than erroring: a readout blip is
   ADR-0026's background tier, not a toast.
-- The **mEdit** row is one row carrying whichever direction is available — the same
-  two-command/context-key toggle shape used by sort direction and show-hidden, expressed as a
-  row instead of an icon.
 - The **Deployment** row appears only when Modbench itself is the deployer
   (`modbench.mods.deploymentMode != external`, read through the single `isStandaloneDeployment`
   predicate that also drives the `when` clauses, so a row and an icon can never disagree), and
@@ -70,6 +67,18 @@ stays quiet rather than repeating it.
   the readout cannot disagree with what purge would do. A corrupt manifest reads as deployed:
   there is state out there needing a purge, which is what the row should say. When deployed,
   the row is an inert readout — Purge is destructive and stays in overflow behind a modal.
+
+### mEdit moved to the Plugins view (#352)
+
+Sliced out of #346 during triage: "launch mEdit should be an option on the plugins view —
+mEdit isn't a universal option, it's an option on the plugins view" (maintainer's ruling).
+This header no longer carries an mEdit row of any kind, running or not, and reads no
+backend/session state — `LoadoutHeaderProvider` only ever reads Mod-Management state now.
+Launch mEdit / Close mEdit are the same two command ids as before
+(`modbench.modList.launchMedit` / `modbench.closeMedit`), now reachable from the
+[Plugins view](plugins.md)'s own title-bar overflow, gated the same way it was withheld here —
+`modbench.workspaceIsMo2Instance`. See [plugins.md](plugins.md#toolbar--title-bar) for the
+placement and its context-key toggle.
 
 ### Title bar
 
@@ -128,21 +137,21 @@ script-extender loader exits immediately and its exit code says nothing about th
 
 - **`LoadoutHeaderProvider`** (`modbench/src/LoadoutHeaderProvider.ts`) lives at the
   composition root and imports from neither bounded context. Every piece of state arrives as
-  an injected getter — `activeProfile`, `sessionRunning`, `deployment` — which is both the
-  language-boundary constraint (#241 records the same one for the merged plugins provider) and
-  what makes the whole surface unit-testable without a VS Code harness.
-- **It owns no state.** Profile comes from `Mo2ModlistSource`, session from `BackendManager`,
-  deployment from the deploy manifest. The header re-reads; it never caches.
-- **Refresh triggers** are the transitions themselves: `BackendManager`'s `status` event (which
-  now includes a deliberate `stopped`, previously written straight to the status bar and
-  therefore unobservable), a profile switch, a deploy or purge, and a change to
-  `modbench.mods.deploymentMode`.
+  an injected getter — `activeProfile`, `deployment` — which is both the language-boundary
+  constraint (#241 records the same one for the merged plugins provider) and what makes the
+  whole surface unit-testable without a VS Code harness. It reads no backend/session state at
+  all since #352 moved the mEdit row off it (see above).
+- **It owns no state.** Profile comes from `Mo2ModlistSource`, deployment from the deploy
+  manifest. The header re-reads; it never caches.
+- **Refresh triggers** are the transitions themselves: a profile switch, a deploy or purge, and
+  a change to `modbench.mods.deploymentMode`.
 - **The four-row ceiling is a design constraint, not a limit of the widget.** A fifth candidate
-  row is a signal that the state belongs in a tree or the status bar.
+  row is a signal that the state belongs in a tree or the status bar. #352 leaves it at two.
 
 ## Testing
 
-- `src/test/LoadoutHeaderProvider.test.ts` — every row, as a function of injected state.
+- `src/test/LoadoutHeaderProvider.test.ts` — every row, as a function of injected state; also
+  guards that no mEdit row exists any more (#352).
 - `src/test/packageJson.test.ts` — the header is first in the container and ungated; the
   placement rubric (slots, icon ceiling, workspace actions absent from domain trees,
   destructive actions out of navigation) holds across every contributed menu.
@@ -150,8 +159,11 @@ script-extender loader exits immediately and its exit code says nothing about th
 
 ## Relationship to #241
 
-The header is what [#268](https://github.com/WhiskyTangoFawks/ModBench/issues/268) needs: with
-the loadout and editing views co-visible, starting and stopping the backend cannot belong to
-either Plugins tree's title bar. It is contributed without a `when` clause, so
+The header is what [#268](https://github.com/WhiskyTangoFawks/ModBench/issues/268) needed
+originally: with the loadout and editing views co-visible, starting and stopping the backend
+could not belong to either of the two pre-#270 Plugins trees' title bars, so it lived here
+instead. Post-#270 there is one merged Plugins tree, and #352 revisits that call now that a
+single, unambiguous domain tree exists to host it — see *mEdit moved to the Plugins view
+(#352)* above. The header itself is contributed without a `when` clause, so
 [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273) retiring `modbench.viewMode`
 does not touch it.

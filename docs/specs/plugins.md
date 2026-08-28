@@ -616,6 +616,19 @@ overflow, then native **Collapse All** last.
   frontend never saw it applied), never by its SQL text: a `WHERE` clause is not a readout.
   Clearing either axis leaves the other applied and still named.
 - **Slot 3 — New Plugin…**.
+- **Overflow — Launch mEdit / Close mEdit** ([#352](https://github.com/WhiskyTangoFawks/ModBench/issues/352)):
+  the same two command ids as before the move (`modbench.modList.launchMedit` /
+  `modbench.closeMedit`), gated on `modbench.workspaceIsMo2Instance` — the same MO2-instance
+  gating the [Loadout header](loadout-header.md) withheld it behind — and toggled by the
+  `modbench.sessionRunning` context key, the standard two-command/context-key toggle shape
+  (only one of the pair is ever contributed for a given state, so it "counts as one icon" per
+  `modbench/CLAUDE.md` rule 2). It lands in overflow rather than a `navigation@N` slot because
+  this tree's navigation bar is already at rule 2's four-icon ceiling (name filter, record
+  filter, New Plugin) before this pair is added; rule 5's own slot sequence ends "then
+  overflow" for whatever arrives once a view's icon budget is spent, so overflow is this
+  toggle's rules-compliant landing spot, not a downgrade. Sliced out of #346: the maintainer's
+  ruling was that mEdit is "an option on the plugins view", not a workspace action, so it moved
+  off the [Loadout header](loadout-header.md) entirely rather than gaining a second home.
 - **Native Collapse All** — this became the deepest tree in the product once #270 merged it
   (plugin → record type → record), so it earns the affordance the pre-merge Editing tree
   already had.
