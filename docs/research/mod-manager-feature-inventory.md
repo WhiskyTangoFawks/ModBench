@@ -19,7 +19,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Deployment | USVFS (API hooking, Windows-only) | Hardlinks from staging | ✅ hardlinks (Vortex approach) + purge manifest; symlink fallback for cross-volume |
 | Overwrite folder | ✓ dedicated handling, "move to mod" | n/a (writes land in staging) | ❓ purge collects strays to `mods/overwrite/`; no UI to reassign/discard yet |
 | Tool launcher / dashboard | ✓ executables list | ✓ dashboard dashlets | ➖ mostly covered by VS Code tasks/launch; Launch Game command ✅ |
-| Mod merging (assets) | ✓ | ✗ | ❓ plugin-level merge is Phase 14 (Editing); asset-folder merge unplanned |
+| Mod merging (assets) | ✓ | ✗ | ❓ plugin-level merge is an Editing concern; asset-folder merge unplanned |
 | Problem detection | missing masters, overwrite files, form-43, SE plugins | similar + BSA/BA2 compat | ✅ missing master/missing mod badges; broader checks ❓ |
 
 ## Downloads (planned surface — [docs/specs/downloads.md](../specs/downloads.md))
@@ -27,7 +27,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
 | `nxm://` handler ("Download with manager") | ✓ | ✓ | 🔜 modbench-7 |
-| Download queue UI with progress | ✓ Downloads tab | ✓ | 🔜 modbench-7 (status-bar + quick pick per current spec; tab-like tree ❓) |
+| Download queue UI with progress | ✓ Downloads tab | ✓ | 🔜 modbench-7 (sidebar tree + status-bar item — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)) |
 | Install from download | ✓ double-click | ✓ | 🔜 modbench-7 ("Install now?" → modbench-6 flow) |
 | Nexus account login / API key | ✓ | ✓ (first-party) | 🔜 modbench-7 (`vscode.SecretStorage`) |
 | Update-available check | ✓ | ✓ | 🔜 modbench-8 (`meta.ini` version vs Nexus) |
@@ -35,15 +35,15 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | Premium vs free download links | ✓ | ✓ | 🔜 modbench-7 open question (direct CDN vs redirect) |
 | Collections | ✗ | ✓ browse + install + author | ➖ long-term idea only; but note Modbench's angle — a modlist repo under git *is* a shareable collection |
 
-## Plugins / load order (surface resolved by ADR-0027; tracked in milestone 1 / #7)
+## Plugins / load order (Plugins surface — [docs/specs/plugins.md](../specs/plugins.md))
 
 | Feature | MO2 | Vortex | Modbench |
 |---|---|---|---|
-| Plugin enable/disable + reorder | ✓ Plugins tab | ✓ Plugins page | 🔜 modbench-9 (writes `plugins.txt`) |
-| LOOT auto-sort | ✓ one-click, full masterlist | ✓ built-in, native grouping | 🔜 modbench-9 = dependency-only topological sort; full LOOT masterlist ❓ |
-| ESL flags / capacity display | ✓ | ✓ | ❓ ESL convert is Phase 14 (Editing); display in a Plugins surface undecided |
+| Plugin enable/disable + reorder | ✓ Plugins tab | ✓ Plugins page | ✅ the one Plugins tree ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)), writes `plugins.txt` |
+| LOOT auto-sort | ✓ one-click, full masterlist | ✓ built-in, native grouping | ➖ deferred indefinitely (see plugins.md) |
+| ESL flags / capacity display | ✓ | ✓ | ✅ ESL/ESM flag edited on the header record (Editing); capacity display ❓ |
 | Missing-master warnings | ✓ | ✓ | ✅ (badge, via `MasterReader`) |
-| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([MM ADR-0001](../adr/0021-mod-manager-in-extension.md)) |
+| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([ADR-0021](../adr/0021-mod-manager-in-extension.md)) |
 
 ## Other MO2/Vortex surfaces
 
