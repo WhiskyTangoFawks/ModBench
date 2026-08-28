@@ -273,6 +273,10 @@ using git.
 - **Where**: command from the record editor, a tracked plugin's context menu, and the
   palette. The gesture is named **Save & Compile** in full, so save is never mistaken for
   commit.
+- **Target resolution from the palette** (no tree row, no active record): falls through to
+  a QuickPick over every loaded plugin. Any failure resolving a target — including the
+  backend being unreachable (before Launch mEdit) — reports a clear Modbench-authored
+  error and ends quietly, never VS Code's raw "fetch failed" toast (#505/#530).
 - **Behavior** (#416 pinned contract): serialize the plugin's working tree to the binary
   through the journaled pipeline (timestamped `.bak` per ADR-0008). Masters are derived
   from content and written in current plugin load order. Semantic breakage (dangling
