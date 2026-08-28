@@ -817,7 +817,7 @@ overflow, then native **Collapse All** last.
   MO2 doesn't guard-rail it either, and the order-aware missing-master badge catches the
   fallout if it happens.
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
-  user-written SQL against the per-type tables, not a fixed toggle set (ADR-0018).
+  user-written SQL against the generated per-type views, not a fixed toggle set (ADR-0018).
 - **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record
   down into a master), and merge-into-another-plugin — are deferred and will be delivered as
   Python scripts over the header/renumber/delete edit primitives, not bespoke commands.

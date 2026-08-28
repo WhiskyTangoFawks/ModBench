@@ -157,7 +157,7 @@ export interface PluginRecordTypeCount {
   count: number;
 }
 
-// Phase 16: worldspace / cell / placed-object tree (per-plugin).
+// Worldspace / cell / placed-object tree (per-plugin).
 export interface WorldspaceSummary {
   formKey: string;
   editorId: string | null;

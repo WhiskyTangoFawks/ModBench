@@ -17,8 +17,8 @@ mirroring how VS Code itself splits Explorer from SCM:
 - **The SCM panel renders the divergence** (Effective vs Head) — modifications,
   additions, and deletions alike, for free, via the mod folder's own git repo.
 
-VS Code's Explorer is the idiom reference for pending-change UX (root CLAUDE.md
-carve-out: xEdit has no pending-change model), and Explorer does *not* keep a
+VS Code's Explorer is the idiom reference for tracking/compile UX (root CLAUDE.md
+carve-out: xEdit has no working-tree model), and Explorer does *not* keep a
 deleted file's row visible with a badge — the row disappears and the deletion is
 reviewed in SCM. Modbench already matches that exactly.
 

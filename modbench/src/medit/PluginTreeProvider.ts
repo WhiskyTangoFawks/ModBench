@@ -77,7 +77,7 @@ export class RecordNode extends vscode.TreeItem {
   }
 }
 
-// ── Phase 16: worldspace / cell / placed-object nodes ─────────────────────────
+// ── Worldspace / cell / placed-object nodes ─────────────────────────
 
 // #305 / ADR-0036: every node in the spatial chain carries the same optional `origin` RecordTypeNode
 // already does — a node built for a specific copy has to keep saying so all the way down to its

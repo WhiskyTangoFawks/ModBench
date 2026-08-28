@@ -16,7 +16,7 @@ public static class ConditionPath
     // actually condition-owning fields (#154: a record may have more than one — e.g. Quest's
     // DialogConditions/UnusedConditions, not just "Conditions") needs the record's CLR type, which
     // this pure wire-format helper doesn't have — see IConditionCodec.IsConditionListField, which
-    // callers with schema/instance access (PluginWriter, EditOrchestrator) use instead.
+    // callers with schema/instance access (PluginWriter, RecordEditService) use instead.
     public static bool IsConditionPath(string path) =>
         path.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase);
 

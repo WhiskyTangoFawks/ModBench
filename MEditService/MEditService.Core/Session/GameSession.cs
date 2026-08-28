@@ -431,7 +431,7 @@ public sealed class GameSession : IGameSession
         var mod = ModFactory.ImportGetter(modPath, GameRelease, LocalizedStrings.ForRead(ModFolders.Of(origin, filePath), DataFolderPath));
 
         // No Mutagen LoadOrder or link cache is built here or anywhere else in this class: reads
-        // answer from the DuckDB index (ADR-0025), and the write path builds its own typed cache
+        // answer from the DuckDB index (ADR-0005), and the write path builds its own typed cache
         // per save from the load-order members only (SessionManager.BuildTypedLinkCache). That
         // matters for this method in particular — Mutagen's LoadOrder is keyed by ModKey and
         // refuses a second listing for a filename it already holds.

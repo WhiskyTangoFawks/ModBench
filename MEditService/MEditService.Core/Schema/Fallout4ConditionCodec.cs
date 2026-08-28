@@ -205,7 +205,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // abstract/interface and bare, any concrete subtype in the same assembly) for a condition-list
     // property named nestedField. recordType is either the record's getter interface
     // (PluginWriter.IsReadOnly, via schema.RecordType) or its concrete setter class
-    // (EditOrchestrator's record.GetType() dispatch) — both resolve the same way, since
+    // (RecordEditService's record.GetType() dispatch) — both resolve the same way, since
     // GetEnumerableElementType works on either shape. Takes the raw composed path directly (#184) —
     // parsing it (arbitrary depth, no upfront caller-side split) is entirely this method's job now.
     public bool IsNestedConditionListField(Type recordType, string composedFieldPath)

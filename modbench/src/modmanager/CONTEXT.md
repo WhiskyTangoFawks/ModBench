@@ -25,16 +25,16 @@ Take ownership of a Modified mod: reclassify it as Authored and sever the upstre
 _Avoid_: fork, convert
 
 **Upstream**:
-The lineage of pristine content a Downloaded mod derives from — the author's releases, as installed. What a mod's divergence is measured against; its identity at any point in time is captured by an Anchor. Already implicit in Downloaded/Modified above; first-class because drift classification hangs on it.
+The lineage of pristine content a Downloaded mod derives from — the author's releases, as installed. What a mod's divergence is measured against. For a tracked mod's *plugins*, that measurement is Editing's (pristine `main` vs the edit branch, ADR-0041) and Mod Management never sees it; for *assets* it is the deferred Anchor concern below.
 _Avoid_: origin (Editing's plugin-identity term, ADR-0036), source
 
 **Drift**:
-An installed mod's files changing through any door other than Modbench — a new upstream release installed over it, or an in-place edit by an external tool (xEdit, the Creation Kit, a patcher). Detected by Anchor comparison at load, and classified, never guessed: provenance moved too → an upstream advance (divergence is rebased onto the new pristine state); provenance unchanged → treated as the user's own work and surfaced for review. Never silently absorbed, never silently discarded.
-_Avoid_: desync, out-of-band change
+A loaded plugin whose name no longer resolves to the file its records were read from — a mod-level change (install, uninstall, reprioritise) moved which copy wins the Mod override order. Absorbed automatically: the session re-reads the plugin, the same way a clean VS Code buffer follows the disk (ADR-0035 § Live mutation; `pluginDrift.ts`). Not a user-facing concept. A plugin's *bytes* changing under Modbench is a different thing and Editing's concern (load-time hash check, bridge watcher, one dialog — ADR-0041).
+_Avoid_: desync, out-of-band change, "drift classification" (a retired mechanism)
 
 **Anchor**:
-The recorded identity of the upstream state a mod's divergence is measured from: Nexus identity and version (from MO2 metadata) plus a hash of the pristine installed content, captured when divergence tracking begins and advanced when an update is accepted. What makes drift detectable (hash moved?) and classifiable (provenance moved too?).
-_Avoid_: fingerprint, version stamp
+The recorded identity of the upstream state a mod's *asset* divergence would be measured from — Nexus identity and version (from MO2 metadata) plus a hash of the pristine installed content. Deferred: nothing computes or stores one today; plugin divergence is git's (ADR-0041), and asset history waits for a real need.
+_Avoid_: fingerprint, version stamp, provenance (Editing's commit-trailer term)
 
 **Download**:
 A single distributable file sitting in the instance's shared `downloads/` folder (`.zip`/`.7z`/`.rar`), with an optional MO2-written `.meta` sidecar carrying its Nexus metadata. A download is the **uninstalled state of a mod**: installing one produces a `mods/<name>/` folder, and the two are linked only derivably, via the installed mod's `meta.ini` `installationFile` — never by stored state on the download. The relationship is many-to-many (one download can be installed into several mods; a merged mod can come from several downloads), so no download "belongs to" a mod.
@@ -49,7 +49,7 @@ A download the user has dismissed from view (`.meta` `removed=true`). A display 
 _Avoid_: removed, deleted (the file is still on disk)
 
 **Modlist**:
-The ordered, enable-able set of mods mEdit manages for a game. Its ordering is the **Mod override order** (below).
+The ordered, enable-able set of mods Modbench manages for a game. Its ordering is the **Mod override order** (below).
 _Avoid_: load order (ambiguous — say "Mod override order")
 
 **Override order**:
@@ -85,7 +85,7 @@ Remove deployed mod files, returning the game directory to its pre-deploy state.
 _Avoid_: uninstall, clean
 
 **Game directory**:
-The game installation mEdit reads vanilla masters from and deploys into — either the Steam install or a stock game folder.
+The game installation Modbench reads vanilla masters from and deploys into — either the Steam install or a stock game folder.
 _Avoid_: data folder (that is a subpath), install path
 
 **Stock game folder**:

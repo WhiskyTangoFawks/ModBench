@@ -11,7 +11,7 @@ using Noggog;
 
 namespace MEditService.Tests.Indexing;
 
-// Phase 16: the structural indexing pass must populate the `placement` and `cell_location`
+// The structural indexing pass must populate the `placement` and `cell_location`
 // side tables that back the per-plugin worldspace tree.
 //
 // The fixture deliberately mixes present and absent optional values (a TopCell with no
@@ -119,7 +119,7 @@ public class PlacementIndexingTests
         return rows;
     }
 
-    // Regression (Phase 16.2.2): production loads plugins as binary overlays, whose group wrapper
+    // Regression: production loads plugins as binary overlays, whose group wrapper
     // exposes records by being IEnumerable rather than via a "Records" member (the in-memory shape).
     // PlacementWalker must index placement off the overlay too — IndexFixture above only covers the
     // in-memory mod, so this round-trips through disk to exercise the overlay path.
@@ -318,7 +318,7 @@ public class PlacementIndexingTests
         Assert.Null(bare.CellY);
     }
 
-    // ── GetPlacement (Phase 16.2.2: orchestrator placed-path lookup) ───────────
+    // ── GetPlacement (placed-path lookup) ───────────
 
     [Fact]
     public void GetPlacement_PlacedRef_ReturnsParentCellGroupAndPosition()

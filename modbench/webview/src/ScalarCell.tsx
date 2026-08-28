@@ -87,7 +87,7 @@ export function ScalarCell({
   if (!active) {
     // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it, so all three
     // xEdit triggers converge on one code path instead of three near-copies.
-    // Issue #204 / ADR-0033: no cursor override — the parent DiskCell's own cursor is the resting
+    // Issue #204 / ADR-0034: no cursor override — the parent DiskCell's own cursor is the resting
     // affordance; a text caret would falsely imply editing is the only thing a click can start.
     return (
       <span

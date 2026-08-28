@@ -48,7 +48,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // `content_hash` a real git object name (GitBlobHash) rather than a hash of some re-rendered
     // equivalent, and what lets a byte compare stand in for dirty/ITM detection later.
     //
-    // `ref` (ADR-0041's ref dimension, replacing ADR-0025's committed/staged view split) carries
+    // `ref` (ADR-0041's ref dimension) carries
     // exactly one value in this ticket — see SourceRef, which explains why it is here now rather
     // than added once #415 gives it a second. Quoted everywhere it appears: REF is a DuckDB keyword.
     //
@@ -212,10 +212,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
     }
 
-    // ADR-0031: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin)
-    // like every reflected record table — populated in the same indexing pass that writes each
-    // record's own per-type table row, so CheckErrorBuilder and the compare/changes resolvers can
-    // resolve a FormKey in O(1) instead of scanning every per-type table.
+    // ADR-0031: global form_key -> (record type, EditorID) lookup, one row per (form_key, plugin),
+    // extracted from the documents in the same ingest pass that writes each record's `records`
+    // row, so CheckErrorBuilder and the compare resolvers resolve a FormKey in O(1).
     internal static void CreateFormLookupTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
@@ -235,7 +234,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
     }
 
-    // Phase 16: side tables for the worldspace tree. Parentage is structural (GRUP nesting),
+    // ADR-0023: side tables for the worldspace tree. Parentage is structural (GRUP nesting),
     // so it lives here rather than on the reflected record tables — keeping placement read-only
     // by construction and isolating "move a ref between cells" as a structural op.
     internal static void CreatePlacementTables(DuckDBConnection connection)

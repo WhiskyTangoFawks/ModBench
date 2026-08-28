@@ -308,7 +308,7 @@ public static class VmadCodec
         return prop == null ? VmadApplyResult.NotFound : ApplyValue(prop, value);
     }
 
-    // Structural VMAD operations (phase 13.8) on a whole script.
+    // Structural VMAD operations on a whole script.
     public static VmadApplyResult ApplyScriptOp(
         IHaveVirtualMachineAdapter record, string scriptName, string opName, JsonElement op) => opName switch
         {
@@ -318,7 +318,7 @@ public static class VmadCodec
             _ => VmadApplyResult.NotFound,
         };
 
-    // Structural VMAD operations (phase 13.8) on a single property of a script.
+    // Structural VMAD operations on a single property of a script.
     public static VmadApplyResult ApplyPropertyOp(
         IHaveVirtualMachineAdapter record, string scriptName, string propName, string opName, JsonElement op)
     {

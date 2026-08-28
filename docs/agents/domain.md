@@ -7,19 +7,21 @@ How the engineering skills should consume this repo's domain documentation when 
 - **`CONTEXT-MAP.md`** at the repo root — it maps the two bounded contexts and their language boundary. Read the `CONTEXT.md` of each context relevant to the topic:
   - **Editing** context → `CONTEXT.md` (repo root)
   - **Mod Management** context → `modbench/src/modmanager/CONTEXT.md`
-- **`docs/adr/`** — system-wide architectural decisions. Read ADRs that touch the area you're about to work in.
-- **`docs/specs/`** — living surface specs for each Modbench UI surface (present-tense behavior).
+- **`docs/specs/`** — living surface specs, one per Modbench UI surface (present-tense behavior). `docs/specs/README.md` indexes them with status. Before building on a surface, read its spec; when an initiative changes behavior, update the spec first.
+- **`docs/adr/`** — system-wide architectural decisions, each stating current truth. Numbering has gaps: a decision that was reversed is deleted, and its story lives in the *Alternatives rejected* section of the ADR that replaced it. ADRs are rewritten in place (pre-alpha — root `CLAUDE.md` § Status). Read the ADRs that touch the area you're about to work in.
+- **`docs/research/`** — reference material that stays live: `xedit-ux-audit.md` (required reading before any record-editing interaction) and `mod-manager-feature-inventory.md` (MO2/Vortex feature map). A spike is deleted once its decision lands in an ADR.
+- **`docs/out-of-scope/`** — the won't-do register. Check it before proposing a feature; if it's there, the answer and the reason are recorded.
 
 ## Layout
-
-This is a **multi-context** repo:
 
 ```
 /
 ├── CONTEXT-MAP.md                          ← context map (start here)
 ├── CONTEXT.md                              ← Editing context glossary
-├── docs/adr/                               ← system-wide decisions
-├── docs/specs/                             ← per-UI-surface living specs
+├── docs/adr/                               ← system-wide decisions (gaps = reversed decisions)
+├── docs/specs/                             ← per-UI-surface living specs (+ README index)
+├── docs/research/                          ← live reference material
+├── docs/out-of-scope/                      ← won't-do register
 └── modbench/src/modmanager/
     └── CONTEXT.md                          ← Mod Management context glossary
 ```
