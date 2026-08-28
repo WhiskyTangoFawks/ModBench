@@ -527,9 +527,37 @@ Absent fields (a null value in a non-master plugin — the PartialForm absent-fi
 with no background and no text color. Column headers use the worst ConflictThis across that
 plugin's fields as a quick summary; individual cell colors are authoritative.
 
-The [Plugins tree](plugins.md)'s record-node conflict badge is driven by the same
-classification, at the record-wide scope specifically (Axis 1 above) — never the per-node scope
-the compare grid's own rows use.
+The [Plugins tree](plugins.md)'s record-node conflict badge ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364))
+is driven by the same classification, at the record-wide scope specifically (Axis 1 above) —
+never the per-node scope the compare grid's own rows use. It renders on the
+[Conflicts node](plugins.md#conflicts-node-and-conflict-badge-364)'s own rows only (not on every
+ordinary record row wherever a plugin is browsed — a deliberate scope decision, see the Plugins
+tree spec), sharing `RecordDecorationProvider`'s existing M/A working-tree badge (#428) rather
+than a second provider: a row has exactly one `FileDecoration`, so the two are reconciled by
+precedence, not painted independently.
+
+**Plugins-tree badge — `ConflictAll` → glyph, colour, precedence:**
+
+| ConflictAll | Badge | Colour (`ThemeColor`) | Tooltip |
+| --- | --- | --- | --- |
+| OnlyOne, NoConflict | *(none)* | — | *(no badge)* |
+| Override | `O` | `gitDecoration.addedResourceForeground` (green — reused from the `A` badge, never shown on the same row) | Override |
+| Conflict | `C` | `gitDecoration.conflictingResourceForeground` (VS Code's own semantic "conflict" token) | Conflict |
+| ConflictCritical | `!` | `problemsErrorIcon.foreground` (reused from the master-issue/load-failure row decorations) | Conflict (critical) |
+
+No new colours: every token above is already sanctioned elsewhere in this codebase, matching this
+section's own Axis 1/Axis 2 tables' "no new colors" rule (ADR-0016's 2026-08-11 update).
+
+**Precedence: the M/A working-tree badge always wins when present.** An uncommitted local edit
+(`Modified`/`Added`) is the more actionable, session-local fact, so it takes the row's one
+`FileDecoration` slot; the conflict badge above shows only when the working-tree state lookup has
+nothing to say (`None`) for that row. Orchestrator-approved default at #364's plan gate — not
+dictated by ADR-0016, disclosed as a choice rather than buried.
+
+**Gated on `SessionStatus.conflictsComputed`, per #307's invariant** (`PluginTreeProvider
+.conflictAllOf`): renders nothing at all — never a neutral/placeholder badge — while conflicts
+are not yet computed, or for a record nothing has fetched a conflict state for yet. An absent
+badge must never be mistaken for "no conflict".
 
 ### Partial Form overrides (#491)
 
