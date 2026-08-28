@@ -190,8 +190,10 @@ public enum RecordEditRefusal
     /// SubCells cell, or the reference's own Cell when that Cell is one. Auto-creating an exterior
     /// container needs spatial placement (worldspace block/sub-block) this write path does not compute
     /// yet, tracked separately (#549); an interior Cell auto-creates instead (Slice 7) rather than
-    /// refusing here, xEdit's own <c>AddIfMissingInternal</c> parity, since interior placement carries
-    /// no gameplay meaning to compute in the first place.
+    /// refusing here, since interior placement carries no gameplay meaning to compute in the first
+    /// place (<see cref="RecordEditService"/>'s own <c>CreateInteriorCellParent</c> doc comment has the
+    /// full argument for auto-creating it as Partial Form — a deliberate mEdit-specific choice, not
+    /// xEdit parity).
     /// </summary>
     ContainerParentMissingInDestination,
 
@@ -206,6 +208,19 @@ public enum RecordEditRefusal
     /// structural reason, not because the feature is unbuilt.
     /// </summary>
     CopyAsNewRecordDisallowedForType,
+
+    /// <summary>
+    /// #440 review (Standards 3): a placed reference's own file was written, but one of the two index
+    /// calls that follow it (<c>CreateWorkingTreeRecord</c> for the reference's own row,
+    /// <c>ApplyWorkingTreeChanges</c> for its Cell's changed body) threw — a should-never-happen guard
+    /// tripping (both calls' own preconditions are already checked before either runs), never an
+    /// ordinary refusal path. Converted to a typed result rather than left to propagate as a raw
+    /// exception (ADR-0026: the backend never swallows a partial outcome, and a raw exception message
+    /// here would say nothing about the file that already landed) — the message names exactly what
+    /// state that leaves: a working-tree file the index does not yet agree with, reviewable and
+    /// revertable in the Source Control panel like any other write-path fault.
+    /// </summary>
+    ContainerCopyIndexUpdateFailedAfterWrite,
 }
 
 /// <summary>

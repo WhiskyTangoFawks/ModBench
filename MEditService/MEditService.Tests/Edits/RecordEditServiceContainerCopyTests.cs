@@ -70,6 +70,10 @@ public sealed class RecordEditServiceContainerCopyTests
         var text = File.ReadAllText(cellFile);
         Assert.DoesNotContain(ContainerCopyFixture.PersistentRefEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, text, StringComparison.Ordinal);
+        // #440 review (Spec 1): the comment above claims all four embedded slots come back empty —
+        // Navmesh/Landscape were populated in the fixture but never actually checked until now.
+        Assert.DoesNotContain(ContainerCopyFixture.NavmeshEditorId, text, StringComparison.Ordinal);
+        Assert.DoesNotContain(ContainerCopyFixture.LandscapeEditorId, text, StringComparison.Ordinal);
     }
 
     // #440 Slice 2: same "own fields only" rule for a Worldspace — TopCell (its one embedded slot,
@@ -137,10 +141,28 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
     }
 
+    // #440 review (Spec 2): the direct sibling of the placed-reference test above — copying the
+    // exterior Cell itself as override (not one of its children) hits its own, separate check
+    // (RecordEditService.cs's isCell branch in CopyRecordAsOverride, not CopyPlacedReferenceAsOverride)
+    // and needs its own test rather than relying on the placed-reference variant to stand in for it.
+    [Fact]
+    public void CopyRecordAsOverride_OnAnExteriorCellItself_Refuses()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
+        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+    }
+
     // #440 Slice 7: the interior sibling of the case above — no destination override of the Cell
     // exists yet, but interior placement carries no gameplay meaning to compute, so one auto-creates:
-    // bare fields (WaterHeight never copied from the source, xEdit's own AddIfMissingInternal parity),
-    // Partial Form flagged, the reference placed inside it.
+    // bare fields (WaterHeight never copied from the source — genuine xEdit parity), Partial Form
+    // flagged (a deliberate mEdit-specific divergence from xEdit's own bare/unflagged ancestor —
+    // CreateInteriorCellParent's own doc comment has the full argument), the reference placed inside it.
     [Fact]
     public void CopyRecordAsOverride_OnAnInteriorPlacedReference_AutoCreatesTheCellAsPartialForm_WhenMissing()
     {
