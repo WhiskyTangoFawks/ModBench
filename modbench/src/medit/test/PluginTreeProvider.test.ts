@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { PluginMetadata, RecordSummary, ConflictingRecord } from '../ApiClient';
+import type { PluginMetadata, RecordSummary, ConflictingRecord, ContainerChildSummary } from '../ApiClient';
 import type { PluginRepository, RecordPage } from '../PluginRepository';
 
 vi.mock('vscode', () => ({
@@ -93,6 +93,8 @@ function makeRepository(overrides: Partial<{
     getWorldspaces: vi.fn().mockResolvedValue([]),
     getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCells: [] }),
     getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
+    // #424: a Quest/DialogTopic row's own children — empty by default, overridden per-test below.
+    getContainerChildren: vi.fn().mockResolvedValue([]),
     // #415: the tree provider never edits — present only because the double implements the
     // whole PluginRepository surface.
     editRecordField: vi.fn(),
@@ -1303,6 +1305,131 @@ describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () 
     provider.setConflictsComputed(true);
 
     expect(provider.conflictAllOf('Never.esp', 'Data', 'DEADBE:Never.esp')).toBeUndefined();
+  });
+});
+
+// ── #424: Quest/DialogTopic child records ──────────────────────────────────────
+
+function makeContainerChild(
+  formKey: string, recordType: string, editorId: string | null = null,
+): ContainerChildSummary {
+  return {
+    formKey, editorId, plugin: 'Fallout4.esm', origin: 'Data',
+    loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType,
+  };
+}
+
+describe('RecordNode collapsibility for container types (#424)', () => {
+  // Rival named: today's actual RecordNode always constructs CollapsibleState.None regardless of
+  // record type — this pins the change against exactly that rival.
+  it('is Collapsed when built as a "qust" row', () => {
+    const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust');
+    expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
+  });
+
+  it('is Collapsed when built as a "dial" row', () => {
+    const node = new RecordNode(makeRecord(0), undefined, false, false, 'dial');
+    expect(node.collapsibleState).toBe(1);
+  });
+
+  it('stays None (a leaf) when no containerChildType is given, as every other record type does', () => {
+    const node = new RecordNode(makeRecord(0));
+    expect(node.collapsibleState).toBe(0); // TreeItemCollapsibleState.None
+  });
+});
+
+describe('PluginTreeProvider.getChildren(RecordNode) — container children (#424)', () => {
+  it('a "qust" RecordNode expands via repository.getContainerChildren into ordinary RecordNodes', async () => {
+    const repo = makeRepository();
+    repo.getContainerChildren = vi.fn().mockResolvedValue([
+      makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'),
+      makeContainerChild('dlbr1:Fallout4.esm', 'dlbr', 'BranchA'),
+    ]);
+    const provider = new PluginTreeProvider(repo);
+    const questNode = new RecordNode(
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+
+    const children = await provider.getChildren(questNode);
+
+    expect(repo.getContainerChildren).toHaveBeenCalledWith('Fallout4.esm', 'qust1:Fallout4.esm', undefined);
+    expect(children).toHaveLength(2);
+    expect(children.every(c => c instanceof RecordNode)).toBe(true);
+    expect((children[0] as RecordNode).record.editorId).toBe('TopicA');
+    // Standard record-row affordances (#281 unification) — same command every ordinary
+    // RecordNode gets, so a container child opens in the record editor exactly like any other row.
+    expect((children[0] as RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
+  });
+
+  it('a returned "dial" child is itself Collapsed — expandable to its own Responses', async () => {
+    const repo = makeRepository();
+    repo.getContainerChildren = vi.fn().mockResolvedValue([
+      makeContainerChild('dial1:Fallout4.esm', 'dial', 'TopicA'),
+      makeContainerChild('scen1:Fallout4.esm', 'scen', 'SceneA'),
+    ]);
+    const provider = new PluginTreeProvider(repo);
+    const questNode = new RecordNode(
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+
+    const children = await provider.getChildren(questNode) as RecordNode[];
+
+    const dialChild = children.find(c => c.record.formKey === 'dial1:Fallout4.esm')!;
+    const scenChild = children.find(c => c.record.formKey === 'scen1:Fallout4.esm')!;
+    expect(dialChild.collapsibleState).toBe(1); // Collapsed — a nested "dial" is a container too
+    expect(scenChild.collapsibleState).toBe(0); // None — a Scene is always a leaf
+  });
+
+  it('a "dial" RecordNode expands via repository.getContainerChildren into its Responses', async () => {
+    const repo = makeRepository();
+    repo.getContainerChildren = vi.fn().mockResolvedValue([
+      makeContainerChild('info1:Fallout4.esm', 'info'),
+    ]);
+    const provider = new PluginTreeProvider(repo);
+    const topicNode = new RecordNode(
+      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, false, false, 'dial');
+
+    const children = await provider.getChildren(topicNode);
+
+    expect(repo.getContainerChildren).toHaveBeenCalledWith('Fallout4.esm', 'dial1:Fallout4.esm', undefined);
+    expect(children).toHaveLength(1);
+  });
+
+  it('caches on second expand without re-fetching', async () => {
+    const repo = makeRepository();
+    repo.getContainerChildren = vi.fn().mockResolvedValue([makeContainerChild('dial1:Fallout4.esm', 'dial')]);
+    const provider = new PluginTreeProvider(repo);
+    const questNode = new RecordNode(
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+
+    await provider.getChildren(questNode);
+    await provider.getChildren(questNode);
+
+    expect(repo.getContainerChildren).toHaveBeenCalledTimes(1);
+  });
+
+  // #305 precedent: two same-filename plugin copies expanding the same Quest FormKey must hit
+  // their own repository call / cache entry — a cache key that omits origin is the exact
+  // regression class #305 already fixed for the rest of this spatial chain. Rival: a cache key
+  // built from formKey alone (no origin component) would return ModA's cached children for ModB's
+  // expansion instead of issuing its own call.
+  it('origin-keyed caching: two copies of one plugin browse their own children independently', async () => {
+    const repo = makeRepository();
+    repo.getContainerChildren = vi.fn()
+      .mockResolvedValueOnce([makeContainerChild('dial-a:Shared.esp', 'dial', 'TopicModA')])
+      .mockResolvedValueOnce([makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
+    const provider = new PluginTreeProvider(repo);
+    const questA = new RecordNode(
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', false, false, 'qust');
+    const questB = new RecordNode(
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', false, false, 'qust');
+
+    const childrenA = await provider.getChildren(questA) as RecordNode[];
+    const childrenB = await provider.getChildren(questB) as RecordNode[];
+
+    expect(repo.getContainerChildren).toHaveBeenCalledTimes(2);
+    expect(repo.getContainerChildren).toHaveBeenNthCalledWith(1, 'Shared.esp', 'qust1:Shared.esp', 'ModA');
+    expect(repo.getContainerChildren).toHaveBeenNthCalledWith(2, 'Shared.esp', 'qust1:Shared.esp', 'ModB');
+    expect(childrenA[0].record.editorId).toBe('TopicModA');
+    expect(childrenB[0].record.editorId).toBe('TopicModB');
   });
 });
 

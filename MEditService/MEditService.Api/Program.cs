@@ -68,6 +68,7 @@ try
     builder.Services.AddSingleton<ISessionManager, SessionManager>();
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
+    builder.Services.AddSingleton<IContainerChildQueryService, ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
     // #415: the single write path, plus the read-time freshness validation the read model consumes.
@@ -114,6 +115,7 @@ try
     app.MapPluginEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
+    app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
 
     var cliArgs = CliArgs.Parse(args);
     if (cliArgs.DataFolderPath != null)

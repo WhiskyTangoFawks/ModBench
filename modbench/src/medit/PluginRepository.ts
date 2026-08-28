@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  PendingExternalChange, WorkingTreeState, ConflictingRecord,
+  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -145,6 +145,21 @@ function toPlacedSummary(p: GenPlaced): PlacedSummary {
   };
 }
 
+type GenContainerChild = components['schemas']['ContainerChildSummary'];
+
+function toContainerChildSummary(c: GenContainerChild): ContainerChildSummary {
+  return {
+    formKey: c.formKey ?? '',
+    editorId: c.editorId ?? null,
+    plugin: c.plugin ?? '',
+    origin: c.origin ?? '',
+    loadOrderIndex: c.loadOrderIndex ?? 0,
+    isWinner: c.isWinner ?? false,
+    workingTreeState: toWorkingTreeState(c.workingTreeState),
+    recordType: c.recordType ?? '',
+  };
+}
+
 export interface RecordPage {
   items: RecordSummary[];
   total: number;
@@ -227,6 +242,11 @@ export interface PluginRepository {
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
+  // #424: a container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
+  // Topic's responses), in xEdit's own presentation order — same optional-origin shape as the
+  // worldspace-tree reads above. Cells/worldspaces are unaffected: this reads Quest/DialogTopic
+  // containment only, never Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
+  getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
 
   // #448 / #34: the unlisted-plugin door — loads a file-level peer the load order doesn't name so
   // its own Stack-node entry can lazy-load its records, read-only, on first expansion. Idempotent
@@ -497,6 +517,14 @@ export class ApiPluginRepository implements PluginRepository {
       items: (data?.items ?? []).map(toCellSummary),
       total: data?.total ?? 0,
     };
+  }
+
+  async getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]> {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/records/{formKey}/children', {
+      params: { path: { plugin, formKey: parentFormKey }, query: origin === undefined ? {} : { origin } },
+    });
+    this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
+    return (data ?? []).map(toContainerChildSummary);
   }
 
   async loadUnlistedPlugin(path: string, origin: string): Promise<void> {
