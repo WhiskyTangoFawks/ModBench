@@ -110,6 +110,7 @@ public sealed class CompareGoldenTests : IDisposable
             o.EditorId,
             o.RecordType,
             o.ConflictThis,
+            o.IsPartialForm,
             Fields = o.Fields.ToDictionary(f => f.Metadata.Name, f => f.Value),
         }).ToList(),
         // Only fields that actually differ somewhere: an aligned diff tree over every reflected

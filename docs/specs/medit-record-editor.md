@@ -531,6 +531,57 @@ The [Plugins tree](plugins.md)'s record-node conflict badge is driven by the sam
 classification, at the record-wide scope specifically (Axis 1 above) — never the per-node scope
 the compare grid's own rows use.
 
+### Partial Form overrides (#491)
+
+**Partial Form** is record-header flag bit 14 (`0x4000`; CONTEXT.md's own glossary entry) on CELL,
+WRLD, DIAL and QUST: an override that exists only to carry children, whose own fields the game and
+xEdit ignore, falling through to the previous non-partial override instead. xEdit's own
+`GetWinningOverride` (`wbImplementation.pas`) walks load order skipping any Partial Form override
+to find the record whose fields actually apply, and its write path (`AssignInternal`) refuses
+every field but EDID once the flag is set. Applies to plugins loaded today independent of any copy
+gesture — Sim Settlements 2 is a real-world example on Fallout 4.
+
+- **Type-gated, not a bare bit test.** Bit 14 is reused for unrelated meanings on record types that
+  never declare a `'Partial Form'` flag at all, so a record's own concrete type must be one of the
+  four container types (Cell/Worldspace/Quest/DialogTopic — `ContainerChildFields`'s own table)
+  before the bit means anything. A container type is the domain-correct gate regardless: Partial
+  Form exists specifically so a container can carry children without asserting its own fields, so
+  only a type with children to carry can ever need it.
+- **Conflict exclusion.** A Partial Form override's own fields are excluded from conflict
+  classification entirely — treated as absent for every purpose ADR-0016's existing PartialForm
+  absent-field rule already covers (winner/contest/cell-state candidacy), regardless of whether the
+  field is literally JSON `null` or carries a real, differing value. A cell whose only override
+  beyond the master is a Partial Form record therefore classifies `NoConflict`, not `Override` or
+  `Conflict`, even when that override's own field genuinely differs byte-for-byte from the master's
+  — its own change is out of scope for conflict purposes, full stop, the same way CONTEXT.md's
+  Partial Form entry states it. `FieldDiff.WinnerColumn`/`WinnerValue` fall through to the nearest
+  plugin that actually carries a value for that field, not the record-wide winner, so a field the
+  winning override never touches reports the real effective value rather than a blank one.
+  **Children are unaffected** — a placed reference (or other embedded child) the override
+  introduces is a separate record with its own FormKey, and classifies normally (typically
+  `OnlyOne`, since it exists in only the one plugin that added it).
+- **Column dimming, not hiding (AC3).** Unlike xEdit's own default of hiding a Partial Form
+  record from conflict display entirely, the compare grid shows the column — mEdit's own
+  never-hide-data posture — but visually marks it: the same `DIMMED_OPACITY` treatment a
+  not-in-load-order column already gets, both at the column header and on every one of that
+  column's own cells (read straight off `CompareOverride.IsPartialForm`, not a separately-computed
+  set). A dimmed column is not a full competing override, matching what the exclusion above already
+  computed.
+- **Read-only except the header — and EditorID.** A Partial Form override's own fields refuse on
+  the single write path (`RecordEditRefusal.PartialFormFieldReadOnly`) — a typed refusal, not just
+  a UI disable, so an agent (ADR-0024) sees the same rule a human does. Checked against the write
+  target, not the containing record, so an embedded child stays editable even though its Partial
+  Form parent is not. **EditorID is exempt**, matching xEdit's own `CanAssignInternal`
+  (`wbImplementation.pas:9905-9914`, "allow EDID for partial forms") — ADR-0034 makes that binding
+  here rather than a scope choice this ticket could diverge from, and EditorID is an ordinary,
+  already-writable field rather than part of the header's own flag-write surface, so the exemption
+  needed no header write path to exist first. The record header itself — including clearing the
+  flag, which restores full editability — is a distinct write surface tracked separately (**#539**);
+  until it lands, every field but EditorID stays refused.
+- **Out of scope here:** setting the flag (a container an editing gesture auto-creates carries it
+  from creation — #440) and a lightbulb offering it on an identical-to-master container (a
+  separate ticket under #478).
+
 ### VMAD and Conditions are ordinary rows in the one tree
 
 VMAD (Papyrus script data) and Conditions (CTDA) are not a separate section, table body, row

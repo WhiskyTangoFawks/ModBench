@@ -313,7 +313,7 @@ export function DiffRow({
       </td>
       {columns.map(col => {
         if (col.kind === 'disk') {
-          const { key } = col;
+          const { key, override } = col;
           // Issue #201 / #226 / ADR-0034: no `userSelect: 'text'` here. It was always dead letter
           // — the cell is `draggable` at rest and `draggable` consumes the mousedown that would
           // start a selection — and post-#226 there is no in-cell surface left to ever own a
@@ -324,9 +324,12 @@ export function DiffRow({
           // — the backend keys its own per-column dictionaries the same way (ColumnKey.Of), so
           // `[o.plugin]` was already wrong the moment a non-Data-origin column existed, not merely
           // ambiguous between two same-filename columns.
+          // #491: a Partial Form column dims the same way a not-in-load-order one does — read
+          // straight off the column's own override.isPartialForm (already riding on this Column),
+          // not a separately-threaded Set, since the fact already lives on data this row has.
           const cellStyle = {
             ...baseCell, ...getCellStyle(diff.cellStates?.[key]),
-            opacity: notInLoadOrderSet.has(key) ? DIMMED_OPACITY : undefined,
+            opacity: notInLoadOrderSet.has(key) || override.isPartialForm ? DIMMED_OPACITY : undefined,
           };
           if (collapsedColumns.has(key)) {
             return <td key={`disk:${key}`} style={cellStyle} />;

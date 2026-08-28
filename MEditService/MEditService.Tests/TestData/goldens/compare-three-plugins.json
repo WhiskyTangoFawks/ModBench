@@ -167,6 +167,7 @@
           "xp_value_offset": 0
         },
         "FormKey": "000800:Base.esm",
+        "IsPartialForm": false,
         "IsWinner": false,
         "LoadOrderIndex": 0,
         "Origin": "Data",
@@ -265,6 +266,7 @@
           "xp_value_offset": 0
         },
         "FormKey": "000800:Base.esm",
+        "IsPartialForm": false,
         "IsWinner": false,
         "LoadOrderIndex": 1,
         "Origin": "Data",
@@ -363,6 +365,7 @@
           "xp_value_offset": 0
         },
         "FormKey": "000800:Base.esm",
+        "IsPartialForm": false,
         "IsWinner": true,
         "LoadOrderIndex": 2,
         "Origin": "Data",
@@ -471,6 +474,7 @@
           "xp_value_offset": 0
         },
         "FormKey": "000800:Mid.esp",
+        "IsPartialForm": false,
         "IsWinner": true,
         "LoadOrderIndex": 1,
         "Origin": "Data",
@@ -579,6 +583,7 @@
           "xp_value_offset": 0
         },
         "FormKey": "000802:Base.esm",
+        "IsPartialForm": false,
         "IsWinner": true,
         "LoadOrderIndex": 0,
         "Origin": "Data",
@@ -674,6 +679,7 @@
           "zoom": null
         },
         "FormKey": "000801:Base.esm",
+        "IsPartialForm": false,
         "IsWinner": false,
         "LoadOrderIndex": 0,
         "Origin": "Data",
@@ -759,6 +765,7 @@
           "zoom": null
         },
         "FormKey": "000801:Base.esm",
+        "IsPartialForm": false,
         "IsWinner": true,
         "LoadOrderIndex": 1,
         "Origin": "Data",

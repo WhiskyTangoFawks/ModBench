@@ -10,6 +10,10 @@ namespace MEditService.Core.Records;
 /// all). <see cref="Fields"/> is the same typed, schema-driven extraction <c>RecordDetail</c>
 /// carried before this reshape (<see cref="Schema.ColumnSpec.Extract"/> delegates, byte-identical
 /// by construction) — Records/ still owns this extraction; only its container type changed.
+///
+/// <para><see cref="IsPartialForm"/> (#491): <see cref="Schema.PartialFormFlag.IsSet"/> read off the
+/// live deserialized record at the same point <see cref="Fields"/> is extracted — always false for
+/// the header (a <c>ModHeader</c> can never carry the flag).</para>
 /// </summary>
 public record RecordDocument(
     string FormKey,
@@ -19,7 +23,8 @@ public record RecordDocument(
     string? EditorId,
     string RecordType,
     string? Body,
-    IReadOnlyList<FieldValue> Fields);
+    IReadOnlyList<FieldValue> Fields,
+    bool IsPartialForm = false);
 
 /// <summary>
 /// One plugin's position in a record's override stack. <see cref="Effective"/> and

@@ -197,6 +197,31 @@ const notInLoadOrderPluginsResponse = [
   { name: 'Solo.esp', origin: 'ShadowMod', isImmutable: true, loadOrderIndex: 5, inLoadOrder: false },
 ];
 
+// #491: mirrors compareResult, but MyMod.esp is a Partial Form override of the master rather than
+// an ordinary conflicting one.
+const partialFormCompareResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'IdenticalToMaster',
+      isPartialForm: true,
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Name',
+      values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': null },
+      winnerColumn: 'Fallout4.esm', winnerValue: 'Original Name',
+      cellStates: {},
+    },
+  ],
+};
+
 const structFieldMeta: FieldMetadata = {
   name: 'Bounds',
   type: 'struct',
@@ -581,6 +606,28 @@ describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)'
     await waitFor(() => expect(screen.getByText('Fallout4.esm')).toBeInTheDocument());
 
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
+    const th = screen.getByText('Fallout4.esm').closest('th');
+    expect(th).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+});
+
+describe('RecordPanel — a Partial Form column (#491)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('renders the column header dimmed, matching xEdit-style marking rather than a full competing override', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+
+    const th = screen.getByText('MyMod.esp').closest('th');
+    expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+
+  it('does not dim an ordinary column beside a Partial Form one', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+    renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
+    await waitFor(() => expect(screen.getByText('Fallout4.esm')).toBeInTheDocument());
+
     const th = screen.getByText('Fallout4.esm').closest('th');
     expect(th).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
