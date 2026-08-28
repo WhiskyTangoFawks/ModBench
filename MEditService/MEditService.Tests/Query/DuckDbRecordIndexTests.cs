@@ -310,6 +310,59 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         }
     }
 
+    // --- GetContestedFormKeys (#364: the Conflicts node's candidate population — every FormKey
+    // with more than one override entry in its stack, before classification decides whether that
+    // multiplicity is an actual conflict) ---
+
+    [Fact]
+    public void GetContestedFormKeys_RecordOverriddenByTwoPlugins_ReturnsItsFormKey()
+    {
+        var dataFolder = Path.Combine(Path.GetTempPath(), $"medit-duckdb-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(dataFolder);
+        try
+        {
+            var modA = new Fallout4Mod(ModKey.FromFileName("PluginA.esm"), Fallout4Release.Fallout4);
+            var npc = modA.Npcs.AddNew("SharedNPC");
+            var npcKey = npc.FormKey;
+            modA.WriteToBinary(Path.Combine(dataFolder, "PluginA.esm"));
+
+            var modALoaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
+                new ModPath(ModKey.FromFileName("PluginA.esm"), Path.Combine(dataFolder, "PluginA.esm")),
+                Fallout4Release.Fallout4);
+
+            var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
+            modB.ModHeader.MasterReferences.Add(new MasterReference
+            { Master = ModKey.FromFileName("PluginA.esm") });
+            modB.Npcs.Set(modALoaded.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
+
+            using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
+            repo.Initialize(GameRelease.Fallout4);
+            repo.Index(modALoaded, 0, participates: true, key: new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.Index(modB, 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+            repo.UpdateWinners();
+
+            var contested = repo.GetContestedFormKeys();
+
+            Assert.Contains(npcKey.ToString(), contested);
+        }
+        finally
+        {
+            Directory.Delete(dataFolder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetContestedFormKeys_RecordOnlyInOnePlugin_NotReturned()
+    {
+        using var repo = LoadedRepository();
+        var all = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var soleFormKey = all.Items[0].FormKey;
+
+        var contested = repo.GetContestedFormKeys();
+
+        Assert.DoesNotContain(soleFormKey, contested);
+    }
+
     // --- CountRecordsForPlugin ---
 
     [Fact]

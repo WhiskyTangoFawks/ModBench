@@ -695,6 +695,105 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
+    // --- GetConflicts (#364: the Conflicts node's own listing) ---
+
+    [Fact]
+    public void GetConflicts_SinglePluginSession_ReturnsEmpty()
+    {
+        // TestPluginFixture's default session has exactly one plugin — nothing is contested, so
+        // there is nothing for GetContestedFormKeys to hand GetConflicts in the first place.
+        var conflicts = _svc.GetConflicts();
+
+        Assert.Empty(conflicts);
+    }
+
+    [Fact]
+    public void GetConflicts_TwoPluginsIdenticalOverride_ExcludesRecord()
+    {
+        // Rival this pins wrong: "return every contested FormKey, unfiltered by ConflictAll" would
+        // still include this record (it has two override entries), but its ConflictAll is
+        // NoConflict — the override changes nothing — so the real implementation must exclude it.
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-conflicts-noconflict")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNpc").FormKey)
+            .WithPlugin("Over.esp", (mod, prev) => mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()))
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                Assert.Equal(ConflictAll.NoConflict, svc.GetCompare(npcKey.ToString())!.ConflictAll);
+                Assert.DoesNotContain(svc.GetConflicts(), c => c.Record.FormKey == npcKey.ToString());
+            });
+    }
+
+    [Fact]
+    public void GetConflicts_UncontestedFieldOverride_IncludesRecordWithOverrideState()
+    {
+        // Aggression (a real schema-reflected field), not EditorID — EditorID is compiler-only
+        // metadata, excluded from ConflictClassifier's own field comparison entirely, so setting
+        // only it would leave the record NoConflict, not Override (learned the hard way: this test
+        // originally used EditorID and failed empty until switched to a field the classifier
+        // actually looks at).
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-conflicts-override")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNpc").FormKey)
+            .WithPlugin("Over.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).Aggression = Npc.AggressionType.Frenzied)
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var conflicts = svc.GetConflicts();
+                var entry = Assert.Single(conflicts, c => c.Record.FormKey == npcKey.ToString());
+                Assert.Equal(ConflictAll.Override, entry.ConflictAll);
+                Assert.Equal("Over.esp", entry.Record.Plugin);
+            });
+    }
+
+    [Fact]
+    public void GetConflicts_ConflictingOverrides_IncludesRecordWithConflictState()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-conflicts-conflict")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNpc").FormKey)
+            .WithPlugin("Mid.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).Aggression = Npc.AggressionType.Frenzied)
+            .WithPlugin("Top.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).Aggression = Npc.AggressionType.Aggressive)
+            .Build();
+        using (data)
+            WithCompareService(data, svc =>
+            {
+                var conflicts = svc.GetConflicts();
+                var entry = Assert.Single(conflicts, c => c.Record.FormKey == npcKey.ToString());
+                Assert.Equal(ConflictAll.Conflict, entry.ConflictAll);
+            });
+    }
+
+    [Fact]
+    public void GetConflicts_WithActiveFilter_ExcludesUnmatchedConflict()
+    {
+        FormKey npcKey = default;
+        var data = new PluginFixtureBuilder("rqs-conflicts-filter")
+            .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNpc").FormKey)
+            .WithPlugin("Over.esp", (mod, prev) =>
+                mod.Npcs.GetOrAddAsOverride(prev[0].Npcs.First()).Aggression = Npc.AggressionType.Frenzied)
+            .Build();
+        using (data)
+        {
+            var reflector = SharedSchemaReflector.Instance;
+            var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+            using var manager = new SessionManager(factory);
+            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
+            Assert.Contains(svc.GetConflicts(), c => c.Record.FormKey == npcKey.ToString());
+
+            manager.SetFilter("SELECT 'NoSuchFormKey:000000' AS form_key");
+
+            Assert.DoesNotContain(svc.GetConflicts(), c => c.Record.FormKey == npcKey.ToString());
+        }
+    }
+
     private static void WithCompareService(PluginFixtureData data, Action<RecordQueryService> test)
     {
         var reflector = SharedSchemaReflector.Instance;

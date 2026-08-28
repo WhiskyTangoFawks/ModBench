@@ -30,6 +30,22 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<PagedResult<RecordSummary>>();
 
+        // #364: the Conflicts node's own listing — a literal segment, so ASP.NET Core's routing
+        // matches it ahead of the parameterized `/records/{formKey}` below regardless of
+        // registration order, but it's placed here anyway to read in the same order it resolves.
+        app.MapGet("/records/conflicts", (IRecordQueryService svc) =>
+        {
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Received GetConflicts");
+            }
+            var result = svc.GetConflicts();
+            return Results.Ok(result);
+        })
+        .WithName("GetConflicts")
+        .WithTags("Records")
+        .Produces<IReadOnlyList<ConflictRecord>>();
+
         app.MapGet("/records/{formKey}", (string formKey, IRecordQueryService svc) =>
         {
             if (logger.IsEnabled(LogLevel.Information))

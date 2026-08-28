@@ -250,6 +250,15 @@ public record CompareResult(
 
 public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 
+/// <summary>One entry in the Conflicts node's own listing (#364) — the record's winning override
+/// (the same shape <c>GetRecords</c> already hands the tree, so the frontend can build an ordinary
+/// record row from it) paired with its record-wide <see cref="Queries.ConflictAll"/>
+/// (ADR-0016's Axis 1, the same value <see cref="CompareResult.ConflictAll"/> carries — this
+/// isn't a second definition, <c>RecordQueryService</c> computes both through the same helper).
+/// Never OnlyOne/NoConflict — <c>GetConflicts</c> excludes both before this type is ever
+/// constructed, matching <c>medit-record-editor.md</c>'s "no tint" rule for those two states.</summary>
+public record ConflictRecord(RecordSummary Record, ConflictAll ConflictAll);
+
 public record SessionFilterRequest(string Sql);
 public record SessionFilterResponse(string? Sql);
 

@@ -40,6 +40,7 @@ public class WorldspaceQueryServiceTests
         public RecordDocument? GetDocument(string formKey, PluginKey plugin) => null;
         public RecordOverrides? GetOverrideStack(string formKey) => null;
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => [];
+        public IReadOnlyList<string> GetContestedFormKeys() => [];
         public RecordLookupEntry? Resolve(string formKey) => null;
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> t) => new HashSet<string>();
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => [];

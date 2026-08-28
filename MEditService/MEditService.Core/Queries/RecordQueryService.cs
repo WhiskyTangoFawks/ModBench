@@ -119,7 +119,8 @@ public sealed class RecordQueryService(
         // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
         var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
-        var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, resolveFormKey, pluginParticipates);
+        var (classification, conflictAll, vmad, conditions) =
+            ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
         // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
         // pre-#272 suite because every fixture used the elided Data origin.
         // (1) o.Origin was omitted from the CompareOverride constructor call entirely, so
@@ -139,10 +140,73 @@ public sealed class RecordQueryService(
                 Origin: o.Origin, RecordType: o.RecordType, IsPartialForm: o.IsPartialForm,
                 IsPartialFormable: o.IsPartialFormable));
 
-        // #421: VMAD/conditions are rejected from IRecordReads — reconstituted here instead, from
-        // each entry's own document body (RecordDocumentCodecs, relocated from Records/). #421
-        // ships Head == Effective, so reading Effective is exactly what the old repository.GetVmad/
-        // GetConditions calls answered.
+        var hasVmad = RequireSchemas()[stack.RecordType].HasVmad;
+        return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
+    }
+
+    /// <summary>#364: every contested FormKey (<see cref="IRecordReads.GetContestedFormKeys"/> —
+    /// already filter-narrowed the same way <c>GetRecordTypeCounts</c>/<c>Search</c> are, #278's
+    /// mechanism, not a second one) whose record-wide <see cref="Queries.ConflictAll"/> is not
+    /// OnlyOne/NoConflict — the Conflicts node's own listing. Computed through the exact same
+    /// <see cref="ClassifyStack"/> helper <see cref="GetCompare"/> uses, so "is this record
+    /// conflicting" can never answer differently here than it does when the record is actually
+    /// opened.</summary>
+    public IReadOnlyList<ConflictRecord> GetConflicts()
+    {
+        var repository = RequireRepository();
+        var contested = repository.GetContestedFormKeys();
+        if (contested.Count == 0) return [];
+
+        var resolveFormKey = FormKeyResolutionCache.Memoize(repository.Resolve);
+        var sessionPlugins = RequireSession().Plugins;
+        var pluginMasters = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
+        var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
+
+        var results = new List<ConflictRecord>();
+        foreach (var formKey in contested)
+        {
+            var stack = repository.GetOverrideStack(formKey);
+            // Defensive, not expected in practice: GetContestedFormKeys and this read share no
+            // transaction, so a formKey it just reported could in principle be gone by the time
+            // this asks for its stack. Skipped, not thrown — the same posture the rest of this
+            // service takes toward a race with a concurrent write.
+            if (stack == null) continue;
+
+            var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
+            var (_, conflictAll, _, _) =
+                ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
+            // medit-record-editor.md's "no tint" rule: OnlyOne/NoConflict never render a badge, so
+            // they never belong in this listing either — GetContestedFormKeys only proves "more
+            // than one override entry exists", not that any of them actually differ from master.
+            if (conflictAll is ConflictAll.OnlyOne or ConflictAll.NoConflict) continue;
+
+            var winner = stack.Entries.FirstOrDefault(e => e.IsWinner) ?? stack.Entries[^1];
+            results.Add(new ConflictRecord(
+                new RecordSummary(
+                    FormKey: winner.Effective.FormKey, Plugin: winner.Plugin.Name, LoadOrderIndex: winner.LoadOrderIndex,
+                    IsWinner: true, EditorId: winner.Effective.EditorId, Origin: winner.Plugin.Origin ?? ""),
+                conflictAll));
+        }
+        return results;
+    }
+
+    /// <summary>The record-wide classification both <see cref="GetCompare"/> and
+    /// <see cref="GetConflicts"/> need — one definition of "what is this record's ConflictAll",
+    /// so the two can never disagree. VMAD/conditions are outside the generic reflection pipeline
+    /// (#421: reconstituted here from each entry's own document body via
+    /// <c>RecordDocumentCodecs</c>), so each is classified separately and its contribution folded
+    /// into the generic result via <see cref="ConflictRules.Escalate"/> — mirroring the pattern for
+    /// both. [ADR-0032]</summary>
+    private (ClassifyResult Classification, ConflictAll ConflictAll, VmadCompare? Vmad, ConditionCompare? Conditions) ClassifyStack(
+        RecordOverrides stack,
+        IReadOnlyList<RecordDetail> committedOverrides,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
+        IReadOnlyDictionary<string, bool> pluginParticipates,
+        Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, resolveFormKey, pluginParticipates);
+        var conflictAll = classification.ConflictAll;
+
         var gameRelease = RequireSession().GameRelease;
         // VMAD is outside the generic reflection pipeline, so classify it separately and fold
         // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
@@ -151,7 +215,6 @@ public sealed class RecordQueryService(
                 e.Plugin.Name, e.LoadOrderIndex, RecordDocumentCodecs.GetVmad(e.Effective, gameRelease, _logger), e.Plugin.Origin!))
             .ToList();
         VmadCompare? vmad = null;
-        var conflictAll = classification.ConflictAll;
         if (vmadInputs.Any(i => i.Vmad != null))
         {
             var vmadResult = VmadConflictClassifier.Classify(vmadInputs, resolveFormKey, pluginParticipates);
@@ -160,7 +223,7 @@ public sealed class RecordQueryService(
         }
 
         // Conditions (CTDA) are outside the reflection pipeline too — classify separately and
-        // fold their contribution into the record-level ConflictAll, mirroring VMAD. [ADR-0032]
+        // fold their contribution into the record-level ConflictAll, mirroring VMAD.
         var conditionCodec = ConditionCodecRegistry.For(gameRelease.ToCategory());
         var conditionInputs = stack.Entries
             .Select(e => new ConditionPluginInput(
@@ -174,8 +237,7 @@ public sealed class RecordQueryService(
             conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
         }
 
-        var hasVmad = RequireSchemas()[stack.RecordType].HasVmad;
-        return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
+        return (classification, conflictAll, vmad, conditions);
     }
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
