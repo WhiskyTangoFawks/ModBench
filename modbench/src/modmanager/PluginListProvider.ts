@@ -3,10 +3,14 @@ import { join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
-import { buildFileConflictIndex, rootLevelFileConflicts, type ConflictEntry } from './fileConflictIndex';
+import {
+  buildFileConflictIndex, rootLevelFileConflicts, rootLevelWinnerMods, foldPath,
+  type ConflictEntry, type FileConflictIndex,
+} from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
 import { resolvePluginPaths } from './explicitSession';
 import { discoverImplicitMasters } from './vanillaMasters';
+import { findUnlistedPlugins, type UnlistedPlugin } from './unlistedPlugins';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -362,6 +366,7 @@ export class PluginListProvider
     const facts = await this.computeRowFacts(fullOrder);
     this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
     this.lastFileOverrides = facts?.fileOverrides ?? new Map();
+    this.lastStackPeers = facts?.stackPeers ?? new Map();
     const rows: PluginListNode[] = [
       ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
       ...dedupedOrder.map((name) => new PluginNode(
@@ -396,6 +401,21 @@ export class PluginListProvider
 
   private lastFileOverrides: ReadonlyMap<string, ConflictEntry> = new Map();
 
+  /** #448: every root-level plugin's own file-level peers — the losers `fileOverrides()`' entry
+   *  already names as `providers` minus the winner — keyed the same way (lowercased filename), so
+   *  `stackPeers().has(name)` and `fileOverrides().has(name)` always agree on which plugins are
+   *  contested. Each value is #34's own `UnlistedPlugin` shape (origin + physical path,
+   *  ADR-0036's boundary object) — nothing richer than that ever crosses to Editing's Stack node.
+   *  Reuses `findUnlistedPlugins` unchanged: a file-level peer *is* an unlisted plugin by that
+   *  function's own definition (a copy the load order doesn't point at), so this is a grouping
+   *  over its existing output, not a new computation. Empty before the first render, same
+   *  convention as `fileOverrides()`. */
+  stackPeers(): ReadonlyMap<string, UnlistedPlugin[]> {
+    return this.lastStackPeers;
+  }
+
+  private lastStackPeers: ReadonlyMap<string, UnlistedPlugin[]> = new Map();
+
   /** Order-aware missing-master verdicts *and* (#447) file-override facts for `order` (the
    *  implicit-first, deduped full row order — see `getChildren`), or undefined when no
    *  instanceRoot is configured. One `FileConflictIndex` build feeds both — they are two
@@ -404,7 +424,11 @@ export class PluginListProvider
    *  the tree still renders every row — with a warning surfaced (ADR-0026: silently missing
    *  badges would look identical to "nothing to flag"). */
   private async computeRowFacts(order: string[]): Promise<
-    { statuses: Map<string, PluginOrderStatus>; fileOverrides: Map<string, ConflictEntry> } | undefined
+    {
+      statuses: Map<string, PluginOrderStatus>;
+      fileOverrides: Map<string, ConflictEntry>;
+      stackPeers: Map<string, UnlistedPlugin[]>;
+    } | undefined
   > {
     if (!this.instanceRoot) return undefined;
     try {
@@ -412,13 +436,34 @@ export class PluginListProvider
       const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
       const dataFolder = await this.dataFolder();
       const statuses = await computePluginOrderStatuses(order, index, dataFolder, this.log);
-      return { statuses, fileOverrides: rootLevelFileConflicts(index) };
+      return { statuses, fileOverrides: rootLevelFileConflicts(index), stackPeers: this.computeStackPeers(order, index) };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
       this.reporter?.report('warning', 'Could not compute plugin master-order status — badges may be inaccurate.', message);
       return undefined;
     }
+  }
+
+  /** #448: `order`'s own mod-provided members, paired with their winning mod (the `LoadedPlugin`
+   *  shape `findUnlistedPlugins` expects), then grouped by filename. A name `rootLevelWinnerMods`
+   *  has no entry for (an implicit master or an unmanaged vanilla/DLC/CC plugin — neither is
+   *  provided by any mod) is skipped: it never had a mod-folder origin to begin with, so it can
+   *  never be "shadowed" by one — the same reasoning `findUnlistedPlugins`' own scope note gives
+   *  for why disabled mods are out of scope here. */
+  private computeStackPeers(order: string[], index: FileConflictIndex): Map<string, UnlistedPlugin[]> {
+    const winnerMods = rootLevelWinnerMods(index);
+    const loadOrder = order
+      .map((name) => ({ name, origin: winnerMods.get(foldPath(name)) }))
+      .filter((p): p is { name: string; origin: string } => p.origin !== undefined);
+    const unlisted = findUnlistedPlugins(index, loadOrder);
+    const byName = new Map<string, UnlistedPlugin[]>();
+    for (const peer of unlisted) {
+      const key = foldPath(peer.name);
+      const list = byName.get(key);
+      if (list) list.push(peer); else byName.set(key, [peer]);
+    }
+    return byName;
   }
 
   /** Serialise the dragged selection. VS Code passes the whole selection when the

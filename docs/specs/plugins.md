@@ -563,12 +563,78 @@ that existing index, not a second disk walk.
   `providers`, `winner`, `winnerMod`) — this section, and the user-facing badge/tooltip copy, use
   "file override" per the Resolution stack's level-qualified vocabulary (`CONTEXT.md`), since this
   is the surface where the two contexts' language meets.
-- **Out of scope here.** The Stack expansion node, peer loading, and delta compare are
-  [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448), sequenced after this decoration
-  because it needs the badge above as the signal that a Stack node exists at all —
-  `PluginListProvider.fileOverrides(): ReadonlyMap<string, ConflictEntry>` (keyed by lowercased
-  plugin filename) is that signal, already carrying every peer and the winner. Compile-pending
-  decoration is its own split, [#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449).
+- **Out of scope here.** The Stack expansion node, peer loading, and diff/compile actions are
+  [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448) — see Stack node, below — which
+  needs the badge above as the signal that a Stack node exists at all. Delta compare (Effective
+  vs Effective, "Compare with winner" on a peer) is its own split,
+  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet built. Compile-pending
+  decoration is its own split too, [#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449).
+
+### Stack node ([#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448))
+
+Split (c) of #397's design record — the "investigate the stack" surface for a contested plugin,
+CONTEXT.md's "Resolution stack" made explorable. Where the file-override decoration above only
+*flags* that a plugin's filename resolves to more than one enabled mod's copy, this node is where
+a user actually goes to look at the other copy, or at the tracked winner's own source/binary
+split.
+
+- **Trigger and placement.** A plugin row whose filename `PluginListProvider.stackPeers()` carries
+  peers for (i.e. `fileOverrides()` also flags it — the two always agree) gets a synthetic **Stack**
+  node, pinned first among its children — the Worldspaces-node precedent (a synthetic node ahead
+  of the flat record-type list), not a spatial grouping. Absent entirely for an uncontested
+  plugin, never rendered empty. The row's own file-override badge is the discoverability signal;
+  the chevron itself can't be, since every plugin row always expands (ADR-0035).
+- **The hand-off is exactly ADR-0036's boundary object.** `PluginsTreeCompositeDeps` gains an
+  optional `stackPeersOf(row): { name, path, origin }[] | undefined` accessor (`PluginsTreeComposite.ts`),
+  structurally identical to `unlistedPlugins.ts`'s own `UnlistedPlugin` — origin + physical
+  path, nothing richer ever crosses. `PluginTreeProvider.getPluginChildren` gained a third,
+  optional `stackPeers` parameter carrying it through; the composite computes it once, at the
+  join, from `PluginListProvider.stackPeers()` (itself a grouping over #34's existing
+  `findUnlistedPlugins`, not a new computation).
+- **Children, in resolution order:**
+  1. **`source (working tree) — <mod>`** and **`binary (last compile…) — <mod>`** — the winner's
+     own state-level stack, *tracked plugins only* (CONTEXT.md: "Editing requires tracking;
+     viewing never does" — an untracked winner has no working tree to show a state split for at
+     all). Gated on the composition root's own `.git`-presence check (`isTracked`,
+     `trackedRepositories.ts`, exported for this reuse) plus each plugin's own loaded origin
+     (`PluginTreeProvider.setTrackedPlugins`/`setPluginOrigins`, populated from the same
+     `GET /plugins` answer `driftTracker` already reads). Map + links, not duplicated function
+     (maintainer decision): the source entry is informational only; the binary entry's own
+     context menu offers **Diff against source** and **Save & Compile** — commit/revert stay in
+     the native SCM panel.
+  2. **Every file-level peer** (`<plugin> — <mod>`), greyed (lock icon) and read-only regardless
+     of tracking — load-order membership decides write access (CONTEXT.md), never re-derived per
+     row.
+- **Diff against source** (`modbench.pluginListTree.diffAgainstSource`, the binary entry's own
+  context command) opens a native `vscode.diff` of the working tree against
+  `refs/medit/last-compile/<plugin>` (`SourceRepository`'s own parked snapshot) via the `git:`
+  URI scheme VS Code's built-in git extension resolves. **Scoped to the plugin's own root source
+  file** (`source/<plugin>/RecordData.json` — CONTEXT.md's "one *source unit* = one file"
+  invariant guarantees this file always exists) rather than every file the compile touched; a
+  plugin with group-folder content (`Weapons/`, `Cells/`, …) can have changes this diff does not
+  show. A true whole-tree multi-file diff is `vscode.changes` (VS Code 1.94+, past this
+  extension's current `^1.85.0` engine floor) — a disclosed follow-up, not built here.
+- **Save & Compile** from the binary entry reuses `modbench.saveAndCompile` unchanged — the
+  handler recognizes a `StackBinaryStateNode` argument and compiles its exact `(plugin, origin)`
+  directly, skipping the ordinary row/active-record/QuickPick resolution tiers (`compileTarget.ts`)
+  since the entry already carries both.
+- **Expanding a peer lazy-loads it, read-only, through #34's unlisted-plugin door**
+  (`POST /plugins/load` / `POST /plugins/unload`, generated but never previously called from the
+  frontend) — `PluginTreeProvider.fetchStackPeerChildren` loads at most once per expansion streak,
+  then recurses into the same `getPluginChildren(name, origin)` every other origin-bearing copy
+  already uses; read-only falls out of the pre-existing `isImmutable` short-circuit
+  (`origin !== undefined ⇒ immutable`, #281/ADR-0036), not new logic. Collapsing a peer's row
+  (`pluginListView.onDidCollapseElement`) unloads it again — a browsed-then-abandoned peer never
+  lingers loaded for the rest of the session (#34's "hidden means absent").
+- **Reveal in Mods tree** (`modbench.pluginListTree.revealInModsTree`, a peer's own context
+  command) selects and focuses the providing mod's row in the Mods tree
+  (`ModListProvider.findModNode` / `getParent`, `vscode.TreeView.reveal`) — changing the winner is
+  mod reordering, the Mods tree's own jurisdiction, so this command only ever selects, never
+  reorders.
+- **Out of scope here.** Delta compare ("Compare with winner", Effective vs Effective, the two
+  presence icons) is [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet
+  built. The global "show peers everywhere" audit-mode toggle is deferred, not dropped (#397's
+  design record) — no such toggle is contributed anywhere in `package.json`.
 
 ### Automatic origin absorption ([#279](https://github.com/WhiskyTangoFawks/ModBench/issues/279) / [#356](https://github.com/WhiskyTangoFawks/ModBench/issues/356), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) § Live mutation)
 
