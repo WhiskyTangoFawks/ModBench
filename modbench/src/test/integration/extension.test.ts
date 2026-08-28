@@ -45,6 +45,9 @@ const MOCK_PLUGINS: MockPlugin[] = [
   },
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
+// #364: GET /records/conflicts' answer — the Conflicts node's own listing. Empty until a test
+// says otherwise, mirroring mockPluginsOverride's "changeable per test, reset between them" shape.
+let mockConflicts: unknown[] = [];
 let sessionLoaded = false;
 const requestLog: string[] = [];
 // #295: lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
@@ -86,6 +89,7 @@ function resetMockBackend(): void {
   sessionLoaded = false;
   requestLog.length = 0;
   mockPluginsOverride = null;
+  mockConflicts = [];
   loadExplicitShouldFail = false;
   sessionStatus = { ...NO_SESSION_STATUS };
   holdLoadExplicit = false;
@@ -170,6 +174,12 @@ function createMockBackend(): http.Server {
     if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
       res.writeHead(sessionLoaded ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(sessionLoaded ? JSON.stringify(MOCK_RECORD_TYPES) : 'No session loaded.');
+      return;
+    }
+    // #364: the Conflicts node's own listing.
+    if (url === '/records/conflicts') {
+      res.writeHead(sessionLoaded ? 200 : 503, { 'Content-Type': 'application/json' });
+      res.end(sessionLoaded ? JSON.stringify(mockConflicts) : 'No session loaded.');
       return;
     }
     res.writeHead(404);
@@ -1016,9 +1026,15 @@ describe('Plugin load-order rows expand into records (#270)', () => {
     await vscode.commands.executeCommand('modbench.modList.launchMedit');
 
     const after = await tree.getChildren();
+    // #364: an ordinary (non-held) load completes with conflicts already known (SessionController
+    // .reportLoadedSession's own doc comment — the load POST only answers after the winner sweep),
+    // so the Conflicts node legitimately joins the root listing here too — filtered out (via
+    // rowName's own undefined-for-non-plugin-rows behavior) before this test's own claim, which is
+    // specifically about the *plugin* rows never being rebuilt or reordered, not about whether a
+    // new synthetic node the #270-era tree never had can now appear alongside them.
     assert.deepStrictEqual(
-      after.map(rowName), before.map(rowName),
-      'starting a session must not rebuild or reorder the rows',
+      after.map(rowName).filter((n) => n !== undefined), before.map(rowName),
+      'starting a session must not rebuild or reorder the plugin rows',
     );
     assert.strictEqual(
       tree.getTreeItem(findRow(after, 'TestMod.esp')).collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
@@ -1668,6 +1684,42 @@ describe('Progressive load states its own incompleteness (#307)', () => {
       (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message,
       undefined,
       'the incompleteness statement must clear itself once conflicts are computed',
+    );
+  });
+
+  // #364 inherits #307's own invariant: the Conflicts node is exactly as absent-until-computed as
+  // the incompleteness message above — same conflictsComputed transition, a different surface.
+  it('#364: the Conflicts node is absent from the root listing before conflictsComputed, prepended once it lands', async () => {
+    setIndexed(['TestMod.esp']);
+    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
+
+    await waitFor('TestMod.esp to gain a chevron mid-load', async () =>
+      (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
+
+    const midLoadRows = await pluginsTree()!.getChildren();
+    assert.ok(
+      !midLoadRows.some((r) => (r as { contextValue?: string }).contextValue === 'conflicts'),
+      'the Conflicts node must not appear before conflictsComputed lands',
+    );
+
+    mockConflicts = [{
+      record: {
+        formKey: '000801:TestMod.esp', plugin: 'TestMod.esp', origin: 'Data',
+        loadOrderIndex: 0, isWinner: true, editorId: 'Foo', workingTreeState: 'None',
+      },
+      conflictAll: 'Conflict',
+    }];
+    sessionStatus = { ...sessionStatus, conflictsComputed: true };
+    releaseLoadExplicit!();
+    await launch;
+
+    const rootRows = await waitFor('the Conflicts node to appear once conflicts are computed', async () => {
+      const rows = await pluginsTree()!.getChildren();
+      return rows.some((r) => (r as { contextValue?: string }).contextValue === 'conflicts') ? rows : undefined;
+    });
+    assert.strictEqual(
+      (rootRows[0] as { contextValue?: string }).contextValue, 'conflicts',
+      'the Conflicts node must be prepended ahead of every plugin row, not merely present somewhere',
     );
   });
 

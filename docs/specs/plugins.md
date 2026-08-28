@@ -293,10 +293,10 @@ without saying what is not yet known would make that worse, not better.
   stall. The zero-count phrasing therefore says work is under way on the first plugin(s), keeping
   the count visible rather than replacing it
   ([#342](https://github.com/WhiskyTangoFawks/ModBench/issues/342)).
-- **No conflict badge is rendered before the sweep completes.** No conflict badge exists on this
-  tree yet ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364) — see Further Notes),
-  so this is an **invariant handed to #364**, not current code: whatever renders that badge must
-  gate on `SessionStatus.conflictsComputed`, and must render *nothing* — not "no conflict" —
+- **No conflict badge is rendered before the sweep completes.** The record conflict badge and the
+  Conflicts node ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364) — see Further
+  Notes) both gate on `SessionStatus.conflictsComputed`
+  (`PluginTreeProvider.conflictAllOf`/`conflictsNode`) and render *nothing* — not "no conflict" —
   while it is false.
 - **Gate on `conflictsComputed`, never on "is a load running".** They coincide today but are
   deliberately separate fields (`SessionStatus.cs`): the sweep is whole-set, so ADR-0035's live
@@ -645,6 +645,57 @@ split.
   built. The global "show peers everywhere" audit-mode toggle is deferred, not dropped (#397's
   design record) — no such toggle is contributed anywhere in `package.json`.
 
+### Conflicts node and conflict badge ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364))
+
+Both were recorded as spec drift by #270 and had no real home until #364. ADR-0016's two-axis
+model (record-wide `ConflictAll` / per-cell `ConflictThis`) is the settled design; only Axis 1
+drives anything on this tree — Axis 2 stays the compare grid's own concern
+([medit-record-editor.md](medit-record-editor.md)'s "Conflict color coding").
+
+- **Trigger and placement — root-level, not per-plugin.** Unlike the Stack node above (a
+  per-plugin child `getPluginChildren` builds), the Conflicts node is a session-wide sibling of
+  the plugin rows — a record's override stack inherently spans more than one plugin, so there is
+  no single plugin row it could belong under. `PluginsTreeCompositeDeps.children` gains an
+  optional `conflictsNode(): TChild | undefined` accessor, consulted once at the root and
+  prepended ahead of every plugin row when present — never added to the composite's `rowsSeen`,
+  so it routes through the `children` side for its own `getChildren`/`getTreeItem` the same way
+  every other record-side node does (confirmed disjoint from the Stack node's own insertion point
+  by an executable routing test, not merely by construction).
+- **Gated on `conflictsComputed`, omitted entirely — never rendered empty (#307's invariant).**
+  `PluginTreeProvider.setConflictsComputed`/`conflictsNode` mirror `sessionProgress.ts`'s own "no
+  conflict badge before the sweep completes" rule: `conflictsNode()` answers `undefined` (the
+  node absent, not present-with-nothing-in-it) while `SessionStatus.conflictsComputed` is false.
+  Wired from `SessionController`'s `notifyConflictsComputed` dep — the same load-completing
+  false→true transition point the incompleteness message and the record panel's own comparison
+  refetch already use, and the same documented forward-coupling gap: a live-mutation re-sweep
+  (#97) does not yet call it again on the way *out* of settled.
+- **Children: `GetConflicts()`** (`RecordQueryService`, `GET /records/conflicts`) — every FormKey
+  with more than one override entry (`IRecordReads.GetContestedFormKeys`) whose record-wide
+  `ConflictAll` is not `OnlyOne`/`NoConflict`, classified through the same `ClassifyStack` helper
+  `GetCompare` uses (so "is this record conflicting" can never answer differently here than it
+  does when the record is actually opened), rendered as ordinary `RecordNode` rows (reused, not a
+  bespoke node type — the same click-to-open behavior every other record row has).
+- **Respects the active record filter from birth (#278 AC6, inherited).** `GetContestedFormKeys`
+  is routed through the same `BuildWhere`/`_filterActive` mechanism `GetRecordTypeCounts`/`Search`
+  already use — #278's shipped filter-pruning mechanism, not a second filter path. A filter prunes
+  which conflicting records the node lists; it never removes the node itself, mirroring #278's own
+  "a filter prunes records and record types, never a plugin row" rule.
+- **The conflict badge shares the existing M/A working-tree provider** (`RecordDecorationProvider`,
+  #428) rather than a second one — a row has exactly one `FileDecoration`. M/A wins when present
+  (an uncommitted local edit is the more actionable, session-local fact — orchestrator-approved
+  default); the conflict color/badge (`O`/green for Override, `C`/git-conflict-token for Conflict,
+  `!`/red for ConflictCritical — reusing existing sanctioned `ThemeColor`s, no new ones) shows
+  otherwise. Nothing at all for `OnlyOne`/`NoConflict`, or when the lookup has nothing to say
+  (not computed, or nothing has fetched this record's conflict state yet) — never a badge that
+  could be mistaken for "no conflict".
+- **Deliberately scoped: the badge renders only on the Conflicts node's own rows**, not on every
+  ordinary record row wherever a plugin is browsed. A session-wide persisted `ConflictAll` for
+  every record (computed during the winner sweep, so it's cheap to attach anywhere) is
+  architecturally the "complete" answer ADR-0016's own implementation notes anticipated, but it
+  would touch the live-mutation hot path (reorder/enable/disable's own re-sweep) and widen
+  `RecordSummary` for every caller — a materially bigger, separate ticket if wanted, not a silent
+  scope expansion of this one (#364 plan gate).
+
 ### Automatic origin absorption ([#279](https://github.com/WhiskyTangoFawks/ModBench/issues/279) / [#356](https://github.com/WhiskyTangoFawks/ModBench/issues/356), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) § Live mutation)
 
 Reorder, enable and disable are SQL-only and apply live. Installing, uninstalling or
@@ -971,13 +1022,17 @@ overflow, then native **Collapse All** last.
   tree, Downloads, and this surface all use `registerNameFilter`, which derives each view's two
   command ids and its filter-active context key from the view id so the three cannot drift into
   three conventions.
-- The conflict badge on a record node (the two-axis model, [ADR-0016](../adr/0016-two-axis-conflict-model.md))
-  is planned but not yet built on this tree — see [#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364),
-  which also tracks the missing Conflicts node; both were recorded as spec drift by #270 and
-  carry over unchanged by this merge. The full visual encoding, once built, lives in
-  [medit-record-editor.md](medit-record-editor.md). **#364 inherits one invariant from #307**: the
-  badge must gate on `SessionStatus.conflictsComputed` and render nothing at all while it is
-  false — an absent badge that means "not computed yet" must never be drawn as one that means
-  "no conflict" (see Progressive load).
+- The conflict badge on a record node (the two-axis model, [ADR-0016](../adr/0016-two-axis-conflict-model.md)
+  — only Axis 1, `ConflictAll`, drives this tree's badge; Axis 2 (`ConflictThis`) is the compare
+  grid's own concern) and the Conflicts node are built
+  ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364) — both were recorded as spec
+  drift by #270; #364 is where they landed). The full visual encoding lives in
+  [medit-record-editor.md](medit-record-editor.md). Per #307's invariant: the badge and the node
+  both gate on `SessionStatus.conflictsComputed` and render nothing at all while it is false — an
+  absent badge that means "not computed yet" must never be drawn as one that means "no conflict"
+  (see Progressive load). Scoped deliberately (#364 plan gate): the badge renders only on the
+  Conflicts node's own rows, not on every ordinary record row everywhere a plugin is browsed — a
+  session-wide persisted `ConflictAll` for every record is a larger, separate ticket if wanted,
+  not a silent scope expansion of this one.
 - **Deferred follow-up**: [#62](https://github.com/WhiskyTangoFawks/ModBench/issues/62)
   (cross-tree highlight).

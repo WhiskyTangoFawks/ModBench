@@ -1081,6 +1081,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         public RecordOverrides? GetOverrideStack(string formKey) => owner.GetOverrideStack(records, formKey);
         public PagedResult<RecordSummary> Search(RecordQuery query) => owner.Search(records, query);
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => owner.GetRecordTypeCounts(records, plugin);
+        public IReadOnlyList<string> GetContestedFormKeys() => owner.GetContestedFormKeys(records);
         public RecordLookupEntry? Resolve(string formKey) => owner.ResolveFormKey(formKey);
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => owner.GetReferences(targetFormKey);
         public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
@@ -1303,6 +1304,29 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         while (reader.Read())
             counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1)));
         return counts;
+    }
+
+    // #364: same filter-narrowing invariant as GetRecordTypeCounts above — routed through the same
+    // BuildWhere, so a filter that prunes a FormKey out of Search/counts prunes it out of the
+    // Conflicts node's candidate population too, with nothing bespoke to drift out of sync.
+    public IReadOnlyList<string> GetContestedFormKeys() => GetContestedFormKeys(EffectiveRelation);
+
+    private List<string> GetContestedFormKeys(string records)
+    {
+        var (where, paramValues) = BuildWhere(null, null, _filterActive, null, recordTypes: null);
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT form_key FROM {records}{where}
+            GROUP BY form_key
+            HAVING COUNT(*) > 1
+            """;
+        AddParams(cmd, paramValues);
+        using var reader = cmd.ExecuteReader();
+
+        var formKeys = new List<string>();
+        while (reader.Read())
+            formKeys.Add(reader.GetString(0));
+        return formKeys;
     }
 
     public RecordLookupEntry? Resolve(string formKey) => ResolveFormKey(formKey);

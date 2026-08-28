@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type {
-  RecordSummary,
+  RecordSummary, ConflictAll,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
@@ -61,6 +61,11 @@ export class RecordNode extends vscode.TreeItem {
     public readonly record: RecordSummary,
     public readonly origin?: string,
     immutable = false,
+    // #364 review finding: whether this row was built by the Conflicts node's own listing
+    // (fetchConflicts) rather than an ordinary RecordTypeNode browse — threaded into the
+    // resourceUri itself so RecordDecorationProvider can scope the conflict badge to this node's
+    // rows only, never to every location the same record happens to appear.
+    fromConflictsNode = false,
   ) {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -73,7 +78,7 @@ export class RecordNode extends vscode.TreeItem {
     // #428: RecordDecorationProvider's own keying identity — record.plugin (this row's own copy's
     // owning plugin, which an override stack row can differ from the RecordTypeNode's plugin) paired
     // with origin, the same (plugin, origin, formKey) triple every record-scoped command already uses.
-    this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
+    this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey, fromConflictsNode);
   }
 }
 
@@ -303,11 +308,32 @@ export class StackPeerNode extends vscode.TreeItem {
   }
 }
 
+/** #364: the Conflicts node — root-level (unlike Stack above, which is a per-plugin pinned-first
+ *  *child* built inside `getPluginChildren`), so it is never constructed there and never collides
+ *  with Stack's own insertion point. `PluginsTreeComposite`'s root `getChildren` consults
+ *  {@link PluginTreeProvider.conflictsNode} the same optional-accessor way it already consults
+ *  `stackPeersOf`/`hasMatchingRecords`, and prepends whatever it returns.
+ *
+ *  Omitted entirely — never rendered with empty/placeholder children — while
+ *  `SessionStatus.conflictsComputed` is false (`setConflictsComputed`/`conflictsNode`, #307's
+ *  invariant): an absent node is what "not computed yet" looks like, never a node with nothing
+ *  in it, which would be indistinguishable from "computed, and there happen to be no
+ *  conflicts". */
+export class ConflictsNode extends vscode.TreeItem {
+  readonly kind = 'conflicts' as const;
+  constructor() {
+    super('Conflicts', vscode.TreeItemCollapsibleState.Collapsed);
+    this.contextValue = 'conflicts';
+    this.iconPath = new vscode.ThemeIcon('warning');
+  }
+}
+
 export type PluginTreeNode =
   | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
-  | StackNode | StackSourceStateNode | StackBinaryStateNode | StackPeerNode | ErrorNode;
+  | StackNode | StackSourceStateNode | StackBinaryStateNode | StackPeerNode
+  | ConflictsNode | ErrorNode;
 
 // Record types that get their own dedicated node in the worldspace tree, keyed by raw
 // signature — the single source of truth for which spatial type maps to which node
@@ -355,6 +381,16 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // labels the Stack node's own state entries ("source (working tree) — <origin>"). A plugin
   // nothing has told this provider about degrades to no state entries, same as untracked.
   private pluginOrigins = new Map<string, string>();
+  // #364: gates both the Conflicts node's own existence (conflictsNode) and the badge lookup
+  // (conflictAllOf) — mirrors `sessionProgress.ts`'s "each surface gates on conflictsComputed
+  // itself" posture rather than trusting a single upstream check, so a stale cached value can
+  // never leak past the flag going back to false (ADR-0035's live-mutation re-sweep).
+  private conflictsComputed = false;
+  // #364: (plugin, origin, formKey) -> the record-wide ConflictAll the Conflicts node's own
+  // listing last reported for it — populated by getConflictsChildren, read by conflictAllOf.
+  // Cleared whenever conflictsComputed goes back to false, so a badge can never keep showing a
+  // value from before the session's winners were last known-good.
+  private readonly conflictAllCache = new Map<string, ConflictAll>();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly repository: PluginRepository, log?: (msg: string) => void) {
@@ -384,6 +420,37 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this._onDidChangeTreeData.fire(undefined);
   }
 
+  /** #364 / #307: flips the one fact that decides whether the Conflicts node exists at all and
+   *  whether the badge lookup answers anything — never on "is a load running" (`extension.ts`'s
+   *  own `notifyConflictsComputed`, fired on the load-completing false→true transition, is the
+   *  wiring; live-mutation re-sweep's own false-again notification is #97's territory, not
+   *  wired here yet). Going back to false clears the cached ConflictAll values too, so nothing
+   *  stale can answer once the flag flips back — a fresh `getConflictsChildren` call is what
+   *  repopulates it. */
+  setConflictsComputed(computed: boolean): void {
+    this.conflictsComputed = computed;
+    if (!computed) this.conflictAllCache.clear();
+    this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** #364: the root-level node `PluginsTreeComposite` prepends to the tree, or undefined while
+   *  `conflictsComputed` is false — omitted entirely, never rendered with empty/placeholder
+   *  children (see the class doc comment on {@link ConflictsNode}). */
+  conflictsNode(): ConflictsNode | undefined {
+    return this.conflictsComputed ? new ConflictsNode() : undefined;
+  }
+
+  /** #364: the record conflict badge's own lookup — `RecordDecorationProvider`'s conflict-color
+   *  callback. Gated on `conflictsComputed` independently of whatever is or isn't in the cache,
+   *  the same belt-and-suspenders posture `conflictsNode` above takes: a badge must never answer
+   *  from stale data left over from before the flag went back to false. Undefined for a record
+   *  nothing has fetched a ConflictAll for yet (never rendered, or a since-cleared cache), read
+   *  the same as "nothing to badge" — same convention as `workingTreeStateOf`. */
+  conflictAllOf(plugin: string, origin: string | undefined, formKey: string): ConflictAll | undefined {
+    if (!this.conflictsComputed) return undefined;
+    return this.conflictAllCache.get(`${this.originKey(plugin, origin)}::${formKey}`);
+  }
+
   // #281 / ADR-0036: a shadowed copy (origin stated) is read-only by construction — an edit to a
   // file the game does not load changes nothing observable — so origin alone decides before the
   // immutable set is even consulted.
@@ -400,6 +467,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     // provider remembered from the last one — never carry a stale "already loaded" belief across
     // a session boundary the backend itself just reset.
     this.loadedPeers.clear();
+    // #364: same wholesale-clear posture as every other cache above — a stale ConflictAll must
+    // not survive a refresh any more than a stale record page does. Does not touch
+    // conflictsComputed itself; that flag has its own setter and its own lifecycle.
+    this.conflictAllCache.clear();
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -469,6 +540,8 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     // case stays only to satisfy vscode.TreeDataProvider<T>'s own optional-parameter contract.
     if (!element) return [];
     if (element instanceof RecordTypeNode) return this.fetchRecords(element);
+    // #364: not spatial, so dispatched here rather than folded into getSpatialChildren below.
+    if (element instanceof ConflictsNode) return this.fetchConflicts();
     return this.getSpatialChildren(element);
   }
 
@@ -709,5 +782,26 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     }
 
     return cached.items.map(r => new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
+  }
+
+  /** #364: the Conflicts node's own children. No page cache the way fetchRecords has one — this
+   *  is a session-wide listing, not a per-(plugin, type) one, and refetches on every expansion
+   *  (already backend-filtered per #278's mechanism, so there's nothing local to re-narrow).
+   *  Populates conflictAllCache as it goes, so the badge lookup has something to answer once this
+   *  has run at least once. */
+  private async fetchConflicts(): Promise<PluginTreeNode[]> {
+    try {
+      const conflicts = await this.repository.getConflicts();
+      return conflicts.map((c) => {
+        this.conflictAllCache.set(`${this.originKey(c.record.plugin, c.origin)}::${c.record.formKey}`, c.conflictAll);
+        // #364 review finding: fromConflictsNode=true — this is the one call site allowed to
+        // build a badge-eligible row; fetchRecords below never passes it.
+        return new RecordNode(c.record, c.origin, this.isImmutable(c.record.plugin, c.origin), true);
+      });
+    } catch (e) {
+      const message = this.err(e);
+      this.log(`[PluginTreeProvider] fetchConflicts failed: ${message}`);
+      return [new ErrorNode(message)];
+    }
   }
 }

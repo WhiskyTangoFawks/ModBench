@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { PluginMetadata, RecordSummary } from '../ApiClient';
+import type { PluginMetadata, RecordSummary, ConflictingRecord } from '../ApiClient';
 import type { PluginRepository, RecordPage } from '../PluginRepository';
 
 vi.mock('vscode', () => ({
@@ -33,6 +33,7 @@ import {
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
   StackNode, StackSourceStateNode, StackBinaryStateNode, StackPeerNode,
+  ConflictsNode,
   ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
 import type { PluginTreeNode, StackPeer } from '../PluginTreeProvider';
@@ -103,6 +104,8 @@ function makeRepository(overrides: Partial<{
     // #448: the unlisted-plugin door a Stack peer's own expansion/collapse drives.
     loadUnlistedPlugin: vi.fn().mockResolvedValue(undefined),
     unloadUnlistedPlugin: vi.fn().mockResolvedValue(undefined),
+    // #364: the Conflicts node's own listing.
+    getConflicts: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -1181,6 +1184,123 @@ describe('PluginTreeProvider — Stack peer lazy load & read-only browsing (#448
     await provider.getChildren(peerNode);
 
     expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── #364: the Conflicts node (root-level, unlike Stack above which is per-plugin) ──────────────
+
+describe('PluginTreeProvider — Conflicts node existence & gating (#364, #307\'s invariant)', () => {
+  it('conflictsNode() is undefined before conflictsComputed is ever set', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+
+    expect(provider.conflictsNode()).toBeUndefined();
+  });
+
+  // Rival named: "render the node but with nothing to show yet" would still return a ConflictsNode
+  // instance here too — the real distinguishing check is conflictsNode() itself answering
+  // undefined (the node omitted entirely), not merely "its children are empty".
+  it('conflictsNode() returns a node once setConflictsComputed(true) is called', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+
+    provider.setConflictsComputed(true);
+
+    expect(provider.conflictsNode()).toBeInstanceOf(ConflictsNode);
+  });
+
+  it('conflictsNode() reverts to undefined after setConflictsComputed(false) — a stale session must not keep showing it', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+    provider.setConflictsComputed(true);
+
+    provider.setConflictsComputed(false);
+
+    expect(provider.conflictsNode()).toBeUndefined();
+  });
+
+  it('setConflictsComputed fires onDidChangeTreeData so the root re-renders', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+    const fired: unknown[] = [];
+    provider.onDidChangeTreeData(e => fired.push(e));
+
+    provider.setConflictsComputed(true);
+
+    expect(fired).toHaveLength(1);
+  });
+});
+
+describe('PluginTreeProvider.getChildren(ConflictsNode) (#364)', () => {
+  it('fetches from repository.getConflicts and returns one RecordNode per entry', async () => {
+    const record = makeRecord(5);
+    const repo = makeRepository();
+    repo.getConflicts = vi.fn().mockResolvedValue([{ record, origin: 'Data', conflictAll: 'Conflict' }]);
+    const provider = new PluginTreeProvider(repo);
+    provider.setConflictsComputed(true);
+
+    const children = await provider.getChildren(provider.conflictsNode());
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(RecordNode);
+    expect((children[0] as RecordNode).record.formKey).toBe(record.formKey);
+  });
+
+  it('renders an error node when getConflicts fails, matching every other fetch failure in this file', async () => {
+    const repo = makeRepository();
+    repo.getConflicts = vi.fn().mockRejectedValue(new Error('boom'));
+    const provider = new PluginTreeProvider(repo);
+    provider.setConflictsComputed(true);
+
+    const children = await provider.getChildren(provider.conflictsNode());
+
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBeInstanceOf(ErrorNode);
+  });
+});
+
+describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () => {
+  // Rival named — the literal #307 failure mode given a concrete implementation to fail against:
+  // "keep serving the cached value regardless of conflictsComputed" would return 'Conflict' here
+  // instead of undefined, indistinguishable from a badge that never gates on the flag at all.
+  //
+  // This has to be a genuine race, not just setConflictsComputed(false) followed by a read —
+  // setConflictsComputed(false) already clears conflictAllCache itself, so a test that only calls
+  // it and then reads would pass even with conflictAllOf's own gate deleted (confirmed: writing
+  // that version first and running it, it stayed green with the gate removed — vacuous, exactly
+  // the trap the standing instruction warns about). The real scenario the gate exists for is an
+  // in-flight getConflicts() call that resolves *after* conflictsComputed has already gone back to
+  // false — ADR-0035's live-mutation re-sweep racing a still-pending Conflicts-node fetch — which
+  // populates the cache post-clear with nothing left to clear it again. Only conflictAllOf's own
+  // independent check catches that.
+  it('returns undefined for a late-arriving cache entry — a getConflicts() call still in flight when conflictsComputed goes back to false', async () => {
+    const record = makeRecord(5);
+    let resolveFetch!: (v: ConflictingRecord[]) => void;
+    const repo = makeRepository();
+    repo.getConflicts = vi.fn(() => new Promise<ConflictingRecord[]>((resolve) => { resolveFetch = resolve; }));
+    const provider = new PluginTreeProvider(repo);
+    provider.setConflictsComputed(true);
+    const fetchPromise = provider.getChildren(provider.conflictsNode()); // in flight, not yet resolved
+
+    provider.setConflictsComputed(false); // clears the (still-empty) cache; flag now false
+    resolveFetch([{ record, origin: 'Data', conflictAll: 'Conflict' }]); // lands late, populates the cache anyway
+    await fetchPromise;
+
+    expect(provider.conflictAllOf(record.plugin, 'Data', record.formKey)).toBeUndefined();
+  });
+
+  it('returns the cached ConflictAll once computed and fetched', async () => {
+    const record = makeRecord(5);
+    const repo = makeRepository();
+    repo.getConflicts = vi.fn().mockResolvedValue([{ record, origin: 'Data', conflictAll: 'Conflict' }]);
+    const provider = new PluginTreeProvider(repo);
+    provider.setConflictsComputed(true);
+    await provider.getChildren(provider.conflictsNode());
+
+    expect(provider.conflictAllOf(record.plugin, 'Data', record.formKey)).toBe('Conflict');
+  });
+
+  it('returns undefined for a record nothing has fetched yet, even once computed', () => {
+    const provider = new PluginTreeProvider(makeRepository());
+    provider.setConflictsComputed(true);
+
+    expect(provider.conflictAllOf('Never.esp', 'Data', 'DEADBE:Never.esp')).toBeUndefined();
   });
 });
 
