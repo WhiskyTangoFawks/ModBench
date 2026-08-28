@@ -464,6 +464,19 @@ without saying what is not yet known would make that worse, not better.
   the same lifecycle actions as a record row — Remove, Change FormID… — with the same handlers
   and immutable gating. CELL nodes have no menu.
 
+### Quest / dialog topic children
+
+- Shallow containers (ADR-0040/#387) strip a Quest's dialog topics/branches/scenes and a Dialog
+  Topic's responses out of the parent's own record/document — the Plugins tree restores
+  navigation to them as expandable tree children, reading the same containment index the
+  worldspace tree above reads, never a parallel source.
+- A Quest row expands to its `DialogTopics`, `DialogBranches`, then `Scenes`, in that flat order
+  with no intermediate grouping node — xEdit's own GroupType-10 order
+  ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)). A Dialog Topic row
+  (whether reached directly or as a Quest's child) expands to its `Responses`.
+- Child rows are ordinary record rows — same `modbench.openEditor` command, same context menu,
+  same origin-keyed identity as every other record row (no new command was needed for this).
+
 ### Missing-master badge (order-aware) and session-derived master/load-failure decoration
 
 Two independent signals can land on the same plugin row, from two different sources, and
