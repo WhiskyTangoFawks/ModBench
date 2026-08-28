@@ -12,7 +12,7 @@ import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
 import { makeLoadProgressHandler } from './medit/sessionProgress';
 import {
-  InteriorLoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, headerFormKeyFor,
+  InteriorLoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode, headerFormKeyFor,
 } from './medit/PluginTreeProvider';
 import {
   ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, type ReferencedByTreeNode,
@@ -679,16 +679,28 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     registerReloadSessionCommand(controller, outputChannel),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker });
+        vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
-    // Issue #213: Referenced By's named "Open to the Side" (ADR-0034), not a right-click side effect.
-    vscode.commands.registerCommand('modbench.openEditorBeside', (args?: { formKey?: string; label?: string }) => {
-      openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
-        vscode.ViewColumn.Beside, { routerDeps, recordPanels, activeRecordTracker });
-    }),
+    // Issue #213/#284: Referenced By's named "Open to the Side" (ADR-0034), not a right-click side
+    // effect — also reachable from the Plugins tree's record/placed-reference rows (single or
+    // multi-selected). `item`/`allSelected` mirror VS Code's own view/item/context invocation shape
+    // (clicked, selected[]), falling back to the Plugins tree's own current selection when neither
+    // is supplied (e.g. Command Palette) — same fallback chain modbench.referencedByTree.copy
+    // already uses, just against pluginsTreeView instead of referencedByTreeView.
+    vscode.commands.registerCommand('modbench.openEditorBeside',
+      (item?: RecordNode | PlacedNode | ReferencedByGroupNode | { formKey?: string; label?: string },
+        allSelected?: unknown[]) => {
+        const nodes: readonly unknown[] = allSelected?.length ? allSelected
+          : pluginsTreeView?.selection.length ? pluginsTreeView.selection
+          : item ? [item] : [];
+        const identities = nodes.map(recordOpenIdentity)
+          .filter((i): i is { formKey: string; label: string } => i !== undefined);
+        if (identities.length === 0) return;
+        openBesideRecordPanels(context, openPanels, identities, port, { routerDeps, recordPanels, activeRecordTracker });
+      }),
     vscode.commands.registerCommand('modbench.openCompare', () => {
       openRecordPanel(context, openPanels, 'mEdit', undefined, port, vscode.ViewColumn.One,
-        { routerDeps, recordPanels, activeRecordTracker });
+        { routerDeps, recordPanels, activeRecordTracker, singleton: true });
     }),
     vscode.commands.registerCommand('modbench.loadMore', (node: InteriorLoadMoreNode) => treeProvider.loadMore(node)),
     ...registerFilterCommands(scriptsPath, controller),
@@ -2729,6 +2741,13 @@ interface OpenRecordPanelDeps {
   // #282: kept current at both branches below (reuse-and-retarget, create) — the Referenced By
   // view's whole input, replacing the old showReferencedBy(node) command argument.
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
+  // #284: whether this open should reuse/retarget the singleton RECORD_PANEL_KEY panel (plain
+  // "Open"/"Compare") or always create a fresh, non-retargeting panel ("Open Editor to the Side",
+  // single or batched). Deliberately independent of `viewColumn` below — a batched Beside open's
+  // 2nd..Nth panel needs a concrete resolved ViewColumn (not the Beside sentinel, see
+  // openBesideRecordPanels) while still being non-retargeting, so `viewColumn !== Beside` can no
+  // longer stand in for "is this the singleton" the way it used to.
+  singleton: boolean;
 }
 
 function openRecordPanel(
@@ -2737,10 +2756,10 @@ function openRecordPanel(
   title: string,
   formKey: string | undefined,
   port: number,
-  viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-  { routerDeps, recordPanels, activeRecordTracker }: OpenRecordPanelDeps,
-) {
-  if (viewColumn !== vscode.ViewColumn.Beside) {
+  viewColumn: vscode.ViewColumn,
+  { routerDeps, recordPanels, activeRecordTracker, singleton }: OpenRecordPanelDeps,
+): void {
+  if (singleton) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
     if (existing) {
       existing.title = title;
@@ -2761,7 +2780,7 @@ function openRecordPanel(
     localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'out', 'webview'))],
   });
 
-  if (viewColumn !== vscode.ViewColumn.Beside) {
+  if (singleton) {
     openPanels.set(RECORD_PANEL_KEY, panel);
     panel.onDidDispose(() => openPanels.delete(RECORD_PANEL_KEY));
   }
@@ -2804,4 +2823,45 @@ function openRecordPanel(
     scriptUri: scriptUri.toString(),
     cspSource: panel.webview.cspSource,
   });
+}
+
+// #284: a right-clicked Plugins-tree record/placed-reference row, a multi-selection of them, or
+// the Referenced By group row's own plain shape — whichever one duck-types against, resolved to
+// the (formKey, label) pair openRecordPanel needs. `'kind' in node` (not `instanceof`), matching
+// recordCopyIdentity's existing convention above — keeps this testable against plain object
+// literals shaped like the real tree nodes, with no dependency on constructing one.
+function recordOpenIdentity(node: unknown): { formKey: string; label: string } | undefined {
+  if (!node || typeof node !== 'object') return undefined;
+  const n = node as { kind?: string; record?: { formKey?: string }; placed?: { formKey?: string };
+    formKey?: string; label?: unknown };
+  const formKey = 'kind' in n
+    ? n.kind === 'record' ? n.record?.formKey : n.kind === 'placed' ? n.placed?.formKey : undefined
+    : n.formKey;
+  if (!formKey) return undefined;
+  return { formKey, label: typeof n.label === 'string' ? n.label : formKey };
+}
+
+// #284: opens one non-retargeting panel per identity, all landing as tabs in a single new editor
+// group beside the currently active one — not one new group per record. `ViewColumn.Beside` only
+// resolves correctly once: after the first panel is created it becomes the active editor, so a
+// second `createWebviewPanel(..., ViewColumn.Beside, ...)` call would resolve beside *that* panel
+// instead, cascading into a new column per record. Resolving it once — via
+// `tabGroups.activeTabGroup.viewColumn` right after each create — and reusing that concrete
+// column for every remaining identity is what keeps them stacked as tabs in one group instead.
+// Not `panel.viewColumn`: that getter stays `undefined` synchronously right after
+// `createWebviewPanel` returns (its resolution is a round trip to the renderer that hasn't landed
+// yet), so it can never supply the concrete column the very next iteration needs — confirmed by
+// instrumenting it directly against this function's own multi-select integration test.
+function openBesideRecordPanels(
+  context: vscode.ExtensionContext,
+  openPanels: Map<string, vscode.WebviewPanel>,
+  identities: { formKey: string; label: string }[],
+  port: number,
+  deps: Omit<OpenRecordPanelDeps, 'singleton'>,
+): void {
+  let column: vscode.ViewColumn = vscode.ViewColumn.Beside;
+  for (const { formKey, label } of identities) {
+    openRecordPanel(context, openPanels, label, formKey, port, column, { ...deps, singleton: false });
+    column = vscode.window.tabGroups.activeTabGroup.viewColumn;
+  }
 }

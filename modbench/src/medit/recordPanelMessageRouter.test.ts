@@ -155,6 +155,53 @@ describe('routeRecordPanelMessage', () => {
   });
 });
 
+// #284: openEditorBeside makes a second, independently-opened panel possible — this is the
+// plumbing behind the issue's "Ctrl+C in one panel, Ctrl+V in the other" acceptance criterion.
+// openRecordPanel wires a fresh onDidReceiveMessage listener per real WebviewPanel, but every one
+// of them dispatches through this same routeRecordPanelMessage with no panel identity anywhere in
+// its signature (RouteRecordPanelMessageDeps' own doc comment) — so "two panels" here is two
+// independently-built deps bundles, exactly what openRecordPanel constructs fresh per panel (see
+// its onDidReceiveMessage closure), not two of anything this file has to special-case.
+// There is no PASTE message type to route: per ADR-0034 and DiskCell/ScalarCell's own doc
+// comments, Ctrl+V lands in a focused cell's plain <input> (native browser paste, #410/ADR-0041
+// retired the bespoke paste bridge), and committing it is the ordinary EDIT_FIELD write already
+// covered above — this test's job is only to prove that commit lands against the panel it was
+// invoked in, using the value copied out of the *other* one, not the panel it was copied from.
+describe('cross-panel copy/paste — two independently-opened panels share this router unmodified (#284)', () => {
+  beforeEach(() => {
+    writeText.mockReset();
+    fakeRepository.editRecordField.mockReset().mockResolvedValue({ applied: true });
+    onRecordEdited.mockReset();
+  });
+
+  it('copies a value out of one panel and commits it, via ordinary EDIT_FIELD, into a different panel\'s own record', async () => {
+    const panelADeps = makeDeps(); // "panel A", open on Record1
+    const panelBDeps = makeDeps(); // "panel B", open on a different record — its own independent deps bundle
+
+    // Ctrl+C in panel A: the webview has already read its own focused cell's model value
+    // (modelValue.ts, ADR-0034) — this is that value on its way to the OS clipboard.
+    await routeRecordPanelMessage(
+      { type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value: 'CopiedNPC [000001:Fallout4.esm]' }, panelADeps);
+    expect(writeText).toHaveBeenCalledWith('CopiedNPC [000001:Fallout4.esm]');
+
+    // Ctrl+V in panel B, then commit: the pasted text lands in panel B's own focused input with no
+    // Modbench-side paste plumbing at all (native browser paste), so the only thing left to prove
+    // is that committing it is the ordinary EDIT_FIELD write, addressed to panel B's own record —
+    // not panel A's, and not confused by panel A's own preceding call.
+    await routeRecordPanelMessage({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
+      formKey: '000800:Mod.esp', plugin: 'Mod.esp', origin: 'SomeMod',
+      fieldPath: 'linkedRef', value: 'CopiedNPC [000001:Fallout4.esm]',
+    }, panelBDeps);
+
+    expect(fakeRepository.editRecordField).toHaveBeenCalledWith(
+      '000800:Mod.esp', 'Mod.esp', 'SomeMod', 'linkedRef', 'CopiedNPC [000001:Fallout4.esm]');
+    expect(onRecordEdited).toHaveBeenCalledWith('000800:Mod.esp', 'Mod.esp', 'SomeMod');
+    // Copying out of panel A triggers no write of its own — only panel B's later EDIT_FIELD does.
+    expect(fakeRepository.editRecordField).toHaveBeenCalledTimes(1);
+  });
+});
+
 // #415/ADR-0041: the one write the panel can ask for. Routed through the host rather than posted
 // to the backend from the webview precisely so a refusal can become a native notification — which
 // is what these cases are really pinning.

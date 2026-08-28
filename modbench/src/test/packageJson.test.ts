@@ -640,3 +640,26 @@ describe('package.json contributes nothing for the retired pending-change model 
     expect(keys.filter((k) => RETIRED.test(k.command) || RETIRED.test(k.when ?? ''))).toEqual([]);
   });
 });
+
+// #284: "Open Editor to the Side" (already reachable from the Referenced By tree's group rows,
+// untouched by this) is now also reachable from the Plugins tree's record and placed-reference
+// rows — single or multi-selected.
+describe('package.json "Open Editor to the Side" reachable from Plugins tree record rows (#284)', () => {
+  const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
+
+  it('offers modbench.openEditorBeside on record, recordImmutable, refr and refrImmutable rows', () => {
+    const entry = contextMenus().find((e) =>
+      e.command === 'modbench.openEditorBeside' && e.when.includes('modbench.pluginListTree'));
+    expect(entry, 'expected a modbench.openEditorBeside entry on the Plugins tree').toBeTruthy();
+    expect(entry!.when).toBe(
+      'view == modbench.pluginListTree && (viewItem == record || viewItem == recordImmutable || viewItem == refr || viewItem == refrImmutable)');
+  });
+
+  it('leaves the Referenced By group row\'s own existing entry untouched', () => {
+    const entry = contextMenus().find((e) =>
+      e.command === 'modbench.openEditorBeside' && e.when.includes('referencedByTree'));
+    expect(entry).toBeTruthy();
+    expect(entry!.when).toBe('view == modbench.referencedByTree && viewItem == referencedByGroup');
+    expect(entry!.group).toBe('modbench@2');
+  });
+});
