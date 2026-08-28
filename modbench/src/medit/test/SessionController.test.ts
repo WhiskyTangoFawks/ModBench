@@ -220,6 +220,9 @@ describe('SessionController.copyRecordAsOverride', () => {
       body: { sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', destinationPlugin: 'MyPatch.esp', destinationOrigin: 'ModA' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: a copy lands as a working-tree change on the destination plugin's own source — same
+    // reason createRecord/deleteRecord/renumberRecord refresh it.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('surfaces a refusal and reports that it did not happen', async () => {
@@ -232,6 +235,7 @@ describe('SessionController.copyRecordAsOverride', () => {
     expect(ok).toBe(false);
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:Fallout4.esm'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('surfaces a thrown request the same way', async () => {
@@ -265,6 +269,8 @@ describe('SessionController.copyRecordAsNewRecord', () => {
       },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: same reason as copyRecordAsOverride above — a copy is a working-tree change too.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('passes an explicit requested FormKey through, xEdit\'s typed-FormID path', async () => {
@@ -292,6 +298,7 @@ describe('SessionController.copyRecordAsNewRecord', () => {
     expect(newFormKey).toBeUndefined();
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:Fallout4.esm'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('surfaces a thrown request the same way', async () => {

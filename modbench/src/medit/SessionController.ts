@@ -581,6 +581,9 @@ export class SessionController {
         return false;
       }
       this.deps.refreshTree();
+      // #449: a copy lands as a working-tree change on the destination plugin's own source, same
+      // reason createRecord/deleteRecord/renumberRecord above refresh it.
+      this.deps.refreshMatchingPlugins();
       return true;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -615,6 +618,8 @@ export class SessionController {
         return undefined;
       }
       this.deps.refreshTree();
+      // #449: same reason as copyRecordAsOverride above — a copy is a working-tree change too.
+      this.deps.refreshMatchingPlugins();
       return data?.newFormKey ?? undefined;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
