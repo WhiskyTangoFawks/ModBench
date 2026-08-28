@@ -61,6 +61,11 @@ export class RecordNode extends vscode.TreeItem {
     public readonly record: RecordSummary,
     public readonly origin?: string,
     immutable = false,
+    // #364 review finding: whether this row was built by the Conflicts node's own listing
+    // (fetchConflicts) rather than an ordinary RecordTypeNode browse — threaded into the
+    // resourceUri itself so RecordDecorationProvider can scope the conflict badge to this node's
+    // rows only, never to every location the same record happens to appear.
+    fromConflictsNode = false,
   ) {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -73,7 +78,7 @@ export class RecordNode extends vscode.TreeItem {
     // #428: RecordDecorationProvider's own keying identity — record.plugin (this row's own copy's
     // owning plugin, which an override stack row can differ from the RecordTypeNode's plugin) paired
     // with origin, the same (plugin, origin, formKey) triple every record-scoped command already uses.
-    this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey);
+    this.resourceUri = recordResourceUri(record.plugin, origin, record.formKey, fromConflictsNode);
   }
 }
 
@@ -789,7 +794,9 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       const conflicts = await this.repository.getConflicts();
       return conflicts.map((c) => {
         this.conflictAllCache.set(`${this.originKey(c.record.plugin, c.origin)}::${c.record.formKey}`, c.conflictAll);
-        return new RecordNode(c.record, c.origin, this.isImmutable(c.record.plugin, c.origin));
+        // #364 review finding: fromConflictsNode=true — this is the one call site allowed to
+        // build a badge-eligible row; fetchRecords below never passes it.
+        return new RecordNode(c.record, c.origin, this.isImmutable(c.record.plugin, c.origin), true);
       });
     } catch (e) {
       const message = this.err(e);

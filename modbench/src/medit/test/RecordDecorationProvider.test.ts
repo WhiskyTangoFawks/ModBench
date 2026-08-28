@@ -70,9 +70,12 @@ describe('RecordDecorationProvider (#428)', () => {
   });
 });
 
-// #364: the record conflict badge — ADR-0016's Axis 1 (record-wide ConflictAll) only.
+// #364: the record conflict badge — ADR-0016's Axis 1 (record-wide ConflictAll) only. Every test
+// in this block uses a Conflicts-node-flavored URI (the 4th recordResourceUri argument) — the
+// "conflict badge scoping" block below is what proves an *ordinary* URI never gets one, even when
+// the exact same lookup would answer with a real value.
 describe('RecordDecorationProvider — conflict badge (#364)', () => {
-  const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
+  const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', true);
 
   it('badges an Override record with O and green', () => {
     const provider = new RecordDecorationProvider(() => 'None', () => 'Override');
@@ -141,5 +144,38 @@ describe('RecordDecorationProvider — conflict badge (#364)', () => {
     const provider = new RecordDecorationProvider(() => 'None', conflictLookup);
     provider.provideFileDecoration(uri);
     expect(conflictLookup).toHaveBeenCalledWith('Fallout4.esm', 'ModA', '000001:Fallout4.esm');
+  });
+});
+
+// #364 review finding: the badge must render only on the Conflicts node's own rows — the AC's
+// explicit scope decision, contradicted by the original implementation (a bare identity-keyed
+// lookup badges every URI sharing that identity, including an ordinary RecordTypeNode -> RecordNode
+// row for the same record elsewhere in the tree). No test caught this the first time; these do.
+describe('RecordDecorationProvider — conflict badge scoping (#364 review)', () => {
+  it('never calls the conflict lookup at all for an ordinary (non-Conflicts-node) URI', () => {
+    const conflictLookup = vi.fn().mockReturnValue('Conflict');
+    const ordinaryUri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', false);
+    const provider = new RecordDecorationProvider(() => 'None', conflictLookup);
+
+    const decoration = provider.provideFileDecoration(ordinaryUri);
+
+    expect(decoration).toBeUndefined();
+    expect(conflictLookup).not.toHaveBeenCalled();
+  });
+
+  // The direct cross-tree proof: the identical lookup, identical identity — the only difference
+  // between these two calls is which URI flavor asked.
+  it('badges the Conflicts-node URI but not the ordinary URI for the same (plugin, origin, formKey)', () => {
+    const conflictLookup = vi.fn().mockReturnValue('Conflict');
+    const provider = new RecordDecorationProvider(() => 'None', conflictLookup);
+    const ordinaryUri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', false);
+    const conflictsUri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', true);
+
+    expect(provider.provideFileDecoration(conflictsUri)).toEqual({
+      badge: 'C',
+      color: new vscode.ThemeColor('gitDecoration.conflictingResourceForeground'),
+      tooltip: 'Conflict',
+    });
+    expect(provider.provideFileDecoration(ordinaryUri)).toBeUndefined();
   });
 });

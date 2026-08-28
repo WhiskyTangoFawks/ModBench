@@ -674,7 +674,12 @@ function makeOnRecordEdited(
   return (formKey, plugin, origin) => {
     broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
     if (treeProvider.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
+      // #364 review finding: the M/A badge is location-independent (a local edit is a fact about
+      // the record, not about where it's viewed), but the badge-scoping fix gave the Conflicts
+      // node's own row a distinct resourceUri from the ordinary one — refresh both, so a record
+      // visible in both places at once gets its M/A badge updated in both.
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
+      recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey, true));
     }
   };
 }

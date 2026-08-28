@@ -47,6 +47,15 @@ import { parseRecordResourceUri } from './recordResourceUri';
  * that itself, only renders what it's told. OnlyOne/NoConflict never badge either
  * (`medit-record-editor.md`'s "no tint" rule, reused here as "no badge"): a badge is reserved for
  * "this needs attention", not for every record with more than one plugin's opinion on file.
+ *
+ * **#364 review finding: the conflict lookup only ever runs for a URI `parseRecordResourceUri`
+ * marks `fromConflictsNode`.** `conflictAllLookup` is keyed purely on (plugin, origin, formKey) —
+ * the same record shown via an ordinary `RecordTypeNode -> RecordNode` row elsewhere in the tree
+ * resolves to the identical lookup key, so without this gate that row would inherit a badge that
+ * belongs only to its Conflicts-node row (the AC's explicit scope — Option B's "badge everywhere"
+ * was deliberately not built). The marker, not the lookup's own cache, is what closes this: the
+ * cache stays a plain identity map (one conflictAll per record is still a true fact regardless of
+ * who asks), but only a Conflicts-node-built row's URI ever asks.
  */
 export class RecordDecorationProvider implements vscode.FileDecorationProvider {
   private readonly _onDidChangeFileDecorations = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
@@ -67,6 +76,9 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider {
     if (state === 'Added') {
       return { badge: 'A', color: new vscode.ThemeColor('gitDecoration.addedResourceForeground'), tooltip: 'Added' };
     }
+    // #364 review finding: never even attempt a conflict lookup for a row outside the Conflicts
+    // node — see the class doc comment.
+    if (!identity.fromConflictsNode) return undefined;
     return this.conflictDecoration(identity.plugin, identity.origin, identity.formKey);
   }
 
