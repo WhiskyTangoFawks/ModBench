@@ -2758,7 +2758,7 @@ function openRecordPanel(
   port: number,
   viewColumn: vscode.ViewColumn,
   { routerDeps, recordPanels, activeRecordTracker, singleton }: OpenRecordPanelDeps,
-): vscode.WebviewPanel {
+): void {
   if (singleton) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
     if (existing) {
@@ -2771,7 +2771,7 @@ function openRecordPanel(
         activeRecordTracker.setFormKey(existing, formKey);
       }
       activeRecordTracker.setActivePanel(existing);
-      return existing;
+      return;
     }
   }
 
@@ -2823,8 +2823,6 @@ function openRecordPanel(
     scriptUri: scriptUri.toString(),
     cspSource: panel.webview.cspSource,
   });
-
-  return panel;
 }
 
 // #284: a right-clicked Plugins-tree record/placed-reference row, a multi-selection of them, or
