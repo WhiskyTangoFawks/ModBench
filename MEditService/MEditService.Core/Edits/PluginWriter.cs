@@ -86,20 +86,22 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
             .NoNextFormIDProcessing()
             .WithRecordCount(RecordCountOption.NoCheck);
 
-        // #515 AC1/AC3: a Localized mod's own strings must land beside the *real* plugin, not the
-        // temp file this method writes to and then discards the directory of. Mutagen's own default
-        // (PluginUtilityTranslation.SetStringsWriter, which only fires when nothing here supplies one)
-        // derives its write folder from the write path — the temp path here — and this class's own
-        // commit only renames the single plugin file, never a sibling folder, so the auto-written
-        // strings would be orphaned in a temp directory PreparedPluginSave.Dispose then fails to
-        // remove (non-recursive Directory.Delete on a non-empty folder) and silently swallows.
-        // Supplying our own, rooted at pluginPath's own folder, sidesteps that entirely: the strings
-        // land in their final home directly, with no move to forget.
+        // #515 AC1/AC3, #537: a Localized mod's own strings must land beside the *real* plugin, not
+        // orphaned in the temp directory this method discards — but not written directly to their
+        // real destination either. Mutagen's own default (PluginUtilityTranslation.SetStringsWriter,
+        // which only fires when nothing here supplies one) derives its write folder from the write
+        // path — the temp path here — which is why a writer must be supplied explicitly at all.
+        // #537 nests that writer's own folder inside the same tmpDir the plugin binary already
+        // writes to, rather than pointing it at pluginPath's real Strings/ folder directly: the real
+        // .esp/.esm gets the same temp-write-then-rename discipline from PreparedPluginSave.Commit,
+        // and the strings files now get it too, moved into place only once every write here has
+        // succeeded.
+        var tmpStringsDir = Path.Combine(tmpDir, "Strings");
         if (mod.UsingLocalization)
         {
             writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
                 mod.GameRelease, mod.ModKey,
-                writeDirectory: Path.Combine(dir, "Strings"),
+                writeDirectory: tmpStringsDir,
                 encodingProvider: MutagenEncoding.Default));
         }
 
@@ -113,7 +115,16 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
 
         await writeBuilder.WriteAsync();
 
-        return new PreparedPluginSave(tmpPath, pluginPath, backupPath);
+        // #537: whatever StringsWriter actually produced (only present when UsingLocalization, and
+        // only once WriteAsync's own StringsWriter.Dispose has run) rides to its real Strings/ folder
+        // through Commit(), never written here directly.
+        var stringsFiles = Directory.Exists(tmpStringsDir)
+            ? Directory.GetFiles(tmpStringsDir)
+                .Select(f => (TempPath: f, FinalPath: Path.Combine(dir, "Strings", Path.GetFileName(f))))
+                .ToList()
+            : [];
+
+        return new PreparedPluginSave(tmpPath, pluginPath, backupPath, stringsFiles);
     }
 
     /// <summary>Prepare, commit, prune. Returns the path of the backup it created.</summary>
