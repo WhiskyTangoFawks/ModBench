@@ -8,11 +8,9 @@ description: Build the extension and launch a VS Code Extension Development Host
 Build the extension if needed, then launch a VS Code Extension Development Host pointed at
 a real MO2 instance directory. Do all steps proactively without waiting to be asked.
 
-Since [ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md), the extension
-owns the editing backend's lifecycle — it spawns the bundled binary itself when the user
-triggers "Launch mEdit" from the Loadout view. There is no more manual `dotnet run` step and
-no `--data-folder`/`--plugins-txt` flags; the backend is driven by `load-explicit` (the active
-modlist's enabled plugins + vanilla masters), not a standalone data-folder scan.
+The extension spawns the backend itself on "Launch mEdit"
+([ADR-0022](../../../docs/adr/0022-extension-owns-backend-lifecycle.md)) — there is no manual
+`dotnet run` step. Setup and prerequisites: [README.md](../../../README.md) § Getting started.
 
 ## 0 — Confirm the checkout is current
 
@@ -44,11 +42,10 @@ code --extensionDevelopmentPath="$(git rev-parse --show-toplevel)/modbench" \
      "<path-to-an-MO2-instance-directory>" &
 ```
 
-**The workspace root must be a real MO2 instance directory** (contains `ModOrganizer.ini`,
-`mods/`, `profiles/`) — per `modbench/CLAUDE.md`, the mod manager reads these relative to
-the workspace folder; there is no separate "instance path" setting. Do not open the Modbench
-source repo itself as the workspace — it has no `ModOrganizer.ini` and the Loadout view will
-have nothing to show. Ask the user which instance to use if none was named.
+**The workspace root must be a real MO2 instance directory** (`modbench/CLAUDE.md` § Invariants:
+workspace root = MO2 instance, no separate setting). Do not open the Modbench source repo itself
+as the workspace — the Loadout view will have nothing to show. Ask the user which instance to
+use if none was named.
 
 ## 3 — Activate the extension
 
