@@ -1928,7 +1928,11 @@
         "flags": "2",
         "god_rays": null,
         "grid": {
-          "flags": "-1654112256"
+          "flags": "-1654112256",
+          "point": {
+            "x": 7,
+            "y": 7
+          }
         },
         "image_space": null,
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
@@ -2115,7 +2119,12 @@
           "version2": 15,
           "version_control": 8527585,
           "vertex_height_map": {
-            "offset": 85
+            "offset": 85,
+            "unknown": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
           }
         },
         "lighting": null,
@@ -4084,6 +4093,10 @@
                 "x": 32768,
                 "y": 32768,
                 "z": 3.4028235E+38
+              },
+              "grid_max_distance": {
+                "x": 455.1111,
+                "y": 455.1111
               },
               "grid_min": {
                 "x": 28672,
@@ -11198,7 +11211,11 @@
         "flags": "2",
         "god_rays": null,
         "grid": {
-          "flags": "-1654112256"
+          "flags": "-1654112256",
+          "point": {
+            "x": 6,
+            "y": 7
+          }
         },
         "image_space": null,
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
@@ -11409,7 +11426,12 @@
           "version2": 2,
           "version_control": 8527585,
           "vertex_height_map": {
-            "offset": 36
+            "offset": 36,
+            "unknown": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
           }
         },
         "lighting": null,
@@ -14343,6 +14365,10 @@
                 "x": 28672,
                 "y": 32768,
                 "z": 3.4028235E+38
+              },
+              "grid_max_distance": {
+                "x": 341.33334,
+                "y": 341.33334
               },
               "grid_min": {
                 "x": 24576,
@@ -25582,7 +25608,11 @@
         "flags": "2",
         "god_rays": null,
         "grid": {
-          "flags": "-1654112256"
+          "flags": "-1654112256",
+          "point": {
+            "x": 5,
+            "y": 7
+          }
         },
         "image_space": null,
         "in_pre_vis_file_of": "00DB61:Fallout4.esm",
@@ -25817,7 +25847,12 @@
           "version2": 2,
           "version_control": 8593082,
           "vertex_height_map": {
-            "offset": 85
+            "offset": 85,
+            "unknown": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
           }
         },
         "lighting": null,
@@ -29431,6 +29466,10 @@
                 "x": 24576,
                 "y": 32768,
                 "z": 3.4028235E+38
+              },
+              "grid_max_distance": {
+                "x": 341.33334,
+                "y": 341.50766
               },
               "grid_min": {
                 "x": 20480,
@@ -48290,9 +48329,11 @@
         "canopy_shadow": null,
         "climate": null,
         "cloud_model": null,
+        "default_level_data": null,
         "distant_lod_multiplier": null,
         "encounter_zone": null,
         "fallout4_major_record_flags": "0",
+        "fixed_dimensions_center_cell": null,
         "flags": "0",
         "hd_lod_diffuse_texture": null,
         "hd_lod_normal_texture": null,
@@ -48304,9 +48345,19 @@
         "lod_water": null,
         "lod_water_height": null,
         "major_flags": "0",
+        "map_data": null,
         "map_image": null,
+        "max_height": null,
         "music": null,
         "name": null,
+        "object_bounds_max": {
+          "x": 0,
+          "y": 0
+        },
+        "object_bounds_min": {
+          "x": 0,
+          "y": 0
+        },
         "parent": null,
         "sub_cells": [],
         "sub_cells_timestamp": 0,
@@ -48324,7 +48375,11 @@
           "form_version": 131,
           "god_rays": null,
           "grid": {
-            "flags": "Quad1"
+            "flags": "Quad1",
+            "point": {
+              "x": 0,
+              "y": 0
+            }
           },
           "image_space": null,
           "in_pre_vis_file_of": null,

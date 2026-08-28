@@ -1917,4 +1917,112 @@ public class SchemaReflectorTests
         Assert.NotNull(rotation);
         Assert.Equal("struct", rotation!.Type);
     }
+
+    // ── #546: Noggog's small value-vector struct family, beyond P3Int16/P3Float ────────────────
+
+    [Fact]
+    public void GetSchemas_Cell_HasGridColumn_WithFlagsAndPointXySubFields()
+    {
+        // Cell.Grid.Point is a Noggog.P2Int — a 2-component sibling of #541's P3Int16/P3Float, not
+        // one of those two types, so ClassifyLeaf mapped neither before #546. Unlike ObjectBounds
+        // (whose whole column vanished because both its members were unmapped P3Int16), Grid's own
+        // Flags (an enum) already mapped fine on its own, so BuildStructColumn's
+        // subFields.Count == 0 check never dropped the whole column — "grid" already existed with
+        // one sub-field, silently missing Point, which is the specific gap #546 names and this
+        // asserts closed: exactly two sub-fields (flags, point), point itself with exactly two —
+        // X/Y, no Z, unlike every P3-shaped case this file already covers above.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cell"].RecordColumns.FirstOrDefault(c => c.Name == "grid");
+        Assert.NotNull(col);
+        Assert.Equal("struct", col!.ApiType);
+        Assert.Equal(2, col.SubFields!.Count);
+
+        Assert.Contains(col.SubFields!, f => f.Name == "flags" && f.Type == "enum");
+
+        var point = col.SubFields!.FirstOrDefault(f => f.Name == "point");
+        Assert.NotNull(point);
+        Assert.Equal("struct", point!.Type);
+        Assert.Equal(2, point.Fields!.Count);
+        Assert.Contains(point.Fields!, f => f.Name == "x" && f.Type == "int");
+        Assert.Contains(point.Fields!, f => f.Name == "y" && f.Type == "int");
+    }
+
+    [Fact]
+    public void GetSchemas_Cell_Grid_Extract_ReturnsPointXyValues()
+    {
+        // The genuine read-side fix #546 closes. #541's own RefuseIfContainmentField Grid guard
+        // was reported to still be re-verified live by this issue, but it turned out to already be
+        // live on unmodified main — verified directly (a throwaway diagnostic dump showed
+        // `cell.grid` already existed as a struct column via its Flags sub-field alone, and
+        // RefuseIfContainmentField gates on column *existence* by name, not on what's inside it —
+        // EmbeddedChildEditTests.ACellsGrid_IsRefused_SoCellLocationCannotGoStale already passed
+        // before this fix and needs no change). What was actually silently broken, and what this
+        // test is the real red/green proof of, is the *read* side: Grid's own Extract used to omit
+        // Point from the JSON entirely, because ExtractSubObject only ever walks recognized
+        // sub-fields.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cell"].RecordColumns.First(c => c.Name == "grid");
+        var cell = new Cell(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            Grid = new CellGrid { Point = new Noggog.P2Int(3, -4) },
+        };
+
+        var json = col.Extract(cell) as string;
+        Assert.NotNull(json);
+        using var doc = JsonDocument.Parse(json!);
+        Assert.Equal(3, doc.RootElement.GetProperty("point").GetProperty("x").GetInt32());
+        Assert.Equal(-4, doc.RootElement.GetProperty("point").GetProperty("y").GetInt32());
+    }
+
+    [Fact]
+    public void GetSchemas_Location_WorldspaceCellsAdded_ElementHasCoordinatesListOfXYSubFields()
+    {
+        // LocationCoordinate.Coordinates is IReadOnlyList<Noggog.P2Int16> — a list nested inside a
+        // struct that is itself a list element (Location.WorldspaceCellsAdded is
+        // IReadOnlyList<ILocationCoordinateGetter>), composing #541's own struct-nested-list fix
+        // (GetSubFieldInfo's IsListType arm, proven there against Destructible.Resistances/Stages)
+        // with #546's widened vector-struct set. P2Int16 (2-component, short) is a shape neither
+        // #541's own IslandData.Vertices proof (P3Float, 3-component, list at the top level rather
+        // than nested two deep) nor this file's Cell.Grid.Point proof above (P2Int, not itself
+        // list-shaped) exercises.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["lctn"].RecordColumns.FirstOrDefault(c => c.Name == "worldspace_cells_added");
+        Assert.NotNull(col);
+        Assert.Equal("array", col!.ApiType);
+
+        var coordinates = col.ElementType?.Fields?.FirstOrDefault(f => f.Name == "coordinates");
+        Assert.NotNull(coordinates);
+        Assert.True(coordinates!.IsArray);
+        Assert.Equal(2, coordinates.ElementType!.Fields!.Count);
+        Assert.Contains(coordinates.ElementType.Fields!, f => f.Name == "x" && f.Type == "int");
+        Assert.Contains(coordinates.ElementType.Fields!, f => f.Name == "y" && f.Type == "int");
+    }
+
+    [Fact]
+    public void GetSchemas_Location_WorldspaceCellsAdded_Extract_ReturnsCoordinatesXyValues()
+    {
+        // The rival this defeats: widening ClassifyLeaf's own top-level/sub-field dispatch alone,
+        // while leaving BuildListColumn's/BuildListElementSubFields' own isVector flag pointed at
+        // the old, narrower set, would leave a list-of-P2Int16 element silently falling through to
+        // the raw/unmapped scalar-element fallback here — a defect this file's Cell.Grid test above
+        // cannot catch, since Grid.Point is a struct sub-field, never a list element.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["lctn"].RecordColumns.First(c => c.Name == "worldspace_cells_added");
+        var location = new Location(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            WorldspaceCellsAdded = new Noggog.ExtendedList<LocationCoordinate>
+            {
+                new() { Coordinates = new Noggog.ExtendedList<Noggog.P2Int16> { new(5, 6), new(7, 8) } },
+            },
+        };
+
+        var json = col.Extract(location) as string;
+        Assert.NotNull(json);
+        using var doc = JsonDocument.Parse(json!);
+        var coords = doc.RootElement[0].GetProperty("coordinates");
+        Assert.Equal(5, coords[0].GetProperty("x").GetInt32());
+        Assert.Equal(6, coords[0].GetProperty("y").GetInt32());
+        Assert.Equal(7, coords[1].GetProperty("x").GetInt32());
+        Assert.Equal(8, coords[1].GetProperty("y").GetInt32());
+    }
 }

@@ -22,7 +22,7 @@ namespace MEditService.Tests.Indexing;
 /// the fact under test (here, "does this property exist on the getter interface, and is it
 /// represented in the schema") using Mutagen's own reflection rather than calling back into
 /// <see cref="SchemaReflector"/>'s own private classification, then cross-check the two. A handful
-/// of trivial one-line predicates below (<see cref="IsLoquiInterface"/>, <see cref="IsP3Type"/>, ...)
+/// of trivial one-line predicates below (<see cref="IsLoquiInterface"/>, <see cref="IsVectorStructType"/>, ...)
 /// necessarily mirror <c>SchemaReflector</c>'s own — they are shape tests, not the classification
 /// decision this file exists to check, the same distinction that sweep's own doc comment draws.</para>
 ///
@@ -80,20 +80,17 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     // Known, accepted gaps — every one named and explained, never passed over silently. (OwnerType
     // .Name, PropertyName) at whichever depth the pair is walked. Discovered running this sweep
     // during #541's own implementation; every one reported to the orchestrator, not folded in
-    // silently — none is P3Int16/P3Float or a struct-nested list, so none is this issue's to fix.
+    // silently — none is P3Int16/P3Float or a struct-nested list, so none was #541's to fix.
+    //
+    // #546 closed the former Category 1 (Cell.Grid.Point, a Noggog.P2Int — #541's own two types
+    // widened to the rest of the small value-vector struct family) and, with it, three Category 3
+    // entries that shared the exact same root cause under a different label (WorldspaceMaxHeight/
+    // WorldspaceMap/WorldDefaultLevelData: each struct's *only* members are themselves P2Int/
+    // P2Int16/P2UInt8, not the "raw byte blob" shape the rest of Category 3 actually means — a
+    // mis-filed pair of categories, corrected by removal rather than by leaving a stale comment
+    // behind). No entries remain for either.
     private static readonly HashSet<(string Owner, string Property)> KnownGaps = new()
     {
-        // ── Category 1: Noggog's small value-vector struct family, beyond P3Int16/P3Float (#546,
-        // filed, tracked separately) ──────────────────────────────────────────────────────────────
-        // Cell.Grid is the one concrete instance this sweep finds: ICellGridGetter's only member,
-        // Point, is a Noggog.P2Int (not one of #541's two types — IsRecognizedShape correctly does
-        // not flag Point itself, since an entirely unrecognized shape is a different problem than
-        // this test's own scope, per the class doc comment). An all-unrecognized-members struct
-        // still reflects as zero sub-fields, which BuildStructColumn treats as "no column at all"
-        // (subFields.Count == 0) — the same "empty struct column" shape ObjectBounds had before
-        // #541 fixed it. Named here explicitly so #546's executor has a starting point.
-        ("ICellGetter", "Grid"),
-
         // ── Category 2: abstract Loqui "leaf union" types — a base interface (Mutagen's own "A<Name>"
         // naming convention: ABookTeachTarget, AColorRecordData, AHolotapeData, ANpcLevel,
         // AQuestAlias, ANavmeshParent, ALocationTarget, ASceneActionType, ...) whose real per-
@@ -116,15 +113,14 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         ("ISceneActionGetter", "Type"),           // ASceneActionType
 
         // ── Category 3: a real, non-abstract Loqui struct whose only members are themselves an
-        // unrecognized shape (same "empty struct column" mechanics as Category 1, different member
-        // type — a raw byte blob rather than a Noggog vector struct). ScenePhaseUnusedData appears
-        // on both Scene's own phase data and SceneAction; the same reason both are named.
+        // unrecognized shape — a raw byte blob, not a Noggog vector struct (that was the former
+        // WorldspaceMaxHeight/WorldspaceMap/WorldDefaultLevelData trio here, closed by #546: every
+        // member of all three turned out to be P2Int/P2Int16/P2UInt8, the same root cause as the
+        // former Category 1, not this one). ScenePhaseUnusedData appears on both Scene's own phase
+        // data and SceneAction; the same reason both are named.
         ("ISceneGetter", "Unused"),                // ScenePhaseUnusedData
         ("ISceneGetter", "Unused2"),               // ScenePhaseUnusedData
         ("ISceneActionGetter", "Unused"),          // ScenePhaseUnusedData
-        ("IWorldspaceGetter", "MaxHeight"),        // WorldspaceMaxHeight
-        ("IWorldspaceGetter", "MapData"),          // WorldspaceMap
-        ("IWorldspaceGetter", "DefaultLevelData"), // WorldDefaultLevelData
 
         // ── Category 4: not a reflector gap at all — a false positive of this test's own simplistic
         // column-name matching against #263's sibling-shape merge. DamageType and its sibling
@@ -214,19 +210,24 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     // (it is `private`), which is the same posture ContainerChildFieldsCompletenessTests already
     // takes for its own equivalent walk.
     //
-    // P3Int16/P3Float are special-cased to exactly X/Y/Z rather than a generic property walk,
-    // mirroring SchemaReflector.BuildP3ComponentSubFields' own explicit scope: both types carry real
-    // geometry-helper properties (Length, Magnitude, SqrMagnitude, Normalized, Absolute) that are
-    // computed, not serialized data, and P3Int16's own Point (`P3Int16 Point => this`) is
-    // self-referencing — "all public properties" is the wrong model of "this type's own data" for
-    // exactly these two types, the same reason BuildP3ComponentSubFields itself is a fixed 3-name
-    // list rather than a property walk.
+    // Noggog's small value-vector structs (see IsVectorStructType) are special-cased to exactly
+    // X/Y/Z rather than a generic property walk, mirroring
+    // SchemaReflector.BuildVectorComponentSubFields' own explicit scope: every one of these types
+    // carries real geometry-helper properties (Length, Magnitude, SqrMagnitude, Normalized,
+    // Absolute) that are computed, not serialized data, and several (P3Int16, P2UInt8, P3UInt8,
+    // P3UInt16) have their own self-referencing Point (`P3Int16 Point => this`) — "all public
+    // properties" is the wrong model of "this type's own data" for any of them, the same reason
+    // BuildVectorComponentSubFields itself is a fixed name list rather than a property walk. #546:
+    // a 2-component type (P2Int, P2UInt8, P2Int16, P2Float) has no "Z" — GetProperty returns null
+    // for it, which the null filter below drops rather than crashing on `.Name` downstream, mirroring
+    // BuildVectorComponentSubFields' own `if (componentProp == null) continue`.
     private static IEnumerable<PropertyInfo> DirectDataProperties(Type type, HashSet<string> skip)
     {
-        if (IsP3Type(type))
+        if (IsVectorStructType(type))
         {
             return new[] { "X", "Y", "Z" }
-                .Select(n => type.GetProperty(n, BindingFlags.Public | BindingFlags.Instance)!);
+                .Select(n => type.GetProperty(n, BindingFlags.Public | BindingFlags.Instance))
+                .Where(p => p != null)!;
         }
 
         return type.GetInterfaces().Append(type)
@@ -236,7 +237,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             .Select(g => g.First());
     }
 
-    // A property's own nested getter type, one level in — a Loqui struct, a P3Int16/P3Float, or
+    // A property's own nested getter type, one level in — a Loqui struct, a Noggog vector struct, or
     // (for a list column) whichever of those its element type is. Null for a plain scalar/enum/
     // FormLink/translated-string leaf and for a list of one of those: nothing to walk further into.
     private static Type? NestedGetterType(Type propertyType)
@@ -246,12 +247,12 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             core = core.GetGenericArguments()[0];
         if (IsFormLink(core)) return null;
         if (IsLoquiInterface(core)) return core;
-        return IsP3Type(core) ? core : null;
+        return IsVectorStructType(core) ? core : null;
     }
 
     // This class's own scope boundary (see the class doc comment): a shape SchemaReflector's
     // dispatch already recognizes somewhere (ClassifyLeaf's four leaf kinds, IsListType,
-    // IsLoquiInterface, IsP3Type) — independently re-derived, not called into.
+    // IsLoquiInterface, IsVectorStructType) — independently re-derived, not called into.
     private static bool IsRecognizedShape(Type propertyType)
     {
         var core = Nullable.GetUnderlyingType(propertyType) ?? propertyType;
@@ -262,7 +263,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             || core.IsEnum
             || IsFormLink(core)
             || IsLoquiInterface(core)
-            || IsP3Type(core);
+            || IsVectorStructType(core);
     }
 
     // Mirrors SchemaReflector.PrimitiveMap's key set.
@@ -278,7 +279,20 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         type.IsInterface && !IsFormLink(type)
         && type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    private static readonly HashSet<Type> P3Types = [typeof(P3Int16), typeof(P3Float)];
+    // Mirrors SchemaReflector.VectorStructTypes — #546 widened this from #541's original
+    // {P3Int16, P3Float} to every Noggog small value-vector struct actually reachable in FO4's
+    // schema graph (verified by grepping references/Mutagen/Mutagen.Bethesda.Fallout4, not assumed):
+    // P2Int (Cell.Grid.Point), P2UInt8 (WorldDefaultLevelData), P2Int16 (WorldspaceMaxHeight and
+    // others, including as a list element on LocationCoordinate.Coordinates), P3UInt8
+    // (LandscapeVertexHeightMap.Unknown), P3UInt16 (RegionObject.AngleVariance), P2Float
+    // (ImageSpaceAdapter.RadialBlurCenter). Noggog's other siblings (P2Double, P3Double, P3Int, the
+    // *Value*/*Obj wrapper types) have zero usages anywhere in FO4's record graph, so they stay out.
+    private static readonly HashSet<Type> VectorStructTypes =
+    [
+        typeof(P3Int16), typeof(P3Float),
+        typeof(P2Int), typeof(P2UInt8), typeof(P2Int16),
+        typeof(P3UInt8), typeof(P3UInt16), typeof(P2Float),
+    ];
 
-    private static bool IsP3Type(Type type) => P3Types.Contains(type);
+    private static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
 }
