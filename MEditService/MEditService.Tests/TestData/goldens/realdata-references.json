@@ -46,92 +46,92 @@
       ]
     },
     "004E1E:Fallout4.esm": {
-      "Count": 38,
+      "Count": 57,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "start_scene",
-          "FormKey": "0180F8:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[61].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[0].start_scene",
-          "FormKey": "02B892:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[62].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[1].start_scene",
-          "FormKey": "02B892:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[63].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "start_scene",
-          "FormKey": "02B89C:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[64].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "start_scene",
-          "FormKey": "02B8A0:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[65].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "qust"
         }
       ]
     },
     "00583D:Fallout4.esm": {
-      "Count": 36,
+      "Count": 54,
       "Sample": [
         {
-          "EditorId": null,
-          "FieldPath": "start_scene",
-          "FormKey": "005834:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[207].responses[0].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "start_scene",
-          "FormKey": "017BB2:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[35].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[0].start_scene",
-          "FormKey": "01DA26:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[36].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[1].start_scene",
-          "FormKey": "01DA26:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[37].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[2].start_scene",
-          "FormKey": "01DA26:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[39].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         }
       ]
     },
@@ -226,47 +226,47 @@
       ]
     },
     "017B27:Fallout4.esm": {
-      "Count": 14,
+      "Count": 20,
       "Sample": [
         {
           "EditorId": "DialogueDiamondCity",
-          "FieldPath": "scenes[30].template",
+          "FieldPath": "dialog_topics[339].responses[157].start_scene",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
           "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "start_scene",
-          "FormKey": "0057E4:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[158].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "info"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[0].start_scene",
-          "FormKey": "01F679:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[339].responses[159].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[1].start_scene",
-          "FormKey": "01F679:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[33].responses[0].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         },
         {
-          "EditorId": null,
-          "FieldPath": "responses[2].start_scene",
-          "FormKey": "01F679:Fallout4.esm",
+          "EditorId": "DialogueDiamondCity",
+          "FieldPath": "dialog_topics[33].responses[1].start_scene",
+          "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
+          "RecordType": "qust"
         }
       ]
     },

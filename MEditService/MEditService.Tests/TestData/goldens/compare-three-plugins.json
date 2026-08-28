@@ -1,7 +1,7 @@
 {
   "conflicted-npc": {
     "ConflictAll": "Conflict",
-    "DiffFieldCount": 40,
+    "DiffFieldCount": 41,
     "Diffs": [
       {
         "CellStates": {
@@ -142,6 +142,18 @@
           "name": "Base name",
           "native_terminal": null,
           "no_slow_approach": false,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_templates": null,
           "observe_dead_body_override_package_list": null,
           "packages": [],
@@ -241,6 +253,18 @@
           "name": "Mid name",
           "native_terminal": null,
           "no_slow_approach": false,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_templates": null,
           "observe_dead_body_override_package_list": null,
           "packages": [],
@@ -340,6 +364,18 @@
           "name": "Top name",
           "native_terminal": null,
           "no_slow_approach": false,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_templates": null,
           "observe_dead_body_override_package_list": null,
           "packages": [],
@@ -376,7 +412,7 @@
   },
   "injected-npc": {
     "ConflictAll": "OnlyOne",
-    "DiffFieldCount": 40,
+    "DiffFieldCount": 41,
     "Diffs": [],
     "HasConditionData": false,
     "HasVmad": true,
@@ -449,6 +485,18 @@
           "name": "Injected",
           "native_terminal": null,
           "no_slow_approach": false,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_templates": null,
           "observe_dead_body_override_package_list": null,
           "packages": [],
@@ -485,7 +533,7 @@
   },
   "sole-npc": {
     "ConflictAll": "OnlyOne",
-    "DiffFieldCount": 39,
+    "DiffFieldCount": 40,
     "Diffs": [],
     "HasConditionData": false,
     "HasVmad": true,
@@ -558,6 +606,18 @@
           "name": null,
           "native_terminal": null,
           "no_slow_approach": false,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_templates": null,
           "observe_dead_body_override_package_list": null,
           "packages": [],
@@ -594,7 +654,7 @@
   },
   "unchanged-weapon": {
     "ConflictAll": "NoConflict",
-    "DiffFieldCount": 43,
+    "DiffFieldCount": 44,
     "Diffs": [],
     "HasConditionData": false,
     "HasVmad": true,
@@ -654,6 +714,18 @@
           "model": null,
           "name": null,
           "npc_add_ammo_list": null,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_effect": null,
           "object_templates": null,
           "on_hit": "Normal",
@@ -740,6 +812,18 @@
           "model": null,
           "name": null,
           "npc_add_ammo_list": null,
+          "object_bounds": {
+            "first": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "second": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            }
+          },
           "object_effect": null,
           "object_templates": null,
           "on_hit": "Normal",
