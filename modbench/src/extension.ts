@@ -34,7 +34,7 @@ import {
 import { copyTargetPlugins, type CopyGesture } from './medit/copyTargetPlugins';
 import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPanelMessageDeps } from './medit/recordPanelMessageRouter';
 import { RecordDecorationProvider } from './medit/RecordDecorationProvider';
-import { recordResourceUri } from './medit/recordResourceUri';
+import { broadcastToRecordPanels, makeOnRecordEdited } from './medit/onRecordEdited';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
 import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
@@ -686,31 +686,6 @@ function registerVmadOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.
   ];
 }
 
-// #428: builds the onRecordEdited callback — pulled out of registerRecordViewCommands purely to
-// stay under the lint budget, same reasoning as registerFilterCommands below. Scoped, not
-// refresh() (Q1, orchestrator gate ruling): patches the one cached record PluginTreeProvider
-// already holds and refreshes only that record's own decoration, so a committed cell edit never
-// pays a page-cache invalidation + repository refetch. Hardcodes 'Modified': the edit response
-// carries no resulting WorkingTreeState, so the one case this can't see is an edit that converges
-// back to the committed bytes (#413's own revert-by-typing convergence) — that row shows a stale M
-// until an unrelated refresh corrects it, no worse than every other fact this cache already
-// tolerates going stale between refreshes (Q2's own no-watcher posture).
-function makeOnRecordEdited(
-  treeProvider: PluginTreeProvider, recordDecorationProvider: RecordDecorationProvider, recordPanels: Set<vscode.WebviewPanel>,
-): (formKey: string, plugin: string, origin: string) => void {
-  return (formKey, plugin, origin) => {
-    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
-    if (treeProvider.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
-      // #364 review finding: the M/A badge is location-independent (a local edit is a fact about
-      // the record, not about where it's viewed), but the badge-scoping fix gave the Conflicts
-      // node's own row a distinct resourceUri from the ordinary one — refresh both, so a record
-      // visible in both places at once gets its M/A badge updated in both.
-      recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
-      recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey, true));
-    }
-  };
-}
-
 // #428: one provider per extension activation (not per panel/command) — its lookup reads
 // treeProvider's own cache live, so it never needs its own copy of the same state. Pulled out of
 // registerRecordViewCommands (#364, which pushed that function over the lint line budget) purely
@@ -744,7 +719,10 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     // this record to re-read. Broadcast rather than replying to the one panel that asked: the same
     // record can be open in more than one panel (openEditorBeside), and all of them are now stale.
     repository: deps.repository,
-    onRecordEdited: makeOnRecordEdited(treeProvider, recordDecorationProvider, recordPanels),
+    onRecordEdited: makeOnRecordEdited(
+      treeProvider, recordDecorationProvider, recordPanels,
+      () => { void refreshMatchingPlugins(deps.repository, outputChannel); },
+    ),
     // Placeholders — the onDidReceiveMessage wiring below overrides all three per panel every call.
     formKeyPicker: undefined,
     conditionFunctionPicker: undefined,
@@ -918,10 +896,6 @@ function registerReferencedByCopyCommand(
           'error', 'Could not copy to the clipboard.', err instanceof Error ? err.message : String(err));
       }
     });
-}
-
-function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: ExtensionToWebview) {
-  for (const panel of recordPanels) void panel.webview.postMessage(msg);
 }
 
 interface ModListCoreDeps {

@@ -1092,6 +1092,9 @@ describe('SessionController.createRecord', () => {
       body: { origin: 'ModA', recordType: 'npc_', editorId: 'NewNpc', formKey: null },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: a create is a working-tree change to a tracked plugin's source — the compile-pending
+    // decoration needs the same re-derive refreshTree's sibling facts already get here.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('passes an explicit requested FormKey through, xEdit\'s typed-FormID path', async () => {
@@ -1118,6 +1121,7 @@ describe('SessionController.createRecord', () => {
     expect(formKey).toBeUndefined();
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('MyPatch.esp'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('surfaces a thrown request the same way', async () => {
@@ -1148,6 +1152,8 @@ describe('SessionController.deleteRecord', () => {
       body: { plugin: 'MyPatch.esp', origin: 'ModA' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: same reason as createRecord above — a delete is a working-tree change too.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('surfaces a refusal and reports that it did not happen', async () => {
@@ -1160,6 +1166,7 @@ describe('SessionController.deleteRecord', () => {
     expect(ok).toBe(false);
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:MyPatch.esp'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('surfaces a thrown request the same way', async () => {
@@ -1190,6 +1197,9 @@ describe('SessionController.renumberRecord', () => {
       body: { plugin: 'MyPatch.esp', origin: 'ModA', newFormKey: null },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: same reason as createRecord above — a renumber (delete+create) is a working-tree
+    // change too.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('passes an explicit requested target FormKey through, xEdit\'s typed-FormID path', async () => {
@@ -1217,6 +1227,7 @@ describe('SessionController.renumberRecord', () => {
     expect(newFormKey).toBeUndefined();
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:MyPatch.esp'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('surfaces a thrown request the same way', async () => {
@@ -1326,6 +1337,9 @@ describe('SessionController.absorbUpstreamUpdate', () => {
       body: { origin: 'ModA' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: absorbing a new baseline moves the source under this plugin the same way a track
+    // does — the compile-pending decoration needs the same re-derive.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('surfaces a transport failure as null, without refreshing', async () => {
@@ -1339,6 +1353,7 @@ describe('SessionController.absorbUpstreamUpdate', () => {
     expect(result).toBeNull();
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('git unavailable'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 });
 
@@ -1359,6 +1374,7 @@ describe('SessionController.keepAsMyEdit', () => {
     expect(result).toEqual({ succeeded: false, refusalReason: 'Fixture.esp has uncommitted changes on 000800:Fixture.esp.' });
     // A refused Keep changed nothing — no reason to refresh.
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
   });
 
   it('refreshes the tree once a Keep actually lands', async () => {
@@ -1370,6 +1386,9 @@ describe('SessionController.keepAsMyEdit', () => {
     await controller.keepAsMyEdit('Fixture.esp', 'ModA');
 
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: keeping an external change deserializes into working-tree dirt — same reason as
+    // absorbUpstreamUpdate above.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 });
 
@@ -1390,6 +1409,9 @@ describe('SessionController.rebaseOntoMain / continueRebase', () => {
     expect(result).toEqual({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
     expect(client.POST).toHaveBeenCalledWith('/plugins/rebase', { body: { origin: 'ModA' } });
     expect(deps.refreshTree).toHaveBeenCalled();
+    // #449: a rebase moves the branch, which can change a tracked plugin's compile-freshness
+    // answer — same reason absorbUpstreamUpdate/keepAsMyEdit above refresh it.
+    expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
   it('rebaseOntoMain reports a refused outcome (uncommitted dirt), still typed, not thrown', async () => {
