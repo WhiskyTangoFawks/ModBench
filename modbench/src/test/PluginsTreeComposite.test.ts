@@ -92,7 +92,6 @@ class FakeChildren {
 function make(
   rows: FakeRow[],
   children = new FakeChildren(),
-  driftOf?: (file: string) => { loadedOrigin: string; currentOrigin: string | null; currentPath: string | null } | undefined,
   hasMatchingRecords?: (file: string) => boolean | undefined,
 ) {
   const rowSource = new FakeRows(rows);
@@ -101,7 +100,6 @@ function make(
     children,
     pluginFileOf: (row) => row.file,
     orderIssueMastersOf: (row) => row.orderIssueMasters,
-    driftOf,
     hasMatchingRecords,
   });
   // The composite tells rows from children by having handed the rows out, so every test renders
@@ -211,14 +209,14 @@ describe('PluginsTreeComposite when a session starts', () => {
 // never gets far enough to have a chevron opinion at all.
 describe('PluginsTreeComposite — a record filter hides a plugin with no matches (#396 / ADR-0035)', () => {
   it('omits a plugin with no matching records from the row set entirely', async () => {
-    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp');
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp');
     composite.setSession(new Set(['A.esp', 'B.esp']));
 
     expect(await render()).toEqual([OTHER_ROW]);
   });
 
   it('keeps a plugin the filter still matches visible and expandable', async () => {
-    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp');
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp');
     composite.setSession(new Set(['A.esp', 'B.esp']));
     await render();
 
@@ -240,7 +238,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   // filter to have an opinion about, so it is never a candidate for hiding — same as it was never
   // a candidate for the chevron.
   it('never hides a row that stands for no plugin file', async () => {
-    const { composite, render } = make([PLUGIN_ROW, ERROR_ROW], new FakeChildren(), undefined, () => false);
+    const { composite, render } = make([PLUGIN_ROW, ERROR_ROW], new FakeChildren(), () => false);
     composite.setSession(new Set(['A.esp']));
 
     expect(await render()).toEqual([ERROR_ROW]);
@@ -249,7 +247,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   it('restores a hidden plugin immediately, in load order, once the filter clears', async () => {
     let matches = false;
     const { composite, render } = make(
-      [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp' || matches,
+      [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp' || matches,
     );
     composite.setSession(new Set(['A.esp', 'B.esp']));
     expect(await render()).toEqual([OTHER_ROW]);
@@ -271,7 +269,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   it('restores a hidden row in its new position when the underlying order changed while it was hidden', async () => {
     let matches = false;
     const { composite, rowSource, render } = make(
-      [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), undefined, (file) => file !== 'A.esp' || matches,
+      [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp' || matches,
     );
     composite.setSession(new Set(['A.esp', 'B.esp']));
     expect(await render()).toEqual([OTHER_ROW]);
@@ -289,7 +287,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   // and isHiddenByFilter reads only pluginFileOf/hasMatchingRecords — never masterIssues or
   // loadFailures — so a plugin flagged either way is hidden right along with an ordinary one.
   it('hides a plugin with a missing-master flag while the filter matches none of its records', async () => {
-    const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), undefined, () => false);
+    const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
     composite.setSession(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
@@ -298,7 +296,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   });
 
   it('hides a plugin that failed to load while the filter matches none of its records', async () => {
-    const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), undefined, () => false);
+    const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
     composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
 
     expect(await render()).toEqual([]);
@@ -718,122 +716,26 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
   });
 });
 
-// #279 / ADR-0035 § Live mutation: a mod-level change can make a plugin name resolve to a
-// different physical file. The row says so and offers a re-read; nothing re-reads on its own.
-//
-// The comparison itself lives in `pluginDrift.ts` and is tested there — what these pin is the
-// rendering contract: which of the row's decorations drift is allowed to touch, and (the part a
-// menu contribution depends on) when the row becomes a re-read target.
-describe('PluginsTreeComposite when a plugin has drifted', () => {
-  const DRIFTED = { loadedOrigin: 'ModA', currentOrigin: 'ModB', currentPath: '/mods/B/A.esp' };
-  const GONE = { loadedOrigin: 'ModA', currentOrigin: null, currentPath: null };
-
-  const withDrift = (drift: Record<string, typeof DRIFTED | typeof GONE>) =>
-    make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => drift[file]);
-
-  it('states in the tooltip which origin is loaded and which it would now resolve to', async () => {
-    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
+// #356: a mod-level change that alters which file a plugin name resolves to is absorbed
+// automatically (`pluginDrift.ts` + `SessionController.rereadPlugin`) — there is no longer
+// anything for this composite to render about it. This guards the retirement: nothing in
+// `PluginsTreeCompositeDeps` names drift any more (TypeScript itself refuses a `driftOf` field —
+// the compiler-enforced half of the retirement), and no combination of inputs produces a
+// `pluginDrifted` contextValue, an added tooltip line, or an added icon/description for an
+// origin change. `PluginListProvider`'s own `contextValue: 'plugin'` is therefore the only value
+// a plugin row can carry out of this composite now.
+describe('PluginsTreeComposite has no drift decoration left to apply (#356)', () => {
+  it('renders every plugin row exactly as its own provider built it, regardless of session state', async () => {
+    const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     composite.setSession(new Set(['A.esp', 'B.esp']));
     await render();
 
-    const tooltip = String(composite.getTreeItem(PLUGIN_ROW).tooltip);
-    expect(tooltip).toContain('ModA');
-    expect(tooltip).toContain('ModB');
-  });
-
-  it('says a plugin whose name resolves to nothing resolves to nothing', async () => {
-    const { composite, render } = withDrift({ 'A.esp': GONE });
-    composite.setSession(new Set(['A.esp', 'B.esp']));
-    await render();
-
-    expect(String(composite.getTreeItem(PLUGIN_ROW).tooltip)).toContain('nothing');
-  });
-
-  it('makes a drifted row a re-read target', async () => {
-    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
-    composite.setSession(new Set(['A.esp', 'B.esp']));
-    await render();
-
-    expect(composite.getTreeItem(PLUGIN_ROW).contextValue).toBe('pluginDrifted');
-  });
-
-  // Nothing to read, so nothing to offer: the row still flags, but the command must not appear.
-  it('does not make a row that resolves to nothing a re-read target', async () => {
-    const { composite, render } = withDrift({ 'A.esp': GONE });
-    composite.setSession(new Set(['A.esp', 'B.esp']));
-    await render();
-
-    expect(composite.getTreeItem(PLUGIN_ROW).contextValue).toBe('plugin');
-  });
-
-  it('leaves a row that has not drifted exactly as its own provider built it', async () => {
-    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
-    composite.setSession(new Set(['A.esp', 'B.esp']));
-    await render();
-
-    const item = composite.getTreeItem(OTHER_ROW);
-    expect(item.contextValue).toBe('plugin');
-    expect(item.description).toBeUndefined();
-    expect(item.tooltip).toBeUndefined();
-  });
-
-  // Drift is about which file backs the row, not about whether it can be browsed: the session
-  // still holds the records it read, and they stay readable until the user chooses otherwise.
-  it('leaves the row expandable', async () => {
-    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
-    composite.setSession(new Set(['A.esp', 'B.esp']));
-    await render();
-
-    expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
-  });
-
-  it('adds to the row\'s own tooltip rather than replacing it', async () => {
-    const rowSource = new FakeRows([PLUGIN_ROW]);
-    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
-      rows: rowSource,
-      children: new FakeChildren(),
-      pluginFileOf: (row) => row.file,
-      driftOf: () => DRIFTED,
-    });
-    const built = rowSource.getTreeItem(PLUGIN_ROW);
-    built.tooltip = 'A.esp';
-    composite.setSession(new Set(['A.esp']));
-    await composite.getChildren();
-
-    expect(String(composite.getTreeItem(PLUGIN_ROW).tooltip)).toContain('A.esp');
-  });
-
-  // The mirror of the note above, and the bug #276 hit for the read-only note: rows are the same
-  // mutable objects the tree keeps reusing, so a marker that stops applying has to actually come
-  // back off — a re-read that resolves the drift must not leave the row claiming it forever.
-  it('takes the marker back off once the drift clears', async () => {
-    let drift: typeof DRIFTED | undefined = DRIFTED;
-    const rowSource = new FakeRows([PLUGIN_ROW]);
-    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
-      rows: rowSource,
-      children: new FakeChildren(),
-      pluginFileOf: (row) => row.file,
-      driftOf: () => drift,
-    });
-    composite.setSession(new Set(['A.esp']));
-    await composite.getChildren();
-    expect(composite.getTreeItem(PLUGIN_ROW).contextValue).toBe('pluginDrifted');
-
-    drift = undefined;
-
-    const item = composite.getTreeItem(PLUGIN_ROW);
-    expect(item.contextValue).toBe('plugin');
-    expect(item.description).toBeUndefined();
-    expect(item.tooltip).toBeUndefined();
-  });
-
-  it('says nothing about drift on a row with no session behind it', async () => {
-    const { composite, render } = withDrift({ 'A.esp': DRIFTED });
-    await render(); // no setSession
-
-    const item = composite.getTreeItem(PLUGIN_ROW);
-    expect(item.contextValue).toBe('plugin');
-    expect(item.tooltip).toBeUndefined();
+    for (const row of [PLUGIN_ROW, OTHER_ROW]) {
+      const item = composite.getTreeItem(row);
+      expect(item.contextValue).toBe('plugin');
+      expect(item.description).toBeUndefined();
+      expect(item.tooltip).toBeUndefined();
+    }
   });
 });
 

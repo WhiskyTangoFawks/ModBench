@@ -447,11 +447,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.pluginListTree.rereadPlugin",
-        "title": "Re-read Plugin from Its Current File",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.pluginListTree.track",
         "title": "Track…",
         "category": "Modbench"
@@ -634,10 +629,6 @@
           "when": "false"
         },
         {
-          "command": "modbench.pluginListTree.rereadPlugin",
-          "when": "false"
-        },
-        {
           "command": "modbench.pluginListTree.track",
           "when": "false"
         },
@@ -796,12 +787,12 @@
       "view/item/context": [
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "modbench@1"
         },
         {
           "command": "modbench.openHeader",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)",
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
           "group": "inline"
         },
         {
@@ -921,38 +912,33 @@
         },
         {
           "command": "modbench.pluginListTree.revealInExplorer",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@1"
         },
         {
-          "command": "modbench.pluginListTree.rereadPlugin",
-          "when": "view == modbench.pluginListTree && viewItem == pluginDrifted",
+          "command": "modbench.pluginListTree.track",
+          "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@2"
         },
         {
-          "command": "modbench.pluginListTree.track",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "command": "modbench.saveAndCompile",
+          "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@3"
         },
         {
-          "command": "modbench.saveAndCompile",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "command": "modbench.pluginListTree.compileAtMain",
+          "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@4"
         },
         {
-          "command": "modbench.pluginListTree.compileAtMain",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
+          "command": "modbench.pluginListTree.rebase",
+          "when": "view == modbench.pluginListTree && viewItem == plugin",
           "group": "pluginActions@5"
         },
         {
-          "command": "modbench.pluginListTree.rebase",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)",
-          "group": "pluginActions@6"
-        },
-        {
           "command": "modbench.pluginListTree.filterToSelected",
-          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)",
-          "group": "pluginActions@7"
+          "when": "view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)",
+          "group": "pluginActions@6"
         },
         {
           "command": "modbench.record.create",

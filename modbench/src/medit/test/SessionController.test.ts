@@ -871,6 +871,22 @@ describe('SessionController.rereadPlugin', () => {
     expect(deps.refreshTree).toHaveBeenCalled();
   });
 
+  // #356: the backend re-sweeps winners synchronously inside this same POST (SessionManager.
+  // RereadPlugin), so reaching here *is* "conflicts are now computed" for this plugin — the same
+  // fact `reportLoadedSession` reuses this signal for on the load path. Reusing it here is what
+  // re-registers a newly-tracked origin's repo with vscode.git (`registerTrackedRepositoriesForSession`,
+  // wired to this same hook in extension.ts) without a second bespoke mechanism, and refreshes any
+  // open record panel's stale-conflict banner immediately rather than leaving it showing "not yet
+  // computed" for content that already landed.
+  it('notifies that conflicts are computed, the same signal a completed load fires', async () => {
+    const deps = makeDeps();
+    const controller = new SessionController(deps);
+
+    await controller.rereadPlugin('A.esp', '/mods/B/A.esp', 'ModB');
+
+    expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
+  });
+
   // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
   // notification, not a log line — and nothing is refreshed, because nothing changed.
   it('surfaces a failure and reports that it did not happen', async () => {
@@ -884,6 +900,7 @@ describe('SessionController.rereadPlugin', () => {
     expect(ok).toBe(false);
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('A session load is still in flight'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 
   it('surfaces a thrown request the same way', async () => {
@@ -896,6 +913,7 @@ describe('SessionController.rereadPlugin', () => {
 
     expect(ok).toBe(false);
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+    expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 });
 

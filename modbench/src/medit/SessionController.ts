@@ -354,9 +354,10 @@ export class SessionController {
     return plugins.find((p) => p.name === pluginName)?.origin;
   }
 
-  /** #279 / ADR-0035 § Live mutation: re-read one plugin from the copy its name resolves to now.
-   *  The path and origin come from the caller — Mod Management resolved them; the backend cannot
-   *  and must not.
+  /** #279 / #356 / ADR-0035 § Live mutation (2026-08-17 amendment): re-read one plugin from the
+   *  copy its name resolves to now. The path and origin come from the caller — Mod Management
+   *  resolved them; the backend cannot and must not. Since #356 this is called automatically, off
+   *  a mod-level change, never from a user gesture.
    *
    *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier (the user
    *  ran a command), so it is notified as well as logged, and nothing is refreshed: the session is
@@ -382,6 +383,16 @@ export class SessionController {
     // The plugin's records were replaced and winners re-swept, so every cached page for it and
     // every conflict badge in the tree is stale.
     this.deps.refreshTree();
+    // #356: the backend (SessionManager.RereadPlugin) re-sweeps winners synchronously inside the
+    // POST above, so reaching here *is* "conflicts are now computed" for this plugin — the same
+    // fact `reportLoadedSession` fires this signal for on the load path (its own comment explains
+    // the reuse). Two things ride on it: any open record panel's stale-conflict banner clears
+    // immediately instead of waiting on nothing, and — the mechanism that satisfies the "a tracked
+    // plugin's re-read follows its new folder" requirement without a second bespoke hook —
+    // `registerTrackedRepositoriesForSession` (wired to this same signal in `extension.ts`)
+    // re-registers every tracked mod folder with vscode.git, picking up a new origin that is now
+    // tracked, or dropping one that no longer is.
+    this.deps.notifyConflictsComputed();
     return true;
   }
 

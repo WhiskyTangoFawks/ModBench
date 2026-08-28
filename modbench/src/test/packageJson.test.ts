@@ -162,10 +162,7 @@ describe('package.json Open Header reachable from every plugin-bearing row (#273
   it.each(['modbench@1', 'inline'])('targets the merged tree, both plugin row kinds, group %s', (group) => {
     const entry = contextMenus().find((e) => e.command === 'modbench.openHeader' && e.group === group);
     expect(entry, `expected an openHeader entry in group ${group}`).toBeTruthy();
-    // #279 widened this: a drifted plugin row's contextValue is pluginDrifted, and it is still a
-    // plugin row — the header it opens is the loaded copy's, which is exactly what the session
-    // still serves.
-    expect(entry!.when).toBe('view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)');
+    expect(entry!.when).toBe('view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)');
   });
 });
 
@@ -501,8 +498,6 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.modList.separator.delete',
     'modbench.modList.overwrite.reveal',
     'modbench.pluginListTree.revealInExplorer',
-    // #279: needs the clicked row for its plugin name and its drift, and has no ambient fallback.
-    'modbench.pluginListTree.rereadPlugin',
     // #414: needs the clicked row's plugin name to resolve which mod folder to track.
     'modbench.pluginListTree.track',
     // #416: needs the clicked row's plugin name — compiling "at main" from the palette with no
@@ -530,7 +525,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(39);
+    expect(PALETTE_GATED).toHaveLength(38);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
@@ -539,65 +534,39 @@ describe('package.json command titles and categories (#280)', () => {
   });
 });
 
-// #279 / ADR-0035 § Live mutation. Drift makes a plugin row carry a *different* contextValue for
-// the first time, and every clause gating on the old one had to be widened to keep matching. That
-// widening is the risk this block exists to hold still: a shared gate silently reaching new rows
-// is invisible in a diff that only adds a menu entry.
-describe('package.json per-plugin Re-read on a drifted row (#279)', () => {
+// #356: the manual re-read gesture — and with it, the `pluginDrifted` contextValue every plugin-row
+// command's `when` clause had to be widened to keep matching — is retired. Origin drift is now
+// absorbed automatically (`pluginDrift.ts`), so there is nothing left for a row to be, or offer,
+// beyond the two contextValues `PluginListProvider` itself produces (`plugin`, `pluginImplicit`).
+// This block is the retirement's own guard: a straggler `pluginDrifted` reference anywhere in
+// `package.json`, or a command entry pointing at the retired `rereadPlugin` id, fails it.
+describe('package.json has no trace of the retired drift gesture (#356)', () => {
+  const asString = JSON.stringify(pkg);
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
   const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
 
-  it('offers Re-read only on a row that has somewhere to re-read from', () => {
-    const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.rereadPlugin');
-    expect(entry).toBeTruthy();
-    // Never `viewItem == plugin`: an undrifted row has nothing to re-read, and a row that resolves
-    // to nothing keeps the plain `plugin` value precisely so this clause misses it.
-    expect(entry!.when).toBe('view == modbench.pluginListTree && viewItem == pluginDrifted');
+  it('mentions pluginDrifted nowhere in the manifest', () => {
+    expect(asString).not.toContain('pluginDrifted');
   });
 
-  it('sits below Reveal in Explorer in the same row-action group', () => {
-    const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.rereadPlugin');
-    expect(entry!.group).toBe('pluginActions@2');
+  it('declares no command, palette entry or menu contribution for the retired rereadPlugin id', () => {
+    expect(asString).not.toContain('rereadPlugin');
   });
 
-  // Rule 4 (modbench/CLAUDE.md): destructive actions never get an icon. Re-read discards staged
-  // edits, so it is a menu entry with a modal confirm and nothing else.
-  it('never appears as an inline or navigation icon', () => {
-    const inline = contextMenus().filter((e) => e.command === 'modbench.pluginListTree.rereadPlugin' && e.group === 'inline');
-    const title = (pkg.contributes.menus['view/title'] as { command: string }[])
-      .filter((e) => e.command === 'modbench.pluginListTree.rereadPlugin');
-    expect([...inline, ...title]).toEqual([]);
-  });
-
-  // The D3 enumeration, kept honest: every command reachable from a plugin row, listed. A new one
-  // that forgets `pluginDrifted` disappears from drifted rows; a new one that adds it without
-  // meaning to gains them. Either way this fails rather than shipping.
+  // The D3 enumeration, kept honest: every command reachable from a plugin row, listed, now with
+  // exactly one contextValue (`plugin`) standing in for what used to be two.
   it('every plugin-row command states exactly which plugin rows it applies to', () => {
     expect(forPluginRows().map((e) => [e.command, e.when])).toEqual([
-      // Open Header: reads the loaded copy's header, which is what the session still serves.
-      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)'],
-      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)'],
-      // Reveal in Explorer: re-resolves the path live, so on a drifted row it reveals the file the
-      // name points at now — the same question it always answered, not a stale one.
-      ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
-      ['modbench.pluginListTree.rereadPlugin', 'view == modbench.pluginListTree && viewItem == pluginDrifted'],
-      // Track: serializes whatever the session actually loaded for this origin, regardless of
-      // whether the name's *current* MO2 resolution has drifted since — never offered on an
-      // implicit master, which is immutable base-game content with no mod folder to track.
-      ['modbench.pluginListTree.track', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
-      // Save & Compile (#416): compile refuses an untracked/no-mod-folder target on its own (a
-      // typed CompileResult), so the row gate stays the same broad plugin/pluginDrifted shape
-      // Track uses rather than pre-filtering tracked-ness the tree doesn't carry.
-      ['modbench.saveAndCompile', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
-      ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
-      // Rebase onto Updated Baseline (#417): same broad plugin/pluginDrifted shape as Track/
-      // compileAtMain — the backend resolves origin and refuses a non-tracked/non-diverged target
-      // on its own, typed, rather than the row pre-filtering.
-      ['modbench.pluginListTree.rebase', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted)'],
+      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
+      ['modbench.openHeader', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
+      ['modbench.pluginListTree.revealInExplorer', 'view == modbench.pluginListTree && viewItem == plugin'],
+      ['modbench.pluginListTree.track', 'view == modbench.pluginListTree && viewItem == plugin'],
+      ['modbench.saveAndCompile', 'view == modbench.pluginListTree && viewItem == plugin'],
+      ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
+      ['modbench.pluginListTree.rebase', 'view == modbench.pluginListTree && viewItem == plugin'],
       // Filter to Selected Plugins (#363): a read-only record-filter scoping, so — like Open
-      // Header — it applies to an implicit master too, not just togglable plugin/pluginDrifted
-      // rows.
-      ['modbench.pluginListTree.filterToSelected', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginDrifted || viewItem == pluginImplicit)'],
+      // Header — it applies to an implicit master too, not just a togglable plugin row.
+      ['modbench.pluginListTree.filterToSelected', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
     ]);
   });
 });
@@ -609,7 +578,7 @@ describe('package.json per-plugin Track (#414)', () => {
   it('sits below the other row actions in the same row-action group', () => {
     const entry = contextMenus().find((e) => e.command === 'modbench.pluginListTree.track');
     expect(entry).toBeTruthy();
-    expect(entry!.group).toBe('pluginActions@3');
+    expect(entry!.group).toBe('pluginActions@2');
   });
 
   // No icon: Track is a one-time, deliberately weighty gesture (ADR-0041: "deliberate friction"),
