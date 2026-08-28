@@ -379,6 +379,10 @@ describe('modbench command registration', () => {
     // #417: Modbench: Rebase onto Updated Baseline — the offered rebase's re-runnable form. Gated
     // to the clicked row and hidden from the palette, same posture as Track/compileAtMain.
     'modbench.pluginListTree.rebase',
+    // #363: Filter to Selected Plugins — the ordinary record filter, pre-restricted to the
+    // clicked/selected plugin row(s). Gated to plugin-bearing rows and hidden from the palette,
+    // same posture as Track/rebase — it needs the row selection, with no ambient fallback.
+    'modbench.pluginListTree.filterToSelected',
     // #427: the three lifecycle gestures — Add (recordType row), Remove/Change FormID… (record
     // row). Gated to the clicked row and hidden from the palette, same posture as Track/rebase —
     // each needs the clicked row's own identity, with no ambient fallback.
@@ -1373,6 +1377,64 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
 
     assert.strictEqual(await codeLensCommandFor(doc.uri), 'modbench.setFilterFromDocument',
       'a session that no longer exists must not leave the code lens still claiming its SQL is active');
+  });
+});
+
+// #363: Filter to Selected Plugins — the ordinary record filter, pre-restricted to a plugin-name
+// set drawn from the tree selection. The pure SQL builder's escaping/multi-plugin behavior is
+// unit-tested (filterSelectedPluginsSql.test.ts) and the selection-extractor's dedupe/drop
+// behavior is unit-tested (PluginListProvider.test.ts) without a VS Code harness; this suite
+// proves only that a real VS Code dispatch — `(clicked, selected[])`, the actual
+// `view/item/context` invocation shape — reaches the same POST /session/filter and readout every
+// other filter entry point already goes through.
+describe('modbench.pluginListTree.filterToSelected (#363)', () => {
+  const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
+  const description = () =>
+    (ext?.exports as { pluginListView?: { description?: string } } | undefined)?.pluginListView?.description;
+  let gameDir = '';
+
+  before(async () => {
+    if (!root) return;
+    resetMockBackend();
+    gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-filter-to-selected-'));
+    fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', gameDir, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '*TestMod.esp\n');
+    await vscode.commands.executeCommand('modbench.modList.launchMedit');
+  });
+
+  after(async () => {
+    if (!root) return;
+    await vscode.commands.executeCommand('modbench.closeMedit');
+    await vscode.workspace.getConfiguration('modbench').update(
+      'mods.gameDirectory', undefined, vscode.ConfigurationTarget.Workspace);
+    fs.writeFileSync(pluginsTxtPath, '');
+    fs.rmSync(gameDir, { recursive: true, force: true });
+    resetMockBackend();
+  });
+
+  it('scopes the filter to a multi-row selection and names it in the readout', async () => {
+    const a = new PluginListPluginNode({ name: 'TestMod.esp', path: '/data/TestMod.esp', enabled: true } as any);
+    const b = new ImplicitMasterNode('Fallout4.esm');
+    const before = requestLog.filter((l) => l === 'POST /session/filter').length;
+
+    await vscode.commands.executeCommand('modbench.pluginListTree.filterToSelected', a, [a, b]);
+
+    const after = requestLog.filter((l) => l === 'POST /session/filter').length;
+    assert.strictEqual(after, before + 1, 'expected the command to reach POST /session/filter exactly once');
+    assert.ok(description()?.includes('records: Selected Plugins'),
+      `expected the readout to name the filter (was: ${description() ?? 'unset'})`);
+  });
+
+  it('is a no-op for a selection that names no plugin', async () => {
+    const before = requestLog.filter((l) => l === 'POST /session/filter').length;
+
+    await vscode.commands.executeCommand('modbench.pluginListTree.filterToSelected', undefined, []);
+
+    const after = requestLog.filter((l) => l === 'POST /session/filter').length;
+    assert.strictEqual(after, before, 'a selection with no plugin row must never reach the backend');
   });
 });
 
