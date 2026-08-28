@@ -1,6 +1,8 @@
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
+using MEditService.Tests.TestSupport;
+using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
@@ -159,6 +161,42 @@ public class ContainerChildQueryServiceTests
         svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
 
         Assert.Equal("ModB", reader.LastGetContainerChildrenOrigin);
+    }
+
+    // Slice 4: a container_child row naming a child FormKey Search doesn't return is an index
+    // inconsistency between two tables written from the same ingest pass — never expected in
+    // practice, but GetChildren degrades by omission (skips just that row, keeps the survivors)
+    // rather than throwing, and logs a warning naming every identifying fact. Rival: an
+    // unconditional dictionary index (`byFormKey[row.ChildFormKey]` instead of TryGetValue) would
+    // throw KeyNotFoundException here instead of returning dial1 alone.
+    [Fact]
+    public void GetChildren_ContainerChildRowSearchDidNotReturn_SkipsIt_ReturnsSurvivors_LogsWarning()
+    {
+        var reader = new StubReader(
+            [
+                new ContainerChildRow("dial1:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 0),
+                new ContainerChildRow("dial-missing:M.esp", "qust1:M.esp", "Quest", "DialogTopics", 1),
+            ],
+            new Dictionary<string, IReadOnlyList<RecordSummary>>
+            {
+                // Search("dial") never returns dial-missing:M.esp — the index-inconsistency case.
+                ["dial"] = [new RecordSummary("dial1:M.esp", "M.esp", 0, true, "TopicA", "Data")],
+            });
+        var entries = new List<LogEntry>();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
+        var svc = new ContainerChildQueryService(new StubSession(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
+
+        var result = svc.GetChildren("M.esp", "qust1:M.esp");
+
+        Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
+        var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
+        // Origin is omitted here (no session), so PluginOriginResolver resolves it to the
+        // reserved PluginOrigin.DataDirectory value ("Data") — the same fallback every other
+        // caller of that resolver gets.
+        Assert.Equal(
+            "Container child dial-missing:M.esp of qust1:M.esp in M.esp (Data) is indexed in " +
+            "container_child but Search(dial) did not return it; omitting.",
+            warning.Message);
     }
 
     // Slice 5: no rows at all (a Quest with no topics/branches/scenes) is an empty list, not an
