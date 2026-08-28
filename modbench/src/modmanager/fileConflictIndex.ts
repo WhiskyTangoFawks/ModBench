@@ -189,6 +189,22 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
 }
 
+/** Root-level entries (plugin filenames, never a nested file sharing one's basename — same
+ *  exclusion rootLevelWinners/rootLevelWinnerMods already apply) that more than one enabled mod
+ *  provides — "File conflict" (modmanager/CONTEXT.md). Keyed by lowercased filename like this
+ *  module's other root-level accessors. #447: the one new fact the Plugins tree's file-override
+ *  decoration needs — everything else (`providers`, `winner`, `winnerMod`) is already on
+ *  `ConflictEntry`, so this is a filter over the existing index, not a new computation. An
+ *  uncontested plugin (zero or one provider) is absent, never a "false"-carrying entry — absence
+ *  itself is the "uncontested" signal, matching this module's existing convention. */
+export function rootLevelFileConflicts(index: FileConflictIndex): Map<string, ConflictEntry> {
+  return new Map(
+    rootLevelEntries(index)
+      .filter((entry) => entry.providers.length > 1)
+      .map((entry) => [foldPath(entry.relativePath), entry]),
+  );
+}
+
 /** Non-regular dirent policy inside `mods/<Mod>/` (#322). `references/modorganizer/`
  *  (grep-only, checked first) sets the precedent: its own walker
  *  (`DirectoryWalker::forEachEntry`, `src/envfs.cpp`, consumed by

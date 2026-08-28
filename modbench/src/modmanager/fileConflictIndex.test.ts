@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import type { Mod, Separator, ModlistEntry } from './model';
-import { buildFileConflictIndex, rootLevelWinners, foldPath } from './fileConflictIndex';
+import { buildFileConflictIndex, rootLevelWinners, rootLevelFileConflicts, foldPath } from './fileConflictIndex';
 import { parseModlist } from './mo2/modlistText';
 import { computeModStatuses } from './statusChecker';
 import { readVanillaMasters } from './vanillaMasters';
@@ -126,6 +126,73 @@ describe('buildFileConflictIndex — case-insensitive conflicts', () => {
 
     expect(winners.size).toBe(1);
     expect(winners.get('foo.esp')).toBe(join(caseFixture, 'mods', 'RootA', 'Foo.esp'));
+  });
+});
+
+// #447: the Plugins tree's file-override decoration's one new fact — which root-level (plugin)
+// entries more than one enabled mod provides. Pure filter over the existing index; no new walk.
+describe('rootLevelFileConflicts (#447)', () => {
+  it('flags a root-level plugin two enabled mods both provide, carrying both providers and the winner', async () => {
+    // Reuses case-conflict-instance's RootA/Foo.esp vs RootB/foo.ESP pair (already a root-level
+    // conflict fixture — see rootLevelWinners' own test above), rather than hand-rolling a new one.
+    const index = await buildFileConflictIndex([mod('RootA'), mod('RootB')], caseFixture, () => {});
+    const conflicts = rootLevelFileConflicts(index);
+
+    expect(conflicts.size).toBe(1);
+    const entry = conflicts.get('foo.esp');
+    expect(entry?.providers.sort()).toEqual(['RootA', 'RootB']);
+    expect(entry?.winnerMod).toBe('RootA');
+    expect(entry?.winner).toBe(join(caseFixture, 'mods', 'RootA', 'Foo.esp'));
+  });
+
+  it('rival: a filter with no providers.length guard would wrongly flag an uncontested plugin', async () => {
+    // Named rival for the length>1 guard: an implementation that omits the `.length > 1` filter
+    // (returns every root-level entry regardless of provider count) would flag Solo.esp here too —
+    // this is the guard that makes "uncontested plugins render exactly as today" (#447 AC4) hold.
+    const instanceRoot = await mkdtemp(join(tmpdir(), 'medit-conflict-solo-'));
+    try {
+      const soloRoot = join(instanceRoot, 'mods', 'Solo');
+      await mkdir(soloRoot, { recursive: true });
+      await writeFile(join(soloRoot, 'Solo.esp'), 'PLUGINBYTES');
+
+      const index = await buildFileConflictIndex([mod('Solo')], instanceRoot, () => {});
+      const conflicts = rootLevelFileConflicts(index);
+
+      expect(conflicts.has('solo.esp')).toBe(false);
+      expect(conflicts.size).toBe(0);
+    } finally {
+      await rm(instanceRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rival: a filter reusing the raw (non-root-level) index would let a nested same-basename file leak onto the plugin\'s own entry', async () => {
+    // Named rival for reusing rootLevelEntries: an implementation that filtered index.files
+    // directly (skipping the root-level-only exclusion rootLevelWinners/rootLevelWinnerMods
+    // already apply) could conflate a nested "shadow" file sharing a plugin's basename with the
+    // plugin's own root-level conflict. ModA ships the plugin alone (uncontested at root); ModA
+    // and ModB both ship a NESTED file of the same basename — that nested contest must never
+    // surface as Base.esp being a file conflict.
+    const instanceRoot = await mkdtemp(join(tmpdir(), 'medit-conflict-nested-'));
+    try {
+      const modARoot = join(instanceRoot, 'mods', 'ModA');
+      const modBRoot = join(instanceRoot, 'mods', 'ModB');
+      await mkdir(join(modARoot, 'nested'), { recursive: true });
+      await mkdir(join(modBRoot, 'nested'), { recursive: true });
+      await writeFile(join(modARoot, 'Base.esp'), 'PLUGINBYTES'); // root-level, ModA only
+      await writeFile(join(modARoot, 'nested', 'Base.esp'), 'NESTED-A'); // nested, contested
+      await writeFile(join(modBRoot, 'nested', 'Base.esp'), 'NESTED-B'); // nested, contested
+
+      const index = await buildFileConflictIndex([mod('ModA'), mod('ModB')], instanceRoot, () => {});
+      // Sanity: the nested file genuinely is a conflict in the raw index — this is what a
+      // root-level-blind filter would wrongly let leak onto rootLevelFileConflicts' answer.
+      expect(index.files.get('nested/Base.esp')?.providers.length).toBe(2);
+
+      const conflicts = rootLevelFileConflicts(index);
+      expect(conflicts.has('base.esp')).toBe(false);
+      expect(conflicts.size).toBe(0);
+    } finally {
+      await rm(instanceRoot, { recursive: true, force: true });
+    }
   });
 });
 
