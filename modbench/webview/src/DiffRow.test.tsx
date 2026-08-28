@@ -24,6 +24,7 @@ import { DiffRow } from './DiffRow';
 import type { Column, PathSegment } from './recordUtils';
 import type { CompareOverride, FieldDiff, FieldMetadata, FormKeyResolution } from './types';
 import { columnKey } from './types';
+import { DIMMED_OPACITY } from './gridStyles';
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -149,6 +150,29 @@ describe('DiffRow — top-level scalar row', () => {
     expect(() => fireEvent.doubleClick(labelCell)).not.toThrow();
   });
 });
+
+// #491: a Partial Form column dims the same way notInLoadOrderSet already does — read straight off
+// the column's own override.isPartialForm (already riding on the Column the row is handed), not a
+// separately-threaded Set, since the fact already lives on data DiffRow already has.
+describe('DiffRow — Partial Form column dimming (#491)', () => {
+  it('dims a cell whose column override is a Partial Form record', () => {
+    const master = override('Fallout4.esm');
+    const partial = override('MyMod.esp', { isPartialForm: true });
+    renderRow({
+      columns: [diskColumn(master), diskColumn(partial)],
+      overrideMap: { [columnKey('Fallout4.esm', null)]: master, [columnKey('MyMod.esp', null)]: partial },
+    });
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    expect(cell).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+
+  it('does not dim an ordinary (non-Partial-Form) column', () => {
+    renderRow();
+    const cell = screen.getAllByText('disk-value')[1].closest('td')!;
+    expect(cell).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+});
+
 describe('DiffRow — drag affordance on leaf cells', () => {
 
   // Issue #222 / ADR-0034: `grab` is removed from every value cell — the grid rests on the

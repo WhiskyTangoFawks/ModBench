@@ -116,6 +116,10 @@ public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckErr
 // construction (including a test fixture) must say which origin, not fall back to one silently.
 // Declared before the two still-defaulted trailing fields only because C# requires a required
 // parameter to precede any optional one — callers may still pass it by name in any position.
+// IsPartialForm (#491): this override's own record-header Partial Form flag
+// (Schema.PartialFormFlag), independent of any field's own value — always false for a synthesized
+// row (e.g. the header table, which has no such flag). Drives ConflictClassifier's field-exclusion
+// rule and the compare grid's column dimming (CompareOverride below).
 public record RecordDetail(
     string FormKey,
     string Plugin,
@@ -124,7 +128,8 @@ public record RecordDetail(
     string? EditorId,
     IReadOnlyList<FieldValue> Fields,
     string Origin,
-    string RecordType = "");
+    string RecordType = "",
+    bool IsPartialForm = false);
 
 public record CompareOverride(
     string FormKey,
@@ -135,8 +140,9 @@ public record CompareOverride(
     IReadOnlyList<FieldValue> Fields,
     ConflictThis ConflictThis,
     string Origin,
-    string RecordType = "")
-    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType);
+    string RecordType = "",
+    bool IsPartialForm = false)
+    : RecordDetail(FormKey, Plugin, LoadOrderIndex, IsWinner, EditorId, Fields, Origin, RecordType, IsPartialForm);
 
 // Resolutions (ADR-0031): only populated for a scalar formKey-typed leaf, keyed by plugin like
 // Values/CellStates — one entry per plugin whose cell holds a FormKey value. Never populated on a

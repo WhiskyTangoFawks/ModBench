@@ -101,17 +101,22 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // apart from a real cross-column copy. #272: sourcePlugin is a ColumnKey.
 
   // #415/ADR-0041: the one definition of "this column can be written", computed once for the whole
-  // grid. Three conditions, all of them already known here: the plugin is not immutable (a vanilla
+  // grid. Four conditions, all of them already known here: the plugin is not immutable (a vanilla
   // or DLC master), the load order actually names this copy (editing a shadowed one changes nothing
-  // anywhere), and the plugin's mod is tracked (editing requires tracking; viewing never does).
+  // anywhere), the plugin's mod is tracked (editing requires tracking; viewing never does), and
+  // (#491) the column's own override is not a Partial Form record — its fields are read-only on
+  // the single write path (RecordEditRefusal.PartialFormFieldReadOnly) until #539 lands a header
+  // write path to exempt, so no field on this column is offered as editable yet.
   //
-  // Derived rather than asked of the backend per cell: the panel already holds all three facts from
-  // its own load(), and a per-cell round trip would make editability lag the grid it decorates.
+  // Derived rather than asked of the backend per cell: the panel already holds all four facts from
+  // its own load()/result, and a per-cell round trip would make editability lag the grid it decorates.
   const editableColumns = useMemo(() => {
     const writable = new Set<ColumnKey>();
     for (const o of result?.overrides ?? []) {
       const key = columnKey(o.plugin, o.origin);
-      if (!immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key)) writable.add(key);
+      if (!immutableSet.has(key) && !notInLoadOrderSet.has(key) && trackedSet.has(key) && !o.isPartialForm) {
+        writable.add(key);
+      }
     }
     return writable;
   }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
@@ -598,13 +603,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                   // column (DiffRow, below), matching the tree row's own treatment (ADR-0035:
                   // "non-participating copies render dimmed").
                   const inLoadOrder = !notInLoadOrderSet.has(col.key);
+                  // #491: a Partial Form column dims the same way a not-in-load-order one does —
+                  // xEdit's own answer ("shown as such, not as a full competing override") applied
+                  // to mEdit's never-hide-data posture. Read straight off col.override.isPartialForm
+                  // rather than a separately-threaded Set, since the fact already rides on this
+                  // column's own data.
+                  const dimmed = !inLoadOrder || col.override.isPartialForm;
                   return (
                     <th
                       key={`disk:${col.key}`}
                       style={{
                         ...headerCell, textAlign: 'left', minWidth: isCollapsed ? '48px' : '200px',
                         backgroundColor: getHeaderBg(col.override.conflictThis),
-                        opacity: inLoadOrder ? undefined : DIMMED_OPACITY,
+                        opacity: dimmed ? DIMMED_OPACITY : undefined,
                       }}
                     >
                       <PluginHeader

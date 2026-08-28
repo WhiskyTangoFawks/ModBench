@@ -143,6 +143,27 @@ public enum RecordEditRefusal
     /// the same way a human reading the message can.
     /// </summary>
     ListElementTypeUnresolved,
+
+    /// <summary>
+    /// #491: the record carries the Partial Form header flag (bit 14, <c>0x4000</c> — CONTEXT.md's
+    /// Partial Form entry), so its own fields are read-only — the game and xEdit fall through to the
+    /// previous non-partial override for them, so a value written here would never be seen. Its own
+    /// value rather than <see cref="FieldReadOnly"/>: the way out is different (clear the flag, or
+    /// edit a different, non-partial override) from that value's causes (masters, FormKey, the
+    /// widened text columns — permanent, not state-dependent), the same distinction #531's
+    /// <see cref="ListElementTypeUnresolved"/> already draws against
+    /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable — #539 is
+    /// where that write path (including clearing this flag) lands.
+    ///
+    /// <para><b>EditorID is exempt</b> (#491 review): xEdit's own <c>CanAssignInternal</c>
+    /// (<c>wbImplementation.pas:9905-9914</c>) explicitly allows EDID assignment on a Partial Form
+    /// record — ADR-0034 makes that binding here, not a divergence #539's own scope could excuse.
+    /// EditorID is an ordinary, already-writable field (<c>RecordFieldWriter.EditorIdFieldPath</c>),
+    /// not part of #539's flag-write surface, so exempting it needed no header write path to exist
+    /// first. Every other field remains refused until #539 lands one.
+    /// </para>
+    /// </summary>
+    PartialFormFieldReadOnly,
 }
 
 /// <summary>
