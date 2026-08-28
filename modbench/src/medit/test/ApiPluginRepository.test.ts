@@ -523,6 +523,48 @@ describe('ApiPluginRepository.getRecordOverridePlugins', () => {
   });
 });
 
+describe('ApiPluginRepository.getConflicts', () => {
+  it('calls GET /records/conflicts and carries each entry\'s own origin separately from RecordSummary', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: [
+          {
+            record: {
+              formKey: 'Fallout4.esm:000801', plugin: 'Fallout4.esm', origin: 'Data',
+              loadOrderIndex: 0, isWinner: true, editorId: 'Foo', workingTreeState: 'None',
+            },
+            conflictAll: 'Conflict',
+          },
+        ],
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const conflicts = await repo.getConflicts();
+
+    expect(conflicts).toEqual([{
+      record: {
+        formKey: 'Fallout4.esm:000801', plugin: 'Fallout4.esm',
+        loadOrderIndex: 0, isWinner: true, editorId: 'Foo', workingTreeState: 'None',
+      },
+      origin: 'Data',
+      conflictAll: 'Conflict',
+    }]);
+    expect(client.GET).toHaveBeenCalledWith('/records/conflicts', {});
+  });
+
+  it('returns an empty list when the backend reports no data', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
+
+    expect(await new ApiPluginRepository(client).getConflicts()).toEqual([]);
+  });
+
+  it('throws on a genuine non-OK response — a fetch failure is never indistinguishable from "no conflicts" (#307)', async () => {
+    await expect(new ApiPluginRepository(nonOkClient()).getConflicts()).rejects.toThrow(/500/);
+  });
+});
+
 describe('ApiPluginRepository.getWorldspaces', () => {
   it('maps worldspace summaries on an OK response', async () => {
     const client = {

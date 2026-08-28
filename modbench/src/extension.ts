@@ -312,6 +312,10 @@ function exitToLoadout(): void {
   // own state entries clear along with everything else this reset already clears.
   recordBrowserProvider?.setTrackedPlugins([]);
   recordBrowserProvider?.setPluginOrigins(new Map());
+  // #364: no session means no conflict information either — the Conflicts node and the badge both
+  // have to disappear along with everything else this reset already clears, not linger describing
+  // a session that's gone.
+  recordBrowserProvider?.setConflictsComputed(false);
   backendManager?.stop();
 }
 
@@ -379,6 +383,31 @@ function createReferencedByTree(
   return { referencedByTreeProvider, referencedByTreeView, activeRecordSubscription };
 }
 
+/** `SessionController`'s own `notifyConflictsComputed` dep — pulled out of `activate` (#364,
+ *  which pushed that function over the lint line budget) purely to stay under it, same shape as
+ *  `makeSetFilterActive` above. Fires on the load-completing false→true `conflictsComputed`
+ *  transition only (this dep's own doc comment): tells every open record panel to refetch its
+ *  comparison, (re-)registers every tracked mod's repo with `vscode.git`, and (#364) flips the
+ *  Conflicts node/badge gate on `treeProvider`. */
+function makeNotifyConflictsComputed(
+  treeProvider: PluginTreeProvider, recordPanels: Set<vscode.WebviewPanel>,
+  repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
+): () => void {
+  return () => {
+    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED });
+    // #414/ADR-0041: the session just became newly readable — the one reliable point (see this
+    // dep's own doc comment) to (re-)register every tracked mod's repo with vscode.git.
+    void registerTrackedRepositoriesForSession(repository, outputChannel);
+    // #364: the Conflicts node's own gate and the badge's own gate — same fact, same call site as
+    // the two above, and the same documented forward-coupling gap (SessionController's own comment
+    // on this dep): a live-mutation re-sweep (#97) does not yet call this again on the way *out* of
+    // settled, so a stale true can outlive a reorder/enable/disable until #97 wires that
+    // notification too. Not a regression this ticket introduces — the message-based consumers
+    // (`sessionProgress.ts`) already inherit the identical gap.
+    treeProvider.setConflictsComputed(true);
+  };
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const cfg = vscode.workspace.getConfiguration('modbench');
   const port: number = cfg.get('backendPort') ?? 5172;
@@ -420,12 +449,7 @@ export function activate(context: vscode.ExtensionContext) {
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive,
     refreshMatchingPlugins: () => { void refreshMatchingPlugins(repository, outputChannel); },
-    notifyConflictsComputed: () => {
-      broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED });
-      // #414/ADR-0041: the session just became newly readable — the one reliable point (see this
-      // dep's own doc comment) to (re-)register every tracked mod's repo with vscode.git.
-      void registerTrackedRepositoriesForSession(repository, outputChannel);
-    },
+    notifyConflictsComputed: makeNotifyConflictsComputed(treeProvider, recordPanels, repository, outputChannel),
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
@@ -655,6 +679,18 @@ function makeOnRecordEdited(
   };
 }
 
+// #428: one provider per extension activation (not per panel/command) — its lookup reads
+// treeProvider's own cache live, so it never needs its own copy of the same state. Pulled out of
+// registerRecordViewCommands (#364, which pushed that function over the lint line budget) purely
+// to stay under it, same shape as makeNotifyConflictsComputed above.
+function makeRecordDecorationProvider(treeProvider: PluginTreeProvider): RecordDecorationProvider {
+  return new RecordDecorationProvider(
+    (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey),
+    // #364: the conflict badge's own lookup — independent gate, see RecordDecorationProvider's
+    // own class doc comment for the M/A-wins precedence.
+    (plugin, origin, formKey) => treeProvider.conflictAllOf(plugin, origin, formKey));
+}
+
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
@@ -667,10 +703,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
   // back — the FormKey picker — so this object is the *shared* remainder; `formKeyPicker` itself
   // is rebuilt per panel at the onDidReceiveMessage call site below, since its reply must reach
   // the one panel that asked, never a broadcast.
-  // #428: one provider per extension activation (not per panel/command) — its lookup reads
-  // treeProvider's own cache live, so it never needs its own copy of the same state.
-  const recordDecorationProvider = new RecordDecorationProvider(
-    (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey));
+  const recordDecorationProvider = makeRecordDecorationProvider(treeProvider);
   const routerDeps: RouteRecordPanelMessageDeps = {
     channel: outputChannel,
     // Issue #224: COPY_TO_CLIPBOARD's ADR-0026 surfacing on a failed clipboard write.
@@ -1142,6 +1175,10 @@ function buildPluginsTreeComposite(
       getChildren: (child) => recordBrowser.getChildren(child),
       getTreeItem: (child) => recordBrowser.getTreeItem(child),
       onDidChangeTreeData: recordBrowser.onDidChangeTreeData,
+      // #364: the root-level Conflicts node — a thin relay to PluginTreeProvider's own gate
+      // (conflictsComputed), same "the composite decides nothing, only relays" posture every
+      // other member of this adapter object already has.
+      conflictsNode: () => recordBrowser.conflictsNode(),
     },
     pluginFileOf,
     // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with session state
@@ -2031,6 +2068,8 @@ function clearSessionWhenBackendDies(
     // entries must not survive it.
     recordBrowser.setTrackedPlugins([]);
     recordBrowser.setPluginOrigins(new Map());
+    // #364: same reasoning again — a dead session's Conflicts node and badge must not survive it.
+    recordBrowser.setConflictsComputed(false);
     tracker.setLoaded(undefined);
     // #278 / ADR-0035 amending ADR-0018: same reasoning as the three above — a statement about
     // which plugins the dead session's records matched must not seed the next one.
