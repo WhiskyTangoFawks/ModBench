@@ -27,12 +27,17 @@ Traverse with `gh`:
 
 ## Conventions
 
-- **Create**: `gh issue create --title "..." --body "..."` (heredoc for multi-line).
+- **Create**: `gh issue create --title "..." --body "..."` (heredoc for multi-line). Body
+  contains a code span or backtick-quoted identifier (near-universal for a technical issue)?
+  Write it to a file first and pass `--body-file` — an inline `--body "...`code`..."` inside a
+  double-quoted shell string lets the shell read the backticks as command substitution and
+  silently drops or corrupts everything between them.
 - **Read**: `gh issue view <number> --json number,title,body,labels,comments` — never
   `--comments`, whose GraphQL query still requests the deprecated `projectCards` field and
   exits 1 in this repo.
 - **List**: `gh issue list --state open --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`; add `--label`/`--state` as needed.
-- **Comment**: `gh issue comment <number> --body "..."`
+- **Comment**: `gh issue comment <number> --body "..."` — same backtick hazard and same
+  `--body-file` fix as Create.
 - **Labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
 - **Blocking links**: dependency is tracker state, not a label or prose. Link the moment a
   dependency is known — at filing, triage, or queue rejection: `gh issue edit <n> --add-blocked-by <m>`
