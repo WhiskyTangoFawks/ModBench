@@ -1334,7 +1334,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // #541: a list of P3Int16/P3Float elements (e.g. IslandData.Vertices: ExtendedList<P3Float>).
         // Without this arm, elemMeta below falls through to null (P3Int16/P3Float match none of the
         // scalar cases in the switch), which makes BuildListColumn drop the whole field the same way
-        // ObjectBounds used to drop before #541's other arms — and, worse, SerializeListItems's own
+        // ObjectBounds used to drop before #541's other arms — and, worse, BuildListItems's own
         // scalar-element fallback (`result.Add(item)`) would hand a raw boxed P3Int16 straight to
         // JsonSerializer, which would recurse forever over its self-referencing `Point` property.
         if (IsP3Type(core))
@@ -1748,9 +1748,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // A list nested one level inside a struct (e.g. Destructible.Resistances/Stages) — GetColumnInfo
     // has handled this shape at the top level (BuildListColumn) since the file's beginning; this is
     // its GetSubFieldInfo-side twin, absent until #541 (issue's gap #2). Reuses BuildListColumn's own
-    // element-type dispatch (form-link / Loqui-struct / P3) and SerializeListItems/ApplyListJson for
-    // extraction and writing, so a struct's own list member behaves identically to a top-level array
-    // column of the same shape.
+    // element-type dispatch (form-link / Loqui-struct / P3) and ApplyListJson for writing, and
+    // BuildListItems (not SerializeListItems — see that method's own doc comment for why a sub-field's
+    // Extract must stay unserialized) for extraction, so a struct's own list member behaves
+    // identically to a top-level array column of the same shape.
     private static List<SubFieldSpec>? BuildListElementSubFields(
         Type elementType, bool isLoqui, bool isP3,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
@@ -1801,7 +1802,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             : null;
 
         return new(colName, "array", Empty, Empty,
-            obj => g(obj) is IEnumerable list ? SerializeListItems(list, elementType, elemSubFields) : null,
+            obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
             apply,
             ElementSpec: elementSpec);
     }
@@ -1851,7 +1852,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return dict;
     }
 
-    private static string? SerializeListItems(
+    // The raw object graph for a list's elements — FormLink elements become their FormKey string,
+    // struct/P3 elements become the same Dictionary<string, object?> ExtractSubObject builds for any
+    // other struct, everything else passes through as-is. Deliberately not itself serialized: a
+    // top-level array *column* (BuildListColumn) is the one caller that needs a VARCHAR string, and
+    // does its own JsonSerializer.Serialize on top of this (SerializeListItems, below). A struct
+    // *sub-field* (BuildListSubField) is not that caller — its own Extract composes under the
+    // enclosing struct's single JsonSerializer.Serialize (ExtractSubObject's own dictionary), the
+    // same way a struct or P3 sub-field's Extract already returns a raw Dictionary rather than a
+    // pre-serialized string. #541 review finding: BuildListSubField used to call SerializeListItems
+    // directly and return its string, which the enclosing struct's own serialize pass then re-encoded as an
+    // escaped JSON *string* value instead of a nested array — a round-trip break (ApplyListSubFieldJson
+    // requires JsonValueKind.Array, so submitting back exactly what Extract just served was itself
+    // refused) and a silent compare-grid diff failure (ConflictClassifier.BuildArrayChildren no-ops
+    // on a non-Array JsonElement.Kind) for every struct-nested list, including #541's own two named
+    // fields (Destructible.Resistances/Stages) and the real-data case (ActivateParents.Parents).
+    private static List<object?> BuildListItems(
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
         var isFl = IsFormLink(elementType);
@@ -1862,8 +1878,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             else if (subFields != null) result.Add(ExtractSubObject(item, subFields));
             else result.Add(item);
         }
-        return JsonSerializer.Serialize(result);
+        return result;
     }
+
+    // BuildListColumn's own caller shape: a top-level array column's Extract returns a VARCHAR
+    // string (the DuckDB column type), unlike a struct sub-field's Extract (see BuildListItems above).
+    private static string? SerializeListItems(
+        IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields) =>
+        JsonSerializer.Serialize(BuildListItems(items, elementType, subFields));
 
     // ── GetColumnInfo ─────────────────────────────────────────────────────────
 

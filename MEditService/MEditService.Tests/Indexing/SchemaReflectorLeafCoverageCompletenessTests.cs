@@ -103,8 +103,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // getter interfaces... rather than the other way around, so none of their own members are
         // ever reached by [a plain interface] walk alone"). Every one of these is a genuinely bigger,
         // separate undertaking than #541 (a discriminator scheme per abstract type, #360's own
-        // per-case verification work) — reported to the orchestrator as a new, material finding, not
-        // silently swept into this exclusion list. Not P3-related; not a struct-nested list.
+        // per-case verification work) — filed as #548 (tracked separately) rather than silently swept
+        // into this exclusion list. Not P3-related; not a struct-nested list.
         ("IBookGetter", "Teaches"),               // BookTeachTarget
         ("IColorRecordGetter", "Data"),           // AColorRecordData
         ("IHolotapeGetter", "Data"),              // AHolotapeData

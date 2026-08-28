@@ -1835,6 +1835,36 @@ public class SchemaReflectorTests
         Assert.Equal(50, container.Destructible.Stages[0].HealthPercent);
     }
 
+    [Fact]
+    public void GetSchemas_Container_Destructible_Extract_StagesNestAsARealArray_NotAnEscapedString()
+    {
+        // #541 review finding: BuildListSubField's Extract used to reuse SerializeListItems (built
+        // for a top-level array *column*, which ends as a VARCHAR string deserialized exactly once)
+        // for a sub-field's own Extract, whose contract is to return the raw object graph so it
+        // composes under the enclosing struct's single JsonSerializer.Serialize pass. Pre-serializing
+        // inside a sub-field double-encodes: the enclosing struct's own serialize pass re-escapes the
+        // already-JSON string as a JSON *string value* rather than nesting it as an array. Round-trip
+        // consequence: ApplyListSubFieldJson requires JsonValueKind.Array, so submitting back exactly
+        // what a double-encoded Extract just served would itself be refused — and separately,
+        // ConflictClassifier.BuildArrayChildren no-ops on a non-Array JsonElement.Kind, silently
+        // dropping the field from the compare grid too.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cont"].RecordColumns.First(c => c.Name == "destructible");
+        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            Destructible = new Destructible(),
+        };
+        container.Destructible!.Stages.Add(new DestructionStage { HealthPercent = 50 });
+
+        var json = col.Extract(container) as string;
+        Assert.NotNull(json);
+        using var doc = JsonDocument.Parse(json!);
+        var stages = doc.RootElement.GetProperty("stages");
+
+        Assert.Equal(JsonValueKind.Array, stages.ValueKind);
+        Assert.Equal(50, stages[0].GetProperty("health_percent").GetInt32());
+    }
+
     // ── #541: P3Float, both dispatch paths, on fixtures with no side-table mirror ──────────────
 
     [Fact]
