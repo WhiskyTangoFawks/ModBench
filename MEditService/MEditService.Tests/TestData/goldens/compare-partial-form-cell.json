@@ -138,6 +138,7 @@
           "ammo_count": null,
           "attach_ref": null,
           "base": null,
+          "bound_half_extents": null,
           "collision_layer": null,
           "comments": null,
           "current_zone_cell": null,
@@ -179,14 +180,25 @@
           "patrol": null,
           "persistent_location": null,
           "portals": null,
+          "position": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
           "power_grid_connections": null,
           "primitive": null,
           "projected_decal": null,
           "radio": null,
           "radius": null,
+          "ragdoll_biped_rotation": null,
           "ragdoll_data": null,
           "reference_group": null,
           "room_portal": null,
+          "rotation": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
           "scale": 1,
           "spawn_container": null,
           "spline": null,

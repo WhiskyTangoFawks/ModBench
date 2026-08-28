@@ -1701,4 +1701,190 @@ public class SchemaReflectorTests
         var columns = schemas["perk"].RecordColumns;
         Assert.Contains(columns, c => c.Name == "effects" && c.ApiType == "array");
     }
+
+    // ── #541: P3Int16/P3Float leaf coverage ────────────────────────────────────
+
+    [Fact]
+    public void GetSchemas_Container_HasObjectBoundsColumn_WithFirstSecondXyzSubFields()
+    {
+        // ObjectBounds (OBND).First/Second are Noggog.P3Int16 — before #541, ClassifyLeaf mapped
+        // neither, so BuildStructColumn's own subFields.Count == 0 dropped the whole column: this
+        // asserts it exists at all, then that xEdit's own display (wbDefinitionsCommon.pas: wbOBND —
+        // six individually-named int16 members, not one opaque value) is what came back: three named
+        // numeric sub-fields per side, not an atomic value.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cont"].RecordColumns.FirstOrDefault(c => c.Name == "object_bounds");
+        Assert.NotNull(col);
+        Assert.Equal("struct", col!.ApiType);
+
+        var first = col.SubFields?.FirstOrDefault(f => f.Name == "first");
+        Assert.NotNull(first);
+        Assert.Equal("struct", first!.Type);
+        Assert.Contains(first.Fields!, f => f.Name == "x" && f.Type == "int");
+        Assert.Contains(first.Fields!, f => f.Name == "y" && f.Type == "int");
+        Assert.Contains(first.Fields!, f => f.Name == "z" && f.Type == "int");
+
+        var second = col.SubFields?.FirstOrDefault(f => f.Name == "second");
+        Assert.NotNull(second);
+        Assert.Equal("struct", second!.Type);
+        Assert.Contains(second.Fields!, f => f.Name == "x" && f.Type == "int");
+        Assert.Contains(second.Fields!, f => f.Name == "y" && f.Type == "int");
+        Assert.Contains(second.Fields!, f => f.Name == "z" && f.Type == "int");
+    }
+
+    [Fact]
+    public void GetSchemas_Container_ObjectBounds_Extract_ReturnsFirstSecondXyzValues()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cont"].RecordColumns.First(c => c.Name == "object_bounds");
+        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4)
+        {
+            ObjectBounds = new ObjectBounds
+            {
+                First = new Noggog.P3Int16(1, 2, 3),
+                Second = new Noggog.P3Int16(4, 5, 6),
+            },
+        };
+
+        var json = col.Extract(container) as string;
+        Assert.NotNull(json);
+        using var doc = JsonDocument.Parse(json!);
+        Assert.Equal(1, doc.RootElement.GetProperty("first").GetProperty("x").GetInt32());
+        Assert.Equal(2, doc.RootElement.GetProperty("first").GetProperty("y").GetInt32());
+        Assert.Equal(3, doc.RootElement.GetProperty("first").GetProperty("z").GetInt32());
+        Assert.Equal(4, doc.RootElement.GetProperty("second").GetProperty("x").GetInt32());
+        Assert.Equal(5, doc.RootElement.GetProperty("second").GetProperty("y").GetInt32());
+        Assert.Equal(6, doc.RootElement.GetProperty("second").GetProperty("z").GetInt32());
+    }
+
+    [Fact]
+    public void GetSchemas_Container_ObjectBounds_Apply_WritesFirstSecondXyz()
+    {
+        // The rival this defeats: a P3Int16 sub-field built like BuildStructSubField's own nested
+        // structs (Apply: null) would make ApplySubFields silently skip "first"/"second" — the whole
+        // object_bounds Apply would still report Applied (nothing in it was rejected, just skipped)
+        // while ObjectBounds itself never changed. Asserting the actual field values, not just the
+        // outcome, is what catches that.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cont"].RecordColumns.First(c => c.Name == "object_bounds");
+        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+
+        var json = """{"first":{"x":1,"y":2,"z":3},"second":{"x":4,"y":5,"z":6}}""";
+        var outcome = col.Apply!(container, JsonDocument.Parse(json).RootElement);
+
+        Assert.Equal(ApplyOutcome.Applied, outcome);
+        Assert.Equal((short)1, container.ObjectBounds.First.X);
+        Assert.Equal((short)2, container.ObjectBounds.First.Y);
+        Assert.Equal((short)3, container.ObjectBounds.First.Z);
+        Assert.Equal((short)4, container.ObjectBounds.Second.X);
+        Assert.Equal((short)5, container.ObjectBounds.Second.Y);
+        Assert.Equal((short)6, container.ObjectBounds.Second.Z);
+    }
+
+    [Fact]
+    public void GetSchemas_Container_ObjectBounds_Apply_NonObjectJson_DoesNothing()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cont"].RecordColumns.First(c => c.Name == "object_bounds");
+        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+        var original = container.ObjectBounds;
+
+        var outcome = col.Apply!(container, JsonDocument.Parse("[1,2,3]").RootElement);
+
+        Assert.Equal(ApplyOutcome.ValueRejected, outcome);
+        Assert.Equal(original.First, container.ObjectBounds.First);
+        Assert.Equal(original.Second, container.ObjectBounds.Second);
+    }
+
+    // ── #541: nested list inside a struct (Destructible.Resistances/Stages) ────
+
+    [Fact]
+    public void GetSchemas_Container_Destructible_HasResistancesAndStagesArraySubFields()
+    {
+        // Before #541, GetSubFieldInfo had no IsListType arm, so both silently dropped from
+        // Destructible's own sub-schema — "data" (Destructible's other, already-mappable member)
+        // stayed present the whole time, which is why this can't just check the column exists.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var destructible = schemas["cont"].RecordColumns.First(c => c.Name == "destructible");
+
+        var resistances = destructible.SubFields?.FirstOrDefault(f => f.Name == "resistances");
+        Assert.NotNull(resistances);
+        Assert.Equal("array", resistances!.Type);
+        Assert.True(resistances.IsArray);
+
+        var stages = destructible.SubFields?.FirstOrDefault(f => f.Name == "stages");
+        Assert.NotNull(stages);
+        Assert.Equal("array", stages!.Type);
+        Assert.True(stages.IsArray);
+        Assert.Contains(stages.ElementType!.Fields!, f => f.Name == "health_percent");
+    }
+
+    [Fact]
+    public void GetSchemas_Container_Destructible_Apply_WritesStagesArray()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["cont"].RecordColumns.First(c => c.Name == "destructible");
+        var container = new Container(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+
+        var json = """{"stages":[{"health_percent":50}]}""";
+        var outcome = col.Apply!(container, JsonDocument.Parse(json).RootElement);
+
+        Assert.Equal(ApplyOutcome.Applied, outcome);
+        Assert.NotNull(container.Destructible);
+        Assert.Single(container.Destructible!.Stages);
+        Assert.Equal(50, container.Destructible.Stages[0].HealthPercent);
+    }
+
+    // ── #541: P3Float, both dispatch paths, on fixtures with no side-table mirror ──────────────
+
+    [Fact]
+    public void GetSchemas_MaterialObject_HasProjectionVectorColumn_WithXyzSubFields()
+    {
+        // MaterialObject.ProjectionVector is a direct top-level P3Float column (GetColumnInfo path)
+        // with no side-table mirror — unlike Placed*.Position (see the RecordEditService companion
+        // refusal), safe to make writable unconditionally.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["mato"].RecordColumns.FirstOrDefault(c => c.Name == "projection_vector");
+        Assert.NotNull(col);
+        Assert.Equal("struct", col!.ApiType);
+        Assert.Contains(col.SubFields!, f => f.Name == "x" && f.Type == "float");
+        Assert.Contains(col.SubFields!, f => f.Name == "y" && f.Type == "float");
+        Assert.Contains(col.SubFields!, f => f.Name == "z" && f.Type == "float");
+    }
+
+    [Fact]
+    public void GetSchemas_MaterialObject_ProjectionVector_Apply_WritesXyz()
+    {
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var col = schemas["mato"].RecordColumns.First(c => c.Name == "projection_vector");
+        var mato = new MaterialObject(FormKey.Factory("000001:Test.esp"), Fallout4Release.Fallout4);
+
+        var outcome = col.Apply!(mato, JsonDocument.Parse("""{"x":1.5,"y":2.5,"z":3.5}""").RootElement);
+
+        Assert.Equal(ApplyOutcome.Applied, outcome);
+        Assert.Equal(1.5f, mato.ProjectionVector.X, precision: 3);
+        Assert.Equal(2.5f, mato.ProjectionVector.Y, precision: 3);
+        Assert.Equal(3.5f, mato.ProjectionVector.Z, precision: 3);
+    }
+
+    [Fact]
+    public void GetSchemas_PlacedObject_TeleportDestination_HasPositionRotationXyzSubFields()
+    {
+        // PlacedObject.TeleportDestination.Position/Rotation — P3Float nested one level inside a
+        // struct (GetSubFieldInfo path), never mirrored anywhere else, so safe unconditionally too.
+        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
+        var teleport = schemas["refr"].RecordColumns.FirstOrDefault(c => c.Name == "teleport_destination");
+        Assert.NotNull(teleport);
+
+        var position = teleport!.SubFields?.FirstOrDefault(f => f.Name == "position");
+        Assert.NotNull(position);
+        Assert.Equal("struct", position!.Type);
+        Assert.Contains(position.Fields!, f => f.Name == "x" && f.Type == "float");
+        Assert.Contains(position.Fields!, f => f.Name == "y" && f.Type == "float");
+        Assert.Contains(position.Fields!, f => f.Name == "z" && f.Type == "float");
+
+        var rotation = teleport.SubFields?.FirstOrDefault(f => f.Name == "rotation");
+        Assert.NotNull(rotation);
+        Assert.Equal("struct", rotation!.Type);
+    }
 }
