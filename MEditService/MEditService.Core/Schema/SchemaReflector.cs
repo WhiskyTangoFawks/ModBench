@@ -961,19 +961,30 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         !IsFormLink(type) &&
         type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    // #541: Noggog.P3Int16/P3Float — plain structs (not Loqui interfaces: no StaticRegistration),
-    // each with three scalar members X/Y/Z (short / float respectively). ObjectBounds.First/Second
-    // are P3Int16; several top-level fields (Placed*.Position, IslandData.Min/Max, ...) and several
-    // struct sub-fields (PlacedObject.TeleportDestination.Position/Rotation, ...) are P3Float.
-    // Hardcoded to exactly these two — the same "verified, not assumed, small closed set" posture
-    // this file already takes for OMOD's seven leaf interfaces — rather than a generic "any struct
-    // shaped like a small vector" rule, which would also match P3Int16's own self-referencing
-    // `Point` property (`P3Int16 Point => this`) and recurse forever. Noggog has sibling types
-    // (P2Int, P2Float, P3UInt8, ...) with the same shape; #541 scopes to exactly what ObjectBounds
-    // needs, #546 tracks the rest.
-    private static readonly HashSet<Type> P3Types = [typeof(P3Int16), typeof(P3Float)];
+    // #541 (P3Int16, P3Float) widened by #546 to the rest of Noggog's small value-vector struct
+    // family — plain structs (not Loqui interfaces: no StaticRegistration), each with two or three
+    // scalar members named X, Y, and optionally Z. Real FO4 examples of each, found by grepping
+    // references/Mutagen/Mutagen.Bethesda.Fallout4 rather than assumed: ObjectBounds.First/Second
+    // (P3Int16), several top-level fields such as Placed*.Position and IslandData.Min/Max plus
+    // several struct sub-fields such as PlacedObject.TeleportDestination.Position/Rotation (P3Float),
+    // Cell.Grid.Point (P2Int), WorldspaceMaxHeight.Min/Max and several others, also reachable as a
+    // list element on LocationCoordinate.Coordinates (P2Int16), WorldDefaultLevelData's two
+    // cell-coord fields (P2UInt8), LandscapeVertexHeightMap.Unknown (P3UInt8),
+    // RegionObject.AngleVariance (P3UInt16), and ImageSpaceAdapter.RadialBlurCenter (P2Float).
+    // Hardcoded to exactly this verified set — the same "verified, not assumed, small closed set"
+    // posture this file already takes for OMOD's seven leaf interfaces — rather than a generic "any
+    // struct shaped like a small vector" rule, which would also match several of these types' own
+    // self-referencing Point property (P3Int16's own `Point => this` among them) and recurse
+    // forever. Noggog's other siblings (P2Double, P3Double, P3Int, the wrapper types ending in
+    // Value or Obj) have zero FO4 usages and stay out on that ground.
+    private static readonly HashSet<Type> VectorStructTypes =
+    [
+        typeof(P3Int16), typeof(P3Float),
+        typeof(P2Int), typeof(P2UInt8), typeof(P2Int16),
+        typeof(P3UInt8), typeof(P3UInt16), typeof(P2Float),
+    ];
 
-    private static bool IsP3Type(Type type) => P3Types.Contains(type);
+    private static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
 
     private static string[] GetFormLinkValidTypes(
         Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
@@ -1331,15 +1342,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
-        // #541: a list of P3Int16/P3Float elements (e.g. IslandData.Vertices: ExtendedList<P3Float>).
-        // Without this arm, elemMeta below falls through to null (P3Int16/P3Float match none of the
-        // scalar cases in the switch), which makes BuildListColumn drop the whole field the same way
-        // ObjectBounds used to drop before #541's other arms — and, worse, BuildListItems's own
-        // scalar-element fallback (`result.Add(item)`) would hand a raw boxed P3Int16 straight to
-        // JsonSerializer, which would recurse forever over its self-referencing `Point` property.
-        if (IsP3Type(core))
+        // #541/#546: a list of vector-struct elements (e.g. IslandData.Vertices, a list of P3Float,
+        // or LocationCoordinate.Coordinates, a list of P2Int16). Without this arm, elemMeta below
+        // falls through to null (none of these types match the scalar cases in the switch), which
+        // makes BuildListColumn drop the whole field the same way ObjectBounds used to drop before
+        // #541's other arms — and, worse, BuildListItems's own scalar-element fallback
+        // (`result.Add(item)`) would hand a raw boxed vector struct straight to JsonSerializer, which
+        // would recurse forever over several of these types' own self-referencing `Point` property.
+        if (IsVectorStructType(core))
         {
-            var sub = BuildP3ComponentSubFields(core, getterTypeToTable, 0, logger);
+            var sub = BuildVectorComponentSubFields(core, getterTypeToTable, 0, logger);
             return sub.Count == 0
                 ? null
                 : new FieldMetadata("", "struct", false, Empty, Empty,
@@ -1611,7 +1623,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
-            null when IsP3Type(core) => BuildP3SubField(prop, core, colName, getterTypeToTable, depth, logger),
+            null when IsVectorStructType(core) => BuildVectorSubField(prop, core, colName, getterTypeToTable, depth, logger),
             null when IsListType(core, out var elementType) =>
                 BuildListSubField(prop, colName, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger),
@@ -1689,25 +1701,29 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             SubFields: sub);
     }
 
-    // ── #541: P3Int16/P3Float (Noggog's small value-vector structs, see IsP3Type) ─────────────
+    // ── #541/#546: Noggog's small value-vector struct family (see IsVectorStructType) ───────────
 
-    private static readonly string[] P3ComponentNames = ["X", "Y", "Z"];
+    private static readonly string[] VectorComponentNames = ["X", "Y", "Z"];
 
-    // The three scalar sub-fields (x/y/z) a P3Int16/P3Float leaf carries, reusing the ordinary
-    // GetSubFieldInfo/ClassifyLeaf machinery for the leaf work (short/float -> PrimitiveMap) rather
-    // than a bespoke leaf builder — X/Y/Z are ordinary public get/set properties on the P3 type
-    // itself, so a PropertyInfo for one of them, handed to GetSubFieldInfo the same way any other
-    // struct member's PropertyInfo is, gets the same Get/Apply a top-level int/float column would.
-    // Deliberately not P3Int16's own Point property (`P3Int16 Point => this`) — walking it here
-    // would recurse forever, which is why this is a fixed 3-name list rather than a generic property
-    // walk over the P3 type.
-    private static List<SubFieldSpec> BuildP3ComponentSubFields(
-        Type p3Type, IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
+    // The scalar sub-fields (x/y, or x/y/z for a P3-shaped type) a vector-struct leaf carries,
+    // reusing the ordinary GetSubFieldInfo/ClassifyLeaf machinery for the leaf work (byte/short/
+    // ushort/int/float -> PrimitiveMap) rather than a bespoke leaf builder — X/Y/Z are ordinary
+    // public get/set properties on the vector type itself, so a PropertyInfo for one of them, handed
+    // to GetSubFieldInfo the same way any other struct member's PropertyInfo is, gets the same
+    // Get/Apply a top-level scalar column would. Deliberately not any vector type's own
+    // self-referencing Point property (`P3Int16 Point => this`, and the same shape on P2UInt8/
+    // P3UInt8/P3UInt16) — walking it here would recurse forever, which is why this is a fixed
+    // name list rather than a generic property walk over the vector type. A P2-shaped type has no
+    // "Z" — GetProperty returns null for it, silently skipped by the `continue` below, which is what
+    // makes this list produce exactly 2 sub-fields for a P2 type and 3 for a P3 type with no
+    // count-specific branch anywhere in this file.
+    private static List<SubFieldSpec> BuildVectorComponentSubFields(
+        Type vectorType, IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
     {
         var result = new List<SubFieldSpec>();
-        foreach (var name in P3ComponentNames)
+        foreach (var name in VectorComponentNames)
         {
-            var componentProp = p3Type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            var componentProp = vectorType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
             if (componentProp == null) continue;
             if (GetSubFieldInfo(componentProp, getterTypeToTable, depth + 1, logger) is { } spec)
                 result.Add(spec);
@@ -1715,18 +1731,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return result;
     }
 
-    // A P3Int16/P3Float field nested inside a struct (e.g. ObjectBounds.First/Second) — xEdit shows
-    // OBND's six components individually (wbDefinitionsCommon.pas: wbOBND — X1/Y1/Z1/X2/Y2/Z2, not
-    // one opaque value), so this mirrors BuildStructSubField's shape rather than treating the P3
-    // value as an atomic leaf. Unlike BuildStructSubField (whose nested Loqui structs are read-only,
-    // Apply: null), this one is a value type — Get/SetValue on the *enclosing* object is the only way
-    // to write it, so Apply builds (or copies) the current boxed value, applies each component onto
-    // that same box, then writes the box back onto the enclosing property.
-    private static SubFieldSpec? BuildP3SubField(
+    // A vector-struct field nested inside another struct (e.g. ObjectBounds.First/Second, a
+    // P3Int16; Cell.Grid.Point, a P2Int) — xEdit shows OBND's six components individually
+    // (wbDefinitionsCommon.pas: wbOBND — X1/Y1/Z1/X2/Y2/Z2, not one opaque value), so this mirrors
+    // BuildStructSubField's shape rather than treating the vector value as an atomic leaf. Unlike
+    // BuildStructSubField (whose nested Loqui structs are read-only, Apply: null), this one is a
+    // value type — Get/SetValue on the *enclosing* object is the only way to write it, so Apply
+    // builds (or copies) the current boxed value, applies each component onto that same box, then
+    // writes the box back onto the enclosing property.
+    private static SubFieldSpec? BuildVectorSubField(
         PropertyInfo prop, Type core, string colName,
         IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
     {
-        var components = BuildP3ComponentSubFields(core, getterTypeToTable, depth, logger);
+        var components = BuildVectorComponentSubFields(core, getterTypeToTable, depth, logger);
         if (components.Count == 0) return null;
         var g = SubGetter(prop);
         var pName = prop.Name;
@@ -1748,16 +1765,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // A list nested one level inside a struct (e.g. Destructible.Resistances/Stages) — GetColumnInfo
     // has handled this shape at the top level (BuildListColumn) since the file's beginning; this is
     // its GetSubFieldInfo-side twin, absent until #541 (issue's gap #2). Reuses BuildListColumn's own
-    // element-type dispatch (form-link / Loqui-struct / P3) and ApplyListJson for writing, and
+    // element-type dispatch (form-link / Loqui-struct / vector) and ApplyListJson for writing, and
     // BuildListItems (not SerializeListItems — see that method's own doc comment for why a sub-field's
     // Extract must stay unserialized) for extraction, so a struct's own list member behaves
     // identically to a top-level array column of the same shape.
     private static List<SubFieldSpec>? BuildListElementSubFields(
-        Type elementType, bool isLoqui, bool isP3,
+        Type elementType, bool isLoqui, bool isVector,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
         if (isLoqui) return BuildSubSchema(elementType, getterTypeToTable, logger);
-        if (isP3) return BuildP3ComponentSubFields(elementType, getterTypeToTable, 0, logger);
+        if (isVector) return BuildVectorComponentSubFields(elementType, getterTypeToTable, 0, logger);
         return null;
     }
 
@@ -1783,21 +1800,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var isFl = IsFormLink(elementType);
         var isLoqui = !isFl && IsLoquiInterface(elementType);
-        var isP3 = !isFl && !isLoqui && IsP3Type(elementType);
+        var isVector = !isFl && !isLoqui && IsVectorStructType(elementType);
 
-        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isP3, getterTypeToTable, logger);
+        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, getterTypeToTable, logger);
 
         // Mirrors BuildElementMeta's own branches, but building a SubFieldSpec directly rather than
         // a FieldMetadata — this method's caller (GetSubFieldInfo) needs the reflection-time shape
         // (ElementSpec.ToFieldMetadata() below is what turns it into wire metadata), and elemSubFields
-        // above has already done the Loqui/P3 element work, so there is nothing to gain from routing
+        // above has already done the Loqui/vector element work, so there is nothing to gain from routing
         // through BuildElementMeta's own FieldMetadata output and converting it back.
         var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, getterTypeToTable);
         if (elementSpec == null) return null;
 
         var g = SubGetter(prop);
         var pName = prop.Name;
-        Func<object, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isP3
+        Func<object, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isVector
             ? (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)
             : null;
 
@@ -1853,13 +1870,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     // The raw object graph for a list's elements — FormLink elements become their FormKey string,
-    // struct/P3 elements become the same Dictionary<string, object?> ExtractSubObject builds for any
+    // struct/vector elements become the same Dictionary<string, object?> ExtractSubObject builds for any
     // other struct, everything else passes through as-is. Deliberately not itself serialized: a
     // top-level array *column* (BuildListColumn) is the one caller that needs a VARCHAR string, and
     // does its own JsonSerializer.Serialize on top of this (SerializeListItems, below). A struct
     // *sub-field* (BuildListSubField) is not that caller — its own Extract composes under the
     // enclosing struct's single JsonSerializer.Serialize (ExtractSubObject's own dictionary), the
-    // same way a struct or P3 sub-field's Extract already returns a raw Dictionary rather than a
+    // same way a struct or vector sub-field's Extract already returns a raw Dictionary rather than a
     // pre-serialized string. #541 review finding: BuildListSubField used to call SerializeListItems
     // directly and return its string, which the enclosing struct's own serialize pass then re-encoded as an
     // escaped JSON *string* value instead of a nested array — a round-trip break (ApplyListSubFieldJson
@@ -1899,7 +1916,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
-            null when IsP3Type(core) => BuildP3Column(prop, core, getterTypeToTable, logger),
+            null when IsVectorStructType(core) => BuildVectorColumn(prop, core, getterTypeToTable, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
             _ => null,
@@ -1934,11 +1951,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var isFl = IsFormLink(elementType);
         var isLoqui = !isFl && IsLoquiInterface(elementType);
-        // #541: a list of P3Int16/P3Float elements (IslandData.Vertices) — same three-cases-share-
-        // one-shape pattern as GetColumnInfo/GetSubFieldInfo/BuildElementMeta above.
-        var isP3 = !isFl && !isLoqui && IsP3Type(elementType);
+        // #541/#546: a list of vector-struct elements (IslandData.Vertices, a list of P3Float, or
+        // LocationCoordinate.Coordinates, a list of P2Int16) — same three-cases-share-one-shape
+        // pattern as GetColumnInfo/GetSubFieldInfo/BuildElementMeta above.
+        var isVector = !isFl && !isLoqui && IsVectorStructType(elementType);
 
-        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isP3, getterTypeToTable, logger);
+        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isVector, getterTypeToTable, logger);
 
         var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
         if (elemMeta == null) return null;
@@ -1955,7 +1973,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isP3
+        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isVector
             ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
             : null;
 
@@ -2168,21 +2186,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             SubFieldMetas: subFieldMetas);
     }
 
-    // A P3Int16/P3Float field at the record's own top level (e.g. IslandData.Min/Max,
-    // Placed*.Position/Rotation, MaterialObject.ProjectionVector) — BuildStructColumn's twin for
-    // Noggog's small value-vector structs (see IsP3Type), unlike which there is no separate
-    // Getter/Setter split to resolve: `core` here already is the concrete P3Int16/P3Float struct on
-    // both sides, so this can always construct and write one, unconditionally.
+    // A vector-struct field at the record's own top level (e.g. IslandData.Min/Max,
+    // Placed*.Position/Rotation, MaterialObject.ProjectionVector, ImageSpaceAdapter.RadialBlurCenter)
+    // — BuildStructColumn's twin for Noggog's small value-vector structs (see IsVectorStructType),
+    // unlike which there is no separate Getter/Setter split to resolve: `core` here already is the
+    // concrete vector struct on both sides, so this can always construct and write one,
+    // unconditionally.
     //
     // #541: making Position reachable here for the *Placed family specifically re-opens a hazard
     // RecordEditService.RefuseIfContainmentField's own doc comment names explicitly — placement's
     // Position is mirrored into the `placement` side table (PlacementWalker) with no write-time
     // re-derivation. That refusal is extended in the same change that lands this method; see its own
     // doc comment for the guard.
-    private static ColumnInfoResult? BuildP3Column(
+    private static ColumnInfoResult? BuildVectorColumn(
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
-        var components = BuildP3ComponentSubFields(core, getterTypeToTable, 0, logger);
+        var components = BuildVectorComponentSubFields(core, getterTypeToTable, 0, logger);
         if (components.Count == 0) return null;
 
         var subFieldMetas = components.ConvertAll(s => s.ToFieldMetadata());
