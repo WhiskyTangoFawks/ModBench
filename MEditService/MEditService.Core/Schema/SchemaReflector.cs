@@ -11,6 +11,7 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Strings;
+using Noggog;
 
 namespace MEditService.Core.Schema;
 
@@ -901,8 +902,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         bool IsBitmask = false,
         string[]? EnumBitValues = null)
     {
+        // #541: used to hardcode false — dead until BuildListSubField gave this record its first
+        // list-shaped instance (a struct/array-element sub-field, e.g. Destructible.Resistances/
+        // Stages). Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
+        // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
         public FieldMetadata ToFieldMetadata() =>
-            new(Name, ApiType, false, ValidFormKeyTypes, EnumValues,
+            new(Name, ApiType, ApiType == "array", ValidFormKeyTypes, EnumValues,
                 ElementSpec?.ToFieldMetadata(),
                 SubFields?.Select(s => s.ToFieldMetadata()).ToList(),
                 AllowsNull: AllowsNull,
@@ -955,6 +960,20 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         type.IsInterface &&
         !IsFormLink(type) &&
         type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
+
+    // #541: Noggog.P3Int16/P3Float — plain structs (not Loqui interfaces: no StaticRegistration),
+    // each with three scalar members X/Y/Z (short / float respectively). ObjectBounds.First/Second
+    // are P3Int16; several top-level fields (Placed*.Position, IslandData.Min/Max, ...) and several
+    // struct sub-fields (PlacedObject.TeleportDestination.Position/Rotation, ...) are P3Float.
+    // Hardcoded to exactly these two — the same "verified, not assumed, small closed set" posture
+    // this file already takes for OMOD's seven leaf interfaces — rather than a generic "any struct
+    // shaped like a small vector" rule, which would also match P3Int16's own self-referencing
+    // `Point` property (`P3Int16 Point => this`) and recurse forever. Noggog has sibling types
+    // (P2Int, P2Float, P3UInt8, ...) with the same shape; #541 scopes to exactly what ObjectBounds
+    // needs, #546 tracks the rest.
+    private static readonly HashSet<Type> P3Types = [typeof(P3Int16), typeof(P3Float)];
+
+    private static bool IsP3Type(Type type) => P3Types.Contains(type);
 
     private static string[] GetFormLinkValidTypes(
         Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
@@ -1312,6 +1331,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
+        // #541: a list of P3Int16/P3Float elements (e.g. IslandData.Vertices: ExtendedList<P3Float>).
+        // Without this arm, elemMeta below falls through to null (P3Int16/P3Float match none of the
+        // scalar cases in the switch), which makes BuildListColumn drop the whole field the same way
+        // ObjectBounds used to drop before #541's other arms — and, worse, BuildListItems's own
+        // scalar-element fallback (`result.Add(item)`) would hand a raw boxed P3Int16 straight to
+        // JsonSerializer, which would recurse forever over its self-referencing `Point` property.
+        if (IsP3Type(core))
+        {
+            var sub = BuildP3ComponentSubFields(core, getterTypeToTable, 0, logger);
+            return sub.Count == 0
+                ? null
+                : new FieldMetadata("", "struct", false, Empty, Empty,
+                Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
+        }
+
         return core switch
         {
             _ when core == typeof(float) => new("", "float", false, Empty, Empty),
@@ -1577,6 +1611,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
+            null when IsP3Type(core) => BuildP3SubField(prop, core, colName, getterTypeToTable, depth, logger),
+            null when IsListType(core, out var elementType) =>
+                BuildListSubField(prop, colName, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructSubField(prop, core, colName, getterTypeToTable, depth, logger),
             _ => null,
         };
@@ -1652,6 +1689,159 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             SubFields: sub);
     }
 
+    // ── #541: P3Int16/P3Float (Noggog's small value-vector structs, see IsP3Type) ─────────────
+
+    private static readonly string[] P3ComponentNames = ["X", "Y", "Z"];
+
+    // The three scalar sub-fields (x/y/z) a P3Int16/P3Float leaf carries, reusing the ordinary
+    // GetSubFieldInfo/ClassifyLeaf machinery for the leaf work (short/float -> PrimitiveMap) rather
+    // than a bespoke leaf builder — X/Y/Z are ordinary public get/set properties on the P3 type
+    // itself, so a PropertyInfo for one of them, handed to GetSubFieldInfo the same way any other
+    // struct member's PropertyInfo is, gets the same Get/Apply a top-level int/float column would.
+    // Deliberately not P3Int16's own Point property (`P3Int16 Point => this`) — walking it here
+    // would recurse forever, which is why this is a fixed 3-name list rather than a generic property
+    // walk over the P3 type.
+    private static List<SubFieldSpec> BuildP3ComponentSubFields(
+        Type p3Type, IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
+    {
+        var result = new List<SubFieldSpec>();
+        foreach (var name in P3ComponentNames)
+        {
+            var componentProp = p3Type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+            if (componentProp == null) continue;
+            if (GetSubFieldInfo(componentProp, getterTypeToTable, depth + 1, logger) is { } spec)
+                result.Add(spec);
+        }
+        return result;
+    }
+
+    // A P3Int16/P3Float field nested inside a struct (e.g. ObjectBounds.First/Second) — xEdit shows
+    // OBND's six components individually (wbDefinitionsCommon.pas: wbOBND — X1/Y1/Z1/X2/Y2/Z2, not
+    // one opaque value), so this mirrors BuildStructSubField's shape rather than treating the P3
+    // value as an atomic leaf. Unlike BuildStructSubField (whose nested Loqui structs are read-only,
+    // Apply: null), this one is a value type — Get/SetValue on the *enclosing* object is the only way
+    // to write it, so Apply builds (or copies) the current boxed value, applies each component onto
+    // that same box, then writes the box back onto the enclosing property.
+    private static SubFieldSpec? BuildP3SubField(
+        PropertyInfo prop, Type core, string colName,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
+    {
+        var components = BuildP3ComponentSubFields(core, getterTypeToTable, depth, logger);
+        if (components.Count == 0) return null;
+        var g = SubGetter(prop);
+        var pName = prop.Name;
+        return new(colName, "struct", Empty, Empty,
+            obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
+            Apply: (obj, val) =>
+            {
+                if (val.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
+                var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+                if (rp == null) return ApplyOutcome.PropertyNotFound;
+                var current = rp.GetValue(obj) ?? Activator.CreateInstance(core)!;
+                if (!ApplySubFields(current, val, components)) return ApplyOutcome.ValueRejected;
+                if (rp.CanWrite) rp.SetValue(obj, current);
+                return ApplyOutcome.Applied;
+            },
+            SubFields: components);
+    }
+
+    // A list nested one level inside a struct (e.g. Destructible.Resistances/Stages) — GetColumnInfo
+    // has handled this shape at the top level (BuildListColumn) since the file's beginning; this is
+    // its GetSubFieldInfo-side twin, absent until #541 (issue's gap #2). Reuses BuildListColumn's own
+    // element-type dispatch (form-link / Loqui-struct / P3) and ApplyListJson for writing, and
+    // BuildListItems (not SerializeListItems — see that method's own doc comment for why a sub-field's
+    // Extract must stay unserialized) for extraction, so a struct's own list member behaves
+    // identically to a top-level array column of the same shape.
+    private static List<SubFieldSpec>? BuildListElementSubFields(
+        Type elementType, bool isLoqui, bool isP3,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
+        if (isLoqui) return BuildSubSchema(elementType, getterTypeToTable, logger);
+        if (isP3) return BuildP3ComponentSubFields(elementType, getterTypeToTable, 0, logger);
+        return null;
+    }
+
+    private static SubFieldSpec? BuildListElementSpec(
+        Type elementType, bool isFl, IReadOnlyList<SubFieldSpec>? elemSubFields,
+        IReadOnlyDictionary<Type, string> getterTypeToTable)
+    {
+        if (elemSubFields != null)
+            return new("", "struct", Empty, Empty, _ => null, Apply: null, SubFields: elemSubFields);
+        if (isFl)
+        {
+            return new("", "formKey", GetFormLinkValidTypes(elementType, getterTypeToTable), Empty,
+                _ => null, Apply: null, AllowsNull: true);
+        }
+        return TryMapPrimitive(elementType, out _, out var elemApiType, out _)
+            ? new("", elemApiType, Empty, Empty, _ => null, Apply: null)
+            : null;
+    }
+
+    private static SubFieldSpec? BuildListSubField(
+        PropertyInfo prop, string colName, Type elementType,
+        IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
+        var isFl = IsFormLink(elementType);
+        var isLoqui = !isFl && IsLoquiInterface(elementType);
+        var isP3 = !isFl && !isLoqui && IsP3Type(elementType);
+
+        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isP3, getterTypeToTable, logger);
+
+        // Mirrors BuildElementMeta's own branches, but building a SubFieldSpec directly rather than
+        // a FieldMetadata — this method's caller (GetSubFieldInfo) needs the reflection-time shape
+        // (ElementSpec.ToFieldMetadata() below is what turns it into wire metadata), and elemSubFields
+        // above has already done the Loqui/P3 element work, so there is nothing to gain from routing
+        // through BuildElementMeta's own FieldMetadata output and converting it back.
+        var elementSpec = BuildListElementSpec(elementType, isFl, elemSubFields, getterTypeToTable);
+        if (elementSpec == null) return null;
+
+        var g = SubGetter(prop);
+        var pName = prop.Name;
+        Func<object, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isP3
+            ? (obj, json) => ApplyListSubFieldJson(obj, json, pName, isFl, elementType, elemSubFields)
+            : null;
+
+        return new(colName, "array", Empty, Empty,
+            obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
+            apply,
+            ElementSpec: elementSpec);
+    }
+
+    // ApplyListJson's own sub-field twin: writes a struct/array-nested list's whole value, same
+    // atomic-write and refusal rules (CONTEXT.md's Complex field), operating on `object` (the
+    // enclosing struct instance) rather than IMajorRecord.
+    private static ApplyOutcome ApplyListSubFieldJson(
+        object obj, JsonElement json, string pName,
+        bool isFl, Type elemCore, IReadOnlyList<SubFieldSpec>? subFields)
+    {
+        if (json.ValueKind != JsonValueKind.Array) return ApplyOutcome.ValueRejected;
+        var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+        if (rp == null) return ApplyOutcome.PropertyNotFound;
+
+        var listType = rp.PropertyType;
+        var newList = Activator.CreateInstance(listType)!;
+        var addMethod = listType.GetMethod("Add")!;
+        var elemConcreteType = listType.GetGenericArguments()[0];
+
+        foreach (var elem in json.EnumerateArray())
+        {
+            var concreteType = elemConcreteType;
+            if (!isFl && concreteType.IsAbstract)
+            {
+                if (ResolveAbstractListElementType(concreteType, elem) is not { } resolved)
+                    return ApplyOutcome.ListElementTypeUnresolved;
+                concreteType = resolved;
+            }
+
+            var item = BuildListElement(elem, isFl, elemCore, concreteType, subFields, out var rejected);
+            if (rejected) return ApplyOutcome.ValueRejected;
+            if (item != null) addMethod.Invoke(newList, [item]);
+        }
+
+        if (rp.CanWrite) rp.SetValue(obj, newList);
+        return ApplyOutcome.Applied;
+    }
+
     // ── Serialization helpers ─────────────────────────────────────────────────
 
     private static Dictionary<string, object?> ExtractSubObject(
@@ -1662,7 +1852,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return dict;
     }
 
-    private static string? SerializeListItems(
+    // The raw object graph for a list's elements — FormLink elements become their FormKey string,
+    // struct/P3 elements become the same Dictionary<string, object?> ExtractSubObject builds for any
+    // other struct, everything else passes through as-is. Deliberately not itself serialized: a
+    // top-level array *column* (BuildListColumn) is the one caller that needs a VARCHAR string, and
+    // does its own JsonSerializer.Serialize on top of this (SerializeListItems, below). A struct
+    // *sub-field* (BuildListSubField) is not that caller — its own Extract composes under the
+    // enclosing struct's single JsonSerializer.Serialize (ExtractSubObject's own dictionary), the
+    // same way a struct or P3 sub-field's Extract already returns a raw Dictionary rather than a
+    // pre-serialized string. #541 review finding: BuildListSubField used to call SerializeListItems
+    // directly and return its string, which the enclosing struct's own serialize pass then re-encoded as an
+    // escaped JSON *string* value instead of a nested array — a round-trip break (ApplyListSubFieldJson
+    // requires JsonValueKind.Array, so submitting back exactly what Extract just served was itself
+    // refused) and a silent compare-grid diff failure (ConflictClassifier.BuildArrayChildren no-ops
+    // on a non-Array JsonElement.Kind) for every struct-nested list, including #541's own two named
+    // fields (Destructible.Resistances/Stages) and the real-data case (ActivateParents.Parents).
+    private static List<object?> BuildListItems(
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
         var isFl = IsFormLink(elementType);
@@ -1673,8 +1878,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             else if (subFields != null) result.Add(ExtractSubObject(item, subFields));
             else result.Add(item);
         }
-        return JsonSerializer.Serialize(result);
+        return result;
     }
+
+    // BuildListColumn's own caller shape: a top-level array column's Extract returns a VARCHAR
+    // string (the DuckDB column type), unlike a struct sub-field's Extract (see BuildListItems above).
+    private static string? SerializeListItems(
+        IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields) =>
+        JsonSerializer.Serialize(BuildListItems(items, elementType, subFields));
 
     // ── GetColumnInfo ─────────────────────────────────────────────────────────
 
@@ -1688,6 +1899,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
+            null when IsP3Type(core) => BuildP3Column(prop, core, getterTypeToTable, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
             _ => null,
@@ -1722,9 +1934,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var isFl = IsFormLink(elementType);
         var isLoqui = !isFl && IsLoquiInterface(elementType);
+        // #541: a list of P3Int16/P3Float elements (IslandData.Vertices) — same three-cases-share-
+        // one-shape pattern as GetColumnInfo/GetSubFieldInfo/BuildElementMeta above.
+        var isP3 = !isFl && !isLoqui && IsP3Type(elementType);
 
-        IReadOnlyList<SubFieldSpec>? elemSubFields = isLoqui
-            ? BuildSubSchema(elementType, getterTypeToTable, logger) : null;
+        var elemSubFields = BuildListElementSubFields(elementType, isLoqui, isP3, getterTypeToTable, logger);
 
         var elemMeta = BuildElementMeta(elementType, getterTypeToTable, logger);
         if (elemMeta == null) return null;
@@ -1741,7 +1955,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var pName = prop.Name;
-        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui
+        Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = isFl || isLoqui || isP3
             ? (record, json) => ApplyListJson(record, json, pName, isFl, elementType, elemSubFields)
             : null;
 
@@ -1951,6 +2165,46 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         return new("VARCHAR", Extractor, "struct", Empty, Empty, apply,
+            SubFieldMetas: subFieldMetas);
+    }
+
+    // A P3Int16/P3Float field at the record's own top level (e.g. IslandData.Min/Max,
+    // Placed*.Position/Rotation, MaterialObject.ProjectionVector) — BuildStructColumn's twin for
+    // Noggog's small value-vector structs (see IsP3Type), unlike which there is no separate
+    // Getter/Setter split to resolve: `core` here already is the concrete P3Int16/P3Float struct on
+    // both sides, so this can always construct and write one, unconditionally.
+    //
+    // #541: making Position reachable here for the *Placed family specifically re-opens a hazard
+    // RecordEditService.RefuseIfContainmentField's own doc comment names explicitly — placement's
+    // Position is mirrored into the `placement` side table (PlacementWalker) with no write-time
+    // re-derivation. That refusal is extended in the same change that lands this method; see its own
+    // doc comment for the guard.
+    private static ColumnInfoResult? BuildP3Column(
+        PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
+    {
+        var components = BuildP3ComponentSubFields(core, getterTypeToTable, 0, logger);
+        if (components.Count == 0) return null;
+
+        var subFieldMetas = components.ConvertAll(s => s.ToFieldMetadata());
+
+        object? Extractor(IMajorRecordGetter r)
+        {
+            var obj = TryGet(r, prop);
+            return obj == null ? null
+                : JsonSerializer.Serialize(ExtractSubObject(obj, components));
+        }
+
+        var pName = prop.Name;
+        return new("VARCHAR", Extractor, "struct", Empty, Empty,
+            (record, json) =>
+            {
+                if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
+                var rp = record.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
+                var obj = rp.GetValue(record) ?? Activator.CreateInstance(core)!;
+                if (!ApplySubFields(obj, json, components)) return ApplyOutcome.ValueRejected;
+                if (rp.CanWrite) rp.SetValue(record, obj);
+                return ApplyOutcome.Applied;
+            },
             SubFieldMetas: subFieldMetas);
     }
 

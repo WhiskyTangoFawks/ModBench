@@ -114,21 +114,25 @@ public sealed class EmbeddedChildEditTests : IDisposable
     // ---- The index's spatial side tables stay correct, because nothing can move them ----
 
     [Fact]
-    public void APlacedRefsPosition_IsNotAWritableField_SoItsPlacementRowCannotGoStale()
+    public void APlacedRefsPosition_IsRefused_SoItsPlacementRowCannotGoStale()
     {
+        // #541: before this, Position (a P3Float) was one of the two properties SchemaReflector's
+        // GetColumnInfo mapped to no column at all, so `refr` had no `position` column and the write
+        // refused as FieldNotFound — dropped, not guarded. #541 gave the reflector a general
+        // P3Int16/P3Float mapping (needed for ObjectBounds and several other fields with no side-table
+        // mirror), which made `position` an ordinary writable column on every IPlacedGetter type for
+        // the first time. RefuseIfContainmentField now refuses it by name, the same way Grid is
+        // refused for cell_location above: Position is mirrored into `placement` (PlacementWalker),
+        // and nothing on this write path re-derives that row.
         var index = _fixture.Sessions.Index!;
         Assert.Equal(11f, index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
 
         var result = EditService().EditField(
             _fixture.Plugin, _fixture.TemporaryRef.ToString(), "position", Json("""{"X": 99.0, "Y": 88.0, "Z": 77.0}"""));
 
-        // `placement`'s only non-containment columns come from Position, and Position is a P3Float,
-        // which SchemaReflector.GetColumnInfo does not map — the property is dropped, so `refr` has no
-        // `position` column and the write refuses. That is what makes the table unreachable from this
-        // gesture, and it is why RecordEditService has no placement write-back: there would be nothing
-        // able to make one go red.
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
+        Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
+        Assert.Contains("placement", result.Message, StringComparison.Ordinal);
         Assert.Equal(11f, index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
         // AC3 at the level the AC names: no working-tree dirt at all from a refused edit.
         Assert.Empty(_fixture.GitStatus());

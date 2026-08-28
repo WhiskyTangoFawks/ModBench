@@ -232,12 +232,16 @@ public sealed class RecordEditService(
     /// rather than naming a ticket that has since landed without changing the answer.</para>
     ///
     /// <para><b>This is what closes the side-table question, and it closes it completely rather than
-    /// per-table.</b> <c>placement</c>'s only non-containment columns come from <c>Position</c>, a
-    /// <c>P3Float</c> the schema reflector does not map at all — verified, not assumed: it never
-    /// becomes a column, so <see cref="RecordFieldWriter"/> answers <c>FieldNotFound</c> for it and no
-    /// edit can move a placed reference. <c>cell_location</c>'s only non-containment columns are the
-    /// grid, refused here. <c>container_child</c> is containment and slot order throughout, and the
-    /// slots that could change it are refused here too. So after this guard, every side table is
+    /// per-table.</b> <c>cell_location</c>'s only non-containment columns are the grid, refused here.
+    /// <c>container_child</c> is containment and slot order throughout, and the slots that could
+    /// change it are refused here too. <c>placement</c>'s only non-containment column is
+    /// <c>Position</c> (a <c>P3Float</c>) — also refused here (#541), since #541 gave the schema
+    /// reflector a general <c>P3Int16</c>/<c>P3Float</c> mapping (needed for <c>ObjectBounds</c> and
+    /// several other fields with no side-table mirror), which made <c>Position</c> an ordinary
+    /// writable column on every <c>IPlacedGetter</c> type for the first time — this file used to rely
+    /// on the reflector never mapping <c>P3Float</c> at all, verified rather than assumed at the time,
+    /// but that verification is what #541 changed; the guard below is what keeps the conclusion true
+    /// now that the premise no longer holds on its own. So after this guard, every side table is
     /// unreachable from <see cref="EditField"/> by construction — which is a stronger statement than
     /// re-deriving them would have been, and it is the reason this method exists instead of a
     /// <c>SetPlacement</c>-style write-back.</para>
@@ -269,6 +273,24 @@ public sealed class RecordEditService(
                 "'grid' is an exterior cell's own place in the world — its source directory is named " +
                 "after these coordinates, so moving it restructures the tree rather than rewriting one " +
                 "file. That is a structural gesture, not a field edit.");
+        }
+
+        // #541: Position is mirrored into the `placement` side table (PlacementWalker), with no
+        // write-time re-derivation — the same hazard Grid guards against for cell_location. Resolved
+        // through the game's own IPlacedGetter marker interface (same namespace/assembly as `concrete`
+        // — the per-game-generic lookup this file already uses via RecordTypeDispatch, rather than a
+        // hardcoded FO4 type list), not a hardcoded record-type name, so this holds for whichever
+        // concrete types a game module gives Position to (APlacedTrap/PlacedNpc/PlacedObject in
+        // Fallout4 today).
+        if (column.PropertyName.Equals("Position", StringComparison.Ordinal)
+            && concrete.Assembly.GetType($"{concrete.Namespace}.IPlacedGetter") is { } placedGetterType
+            && placedGetterType.IsAssignableFrom(concrete))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FieldReadOnly,
+                "'position' is mirrored into the placement index (which cell a reference is in, and " +
+                "where) — nothing on this path re-derives that side table, so a placed reference's " +
+                "position is not writable through a field edit.");
         }
 
         return null;
