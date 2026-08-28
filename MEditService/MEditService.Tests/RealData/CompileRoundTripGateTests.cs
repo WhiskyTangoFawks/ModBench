@@ -244,14 +244,17 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         Assert.Contains("\"NextFormID\": 2049", rootText, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Compile_OfTheRealFixture_Succeeds()
-    {
-        var result = fixture.CompileService().Compile(fixture.Plugin, new CompileSource.WorkingTree());
-
-        Assert.True(result.Succeeded, result.RefusalReason);
-    }
-
+    /// <summary>
+    /// #536: subsumes what used to be a separate <c>Compile_OfTheRealFixture_Succeeds</c> fact —
+    /// that fact asserted only <c>result.Succeeded</c>, a strict subset of what this test already
+    /// asserts (the same <c>Assert.True(result.Succeeded, result.RefusalReason)</c> below, before the
+    /// stronger content check), so a bare-compile failure surfaces here with the same
+    /// <c>RefusalReason</c> message the deleted fact would have shown. Deleting it outright rather
+    /// than sharing one <c>Compile()</c> call across two facts avoids adding fixture-level shared
+    /// mutable state (a memoized result, ordering-dependent) for a fact with no independent
+    /// diagnostic value — see #536's own investigation: <c>Compile()</c> costs ~40s on this fixture,
+    /// so the deleted fact was a full extra ~40s call for zero additional coverage.
+    /// </summary>
     [Fact]
     public void Compile_OfTheRealFixture_PreservesEveryRecordsSourceContent()
     {
