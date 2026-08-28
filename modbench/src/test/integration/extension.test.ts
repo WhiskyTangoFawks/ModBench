@@ -363,11 +363,8 @@ describe('modbench command registration', () => {
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.clearFilter',
     'modbench.pluginListTree.revealInExplorer',
-    // #279: the per-plugin re-read a drifted row offers. Gated to `viewItem == pluginDrifted` in
-    // package.json and hidden from the palette — it needs the clicked row.
-    'modbench.pluginListTree.rereadPlugin',
-    // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin`/`pluginDrifted` in
-    // package.json and hidden from the palette — it needs the clicked row's plugin name.
+    // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin` in package.json and hidden
+    // from the palette — it needs the clicked row's plugin name.
     'modbench.pluginListTree.track',
     // #416: Save & Compile — reachable from the record editor's editor/title icon, the tree row's
     // context menu, and the palette (falls back to a QuickPick when invoked with no plugin in hand).

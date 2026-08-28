@@ -549,12 +549,19 @@ public sealed class SessionManager(
             }
 
             // Rebind first — it opens the new file, which is the failure-prone half, and it leaves
-            // the session untouched if that open throws.
+            // the session untouched if that open throws. RebindPlugin still opens the binary itself
+            // (metadata — masters, record count — comes from the overlay for every plugin, tracked
+            // or not; IndexOnePlugin's own doc comment states this is bounded to *content*).
             var metadata = _session!.RebindPlugin(previous, newPath, newOrigin);
 
             repository.Unindex(new PluginKey(previous.Name, previous.Origin));
             var mod = _session.GetMod(metadata.Name, metadata.Origin)!;
-            repository.Index(mod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
+            // #356: routed through the same choke point an ordinary session load uses, rather than
+            // repository.Index(mod, ...) directly — a re-read onto a tracked origin must ingest that
+            // origin's source tree, exactly as IndexOnePlugin already decides for every other plugin
+            // this session opens. Two ingestion paths for one "which copy backs this row" question
+            // is exactly the drift this method exists to close, not something to reintroduce here.
+            IndexOnePlugin(_session, repository, metadata, new PluginKey(metadata.Name, metadata.Origin), mod, CancellationToken.None);
             // AC7: the whole-set sweep, so winner status and conflict badges describe the new file.
             repository.UpdateWinners();
             // #422: the reread changed record content, which can flip filter membership either way.
