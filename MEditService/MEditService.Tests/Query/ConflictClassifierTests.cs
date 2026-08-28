@@ -32,6 +32,14 @@ public class ConflictClassifierTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], Origin: origin);
 
+    // #491: a Partial Form override — its own fields are excluded from conflict detection
+    // regardless of their content (not merely when null, unlike the generic absent-field rule
+    // above).
+    private static RecordDetail MakePartialFormOverride(string plugin, int loadOrder, bool isWinner,
+        params (string name, object? value)[] fields) =>
+        new("000001:Test.esp", plugin, loadOrder, isWinner, null,
+            [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], "Data", IsPartialForm: true);
+
     // --- OnlyOne ---
 
     [Fact]
@@ -294,6 +302,51 @@ public class ConflictClassifierTests
         var winner = MakeOverride("C.esp", 2, true, ("name", "Alice"));
         var result = Classify([master, partial, winner]);
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
+    }
+
+    // --- Per-field WinnerColumn/WinnerValue fallthrough (#491 review, condition (a)) ---
+    // Not Partial Form specific — a dedicated pin for the generalized null-field fallthrough this
+    // ticket's fix also applies to any ordinary record: before this fix, a field the record-wide
+    // winner simply never set (a null, same as any other absent field) reported that winner's own
+    // (null) value instead of falling through to whichever plugin actually carries the value.
+
+    [Fact]
+    public void Classify_RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()
+    {
+        // C.esp is the record-wide winner (IsWinner=true) but never touches "level" — only "name".
+        // The field's own winner must be A.esp (the only plugin with a "level" value), not C.esp.
+        var master = MakeOverride("A.esp", 0, false, ("level", 1), ("name", "Alice"));
+        var winner = MakeOverride("C.esp", 1, true, ("level", null), ("name", "Bob"));
+        var result = Classify([master, winner]);
+
+        var level = result.Diffs.Single(d => d.FieldName == "level");
+        Assert.Equal("A.esp", level.WinnerColumn);
+        Assert.Equal(1, level.WinnerValue);
+    }
+
+    // --- Partial Form flag rule (#491) ---
+
+    [Fact]
+    public void Classify_PartialFormOverride_OwnNonNullFieldDiffersFromMaster_StillNoConflict()
+    {
+        // B.esp is Partial Form and genuinely sets "level" to a different value than the master —
+        // not merely absent (unlike the generic null rule above). Its own field is still excluded.
+        var master = MakeOverride("A.esp", 0, false, ("level", 1));
+        var partial = MakePartialFormOverride("B.esp", 1, true, ("level", 999));
+        var result = Classify([master, partial]);
+
+        Assert.Equal(ConflictAll.NoConflict, result.ConflictAll);
+    }
+
+    [Fact]
+    public void Classify_PartialFormOverride_OwnFieldNeverWinsOrLoses()
+    {
+        var master = MakeOverride("A.esp", 0, false, ("level", 1));
+        var partial = MakePartialFormOverride("B.esp", 1, false, ("level", 999));
+        var winner = MakeOverride("C.esp", 2, true, ("level", 5));
+        var result = Classify([master, partial, winner]);
+
+        Assert.DoesNotContain(result.Diffs, d => d.CellStates.ContainsKey("B.esp"));
     }
 
     // --- JsonElement comparison (ValuesEqual branch) ---

@@ -136,7 +136,7 @@ public sealed class RecordQueryService(
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
                 classification.PluginStates.GetValueOrDefault(ColumnKey.Of(o.Plugin, o.Origin), ConflictThis.OnlyOne),
-                Origin: o.Origin, RecordType: o.RecordType));
+                Origin: o.Origin, RecordType: o.RecordType, IsPartialForm: o.IsPartialForm));
 
         // #421: VMAD/conditions are rejected from IRecordReads — reconstituted here instead, from
         // each entry's own document body (RecordDocumentCodecs, relocated from Records/). #421
@@ -205,7 +205,8 @@ public sealed class RecordQueryService(
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
-            document.Fields, Origin: document.Plugin.Origin!, RecordType: document.RecordType);
+            document.Fields, Origin: document.Plugin.Origin!, RecordType: document.RecordType,
+            IsPartialForm: document.IsPartialForm);
 
     private IGameSession RequireSession() =>
         _session.Session ?? throw new InvalidOperationException("No session loaded.");

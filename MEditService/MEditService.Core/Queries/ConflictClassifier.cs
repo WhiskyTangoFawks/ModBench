@@ -118,15 +118,36 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         DiffContext ctx,
         HashSet<string> sortedArrays)
     {
-        var winnerColumn = ColumnKey.Of(winner.Plugin, winner.Origin);
+        // Record-wide fallback only — used when *no* plugin has a value for a field (the per-field
+        // computation below has nothing to fall through to at that point, matching prior behavior
+        // for a field genuinely absent everywhere).
+        var recordWinnerColumn = ColumnKey.Of(winner.Plugin, winner.Origin);
         var masterFieldMeta = records[0].Fields
             .ToDictionary(f => f.Metadata.Name, f => f.Metadata);
         return [.. fieldNames
             .Select(fieldName =>
             {
+                // #491: a Partial Form override's own fields are excluded from conflict detection
+                // entirely — treated the same way a genuinely-null field already is (the "PartialForm
+                // null rule" above), regardless of what value this field actually carries. That reuse
+                // is deliberate: ComputeCellStates/PickWinner/BuildStructChildren already skip a null
+                // value's plugin as a candidate for winning, contesting or contributing a cell state,
+                // which is exactly "this override's own fields fall through to the previous
+                // non-partial override" (CONTEXT.md's Partial Form entry) with no new state to invent.
                 var values = records.ToDictionary(
                     o => ColumnKey.Of(o.Plugin, o.Origin),
-                    o => o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
+                    o => o.IsPartialForm ? null : o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
+                // #491: WinnerColumn/WinnerValue are this *field's* own winner — the highest
+                // load-order plugin that actually carries a (non-excluded) value for it — not the
+                // record-wide winner. Mirrors BuildStructChildren's own per-field winner below, which
+                // already worked this way; before this fix a field's WinnerValue silently went null
+                // whenever the record-wide winner happened to have no value for that one field
+                // (Partial Form is the case that surfaced it, but any genuinely-null field on the
+                // record-wide winner hit the same gap — #491 review, condition (a)).
+                var fieldWinner = records
+                    .Where(r => values.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
+                    .MaxBy(r => r.LoadOrderIndex);
+                var winnerColumn = fieldWinner != null ? ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin) : recordWinnerColumn;
                 var winnerValue = values.GetValueOrDefault(winnerColumn);
                 var cellStates = ComputeCellStates(fieldName, values, ctx.MasterColumn, records, sortedArrays);
                 var meta = masterFieldMeta.GetValueOrDefault(fieldName);

@@ -1401,7 +1401,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         return new RecordDocument(
             formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
-            body, ExtractFields(schema, record, resolveFormKey));
+            body, ExtractFields(schema, record, resolveFormKey), PartialFormFlag.IsSet(record));
     }
 
     /// <summary>The header's own reader (D8: no document) — reads straight off the header table's
