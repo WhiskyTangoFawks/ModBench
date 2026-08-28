@@ -53,4 +53,64 @@ public sealed class RecordFieldWriterTests
 
         Assert.Equal(FieldApplyOutcome.NotFound, outcome);
     }
+
+    // #539: is_partial_form dispatched ahead of the reflected columns, same tier as editor_id —
+    // BaseSkip excludes MajorRecordFlagsRaw from the reflected schema entirely, so NoSchemas here
+    // proves the dispatch never needs a schema lookup to reach it.
+    [Fact]
+    public void TryApply_IsPartialForm_OnCell_SetTrue_Applied()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod) { EditorID = "SomeCell" };
+
+        var outcome = RecordFieldWriter.TryApply(
+            cell, "cell", "is_partial_form", J("true"), NoSchemas, GameRelease.Fallout4);
+
+        Assert.Equal(FieldApplyOutcome.Applied, outcome);
+        Assert.Equal(0x0000_4000, cell.MajorRecordFlagsRaw);
+    }
+
+    [Fact]
+    public void TryApply_IsPartialForm_OnCell_SetFalse_Applied()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod) { EditorID = "SomeCell", MajorRecordFlagsRaw = 0x0000_4000 };
+
+        var outcome = RecordFieldWriter.TryApply(
+            cell, "cell", "is_partial_form", J("false"), NoSchemas, GameRelease.Fallout4);
+
+        Assert.Equal(FieldApplyOutcome.Applied, outcome);
+        Assert.Equal(0, cell.MajorRecordFlagsRaw);
+    }
+
+    // #539 correction 1's rival: the originally-briefed (superseded) design gated on Mutagen's own
+    // static IsPartialFormable reflection instead of PartialFormFlag's container-type gate. FO4's
+    // Cell is not wired up for that static property (PartialFormFlag.cs's own doc) — a reflection
+    // gate would wrongly refuse this. Guarded here by asserting success on exactly the type the
+    // ticket's own real-world case names (Sim Settlements 2's Partial Form Cell overrides).
+    [Fact]
+    public void TryApply_IsPartialForm_OnNonPartialFormableType_ReturnsNotFound()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        var npc = mod.Npcs.AddNew("SomeNpc");
+
+        var outcome = RecordFieldWriter.TryApply(
+            npc, "npc_", "is_partial_form", J("true"), NoSchemas, GameRelease.Fallout4);
+
+        Assert.Equal(FieldApplyOutcome.NotFound, outcome);
+        Assert.Equal(0, npc.MajorRecordFlagsRaw);
+    }
+
+    [Fact]
+    public void TryApply_IsPartialForm_NonBoolValue_ReturnsNotFound()
+    {
+        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
+        var cell = new Cell(mod) { EditorID = "SomeCell" };
+
+        var outcome = RecordFieldWriter.TryApply(
+            cell, "cell", "is_partial_form", J("\"yes\""), NoSchemas, GameRelease.Fallout4);
+
+        Assert.Equal(FieldApplyOutcome.NotFound, outcome);
+        Assert.Equal(0, cell.MajorRecordFlagsRaw);
+    }
 }

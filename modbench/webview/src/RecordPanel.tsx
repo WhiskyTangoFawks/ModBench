@@ -633,6 +633,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
                         )}
+                        // #539: the one sanctioned header-flag write, through the same handleEditCell
+                        // every other field edit on this panel already goes through — is_partial_form
+                        // is exempt from RecordEditService's own Partial Form read-only guard
+                        // (RecordEditService.cs), so this reaches the backend regardless of the
+                        // column's current isPartialForm state.
+                        onTogglePartialForm={next => handleEditCell(col.key, 'is_partial_form', next)}
                       />
                     </th>
                   );

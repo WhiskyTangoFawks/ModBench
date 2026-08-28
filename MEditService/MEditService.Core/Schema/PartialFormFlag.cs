@@ -34,12 +34,38 @@ namespace MEditService.Core.Schema;
 /// </summary>
 public static class PartialFormFlag
 {
-    private const int Bit = 0x0000_4000;
+    /// <summary>Internal rather than private (#539): <see cref="MEditService.Core.Edits.RecordEditService"/>'s
+    /// own bit-14 write-surface guard needs the literal bit value to compare a field write's
+    /// before/after <c>MajorRecordFlagsRaw</c> — reading it off here rather than re-declaring
+    /// <c>0x4000</c> a second time keeps the one fact in the one place that already owns it.</summary>
+    internal const int Bit = 0x0000_4000;
+
+    /// <summary>Whether <paramref name="recordType"/> is a container record — the only kind that can
+    /// carry a Partial Form override at all (#539: split out of <see cref="IsSet"/> so the write path
+    /// can ask "is this type eligible" on its own, independent of whether the bit happens to be set
+    /// right now — setting the flag needs the same gate <see cref="IsSet"/> uses for reading it, per
+    /// #539's own correction: this is the one gate, not a second reflection-based one).</summary>
+    internal static bool IsPartialFormable(Type recordType) =>
+        ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
 
     /// <summary>True when <paramref name="record"/>'s own concrete type is a container record (the
     /// only kind that can carry a Partial Form override at all) and its header flags have the bit
     /// set.</summary>
     public static bool IsSet(IMajorRecordGetter record) =>
-        ContainerChildFields.EnumerateChildFieldsFor(record.GetType()) != null
-        && (record.MajorRecordFlagsRaw & Bit) != 0;
+        IsPartialFormable(record.GetType()) && (record.MajorRecordFlagsRaw & Bit) != 0;
+
+    /// <summary>
+    /// #539: the one sanctioned bit-14 write — sets or clears exactly this bit against
+    /// <paramref name="record"/>'s <em>current</em> <c>MajorRecordFlagsRaw</c>, never a full
+    /// overwrite. A full overwrite (<c>MajorRecordFlagsRaw = value ? Bit : 0</c>) would silently drop
+    /// every other flag bit already set on the record (ESM, Deleted, …) — AC2's byte-diff assertion
+    /// is what catches that rival, but the contract is stated here too: only bit 14 may move.
+    /// Callers (<see cref="MEditService.Core.Edits.RecordFieldWriter"/>) are expected to have already
+    /// checked <see cref="IsPartialFormable"/> — this does not re-check it, since a caller reaching
+    /// here has already decided the record type is eligible.
+    /// </summary>
+    internal static void Set(IMajorRecord record, bool value) =>
+        record.MajorRecordFlagsRaw = value
+            ? record.MajorRecordFlagsRaw | Bit
+            : record.MajorRecordFlagsRaw & ~Bit;
 }

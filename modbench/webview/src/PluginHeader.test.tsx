@@ -26,6 +26,7 @@ function baseProps() {
     showOriginInline: false,
     collapsed: false,
     onToggleCollapse: vi.fn(),
+    onTogglePartialForm: vi.fn(),
   };
 }
 
@@ -195,5 +196,102 @@ describe('PluginHeader — untracked signposting (#415)', () => {
 
     expect(screen.queryByText('(untracked)')).toBeNull();
     expect(screen.queryByText('(read-only)')).toBeNull();
+  });
+});
+
+// #539: the header-write half of #491's Partial Form work — a checkbox on a partial-formable
+// column's own header, reflecting isPartialForm and dispatching the sanctioned is_partial_form
+// write on toggle.
+describe('PluginHeader — Partial Form toggle (#539)', () => {
+  it('does not render the toggle for a column whose record type can never carry the flag', () => {
+    render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: false })} />);
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  // Rival: a version that renders whenever isPartialForm is merely defined (rather than gating on
+  // isPartialFormable) would render here too, since isPartialForm is explicitly false, not absent.
+  it('does not render the toggle when isPartialFormable is absent, even if isPartialForm is set', () => {
+    render(<PluginHeader {...baseProps()} override={override({ isPartialForm: false })} />);
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('renders the toggle, checked, for a currently-flagged partial-formable column', () => {
+    render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: true, isPartialForm: true })} />);
+
+    expect(screen.getByRole('checkbox')).toBeChecked();
+  });
+
+  it('renders the toggle, unchecked, for an eligible but currently-unflagged column', () => {
+    render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: true, isPartialForm: false })} />);
+
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+  });
+
+  it('dispatches onTogglePartialForm(false) when unchecking a flagged column', () => {
+    const onTogglePartialForm = vi.fn();
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ isPartialFormable: true, isPartialForm: true })}
+        onTogglePartialForm={onTogglePartialForm}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    expect(onTogglePartialForm).toHaveBeenCalledWith(false);
+  });
+
+  it('dispatches onTogglePartialForm(true) when checking an unflagged eligible column', () => {
+    const onTogglePartialForm = vi.fn();
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ isPartialFormable: true, isPartialForm: false })}
+        onTogglePartialForm={onTogglePartialForm}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    expect(onTogglePartialForm).toHaveBeenCalledWith(true);
+  });
+
+  it('disables the toggle on an untracked column — no dead control for a write that cannot land', () => {
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ isPartialFormable: true, isPartialForm: true })}
+        isTracked={false}
+      />,
+    );
+
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  it('disables the toggle on a not-in-load-order column', () => {
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ isPartialFormable: true, isPartialForm: true })}
+        inLoadOrder={false}
+      />,
+    );
+
+    expect(screen.getByRole('checkbox')).toBeDisabled();
+  });
+
+  it('does not render the toggle at all when the column is collapsed', () => {
+    render(
+      <PluginHeader
+        {...baseProps()}
+        override={override({ isPartialFormable: true, isPartialForm: true })}
+        collapsed
+      />,
+    );
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 });

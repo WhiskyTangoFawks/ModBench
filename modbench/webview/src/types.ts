@@ -141,6 +141,13 @@ export interface RecordDetail {
   // ADR-0034) until #539 lands the header write path. Optional so existing fixtures/callers don't
   // break; always populated by the real backend response.
   isPartialForm?: boolean;
+  // #539: whether this record's own type could ever carry the flag at all — independent of
+  // isPartialForm's current state. PluginHeader reads this to decide whether to render its own
+  // Partial Form toggle at all, rather than hand-duplicating the backend's own container-type table
+  // (Source.ContainerChildFields) here — the exact shape of drift that table's own completeness
+  // sweep exists to guard against server-side. Optional so existing fixtures/callers don't break;
+  // always populated by the real backend response.
+  isPartialFormable?: boolean;
 }
 
 export interface CompareOverride extends RecordDetail {

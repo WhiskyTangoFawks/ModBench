@@ -80,6 +80,9 @@ internal static class RecordFieldWriter
         if (fieldPath.Equals(EditorIdFieldPath, StringComparison.Ordinal))
             return ApplyEditorId(record, value);
 
+        if (fieldPath.Equals(IsPartialFormFieldPath, StringComparison.Ordinal))
+            return ApplyIsPartialForm(record, value);
+
         if (VmadPath.IsVmadPath(fieldPath))
             return ApplyVmadField(record, fieldPath, value);
 
@@ -166,6 +169,49 @@ internal static class RecordFieldWriter
             default:
                 return FieldApplyOutcome.NotFound;
         }
+    }
+
+    /// <summary>
+    /// The field path a Partial Form header-flag edit arrives under (#539) — snake_case, matching
+    /// <see cref="EditorIdFieldPath"/>'s own convention. Internal so
+    /// <see cref="RecordEditService"/>'s Partial Form guard can exempt exactly this literal (#491's
+    /// own field is read-only while the flag is set, but this is the one write that must reach the
+    /// flag itself — clearing it is the only way out of that read-only state) and so its own
+    /// bit-14-only write-surface guard can name it too.
+    /// </summary>
+    internal const string IsPartialFormFieldPath = "is_partial_form";
+
+    /// <summary>
+    /// #539: the one sanctioned write to header flag bit 14 — dispatched ahead of the reflected
+    /// columns for the same reason <see cref="ApplyEditorId"/> is: <c>MajorRecordFlagsRaw</c> is in
+    /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>BaseSkip</c> (it is GRUP/header
+    /// metadata, not record data), so nothing in the reflected schema could ever reach it.
+    ///
+    /// <para>Gated by <see cref="Schema.PartialFormFlag.IsPartialFormable"/> — the same container-type
+    /// gate the read half (<see cref="Schema.PartialFormFlag.IsSet"/>) already uses, per #539's own
+    /// correction: a record type that can never carry the flag refuses here as
+    /// <see cref="FieldApplyOutcome.NotFound"/> (no silent no-op — matching every other refusal in
+    /// this class), never silently flipping bit 14's unrelated meaning on that type. xEdit's own
+    /// <c>SetIsPartialForm</c> (<c>wbImplementation.pas:14157</c>) instead silently coerces an
+    /// ineligible <c>aValue</c> to <c>False</c> — a deliberate divergence, not a missed gesture: this
+    /// is an internal write-path contract question (every other <see cref="FieldApplyOutcome"/> here
+    /// refuses loudly), not a record-editing UX one, so ADR-0034's xEdit-is-the-reference rule does
+    /// not reach it.</para>
+    ///
+    /// <para>A non-boolean value is not an <c>is_partial_form</c> edit and is refused as
+    /// <see cref="FieldApplyOutcome.NotFound"/>, mirroring <see cref="ApplyEditorId"/>'s own handling
+    /// of a mistyped value.</para>
+    /// </summary>
+    private static FieldApplyOutcome ApplyIsPartialForm(IMajorRecord record, JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.True && value.ValueKind != JsonValueKind.False)
+            return FieldApplyOutcome.NotFound;
+
+        if (!PartialFormFlag.IsPartialFormable(record.GetType()))
+            return FieldApplyOutcome.NotFound;
+
+        PartialFormFlag.Set(record, value.GetBoolean());
+        return FieldApplyOutcome.Applied;
     }
 
     // #426: a VMAD path carries either a plain scalar property value (the #415 shape, unchanged)

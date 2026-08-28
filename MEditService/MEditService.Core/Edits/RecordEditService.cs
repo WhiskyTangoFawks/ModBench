@@ -125,8 +125,12 @@ public sealed class RecordEditService(
         // (wbImplementation.pas:9905-9914) explicitly allows EDID assignment on a Partial Form
         // record — ADR-0034 makes xEdit's answer binding here, and #539 owning the *header* write
         // path is a sequencing choice, not a platform limitation, so it cannot justify refusing an
-        // ordinary, already-writable field xEdit itself never blocks.
-        if (PartialFormFlag.IsSet(target) && !fieldPath.Equals(RecordFieldWriter.EditorIdFieldPath, StringComparison.Ordinal))
+        // ordinary, already-writable field xEdit itself never blocks. is_partial_form is exempt too
+        // (#539): it is the one write that must reach the flag while it is set — clearing it is the
+        // only way out of this very refusal.
+        if (PartialFormFlag.IsSet(target)
+            && !fieldPath.Equals(RecordFieldWriter.EditorIdFieldPath, StringComparison.Ordinal)
+            && !fieldPath.Equals(RecordFieldWriter.IsPartialFormFieldPath, StringComparison.Ordinal))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.PartialFormFieldReadOnly,
@@ -138,9 +142,33 @@ public sealed class RecordEditService(
         if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value) is { } linkError)
             return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
 
+        // #539 correction 2: two reflected columns (major_flags, fallout4_major_record_flags — and,
+        // structurally, any other column Mutagen's own MajorRecordFlags-passthrough convention
+        // generates on some other game's record type) read and write the very same MajorRecordFlagsRaw
+        // int bit 14 lives in. is_partial_form is meant to be the one sanctioned door onto that bit,
+        // so rather than naming those columns (which would silently miss the next game's own alias),
+        // this checks the invariant structurally: bit 14 must not move through any field path other
+        // than is_partial_form. The before-value is captured here so there is something to compare
+        // against once the write below runs; the comparison itself happens after a successful apply
+        // but well before this record's bytes reach disk, so a caught violation leaves the working
+        // tree untouched — the mutated in-memory record is a throwaway (this class's own doc comment)
+        // and is simply never serialized.
+        var checkBit14Leak = !fieldPath.Equals(RecordFieldWriter.IsPartialFormFieldPath, StringComparison.Ordinal)
+            && PartialFormFlag.IsPartialFormable(target.GetType());
+        var bit14Before = checkBit14Leak ? target.MajorRecordFlagsRaw & PartialFormFlag.Bit : 0;
+
         var outcome = RecordFieldWriter.TryApply(target, document.RecordType, fieldPath, value, schemas, release);
         if (outcome != FieldApplyOutcome.Applied)
             return RefuseFieldOutcome(outcome, fieldPath, document.RecordType, schemas);
+
+        if (checkBit14Leak && (target.MajorRecordFlagsRaw & PartialFormFlag.Bit) != bit14Before)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.PartialFormFlagIndirectWrite,
+                $"'{fieldPath}' would change record header flag bit 14 (Partial Form) as a side " +
+                "effect of writing an unrelated column. That bit is only writable through " +
+                "'is_partial_form' — nothing was written.");
+        }
 
         // #453 scope 3: the file name carries the EditorID, so an EditorID edit is a rename as well as
         // a content change. Done before the write, deliberately — see RenameSourceUnit.
