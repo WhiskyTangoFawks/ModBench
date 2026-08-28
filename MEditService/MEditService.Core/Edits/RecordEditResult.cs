@@ -143,6 +143,21 @@ public enum RecordEditRefusal
     /// the same way a human reading the message can.
     /// </summary>
     ListElementTypeUnresolved,
+
+    /// <summary>
+    /// #491: the record carries the Partial Form header flag (bit 14, <c>0x4000</c> — CONTEXT.md's
+    /// Partial Form entry), so its own fields are read-only — the game and xEdit fall through to the
+    /// previous non-partial override for them, so a value written here would never be seen. Its own
+    /// value rather than <see cref="FieldReadOnly"/>: the way out is different (clear the flag, or
+    /// edit a different, non-partial override) from that value's causes (masters, FormKey, the
+    /// widened text columns — permanent, not state-dependent), the same distinction #531's
+    /// <see cref="ListElementTypeUnresolved"/> already draws against
+    /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable — #539 is
+    /// where that write path (including clearing this flag) lands; this refusal covers every field
+    /// this ticket's own scope reaches, which today is every field, since no header write path exists
+    /// yet to exempt.
+    /// </summary>
+    PartialFormFieldReadOnly,
 }
 
 /// <summary>
