@@ -15,8 +15,8 @@ namespace MEditService.Tests.RealData;
 /// Track it — runs once instead of once per <c>[Fact]</c>. That repeated Track (present since #416)
 /// was 6 of the backend suite's 9 minutes on its own.
 ///
-/// <para><b>Two folders, not one.</b> <see cref="ModFolder"/> is the "live" tree the 8 read-only
-/// facts in <see cref="CompileRoundTripGateTests"/> share: they only read it, except the three
+/// <para><b>Two folders, not one.</b> <see cref="ModFolder"/> is the "live" tree the 7 read-only
+/// facts in <see cref="CompileRoundTripGateTests"/> share: they only read it, except the two
 /// <c>Compile_OfTheRealFixture_*</c> tests, which also compile into it and so overwrite its plugin
 /// binary with deterministic-but-not-Track's-own-bytes output. <see cref="TrackedTemplateFolder"/> is
 /// a second copy, taken immediately after Track succeeds and before any Compile can run against
