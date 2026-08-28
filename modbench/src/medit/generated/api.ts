@@ -650,6 +650,7 @@ export interface components {
             fields?: components["schemas"]["FieldValue"][] | null;
             origin?: string | null;
             recordType?: string | null;
+            isPartialForm?: boolean;
             conflictThis?: components["schemas"]["ConflictThis"];
         };
         CompareResult: {
@@ -928,6 +929,7 @@ export interface components {
             fields?: components["schemas"]["FieldValue"][] | null;
             origin?: string | null;
             recordType?: string | null;
+            isPartialForm?: boolean;
         };
         RecordFieldEditRequest: {
             plugin?: string | null;
