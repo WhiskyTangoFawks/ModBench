@@ -217,6 +217,49 @@ internal static class ContainerChildFields
         return null;
     }
 
+    /// <summary>
+    /// #440: clears every child-major slot <paramref name="record"/>'s object graph actually carries a
+    /// value in — the plain "own fields only" half of a shallow Copy as Override on a container (AC3):
+    /// xEdit's own Copy as Override always lands own-fields-only for every record type, containers
+    /// included — only "Deep copy as override" (#551) keeps children. Built over
+    /// <see cref="EnumerateChildren"/>'s own yield rather than <see cref="ByTypeName"/>'s raw field
+    /// list, deliberately: that already excludes <c>Worldspace.SubCells</c> (its items are
+    /// <c>WorldspaceBlock</c>, not <see cref="IMajorRecordGetter"/>) and, for a Quest or DialogTopic
+    /// deserialized from its own <c>RecordData.json</c> alone, yields nothing at all — those folder-
+    /// split fields are never inlined into the body to begin with (the codec's own child-folder
+    /// suppression), so this is a true no-op for them rather than one that happens to look like it.
+    /// </summary>
+    internal static void ClearAllChildSlots(IMajorRecordGetter record)
+    {
+        var slotNames = EnumerateChildren(record).Select(c => c.SlotName).Distinct(StringComparer.Ordinal).ToList();
+        foreach (var slotName in slotNames)
+        {
+            var property = record.GetType().GetProperty(slotName)
+                ?? throw new InvalidOperationException(
+                    $"{record.GetType().Name} has no property '{slotName}' to clear — ContainerChildFields' table is stale.");
+
+            var value = property.GetValue(record);
+            if (value is IMajorRecordGetter) property.SetValue(record, null);
+            else ((dynamic)value!).Clear();
+        }
+    }
+
+    /// <summary>
+    /// #440 Slice 6: appends <paramref name="child"/> onto the end of <paramref name="parent"/>'s
+    /// <paramref name="slotName"/> list — the write-side counterpart to <see cref="RemoveFromSlot"/>,
+    /// for a copy landing a new child into an existing container override (AC2). Only ever a list slot
+    /// in practice for this method's one caller (Persistent/Temporary, the placement-tracked embedded
+    /// lists) — a single-value slot (Landscape, TopCell) has no "append" to make sense of.
+    /// </summary>
+    internal static void AddChildToSlot(IMajorRecordGetter parent, string slotName, IMajorRecord child)
+    {
+        var property = parent.GetType().GetProperty(slotName)
+            ?? throw new InvalidOperationException(
+                $"{parent.GetType().Name} has no property '{slotName}' to add a child to — ContainerChildFields' table is stale.");
+
+        ((dynamic)property.GetValue(parent)!).Add((dynamic)child);
+    }
+
     /// <summary>The mutation half of <see cref="RemoveEmbeddedChild"/> — reflection rather than a
     /// hand-written switch over each of the four/two concrete slot shapes, for the same reason
     /// <see cref="EnumerateChildren"/> reads them that way: one path that cannot drift from the table

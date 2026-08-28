@@ -183,6 +183,44 @@ public enum RecordEditRefusal
     /// <c>is_partial_form</c> instead.</para>
     /// </summary>
     PartialFormFlagIndirectWrite,
+
+    /// <summary>
+    /// #440 Slice 6: Copy as Override on a placed reference (or the Cell it belongs to) whose parent
+    /// chain the destination does not already carry, and the missing piece is exterior — a Worldspace's
+    /// SubCells cell, or the reference's own Cell when that Cell is one. Auto-creating an exterior
+    /// container needs spatial placement (worldspace block/sub-block) this write path does not compute
+    /// yet, tracked separately (#549); an interior Cell auto-creates instead (Slice 7) rather than
+    /// refusing here, since interior placement carries no gameplay meaning to compute in the first
+    /// place (<see cref="RecordEditService"/>'s own <c>CreateInteriorCellParent</c> doc comment has the
+    /// full argument for auto-creating it as Partial Form — a deliberate mEdit-specific choice, not
+    /// xEdit parity).
+    /// </summary>
+    ContainerParentMissingInDestination,
+
+    /// <summary>
+    /// #440 Slice 8: Copy as New Record on a type xEdit itself refuses in both its UI and its engine —
+    /// CELL, WRLD (and, per xEdit's own hardcoded blacklist, LAND/NAVM/PGRD/ROAD/NAVI, none of which
+    /// reach this check in mEdit's own schema: <see cref="Schema.ISchemaReflector"/> surfaces no table
+    /// for them at all, so a copy naming one already refuses earlier as <see cref="RecordNotFound"/>).
+    /// Permanent, unlike <see cref="ContainerRecordNotYetSupported"/>'s "not yet" for Quest/DialogTopic/
+    /// INFO (#550's own scope to widen) — a fresh FormKey for one of these would leave the record
+    /// duplicated with no parent group to place the copy into, which xEdit blocks for exactly that
+    /// structural reason, not because the feature is unbuilt.
+    /// </summary>
+    CopyAsNewRecordDisallowedForType,
+
+    /// <summary>
+    /// #440 review (Standards 3): a placed reference's own file was written, but one of the two index
+    /// calls that follow it (<c>CreateWorkingTreeRecord</c> for the reference's own row,
+    /// <c>ApplyWorkingTreeChanges</c> for its Cell's changed body) threw — a should-never-happen guard
+    /// tripping (both calls' own preconditions are already checked before either runs), never an
+    /// ordinary refusal path. Converted to a typed result rather than left to propagate as a raw
+    /// exception (ADR-0026: the backend never swallows a partial outcome, and a raw exception message
+    /// here would say nothing about the file that already landed) — the message names exactly what
+    /// state that leaves: a working-tree file the index does not yet agree with, reviewable and
+    /// revertable in the Source Control panel like any other write-path fault.
+    /// </summary>
+    ContainerCopyIndexUpdateFailedAfterWrite,
 }
 
 /// <summary>

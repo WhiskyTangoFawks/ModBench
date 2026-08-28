@@ -108,16 +108,21 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
+    // #440 Slice 1: a container's own top-level record (Cell/Worldspace/Quest) is no longer refused
+    // here — see RecordEditServiceContainerCopyTests. What still refuses is a record with no top-level
+    // group of its own at all — a DialogTopic has no independent existence outside its owning Quest
+    // (Fallout4Mod carries no top-level DialogTopics property; ContainerChildFields' own doc comment),
+    // unlike a placed reference (RecordEditServiceContainerCopyTests covers that narrower, deliberately
+    // still-refused-until-Slice-6 shape).
     [Fact]
-    public void CopyRecordAsOverride_Refuses_WhenTheSourceIsAContainerFamilyRecord_ReadingNotYetSupported()
+    public void CopyRecordAsOverride_Refuses_WhenTheSourceHasNoContainerOfItsOwnAnywhere()
     {
         using var fixture = new ContainerModFixture();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(fixture.Plugin, fixture.Cell.ToString(), fixture.Plugin);
+        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(fixture.Plugin, fixture.DialogTopic.ToString(), fixture.Plugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
-        Assert.Contains("not yet", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
