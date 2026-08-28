@@ -41,7 +41,7 @@ export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: 
   // has to be able to hand over — the bitmask integer behind them is not something the user ever
   // saw. Sourced from modelValue (the same string Ctrl+C copies, AC6) rather than computed again
   // here. Null and "no bits set" both render `—`, a placeholder rather than a value, and collapse
-  // to the same null here so neither offers a surface (ADR-0033's struct/array exception) —
+  // to the same null here so neither offers a surface (ADR-0034's placeholder rule) —
   // modelValue already collapses both to '', so only the empty-string check is needed here.
   const namesStr = modelValue(value, meta);
   const names = namesStr === '' ? null : namesStr;
@@ -57,7 +57,7 @@ export function FlagCell({ value, meta, editable, isFocused = true, onCommit }: 
   if (!editable || !onCommit) return text;
 
   if (!active) {
-    // Issue #201 / #204 / ADR-0033: no cursor override — the parent DiskCell's `grab` is this
+    // Issue #201 / #204 / ADR-0034 (no leaf asserts a resting cursor): no cursor override — the parent DiskCell's `grab` is this
     // cell's resting affordance, since it is a drag source the whole time. The `pointer` that
     // used to be here advertised the click and painted over the drag, which is the same false
     // promise #204 removed from ScalarCell and #218 removed from FormKeyLink.

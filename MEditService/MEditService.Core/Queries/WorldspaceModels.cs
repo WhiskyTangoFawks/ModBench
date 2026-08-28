@@ -1,6 +1,6 @@
 namespace MEditService.Core.Queries;
 
-// Phase 16: DTOs for the per-plugin worldspace / cell / placed-object tree.
+// DTOs for the per-plugin worldspace / cell / placed-object tree.
 
 public record WorldspaceSummary(string FormKey, string? EditorId);
 

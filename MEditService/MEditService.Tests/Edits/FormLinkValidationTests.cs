@@ -6,8 +6,8 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>
 /// #415 AC3: creating a Dangling or Type-Mismatched FormLink (CONTEXT.md — both always data errors)
-/// is still blocked at edit time, and the check reads <b>effective</b> state. ADR-0020 kept, relocated:
-/// the validation moment moved from staging to the working-tree write, but existence and type are
+/// is still blocked at edit time, and the check reads <b>effective</b> state. ADR-0041: the check
+/// runs at the working-tree write, and existence and type are
 /// still checked before anything is persisted.
 ///
 /// The effective-state half is the one worth being careful about. A record the working tree has

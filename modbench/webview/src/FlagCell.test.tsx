@@ -96,7 +96,7 @@ describe('FlagCell — editable column renders text until clicked', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  // Issue #201 / #204 / ADR-0033: the same defect #204 fixed in ScalarCell and #218 fixed in
+  // Issue #201 / #204 / ADR-0034: the same defect #204 fixed in ScalarCell and #218 fixed in
   // FormKeyLink, in the leaf both of them missed. A flag cell sits inside DiskCell and is a drag
   // source the whole time it is at rest; an inline `cursor: 'pointer'` here paints over the
   // parent's `grab` and so advertises only the click. The test DOM has no cascade, so this proves

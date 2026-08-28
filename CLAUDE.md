@@ -6,6 +6,14 @@ Modbench: VS Code extension + local C# service (mEdit) — modding IDE for Bethe
 plugins. Setup/architecture: [README.md](README.md). Per-module invariants:
 [modbench/CLAUDE.md](modbench/CLAUDE.md), [MEditService/CLAUDE.md](MEditService/CLAUDE.md).
 
+## Status: pre-alpha, unreleased, zero users
+
+Nothing has shipped and nobody has an installed copy. Therefore: **no backwards compatibility,
+ever** — no migrations for internal renames or layout changes (re-Track is the migration), no
+compatibility shims, no "existing users" reasoning, no deprecation periods. Rename and delete
+freely; when an old form has no live consumer, remove it and its tests. ADRs are rewritten in
+place, not superseded-and-kept.
+
 ## Tools
 
 ```bash
@@ -46,12 +54,12 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   detect and recover from that file having changed without Modbench's
   knowledge — never assume the last write Modbench made is still the current
   state.
-- `references/` (not `.references/`) — grep-only local clones, never modify:
+- `references/` (not `.references/`) — grep-only local clones, never modify. Clone what
+  you need; Mutagen and TES5Edit are the load-bearing two:
   Mutagen (`docs/Big-Cheat-Sheet.md`), TES5Edit (`wbDefinitionsFO4.pas`: `wbArrayS` =
   sorted, `wbArray` = unsorted), `modorganizer/` (MO2 C++, e.g.
   `src/downloadmanager.cpp` for `.meta` semantics), `SFRecordCompareEngine/`
-  (UX-parity reference).
-  `vscode-docs` for vscode api documentation.
+  (UX-parity reference), `vscode-docs` for the VS Code API.
   **Gitignored, so it exists only in the main checkout and never in a `git worktree`.**
   From a worktree, read it at the main checkout's absolute path — a relative grep
   there matches nothing and returns success, which reads as "no such convention
@@ -73,9 +81,10 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specifying from
   memory of xEdit instead of from xEdit is what cost #201/#204/#218 — click focuses a cell
   there, it does not edit. Does not apply to Mod Management, which follows MO2. Also does
-  not apply to pending-change UX (staging, revert, dirty indicators) — xEdit has no such
-  model; the references there are the product's own git-native working-tree model
-  (ADR-0041) and VS Code/git native idioms (decorations, dirty markers).
+  not apply to tracking/compile/branch UX (review, revert, history, dirty indicators) —
+  xEdit has no such model; the references there are the product's own git-native
+  working-tree model (ADR-0041) and VS Code/git native idioms (Source Control panel,
+  decorations, dirty markers).
 - Native-first, webviews included: before designing any interaction, ask "which VS
   Code surface already does this?" and copy its answer — menus, pickers, confirms,
   prompts, trees and clipboard all have one. A webview is justified by what it

@@ -275,7 +275,7 @@ the configured game directory's `Data/`.
 The extension owns the editing backend process
 ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)):
 
-- **Spawn** — lazily, on **Launch mEdit** (first entry into editing mode for the active
+- **Spawn** — lazily, on **Launch mEdit** (the first editing session for the active
   modlist).
 - **Session** — built via the backend's `load-explicit` source: an ordered
   `{name, physicalPath, origin, participates}` list of every `plugins.txt` line — disabled

@@ -495,7 +495,7 @@ describe('PluginTreeProvider.refresh', () => {
   });
 });
 
-// ── Phase 16: worldspace / cell / placed-object tree ──────────────────────────
+// ── Worldspace / cell / placed-object tree ──────────────────────────
 
 describe('PluginTreeProvider worldspace tree', () => {
   it('adds Worldspaces and Interior Cells nodes and hides spatial record types', async () => {

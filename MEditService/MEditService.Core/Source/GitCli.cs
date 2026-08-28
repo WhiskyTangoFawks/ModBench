@@ -4,7 +4,7 @@ using Serilog;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// Thin process wrapper over the real git CLI — the source's one execution boundary (ADR-0040/#370).
+/// Thin process wrapper over the real git CLI — the source's one execution boundary (ADR-0041/#370).
 /// No interface, no fake implementation: there is exactly one way to run git, and every call states
 /// its own gitdir/worktree explicitly (via <c>GIT_DIR</c>/<c>GIT_WORK_TREE</c>), which is the whole
 /// seam tests need — pointing at scratch directories, never a mocked git. Internal: callers go

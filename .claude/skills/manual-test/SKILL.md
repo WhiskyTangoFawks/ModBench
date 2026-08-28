@@ -53,12 +53,8 @@ have nothing to show. Ask the user which instance to use if none was named.
 ## 3 — Activate the extension
 
 `activationEvents` is intentionally `[]` — the extension does not auto-activate on startup
-(see `src/test/integration/extension.test.ts`). The Modbench activity bar icon stays hidden
-until something activates the extension, because every contributed view had a `when` clause and
-none defaulted to true; #273 retired that gate (`modbench.viewMode`) along with the second
-Plugins view it existed to disambiguate, so the loadout views (Mods, Plugins, Downloads) are
-contributed unconditionally now — activation is still required to populate them, just not a
-context key to reveal them.
+(see `src/test/integration/extension.test.ts`). The loadout views (Mods, Plugins, Downloads)
+are contributed unconditionally, but activation is still required to populate them.
 
 Force activation once per session by running any Modbench command from the Command Palette,
 e.g. **Modbench: Refresh Mod List**. The activity bar icon then appears (Loadout view). From
