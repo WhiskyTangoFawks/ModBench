@@ -697,6 +697,41 @@ describe('ApiPluginRepository.getInteriorCells', () => {
   });
 });
 
+describe('ApiPluginRepository.getContainerChildren', () => {
+  it('maps container child summaries on an OK response', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: [
+          {
+            formKey: 'Fallout4.esm:000010', editorId: 'TopicA', plugin: 'Fallout4.esm', origin: 'Data',
+            loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType: 'dial',
+          },
+        ],
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const result = await repo.getContainerChildren('Plugin.esp', 'Fallout4.esm:00003C');
+
+    expect(result).toEqual([
+      {
+        formKey: 'Fallout4.esm:000010', editorId: 'TopicA', plugin: 'Fallout4.esm', origin: 'Data',
+        loadOrderIndex: 0, isWinner: true, workingTreeState: 'None', recordType: 'dial',
+      },
+    ]);
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/records/{formKey}/children',
+      expect.objectContaining({ params: { path: { plugin: 'Plugin.esp', formKey: 'Fallout4.esm:00003C' }, query: {} } }),
+    );
+  });
+
+  it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
+    const repo = new ApiPluginRepository(nonOkClient());
+    await expect(repo.getContainerChildren('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
+  });
+});
+
 // #34 / ADR-0036: a row that stands for a specific copy of a filename says which one; an ordinary
 // load-order row sends no origin at all and lets the backend resolve it.
 describe('ApiPluginRepository origin threading', () => {
@@ -750,6 +785,19 @@ describe('ApiPluginRepository origin threading', () => {
 
     expect(client.GET).toHaveBeenCalledWith(
       '/plugins/{plugin}/worldspaces/{formKey}/blocks',
+      expect.objectContaining({
+        params: { path: { plugin: 'Shared.esp', formKey: 'Fallout4.esm:00003C' }, query: { origin: 'ModB' } },
+      }),
+    );
+  });
+
+  it('sends origin as a query param on getContainerChildren', async () => {
+    const client = { GET: vi.fn().mockResolvedValue({ data: [], response: { ok: true } }) } as any;
+
+    await new ApiPluginRepository(client).getContainerChildren('Shared.esp', 'Fallout4.esm:00003C', 'ModB');
+
+    expect(client.GET).toHaveBeenCalledWith(
+      '/plugins/{plugin}/records/{formKey}/children',
       expect.objectContaining({
         params: { path: { plugin: 'Shared.esp', formKey: 'Fallout4.esm:00003C' }, query: { origin: 'ModB' } },
       }),

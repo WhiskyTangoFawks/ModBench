@@ -165,6 +165,24 @@ export interface PluginRecordTypeCount {
   count: number;
 }
 
+// #424: a container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
+// Topic's responses) — a flattened RecordSummary plus recordType, the same "carry the type so the
+// tree can tell a nested-expandable child (a DIAL under a Quest) apart from a leaf" reason
+// PlacedSummary already carries one. plugin/origin are always the parent's own — a container's
+// children can only exist in a plugin that also carries the container (CONTEXT.md's "Container
+// record") — carried anyway rather than assumed, so a consumer never has to reach back to the
+// parent node for them.
+export interface ContainerChildSummary {
+  formKey: string;
+  editorId: string | null;
+  plugin: string;
+  origin: string;
+  loadOrderIndex: number;
+  isWinner: boolean;
+  workingTreeState: WorkingTreeState;
+  recordType: string;
+}
+
 // #364 / ADR-0016: the record-wide axis only (Axis 1 — "the record's override stack as a
 // whole"). Per-cell ConflictThis (Axis 2) is the compare grid's own concern, never the Plugins
 // tree's — see medit-record-editor.md's "Conflict color coding". Mirrors the backend's

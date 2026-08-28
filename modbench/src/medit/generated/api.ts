@@ -521,6 +521,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/records/{formKey}/children": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetContainerChildren"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/session/load": {
         parameters: {
             query?: never;
@@ -749,6 +765,17 @@ export interface components {
         };
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
+        ContainerChildSummary: {
+            formKey?: string | null;
+            editorId?: string | null;
+            plugin?: string | null;
+            origin?: string | null;
+            /** Format: int32 */
+            loadOrderIndex?: number;
+            isWinner?: boolean;
+            workingTreeState?: components["schemas"]["WorkingTreeState"];
+            recordType?: string | null;
+        };
         CrashRepairOffer: {
             plugin?: string | null;
             origin?: string | null;
@@ -2589,6 +2616,40 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetContainerChildren: {
+        parameters: {
+            query?: {
+                origin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+                formKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContainerChildSummary"][];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

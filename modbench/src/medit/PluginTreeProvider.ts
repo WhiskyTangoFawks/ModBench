@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type {
   RecordSummary, ConflictAll,
   WorldspaceSummary, CellSummary, PlacedSummary, WorldspaceBlock, WorldspaceSubBlock, CellReferences,
+  ContainerChildSummary,
 } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
 import { recordResourceUri } from './recordResourceUri';
@@ -66,9 +67,15 @@ export class RecordNode extends vscode.TreeItem {
     // resourceUri itself so RecordDecorationProvider can scope the conflict badge to this node's
     // rows only, never to every location the same record happens to appear.
     fromConflictsNode = false,
+    // #424: set when this row is a Quest or a Dialog Topic — the two container types whose
+    // children (dialog topics/branches/scenes, responses) this same row type now expands into,
+    // rather than forking a dedicated wrapper node the way the worldspace tree's WorldspacesNode/
+    // CellNode do (the #281 unification: a container's own row stays an ordinary, fully-affordanced
+    // record row). undefined for every other record type, which stays a leaf exactly as before.
+    public readonly containerChildType?: 'qust' | 'dial',
   ) {
     const label = record.editorId ? `${record.editorId} [${record.formKey}]` : record.formKey;
-    super(label, vscode.TreeItemCollapsibleState.None);
+    super(label, containerChildType ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
     this.contextValue = immutable ? 'recordImmutable' : 'record';
     this.command = {
       command: 'modbench.openEditor',
@@ -349,6 +356,14 @@ const SPATIAL_NODE_FACTORIES: Record<string, (pluginName: string, origin?: strin
 // top-level node of their own, so they're not in SPATIAL_NODE_FACTORIES.
 const SPATIAL_TYPES = new Set([...Object.keys(SPATIAL_NODE_FACTORIES), 'refr', 'achr']);
 
+// #424: which raw record-type signature gets RecordNode's own containerChildType flag (Collapsed,
+// expands via fetchContainerChildren) — a Quest's dialog topics/branches/scenes, a Dialog Topic's
+// responses. Deliberately narrow: every other record type's RecordNode stays a plain leaf exactly
+// as before this ticket.
+function containerChildTypeOf(recordType: string): 'qust' | 'dial' | undefined {
+  return recordType === 'qust' || recordType === 'dial' ? recordType : undefined;
+}
+
 type PageCache = Map<string, { items: RecordSummary[]; total: number }>;
 type CellPageCache = Map<string, { items: CellSummary[]; total: number }>;
 
@@ -359,6 +374,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   private readonly pageCache: PageCache = new Map();
   private readonly interiorCache: CellPageCache = new Map();
   private readonly refCache = new Map<string, CellReferences>();
+  // #424 / #305: a Quest/DialogTopic row's own children, keyed the same
+  // `${originKey(plugin, origin)}::${formKey}` shape refCache already uses for a cell's own
+  // references — two same-filename copies' rows never share an entry.
+  private readonly containerChildCache = new Map<string, ContainerChildSummary[]>();
   // Last load-more failure per parent, keyed by originKey alone — interior cells are the only
   // surface left that pages (#398 removed record-type pagination). Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
@@ -462,6 +481,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.pageCache.clear();
     this.interiorCache.clear();
     this.refCache.clear();
+    this.containerChildCache.clear();
     this.interiorLoadMoreFailures.clear();
     // #448: a fresh session has loaded nothing through the unlisted-plugin door yet, whatever this
     // provider remembered from the last one — never carry a stale "already loaded" belief across
@@ -542,6 +562,10 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     if (element instanceof RecordTypeNode) return this.fetchRecords(element);
     // #364: not spatial, so dispatched here rather than folded into getSpatialChildren below.
     if (element instanceof ConflictsNode) return this.fetchConflicts();
+    // #424: a Quest/DialogTopic row expanding into its own container children — not spatial
+    // (WorldspacesNode/CellNode's own hierarchy), so dispatched here rather than folded into
+    // getSpatialChildren below.
+    if (element instanceof RecordNode && element.containerChildType) return this.fetchContainerChildren(element);
     return this.getSpatialChildren(element);
   }
 
@@ -739,6 +763,28 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     return groups;
   }
 
+  /** #424: a Quest/DialogTopic row's own children, in the backend's already-xEdit-ordered
+   *  response — flat, no intermediate grouping node (xEdit has none either; see
+   *  ContainerChildQueryService's own doc comment). A returned "dial" child (a Quest's own Dialog
+   *  Topic) recurses into the same containerChildType flag its parent has, so it is itself
+   *  expandable to its own Responses; every other returned type (dlbr/scen/info) stays a leaf. */
+  private async fetchContainerChildren(node: RecordNode): Promise<PluginTreeNode[]> {
+    const cacheKey = `${this.originKey(node.record.plugin, node.origin)}::${node.record.formKey}`;
+    let children = this.containerChildCache.get(cacheKey);
+    if (!children) {
+      try {
+        children = await this.repository.getContainerChildren(node.record.plugin, node.record.formKey, node.origin);
+        this.containerChildCache.set(cacheKey, children);
+      } catch (e) {
+        const message = this.err(e);
+        this.log(`[PluginTreeProvider] fetchContainerChildren(${node.record.formKey}) failed: ${message}`);
+        return [new ErrorNode(message)];
+      }
+    }
+    return children.map(c => new RecordNode(
+      c, node.origin, this.isImmutable(c.plugin, node.origin), false, containerChildTypeOf(c.recordType)));
+  }
+
   private async fetchInteriorCells(node: InteriorCellsNode): Promise<PluginTreeNode[]> {
     const cacheKey = this.originKey(node.plugin, node.origin);
     let cached = this.interiorCache.get(cacheKey);
@@ -781,7 +827,11 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
       }
     }
 
-    return cached.items.map(r => new RecordNode(r, node.origin, this.isImmutable(r.plugin, node.origin)));
+    // #424: qust/dial rows are collapsible here too — a Quest or Dialog Topic reached from its
+    // own flat record-type listing (not just as someone else's child) still expands into its own
+    // container children, the same single mechanism fetchContainerChildren's own recursion uses.
+    return cached.items.map(r => new RecordNode(
+      r, node.origin, this.isImmutable(r.plugin, node.origin), false, containerChildTypeOf(node.recordType)));
   }
 
   /** #364: the Conflicts node's own children. No page cache the way fetchRecords has one — this
