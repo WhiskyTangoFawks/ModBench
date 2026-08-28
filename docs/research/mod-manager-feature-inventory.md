@@ -43,7 +43,7 @@ A survey of Mod Organizer 2 and Vortex feature surfaces, mapped to Modbench's cu
 | LOOT auto-sort | ✓ one-click, full masterlist | ✓ built-in, native grouping | 🔜 modbench-9 = dependency-only topological sort; full LOOT masterlist ❓ |
 | ESL flags / capacity display | ✓ | ✓ | ❓ ESL convert is Phase 14 (Editing); display in a Plugins surface undecided |
 | Missing-master warnings | ✓ | ✓ | ✅ (badge, via `MasterReader`) |
-| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([MM ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md)) |
+| Rule-based ordering (after/before rules) | ✗ | ✓ | ➖ MO2 explicit-order model chosen ([MM ADR-0001](../adr/0021-mod-manager-in-extension.md)) |
 
 ## Other MO2/Vortex surfaces
 

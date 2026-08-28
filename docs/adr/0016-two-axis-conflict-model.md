@@ -1,11 +1,14 @@
-# ADR-0016: Two-axis conflict model (ConflictAll + ConflictThis)
+---
+status: accepted
+---
 
-**Status:** Accepted  
-**Date:** 2026-06-02
+# Two-axis conflict model (ConflictAll + ConflictThis)
+
+Decided 2026-06-02; extended 2026-08-11.
 
 ## Context
 
-CONTEXT.md describes a four-state conflict model (No Override, Override, Change Lost, Conflict) derived from xEdit's visible UI states. Phase 9 was designed around this model.
+An early four-state conflict model (No Override, Override, Change Lost, Conflict) was derived from xEdit's visible UI states.
 
 Investigation of the TES5Edit source (`xeMainForm.pas`, `wbInterface.pas`, `wbImplementation.pas`) revealed that xEdit actually tracks conflict state on **two independent axes**:
 
@@ -88,8 +91,6 @@ Investigation revealed that xEdit's `ConflictPriority` system exists because xEd
 
 `ConflictThis`: `OnlyOne`, `Master`, `IdenticalToMaster`, `Override`, `ConflictWins`, `ConflictLoses`
 
-**Update CONTEXT.md** conflict state glossary to reflect the two-axis model and retire the simplified four-state definitions.
-
 **Do not implement a five-state or six-state simplification.** The temptation to flatten the two axes into a single summary is strong, but it destroys the per-cell information that makes xEdit's grid readable. The UI needs both axes.
 
 ## Implementation notes
@@ -152,6 +153,6 @@ changed.
 
 **Keep the four-state model** — cannot drive per-cell color coding. The "Change Lost" state (a mid-stack change overwritten by a later plugin) maps to `ctConflictLoses` on a specific plugin column, which requires ConflictThis to exist at all.
 
-**Implement ConflictPriority table** — investigated during Phase 9.5. The priority system exists because xEdit works at the raw binary level and must paper over redundant count fields, unused bytes, and internal bookkeeping. Mutagen abstracts all of those away — those fields do not appear in the DuckDB schema. The table would annotate fields that don't exist in our system. Closed; not deferred.
+**Implement ConflictPriority table** — investigated and closed. The priority system exists because xEdit works at the raw binary level and must paper over redundant count fields, unused bytes, and internal bookkeeping. Mutagen abstracts all of those away — those fields do not appear in the DuckDB schema. The table would annotate fields that don't exist in our system. Closed; not deferred.
 
 **Compute conflict state in DuckDB SQL** — conflict classification requires iterating the override stack in load-order position and comparing field values across rows. DuckDB's `GROUP BY` + `COUNT(DISTINCT value)` approximation would give a binary "agrees/disagrees" per field but cannot produce `ConflictThis` per plugin or distinguish `ctConflictWins` from `ctConflictLoses`. The classification belongs in C# using the full record objects, with results persisted to DuckDB for filtering.

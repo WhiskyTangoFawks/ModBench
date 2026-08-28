@@ -39,8 +39,7 @@ rather than applied silently.
 - A `string` cell behaves like every other scalar: second click, `F2` and double click all open the
   **inline** editor, immediately, with no debounce.
 - The extended editor is reached only from the cell's **right-click menu** — a native
-  `webview/context` contribution, the same mechanism the pending-cell, column-header and array
-  menus use.
+  `webview/context` contribution, the same mechanism the column-header and array menus use.
 - The command is offered on **immutable** string cells too, opening the extended editor read-only —
   that path is the only way to read a long immutable value in full, and it survives.
 
@@ -53,7 +52,4 @@ divergence #2's vehicle substitution stands. Only the gesture that reaches it ch
   binding are deleted; the branch collapses into the generic scalar branch (#258).
 - The record editor's right-click menus grow an extended-editor entry on string value cells,
   mutable and immutable.
-- ADR-0034's gesture table (double-click row) and divergence #2 are amended to point here, since
-  both asserted the behaviour this ADR removes.
-- The record-editor spec's gesture matrix is rewritten when #258's implementation ships — the spec
-  states current behaviour, so it changes with the code, not with this ADR.
+- ADR-0034's gesture table (double-click row) and divergence #2 state this behaviour.
