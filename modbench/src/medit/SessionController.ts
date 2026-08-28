@@ -354,7 +354,7 @@ export class SessionController {
     return plugins.find((p) => p.name === pluginName)?.origin;
   }
 
-  /** #279 / #356 / ADR-0035 § Live mutation (2026-08-17 amendment): re-read one plugin from the
+  /** #279 / #356 / ADR-0035 § Live mutation: re-read one plugin from the
    *  copy its name resolves to now. The path and origin come from the caller — Mod Management
    *  resolved them; the backend cannot and must not. Since #356 this is called automatically, off
    *  a mod-level change, never from a user gesture.

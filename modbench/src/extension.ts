@@ -1803,7 +1803,7 @@ function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, orig
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** #279 / #356 / ADR-0035 § Live mutation (2026-08-17 amendment): origin drift is the comparison
+/** #279 / #356 / ADR-0035 § Live mutation: origin drift is the comparison
  *  between the origin a plugin's records were read from and the origin its name resolves to now,
  *  absorbed automatically when the two disagree. The tracker owns both the comparison and the
  *  reaction, and imports from neither bounded context; this is where both halves are injected —

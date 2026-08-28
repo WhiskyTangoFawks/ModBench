@@ -9,8 +9,8 @@ import * as vscode from 'vscode';
 export type ResolvedOrigin = { origin: string; path: string } | null;
 
 /** A plugin whose name no longer resolves to the file its records were read from (#279 / #356 /
- *  [ADR-0035](../../docs/adr/0035-one-plugins-tree-editing-is-a-capability.md) § Live mutation,
- *  2026-08-17 amendment). `currentOrigin: null` is the "would now resolve to: nothing" case —
+ *  [ADR-0035](../../docs/adr/0035-one-plugins-tree-editing-is-a-capability.md) § Live mutation).
+ *  `currentOrigin: null` is the "would now resolve to: nothing" case —
  *  uninstalling the only provider of a loaded plugin — where there is nothing left to re-read. */
 export interface PluginDrift {
   /** The origin the session's copy of this plugin was read from. */
@@ -28,7 +28,7 @@ export interface DriftTrackerDeps {
    *  come back as a key with a `null` value; an *absent* key means "no answer for this one", which
    *  is treated as unknown rather than as no drift. */
   currentOrigins: (names: string[]) => Promise<Map<string, ResolvedOrigin>>;
-  /** #356 / ADR-0035's 2026-08-17 amendment: re-reads one plugin from the copy its name resolves
+  /** #356 / ADR-0035 § Live mutation: re-reads one plugin from the copy its name resolves
    *  to now — `SessionController.rereadPlugin`, wired in `extension.ts`. Injected the same way
    *  `currentOrigins` is, for the same reason: this is where Editing's half of the absorption is
    *  reached without this module importing either bounded context. Returns whether it happened;
@@ -46,7 +46,7 @@ export interface DriftTracker extends vscode.Disposable {
   setLoaded(loadedOrigins: Map<string, string> | undefined): void;
   /** Recompute against what the loadout says now, and absorb what changed: every plugin whose
    *  name resolves to a different file than it was loaded from is re-read automatically (#356 /
-   *  ADR-0035's 2026-08-17 amendment) — no decoration, no confirmation, no user gesture. Wired to
+   *  ADR-0035 § Live mutation) — no decoration, no confirmation, no user gesture. Wired to
    *  Mod Management's own watchers (`extension.ts`), never a timer.
    *
    *  Serialized: overlapping calls (the modlist and mods watchers can both fire for one mod-level
@@ -174,8 +174,8 @@ async function doRefresh(deps: DriftTrackerDeps, state: DriftState): Promise<voi
  *
  *  Drift is a comparison between two facts that must not live in one place: **where a plugin's
  *  records were read from** (the session's `PluginMetadata.Origin` — Editing's) and **where its
- *  name resolves now** (`mods/` plus Modlist priority — Mod Management's). ADR-0035's 2026-08-17
- *  amendment gives the reaction to it, too: the session re-reads the plugin automatically, the
+ *  name resolves now** (`mods/` plus Modlist priority — Mod Management's). ADR-0035 § Live
+ *  mutation gives the reaction to it, too: the session re-reads the plugin automatically, the
  *  same absorption every other loadout gesture already gets. So the comparison *and* the reaction
  *  both happen here, at the composition root, over two injected functions — the same shape
  *  `PluginsTreeComposite` and `nameFilter` already use, and the reason all three live in `src/`

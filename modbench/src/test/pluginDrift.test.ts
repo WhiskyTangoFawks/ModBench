@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// #279 / #356 / ADR-0035 § Live mutation (2026-08-17 amendment). Origin drift is a comparison
+// #279 / #356 / ADR-0035 § Live mutation. Origin drift is a comparison
 // between two facts neither bounded context may hold together: where a plugin's records were read
 // from (the session's), and where its name resolves now (Mod Management's) — and, since #356, the
 // reaction to a mismatch too: an automatic re-read, with no decoration and no user gesture. So all
