@@ -26,7 +26,7 @@ export type DetectPaths = () => Promise<{ dataFolder: string; pluginsTxt: string
 export type DetectWinePrefix = () => Promise<string | null>;
 
 /** MO2 running under Proton/Wine stores gamePath as a Wine drive-mapped, backslash path (e.g.
- *  `Z:\home\wayne\...` or `C:\Program Files\...`). `Z:` is Wine's fixed mapping of the filesystem
+ *  `Z:\home\user\...` or `C:\Program Files\...`). `Z:` is Wine's fixed mapping of the filesystem
  *  root; `C:` is Wine's fixed mapping of the prefix's own `drive_c` — a real, distinct location
  *  (#187), not the same drive under a different name. Any other drive letter is a user-defined
  *  Wine mapping (`dosdevices/<letter>`) that can point anywhere on the host; there's no reliable

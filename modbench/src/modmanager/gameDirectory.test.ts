@@ -20,7 +20,7 @@ describe('normalizeGamePath', () => {
   it('leaves a colon that is not a leading drive letter untouched (only the drive-letter prefix is stripped)', async () => {
     // Unlike Windows, a colon elsewhere in a path is legal on Linux (e.g. a mod folder someone
     // named literally "A:B") — an unanchored strip would corrupt it.
-    const path = '/home/wayne/mods/A:B/Fallout4';
+    const path = '/home/user/mods/A:B/Fallout4';
     expect(await normalizeGamePath(path, 'linux', noDetectPrefix)).toBe(path);
   });
 
@@ -31,14 +31,14 @@ describe('normalizeGamePath', () => {
       return Promise.resolve(null);
     };
 
-    const result = await normalizeGamePath('Z:\\home\\wayne\\Games\\Fallout4', 'linux', detectPrefix);
+    const result = await normalizeGamePath('Z:\\home\\user\\Games\\Fallout4', 'linux', detectPrefix);
 
-    expect(result).toBe('/home/wayne/Games/Fallout4');
+    expect(result).toBe('/home/user/Games/Fallout4');
     expect(calledPrefix).toBe(false);
   });
 
   it("maps a C: drive path inside the Proton prefix's drive_c", async () => {
-    const prefix = '/home/wayne/.steam/steam/steamapps/compatdata/377160/pfx';
+    const prefix = '/home/user/.steam/steam/steamapps/compatdata/377160/pfx';
     const detectPrefix = () => Promise.resolve(prefix);
 
     const result = await normalizeGamePath('C:\\Games\\Fallout4', 'linux', detectPrefix);
