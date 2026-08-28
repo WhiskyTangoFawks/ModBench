@@ -872,7 +872,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_StructField_ArraySubFieldIncluded_ProducesChildRows()
     {
-        // Phase 12.2 removed the depth guard: array sub-fields inside structs are now recursed into.
+        // The depth guard is gone: array sub-fields inside structs are now recursed into.
         var subX = Meta("X", "int");
         var subYArray = new FieldMetadata("Y", "array", true, [], [],
             ElementType: new FieldMetadata("", "int", false, [], []));

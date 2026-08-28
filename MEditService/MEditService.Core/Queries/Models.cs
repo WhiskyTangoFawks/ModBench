@@ -108,7 +108,7 @@ public record FieldValue(FieldMetadata Metadata, object? Value, string? CheckErr
 // RecordType (issue #3): the schema table name (e.g. "NPC_") this record belongs to — needed by
 // the webview's "Copy as New Record" column-header action, which must supply a RecordType up
 // front to CreateRecord (schema validation happens before the TemplateFormKey is even read; see
-// EditOrchestrator.CreateRecordCore). Defaults to "" for the many pre-existing call sites (mostly
+// RecordEditService's create path). Defaults to "" for the many pre-existing call sites (mostly
 // test fixtures) that don't need it — always populated for real reads (ReadDetail knows its own
 // schema's TableName).
 // Origin (#272 / ADR-0036): the mod folder that provided this row's physical file, or a reserved

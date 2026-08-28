@@ -4,63 +4,40 @@ status: accepted
 
 # xEdit is the UX reference: click focuses, the keyboard acts, double click edits
 
-Supersedes [ADR-0033](0033-one-gesture-one-meaning-in-the-record-editor.md).
-
 ## Context
 
-ADR-0033 set out to make the record editor's gestures consistent. It picked **left-click = edit** as
-the anchor, then spent an amendment and a narrowing discovering that this leaves nothing for any
-other gesture to mean:
+The record editor's gestures were first specified from memory of xEdit rather than from xEdit,
+anchored on **left-click = edit** (see Alternatives rejected). That one choice left no gesture
+for selection, forced copy to come from native text selection, collided with drag consuming the
+mousedown, and produced the absurd result that a read-only column could hand you its value and
+an editable one could not.
 
-- With edit on single click there is no gesture left for **selection**, so there was no concept of a
-  focused cell at all.
-- Copy therefore had to come from native text selection, which meant a cell had to *activate a text
-  surface* before anything could be copied out of it.
-- But every value cell is a drag source, and `draggable` consumes the mousedown that would begin a
-  selection — so no resting cell could be selected from, which is what forced the read-only surface
-  into existence (#201) just to have something to select.
-- And a resting cell then had to advertise *both* drag and click-to-activate with one cursor, which
-  is impossible; we shipped `grab` everywhere, which advertised the wrong one and hid the gesture
-  users were actually hunting for.
-- Two whole categories of cell ended up with no copy path at all (`bool`/`enum`/`flags` on a mutable
-  column), producing the absurd result that a **read-only** column could hand you its value and an
-  editable one could not.
-
-Every one of those is downstream of the first choice. [The xEdit UX
-audit](../research/xedit-ux-audit.md) shows xEdit has none of these problems, because it never puts
-anything on a single click: `vstViewClick` exits unless Ctrl is held, so plain click is left to the
-tree's own focus machinery. Click means *focus*. Editing is reached by F2, by a second click on an
-already-focused cell, or by double click. The clipboard is a keyboard operation on the focused
-cell's **model value** (`Element.EditValue`), so it does not care what widget the cell renders.
-
-The deeper mistake was procedural: mEdit's interaction model was specified from memory of xEdit
-rather than from xEdit. [ADR-0019](0019-xedit-unified-tree-model-for-compare-grid.md) had already
-established the principle for the compare grid's *data* model — "xEdit (the reference tool that all
-mEdit users will be familiar with)" — and it should have governed the *interaction* model too.
+[The xEdit UX audit](../research/xedit-ux-audit.md) shows xEdit has none of these problems,
+because it never puts anything on a single click: `vstViewClick` exits unless Ctrl is held, so
+plain click is left to the tree's own focus machinery. Click means *focus*. Editing is reached by
+F2, by a second click on an already-focused cell, or by double click. The clipboard is a keyboard
+operation on the focused cell's **model value** (`Element.EditValue`), so it does not care what
+widget the cell renders. [ADR-0019](0019-xedit-unified-tree-model-for-compare-grid.md) had
+already established the principle for the compare grid's *data* model; it governs the
+*interaction* model too.
 
 ## Decision
 
-**xEdit is the UX reference for this surface.** Where xEdit has an answer, mEdit adopts it. The only
-admissible reason to diverge is a genuine platform limitation that cannot be worked around — not
-that an alternative seems nicer, cleaner, or more modern. xEdit has 25 years of refinement against
-this exact problem domain, and essentially every mEdit user arrives already fluent in it; familiarity
-is worth more than local improvement.
+**xEdit is the UX reference for this surface.** Where xEdit has an answer, mEdit adopts it. The
+only admissible reason to diverge is a genuine platform limitation that cannot be worked around —
+not that an alternative seems nicer, cleaner, or more modern. xEdit has 25 years of refinement
+against this exact problem domain, and essentially every mEdit user arrives already fluent in it;
+familiarity is worth more than local improvement.
 
-### Baseline, not ceiling *(amendment, 2026-08-16)*
+### Baseline, not ceiling
 
-The rule governs **replacing** xEdit's answers, not **adding** what xEdit never had. xEdit is the
-base experience mEdit builds on top of; an opt-in power-user addition with no xEdit counterpart
-needs no platform-limitation justification, provided:
-
-- the default experience remains xEdit's — the addition is reached by an explicit, opt-in
-  affordance, never a changed default;
-- no existing xEdit gesture or meaning is redefined to reach or operate it;
-- where the addition overlaps ground xEdit does cover, xEdit's vocabulary and semantics carry into
-  it.
-
-First instance: the transposed record view
-([#341](https://github.com/WhiskyTangoFawks/ModBench/issues/341)) — an optional plugins-as-rows
-orientation on top of the default plugins-as-columns grid.
+The rule governs **replacing** xEdit's answers, not **adding** what xEdit never had. An opt-in
+power-user addition with no xEdit counterpart needs no platform-limitation justification,
+provided the default experience remains xEdit's (the addition is reached by an explicit, opt-in
+affordance, never a changed default), no existing xEdit gesture or meaning is redefined to reach
+or operate it, and where the addition overlaps ground xEdit does cover, xEdit's vocabulary and
+semantics carry into it. First instance: the transposed record view (#341), an optional
+plugins-as-rows orientation on top of the default plugins-as-columns grid.
 
 ### The gesture model
 
@@ -68,11 +45,11 @@ orientation on top of the default plugins-as-columns grid.
 | --- | --- |
 | **Single click**, value cell | Focus that cell. The row highlights; one cell carries focus. Nothing else happens. |
 | **Single click**, already-focused cell | Open its inline editor. |
-| **Double click**, value cell | Open the fullest editor the type has — inline for numeric and flag types, the extended editor otherwise. *Amended by [ADR-0039](0039-no-left-click-leaves-the-record-panel.md): a `string` cell's double click opens the inline editor; the extended editor is right-click only.* |
+| **Double click**, value cell | Open the inline editor. No left-click gesture reaches the extended editor ([ADR-0039](0039-no-left-click-leaves-the-record-panel.md)). |
 | **Double click**, label column | Expand/collapse the node. |
-| **Ctrl+click** | Follow the reference to its record. Unchanged. |
-| **Click and hold, drag** | Copy this value into wherever it is dropped. Unchanged, but **no longer advertised by the cursor**. |
-| **Right-click** | Named, discrete actions, including list structure ops. |
+| **Ctrl+click** | Follow the reference to its record. |
+| **Click and hold, drag** | Copy this value into wherever it is dropped. Not advertised by the cursor. |
+| **Right-click** | Named, discrete actions, including list structure ops and the extended editor. |
 
 ### The keyboard, acting on the focused cell
 
@@ -80,75 +57,75 @@ orientation on top of the default plugins-as-columns grid.
 remove entry or clear value · `Ctrl+↑`/`Ctrl+↓` reorder within an unsorted list.
 
 **Clipboard operations carry the cell's model value, not DOM text.** This is the load-bearing
-change: copy stops caring whether the cell renders a text box, a dropdown, a checkbox or a link, so
-every type is copyable in every column, and the mutable/immutable inversion disappears.
+change: copy stops caring whether the cell renders a text box, a dropdown, a checkbox or a link,
+so every type is copyable in every column, and the mutable/immutable inversion disappears.
 
-### Selection
+### Selection and the resting cursor
 
-Single-select, matching xEdit: the row highlights, one cell within it carries focus, and the focused
-cell is what every keyboard action operates on. No multi-cell ranges.
-
-### The resting cursor
-
-Default arrow. Drag is not advertised, exactly as in xEdit — `grab` on every value cell is removed.
+Single-select, matching xEdit: the row highlights, one cell within it carries focus, and the
+focused cell is what every keyboard action operates on. No multi-cell ranges. The resting cursor
+is the default arrow; drag is not advertised, exactly as in xEdit.
 
 ## Permitted divergences, and why each is forced
 
 1. **FormKey editing uses a native QuickPick**, not xEdit's sorted combo box. The webview cannot
    host a searchable 1000-row picker as well as VS Code already does, and
-   [ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md) requires the native surface where one
-   exists. Behaviour aligned (type to search, pick to commit); vehicle substituted.
-2. **The extended editor is a VS Code surface**, not a modeless form. xEdit's `TfrmViewElements` has
-   no analogue we can or should reproduce in a webview; the native answer is an editor tab or an
-   input box. Behaviour aligned (double click reaches a fuller editor for text and reference types);
-   vehicle substituted. *Amended by
-   [ADR-0039](0039-no-left-click-leaves-the-record-panel.md): the behaviour half no longer holds for
-   `string` cells — a tab relocates the user in a way xEdit's modeless form never did, so no
-   left-click gesture reaches the extended editor; it is a right-click action, on immutable cells
-   (read-only) as well as mutable ones.*
-3. **The clipboard is written through the extension host** (`vscode.env.clipboard`) rather than from
-   the webview. A mechanism detail with no user-visible difference, chosen because webview clipboard
-   access is not guaranteed.
-4. **The pending-change column and staged edits have no xEdit equivalent.** xEdit writes to the
-   in-memory plugin directly. mEdit stages, per
-   [ADR-0017](0017-pending-change-model.md)/[ADR-0028](0028-change-groups-are-derived-dependency-closures.md).
-   That is a deliberate product difference, not a UX one, and it is out of this ADR's scope.
+   [ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md) requires the native surface where
+   one exists. Behaviour aligned (type to search, pick to commit); vehicle substituted.
+2. **The extended editor is a VS Code surface**, not a modeless form. xEdit's `TfrmViewElements`
+   has no analogue we can or should reproduce in a webview; the native answer is an editor tab.
+   Because a tab relocates the user in a way xEdit's modeless form never did, no left-click
+   gesture reaches it — it is a right-click action, on immutable cells (read-only) as well as
+   mutable ones ([ADR-0039](0039-no-left-click-leaves-the-record-panel.md)).
+3. **The clipboard is written through the extension host** (`vscode.env.clipboard`) rather than
+   from the webview. A mechanism detail with no user-visible difference, chosen because webview
+   clipboard access is not guaranteed.
+4. **Tracking, compile and branch UX follows git and VS Code, not xEdit.** xEdit writes to the
+   in-memory plugin and saves; Modbench edits a tracked mod's source in a git working tree and
+   compiles it ([ADR-0041](0041-manual-git-tracking-compile-from-text.md)). xEdit has no model
+   for review, revert or history, so the references there are git's own and VS Code's native
+   Source Control idioms. A product difference, not a UX one, and out of this ADR's scope.
 
 Anything not on this list aligns.
 
 ## Consequences
 
-This invalidates work that has already shipped, and says so plainly rather than letting it rot:
-
-- **`ReadOnlyValueSurface` is deleted.** It existed solely to give an immutable cell something to
-  select; with `Ctrl+C` on the focused cell there is nothing for it to do. An immutable cell simply
-  refuses to edit, as in xEdit.
-- **Single-click activation is removed** from `ScalarCell`, `FlagCell`, `FormKeyCell`,
-  `ConditionSection` and `VmadSection`.
-- **`cursor: grab` is removed** from the value cells, and with it ADR-0033's cursor contract in full.
-- **Inline array controls (▲▼✕) move to the right-click menu and the keyboard.** ADR-0033's rule
-  that an action reachable by right-click is never also reachable a second way survives this ADR and
-  applies here.
-- **Cell focus is new state that lives above the leaf**, in the grid rather than in any cell — which
-  is the same container [#219](https://github.com/WhiskyTangoFawks/ModBench/issues/219) exists to
-  extract. Those two pieces of work are now one.
-- **The gesture matrix in the record-editor spec is rewritten**, and most of its holes close: with
-  copy on the model value, availability stops varying by type and column kind.
-
-What survives from #201: select-on-focus in the editor, the placeholder rule for `{…}`/`[3]`/`—`,
-and the three cursor-mask fixes (now moot, since no leaf asserts a cursor at all).
+- An immutable cell simply refuses to edit, as in xEdit; there is no read-only "selection surface".
+- Single-click activation does not exist on any cell type; `cursor: grab` does not exist on any
+  value cell.
+- Inline array controls (▲▼✕) live in the right-click menu and on the keyboard. An action
+  reachable by right-click is never also reachable a second, redundant way.
+- Cell focus is state that lives in the grid, above any leaf.
+- The gesture matrix in the record-editor spec derives from this: with copy on the model value,
+  availability stops varying by type and column kind.
+- Select-on-focus in the editor and the placeholder rule for `{…}`/`[3]`/`—` survive from #201.
 
 ## Applies beyond this surface
 
-The rule — **consult xEdit before designing any record-editing interaction, and diverge only under a
-platform limitation** — governs the record editor, VMAD and Condition sections, and any future
-plugin-editing surface. Divergences taken under that wider rule are recorded as their own ADRs, so
-they stay findable: see
-[ADR-0037](0037-unresolvable-masters-are-indexed-and-flagged.md) (a plugin with unresolvable masters
-is indexed and flagged rather than force-deactivated, justified by Mutagen's self-describing
-FormKeys against xEdit's whole-graph resolution) and
+The rule — **consult xEdit before designing any record-editing interaction, and diverge only
+under a platform limitation** — governs the record editor, VMAD and Condition sections, and any
+future plugin-editing surface. Divergences taken under that wider rule are recorded as their own
+ADRs, so they stay findable: [ADR-0037](0037-unresolvable-masters-are-indexed-and-flagged.md) (a
+plugin with unresolvable masters is indexed and flagged rather than force-deactivated, justified
+by Mutagen's self-describing FormKeys against xEdit's whole-graph resolution) and
 [ADR-0038](0038-masters-are-lifecycle-derived-never-user-declared.md) (masters are derived from
 content and never user-declared, justified by Mutagen rebuilding the master list from the live
 object graph on every save against xEdit's in-place byte patching). It does not govern Mod
 Management, which has no xEdit counterpart and takes its cues from MO2 instead
 ([ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md)).
+
+## Alternatives rejected
+
+- **Left-click = edit, "one gesture, one meaning" (2026-08-09 → 2026-08-14).** Three gestures
+  with one meaning each — left-click activates the cell's text surface (an editor on a mutable
+  column, read-only on an immutable one), drag copies a value, right-click holds named actions —
+  plus a cursor contract (`grab` at rest, caret when clicked) so copy and paste could be the
+  platform's own text selection with no clipboard code. The goal stands; the anchor was wrong.
+  With edit on single click there was nothing left for selection, so a read-only surface had to
+  exist just to have something to select from; `draggable` consumed the mousedown that would
+  start a selection; bounded-list types (`bool`/`enum`/`flags`/`formKey`) activated controls,
+  not text, so they were copyable only in immutable columns; and one cursor could not honestly
+  advertise both drag and click-to-activate. Every problem was downstream of the first choice,
+  and every one is absent in xEdit. What survived: an action reachable by right-click is never
+  also reachable a second way; a cell's displayed text must be its value (the FormKey label is
+  `EditorID [FormKey]`, matching its picker).

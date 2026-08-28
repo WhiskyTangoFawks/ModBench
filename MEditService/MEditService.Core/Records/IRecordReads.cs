@@ -62,7 +62,7 @@ public interface IRecordReads
     /// </summary>
     IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin);
 
-    // Phase 16 — worldspace tree reads (from the placement / cell_location side tables).
+    // Worldspace tree reads (ADR-0023) (from the placement / cell_location side tables).
     IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey);
     PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset);
     CellReferences GetCellReferences(PluginKey plugin, string cellFormKey);

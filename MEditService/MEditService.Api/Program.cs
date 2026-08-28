@@ -85,7 +85,7 @@ try
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
     // than this middleware writes under, so the override doesn't touch it and no second override is
     // needed here). The level is what makes it a win rather than a regression: most endpoint guards
-    // and StageEditResultExtensions.ToHttpResult return a 4xx without logging anything of their own,
+    // and the RecordEditRefusal → ProblemDetails mapping return a 4xx without logging anything of their own,
     // so without an explicit selector a deliberate failure would be invisible; with the default
     // (Information), a success line would flood right back in at one line/request.
     app.UseSerilogRequestLogging(opts => opts.GetLevel = RequestLogLevel);

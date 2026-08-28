@@ -116,7 +116,7 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   `modbench.referencedByTree.copy` is reachable by a `Ctrl+C` keybinding (`focusedView ==
   modbench.referencedByTree`) *and* a `view/item/context` entry — both invoking the one command,
   the same shape `modbench.deleteRecord` already uses elsewhere in this tree family.
-  [ADR-0033](../adr/0033-one-gesture-one-meaning-in-the-record-editor.md)'s "no action reachable
+  [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)'s "no action reachable
   two ways" is about redundant *affordances* for one action (an inline button duplicating a menu
   item), not a command carrying both a keybinding and a menu entry — those are the same route, not
   two. **The group node is the copyable unit; field rows are detail** — `referencedByCopyText`
@@ -201,8 +201,8 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   batch `GET /records/{formKeys}/references`-style endpoint; today's endpoint is single-FormKey,
   so an N-record selection would be N round trips. The grouping model already supports the result
   shape (collapse-by-FormKey over a larger input) — only the backend call is missing.
-- **Reference validation at edit time** — that is a backend concern (ADR-0020's rule,
-  relocated from stage time — ADR-0041), surfaced by whichever command made the edit, not
+- **Reference validation at edit time** — that is a backend concern (ADR-0041: FormLinks
+  validate at edit time), surfaced by whichever command made the edit, not
   here.
 - **Forward references** (what this record points at) — that is the compare grid's FormKey
   cells, [medit-record-editor.md](medit-record-editor.md).

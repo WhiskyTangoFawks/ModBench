@@ -27,7 +27,7 @@ namespace MEditService.Tests.RealData;
 /// which property broke.
 ///
 /// A red result here means a human judges the next Mutagen bump before it lands — not that every
-/// bump is forbidden. A release could in principle reorder subrecords benignly (ADR-0040 wants
+/// bump is forbidden. A release could in principle reorder subrecords benignly (ADR-0041 wants
 /// bumps gated, not banned).
 /// </summary>
 public sealed class BinaryRoundTripGateTests

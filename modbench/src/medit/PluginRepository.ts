@@ -178,7 +178,7 @@ export interface PluginRepository {
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
 
-  // Phase 16: per-plugin worldspace tree. origin (#305 / ADR-0036): same optional shape as
+  // Per-plugin worldspace tree. origin (#305 / ADR-0036): same optional shape as
   // getRecordTypes/getRecords above — a row that stands for a specific copy states it.
   /**
    * #415/ADR-0041: one field edit through the single write path. Never throws on a refusal — a

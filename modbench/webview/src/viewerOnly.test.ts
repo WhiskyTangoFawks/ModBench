@@ -15,7 +15,7 @@ import * as path from 'path';
  *    Not through RecordSessionClient, which stays read-only — an edit travels webview → extension
  *    host → backend so that a refusal can become a native notification, a surface only the host has.
  * 2. None of the retired pending-change messages came back. Those were the staging model
- *    (ADR-0017/0028, superseded); a working-tree change is the only "pending" state that exists.
+ *    (retired by ADR-0041); a working-tree change is the only "pending" state that exists.
  *
  * Asserted against the sources rather than rendered components, because this is a statement about
  * what capability the webview *has*. Each absence assertion carries a positive control found by the
@@ -54,7 +54,7 @@ describe('the record editor webview writes through exactly one path (#415)', () 
   // caught here because #410 retired everything on the old write path in one sweep (this ticket's
   // own commit history shows EXTENDED_EDITOR_ leaving the list the moment #426 Track 3 restored
   // it). Genuinely dead for good, because each *is* the pending-change/staging model itself
-  // (ADR-0017/0028, superseded by ADR-0041's working-tree model, which has no "pending" state to
+  // (retired by ADR-0041's working-tree model, which has no "pending" state to
   // stage into, no per-plugin Save button, and no whole-record column-header copy action of its
   // own): PENDING_CHANGED, OPEN_REVERT_GROUP_CONFIRM, PENDING_CELL_, COLUMN_HEADER_.
   //

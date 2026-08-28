@@ -90,13 +90,13 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // produced, never sent back to it, so the two sides folding differently has no wire consequence.
 //
 // #275 / ADR-0036: `origin` is required (no longer omittable) — every hand type that feeds this
-// (RecordDetail.origin, PendingChange.origin, PluginInfo.origin) is a required `string` too, so a
+// (RecordDetail.origin, PluginInfo.origin) is a required `string` too, so a
 // caller can no longer skip specifying it and silently collapse onto the elided Data origin.
 //
 // #272 review: `origin` still accepts a literal `null` value, even though every one of those hand
 // types claims it never will be. Investigated: it provably can't be, today — the
-// backend fields behind all four (`RecordDetail.Origin`/`CompareOverride.Origin`/
-// `PendingChange.Origin`/`PluginResponse.Origin`, MEditService.Core/Queries/Models.cs and
+// backend fields behind all three (`RecordDetail.Origin`/`CompareOverride.Origin`/
+// `PluginResponse.Origin`, MEditService.Core/Queries/Models.cs and
 // Session/PluginMetadata.cs) are non-nullable C# `string`s, always populated from
 // `PluginOrigin.DataDirectory` or an already-normalized value (`SessionEndpoints.cs`'s
 // `string.IsNullOrEmpty(p.Origin) ? PluginOrigin.DataDirectory : p.Origin` is the one place a

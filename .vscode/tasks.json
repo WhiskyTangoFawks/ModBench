@@ -59,7 +59,7 @@
     {
       "label": "Start Backend",
       "type": "shell",
-      "command": "dotnet run -- --data-folder \"/home/wayne/.steam/debian-installation/steamapps/common/Fallout 4/Data\" --plugins-txt \"/home/wayne/.steam/debian-installation/steamapps/compatdata/377160/pfx/drive_c/users/steamuser/AppData/Local/Fallout4/Plugins.txt\"",
+      "command": "dotnet run",
       "options": { "cwd": "${workspaceFolder}/MEditService/MEditService.Api" },
       "isBackground": true,
       "problemMatcher": {

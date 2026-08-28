@@ -152,7 +152,7 @@ bookkeeping.
 
 - The tree views the MO2 instance's shared `downloads/` folder
   (`<instanceRoot>/downloads/`), per
-  [modmanager ADR-0001](../../modbench/src/modmanager/docs/adr/0001-mo2-native-modlist-format.md).
+  [modmanager ADR-0001](../adr/0021-mod-manager-in-extension.md).
   Not a Modbench-private location — a user must be able to alternate between MO2 and
   Modbench on the same instance with no divergence.
 - Retention (keep vs. purge downloads after install) is **not a Downloads-tree decision**:

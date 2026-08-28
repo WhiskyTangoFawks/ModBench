@@ -362,8 +362,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     // #267 / ADR-0035: one row per indexed plugin, upserted every Index() call. UpdateWinners()
-    // joins record tables against it by plugin name rather than widening every reflected table
-    // with its own participates column.
+    // joins `records` against it by plugin name rather than carrying a participates column per row.
     private void UpsertPluginParticipation(string plugin, string origin, int loadOrderIndex, bool participates)
     {
         DeleteExistingForOrigin("plugins", plugin, origin);
@@ -1783,7 +1782,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
     }
 
-    // Phase 16: populate the worldspace-tree side tables from the GRUP hierarchy that
+    // ADR-0023: populate the worldspace-tree side tables from the GRUP hierarchy that
     // EnumerateMajorRecords flattens away.
     private void IndexPlacement(IModGetter pluginMod, string plugin, string origin)
     {
@@ -2017,7 +2016,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         return results;
     }
 
-    // ── Phase 16: worldspace tree reads ────────────────────────────────────────
+    // ── Worldspace tree reads (ADR-0023) ────────────────────────────────────────
 
     public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
         GetWorldspaceCells(EffectiveRelation, plugin.Name, worldspaceFormKey, plugin.Origin!);

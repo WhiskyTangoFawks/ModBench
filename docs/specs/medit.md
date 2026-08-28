@@ -64,7 +64,7 @@ physical plugin file is a separate Save & Compile gesture, and neither requires 
 
 Surface-specific stories live in the surface specs above. These are the cross-cutting ones:
 
-1. As a mod author, I want to enter editing mode from my loadout with a single action, so that
+1. As a mod author, I want to start an editing session from my loadout with a single action, so that
    the editor opens against exactly the plugins my active profile loads, with no separate
    session-setup step.
 2. As a user, I want a status bar item that tells me whether the backend is running,
@@ -72,7 +72,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
    that I always know the editor's state.
 3. As a user, I want clicking the status bar item when the backend isn't running to tell me how
    to start it, so that I'm not stuck guessing.
-4. As a user, I want leaving editing mode to tear the session down, so that a backend I'm not
+4. As a user, I want closing the editor to tear the session down, so that a backend I'm not
    using isn't left running against my loadout.
 5. As a user, I want to run a script against the whole session or a specific record/plugin
    (planned), so that I can automate repetitive edits.

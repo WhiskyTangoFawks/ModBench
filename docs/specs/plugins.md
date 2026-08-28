@@ -347,8 +347,8 @@ without saying what is not yet known would make that worse, not better.
   backend's `/records` query has no artificial limit, and the realistic worst case a Bethesda load
   order can put in front of this surface — a single plugin's own contribution to one record type,
   since that's the unit a `RecordTypeNode` scopes to — is vanilla `Fallout4.esm`'s own `INFO`
-  (Dialog response) records, ~78,000 of them in a full real-world FO4 modlist (`/home/wayne/Games/
-  FO4/LitR`, 592 active plugins; every mod plugin checked, including the largest quest mod in that
+  (Dialog response) records, ~78,000 of them in a full real-world FO4 modlist (a 592-active-plugin
+  MO2 instance; every mod plugin checked, including the largest quest mod in that
   list, stayed under 13,000 for its own biggest type — vanilla dwarfs mods here). At that count:
   ~125-280ms for the full backend query (DuckDB, `LIMIT`/`OFFSET` with no artificial cap) plus an
   estimated ~280ms to materialize and hand off the `TreeItem` batch extension-host-side (synthetic
@@ -817,7 +817,7 @@ overflow, then native **Collapse All** last.
   MO2 doesn't guard-rail it either, and the order-aware missing-master badge catches the
   fallout if it happens.
 - **A structured conflict/EditorID/record-type filter UI** — filtering is deliberately
-  user-written SQL against the per-type tables, not a fixed toggle set (ADR-0018).
+  user-written SQL against the generated per-type views, not a fixed toggle set (ADR-0018).
 - **Multi-step form-space operations** — compact FormIDs, copy-as-underride (moving a record
   down into a master), and merge-into-another-plugin — are deferred and will be delivered as
   Python scripts over the header/renumber/delete edit primitives, not bespoke commands.

@@ -24,7 +24,7 @@ public class SchemaReflectorTests
     [Fact]
     public void GetSchemas_IncludesPlacedRecordTypes()
     {
-        // Phase 16: placed objects are indexed as normal records so the worldspace tree,
+        // ADR-0023: placed objects are indexed as normal records so the worldspace tree,
         // record editor, and agent queries are uniform DuckDB reads.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         Assert.True(schemas.ContainsKey("refr"));
@@ -771,7 +771,7 @@ public class SchemaReflectorTests
         Assert.Same(first, second);
     }
 
-    // ── Phase 12: array and struct field types ─────────────────────────────────
+    // ── Array and struct field types ─────────────────────────────────
 
     [Fact]
     public void GetSchemas_Npc_Keywords_IsReflectedAsArrayOfFormKeys()
@@ -1247,7 +1247,7 @@ public class SchemaReflectorTests
         Assert.Contains("thin", result);
     }
 
-    // ── Phase 12.1: bitmask / [Flags] enum support ────────────────────────────
+    // ── Bitmask / [Flags] enum support ────────────────────────────
 
     [Fact]
     public void GetSchemas_Npc_FlagColumn_IsBitmaskTrue()
@@ -1493,7 +1493,7 @@ public class SchemaReflectorTests
     public void GetSchemas_Header_MastersColumn_ToFieldMetadata_IsArrayTrue()
     {
         // The column itself must be flagged as an array (not just ApiType == "array") — this is
-        // what ArrayRowGroup on the frontend keys off to render masters as a repeatable list.
+        // what the frontend's array rows key off to render masters as a repeatable list.
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
         var col = schemas["header"].RecordColumns.Single(c => c.Name == "masters");
         Assert.True(col.ToFieldMetadata().IsArray);

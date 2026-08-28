@@ -150,7 +150,7 @@ describe('PluginHeader', () => {
     expect(container.firstElementChild).not.toHaveAttribute('data-vscode-context');
   });
 
-  // Issue #209: Add Master… moved into the column header's native right-click menu (ADR-0033:
+  // Issue #209: Add Master… moved into the column header's native right-click menu (ADR-0034:
   // no standalone control once an action is right-click-reachable) — PluginHeader no longer
   // renders a button or its own candidate dropdown for it.
   it('does not render an Add Master… button', () => {

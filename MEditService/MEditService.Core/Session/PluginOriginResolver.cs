@@ -16,7 +16,7 @@ namespace MEditService.Core.Session;
 //
 // Scoping rather than ordering is deliberate. Unlisted copies are appended after the load order is
 // built, so a plain first-match happens to return the right plugin today — but that is an accident
-// of list order, and this method's callers (EditOrchestrator, RecordQueryService,
+// of list order, and this method's callers (RecordEditService, RecordQueryService,
 // WorldspaceQueryService) are scoping their reads with it.
 public static class PluginOriginResolver
 {

@@ -24,7 +24,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // it's a PACK sub-record struct field (wbStruct(PFO2, 'Data', ...) in wbDefinitionsFO4.pas),
     // never a top-level Mutagen record type, so it could never have been discovered here anyway.
 
-    // Deliberate product filter: not standard editable refs (Phase 16 placed refr/achr are
+    // Deliberate product filter: not standard editable refs (placed refr/achr are
     // indexed as normal records so the worldspace tree, record editor, and agent queries are
     // uniform DuckDB reads; their cell parentage lives in the `placement` side table — land/
     // navm/navi don't get that treatment).
