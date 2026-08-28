@@ -65,6 +65,7 @@ import { DownloadsProvider } from './modmanager/DownloadsProvider';
 import { createDownloadsWatcher } from './modmanager/downloadsWatcher';
 import { HiddenDownloadDecorationProvider } from './modmanager/HiddenDownloadDecorationProvider';
 import { ImplicitMasterDecorationProvider } from './modmanager/ImplicitMasterDecorationProvider';
+import { FileOverrideDecorationProvider } from './modmanager/FileOverrideDecorationProvider';
 import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
@@ -1151,6 +1152,11 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     // implicitMasterNames() so it never drifts from what the tree actually rendered.
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
+    ),
+    // #447: badges + tints a file-override row (git-modified idiom) — live against
+    // PluginListProvider's own fileOverrides() so it never drifts from what the tree rendered.
+    vscode.window.registerFileDecorationProvider(
+      new FileOverrideDecorationProvider(() => pluginListProvider.fileOverrides()),
     ),
     ...wireDriftTracker(tracker, instanceRoot),
     pluginListView.onDidChangeCheckboxState(async (e) => {

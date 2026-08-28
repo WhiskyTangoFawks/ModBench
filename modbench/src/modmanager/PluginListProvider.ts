@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
-import { buildFileConflictIndex } from './fileConflictIndex';
+import { buildFileConflictIndex, rootLevelFileConflicts, type ConflictEntry } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
 import { resolvePluginPaths } from './explicitSession';
 import { discoverImplicitMasters } from './vanillaMasters';
@@ -34,10 +34,26 @@ export interface PluginListProviderOptions {
  *  view's `onDidChangeCheckboxState` handler in extension.ts). An order-aware
  *  missing-master `status` (issue #67) overlays an error icon/description/tooltip
  *  when a declared master isn't loaded before this plugin — deliberately worded
- *  distinctly from the Mods tree's presence-only "Missing master:" badge. */
+ *  distinctly from the Mods tree's presence-only "Missing master:" badge.
+ *
+ *  #447: `fileOverride` (this plugin filename's `ConflictEntry`, present only when more than one
+ *  enabled mod provides it — see `rootLevelFileConflicts`) appends a "file override" description
+ *  suffix and tooltip naming every providing mod with the winner marked, and — this is the one
+ *  fact that also has to reach outside this class — sets `resourceUri` to the winner's physical
+ *  path, which is what lets `FileOverrideDecorationProvider` key its badge/tint off this row.
+ *  `resourceUri` is left unset for every other row (undefined `fileOverride`, exactly like today)
+ *  rather than always set: VS Code infers a file-type base icon from a `resourceUri` whenever no
+ *  explicit `iconPath` overrides it, so setting it unconditionally would change every uncontested
+ *  row's rendered icon — a regression no unit test here could catch (`iconPath` itself would stay
+ *  untouched), so it is closed by construction instead: an uncontested row never gets a
+ *  resourceUri at all, the same as before this ticket. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
-  constructor(public readonly plugin: PluginEntry, public readonly orderStatus?: PluginOrderStatus) {
+  constructor(
+    public readonly plugin: PluginEntry,
+    public readonly orderStatus?: PluginOrderStatus,
+    public readonly fileOverride?: ConflictEntry,
+  ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
     this.checkboxState = plugin.enabled
@@ -50,6 +66,19 @@ export class PluginNode extends vscode.TreeItem {
         ? '✗ Master not loaded before this plugin'
         : `✗ ${masters.length} masters not loaded before this plugin`;
       this.tooltip = [plugin.name, ...masters.map((m) => `Master ${m} is not loaded before this plugin`)].join('\n');
+    }
+    if (fileOverride) {
+      this.resourceUri = vscode.Uri.file(fileOverride.winner);
+      // Appended (never overwrites) so the order-aware badge above and this decoration can
+      // legitimately coexist on the same row (#447 AC3 — the Missing-master badge is unaffected).
+      this.description = [this.description, `${fileOverride.providers.length} mods`].filter(Boolean).join(' ');
+      const overrideLines = [
+        `File override: ${fileOverride.providers.length} mods provide this plugin — winner: ${fileOverride.winnerMod}`,
+        ...fileOverride.providers.map((p) => p === fileOverride.winnerMod ? `${p} (winner)` : p),
+      ];
+      this.tooltip = typeof this.tooltip === 'string'
+        ? `${this.tooltip}\n${overrideLines.join('\n')}`
+        : [plugin.name, ...overrideLines].join('\n');
     }
   }
 }
@@ -330,11 +359,16 @@ export class PluginListProvider
     const enabledSet = new Set(enabled);
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
-    const statuses = await this.computeStatuses(fullOrder);
+    const facts = await this.computeRowFacts(fullOrder);
     this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
+    this.lastFileOverrides = facts?.fileOverrides ?? new Map();
     const rows: PluginListNode[] = [
       ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
-      ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
+      ...dedupedOrder.map((name) => new PluginNode(
+        { name, enabled: enabledSet.has(name) },
+        facts?.statuses.get(name),
+        facts?.fileOverrides.get(name.toLowerCase()),
+      )),
     ];
     return { kind: 'ok', cache: { rows } };
   }
@@ -350,19 +384,35 @@ export class PluginListProvider
 
   private lastImplicitNames: ReadonlySet<string> = new Set();
 
-  /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped
-   *  full row order — see `getChildren`), or undefined when no instanceRoot is
-   *  configured. A secondary, non-blocking step (modmanager/CLAUDE.md): on any
-   *  failure the badges degrade to absent — the tree still renders every row —
-   *  with a warning surfaced (ADR-0026: silently missing badges would look
-   *  identical to "all masters correctly ordered"). */
-  private async computeStatuses(order: string[]): Promise<Map<string, PluginOrderStatus> | undefined> {
+  /** #447: every root-level (plugin) `ConflictEntry` more than one enabled mod currently
+   *  provides, from the last render, keyed by lowercased plugin filename — what
+   *  `FileOverrideDecorationProvider` matches a row's `resourceUri` against for its badge/tint,
+   *  and (for #448) the signal a plugin's row has peers to expand into a Stack node from. Empty
+   *  before the first render; a live read (not a snapshot), same convention as
+   *  `implicitMasterNames()`. */
+  fileOverrides(): ReadonlyMap<string, ConflictEntry> {
+    return this.lastFileOverrides;
+  }
+
+  private lastFileOverrides: ReadonlyMap<string, ConflictEntry> = new Map();
+
+  /** Order-aware missing-master verdicts *and* (#447) file-override facts for `order` (the
+   *  implicit-first, deduped full row order — see `getChildren`), or undefined when no
+   *  instanceRoot is configured. One `FileConflictIndex` build feeds both — they are two
+   *  different views over the same enabled-mod file walk, not two separate ones. A secondary,
+   *  non-blocking step (modmanager/CLAUDE.md): on any failure both badges degrade to absent —
+   *  the tree still renders every row — with a warning surfaced (ADR-0026: silently missing
+   *  badges would look identical to "nothing to flag"). */
+  private async computeRowFacts(order: string[]): Promise<
+    { statuses: Map<string, PluginOrderStatus>; fileOverrides: Map<string, ConflictEntry> } | undefined
+  > {
     if (!this.instanceRoot) return undefined;
     try {
       const entries = await this.source.readModlist();
       const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
       const dataFolder = await this.dataFolder();
-      return await computePluginOrderStatuses(order, index, dataFolder, this.log);
+      const statuses = await computePluginOrderStatuses(order, index, dataFolder, this.log);
+      return { statuses, fileOverrides: rootLevelFileConflicts(index) };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
