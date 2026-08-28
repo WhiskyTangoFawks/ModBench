@@ -103,8 +103,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     each names a different way out; naming the wrong one is worse than naming none. Over HTTP they
     travel as a ProblemDetails `refusal` extension beside the detail, so an agent branches on a
     discriminator rather than on prose.
-  - **FormLinks validate at edit time**, against effective state (ADR-0020 kept, relocated from
-    stage time). The check is `CheckErrorBuilder` over the incoming value — the same builder the
+  - **FormLinks validate at edit time**, against effective state (ADR-0041). The check is `CheckErrorBuilder` over the incoming value — the same builder the
     read model renders check errors from — so "what the editor flags" and "what it refuses to
     create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; #429
     gave a top-level FormLink *column* the same `ApplyFormLinkJson` write delegate its struct/array
@@ -160,7 +159,6 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   independent state. No `Connection` property and no SQL crosses this seam except `SetFilter`
   (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
 - Every write backs up the target plugin first (timestamped `.bak`) — cross-session undo depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
-- FormLinks validate at **edit** time, not apply time — existence+type checked before anything is written. The pending-change state that ADR-0020 named is retired (ADR-0041); the rule moved with it, see the edit-path invariant above. [ADR-0020](../docs/adr/0020-reference-validation-at-stage-time.md)
 - Partial-success endpoints return a structured failures collection (named record, e.g. `SessionLoadResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
 - **A session is readable while it is still loading** (#274 / ADR-0035). `SessionManager` publishes the session and repository *before* the indexing loop, and `GameSession.OpenAll()` opens one plugin at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
   - **Anything derived from the whole plugin set must gate on `ISessionManager.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load session reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `SessionState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready session with stale winners.
@@ -177,7 +175,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `SourceCheckout` |
-| `Serialization/` | Per-record text source codec (ADR-0041, née ADR-0040 stage 1) | `RecordTextCodec`, `RecordTextCodecCustomization` |
+| `Serialization/` | Per-record text source codec (ADR-0041) | `RecordTextCodec`, `RecordTextCodecCustomization` |
 | `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
 `MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
