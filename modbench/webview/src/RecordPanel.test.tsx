@@ -197,6 +197,14 @@ const notInLoadOrderPluginsResponse = [
   { name: 'Solo.esp', origin: 'ShadowMod', isImmutable: true, loadOrderIndex: 5, inLoadOrder: false },
 ];
 
+// #539: mirrors pluginsResponse, but MyMod.esp is tracked — the Partial Form toggle is disabled
+// on an untracked column (canWrite), so exercising the real dispatch needs a column that can
+// actually write.
+const partialFormTrackedPluginsResponse = [
+  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+];
+
 // #491: mirrors compareResult, but MyMod.esp is a Partial Form override of the master rather than
 // an ordinary conflicting one.
 const partialFormCompareResult = {
@@ -209,7 +217,7 @@ const partialFormCompareResult = {
     {
       formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
       editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'IdenticalToMaster',
-      isPartialForm: true,
+      isPartialForm: true, isPartialFormable: true,
     },
   ],
   diffs: [
@@ -385,7 +393,7 @@ interface FakeOpts {
 // Issue #122: a fake record-session client. `load` returns the composite view built from the
 // given compare fixture; write methods are spies tests can assert on and override.
 function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient {
-  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean }[];
+  const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean; isTracked?: boolean }[];
   const okLoad = {
     ok: true, result: compare, plugins: pl,
     // #272 / ADR-0036: mirrors RecordSessionClient.load()'s own columnKey()-keyed construction —
@@ -396,6 +404,10 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
     // that never sets inLoadOrder (every pre-#304 fixture) must default every column to
     // in-load-order, the same defensive default the real client applies.
     notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
+    // #415 / ADR-0041: mirrors RecordSessionClient.load()'s own `=== true` filter — every
+    // pre-existing fixture here omits isTracked, so every column defaults to untracked exactly as
+    // the real client's own fail-closed default does.
+    trackedSet: new Set(pl.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin ?? null))),
     conflictsComputed: opts.conflictsComputed ?? true,
   } as unknown as LoadResult;
   return {
@@ -630,6 +642,37 @@ describe('RecordPanel — a Partial Form column (#491)', () => {
 
     const th = screen.getByText('Fallout4.esm').closest('th');
     expect(th).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
+  });
+});
+
+// #539: the column header's own Partial Form checkbox dispatches the sanctioned is_partial_form
+// write — proves the real end-to-end wiring (RecordPanel → PluginHeader → handleEditCell →
+// vscode.postMessage), not just PluginHeader.test.tsx's own component-level pin of
+// onTogglePartialForm, the same two-layer treatment #494's right-click menu and VMAD's own
+// contexts got.
+describe('RecordPanel — Partial Form header toggle (#539)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('posts EDIT_FIELD with fieldPath is_partial_form when the checkbox is unchecked', async () => {
+    renderPanel(partialFormCompareResult, { plugins: partialFormTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    // origin deliberately unasserted (objectContaining), same convention as the extended-editor
+    // wiring test above: partialFormCompareResult's own MyMod.esp override omits it.
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      fieldPath: 'is_partial_form',
+      value: false,
+    }));
   });
 });
 
