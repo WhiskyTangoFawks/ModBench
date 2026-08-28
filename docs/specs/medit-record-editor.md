@@ -568,13 +568,17 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   column's own cells (read straight off `CompareOverride.IsPartialForm`, not a separately-computed
   set). A dimmed column is not a full competing override, matching what the exclusion above already
   computed.
-- **Read-only except the header.** A Partial Form override's own fields refuse on the single write
-  path (`RecordEditRefusal.PartialFormFieldReadOnly`) — a typed refusal, not just a UI disable, so
-  an agent (ADR-0024) sees the same rule a human does. Checked against the write target, not the
-  containing record, so an embedded child stays editable even though its Partial Form parent is
-  not. The record header itself — including clearing the flag, which restores full editability —
-  is a distinct write surface tracked separately (**#539**); until it lands, every field is
-  "non-header" from this rule's own vantage, since there is no header write path yet to exempt.
+- **Read-only except the header — and EditorID.** A Partial Form override's own fields refuse on
+  the single write path (`RecordEditRefusal.PartialFormFieldReadOnly`) — a typed refusal, not just
+  a UI disable, so an agent (ADR-0024) sees the same rule a human does. Checked against the write
+  target, not the containing record, so an embedded child stays editable even though its Partial
+  Form parent is not. **EditorID is exempt**, matching xEdit's own `CanAssignInternal`
+  (`wbImplementation.pas:9905-9914`, "allow EDID for partial forms") — ADR-0034 makes that binding
+  here rather than a scope choice this ticket could diverge from, and EditorID is an ordinary,
+  already-writable field rather than part of the header's own flag-write surface, so the exemption
+  needed no header write path to exist first. The record header itself — including clearing the
+  flag, which restores full editability — is a distinct write surface tracked separately (**#539**);
+  until it lands, every field but EditorID stays refused.
 - **Out of scope here:** setting the flag (a container an editing gesture auto-creates carries it
   from creation — #440) and a lightbulb offering it on an identical-to-master container (a
   separate ticket under #478).

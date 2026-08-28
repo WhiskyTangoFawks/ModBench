@@ -89,6 +89,18 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         Assert.Equal(before, File.ReadAllText(SourcePath()));
     }
 
+    // #491 review: xEdit's own CanAssignInternal (wbImplementation.pas:9905-9914) explicitly allows
+    // EDID assignment on a Partial Form record — ADR-0034 makes that binding, not a divergence
+    // #539 owning the header write path could excuse. EditorID is an ordinary, already-writable
+    // field (RecordFieldWriter.EditorIdFieldPath), so this needed no header write path first.
+    [Fact]
+    public void EditField_EditorIdOnPartialFormRecord_Succeeds()
+    {
+        var result = Service().EditField(Plugin, PartialCell.ToString(), "editor_id", Json("\"RenamedPartialCell\""));
+
+        Assert.True(result.Applied);
+    }
+
     [Fact]
     public void EditField_NonHeaderFieldOnOrdinaryRecord_IsUnaffected()
     {

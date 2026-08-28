@@ -121,8 +121,12 @@ public sealed class RecordEditService(
         // `record`, so an embedded child (a REFR the override introduces) is unaffected: it is never
         // itself a container type, so PartialFormFlag.IsSet is false for it regardless of its
         // parent's own flag (CONTEXT.md's Partial Form entry: "children are unaffected — they are
-        // separate records").
-        if (PartialFormFlag.IsSet(target))
+        // separate records"). EditorID is exempt (#491 review): xEdit's own CanAssignInternal
+        // (wbImplementation.pas:9905-9914) explicitly allows EDID assignment on a Partial Form
+        // record — ADR-0034 makes xEdit's answer binding here, and #539 owning the *header* write
+        // path is a sequencing choice, not a platform limitation, so it cannot justify refusing an
+        // ordinary, already-writable field xEdit itself never blocks.
+        if (PartialFormFlag.IsSet(target) && !fieldPath.Equals(RecordFieldWriter.EditorIdFieldPath, StringComparison.Ordinal))
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.PartialFormFieldReadOnly,

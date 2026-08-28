@@ -126,9 +126,11 @@ internal static class RecordFieldWriter
     /// <summary>
     /// The field path an EditorID edit arrives under — the same snake_case spelling every reflected
     /// column uses, and the same one the read model already publishes the value under
-    /// (<c>form_lookup.editor_id</c>, <c>RecordViewBuilder</c>'s own <c>editor_id</c>).
+    /// (<c>form_lookup.editor_id</c>, <c>RecordViewBuilder</c>'s own <c>editor_id</c>). Internal
+    /// rather than private so <see cref="RecordEditService"/>'s Partial Form guard (#491 review) can
+    /// exempt exactly this literal rather than duplicating it.
     /// </summary>
-    private const string EditorIdFieldPath = "editor_id";
+    internal const string EditorIdFieldPath = "editor_id";
 
     /// <summary>
     /// EditorID, dispatched ahead of the reflected columns because it is not one of them:

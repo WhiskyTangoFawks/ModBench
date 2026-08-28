@@ -153,9 +153,15 @@ public enum RecordEditRefusal
     /// widened text columns — permanent, not state-dependent), the same distinction #531's
     /// <see cref="ListElementTypeUnresolved"/> already draws against
     /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable — #539 is
-    /// where that write path (including clearing this flag) lands; this refusal covers every field
-    /// this ticket's own scope reaches, which today is every field, since no header write path exists
-    /// yet to exempt.
+    /// where that write path (including clearing this flag) lands.
+    ///
+    /// <para><b>EditorID is exempt</b> (#491 review): xEdit's own <c>CanAssignInternal</c>
+    /// (<c>wbImplementation.pas:9905-9914</c>) explicitly allows EDID assignment on a Partial Form
+    /// record — ADR-0034 makes that binding here, not a divergence #539's own scope could excuse.
+    /// EditorID is an ordinary, already-writable field (<c>RecordFieldWriter.EditorIdFieldPath</c>),
+    /// not part of #539's flag-write surface, so exempting it needed no header write path to exist
+    /// first. Every other field remains refused until #539 lands one.
+    /// </para>
     /// </summary>
     PartialFormFieldReadOnly,
 }
