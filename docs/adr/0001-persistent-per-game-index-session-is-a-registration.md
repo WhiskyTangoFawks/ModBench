@@ -33,8 +33,18 @@ index itself outliving the process.
    data (`%LOCALAPPDATA%/mEdit/index/<game>-<hash of Data path>.duckdb`). Every MO2 instance and
    profile on that game shares it; the vanilla masters are indexed once, ever.
 
-2. **Everything ever indexed stays in the file. A session is a registration over it, not a
-   subset of it.** The `plugins` table is the session: a row means "this plugin, from this
+2. **The index mirrors file state; a session is built over it.** Two different things happen
+   to a plugin and they get two different verbs, never conflated:
+   - **A file changes on disk** — created, modified, deleted, uninstalled — and the index
+     changes with it: indexed when it appears, re-indexed when its bytes change, its rows
+     **removed** when it is gone (`Unindex`). The index holds exactly what exists, nothing a
+     file no longer backs. This is what "never assume exclusive ownership" means for an index:
+     it is a mirror of the disk, kept true by the checks in point 4, not a record of what
+     Modbench once saw.
+   - **A session changes** — a plugin is loaded, unloaded, enabled, disabled, reordered — and
+     only the *registration* changes. The file did not change, so the rows do not.
+
+   The `plugins` table is the session: a row means "this plugin, from this
    origin, is in the current session, at this `load_order_idx`, participating or not". Loading a
    session registers its plugins; loading, unloading, enabling, disabling and reordering are
    `plugins`-row changes plus the winner sweep. `records` rows for plugins not registered in the
@@ -47,8 +57,8 @@ index itself outliving the process.
    intent — a hidden plugin's records must not answer a query, ever, on any path — is unchanged;
    what changes is that the mechanism is a join on `plugins` rather than the physical absence of
    rows, because physical absence is exactly what makes re-loading cost a full re-index.
-   `Unindex` survives as the explicit "forget this plugin's rows" verb (eviction, a plugin whose
-   file is gone), no longer as the meaning of unload.
+   `Unindex` is the file-gone verb — a delete, an uninstall, a file missing at validation —
+   never the meaning of unload.
 
 3. **Session-level facts live only in `plugins`, never on `records` rows.** `load_order_idx`,
    participation and `is_winner`-eligibility are properties of a registration, not of a record's
@@ -90,8 +100,10 @@ index itself outliving the process.
   is reworded from "unloading, never filtering" to "unregistered, never physically present but
   answering".
 - New failure surfaces, each with a named answer: stale rows (content hash), format drift
-  (version key → rebuild), a second writer (lock → read-only), disk growth (rows for plugins no
-  session registers are eligible for `Unindex` eviction under a size cap).
+  (version key → rebuild), a second writer (lock → read-only). Disk growth needs no policy of
+  its own: the index is bounded by the plugin files that exist, and a file's removal removes
+  its rows — at the watcher's delete event while running, at validation on the next open
+  otherwise.
 - The load-time profile harness (`RealData/SessionLoadProfile`) gains a warm-launch measurement,
   so both numbers — cold index and warm register — stay measured.
 
@@ -102,8 +114,9 @@ index itself outliving the process.
   its own writer, reader, key and eviction policy, and every runtime mutation would have to be
   mirrored into it. Rejected on the collapse-over-build rule: the index already has the verbs.
 - **Delete unregistered plugins' rows on unload** (keep "absent means unindexed" literally).
-  Makes a profile switch or a re-enable cost a full re-index of the plugin — the exact cost this
-  decision exists to remove — for no correctness gain the join does not also give.
+  Conflates two events — a session no longer wanting a plugin and the plugin ceasing to exist —
+  and makes a profile switch or a re-enable cost a full re-index of the plugin, the exact cost
+  this decision exists to remove, for no correctness gain the join does not also give.
 - **`mtime`-based validity** (the 2026-05 `SessionCache`). Wrong against files other tools write;
   content hash is cheap enough and is the only check that cannot be fooled by a preserved
   timestamp.
