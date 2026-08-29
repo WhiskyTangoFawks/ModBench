@@ -276,10 +276,24 @@ export interface PluginRepository {
   unloadUnlistedPlugin(plugin: string, origin: string): Promise<void>;
 }
 
+// #559 / ADR-0026: how long a tree-populating fetch (see `withTimeout` below) is given before it
+// is treated as hung rather than merely slow. No existing convention to anchor this to (checked
+// ADR-0026 and docs/specs/plugins.md) — 30s is a generous, ordinary HTTP-client default.
+// Deliberately not trying to distinguish "still working" from "actually stuck": #558's own
+// multi-minute Conflicts fetch is exactly the case this is meant to also catch — a
+// slow-but-eventually-resolving call and a genuinely hung one must look the same to the tree,
+// which has no way to tell them apart either (that indistinguishability is #559's whole
+// complaint). Constructor-overridable so a test can inject a tiny value instead of faking timers.
+export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
+
 export class ApiPluginRepository implements PluginRepository {
   private readonly log: (msg: string) => void;
 
-  constructor(private readonly client: ApiClient, log?: (msg: string) => void) {
+  constructor(
+    private readonly client: ApiClient,
+    log?: (msg: string) => void,
+    private readonly timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
+  ) {
     this.log = log ?? (() => {});
   }
 
@@ -295,6 +309,30 @@ export class ApiPluginRepository implements PluginRepository {
     const msg = `${what} failed (${response.status})${detail}`;
     this.log(`[PluginRepository] ${msg}`);
     throw new Error(msg);
+  }
+
+  // #559: races `fn` (handed its own single-use AbortSignal) against a timeoutMs deadline, rather
+  // than trusting the underlying fetch to honor that signal on its own — a hung backend and a
+  // non-cooperative test double behave identically either way, and racing is what makes both
+  // still cause the returned promise to settle. `fn`'s own signal is aborted on timeout too, so a
+  // fetch implementation that *does* honor it (the real one, via undici) gets genuine
+  // cancellation of the in-flight request, not just a client-side rejection — #559's "ideally
+  // cancellation" half of the fix direction. Reuses `what` as the timeout message's own label,
+  // matching ensureOk's failure-message vocabulary so the two read as the same family of error.
+  private async withTimeout<T>(what: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    let timer!: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error(`${what} timed out after ${this.timeoutMs}ms`));
+      }, this.timeoutMs);
+    });
+    try {
+      return await Promise.race([fn(controller.signal), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async getPlugins(): Promise<PluginMetadata[]> {
@@ -346,28 +384,36 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/record-types', {
-      params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+    return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/plugins/{plugin}/record-types', {
+        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getRecordTypes(${plugin})`, response, error);
+      return (data ?? []).map(toRecordTypeCount);
     });
-    this.ensureOk(`getRecordTypes(${plugin})`, response, error);
-    return (data ?? []).map(toRecordTypeCount);
   }
 
   async getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage> {
-    const { data, error, response } = await this.client.GET('/records', {
-      params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
+    return this.withTimeout(`getRecords(${plugin}, ${type})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/records', {
+        params: { query: { plugin, type, offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        signal,
+      });
+      this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
+      return {
+        items: (data?.items ?? []).map(toRecordSummary),
+        total: data?.total ?? 0,
+      };
     });
-    this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
-    return {
-      items: (data?.items ?? []).map(toRecordSummary),
-      total: data?.total ?? 0,
-    };
   }
 
   async getConflicts(): Promise<ConflictingRecord[]> {
-    const { data, error, response } = await this.client.GET('/records/conflicts', {});
-    this.ensureOk('GET /records/conflicts', response, error);
-    return (data ?? []).map(toConflictingRecord);
+    return this.withTimeout('GET /records/conflicts', async (signal) => {
+      const { data, error, response } = await this.client.GET('/records/conflicts', { signal });
+      this.ensureOk('GET /records/conflicts', response, error);
+      return (data ?? []).map(toConflictingRecord);
+    });
   }
 
   async searchRecords(query: string, validTypes: string[]): Promise<RecordPage> {
@@ -496,68 +542,85 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getWorldspaces(plugin: string, origin?: string): Promise<WorldspaceSummary[]> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces', {
-      params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+    return this.withTimeout(`getWorldspaces(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces', {
+        params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getWorldspaces(${plugin})`, response, error);
+      return (data ?? []).map((w: GenWorldspace) => ({
+        formKey: w.formKey ?? '',
+        editorId: w.editorId ?? null,
+      }));
     });
-    this.ensureOk(`getWorldspaces(${plugin})`, response, error);
-    return (data ?? []).map((w: GenWorldspace) => ({
-      formKey: w.formKey ?? '',
-      editorId: w.editorId ?? null,
-    }));
   }
 
   async getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
-      params: { path: { plugin, formKey: worldspaceFormKey }, query: origin === undefined ? {} : { origin } },
-    });
-    this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
-    return {
-      topCells: (data?.topCells ?? []).map(toCellSummary),
-      blocks: (data?.blocks ?? []).map(b => ({
-        x: b.x ?? 0,
-        y: b.y ?? 0,
-        subBlocks: (b.subBlocks ?? []).map(s => ({
-          x: s.x ?? 0,
-          y: s.y ?? 0,
-          cells: (s.cells ?? []).map(toCellSummary),
+    return this.withTimeout(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/plugins/{plugin}/worldspaces/{formKey}/blocks', {
+        params: { path: { plugin, formKey: worldspaceFormKey }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
+      return {
+        topCells: (data?.topCells ?? []).map(toCellSummary),
+        blocks: (data?.blocks ?? []).map(b => ({
+          x: b.x ?? 0,
+          y: b.y ?? 0,
+          subBlocks: (b.subBlocks ?? []).map(s => ({
+            x: s.x ?? 0,
+            y: s.y ?? 0,
+            cells: (s.cells ?? []).map(toCellSummary),
+          })),
         })),
-      })),
-    };
+      };
+    });
   }
 
   async getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/cells/{formKey}/references', {
-      params: { path: { plugin, formKey: cellFormKey }, query: origin === undefined ? {} : { origin } },
+    return this.withTimeout(`getCellReferences(${plugin}, ${cellFormKey})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/plugins/{plugin}/cells/{formKey}/references', {
+        params: { path: { plugin, formKey: cellFormKey }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
+      return {
+        persistent: (data?.persistent ?? []).map(toPlacedSummary),
+        temporary: (data?.temporary ?? []).map(toPlacedSummary),
+      };
     });
-    this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
-    return {
-      persistent: (data?.persistent ?? []).map(toPlacedSummary),
-      temporary: (data?.temporary ?? []).map(toPlacedSummary),
-    };
   }
 
   async getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/interior-cells', {
-      params: { path: { plugin }, query: { offset, limit, ...(origin === undefined ? {} : { origin }) } },
+    return this.withTimeout(`getInteriorCells(${plugin})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/plugins/{plugin}/interior-cells', {
+        params: { path: { plugin }, query: { offset, limit, ...(origin === undefined ? {} : { origin }) } },
+        signal,
+      });
+      this.ensureOk(`getInteriorCells(${plugin})`, response, error);
+      return {
+        items: (data?.items ?? []).map(toCellSummary),
+        total: data?.total ?? 0,
+      };
     });
-    this.ensureOk(`getInteriorCells(${plugin})`, response, error);
-    return {
-      items: (data?.items ?? []).map(toCellSummary),
-      total: data?.total ?? 0,
-    };
   }
 
   async getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/records/{formKey}/children', {
-      params: { path: { plugin, formKey: parentFormKey }, query: origin === undefined ? {} : { origin } },
+    return this.withTimeout(`getContainerChildren(${plugin}, ${parentFormKey})`, async (signal) => {
+      const { data, error, response } = await this.client.GET('/plugins/{plugin}/records/{formKey}/children', {
+        params: { path: { plugin, formKey: parentFormKey }, query: origin === undefined ? {} : { origin } },
+        signal,
+      });
+      this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
+      return (data ?? []).map(toContainerChildSummary);
     });
-    this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
-    return (data ?? []).map(toContainerChildSummary);
   }
 
   async loadUnlistedPlugin(path: string, origin: string): Promise<void> {
-    const { error, response } = await this.client.POST('/plugins/load', { body: { path, origin } });
-    this.ensureOk(`loadUnlistedPlugin(${path}, ${origin})`, response, error);
+    return this.withTimeout(`loadUnlistedPlugin(${path}, ${origin})`, async (signal) => {
+      const { error, response } = await this.client.POST('/plugins/load', { body: { path, origin }, signal });
+      this.ensureOk(`loadUnlistedPlugin(${path}, ${origin})`, response, error);
+    });
   }
 
   async unloadUnlistedPlugin(plugin: string, origin: string): Promise<void> {
