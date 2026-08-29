@@ -172,6 +172,14 @@ describe('ApiPluginRepository.getRecordTypes', () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getRecordTypes('Plugin.esp')).rejects.toThrow(/500/);
   });
+
+  // #559: a hung backend must not leave the tree spinning forever with no error — see the
+  // matching test in each other tree-populating describe block below for the full set.
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getRecordTypes('Plugin.esp')).rejects.toThrow(/getRecordTypes\(Plugin\.esp\) timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.getRecords', () => {
@@ -231,6 +239,13 @@ describe('ApiPluginRepository.getRecords', () => {
 
     expect(result.items.map((r) => r.workingTreeState)).toEqual(['Modified', 'Added', 'None']);
   });
+
+  // #559
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getRecords('Plugin.esp', 'WEAP', 0, 50)).rejects.toThrow(/getRecords\(Plugin\.esp, WEAP\) timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.searchRecords', () => {
@@ -600,7 +615,9 @@ describe('ApiPluginRepository.getConflicts', () => {
       origin: 'Data',
       conflictAll: 'Conflict',
     }]);
-    expect(client.GET).toHaveBeenCalledWith('/records/conflicts', {});
+    // #559: also carries a per-call AbortSignal now, so a timeout genuinely cancels the
+    // in-flight request rather than only rejecting the client-side promise.
+    expect(client.GET).toHaveBeenCalledWith('/records/conflicts', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it('returns an empty list when the backend reports no data', async () => {
@@ -612,6 +629,13 @@ describe('ApiPluginRepository.getConflicts', () => {
   it('throws on a genuine non-OK response — a fetch failure is never indistinguishable from "no conflicts" (#307)', async () => {
     await expect(new ApiPluginRepository(nonOkClient()).getConflicts()).rejects.toThrow(/500/);
   });
+
+  // #559: the Conflicts node's own fetch is the one this ticket's issue text names explicitly.
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getConflicts()).rejects.toThrow(/GET \/records\/conflicts timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.getWorldspaces', () => {
@@ -633,6 +657,13 @@ describe('ApiPluginRepository.getWorldspaces', () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getWorldspaces('Plugin.esp')).rejects.toThrow(/500/);
   });
+
+  // #559
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getWorldspaces('Plugin.esp')).rejects.toThrow(/getWorldspaces\(Plugin\.esp\) timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.getWorldspaceBlocks', () => {
@@ -680,6 +711,14 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
   });
+
+  // #559
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C'))
+      .rejects.toThrow(/getWorldspaceBlocks\(Plugin\.esp, Fallout4\.esm:00003C\) timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.getCellReferences', () => {
@@ -711,6 +750,14 @@ describe('ApiPluginRepository.getCellReferences', () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getCellReferences('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
   });
+
+  // #559
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getCellReferences('Plugin.esp', 'Fallout4.esm:00003C'))
+      .rejects.toThrow(/getCellReferences\(Plugin\.esp, Fallout4\.esm:00003C\) timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.getInteriorCells', () => {
@@ -742,6 +789,13 @@ describe('ApiPluginRepository.getInteriorCells', () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getInteriorCells('Plugin.esp', 0, 50)).rejects.toThrow(/500/);
   });
+
+  // #559
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getInteriorCells('Plugin.esp', 0, 50)).rejects.toThrow(/getInteriorCells\(Plugin\.esp\) timed out after 20ms/);
+  }, 200);
 });
 
 describe('ApiPluginRepository.getContainerChildren', () => {
@@ -777,6 +831,26 @@ describe('ApiPluginRepository.getContainerChildren', () => {
     const repo = new ApiPluginRepository(nonOkClient());
     await expect(repo.getContainerChildren('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
   });
+
+  // #559
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.getContainerChildren('Plugin.esp', 'Fallout4.esm:00003C'))
+      .rejects.toThrow(/getContainerChildren\(Plugin\.esp, Fallout4\.esm:00003C\) timed out after 20ms/);
+  }, 200);
+});
+
+// #559: the Stack-peer first-expand door (#448 / #34) — its own failure already surfaces as an
+// ErrorNode the same way the 8 GET reads above do (PluginTreeProvider.ts:614-619), so a hang here
+// is the same user-visible symptom and gets the same withTimeout treatment.
+describe('ApiPluginRepository.loadUnlistedPlugin', () => {
+  it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
+    const client = { POST: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
+    const repo = new ApiPluginRepository(client, undefined, 20);
+    await expect(repo.loadUnlistedPlugin('/data/Peer.esp', 'ModA'))
+      .rejects.toThrow(/loadUnlistedPlugin\(\/data\/Peer\.esp, ModA\) timed out after 20ms/);
+  }, 200);
 });
 
 // #34 / ADR-0036: a row that stands for a specific copy of a filename says which one; an ordinary
