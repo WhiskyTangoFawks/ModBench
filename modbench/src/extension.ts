@@ -6,7 +6,7 @@ import * as cp from 'child_process';
 import { Agent, fetch as undiciFetch } from 'undici';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
-import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer } from './medit/ApiClient';
+import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer, type PluginDeltaEntry } from './medit/ApiClient';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
 import { SessionController, type SessionLoadProgress } from './medit/SessionController';
@@ -776,7 +776,81 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     vscode.commands.registerCommand('modbench.showReferencedBy',
       () => vscode.commands.executeCommand('modbench.referencedByTree.focus')),
     registerReferencedByCopyCommand(referencedByTreeView, outputChannel),
+    registerCompareWithWinnerCommand(deps, routerDeps),
   ];
+}
+
+/** #544: a Stack peer's own "Compare with winner" — the QuickPick-then-drill-into-RecordPanel
+ *  shape orchestrator-approved at this ticket's plan gate: `RecordPanel`'s own architecture is one
+ *  record with many columns, not many records in one view, so there is no existing "many
+ *  differing records at once" grid to extend (the AC's "opens the grid" reads as the *existing*
+ *  compare grid, reached through a transient native picker rather than a persistent tree node —
+ *  the same shape the Conflicts node's own "list of differing FormKeys, click to open" already
+ *  uses, minus the standing surface, since this is a one-off context-menu action on exactly one
+ *  peer/winner pair). `GetPluginDelta` (bulk, backend-side) supplies "differences only"; opening
+ *  the winner's own resolved name via `getPlugins()` (only the winner is ever listed normally, the
+ *  same lookup `diffAgainstSource` above already does) supplies the exact origin pair
+ *  `openRecordPanel`'s own `deltaScope` restricts the grid to. */
+function registerCompareWithWinnerCommand(
+  deps: EditorCommandDeps, routerDeps: RouteRecordPanelMessageDeps,
+): vscode.Disposable {
+  const { context, openPanels, recordPanels, activeRecordTracker, port, repository, outputChannel } = deps;
+  return vscode.commands.registerCommand('modbench.pluginListTree.compareWithWinner', async (node?: StackPeerNode) => {
+    if (!(node instanceof StackPeerNode)) return;
+    const { plugin, peer } = node;
+    try {
+      const plugins = await repository.getPlugins();
+      const winner = plugins.find((p) => p.name === plugin);
+      if (!winner) {
+        outputChannel.error(`[extension] compareWithWinner: "${plugin}" is not in the current session`);
+        void vscode.window.showErrorMessage(`Modbench: "${plugin}" is not in the current session.`);
+        return;
+      }
+      const delta = await repository.getPluginDelta(plugin, winner.origin, peer.origin);
+      // #544 review finding #2: a vanished origin (the comparison never ran) must read as an
+      // error, not the "no differences" toast below — ADR-0026, an explicit user-invoked action's
+      // failure gets a notification, never a silently-successful-looking empty result.
+      if (!delta.ok) {
+        outputChannel.error(`[extension] compareWithWinner: "${plugin}" (${winner.origin} or ${peer.origin}) is no longer loaded`);
+        void vscode.window.showErrorMessage(
+          `Modbench: "${plugin}" is no longer loaded at "${winner.origin}" or "${peer.origin}" — the comparison could not run.`);
+        return;
+      }
+      if (delta.entries.length === 0) {
+        void vscode.window.showInformationMessage(
+          `Modbench: "${plugin}" (${peer.origin}) has no differences from the winner (${winner.origin}).`);
+        return;
+      }
+      const picked = await vscode.window.showQuickPick(
+        delta.entries.map((entry) => ({ label: `${presenceIconFor(entry.presence)} ${entry.editorId ?? entry.formKey}`, description: entry.formKey, entry })),
+        { placeHolder: `${plugin}: differences between ${peer.origin} (peer) and ${winner.origin} (winner)` },
+      );
+      if (!picked) return;
+      openRecordPanel(
+        context, openPanels, picked.entry.editorId ?? picked.entry.formKey, picked.entry.formKey, port, vscode.ViewColumn.One,
+        {
+          routerDeps, recordPanels, activeRecordTracker, singleton: true,
+          deltaScope: { plugin, winnerOrigin: winner.origin, peerOrigin: peer.origin },
+        },
+      );
+    } catch (err) {
+      // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
+      const message = err instanceof Error ? err.message : String(err);
+      outputChannel.error(`[extension] compareWithWinner("${plugin}", ${peer.origin}) failed: ${message}`);
+      void vscode.window.showErrorMessage(`Modbench: Could not compare "${plugin}" (${peer.origin}) with the winner.`);
+    }
+  });
+}
+
+// #544: the three icons the delta QuickPick's own labels carry — `$(name)` codicon shorthand, the
+// same native-UI convention this file's own status bar text and "New filter…" QuickPick item
+// already use. "WinnerOnly"/"PeerOnly" are the AC's own two presence icons; "BothDiffer" gets its
+// own distinct icon too (an ordinary content difference, not a presence difference) rather than
+// going unprefixed — every entry in the list is visually distinguishable at a glance.
+function presenceIconFor(presence: PluginDeltaEntry['presence']): string {
+  if (presence === 'WinnerOnly') return '$(diff-added)';
+  if (presence === 'PeerOnly') return '$(diff-removed)';
+  return '$(diff-modified)';
 }
 
 // #340: modbench.setFilter/setFilterFromDocument/clearFilter — pulled out of
@@ -3007,6 +3081,10 @@ interface OpenRecordPanelDeps {
   // openBesideRecordPanels) while still being non-retargeting, so `viewColumn !== Beside` can no
   // longer stand in for "is this the singleton" the way it used to.
   singleton: boolean;
+  // #544: "Compare with winner" opening the grid scoped to exactly one plugin's peer/winner
+  // origin pair — undefined for every other caller, which is what keeps "delta mode is scoped to
+  // peer comparison; ordinary browsing unchanged" true for every other call site of this function.
+  deltaScope?: { plugin: string; winnerOrigin: string; peerOrigin: string };
 }
 
 function openRecordPanel(
@@ -3016,7 +3094,7 @@ function openRecordPanel(
   formKey: string | undefined,
   port: number,
   viewColumn: vscode.ViewColumn,
-  { routerDeps, recordPanels, activeRecordTracker, singleton }: OpenRecordPanelDeps,
+  { routerDeps, recordPanels, activeRecordTracker, singleton, deltaScope }: OpenRecordPanelDeps,
 ): void {
   if (singleton) {
     const existing = openPanels.get(RECORD_PANEL_KEY);
@@ -3026,7 +3104,7 @@ function openRecordPanel(
       // #282: setFormKey before setActivePanel so a genuinely new record fires exactly once,
       // already carrying it — see ActiveRecordTracker's own doc comment on ordering.
       if (formKey) {
-        existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey } satisfies ExtensionToWebview);
+        existing.webview.postMessage({ type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey, deltaScope } satisfies ExtensionToWebview);
         activeRecordTracker.setFormKey(existing, formKey);
       }
       activeRecordTracker.setActivePanel(existing);
@@ -3081,6 +3159,7 @@ function openRecordPanel(
     port,
     scriptUri: scriptUri.toString(),
     cspSource: panel.webview.cspSource,
+    deltaScope,
   });
 }
 

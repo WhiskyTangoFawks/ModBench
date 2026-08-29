@@ -144,6 +144,88 @@ public sealed class RecordQueryService(
         return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
     }
 
+    /// <summary>#544: the Stack node's "Compare with winner" bulk seam — see the interface doc.
+    /// Enumerates every FormKey either copy's own row set touches (native or override; <see
+    /// cref="IRecordReads.Search"/> already scopes "every row for this exact (plugin, origin)
+    /// column", the same primitive <see cref="GetPluginRecordTypes"/> uses — a large Limit reads
+    /// it in one page since this is bounded by one plugin's own record count, never the whole
+    /// session), then classifies each FormKey present in only one copy as a presence difference
+    /// and each FormKey present in both through <see cref="RecordDiffers"/> — reusing the exact
+    /// <see cref="ClassifyStack"/> helper <see cref="GetCompare"/> already calls, so this list can
+    /// never disagree with what the ordinary compare grid would show for the same pair.</summary>
+    public IReadOnlyList<PluginDeltaEntry>? GetPluginDelta(string plugin, string winnerOrigin, string peerOrigin)
+    {
+        var currentSession = RequireSession();
+        bool IsLoaded(string origin) => currentSession.Plugins.Any(p =>
+            p.Name.Equals(plugin, StringComparison.OrdinalIgnoreCase) && p.Origin == origin);
+        // Search would otherwise answer an absent origin with an empty row set indistinguishable
+        // from "this copy legitimately has zero records" — silently turning every one of the other
+        // side's FormKeys into a presence difference instead of the "nothing to compare" this
+        // actually is. Checked against the session's own plugin list, not a Search row count.
+        if (!IsLoaded(winnerOrigin) || !IsLoaded(peerOrigin)) return null;
+
+        var repository = RequireRepository();
+        var winnerKey = new PluginKey(plugin, winnerOrigin);
+        var peerKey = new PluginKey(plugin, peerOrigin);
+
+        IEnumerable<string> FormKeysOf(PluginKey key) =>
+            repository.Search(new RecordQuery(Plugin: key, Limit: int.MaxValue)).Items.Select(r => r.FormKey);
+        var formKeys = FormKeysOf(winnerKey).Concat(FormKeysOf(peerKey)).Distinct().Order();
+
+        var resolveFormKey = FormKeyResolutionCache.Memoize(repository.Resolve);
+        var results = new List<PluginDeltaEntry>();
+        foreach (var formKey in formKeys)
+        {
+            var winnerDoc = repository.GetDocument(formKey, winnerKey);
+            var peerDoc = repository.GetDocument(formKey, peerKey);
+            // Defensive, not expected in practice: Search and GetDocument share no transaction —
+            // see GetConflicts' identical posture toward the same class of race.
+            if (winnerDoc is null && peerDoc is null) continue;
+
+            if (winnerDoc is null) { results.Add(new PluginDeltaEntry(formKey, peerDoc!.EditorId, PluginDeltaPresence.PeerOnly)); continue; }
+            if (peerDoc is null) { results.Add(new PluginDeltaEntry(formKey, winnerDoc.EditorId, PluginDeltaPresence.WinnerOnly)); continue; }
+
+            if (RecordDiffers(winnerDoc, peerDoc, resolveFormKey))
+                results.Add(new PluginDeltaEntry(formKey, winnerDoc.EditorId, PluginDeltaPresence.BothDiffer));
+        }
+        return results;
+    }
+
+    /// <summary>#544: "is this FormKey's resolved state actually different between these two
+    /// specific copies" — built as a synthetic two-entry stack fed through the same
+    /// <see cref="ClassifyStack"/> helper <see cref="GetCompare"/> uses (so VMAD/condition-only
+    /// differences are caught too, not just generic fields), with <c>pluginParticipates</c> forced
+    /// true for both columns regardless of the real session's participation flag. Without that
+    /// override, the peer's real participation is always false (a shadowed copy never
+    /// participates in ordinary conflict classification — #446's own fixture-proven behaviour) —
+    /// <c>ConflictRules.FilterParticipating</c> would then drop it before any
+    /// comparison ran, collapsing every call to a trivial one-entry OnlyOne regardless of whether
+    /// the two copies actually differ. IsWinner is likewise forced by role here, not read off
+    /// either document's own DB flag, so <c>Classify</c>'s "no winner" guard can never trip on a
+    /// caller-supplied origin pair the load order doesn't actually agree is the winner.</summary>
+    private bool RecordDiffers(RecordDocument winner, RecordDocument peer, Func<string, RecordLookupEntry?> resolveFormKey)
+    {
+        var winnerDetail = ToRecordDetail(winner) with { IsWinner = true };
+        var peerDetail = ToRecordDetail(peer) with { IsWinner = false };
+        var pluginParticipates = new Dictionary<string, bool>
+        {
+            [ColumnKey.Of(winnerDetail.Plugin, winnerDetail.Origin)] = true,
+            [ColumnKey.Of(peerDetail.Plugin, peerDetail.Origin)] = true,
+        };
+        // Empty, not the real session's masters: IsInjectedRecord (fed by pluginMasters) only ever
+        // escalates an already-different classification to Critical — it never turns a NoConflict
+        // result into a difference — so omitting it changes no include/omit decision here.
+        var pluginMasters = new Dictionary<string, IReadOnlyList<string>>();
+        var stack = new RecordOverrides(winner.FormKey, winner.RecordType,
+        [
+            new OverrideStackEntry(winner.Plugin, winner.LoadOrderIndex, IsWinner: true, winner, winner, HasWorkingTreeChange: false),
+            new OverrideStackEntry(peer.Plugin, peer.LoadOrderIndex, IsWinner: false, peer, peer, HasWorkingTreeChange: false),
+        ]);
+        var (_, conflictAll, _, _) =
+            ClassifyStack(stack, [winnerDetail, peerDetail], pluginMasters, pluginParticipates, resolveFormKey);
+        return conflictAll is not (ConflictAll.OnlyOne or ConflictAll.NoConflict);
+    }
+
     /// <summary>#364: every contested FormKey (<see cref="IRecordReads.GetContestedFormKeys"/> —
     /// already filter-narrowed the same way <c>GetRecordTypeCounts</c>/<c>Search</c> are, #278's
     /// mechanism, not a second one) whose record-wide <see cref="Queries.ConflictAll"/> is not

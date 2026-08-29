@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Session;
@@ -269,6 +270,21 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 /// Never OnlyOne/NoConflict — <c>GetConflicts</c> excludes both before this type is ever
 /// constructed, matching <c>medit-record-editor.md</c>'s "no tint" rule for those two states.</summary>
 public record ConflictRecord(RecordSummary Record, ConflictAll ConflictAll);
+
+/// <summary>#544: which side of a Stack-peer delta comparison a <see cref="PluginDeltaEntry"/>
+/// belongs to — <c>WinnerOnly</c>/<c>PeerOnly</c> are the two presence icons the Compare-with-winner
+/// grid renders; <c>BothDiffer</c> is an ordinary content difference, rendered with the existing
+/// compare-grid coloring, no icon of its own.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum PluginDeltaPresence { WinnerOnly, PeerOnly, BothDiffer }
+
+/// <summary>#544: one FormKey <see cref="IRecordQueryService.GetPluginDelta"/> reports — present
+/// in only one of the two copies, or present in both but resolving differently (VMAD/conditions
+/// included, since <c>RecordQueryService</c> classifies through the same <c>ClassifyStack</c>
+/// helper <see cref="RecordQueryService.GetCompare"/> uses). A FormKey identical in both copies is
+/// never constructed as one of these — GetPluginDelta's own "differences only" contract — so the
+/// list itself is the absence signal, not a flag on an included row.</summary>
+public record PluginDeltaEntry(string FormKey, string? EditorId, PluginDeltaPresence Presence);
 
 public record SessionFilterRequest(string Sql);
 public record SessionFilterResponse(string? Sql);
