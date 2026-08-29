@@ -31,9 +31,24 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// document per major record plus the extracted index tables derived from it).</summary>
     void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key);
 
-    /// <summary>Removes every trace of <paramref name="key"/> from the read model — the inverse of
-    /// <see cref="Index"/> (#34/ADR-0035's "hidden means absent").</summary>
+    /// <summary>Removes every trace of <paramref name="key"/> from the index — rows and
+    /// registration alike, the inverse of <see cref="Index"/>. #582 / ADR-0001: this is the
+    /// <b>file-gone</b> verb — a delete, an uninstall, a file missing at validation — never the
+    /// meaning of unload; a session that merely stops wanting a plugin calls <see cref="Unregister"/>.</summary>
     void Unindex(PluginKey key);
+
+    /// <summary>#582 / ADR-0001: registration is visibility. Writes <paramref name="key"/>'s
+    /// <c>plugins</c> row — the whole of its membership in the session — so its already-indexed rows
+    /// answer again on every read path and every generated view, with no re-index. Winner state is
+    /// stale until the next <see cref="UpdateWinners"/> sweep. (<see cref="Index"/> registers as part
+    /// of indexing; this is the verb for rows the index already holds.)</summary>
+    void Register(PluginKey key, int loadOrderIndex, bool participates);
+
+    /// <summary>Removes <paramref name="key"/>'s <c>plugins</c> row and nothing else: its rows remain
+    /// in the index and answer nothing on any path — ADR-0035's "hidden means absent" is
+    /// <i>unregistered, never answering</i>. Winner state is stale until the next
+    /// <see cref="UpdateWinners"/> sweep.</summary>
+    void Unregister(PluginKey key);
 
     /// <summary>Recomputes <c>is_winner</c> across every indexed table for the whole session.</summary>
     void UpdateWinners();

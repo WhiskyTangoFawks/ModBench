@@ -526,7 +526,9 @@ public sealed class SessionManager(
             {
                 _logger.LogInformation("Unloading unlisted plugin {Plugin} from {Origin}", plugin, origin);
             }
-            _repository!.Unindex(new PluginKey(plugin, origin));
+            // #582 / ADR-0001: an unload is a session change, not a file change — the registration
+            // goes, the rows stay for the next load of this copy. Unindex is the file-gone verb.
+            _repository!.Unregister(new PluginKey(plugin, origin));
         }
     }
 
