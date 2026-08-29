@@ -136,7 +136,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // and header rows never enter form_lookup for the same reason.
             if (tableName == "header") continue;
             IndexRecordTable(
-                tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
+                tableName, schema, pluginMod, plugin, origin, refs, lookupRows,
                 containerChildRows, documentAppender, pluginMod.GameRelease, counters);
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
@@ -170,7 +170,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
 
-        IndexHeader(pluginMod, plugin, origin, loadOrderIndex, schemas);
+        IndexHeader(pluginMod, plugin, origin, schemas);
 
         // Clear this plugin's stale refs, then rebuild from the refs gathered across both passes.
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -198,7 +198,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     row.AppendValue(eid);
                 else
                     row.AppendNullValue();
-                row.AppendValue((int?)loadOrderIndex);
                 row.AppendValue((bool?)false);
                 row.EndRow();
             }
@@ -369,7 +368,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private static void AppendPrepared(
         DuckDBAppender documentAppender, PreparedRecord prepared, string recordType,
-        string plugin, string origin, int loadOrderIndex)
+        string plugin, string origin)
     {
         var record = prepared.Record;
         var row = documentAppender.CreateRow();
@@ -381,7 +380,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             row.AppendValue(editorId);
         else
             row.AppendNullValue();
-        row.AppendValue((int?)loadOrderIndex);
         row.AppendValue((bool?)false);
         row.AppendValue(SourceRef.Committed);
         row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
@@ -391,7 +389,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
-        string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
+        string plugin, string origin, List<FormRef> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
         List<ContainerChildRow> containerChildRows,
         DuckDBAppender documentAppender, GameRelease gameRelease, RefCounters counters)
@@ -457,7 +455,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 var record = p.Record;
                 try
                 {
-                    AppendPrepared(documentAppender, p, tableName, plugin, origin, loadOrderIndex);
+                    AppendPrepared(documentAppender, p, tableName, plugin, origin);
                 }
                 catch (Exception ex)
                 {
@@ -578,18 +576,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // reflected table. #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing
         // a filename but differing in origin are distinct participants, each judged on its own
         // load_order_idx and participation, not folded into one MAX() bucket by filename alone.
+        // #583 / ADR-0001: `load_order_idx` no longer lives on the row — a row's own load order is
+        // p1's, the same `plugins` row EXISTS already needs for participation, so the two collapse
+        // into one predicate rather than a bare column compare plus a separate EXISTS.
         Execute("""
             UPDATE raw.records AS r
-            SET is_winner = (
-                r.load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM raw.records t2
+            SET is_winner = EXISTS (
+                SELECT 1 FROM plugins p1
+                WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
+                  AND p1.load_order_idx = (
+                    SELECT MAX(p2.load_order_idx) FROM raw.records t2
                     JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
                     WHERE t2.form_key = r.form_key
-                )
-                AND EXISTS (
-                    SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                )
+                  )
             )
             """);
 
@@ -599,16 +598,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // through every winnerOnly lookup, Open Header included.
         Execute($"""
             UPDATE raw."{HeaderIndexer.TableName}" AS r
-            SET is_winner = (
-                r.load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM raw."{HeaderIndexer.TableName}" t2
+            SET is_winner = EXISTS (
+                SELECT 1 FROM plugins p1
+                WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
+                  AND p1.load_order_idx = (
+                    SELECT MAX(p2.load_order_idx) FROM raw."{HeaderIndexer.TableName}" t2
                     JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
                     WHERE t2.form_key = r.form_key
-                )
-                AND EXISTS (
-                    SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                )
+                  )
             )
             """);
 
@@ -619,16 +616,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // above — two plugins sharing a filename but differing in origin are distinct participants.
         Execute("""
             UPDATE raw.form_lookup AS r
-            SET is_winner = (
-                r.load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM raw.form_lookup t2
+            SET is_winner = EXISTS (
+                SELECT 1 FROM plugins p1
+                WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
+                  AND p1.load_order_idx = (
+                    SELECT MAX(p2.load_order_idx) FROM raw.form_lookup t2
                     JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
                     WHERE t2.form_key = r.form_key
-                )
-                AND EXISTS (
-                    SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                )
+                  )
             )
             """);
     }
@@ -639,7 +634,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // SELECT *'d so the snapshot copy below is pinned to a column list instead of to the two tables
     // happening to stay in the same order forever.
     private const string RecordColumnList =
-        "form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, \"ref\", body, content_hash";
+        "form_key, plugin, origin, record_type, editor_id, is_winner, \"ref\", body, content_hash";
 
     /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. One transaction for the whole
     /// batch, matching <see cref="Index"/>'s own discipline: a throw partway leaves the prior read
@@ -761,21 +756,22 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // answer nothing for this FormKey without the view itself needing to know about creation at all.
     private void InsertNewWorkingTreeRow(PluginKey key, string formKey, string recordType, string body)
     {
-        var loadOrderIdx = ScalarInt32(
-            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
-            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+        // #583 / ADR-0001: no load_order_idx to carry into the row any more — this check now exists
+        // purely to keep the same refusal for a plugin the registration doesn't know, which
+        // InsertNewWorkingTreeRow's callers (CreateWorkingTreeRecord) still rely on.
+        if (!IsRegisteredPlugin(key))
+            throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.WorkingTree}', $5, $7)
+            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, is_winner, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), FALSE, '{SourceRef.WorkingTree}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
         cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
         cmd.ExecuteNonQuery();
 
@@ -783,13 +779,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // back out of `records`, which is why the insert above must land first.
     }
 
-    private int? ScalarInt32(string sql, params string[] values)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
-        AddParams(cmd, values);
-        return cmd.ExecuteScalar() is int i ? i : null;
-    }
+    private bool IsRegisteredPlugin(PluginKey key) =>
+        ScalarString("SELECT plugin FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!) != null;
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
     public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
@@ -883,9 +874,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 
-        var loadOrderIdx = ScalarInt32(
-            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
-            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+        // #583 / ADR-0001: same refusal as InsertNewWorkingTreeRow's, now for its own sake rather
+        // than as a side effect of fetching a load_order_idx this row no longer carries.
+        if (!IsRegisteredPlugin(key))
+            throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
         // Straight into records_committed with no `records` counterpart — the exact inverse of
         // InsertNewWorkingTreeRow's "records row with no snapshot", and it falls out of records_head's
@@ -894,15 +886,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // read — the view derives its own, per ref.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.Committed}', $5, $7)
+            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, is_winner, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), FALSE, '{SourceRef.Committed}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
         cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
         cmd.ExecuteNonQuery();
     }
@@ -988,8 +979,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // The row is absent when this record was previously deleted in the working tree and has now
         // come back — the one case where there is nothing to update.
         ExecuteFor($"""
-            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner)
-            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id, r.load_order_idx, FALSE
+            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id, is_winner)
+            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id, FALSE
             FROM raw.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
               AND NOT EXISTS (
@@ -2057,14 +2048,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // (VMAD/conditions/form_lookup were migrated to DeleteExistingForOrigin earlier in this same
     // ticket) and is now scoped to (plugin, origin) here too.
     private void IndexHeader(
-        IModGetter pluginMod, string plugin, string origin, int loadOrderIndex,
+        IModGetter pluginMod, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
         DeleteExistingForOrigin("header", plugin, origin);
         using var appender = Connection.CreateAppender("raw", "header");
-        HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
+        HeaderIndexer.Index(pluginMod, plugin, origin, headerSchema, appender);
     }
 
     // One record's condition refs — the body of the loop above, extracted so #415's per-record

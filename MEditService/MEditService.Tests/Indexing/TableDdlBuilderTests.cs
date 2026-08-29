@@ -23,10 +23,17 @@ public class TableDdlBuilderTests
         return conn;
     }
 
-    private static List<string> GetColumns(DuckDBConnection conn, string tableName)
+    // `schema` narrows to one schema (e.g. "raw" vs the registered view's "main") when a table name
+    // exists in both — null keeps the old unqualified behaviour of matching table_name alone.
+    private static List<string> GetColumns(DuckDBConnection conn, string tableName, string? schema = null)
     {
+        var schemaFilter = schema == null ? "" : $"AND table_schema = '{schema}' ";
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"SELECT column_name FROM information_schema.columns WHERE table_name = '{tableName}' ORDER BY ordinal_position";
+        cmd.CommandText = $"""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = '{tableName}' {schemaFilter}
+            ORDER BY ordinal_position
+            """;
         using var reader = cmd.ExecuteReader();
         var columns = new List<string>();
         while (reader.Read()) columns.Add(reader.GetString(0));
@@ -96,6 +103,41 @@ public class TableDdlBuilderTests
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
         _builder.CreateTables(conn, GameRelease.Fallout4); // should not throw
+    }
+
+    // #583 / ADR-0001: load order lives only on `plugins` now. The raw record-shaped tables carry
+    // file-derived facts only; `load_order_idx` reaches a reader exclusively through the registered
+    // view's join to `plugins` (TableDdlBuilder.CreateRegisteredViews), never as a stored column.
+    [Theory]
+    [InlineData("records")]
+    [InlineData("records_committed")]
+    [InlineData("form_lookup")]
+    [InlineData("header")]
+    public void RawRecordShapedTables_CarryNoLoadOrderColumn(string tableName)
+    {
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var cols = GetColumns(conn, tableName, schema: "raw");
+        Assert.NotEmpty(cols); // premise: the raw table actually exists
+        Assert.DoesNotContain("load_order_idx", cols);
+    }
+
+    // The registered view over each of those raw tables still answers `load_order_idx` — derived by
+    // joining `plugins`, the one place the value is stored — so every existing reader that names the
+    // view keeps working unchanged.
+    [Theory]
+    [InlineData("records")]
+    [InlineData("records_committed")]
+    [InlineData("form_lookup")]
+    [InlineData("header")]
+    public void RegisteredViews_StillExposeLoadOrderIndex_DerivedFromPlugins(string tableName)
+    {
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var cols = GetColumns(conn, tableName, schema: "main");
+        Assert.Contains("load_order_idx", cols);
     }
 
     [Fact]

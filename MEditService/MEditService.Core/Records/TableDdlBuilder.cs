@@ -20,19 +20,24 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // enforces rather than a convention a new SQL string could quietly miss.
     internal const string RawSchema = "raw";
 
-    // (table, plugin column, origin column) for every relation that carries a plugin identity —
-    // the list CreateRegisteredViews scopes. `plugins` itself is the registration and stays a plain
-    // table in `main`; `index_state` carries no plugin identity.
-    private static readonly (string Table, string PluginColumn, string OriginColumn)[] RegisteredRelations =
+    // (table, plugin column, origin column, derives load_order_idx) for every relation that carries
+    // a plugin identity — the list CreateRegisteredViews scopes. `plugins` itself is the registration
+    // and stays a plain table in `main`; `index_state` carries no plugin identity.
+    //
+    // #583 / ADR-0001: `load_order_idx` lives only on `plugins` now — none of these raw tables store
+    // it. The four that used to carry it as a stored column (records, records_committed, form_lookup,
+    // the header table) get it back as a derived column in their registered view, joined from
+    // `plugins` rather than read off the row; the rest never had one.
+    private static readonly (string Table, string PluginColumn, string OriginColumn, bool DerivesLoadOrder)[] RegisteredRelations =
     [
-        ("records", "plugin", "origin"),
-        ("records_committed", "plugin", "origin"),
-        ("form_references", "source_plugin", "source_origin"),
-        ("form_lookup", "plugin", "origin"),
-        ("placement", "plugin", "origin"),
-        ("cell_location", "plugin", "origin"),
-        ("container_child", "plugin", "origin"),
-        (HeaderIndexer.TableName, "plugin", "origin"),
+        ("records", "plugin", "origin", true),
+        ("records_committed", "plugin", "origin", true),
+        ("form_references", "source_plugin", "source_origin", false),
+        ("form_lookup", "plugin", "origin", true),
+        ("placement", "plugin", "origin", false),
+        ("cell_location", "plugin", "origin", false),
+        ("container_child", "plugin", "origin", false),
+        (HeaderIndexer.TableName, "plugin", "origin", true),
     ];
 
     public void CreateTables(DuckDBConnection connection, GameRelease release)
@@ -66,21 +71,26 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     /// <summary>
     /// The one "registered" predicate (#582 / ADR-0001): a row answers iff a <c>plugins</c> row
-    /// names its (plugin, origin). Each public relation is exactly its raw table filtered by this,
+    /// names its (plugin, origin). Each public relation is exactly its raw table joined to that row,
     /// so the C# reads (which name the bare table) and the SQL door (user filter SQL,
     /// <c>medit.query</c>, the generated per-type views over <c>records</c>) cannot scope
-    /// differently — there is no second place the scoping is written.
+    /// differently — there is no second place the scoping is written. The join doubles as
+    /// <c>load_order_idx</c>'s one source of truth (#583 / ADR-0001): for the relations that carry
+    /// it, the view adds <c>p.load_order_idx</c> rather than reading a stored column, because
+    /// <c>plugins</c> is the only place that value lives — an INNER JOIN already excludes an
+    /// unregistered plugin's rows, same as the EXISTS this replaces, so filtering and load order
+    /// come from the identical join rather than two separate mechanisms.
     /// </summary>
     private static void CreateRegisteredViews(DuckDBConnection connection)
     {
-        foreach (var (table, pluginColumn, originColumn) in RegisteredRelations)
+        foreach (var (table, pluginColumn, originColumn, derivesLoadOrder) in RegisteredRelations)
         {
+            var loadOrderColumn = derivesLoadOrder ? ", p.load_order_idx" : "";
             Execute(connection, $"""
                 CREATE OR REPLACE VIEW "{table}" AS
-                SELECT t.* FROM {RawSchema}."{table}" t
-                WHERE EXISTS (
-                    SELECT 1 FROM plugins p
-                    WHERE p.plugin = t.{pluginColumn} AND p.origin = t.{originColumn})
+                SELECT t.*{loadOrderColumn}
+                FROM {RawSchema}."{table}" t
+                JOIN plugins p ON p.plugin = t.{pluginColumn} AND p.origin = t.{originColumn}
                 """);
         }
     }
@@ -103,6 +113,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // Identity stays (form_key, origin, plugin) per ADR-0036 — no primary key declared, matching
     // every other table here, because indexing writes through appenders and re-index is
     // delete-then-append rather than upsert.
+    //
+    // #583 / ADR-0001: no `load_order_idx` column. A record row carries file-derived facts only —
+    // load order is a fact about the plugin's registration, not about this row, and the registered
+    // "records" view (CreateRegisteredViews) joins it in from `plugins` for every reader that names
+    // the view rather than this raw table.
     private static void CreateRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
@@ -112,7 +127,6 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type    VARCHAR NOT NULL,
                 editor_id      VARCHAR,
-                load_order_idx INTEGER NOT NULL,
                 is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
                 "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
                 body           VARCHAR NOT NULL,
@@ -160,7 +174,6 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type    VARCHAR NOT NULL,
                 editor_id      VARCHAR,
-                load_order_idx INTEGER NOT NULL,
                 is_winner      BOOLEAN NOT NULL DEFAULT FALSE,
                 "ref"          VARCHAR NOT NULL DEFAULT '{SourceRef.Committed}',
                 body           VARCHAR NOT NULL,
@@ -277,7 +290,6 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 record_type    VARCHAR NOT NULL,
                 editor_id      VARCHAR,
-                load_order_idx INTEGER NOT NULL,
                 is_winner      BOOLEAN NOT NULL DEFAULT FALSE
             )
             """);
@@ -366,7 +378,6 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         sb.Append("form_key VARCHAR NOT NULL, ");
         sb.Append("plugin VARCHAR NOT NULL, ");
         sb.Append(CultureInfo.InvariantCulture, $"origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}', ");
-        sb.Append("load_order_idx INTEGER NOT NULL, ");
         sb.Append("is_winner BOOLEAN NOT NULL DEFAULT FALSE, ");
         sb.Append("editor_id VARCHAR");
 

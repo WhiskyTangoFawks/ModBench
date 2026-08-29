@@ -46,10 +46,16 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 - The per-type views, editor field metadata and record codec are reflection-generated from Mutagen types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
 - **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
-  `load_order_idx`, `is_winner`, `ref`, `content_hash`); the extracted index tables (`form_lookup`,
+  `is_winner`, `ref`, `content_hash`); the extracted index tables (`form_lookup`,
   `form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
+  **`load_order_idx` is not a stored column on any of these** (#583 / ADR-0001): a record row
+  carries file-derived facts only, and load order is a fact about a plugin's registration. It lives
+  solely on `plugins`, and the registered view over each raw table (`records`, `records_committed`,
+  `form_lookup`, `header` — see "Registration is visibility" above) joins it back in for every
+  reader that names the view, so `load_order_idx` still reads as an ordinary column everywhere
+  outside `Records/` itself.
   - **Typed reads reconstitute; they never read the views.** `GetDocument`/`GetOverrideStack`
     deserialize the document through `RecordTextCodec` and run the same `ColumnSpec.Extract`
     delegates the wide tables were filled with, so values are identical by construction. The
