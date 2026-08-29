@@ -85,6 +85,12 @@ is the default arrow; drag is not advertised, exactly as in xEdit.
    compiles it ([ADR-0041](0041-manual-git-tracking-compile-from-text.md)). xEdit has no model
    for review, revert or history, so the references there are git's own and VS Code's native
    Source Control idioms. A product difference, not a UX one, and out of this ADR's scope.
+5. **Record creation always prompts for an EditorID**, on both "Add" and "Copy as New Record" —
+   not xEdit's own split behavior (silent default on Add, prompted-and-skippable on Copy as New,
+   `xeMainForm.pas` `mniNavAddClick` vs. `CopyInto`'s wrapped-copy path). Maintainer ruling,
+   2026-08-29 (#571): a deliberate divergence, not a platform-limitation one — Add's *default*
+   changes, which "Baseline, not ceiling" above would otherwise forbid without an opt-in
+   affordance. Recorded here rather than silently overridden.
 
 Anything not on this list aligns.
 

@@ -36,6 +36,8 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 - `/mutation-test` — mutation testing: `MEditService.Core` (backend) and
   `modbench/src/modmanager/` (frontend).
 - `/manual-test` — e2e test against real MO2 instance.
+- `/ux-checkpoint` — before wiring new/changed interactive UI: inert stub, live demo, signoff,
+  then logic.
 
 ## Rules that matter
 
@@ -85,6 +87,10 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   xEdit has no such model; the references there are the product's own git-native
   working-tree model (ADR-0041) and VS Code/git native idioms (Source Control panel,
   decorations, dirty markers).
+- **New or changed interactive UI ships as an inert stub before any logic wires it up.**
+  Implement the UI only, demo it live, get signoff — a well-cited, xEdit-sourced shape can
+  still be rejected on sight once someone actually runs it (#363/#574). Triggered by the
+  `needs-ux` label (`docs/agents/triage-labels.md`); protocol: `/ux-checkpoint`.
 - Native-first, webviews included: before designing any interaction, ask "which VS
   Code surface already does this?" and copy its answer — menus, pickers, confirms,
   prompts, trees and clipboard all have one. A webview is justified by what it

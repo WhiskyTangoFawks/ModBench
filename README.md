@@ -20,9 +20,9 @@ treats a plugin the way an IDE treats a program:
   at Track time, so a plugin that can't be reproduced is refused rather than silently mangled.
 - **Edit** in the compare grid (or from a script, or from an agent) and the change lands as an
   ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it,
-  discard it, commit it, branch it, rebase it. There is no bespoke "pending changes" layer.
-- **Save & Compile** writes the binary from the source when you say so. Masters are derived from
-  content; the compiler refuses what it can't emit and reports the rest as Problems.
+  discard it, commit it, branch it, rebase it.
+- **Save & Compile** writes the binary from the source when you say so. The compiler refuses what 
+  it can't emit and reports the rest as Problems.
 - **The plugin stays the source of truth.** It's what the game loads and what MO2, xEdit and
   everything else see. Modbench never assumes exclusive ownership of any file — external changes
   are detected and handled through one dialog (upstream update, or your own edit).
@@ -35,7 +35,7 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 | Surface | Spec | State |
 |---|---|---|
 | **Mods** — install from archive, separators, drag-order, enable, deploy (hardlinks), purge, profiles | [mods.md](docs/specs/mods.md) | Implemented |
-| **Plugins** — the one Plugins tree: `plugins.txt` order and checkboxes, and with a session running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
+| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit session running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD and conditions | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
 | **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
 | **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
@@ -134,10 +134,8 @@ Python HTTP clients of the same API ([ADR-0024](docs/adr/0024-python-scripts-are
 ## References
 
 Modbench stands on [Mutagen](https://github.com/Mutagen-Modding/Mutagen) (plugin parsing and
-writing), [DuckDB](https://duckdb.org/) (the record index), and 25 years of
+writing), [DuckDB](https://duckdb.org/) (the record index), and 20+ years of
 [xEdit](https://github.com/TES5Edit/TES5Edit) UX refinement, and it manages
-[Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer) instances in their own format. The
-repository and the backend are still named `mEdit`/`MEditService` from before the mod-management
-side existed; "mEdit" now means the editor view specifically.
+[Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer) instances in their own format.
 
 Licensed under the GPL — see [LICENSE](LICENSE).
