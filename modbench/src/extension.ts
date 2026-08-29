@@ -21,7 +21,7 @@ import {
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { resolveCompileTarget, type CompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
-import { trackedModFoldersOf, registerTrackedRepositories, isTracked } from './medit/trackedRepositories';
+import { trackedModFoldersOf, registerTrackedRepositories, isTracked, pluginRepositoriesOf } from './medit/trackedRepositories';
 import { startExternalChangePolling, runRebase, gateExternalChangePolling, type OpenMergeEditor } from './medit/externalChangeCoordinator';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
@@ -304,11 +304,10 @@ interface GitExtensionExports {
  *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI this
  *  ticket adds, never blocks reading or editing.
  *
- *  #557: also (re)builds `pluginRepositories`, keyed by each plugin's own filename rather than by
- *  folder — the same filename-keying `trackedPlugins` (sessionPluginFilesFrom) already uses, safe
- *  for the same reason: a shadowed same-name copy is read-only (ADR-0036), so filename is unique
- *  among plugins an edit could ever actually reach. Wholesale replace, not a merge: a plugin that
- *  dropped out of tracking between calls must not leave a stale handle behind. */
+ *  #557: also (re)builds `pluginRepositories` via `pluginRepositoriesOf` (`trackedRepositories.ts`
+ *  — the derivation itself stays there, not here, so it is unit-testable without this file).
+ *  Wholesale replace, not a merge: a plugin that dropped out of tracking between calls must not
+ *  leave a stale handle behind. */
 async function registerTrackedRepositoriesForSession(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
@@ -323,13 +322,7 @@ async function registerTrackedRepositoriesForSession(repository: ApiPluginReposi
     const folders = trackedModFoldersOf(plugins);
     const folderRepositories = await registerTrackedRepositories(
       (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-
-    const byPlugin = new Map<string, MinimalRepository>();
-    for (const plugin of plugins) {
-      const repo = folderRepositories.get(path.dirname(plugin.path));
-      if (repo) byPlugin.set(plugin.name, repo);
-    }
-    pluginRepositories = byPlugin;
+    pluginRepositories = pluginRepositoriesOf(plugins, folderRepositories);
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
   }
