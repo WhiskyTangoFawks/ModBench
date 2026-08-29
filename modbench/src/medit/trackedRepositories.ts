@@ -31,13 +31,25 @@ export function trackedModFoldersOf(plugins: readonly Pick<PluginMetadata, 'path
  *  `vscode.git` type so this stays unit-testable; `extension.ts` is the only real caller and
  *  supplies `(folder) => gitApi.openRepository(vscode.Uri.file(folder))`. Deduplicates its own
  *  input too — the AC's contract, not merely a property `trackedModFoldersOf`'s caller happens to
- *  uphold. */
-export async function registerTrackedRepositories(
-  openRepository: (modFolder: string) => Promise<unknown>,
+ *  uphold.
+ *
+ *  #557: resolves to a `Map` of folder → the repository handle `openRepository` returned, instead
+ *  of discarding it (the old `Promise<void>` shape). `extension.ts` keeps this map so a
+ *  subsequent field edit can prompt the right repository's own `status()` — the missing piece
+ *  that left the Source Control panel waiting on a manual Refresh (RecordDecorationProvider.ts's
+ *  own #428 Q2 doc comment already named this as "repo-handle plumbing... not this ticket"; #557
+ *  is that follow-up, for the outbound direction only). A folder whose `openRepository` call
+ *  resolves `null` (the real API's own "declined to open" answer) is omitted rather than stored,
+ *  so a later `.status()` lookup can never land on a null handle. */
+export async function registerTrackedRepositories<T>(
+  openRepository: (modFolder: string) => Promise<T | null | undefined>,
   modFolders: readonly string[],
-): Promise<void> {
+): Promise<Map<string, T>> {
   const distinct = [...new Set(modFolders)];
+  const repositories = new Map<string, T>();
   for (const folder of distinct) {
-    await openRepository(folder);
+    const repository = await openRepository(folder);
+    if (repository != null) repositories.set(folder, repository);
   }
+  return repositories;
 }

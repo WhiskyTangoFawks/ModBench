@@ -89,4 +89,27 @@ describe('registerTrackedRepositories', () => {
 
     expect(openRepository).toHaveBeenCalledTimes(1);
   });
+
+  // #557: the returned repository handles are what extension.ts now keeps around to prompt a
+  // post-edit Source Control status refresh — previously this function returned `Promise<void>`
+  // and threw every resolved `Repository` away, which is why nothing could ever be refreshed.
+  it('resolves to a Map of folder to the repository openRepository returned', async () => {
+    const repoA = { name: 'repoA' };
+    const repoB = { name: 'repoB' };
+    const openRepository = vi.fn((folder: string) => Promise.resolve(folder === '/mods/A' ? repoA : repoB));
+
+    const repositories = await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/B']);
+
+    expect(repositories).toEqual(new Map([['/mods/A', repoA], ['/mods/B', repoB]]));
+  });
+
+  it('omits a folder whose openRepository call resolved null', async () => {
+    // The real `vscode.git` API's own `openRepository` return type is `Repository | null` — a
+    // null here must not become a null-valued map entry a later `.status()` call would crash on.
+    const openRepository = vi.fn().mockResolvedValue(null);
+
+    const repositories = await registerTrackedRepositories(openRepository, ['/mods/A']);
+
+    expect(repositories.size).toBe(0);
+  });
 });

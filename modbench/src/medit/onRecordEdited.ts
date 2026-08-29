@@ -33,12 +33,22 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
  *  isolation at all. Called unconditionally, not gated on `markWorkingTreeState`'s own cache-hit:
  *  the edit already landed server-side by the time this fires, so the plugin row's compile-pending
  *  decoration needs the same re-derive regardless of whether the record-row cache had this
- *  FormKey. */
+ *  FormKey.
+ *
+ *  `refreshSourceControl` (#557): same injected-callback shape as `refreshCompilePending`, for the
+ *  same reason — this is what makes VS Code's native Source Control panel pick up the resulting
+ *  working-tree change without a manual Refresh click. Also called unconditionally: the edit
+ *  landed server-side regardless of whether this record-row cache had a hit, so the SCM refresh
+ *  can't be gated on that either. `extension.ts` supplies a lookup from the edited plugin's own
+ *  filename to the `vscode.git` `Repository` handle `trackedRepositories.ts`'s
+ *  `registerTrackedRepositories` opened for its mod folder, and prompts that repository's own
+ *  `status()`. */
 export function makeOnRecordEdited(
   treeProvider: PluginTreeProvider,
   recordDecorationProvider: RecordDecorationProvider,
   recordPanels: Set<vscode.WebviewPanel>,
   refreshCompilePending: () => void,
+  refreshSourceControl: (plugin: string) => void,
 ): (formKey: string, plugin: string, origin: string) => void {
   return (formKey, plugin, origin) => {
     broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
@@ -51,5 +61,6 @@ export function makeOnRecordEdited(
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey, true));
     }
     refreshCompilePending();
+    refreshSourceControl(plugin);
   };
 }

@@ -112,6 +112,14 @@ let matchingPlugins: Map<string, boolean> | undefined;
 // that fetch rather than a second one. `undefined` reads as "nothing to show" — PluginsTreeComposite
 // .compilePendingOf's own safe default when the accessor has nothing to say.
 let compilePending: Map<string, { pending: boolean; lastCompiledAt: string | null }> | undefined;
+// #557: plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
+// folder — rebuilt wholesale by registerTrackedRepositoriesForSession below, same "no stale
+// carryover" posture as matchingPlugins/compilePending above. This is the piece
+// RecordDecorationProvider.ts's own #428 Q2 doc comment named as missing ("Nothing in this
+// extension retains the Repository handle openRepository returns") — kept so a successful field
+// edit can prompt the right repository's own status() and make the native Source Control panel
+// pick up the resulting working-tree change without a manual Refresh click.
+let pluginRepositories: Map<string, MinimalRepository> | undefined;
 
 /** #307: the Plugins view's own statement about what it is doing, or what it does not yet know
  *  (`TreeView.message` — the native surface for a view-scoped statement about its own contents,
@@ -270,12 +278,20 @@ async function refreshMatchingPlugins(repository: PluginRepository, outputChanne
   pluginsTree?.refreshDecorations();
 }
 
+/** The one shape this extension needs from a `vscode.git` `Repository` (#557) — just `status()`,
+ *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
+ *  manual Refresh button has. */
+interface MinimalRepository {
+  status(): Thenable<unknown>;
+}
 /** The one shape this extension needs from `vscode.git`'s exported API (ADR-0041: "the native git
- *  UI is the review surface") — deliberately not the full upstream `git.d.ts`, just the two members
+ *  UI is the review surface") — deliberately not the full upstream `git.d.ts`, just the members
  *  actually called, so there is nothing here to drift out of sync with an API surface this
- *  extension otherwise never touches. */
+ *  extension otherwise never touches. `openRepository`'s return type widened from `unknown` to
+ *  `MinimalRepository | null` (#557) — the real API's own answer for "declined to open" is `null`,
+ *  and the resolved handle is no longer thrown away (see `pluginRepositories` above). */
 interface MinimalGitApi {
-  openRepository(uri: vscode.Uri): Thenable<unknown>;
+  openRepository(uri: vscode.Uri): Thenable<MinimalRepository | null>;
 }
 interface GitExtensionExports {
   getAPI(version: 1): MinimalGitApi;
@@ -286,7 +302,13 @@ interface GitExtensionExports {
  *  (`notifyConflictsComputed`'s own call site) and immediately after a successful Track, so a
  *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
  *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI this
- *  ticket adds, never blocks reading or editing. */
+ *  ticket adds, never blocks reading or editing.
+ *
+ *  #557: also (re)builds `pluginRepositories`, keyed by each plugin's own filename rather than by
+ *  folder — the same filename-keying `trackedPlugins` (sessionPluginFilesFrom) already uses, safe
+ *  for the same reason: a shadowed same-name copy is read-only (ADR-0036), so filename is unique
+ *  among plugins an edit could ever actually reach. Wholesale replace, not a merge: a plugin that
+ *  dropped out of tracking between calls must not leave a stale handle behind. */
 async function registerTrackedRepositoriesForSession(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
@@ -299,10 +321,35 @@ async function registerTrackedRepositoriesForSession(repository: ApiPluginReposi
 
     const plugins = await repository.getPlugins();
     const folders = trackedModFoldersOf(plugins);
-    await registerTrackedRepositories((folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
+    const folderRepositories = await registerTrackedRepositories(
+      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
+
+    const byPlugin = new Map<string, MinimalRepository>();
+    for (const plugin of plugins) {
+      const repo = folderRepositories.get(path.dirname(plugin.path));
+      if (repo) byPlugin.set(plugin.name, repo);
+    }
+    pluginRepositories = byPlugin;
   } catch (err) {
     outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/** #557: prompts the edited plugin's own repository to re-check its working tree —
+ *  `Repository.status()`, the same effect the SCM panel's manual Refresh button has, fired
+ *  automatically from `onRecordEdited` instead of waiting on it (or on the native watcher, which
+ *  is what left the panel needing that click in the first place — see `pluginRepositories`'s own
+ *  doc comment). A plugin with no tracked repository handle (never tracked, or Source Control
+ *  unavailable) is a silent no-op, same posture as `registerTrackedRepositoriesForSession`'s own
+ *  gates: this only ever narrows the native UI, never blocks the edit that already succeeded. A
+ *  rejected `status()` is logged, not surfaced — a refresh failing must never read as the edit
+ *  itself having failed. */
+function refreshSourceControlFor(plugin: string, outputChannel: vscode.LogOutputChannel): void {
+  const repo = pluginRepositories?.get(plugin);
+  if (!repo) return;
+  void repo.status().then(undefined, (err: unknown) => {
+    outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${err instanceof Error ? err.message : String(err)}`);
+  });
 }
 
 /** Leave editing: tear down the editing backend. #273: there is no separate loadout view mode
@@ -698,6 +745,20 @@ function makeRecordDecorationProvider(treeProvider: PluginTreeProvider): RecordD
     (plugin, origin, formKey) => treeProvider.conflictAllOf(plugin, origin, formKey));
 }
 
+// #557, same shape/reason as makeRecordDecorationProvider above: pulled out of
+// registerRecordViewCommands purely to stay under its own lint line budget (#364).
+function makeOnRecordEditedCallback(
+  deps: EditorCommandDeps,
+  recordDecorationProvider: RecordDecorationProvider,
+): (formKey: string, plugin: string, origin: string) => void {
+  const { treeProvider, recordPanels, repository, outputChannel } = deps;
+  return makeOnRecordEdited(
+    treeProvider, recordDecorationProvider, recordPanels,
+    () => { void refreshMatchingPlugins(repository, outputChannel); },
+    (plugin) => refreshSourceControlFor(plugin, outputChannel),
+  );
+}
+
 /** Record view/navigation + filter commands. */
 function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[] {
   const {
@@ -719,10 +780,7 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
     // this record to re-read. Broadcast rather than replying to the one panel that asked: the same
     // record can be open in more than one panel (openEditorBeside), and all of them are now stale.
     repository: deps.repository,
-    onRecordEdited: makeOnRecordEdited(
-      treeProvider, recordDecorationProvider, recordPanels,
-      () => { void refreshMatchingPlugins(deps.repository, outputChannel); },
-    ),
+    onRecordEdited: makeOnRecordEditedCallback(deps, recordDecorationProvider),
     // Placeholders — the onDidReceiveMessage wiring below overrides all three per panel every call.
     formKeyPicker: undefined,
     conditionFunctionPicker: undefined,
