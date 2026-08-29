@@ -68,6 +68,8 @@ public class ContainerChildQueryServiceTests
         public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
         public PluginResponse SetPluginParticipation(string plugin, bool participates) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
+        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
+        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> p) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();

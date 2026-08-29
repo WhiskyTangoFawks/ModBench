@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Timers;
 using MEditService.Core.Source;
 using Timer = System.Timers.Timer;
@@ -18,6 +19,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     private readonly object _gate = new();
     private readonly Dictionary<string, WatchEntry> _entries = new(StringComparer.Ordinal);
     private readonly Dictionary<string, UnansweredExternalChange> _unanswered = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MirrorEntry> _mirrors = new(StringComparer.Ordinal);
 
     /// <param name="debounce">How long to wait after the last file-system event before reading and
     /// classifying the binary — collapses the several write events one plugin save can raise (xEdit,
@@ -41,30 +43,90 @@ public sealed class ExternalChangeWatcher : IDisposable
         lock (_gate)
         {
             if (_entries.TryGetValue(key, out var existing)) existing.Dispose();
+            _entries[key] = StartWatch(directory, pluginPath, () => Settle(modFolder, pluginName, pluginPath));
+        }
+    }
 
-            var fsWatcher = new FileSystemWatcher(directory, Path.GetFileName(pluginPath))
+    /// <summary>The watch mechanic itself, shared by both kinds of watch this class keeps: a
+    /// <see cref="FileSystemWatcher"/> on one file, every event restarting one debounce timer, and
+    /// <paramref name="onSettle"/> run once the writes stop. What a settle then <i>means</i> is the
+    /// caller's — a question for the user (<see cref="Settle"/>) or a re-index
+    /// (<see cref="SettleIndexed"/>).</summary>
+    private WatchEntry StartWatch(string directory, string pluginPath, Action onSettle)
+    {
+        var fsWatcher = new FileSystemWatcher(directory, Path.GetFileName(pluginPath))
+        {
+            // FileName is required for Renamed to fire at all (confirmed empirically, not
+            // assumed): a temp-file-then-rename commit — exactly how PluginWriter.Commit()
+            // writes every binary, Save & Compile included — raises neither Changed nor
+            // Created without it; .NET's Linux FileSystemWatcher (inotify-backed) gates the
+            // Renamed event on this bit. Without it, the live watcher could not see Save &
+            // Compile's own writes at all, by any event, which would have made self-echo
+            // suppression untestable through this class (and the production watcher blind to
+            // its own writes) rather than merely untested.
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+        };
+        var debounceTimer = new Timer(_debounce.TotalMilliseconds) { AutoReset = false };
+        debounceTimer.Elapsed += (_, _) => onSettle();
+        fsWatcher.Changed += (_, _) => Restart(debounceTimer);
+        fsWatcher.Created += (_, _) => Restart(debounceTimer);
+        // A rename *into* the watched filename (PluginWriter.Commit()'s File.Move(tmpPath,
+        // finalPath), the shape every production binary write actually takes) surfaces here,
+        // never as Changed/Created — see the NotifyFilter comment above.
+        fsWatcher.Renamed += (_, _) => Restart(debounceTimer);
+        // #587: a deletion is a settle like any other. It is the whole point of a mirror watch (the
+        // rows go), and a no-op for a classification watch, whose Settle finds no bytes to read and
+        // returns — the load-time check is what reports a tracked plugin's missing binary.
+        fsWatcher.Deleted += (_, _) => Restart(debounceTimer);
+        fsWatcher.EnableRaisingEvents = true;
+        return new WatchEntry(fsWatcher, debounceTimer);
+    }
+
+    /// <summary>
+    /// #587 / ADR-0001: one indexed binary changed or vanished on disk while a session is live.
+    /// Raised only for the plugins watched through <see cref="WatchIndexed"/> — the ones whose rows
+    /// come from the binary — never for a tracked plugin, whose out-of-band writes are a question
+    /// for the user (Absorb / Keep) rather than a silent re-index.
+    ///
+    /// <para>Raised <i>outside</i> this class's lock, on the debounce timer's thread: the handler
+    /// re-indexes a whole plugin, and holding the watch lock across that would stall every other
+    /// watch's settle behind it.</para>
+    /// </summary>
+    public event Action<IndexedBinaryEvent>? IndexedBinaryChanged;
+
+    /// <summary>
+    /// #587 / ADR-0001: starts mirroring one <b>indexed</b> binary — the game's <c>Data/</c>
+    /// included — so a write by MO2, xEdit, Steam or the user reaches the index with no reload.
+    /// <paramref name="contentHash"/> is what the index's rows were built from, and is what makes a
+    /// <i>touch</i> free: a settle that hashes to the same bytes raises nothing at all. Re-watching
+    /// an (origin, plugin) pair replaces the previous watch and its remembered hash.
+    /// </summary>
+    public void WatchIndexed(string pluginName, string origin, string pluginPath, string contentHash)
+    {
+        var directory = Path.GetDirectoryName(pluginPath)
+            ?? throw new ArgumentException($"'{pluginPath}' has no containing directory.", nameof(pluginPath));
+
+        lock (_gate)
+        {
+            var key = MirrorKey(origin, pluginName);
+            if (_mirrors.TryGetValue(key, out var existing)) existing.Dispose();
+            var mirror = new MirrorEntry(contentHash)
             {
-                // FileName is required for Renamed to fire at all (confirmed empirically, not
-                // assumed): a temp-file-then-rename commit — exactly how PluginWriter.Commit()
-                // writes every binary, Save & Compile included — raises neither Changed nor
-                // Created without it; .NET's Linux FileSystemWatcher (inotify-backed) gates the
-                // Renamed event on this bit. Without it, the live watcher could not see Save &
-                // Compile's own writes at all, by any event, which would have made self-echo
-                // suppression untestable through this class (and the production watcher blind to
-                // its own writes) rather than merely untested.
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
+                Watch = StartWatch(directory, pluginPath, () => SettleIndexed(pluginName, origin, pluginPath)),
             };
-            var debounceTimer = new Timer(_debounce.TotalMilliseconds) { AutoReset = false };
-            debounceTimer.Elapsed += (_, _) => Settle(modFolder, pluginName, pluginPath);
-            fsWatcher.Changed += (_, _) => Restart(debounceTimer);
-            fsWatcher.Created += (_, _) => Restart(debounceTimer);
-            // A rename *into* the watched filename (PluginWriter.Commit()'s File.Move(tmpPath,
-            // finalPath), the shape every production binary write actually takes) surfaces here,
-            // never as Changed/Created — see the NotifyFilter comment above.
-            fsWatcher.Renamed += (_, _) => Restart(debounceTimer);
-            fsWatcher.EnableRaisingEvents = true;
+            _mirrors[key] = mirror;
+        }
+    }
 
-            _entries[key] = new WatchEntry(fsWatcher, debounceTimer);
+    /// <summary>Drops every index-mirror watch. The composition root calls this before re-registering
+    /// a freshly loaded session's plugins, so a watch can never outlive the load order that asked for
+    /// it and re-index a plugin this session no longer holds.</summary>
+    public void UnwatchAllIndexed()
+    {
+        lock (_gate)
+        {
+            foreach (var mirror in _mirrors.Values) mirror.Dispose();
+            _mirrors.Clear();
         }
     }
 
@@ -154,8 +216,59 @@ public sealed class ExternalChangeWatcher : IDisposable
             ReportExternalChange(modFolder, pluginName, externalChange);
     }
 
+    /// <summary>
+    /// #587: what a mirror watch does when the writes stop — re-hash, and say what actually
+    /// happened. Identical bytes raise nothing, which is what keeps a <c>touch</c>, a mod manager's
+    /// re-link or a rewrite of the same content from costing a re-index; and the remembered hash is
+    /// advanced here rather than after the re-index lands, so the several events one write raises do
+    /// not report it several times.
+    /// </summary>
+    private void SettleIndexed(string pluginName, string origin, string pluginPath)
+    {
+        IndexedBinaryEvent notification;
+        lock (_gate)
+        {
+            if (!_mirrors.TryGetValue(MirrorKey(origin, pluginName), out var mirror)) return;
+
+            if (!File.Exists(pluginPath))
+            {
+                // Already reported gone: a delete raises several events and the file stays absent,
+                // so without this every one of them would remove the same rows again.
+                if (mirror.ContentHash == null) return;
+                mirror.ContentHash = null;
+                notification = new IndexedBinaryEvent(pluginName, origin, pluginPath, IndexedBinaryChange.Deleted);
+            }
+            else
+            {
+                // Unreadable is not "changed": a file another process is still writing says nothing
+                // about whether the indexed rows are stale, and the next event settles it.
+                if (HashOf(pluginPath) is not { } observed || observed == mirror.ContentHash) return;
+                mirror.ContentHash = observed;
+                notification = new IndexedBinaryEvent(pluginName, origin, pluginPath, IndexedBinaryChange.Modified);
+            }
+        }
+
+        IndexedBinaryChanged?.Invoke(notification);
+    }
+
+    private static string? HashOf(string pluginPath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(pluginPath);
+            return Convert.ToHexStringLower(SHA256.HashData(stream));
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
     private static string Key(string modFolder, string pluginName) =>
         $"{modFolder} {pluginName}";
+
+    // (origin, plugin) — the compound plugin identity, not a mod folder: an index-mirror watch
+    // covers plugins that have no mod folder at all, the game's own Data/ masters above all.
+    private static string MirrorKey(string origin, string pluginName) =>
+        string.Concat(origin, "\u0000", pluginName);
 
     public void Dispose()
     {
@@ -163,6 +276,8 @@ public sealed class ExternalChangeWatcher : IDisposable
         {
             foreach (var entry in _entries.Values) entry.Dispose();
             _entries.Clear();
+            foreach (var mirror in _mirrors.Values) mirror.Dispose();
+            _mirrors.Clear();
         }
     }
 
@@ -174,7 +289,32 @@ public sealed class ExternalChangeWatcher : IDisposable
             debounceTimer.Dispose();
         }
     }
+
+    /// <summary>One index-mirror watch and the bytes the index was last built from — null once the
+    /// file's disappearance has been reported. Guarded by <c>_gate</c> like every other entry here.</summary>
+    private sealed class MirrorEntry(string contentHash) : IDisposable
+    {
+        public string? ContentHash { get; set; } = contentHash;
+        public WatchEntry? Watch { get; init; }
+        public void Dispose() => Watch?.Dispose();
+    }
 }
+
+/// <summary>#587: what happened to one indexed binary on disk.</summary>
+public enum IndexedBinaryChange
+{
+    /// <summary>Its bytes changed — the index must re-read it.</summary>
+    Modified,
+
+    /// <summary>It is gone — the index must forget it.</summary>
+    Deleted,
+}
+
+/// <summary>#587 / ADR-0001: one indexed binary's disk event, carrying the compound plugin identity
+/// (<c>origin</c> plus filename) the index is keyed by. Deliberately says nothing about sessions,
+/// indexes or DuckDB — this assembly knows none of those (<c>BridgeKnowsNothingOfSessionsTests</c>);
+/// what to do about it is <c>MEditService.Api</c>'s to decide.</summary>
+public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
 
 /// <summary>One plugin's unanswered external-change question, as the watcher (or, once the load-time
 /// check is wired, the same classification from that path) last observed it — what

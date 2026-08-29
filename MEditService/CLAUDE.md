@@ -53,6 +53,17 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates the
     decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones do, so
     a warm launch's progress advances instead of sitting at zero.
+  - **The mirror keeps running while the session does** (#587 / ADR-0001).
+    `ExternalChangeWatcher.WatchIndexed` covers every *indexed* binary the game's `Data/` included,
+    beside the classification watches it already kept for tracked ones; a settle re-hashes and raises
+    `IndexedBinaryChanged` only when the bytes actually moved (a touch costs nothing), and a deletion
+    is its own `IndexedBinaryChange.Deleted`. `MEditService.Api`'s `IndexMirror` turns those into
+    `ISessionManager.ReindexPlugin(PluginKey)` / `UnindexPlugin` — the composition root's job, since
+    the Bridge knows nothing of sessions or DuckDB. **Tracked plugins are deliberately not mirrored**:
+    their rows come from the source tree, so their binary changing stays the user's Absorb/Keep
+    question and re-reading it would overwrite the working tree with the compiled artifact.
+    `ExternalChangeSessionHook.RunAfterLoad` drops every mirror watch before re-registering, so no
+    watch outlives the load order that asked for it.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
     `SessionManager.RequirePlugin`, `IGameSession.LoadOrderPlugin`): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"

@@ -669,28 +669,6 @@ public sealed class SessionManager(
         }
     }
 
-    public Task ReindexPlugin(string plugin)
-    {
-        var (metadata, repository, gameRelease) = RequirePlugin(plugin);
-
-        var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
-        var modPath = new ModPath(modKey, metadata.Path);
-        // #515: same explicit strings parameters every other deep-parse call site now builds.
-        using var loaded = _modImporter.Import(
-            modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _session!.DataFolderPath));
-
-        lock (_lock)
-        {
-            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates,
-                new PluginKey(metadata.Name, metadata.Origin), metadata.Path);
-            repository.UpdateWinners();
-            // #422: re-indexed content can flip filter membership either way.
-            ReapplyFilter();
-        }
-
-        return Task.CompletedTask;
-    }
-
     public Task ReindexPlugins(IReadOnlyList<string> plugins)
     {
         var loaded = new List<(PluginMetadata Metadata, IRecordIndex Repository, ILoadedMod Loaded)>(plugins.Count);
@@ -726,6 +704,71 @@ public sealed class SessionManager(
         }
 
         return Task.CompletedTask;
+    }
+
+    /// <summary>See <see cref="ISessionManager.ReindexPlugin(PluginKey)"/>.</summary>
+    public Task ReindexPlugin(PluginKey key)
+    {
+        PluginMetadata metadata;
+        IRecordIndex repository;
+        GameRelease gameRelease;
+        lock (_lock)
+        {
+            if (_session == null) throw new InvalidOperationException(NoSessionMessage);
+            metadata = _session.Plugins.FirstOrDefault(p =>
+                    string.Equals(p.Name, key.Name, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(p.Origin, key.Origin, StringComparison.OrdinalIgnoreCase))
+                ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' not found in session.");
+            (repository, gameRelease) = (_repository!, _gameRelease);
+        }
+
+        return ReindexOne(metadata, repository, gameRelease);
+    }
+
+    public Task ReindexPlugin(string plugin)
+    {
+        var (metadata, repository, gameRelease) = RequirePlugin(plugin);
+        return ReindexOne(metadata, repository, gameRelease);
+    }
+
+    private Task ReindexOne(PluginMetadata metadata, IRecordIndex repository, GameRelease gameRelease)
+    {
+        var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
+        var modPath = new ModPath(modKey, metadata.Path);
+        // #515: same explicit strings parameters every other deep-parse call site now builds.
+        using var loaded = _modImporter.Import(
+            modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _session!.DataFolderPath));
+
+        lock (_lock)
+        {
+            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates,
+                new PluginKey(metadata.Name, metadata.Origin), metadata.Path);
+            repository.UpdateWinners();
+            // #422: re-indexed content can flip filter membership either way.
+            ReapplyFilter();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>See <see cref="ISessionManager.UnindexPlugin"/>.</summary>
+    public void UnindexPlugin(PluginKey key)
+    {
+        lock (_lock)
+        {
+            if (_repository == null) return;
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "{Plugin} ({Origin}) is gone from disk; removing it from the index", key.Name, key.Origin);
+            }
+            _repository.Unindex(key);
+            // A removal moves winners for every FormKey it held, exactly as an re-index does.
+            _repository.UpdateWinners();
+            // #422: rows that no longer exist cannot match a filter that a stale _filter still lists.
+            ReapplyFilter();
+        }
     }
 
     private (PluginMetadata Metadata, IRecordIndex Repository, GameRelease GameRelease) RequirePlugin(string plugin)

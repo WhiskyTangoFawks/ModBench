@@ -89,6 +89,15 @@ try
 
     var app = builder.Build();
 
+    // #587 / ADR-0001: the index keeps mirroring the disk while a session is live. Subscribed once
+    // here rather than per load — the watcher is a process singleton, and re-subscribing on every
+    // load would stack a handler per load; which plugins are watched is re-decided per load instead
+    // (ExternalChangeSessionHook.RunAfterLoad).
+    var indexMirror = new IndexMirror(
+        app.Services.GetRequiredService<ISessionManager>(),
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
+    app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged += indexMirror.Apply;
+
     // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
     // than this middleware writes under, so the override doesn't touch it and no second override is
