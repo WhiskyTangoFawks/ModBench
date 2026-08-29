@@ -60,12 +60,17 @@ index itself outliving the process.
    `Unindex` is the file-gone verb — a delete, an uninstall, a file missing at validation —
    never the meaning of unload.
 
-3. **Session-level facts live only in `plugins`, never on `records` rows.** `load_order_idx`,
-   participation and `is_winner`-eligibility are properties of a registration, not of a record's
-   bytes; `records.load_order_idx` is either dropped in favour of the join or kept as a
-   denormalized copy that is updated only for plugins whose index actually changed (a relaunch of
-   the same load order updates nothing). The winner sweep already joins `plugins` for
-   participation and keeps doing so.
+3. **The load order is decoupled from the rows.** A record's identity is `(form_key, origin,
+   plugin)` — everything about it is derived from the file it came from, and no session numbering
+   is part of it. `load_order_idx` and participation live **only on the `plugins` row** and are
+   joined at read; `records.load_order_idx` is dropped. `plugins.txt` is the index the session
+   view is built from, and reordering it touches one row per plugin, never a record.
+
+   The one session derivative that stays materialized on `records` is `is_winner`: it is a
+   function of the registered load order, recomputed by the winner sweep (2 s on the profiled
+   order) whenever registration changes, and it is never a key and never persisted as truth —
+   a file-mirror row carrying a cached session answer, labeled as such. Moving it into a
+   session-owned table is a later refactor if the sweep's cost or the labeling ever bites.
 
 4. **Validity is by content, never by clock, and it is checked at every door.** `plugins` records
    the content hash of the file each plugin's rows were built from, plus the codec+schema
