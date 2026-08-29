@@ -227,7 +227,15 @@ public sealed class PluginCompileService(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "{Plugin} could not be read from its source", pluginName);
-            return (null, $"{pluginName} could not be read from its source: {ex.Message} Re-Track to regenerate the source.");
+
+            // #519: this seam's own exception vocabulary is not Track's — a JSON-tree deserialize
+            // never touches Mutagen's binary parser, so it never throws a RecordException at all
+            // (confirmed live with a forged corrupt-FormKey-string fixture: the real exception is
+            // Mutagen.Bethesda.Serialization.Exceptions.FilePathedException, whose only identity is
+            // the source file path). PluginDiagnosis.FromSourceReadException anchors to that file
+            // instead, the same identity unit RefuseIfSourceDoesNotRoundTrip below already uses.
+            var diagnosis = PluginDiagnosis.FromSourceReadException(ex, treeRoot);
+            return (null, $"{pluginName} could not be read from its source: {diagnosis.Describe()} Re-Track to regenerate the source.");
         }
     }
 
