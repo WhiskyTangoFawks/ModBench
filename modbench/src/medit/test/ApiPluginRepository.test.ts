@@ -540,25 +540,30 @@ describe('ApiPluginRepository.getPluginDelta', () => {
 
     const delta = await repo.getPluginDelta('Shared.esp', 'ModA', 'ModB');
 
-    expect(delta).toEqual([
-      { formKey: '000802:Shared.esp', editorId: 'WinnerOnly', presence: 'WinnerOnly' },
-      { formKey: '000803:Shared.esp', editorId: 'PeerOnly', presence: 'PeerOnly' },
-    ]);
+    expect(delta).toEqual({
+      ok: true,
+      entries: [
+        { formKey: '000802:Shared.esp', editorId: 'WinnerOnly', presence: 'WinnerOnly' },
+        { formKey: '000803:Shared.esp', editorId: 'PeerOnly', presence: 'PeerOnly' },
+      ],
+    });
     expect(client.GET).toHaveBeenCalledWith('/plugins/{plugin}/delta', {
       params: { path: { plugin: 'Shared.esp' }, query: { winnerOrigin: 'ModA', peerOrigin: 'ModB' } },
     });
   });
 
-  // #544 plan Q3: a vanished peer/winner (unloaded between the context-menu click and this call
-  // reaching the backend) is "nothing to compare", not a fault — same posture as
-  // getRecordOverridePlugins' own 404 case above.
-  it('returns an empty list on a 404 rather than throwing', async () => {
+  // #544 review finding #2: a vanished peer/winner (unloaded between the context-menu click and
+  // this call reaching the backend) must stay distinguishable from a genuinely empty delta — an
+  // explicit user-invoked action's failure gets an error, never a silently-successful-looking
+  // empty result (ADR-0026), unlike getRecordOverridePlugins' own 404-degrades-to-[] posture
+  // above (a passive read, not an explicit action).
+  it('reports a 404 as a distinguishable "vanished" outcome, not an empty entries list', async () => {
     const client = {
       GET: vi.fn().mockResolvedValue({ data: undefined, error: 'not found', response: { ok: false, status: 404 } }),
     } as any;
     const repo = new ApiPluginRepository(client);
 
-    expect(await repo.getPluginDelta('Shared.esp', 'ModA', 'ModB')).toEqual([]);
+    expect(await repo.getPluginDelta('Shared.esp', 'ModA', 'ModB')).toEqual({ ok: false, reason: 'vanished' });
   });
 
   it('throws on a genuine non-OK response rather than degrading to an empty list', async () => {

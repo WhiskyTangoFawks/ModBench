@@ -807,19 +807,31 @@ function registerCompareWithWinnerCommand(
         return;
       }
       const delta = await repository.getPluginDelta(plugin, winner.origin, peer.origin);
-      if (delta.length === 0) {
+      // #544 review finding #2: a vanished origin (the comparison never ran) must read as an
+      // error, not the "no differences" toast below — ADR-0026, an explicit user-invoked action's
+      // failure gets a notification, never a silently-successful-looking empty result.
+      if (!delta.ok) {
+        outputChannel.error(`[extension] compareWithWinner: "${plugin}" (${winner.origin} or ${peer.origin}) is no longer loaded`);
+        void vscode.window.showErrorMessage(
+          `Modbench: "${plugin}" is no longer loaded at "${winner.origin}" or "${peer.origin}" — the comparison could not run.`);
+        return;
+      }
+      if (delta.entries.length === 0) {
         void vscode.window.showInformationMessage(
           `Modbench: "${plugin}" (${peer.origin}) has no differences from the winner (${winner.origin}).`);
         return;
       }
       const picked = await vscode.window.showQuickPick(
-        delta.map((entry) => ({ label: `${presenceIconFor(entry.presence)} ${entry.editorId ?? entry.formKey}`, description: entry.formKey, entry })),
+        delta.entries.map((entry) => ({ label: `${presenceIconFor(entry.presence)} ${entry.editorId ?? entry.formKey}`, description: entry.formKey, entry })),
         { placeHolder: `${plugin}: differences between ${peer.origin} (peer) and ${winner.origin} (winner)` },
       );
       if (!picked) return;
       openRecordPanel(
         context, openPanels, picked.entry.editorId ?? picked.entry.formKey, picked.entry.formKey, port, vscode.ViewColumn.One,
-        { routerDeps, recordPanels, activeRecordTracker, singleton: true, deltaScope: { winnerOrigin: winner.origin, peerOrigin: peer.origin } },
+        {
+          routerDeps, recordPanels, activeRecordTracker, singleton: true,
+          deltaScope: { plugin, winnerOrigin: winner.origin, peerOrigin: peer.origin },
+        },
       );
     } catch (err) {
       // ADR-0026: an explicit user action failed — notify + log, never a silent no-op.
@@ -830,11 +842,11 @@ function registerCompareWithWinnerCommand(
   });
 }
 
-// #544: the two presence icons the delta QuickPick's own labels carry — `$(name)` codicon
-// shorthand, the same native-UI convention this file's own status bar text and "New filter…"
-// QuickPick item already use. "BothDiffer" gets no icon since it's an ordinary content
-// difference, not a presence difference — the same "no icon for the ordinary case" posture the
-// compile-pending decoration elsewhere in this tree already takes (docs/specs/plugins.md).
+// #544: the three icons the delta QuickPick's own labels carry — `$(name)` codicon shorthand, the
+// same native-UI convention this file's own status bar text and "New filter…" QuickPick item
+// already use. "WinnerOnly"/"PeerOnly" are the AC's own two presence icons; "BothDiffer" gets its
+// own distinct icon too (an ordinary content difference, not a presence difference) rather than
+// going unprefixed — every entry in the list is visually distinguishable at a glance.
 function presenceIconFor(presence: PluginDeltaEntry['presence']): string {
   if (presence === 'WinnerOnly') return '$(diff-added)';
   if (presence === 'PeerOnly') return '$(diff-removed)';
@@ -3069,10 +3081,10 @@ interface OpenRecordPanelDeps {
   // openBesideRecordPanels) while still being non-retargeting, so `viewColumn !== Beside` can no
   // longer stand in for "is this the singleton" the way it used to.
   singleton: boolean;
-  // #544: "Compare with winner" opening the grid scoped to exactly a peer/winner origin pair —
-  // undefined for every other caller, which is what keeps "delta mode is scoped to peer
-  // comparison; ordinary browsing unchanged" true for every other call site of this function.
-  deltaScope?: { winnerOrigin: string; peerOrigin: string };
+  // #544: "Compare with winner" opening the grid scoped to exactly one plugin's peer/winner
+  // origin pair — undefined for every other caller, which is what keeps "delta mode is scoped to
+  // peer comparison; ordinary browsing unchanged" true for every other call site of this function.
+  deltaScope?: { plugin: string; winnerOrigin: string; peerOrigin: string };
 }
 
 function openRecordPanel(

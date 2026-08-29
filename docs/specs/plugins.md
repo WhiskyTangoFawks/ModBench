@@ -707,22 +707,29 @@ split.
   this list can never disagree with what the ordinary compare grid would show), and only those — a
   FormKey identical in both is omitted outright, never included with a "no diff" flag. Null (mapped
   to 404) when either origin is no longer a loaded copy of the plugin by the time the call lands (a
-  collapsed peer racing the click), degrading to an empty QuickPick rather than a misleading
-  "every winner record is winner-only" answer.
+  collapsed peer racing the click) — surfaced end to end as a distinguishable outcome
+  (`PluginRepository.getPluginDelta`'s own `{ ok: false, reason: 'vanished' }`, distinct from `{ ok:
+  true, entries: [] }`), so the command shows an explicit error ("the comparison could not run")
+  rather than the misleading "no differences" toast a collapsed-to-empty-list answer would produce
+  for an explicit user-invoked action (ADR-0026).
   - The command resolves the winner's own origin off `GET /plugins` (only the winner is ever listed
-    normally), fetches the delta, and — no differences: an information message, no grid opens;
-    otherwise — opens a native `QuickPick` of the differing records (`$(diff-added)`/
-    `$(diff-removed)` codicon-prefixed for a presence-only entry, unprefixed for an ordinary content
-    difference), the same transient-picker-over-persistent-tree-node shape the Conflicts node's own
-    "list of differing FormKeys, click to open" already establishes, minus the standing surface
-    (this is a one-off action on exactly one peer/winner pair, not a browsable session-wide fact).
+    normally), fetches the delta, and — a vanished origin: an error message, no grid opens; no
+    differences: an information message, no grid opens; otherwise — opens a native `QuickPick` of
+    the differing records (`$(diff-added)`/`$(diff-removed)`/`$(diff-modified)` codicon-prefixed for
+    every entry, one icon per presence value including an ordinary content difference), the same
+    transient-picker-over-persistent-tree-node shape the Conflicts node's own "list of differing
+    FormKeys, click to open" already establishes, minus the standing surface (this is a one-off
+    action on exactly one peer/winner pair, not a browsable session-wide fact).
   - Selecting an entry opens the existing compare grid (`RecordPanel.tsx`) scoped to exactly the
-    peer/winner origin pair (`LOAD_RECORD`'s own `deltaScope` field, threaded through
-    `RecordSessionClient.load` — filtered at the fetch boundary, so every downstream derivation the
-    grid already had reads the pre-scoped set with no changes of its own) rather than every other
-    column `GetCompare` would otherwise include (a genuine third-party conflict on the same FormKey,
-    say). A record present in only one of the two scoped copies renders a presence banner instead of
-    a two-column diff. Undefined/absent for every ordinary open — "delta mode is scoped to peer
+    named plugin's peer/winner origin pair (`LOAD_RECORD`'s own `deltaScope` field — `{ plugin,
+    winnerOrigin, peerOrigin }`, not origins alone: the peer's own mod folder can ship a second
+    plugin file that independently overrides the same FormKey under the same origin, and an
+    origin-only filter would let that unrelated row back in as a bogus third column — threaded
+    through `RecordSessionClient.load` and filtered at the fetch boundary, so every downstream
+    derivation the grid already had reads the pre-scoped set with no changes of its own) rather than
+    every other column `GetCompare` would otherwise include. A record present in only one of the two
+    scoped copies renders a presence banner instead of a two-column diff. Undefined/absent for every
+    ordinary open — "delta mode is scoped to peer
     comparison; ordinary browsing unchanged."
 - **Out of scope here.** The global "show peers everywhere" audit-mode toggle is deferred, not
   dropped (#397's design record) — no such toggle is contributed anywhere in `package.json`.

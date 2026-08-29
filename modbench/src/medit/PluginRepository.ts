@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary, PluginDeltaEntry,
+  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary, PluginDeltaEntry, PluginDeltaResult,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -219,11 +219,13 @@ export interface PluginRepository {
   // an unknown FormKey (404), the same "not a fault" posture getRecordOwner's own 404 case uses.
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
   // #544: the Stack node's "Compare with winner" bulk seam — every FormKey where `plugin`'s copy
-  // at `winnerOrigin` and its copy at `peerOrigin` disagree, and only those. Empty for a vanished
-  // peer/winner (404 — one of the two origins is no longer a loaded copy of `plugin` by the time
-  // this reaches the backend), the same "not a fault" posture getRecordOverridePlugins' own 404
-  // case above takes.
-  getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaEntry[]>;
+  // at `winnerOrigin` and its copy at `peerOrigin` disagree, and only those. Review correction:
+  // unlike getRecordOverridePlugins' own 404-degrades-to-[] posture above, a vanished peer/winner
+  // (404) here must stay distinguishable from a genuinely empty delta — this is an explicit
+  // user-invoked action (ADR-0026), and "the comparison never ran" reads very differently from
+  // "it ran and found nothing," so the caller needs to tell the two apart rather than see the
+  // same empty array either way.
+  getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaResult>;
   // #427: the Renumber gesture's FormID input box's suggested default — the same both-refs
   // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
   // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
@@ -404,14 +406,15 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   // #544: see the interface's own doc comment. 404 is the vanished-origin case
-  // (RecordQueryService.GetPluginDelta returning null) — "nothing to compare", not a fault.
-  async getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaEntry[]> {
+  // (RecordQueryService.GetPluginDelta returning null) — reported as `{ ok: false, reason:
+  // 'vanished' }`, distinguishable from a genuinely empty `entries` list.
+  async getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaResult> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/delta', {
       params: { path: { plugin }, query: { winnerOrigin, peerOrigin } },
     });
-    if (response.status === 404) return [];
+    if (response.status === 404) return { ok: false, reason: 'vanished' };
     this.ensureOk(`getPluginDelta(${plugin}, ${winnerOrigin}, ${peerOrigin})`, response, error);
-    return (data ?? []).map(toPluginDeltaEntry);
+    return { ok: true, entries: (data ?? []).map(toPluginDeltaEntry) };
   }
 
   async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {

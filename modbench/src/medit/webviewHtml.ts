@@ -5,11 +5,12 @@ export function buildWebviewHtml(params: {
   port: number;
   scriptUri: string;
   cspSource: string;
-  // #544: "Compare with winner" opening a freshly-created panel already scoped to a peer/winner
-  // origin pair — undefined for every ordinary open. This is LOAD_RECORD's own deltaScope field,
-  // for a panel that didn't exist yet to receive a postMessage — the initial-page-load
-  // counterpart, same relationship formKey/mEditFormKey above already has to that message.
-  deltaScope?: { winnerOrigin: string; peerOrigin: string };
+  // #544: "Compare with winner" opening a freshly-created panel already scoped to one plugin's
+  // peer/winner origin pair — undefined for every ordinary open. This is LOAD_RECORD's own
+  // deltaScope field, for a panel that didn't exist yet to receive a postMessage — the
+  // initial-page-load counterpart, same relationship formKey/mEditFormKey above already has to
+  // that message.
+  deltaScope?: { plugin: string; winnerOrigin: string; peerOrigin: string };
 }): string {
   const { formKey, port, scriptUri, cspSource, deltaScope } = params;
   const nonce = crypto.randomBytes(16).toString('base64');

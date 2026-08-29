@@ -81,10 +81,15 @@ export type LoadResult =
 // off this client — the FormKey picker it backed is a native QuickPick now, and its search runs
 // in the extension host via PluginRepository.searchRecords instead of round-tripping through
 // this webview.
-// #544: "Compare with winner" — the peer/winner origin pair `load` scopes its own `overrides` to
-// when given, dropping every other participating column GetCompare would otherwise include (a
-// genuine third-party conflict on the same FormKey, say). Absent for every ordinary open.
+// #544: "Compare with winner" — the plugin + peer/winner origin pair `load` scopes its own
+// `overrides` to when given, dropping every other participating column GetCompare would otherwise
+// include (a genuine third-party conflict on the same FormKey, say). Absent for every ordinary
+// open. `plugin` is required, not inferred from the two origins: an origin alone doesn't name a
+// column — the peer's own mod folder can ship a second plugin file that independently overrides
+// this same FormKey under that same origin, and filtering by origin alone would let that unrelated
+// row back in as a bogus third column, exactly the case this scoping exists to exclude.
 export interface DeltaScope {
+  plugin: string;
   winnerOrigin: string;
   peerOrigin: string;
 }
@@ -119,7 +124,8 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
       // result.overrides (columns, editableColumns, collidingPluginNames, ...) then "just works"
       // against the already-scoped set with no changes of its own.
       const scopedOverrides = deltaScope
-        ? compareResult.overrides.filter(o => o.origin === deltaScope.winnerOrigin || o.origin === deltaScope.peerOrigin)
+        ? compareResult.overrides.filter(o =>
+            o.plugin === deltaScope.plugin && (o.origin === deltaScope.winnerOrigin || o.origin === deltaScope.peerOrigin))
         : compareResult.overrides;
       return {
         ok: true,

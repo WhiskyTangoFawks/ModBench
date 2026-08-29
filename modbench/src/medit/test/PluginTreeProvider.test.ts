@@ -111,7 +111,7 @@ function makeRepository(overrides: Partial<{
     // #364: the Conflicts node's own listing.
     getConflicts: vi.fn().mockResolvedValue([]),
     // #544: the Stack node's "Compare with winner" bulk seam.
-    getPluginDelta: vi.fn().mockResolvedValue([]),
+    getPluginDelta: vi.fn().mockResolvedValue({ ok: true, entries: [] }),
   };
 }
 

@@ -219,6 +219,19 @@ export interface PluginDeltaEntry {
   presence: PluginDeltaPresence;
 }
 
+/** #544 review: a vanished peer/winner (404 — one of the two named origins is no longer a loaded
+ *  copy of the plugin by the time this reaches the backend, e.g. a Stack peer collapsed between
+ *  the context-menu click and the call landing) has to stay distinguishable from a genuinely empty
+ *  delta — "the comparison never ran" is not the same fact as "it ran and found nothing," and
+ *  `registerCompareWithWinnerCommand` must show the first as an error (ADR-0026: an explicit
+ *  user-invoked action's failure gets a notification, never a silently-successful-looking empty
+ *  result) rather than a false "no differences" toast. Mirrors `RecordFieldEditOutcome`'s own
+ *  typed-outcome shape above rather than a sentinel value threaded through the ordinary success
+ *  type. */
+export type PluginDeltaResult =
+  | { ok: true; entries: PluginDeltaEntry[] }
+  | { ok: false; reason: 'vanished' };
+
 // Worldspace / cell / placed-object tree (per-plugin).
 export interface WorldspaceSummary {
   formKey: string;

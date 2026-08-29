@@ -42,8 +42,10 @@ describe('buildWebviewHtml', () => {
     expect(html).toContain('window.mEditDeltaScope = null');
   });
 
-  it('sets mEditDeltaScope to the given winner/peer origin pair', () => {
-    const html = buildWebviewHtml({ ...BASE_PARAMS, deltaScope: { winnerOrigin: 'ModA', peerOrigin: 'ModB' } });
-    expect(html).toContain('window.mEditDeltaScope = {"winnerOrigin":"ModA","peerOrigin":"ModB"}');
+  it('sets mEditDeltaScope to the given plugin + winner/peer origin pair', () => {
+    const html = buildWebviewHtml({
+      ...BASE_PARAMS, deltaScope: { plugin: 'Shared.esp', winnerOrigin: 'ModA', peerOrigin: 'ModB' },
+    });
+    expect(html).toContain('window.mEditDeltaScope = {"plugin":"Shared.esp","winnerOrigin":"ModA","peerOrigin":"ModB"}');
   });
 });
