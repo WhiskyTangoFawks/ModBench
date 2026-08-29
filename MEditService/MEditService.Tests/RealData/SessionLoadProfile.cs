@@ -160,14 +160,18 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
         foreach (var e in entries)
         {
             Match m;
-            if ((m = Opened.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.ImportMs = L(m, "i"); c.MetadataMs = L(m, "m"); }
-            else if ((m = Indexed.Match(e.Message)).Success) Cost(m.Groups["p"].Value).IndexMs = L(m, "ms");
-            else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = L(m, "d"); c.PrepareMs = L(m, "pr"); c.AppendMs = L(m, "ap"); c.ExtractedMs = L(m, "e"); c.CommitMs = L(m, "c"); }
-            else if ((m = Ingested.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.FromSource = true; c.DeserializeMs = L(m, "d"); c.ReconcileMs = L(m, "r"); }
-            else if ((m = RepoInit.Match(e.Message)).Success) repoInitMs = L(m, "ms");
-            else if ((m = Loaded.Match(e.Message)).Success) { loadedMs = L(m, "t"); winnersMs = L(m, "w"); firstUsable = m.Groups["f"].Value; }
+            if ((m = Opened.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.ImportMs = Ms(m, "i"); c.MetadataMs = Ms(m, "m"); }
+            else if ((m = Indexed.Match(e.Message)).Success) Cost(m.Groups["p"].Value).IndexMs = Ms(m, "ms");
+            else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = Ms(m, "d"); c.PrepareMs = Ms(m, "pr"); c.AppendMs = Ms(m, "ap"); c.ExtractedMs = Ms(m, "e"); c.CommitMs = Ms(m, "c"); }
+            else if ((m = Ingested.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.FromSource = true; c.DeserializeMs = Ms(m, "d"); c.ReconcileMs = Ms(m, "r"); }
+            else if ((m = RepoInit.Match(e.Message)).Success) repoInitMs = Ms(m, "ms");
+            else if ((m = Loaded.Match(e.Message)).Success) { loadedMs = Ms(m, "t"); winnersMs = Ms(m, "w"); firstUsable = m.Groups["f"].Value; }
         }
 
+        // The regexes above parse the load path's own Debug lines; a wording change there must fail
+        // here loudly rather than silently zero a phase.
+        if (costs.Count == 0 || loadedMs == 0 || costs.Values.All(c => c.IndexMs == 0))
+            throw new InvalidOperationException("No per-phase timing lines matched — the log texts in GameSession/SessionManager/DuckDbRecordIndex changed; update the regexes.");
         var records = session.Plugins.ToDictionary(p => p.Name, p => p.RecordCount, StringComparer.OrdinalIgnoreCase);
         var totalRecords = records.Values.Sum();
         var sb = new StringBuilder();
@@ -234,5 +238,5 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
         return sb.ToString();
     }
 
-    private static long L(Match m, string group) => long.Parse(m.Groups[group].Value, CultureInfo.InvariantCulture);
+    private static long Ms(Match m, string group) => long.Parse(m.Groups[group].Value, CultureInfo.InvariantCulture);
 }

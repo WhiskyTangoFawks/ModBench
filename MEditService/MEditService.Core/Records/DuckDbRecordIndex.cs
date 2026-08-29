@@ -425,8 +425,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // same order it always did. The codec and the collectors hold no per-call mutable state
         // (RecordTextCodec's caches are ConcurrentDictionaries; Mutagen's binary overlays are
         // immutable views), and a serialize under parallelism was verified byte-identical to the
-        // sequential one on a real DLC before this landed. A throw from any record surfaces as the
-        // original exception, logged against that record, not as an AggregateException.
+        // sequential one (pinned by ParallelPrepareParityTests). A throw from any record surfaces
+        // as the original exception, not as an AggregateException: every failing record has
+        // already been logged individually by PrepareRecordLogged, so when several fail in one
+        // batch the first is the one rethrown and the rest are in the log.
         // Bounded batches rather than one parallel pass over the whole type: a 1.55M-record master
         // has single types in the hundreds of thousands, and preparing all of them before appending
         // any held every body and ref list live at once — measured as ~100 s of GC on Fallout4.esm,
@@ -442,7 +444,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     .Select(record => PrepareRecordLogged(record, tableName, schema, plugin, gameRelease))
                     .ToList();
             }
-            catch (AggregateException ex) when (ex.InnerExceptions.Count == 1)
+            catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
             {
                 ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
                 throw;
@@ -504,8 +506,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
         catch (Exception ex)
         {
+            // Its own message, not AppendPrepared's: nothing has been appended when this fires —
+            // the serialize, hash, ref walk or child enumeration failed for this record.
             _logger.LogError(ex,
-                "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                "Failed to prepare {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
                 tableName, record.FormKey, record.EditorID, plugin);
             throw;
         }
