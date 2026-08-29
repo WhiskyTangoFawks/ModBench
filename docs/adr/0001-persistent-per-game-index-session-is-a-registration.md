@@ -93,9 +93,15 @@ index itself outliving the process.
    persisting working-tree/committed divergence across restarts. Their rows persist like any
    other and are simply replaced.
 
-6. **One writer.** A DuckDB file admits one writing process; a second service instance on the
-   same game opens read-only against the last committed state and reports itself as such, or
-   waits — never a second file, never silent divergence. A file that cannot be opened (DuckDB
+6. **One writer; a second session on the same game is refused.** A DuckDB file admits one
+   writing process, and Modbench runs one service per VS Code window, so two windows on the
+   same game (a second instance, a second profile, the same folder twice) contend for one file.
+   The second load fails with a structured `SessionLoadResponse` failure naming the cause ("the
+   Fallout 4 index is open in another Modbench window") — DuckDB's own open error is the trigger,
+   surfaced honestly. No read-only mode (a second mode every index-writing path would have to
+   detect, for a window that could not edit), no waiting (a hang with no signal), never a second
+   file (silent divergence). Concurrent editing of one game from two windows is not a workflow
+   the git-native model supports anyway. A file that cannot be opened (DuckDB
    storage-format change on upgrade, corruption) is rebuilt from scratch: the index is derived
    state and losing it costs one cold load, which is what it costs today.
 
@@ -110,7 +116,7 @@ index itself outliving the process.
   is reworded from "unloading, never filtering" to "unregistered, never physically present but
   answering".
 - New failure surfaces, each with a named answer: stale rows (content hash), format drift
-  (version key → rebuild), a second writer (lock → read-only). Disk growth needs no policy of
+  (version key → rebuild), a second writer (refused with a named failure). Disk growth needs no policy of
   its own: the index is bounded by the plugin files that exist, and a file's removal removes
   its rows — at the watcher's delete event while running, at validation on the next open
   otherwise.
