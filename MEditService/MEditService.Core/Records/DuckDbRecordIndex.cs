@@ -119,7 +119,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // inherit it. Never removes a *correct* snapshot: after a full re-index from one source, a
         // prior divergence describes bytes that no longer relate to what was just ingested.
         DeleteExistingForOrigin("records_committed", plugin, origin);
-        using var documentAppender = Connection.CreateAppender("records");
+        using var documentAppender = Connection.CreateAppender("raw", "records");
 
         if (_conditionCodec == null)
         {
@@ -176,7 +176,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteFormReferencesForPlugin(plugin, origin);
         if (refs.Count > 0)
         {
-            using var refAppender = Connection.CreateAppender("form_references");
+            using var refAppender = Connection.CreateAppender("raw", "form_references");
             foreach (var r in refs)
                 AppendFormReference(refAppender, r, plugin, origin);
         }
@@ -186,7 +186,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         if (lookupRows.Count > 0)
         {
-            using var lookupAppender = Connection.CreateAppender("form_lookup");
+            using var lookupAppender = Connection.CreateAppender("raw", "form_lookup");
             foreach (var (formKey, recordType, editorId) in lookupRows)
             {
                 var row = lookupAppender.CreateRow();
@@ -209,7 +209,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("container_child", plugin, origin);
         if (containerChildRows.Count > 0)
         {
-            using var containerChildAppender = Connection.CreateAppender("container_child");
+            using var containerChildAppender = Connection.CreateAppender("raw", "container_child");
             foreach (var row in containerChildRows)
             {
                 var r = containerChildAppender.CreateRow();
@@ -270,7 +270,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
         DeleteExistingForOrigin("container_child", plugin, origin);
-        DeleteExistingForOrigin("plugins", plugin, origin);
+        DeleteRegistration(plugin, origin);
 
         tx.Commit();
     }
@@ -519,7 +519,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // joins `records` against it by plugin name rather than carrying a participates column per row.
     private void UpsertPluginParticipation(string plugin, string origin, int loadOrderIndex, bool participates)
     {
-        DeleteExistingForOrigin("plugins", plugin, origin);
+        DeleteRegistration(plugin, origin);
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = "INSERT INTO plugins (plugin, origin, load_order_idx, participates) VALUES ($1, $2, $3, $4)";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
@@ -531,6 +531,34 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     public void SetPluginParticipation(PluginKey key, bool participates) =>
         SetPluginParticipation(key.Name, participates, key.Origin!);
+
+    // #582 / ADR-0001: registration is visibility. The `plugins` row is the whole of a plugin's
+    // membership in the session — every public relation (`records`, the extracted tables, every
+    // generated per-type view) is a view over its `raw.` table joined to this row (see
+    // TableDdlBuilder.CreateRegisteredViews for the one predicate they all share), so writing or
+    // deleting the row is what makes a plugin's rows answer or fall silent. Neither verb touches a
+    // data row: Register after Unregister answers again with no re-index, and Unregister leaves
+    // Index()'s work intact for the next session that wants it. Unindex is the file-gone verb.
+    public void Register(PluginKey key, int loadOrderIndex, bool participates) =>
+        UpsertPluginParticipation(key.Name, key.Origin!, loadOrderIndex, participates);
+
+    public void Unregister(PluginKey key)
+    {
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Unregistering {Plugin} from {Origin}", key.Name, key.Origin);
+        }
+        DeleteRegistration(key.Name, key.Origin!);
+    }
+
+    private void DeleteRegistration(string plugin, string origin)
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM plugins WHERE plugin = $1 AND origin = $2";
+        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
+        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
+        cmd.ExecuteNonQuery();
+    }
 
     // #421: private — SetPluginParticipation(PluginKey, bool) above is the public seam member and
     // delegates here.
@@ -551,16 +579,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // a filename but differing in origin are distinct participants, each judged on its own
         // load_order_idx and participation, not folded into one MAX() bucket by filename alone.
         Execute("""
-            UPDATE records
+            UPDATE raw.records AS r
             SET is_winner = (
-                load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM records t2
+                r.load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM raw.records t2
                     JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = records.form_key
+                    WHERE t2.form_key = r.form_key
                 )
                 AND EXISTS (
                     SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = records.plugin AND p1.origin = records.origin AND p1.participates
+                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
                 )
             )
             """);
@@ -570,16 +598,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // (D8) and would otherwise never have a winner at all — which reads as "no header exists"
         // through every winnerOnly lookup, Open Header included.
         Execute($"""
-            UPDATE "{HeaderIndexer.TableName}"
+            UPDATE raw."{HeaderIndexer.TableName}" AS r
             SET is_winner = (
-                load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM "{HeaderIndexer.TableName}" t2
+                r.load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM raw."{HeaderIndexer.TableName}" t2
                     JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = "{HeaderIndexer.TableName}".form_key
+                    WHERE t2.form_key = r.form_key
                 )
                 AND EXISTS (
                     SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = "{HeaderIndexer.TableName}".plugin AND p1.origin = "{HeaderIndexer.TableName}".origin AND p1.participates
+                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
                 )
             )
             """);
@@ -590,16 +618,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // #272 / ADR-0036: joined on (plugin, origin) together, same as the reflected-table sweep
         // above — two plugins sharing a filename but differing in origin are distinct participants.
         Execute("""
-            UPDATE form_lookup
+            UPDATE raw.form_lookup AS r
             SET is_winner = (
-                load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM form_lookup t2
+                r.load_order_idx = (
+                    SELECT MAX(t2.load_order_idx) FROM raw.form_lookup t2
                     JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = form_lookup.form_key
+                    WHERE t2.form_key = r.form_key
                 )
                 AND EXISTS (
                     SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = form_lookup.plugin AND p1.origin = form_lookup.origin AND p1.participates
+                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
                 )
             )
             """);
@@ -675,7 +703,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // above. Dropping only the document would leave the record resolvable and still sitting
             // in the reference graph, i.e. present in every derived answer and absent from the one
             // that stores it.
-            ExecuteFor("DELETE FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM raw.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             DeleteDerivationsForRecord(key, formKey);
             return existedBefore;
@@ -688,7 +716,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // back, which is why this restores the row from the snapshot rather than assuming one is
             // still there to update.
             RestoreFromSnapshot(key, formKey);
-            ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM raw.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
         }
         else
@@ -739,7 +767,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO records (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
+            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.WorkingTree}', $5, $7)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
@@ -785,10 +813,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             // The working tree agrees with the new commit, so the record is clean and there is no
             // snapshot to keep — the ordinary "the user committed their edit in a terminal" case.
-            ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM raw.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             ExecuteFor($"""
-                UPDATE records SET "ref" = '{SourceRef.Committed}'
+                UPDATE raw.records SET "ref" = '{SourceRef.Committed}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
                 """, formKey, key.Name, key.Origin!);
             return;
@@ -800,12 +828,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // column is the same either way.
         SnapshotCommittedIfFirstDivergence(key, formKey);
         ExecuteFor("""
-            UPDATE records_committed
+            UPDATE raw.records_committed
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!, body, GitBlobHash.Of(Encoding.UTF8.GetBytes(body)));
         ExecuteFor($"""
-            UPDATE records SET "ref" = '{SourceRef.WorkingTree}'
+            UPDATE raw.records SET "ref" = '{SourceRef.WorkingTree}'
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!);
     }
@@ -822,10 +850,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // is also reachable for a record that diverged earlier in the same session, and a stale
             // snapshot would keep answering at Head through records_head's own UNION — which is exactly
             // the state this method exists to end.
-            ExecuteFor("DELETE FROM records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM raw.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             ExecuteFor($"""
-                UPDATE records SET "ref" = '{SourceRef.WorkingTree}'
+                UPDATE raw.records SET "ref" = '{SourceRef.WorkingTree}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
                 """, formKey, key.Name, key.Origin!);
         }
@@ -866,7 +894,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // read — the view derives its own, per ref.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO records_committed (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
+            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.Committed}', $5, $7)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
@@ -885,22 +913,22 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void SnapshotCommittedIfFirstDivergence(PluginKey key, string formKey)
     {
         ExecuteFor($"""
-            INSERT INTO records_committed ({RecordColumnList})
-            SELECT {RecordColumnList} FROM records r
+            INSERT INTO raw.records_committed ({RecordColumnList})
+            SELECT {RecordColumnList} FROM raw.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3 AND r."ref" = '{SourceRef.Committed}'
               AND NOT EXISTS (
-                SELECT 1 FROM records_committed c
+                SELECT 1 FROM raw.records_committed c
                 WHERE c.form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
             """, formKey, key.Name, key.Origin!);
     }
 
     private void RestoreFromSnapshot(PluginKey key, string formKey)
     {
-        ExecuteFor("DELETE FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         ExecuteFor($"""
-            INSERT INTO records ({RecordColumnList})
-            SELECT {RecordColumnList} FROM records_committed
+            INSERT INTO raw.records ({RecordColumnList})
+            SELECT {RecordColumnList} FROM raw.records_committed
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!);
     }
@@ -927,7 +955,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // about these bytes.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            UPDATE records
+            UPDATE raw.records
             SET body = $4, content_hash = $5, "ref" = '{SourceRef.WorkingTree}',
                 editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
@@ -953,19 +981,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // edit — which reads as "this FormKey resolves to nothing" through Resolve's winner filter.
         // record_type cannot change (a record does not change type), so editor_id is the whole delta.
         ExecuteFor("""
-            UPDATE form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
+            UPDATE raw.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!, body);
 
         // The row is absent when this record was previously deleted in the working tree and has now
         // come back — the one case where there is nothing to update.
         ExecuteFor($"""
-            INSERT INTO form_lookup (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner)
+            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner)
             SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id, r.load_order_idx, FALSE
-            FROM records r
+            FROM raw.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
               AND NOT EXISTS (
-                SELECT 1 FROM form_lookup l
+                SELECT 1 FROM raw.form_lookup l
                 WHERE l.form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin)
             """, formKey, key.Name, key.Origin!);
 
@@ -981,7 +1009,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteFormReferencesForRecord(key, formKey);
         if (refs.Count > 0)
         {
-            using var refAppender = Connection.CreateAppender("form_references");
+            using var refAppender = Connection.CreateAppender("raw", "form_references");
             foreach (var r in refs)
                 AppendFormReference(refAppender, r, key.Name, key.Origin!);
         }
@@ -1057,29 +1085,29 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
         }
 
-        ExecuteFor("DELETE FROM container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         if (containerChildRows.Count > 0)
         {
-            using var appender = Connection.CreateAppender("container_child");
+            using var appender = Connection.CreateAppender("raw", "container_child");
             foreach (var row in containerChildRows)
                 AppendContainerChildRow(appender, row, key.Name, key.Origin!);
         }
 
-        ExecuteFor("DELETE FROM placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         if (placementRows.Count > 0)
         {
-            using var appender = Connection.CreateAppender("placement");
+            using var appender = Connection.CreateAppender("raw", "placement");
             foreach (var row in placementRows)
                 AppendPlacementRow(appender, row, key.Name, key.Origin!);
         }
 
         if (topCellRow is not { } cellRow || topCellRecord == null) return;
 
-        ExecuteFor("DELETE FROM cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             cellRow.CellFormKey, key.Name, key.Origin!);
-        using (var appender = Connection.CreateAppender("cell_location"))
+        using (var appender = Connection.CreateAppender("raw", "cell_location"))
             AppendCellLocationRow(appender, cellRow, key.Name, key.Origin!);
 
         // The top cell is itself a container (its own Persistent/Temporary/Landscape/
@@ -1135,7 +1163,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private void DeleteDerivationsForRecord(PluginKey key, string formKey)
     {
-        ExecuteFor("DELETE FROM form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         DeleteFormReferencesForRecord(key, formKey);
         DeleteContainmentForRecord(key, formKey);
@@ -1143,7 +1171,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private void DeleteFormReferencesForRecord(PluginKey key, string formKey) =>
         ExecuteFor(
-            "DELETE FROM form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
+            "DELETE FROM raw.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
             formKey, key.Name, key.Origin!);
 
     /// <summary>
@@ -1158,15 +1186,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// </summary>
     private void DeleteContainmentForRecord(PluginKey key, string formKey)
     {
-        ExecuteFor("DELETE FROM placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM raw.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
     }
 
@@ -1922,7 +1950,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"DELETE FROM \"{tableName}\" WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = $"DELETE FROM raw.\"{tableName}\" WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.ExecuteNonQuery();
@@ -1950,7 +1978,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void DeleteFormReferencesForPlugin(string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
+        cmd.CommandText = "DELETE FROM raw.form_references WHERE source_plugin = $1 AND source_origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.ExecuteNonQuery();
@@ -1986,8 +2014,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
 
-        using var cellAppender = Connection.CreateAppender("cell_location");
-        using var placeAppender = Connection.CreateAppender("placement");
+        using var cellAppender = Connection.CreateAppender("raw", "cell_location");
+        using var placeAppender = Connection.CreateAppender("raw", "placement");
 
         _placementWalker.Walk(pluginMod,
             cell =>
@@ -2035,7 +2063,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
         DeleteExistingForOrigin("header", plugin, origin);
-        using var appender = Connection.CreateAppender("header");
+        using var appender = Connection.CreateAppender("raw", "header");
         HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
     }
 
@@ -2430,14 +2458,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         ExecuteFor(
             """
-            DELETE FROM container_child
+            DELETE FROM raw.container_child
             WHERE parent_form_key = $1 AND slot_name = $2 AND plugin = $3 AND origin = $4
             """,
             parentFormKey, slotName, key.Name, key.Origin!);
 
         if (children.Count == 0) return;
 
-        using var appender = Connection.CreateAppender("container_child");
+        using var appender = Connection.CreateAppender("raw", "container_child");
         foreach (var (childFormKey, slotIndex) in children)
         {
             AppendContainerChildRow(
@@ -2451,7 +2479,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     public void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         ExecuteFor(
             """
-            UPDATE container_child SET parent_form_key = $1
+            UPDATE raw.container_child SET parent_form_key = $1
             WHERE parent_form_key = $2 AND plugin = $3 AND origin = $4
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
@@ -2460,7 +2488,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     public void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         ExecuteFor(
             """
-            UPDATE cell_location SET parent_worldspace = $1
+            UPDATE raw.cell_location SET parent_worldspace = $1
             WHERE parent_worldspace = $2 AND plugin = $3 AND origin = $4
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);

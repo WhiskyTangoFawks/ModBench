@@ -12,13 +12,35 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 {
     private readonly ISchemaReflector _reflector = reflector;
 
+    // #582 / ADR-0001: the physical data tables live in the `raw` schema; the public names in
+    // `main` are views over them scoped by registration (CreateRegisteredViews). Every relation
+    // the read side — C# or the SQL door — names by its bare name is therefore registered-only, and
+    // every writer names `raw.` explicitly: a write against a view fails loudly in DuckDB, which is
+    // what makes "writes go to raw, reads go through registration" a property the database
+    // enforces rather than a convention a new SQL string could quietly miss.
+    internal const string RawSchema = "raw";
+
+    // (table, plugin column, origin column) for every relation that carries a plugin identity —
+    // the list CreateRegisteredViews scopes. `plugins` itself is the registration and stays a plain
+    // table in `main`; `index_state` carries no plugin identity.
+    private static readonly (string Table, string PluginColumn, string OriginColumn)[] RegisteredRelations =
+    [
+        ("records", "plugin", "origin"),
+        ("records_committed", "plugin", "origin"),
+        ("form_references", "source_plugin", "source_origin"),
+        ("form_lookup", "plugin", "origin"),
+        ("placement", "plugin", "origin"),
+        ("cell_location", "plugin", "origin"),
+        ("container_child", "plugin", "origin"),
+        (HeaderIndexer.TableName, "plugin", "origin"),
+    ];
+
     public void CreateTables(DuckDBConnection connection, GameRelease release)
     {
+        Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {RawSchema}");
         CreateRecordsTable(connection);
         CreatePluginsTable(connection);
-        // After `plugins`, not beside `records`: the Head view derives is_winner, and derives it
-        // through the same participation join UpdateWinners uses, so `plugins` has to exist first.
-        CreateCommittedRecordsTableAndHeadView(connection);
+        CreateCommittedRecordsTable(connection);
         CreateIndexStateTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
@@ -34,7 +56,33 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         if (schemas.TryGetValue(HeaderIndexer.TableName, out var headerSchema))
             CreateRecordTable(connection, headerSchema);
 
+        // Views last, in dependency order: the registered views over every raw table, then the
+        // Head view over the registered `records`/`records_committed`, then the per-type views over
+        // the registered `records` — so registration scopes all three layers through one predicate.
+        CreateRegisteredViews(connection);
+        CreateHeadView(connection);
         RecordViewBuilder.CreateViews(connection, schemas);
+    }
+
+    /// <summary>
+    /// The one "registered" predicate (#582 / ADR-0001): a row answers iff a <c>plugins</c> row
+    /// names its (plugin, origin). Each public relation is exactly its raw table filtered by this,
+    /// so the C# reads (which name the bare table) and the SQL door (user filter SQL,
+    /// <c>medit.query</c>, the generated per-type views over <c>records</c>) cannot scope
+    /// differently — there is no second place the scoping is written.
+    /// </summary>
+    private static void CreateRegisteredViews(DuckDBConnection connection)
+    {
+        foreach (var (table, pluginColumn, originColumn) in RegisteredRelations)
+        {
+            Execute(connection, $"""
+                CREATE OR REPLACE VIEW "{table}" AS
+                SELECT t.* FROM {RawSchema}."{table}" t
+                WHERE EXISTS (
+                    SELECT 1 FROM plugins p
+                    WHERE p.plugin = t.{pluginColumn} AND p.origin = t.{originColumn})
+                """);
+        }
     }
 
     // ADR-0041 / #413: the documents table — one row per major record, holding that record's codec
@@ -58,7 +106,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     private static void CreateRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS records (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.records (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -75,11 +123,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         // form_key drives every single-record read (detail, override stack, compare) and the winner
         // sweep's correlated subquery; (plugin, origin) drives the per-plugin delete every re-index
         // starts with, and the per-plugin listings/counts.
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_records_form_key ON records(form_key)
+        Execute(connection, $"""
+            CREATE INDEX IF NOT EXISTS idx_records_form_key ON {RawSchema}.records(form_key)
             """);
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_records_plugin ON records(plugin, origin)
+        Execute(connection, $"""
+            CREATE INDEX IF NOT EXISTS idx_records_plugin ON {RawSchema}.records(plugin, origin)
             """);
     }
 
@@ -103,10 +151,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // `records` counterpart (a record HEAD holds and the working tree deleted — present in this
     // table's half of records_head, absent from the other), and MarkWorkingTreeOnly deletes one (a
     // record the working tree holds and no commit does).
-    private static void CreateCommittedRecordsTableAndHeadView(DuckDBConnection connection)
+    private static void CreateCommittedRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS records_committed (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.records_committed (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -120,10 +168,15 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             )
             """);
 
-        Execute(connection, """
-            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON records_committed(form_key)
+        Execute(connection, $"""
+            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON {RawSchema}.records_committed(form_key)
             """);
+    }
 
+    // #582: reads the registered `records`/`records_committed` views, not the raw tables, so Head is
+    // scoped by registration through the same predicate as Effective.
+    private static void CreateHeadView(DuckDBConnection connection)
+    {
         // The Head relation: every diverged record's committed snapshot, plus every record that
         // never diverged (still carrying SourceRef.Committed in `records` itself). The two halves
         // are disjoint by construction — ApplyWorkingTreeChanges writes the snapshot and flips the
@@ -196,7 +249,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreateFormReferencesTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS form_references (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.form_references (
                 source_form_key VARCHAR NOT NULL,
                 source_plugin   VARCHAR NOT NULL,
                 source_origin   VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -206,9 +259,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 editor_id       VARCHAR
             )
             """);
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_form_references_target
-                ON form_references(target_form_key)
+                ON {RawSchema}.form_references(target_form_key)
             """);
     }
 
@@ -218,7 +271,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreateFormLookupTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS form_lookup (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.form_lookup (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -228,9 +281,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 is_winner      BOOLEAN NOT NULL DEFAULT FALSE
             )
             """);
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_form_lookup_form_key
-                ON form_lookup(form_key)
+                ON {RawSchema}.form_lookup(form_key)
             """);
     }
 
@@ -240,7 +293,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreatePlacementTables(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS placement (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.placement (
                 form_key        VARCHAR NOT NULL,
                 plugin          VARCHAR NOT NULL,
                 origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -251,13 +304,13 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 pos_z           FLOAT
             )
             """);
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_placement_cell
-                ON placement(parent_cell, plugin)
+                ON {RawSchema}.placement(parent_cell, plugin)
             """);
 
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS cell_location (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.cell_location (
                 cell_form_key    VARCHAR NOT NULL,
                 plugin           VARCHAR NOT NULL,
                 origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -271,13 +324,13 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 is_interior      BOOLEAN NOT NULL DEFAULT FALSE
             )
             """);
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_cell_location_worldspace
-                ON cell_location(parent_worldspace, plugin)
+                ON {RawSchema}.cell_location(parent_worldspace, plugin)
             """);
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_cell_location_region
-                ON cell_location(parent_worldspace, grid_x, grid_y)
+                ON {RawSchema}.cell_location(parent_worldspace, grid_x, grid_y)
             """);
     }
 
@@ -288,7 +341,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreateContainerChildTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS container_child (
+            CREATE TABLE IF NOT EXISTS {RawSchema}.container_child (
                 child_form_key      VARCHAR NOT NULL,
                 plugin               VARCHAR NOT NULL,
                 origin               VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -298,9 +351,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 slot_index           INTEGER NOT NULL
             )
             """);
-        Execute(connection, """
+        Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_container_child_parent
-                ON container_child(parent_form_key, plugin)
+                ON {RawSchema}.container_child(parent_form_key, plugin)
             """);
     }
 
@@ -320,7 +373,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         foreach (var col in schema.RecordColumns)
             sb.Append(CultureInfo.InvariantCulture, $", \"{col.Name}\" {col.DuckDbType}");
 
-        Execute(connection, $"CREATE TABLE IF NOT EXISTS \"{schema.TableName}\" ({sb})");
+        Execute(connection, $"CREATE TABLE IF NOT EXISTS {RawSchema}.\"{schema.TableName}\" ({sb})");
     }
 
     private static void Execute(DuckDBConnection connection, string sql)

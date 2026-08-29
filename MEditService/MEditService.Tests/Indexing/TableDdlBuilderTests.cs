@@ -102,7 +102,9 @@ public class TableDdlBuilderTests
     public void CreateFormReferencesTable_CreatesTargetFormKeyIndex()
     {
         using var conn = OpenMemory();
-        TableDdlBuilder.CreateFormReferencesTable(conn);
+        // #582: through CreateTables rather than the per-table helper — the helper writes into the
+        // `raw` schema, which only CreateTables creates.
+        _builder.CreateTables(conn, GameRelease.Fallout4);
 
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM duckdb_indexes() WHERE index_name = 'idx_form_references_target'";

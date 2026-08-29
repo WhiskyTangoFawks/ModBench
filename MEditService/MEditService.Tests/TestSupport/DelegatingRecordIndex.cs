@@ -21,6 +21,9 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
         Inner.Index(plugin, loadOrderIndex, participates, key);
     public virtual void Unindex(PluginKey key) => Inner.Unindex(key);
+    public virtual void Register(PluginKey key, int loadOrderIndex, bool participates) =>
+        Inner.Register(key, loadOrderIndex, participates);
+    public virtual void Unregister(PluginKey key) => Inner.Unregister(key);
     public virtual void UpdateWinners() => Inner.UpdateWinners();
     public virtual void SetPluginParticipation(PluginKey key, bool participates) =>
         Inner.SetPluginParticipation(key, participates);

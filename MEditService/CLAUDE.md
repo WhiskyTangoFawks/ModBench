@@ -23,8 +23,15 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `(origin, plugin)`. `GameSession` keys its opened mods by `(origin, filename)`; unlisted plugins
   (`POST /plugins/load`/`/unload`) open read-only and non-participating, and
   `PluginMetadata.InLoadOrder` says so (a disabled `plugins.txt` line is still in the load order and
-  still a legitimate write target). `IRecordIndexer.Unindex` is `Index`'s inverse — ADR-0035's
-  "hidden means absent" is unloading, never filtering.
+  still a legitimate write target). **Registration is visibility** (#582 / ADR-0001): a plugin
+  answers a read iff it has a `plugins` row. The physical tables live in the `raw` schema; every
+  public relation (`records`, `records_head`, the extracted tables, every generated per-type
+  view) is a view over its raw table through the one registered-predicate
+  (`TableDdlBuilder.CreateRegisteredViews`), so the C# seam and the SQL door cannot scope
+  differently. Writers name `raw.` explicitly. ADR-0035's "hidden means absent" is
+  **unregistered, never answering** — `IRecordIndex.Unregister` removes the `plugins` row and
+  nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
+  missing at validation), never the meaning of unload.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
     `SessionManager.RequirePlugin`, `IGameSession.LoadOrderPlugin`): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"
