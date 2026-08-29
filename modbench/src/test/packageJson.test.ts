@@ -510,6 +510,9 @@ describe('package.json command titles and categories (#280)', () => {
     // #448 AC4: needs the clicked Stack binary-entry's own (plugin, origin) — same posture as
     // revealInModsTree.
     'modbench.pluginListTree.diffAgainstSource',
+    // #544: needs the clicked Stack peer row's own (plugin, origin) to resolve the winner to
+    // compare against — same posture as revealInModsTree/diffAgainstSource above.
+    'modbench.pluginListTree.compareWithWinner',
     // #414: needs the clicked row's plugin name to resolve which mod folder to track.
     'modbench.pluginListTree.track',
     // #416: needs the clicked row's plugin name — compiling "at main" from the palette with no
@@ -537,7 +540,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(40);
+    expect(PALETTE_GATED).toHaveLength(41);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));

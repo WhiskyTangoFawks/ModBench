@@ -203,6 +203,22 @@ export interface ConflictingRecord {
   conflictAll: ConflictAll;
 }
 
+/** #544: which side of a Stack-peer delta comparison a `PluginDeltaEntry` belongs to —
+ *  `WinnerOnly`/`PeerOnly` are the two presence icons the Compare-with-winner picker/grid render;
+ *  `BothDiffer` is an ordinary content difference, no icon of its own. Mirrors the backend's
+ *  `PluginDeltaPresence` enum name exactly, same no-re-wording-at-the-wire-boundary convention
+ *  `ConflictAll` above already established. */
+export type PluginDeltaPresence = 'WinnerOnly' | 'PeerOnly' | 'BothDiffer';
+
+/** #544: one FormKey `GetPluginDelta` reports — present in only one of the two copies, or present
+ *  in both but resolving differently. A FormKey identical in both copies never appears here at
+ *  all — the list itself is the absence signal, not a flag on an included row. */
+export interface PluginDeltaEntry {
+  formKey: string;
+  editorId: string | null;
+  presence: PluginDeltaPresence;
+}
+
 // Worldspace / cell / placed-object tree (per-plugin).
 export interface WorldspaceSummary {
   formKey: string;

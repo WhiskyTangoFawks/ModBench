@@ -525,6 +525,48 @@ describe('ApiPluginRepository.getRecordOverridePlugins', () => {
   });
 });
 
+describe('ApiPluginRepository.getPluginDelta', () => {
+  it('calls GET /plugins/{plugin}/delta with both origins and maps every entry', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({
+        data: [
+          { formKey: '000802:Shared.esp', editorId: 'WinnerOnly', presence: 'WinnerOnly' },
+          { formKey: '000803:Shared.esp', editorId: 'PeerOnly', presence: 'PeerOnly' },
+        ],
+        response: { ok: true },
+      }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    const delta = await repo.getPluginDelta('Shared.esp', 'ModA', 'ModB');
+
+    expect(delta).toEqual([
+      { formKey: '000802:Shared.esp', editorId: 'WinnerOnly', presence: 'WinnerOnly' },
+      { formKey: '000803:Shared.esp', editorId: 'PeerOnly', presence: 'PeerOnly' },
+    ]);
+    expect(client.GET).toHaveBeenCalledWith('/plugins/{plugin}/delta', {
+      params: { path: { plugin: 'Shared.esp' }, query: { winnerOrigin: 'ModA', peerOrigin: 'ModB' } },
+    });
+  });
+
+  // #544 plan Q3: a vanished peer/winner (unloaded between the context-menu click and this call
+  // reaching the backend) is "nothing to compare", not a fault — same posture as
+  // getRecordOverridePlugins' own 404 case above.
+  it('returns an empty list on a 404 rather than throwing', async () => {
+    const client = {
+      GET: vi.fn().mockResolvedValue({ data: undefined, error: 'not found', response: { ok: false, status: 404 } }),
+    } as any;
+    const repo = new ApiPluginRepository(client);
+
+    expect(await repo.getPluginDelta('Shared.esp', 'ModA', 'ModB')).toEqual([]);
+  });
+
+  it('throws on a genuine non-OK response rather than degrading to an empty list', async () => {
+    await expect(new ApiPluginRepository(nonOkClient()).getPluginDelta('Shared.esp', 'ModA', 'ModB'))
+      .rejects.toThrow(/500/);
+  });
+});
+
 describe('ApiPluginRepository.getConflicts', () => {
   it('calls GET /records/conflicts and carries each entry\'s own origin separately from RecordSummary', async () => {
     const client = {

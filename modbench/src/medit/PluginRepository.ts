@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary,
+  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary, PluginDeltaEntry,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -20,8 +20,16 @@ type GeneratedMasterIssue = components['schemas']['MasterIssue'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
 type GeneratedConflictRecord = components['schemas']['ConflictRecord'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+type GeneratedPluginDeltaEntry = components['schemas']['PluginDeltaEntry'];
 function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
   return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
+}
+
+// #544: PluginDeltaPresence is JsonStringEnumConverter'd at its own declaration (mirroring
+// ConflictAll's own attribute), so — unlike toTrackPhase's numeric-enum workaround above — the
+// generator already produces the string-literal union type here; trust the wire string.
+function toPluginDeltaEntry(e: GeneratedPluginDeltaEntry): PluginDeltaEntry {
+  return { formKey: e.formKey ?? '', editorId: e.editorId ?? null, presence: e.presence ?? 'BothDiffer' };
 }
 
 // #414 review F2: the generated TrackPhase type is a numeric union (0|1|2|3) — Swashbuckle's
@@ -210,6 +218,12 @@ export interface PluginRepository {
   // /records/{formKey}/compare's existing Overrides list; no dedicated endpoint needed. Empty for
   // an unknown FormKey (404), the same "not a fault" posture getRecordOwner's own 404 case uses.
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
+  // #544: the Stack node's "Compare with winner" bulk seam — every FormKey where `plugin`'s copy
+  // at `winnerOrigin` and its copy at `peerOrigin` disagree, and only those. Empty for a vanished
+  // peer/winner (404 — one of the two origins is no longer a loaded copy of `plugin` by the time
+  // this reaches the backend), the same "not a fault" posture getRecordOverridePlugins' own 404
+  // case above takes.
+  getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaEntry[]>;
   // #427: the Renumber gesture's FormID input box's suggested default — the same both-refs
   // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
   // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
@@ -387,6 +401,17 @@ export class ApiPluginRepository implements PluginRepository {
     if (response.status === 404) return [];
     this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
     return (data?.overrides ?? []).flatMap((o) => (o.plugin ? [o.plugin] : []));
+  }
+
+  // #544: see the interface's own doc comment. 404 is the vanished-origin case
+  // (RecordQueryService.GetPluginDelta returning null) — "nothing to compare", not a fault.
+  async getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaEntry[]> {
+    const { data, error, response } = await this.client.GET('/plugins/{plugin}/delta', {
+      params: { path: { plugin }, query: { winnerOrigin, peerOrigin } },
+    });
+    if (response.status === 404) return [];
+    this.ensureOk(`getPluginDelta(${plugin}, ${winnerOrigin}, ${peerOrigin})`, response, error);
+    return (data ?? []).map(toPluginDeltaEntry);
   }
 
   async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {

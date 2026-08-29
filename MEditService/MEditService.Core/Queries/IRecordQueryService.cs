@@ -17,6 +17,19 @@ public interface IRecordQueryService
 
     CompareResult? GetCompare(string formKey);
 
+    /// <summary>#544: the Stack node's "Compare with winner" bulk seam — every FormKey where
+    /// <paramref name="plugin"/>'s copy at <paramref name="winnerOrigin"/> and its copy at
+    /// <paramref name="peerOrigin"/> disagree (one side missing the record entirely, or both
+    /// present but resolving differently), and only those — a FormKey identical in both is
+    /// omitted, never included with a "no diff" flag. The bulk shape a per-FormKey
+    /// <see cref="GetCompare"/> loop from the frontend would be the wrong one for: this is one
+    /// backend-side scan bounded by the plugin's own record count, not the whole session.
+    /// Null when either origin is no longer a loaded copy of <paramref name="plugin"/> — a peer
+    /// unloaded (Stack-peer collapse, #448) or a winner reordered away between the context-menu
+    /// click and this call reaching the backend — never a misleading "every winner record is
+    /// winner-only" answer computed against a copy that no longer exists.</summary>
+    IReadOnlyList<PluginDeltaEntry>? GetPluginDelta(string plugin, string winnerOrigin, string peerOrigin);
+
     /// <summary>#364: the Conflicts node's own listing — every contested record whose record-wide
     /// ConflictAll is not OnlyOne/NoConflict, filter-narrowed the same way GetRecords/
     /// GetPluginRecordTypes already are.</summary>

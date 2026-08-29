@@ -34,4 +34,16 @@ describe('buildWebviewHtml', () => {
     const nonce2 = html2.match(/'nonce-([A-Za-z0-9+/]+=*)'/)?.[1];
     expect(nonce1).not.toBe(nonce2);
   });
+
+  // #544: "Compare with winner" opening a freshly-created panel already scoped to a peer/winner
+  // pair — the initial-page-load counterpart to LOAD_RECORD's own deltaScope field.
+  it('defaults mEditDeltaScope to null when no scope is given', () => {
+    const html = buildWebviewHtml(BASE_PARAMS);
+    expect(html).toContain('window.mEditDeltaScope = null');
+  });
+
+  it('sets mEditDeltaScope to the given winner/peer origin pair', () => {
+    const html = buildWebviewHtml({ ...BASE_PARAMS, deltaScope: { winnerOrigin: 'ModA', peerOrigin: 'ModB' } });
+    expect(html).toContain('window.mEditDeltaScope = {"winnerOrigin":"ModA","peerOrigin":"ModB"}');
+  });
 });

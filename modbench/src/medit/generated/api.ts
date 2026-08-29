@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/plugins/{plugin}/delta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetPluginDelta"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -896,6 +912,13 @@ export interface components {
             baseFormKey?: string | null;
             recordType?: string | null;
         };
+        PluginDeltaEntry: {
+            formKey?: string | null;
+            editorId?: string | null;
+            presence?: components["schemas"]["PluginDeltaPresence"];
+        };
+        /** @enum {string} */
+        PluginDeltaPresence: "WinnerOnly" | "PeerOnly" | "BothDiffer";
         PluginLoadFailure: {
             name?: string | null;
             reason?: string | null;
@@ -1238,6 +1261,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginRecordTypeCount"][];
+                };
+            };
+        };
+    };
+    GetPluginDelta: {
+        parameters: {
+            query?: {
+                winnerOrigin?: string;
+                peerOrigin?: string;
+            };
+            header?: never;
+            path: {
+                plugin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDeltaEntry"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };

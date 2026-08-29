@@ -81,8 +81,16 @@ export type LoadResult =
 // off this client — the FormKey picker it backed is a native QuickPick now, and its search runs
 // in the extension host via PluginRepository.searchRecords instead of round-tripping through
 // this webview.
+// #544: "Compare with winner" — the peer/winner origin pair `load` scopes its own `overrides` to
+// when given, dropping every other participating column GetCompare would otherwise include (a
+// genuine third-party conflict on the same FormKey, say). Absent for every ordinary open.
+export interface DeltaScope {
+  winnerOrigin: string;
+  peerOrigin: string;
+}
+
 export interface RecordSessionClient {
-  load(formKey: string): Promise<LoadResult>;
+  load(formKey: string, deltaScope?: DeltaScope): Promise<LoadResult>;
   // Issue #167: the Run On target dropdown's catalog — feeds ConditionRunOnCell's own inline
   // `<select>` rendered in this webview (not a native QuickPick), so this webview needs the list
   // itself, the same way it already reads `/plugins` directly rather than round-tripping through
@@ -95,7 +103,7 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
   const client = createApiClient(port);
 
   return {
-    async load(formKey) {
+    async load(formKey, deltaScope) {
       const [cmp, plugins, status] = await Promise.all([
         client.GET('/records/{formKey}/compare', { params: { path: { formKey } } }),
         client.GET('/plugins'),
@@ -106,9 +114,16 @@ export function createRecordSessionClient(port: number): RecordSessionClient {
       ]);
       if (!cmp.response.ok) return { ok: false, error: `HTTP ${cmp.response.status}` };
       const pluginList = plugins.response.ok ? (plugins.data as PluginInfo[]) : null;
+      const compareResult = cmp.data as CompareResult;
+      // #544: scoped here, not in RecordPanel — every downstream derivation that reads
+      // result.overrides (columns, editableColumns, collidingPluginNames, ...) then "just works"
+      // against the already-scoped set with no changes of its own.
+      const scopedOverrides = deltaScope
+        ? compareResult.overrides.filter(o => o.origin === deltaScope.winnerOrigin || o.origin === deltaScope.peerOrigin)
+        : compareResult.overrides;
       return {
         ok: true,
-        result: cmp.data as CompareResult,
+        result: { ...compareResult, overrides: scopedOverrides },
         // #272 / ADR-0036: keyed by compound column identity, not bare plugin name — two
         // PluginInfo entries sharing a filename but differing in origin must stay distinct
         // Set members, or one origin's mutability silently wins for both (RecordPanel.tsx's

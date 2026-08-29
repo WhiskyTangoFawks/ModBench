@@ -195,6 +195,46 @@ describe('RecordSessionClient.load', () => {
     if (!r.ok) return;
     expect(r.conflictsComputed).toBe(false);
   });
+
+  // #544: "Compare with winner" delta mode — the grid shows Effective vs Effective for exactly
+  // the peer/winner pair, never every other participating override GetCompare would otherwise
+  // hand back (a genuine third-party conflict on the same FormKey, say). Filtering happens here,
+  // not in RecordPanel, so every downstream derivation (columns, editableColumns, ...) that reads
+  // result.overrides "just works" against the already-scoped set.
+  describe('with a deltaScope', () => {
+    beforeEach(() => {
+      fetchMock.mockImplementation((input: Request | string) => {
+        const url = typeof input === 'string' ? input : input.url;
+        if (url.includes('/compare')) {
+          return Promise.resolve(jsonResponse({
+            overrides: [
+              { formKey: '000800:Shared.esp', plugin: 'Shared.esp', origin: 'ModA', editorId: 'FromA' },
+              { formKey: '000800:Shared.esp', plugin: 'Shared.esp', origin: 'ModB', editorId: 'FromB' },
+              { formKey: '000800:Shared.esp', plugin: 'Shared.esp', origin: 'ModC', editorId: 'FromC' },
+            ],
+            diffs: [], conflictAll: 'Conflict',
+          }));
+        }
+        if (url.includes('/plugins')) return Promise.resolve(jsonResponse([]));
+        if (url.includes('/session/status')) return Promise.resolve(jsonResponse({ conflictsComputed: true }));
+        return Promise.resolve(jsonResponse({}, 404));
+      });
+    });
+
+    it('keeps only the two named origins, dropping every other override', async () => {
+      const r = await createRecordSessionClient(5172).load('000800:Shared.esp', { winnerOrigin: 'ModA', peerOrigin: 'ModB' });
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.result.overrides.map(o => o.origin)).toEqual(['ModA', 'ModB']);
+    });
+
+    it('leaves the full override set untouched when no deltaScope is given', async () => {
+      const r = await createRecordSessionClient(5172).load('000800:Shared.esp');
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.result.overrides.map(o => o.origin)).toEqual(['ModA', 'ModB', 'ModC']);
+    });
+  });
 });
 
 describe('RecordSessionClient.conditionRunOnTargets', () => {

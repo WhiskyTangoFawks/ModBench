@@ -280,7 +280,13 @@ export interface StringValueContext {
 }
 
 export type ExtensionToWebview =
-  | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
+  // deltaScope (#544): "Compare with winner" opening the grid scoped to exactly a peer/winner
+  // origin pair — absent for every ordinary open, which is the AC's own "delta mode is scoped to
+  // peer comparison; ordinary browsing unchanged." Undefined, not omitted-and-inherited: the
+  // panel clears any previous scope on every LOAD_RECORD that doesn't restate one, so navigating
+  // away from a delta-mode record (a FormKey link, Referenced By, ...) drops back to ordinary
+  // browsing rather than silently carrying the old scope onto an unrelated record.
+  | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string; deltaScope?: { winnerOrigin: string; peerOrigin: string } }
   | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
