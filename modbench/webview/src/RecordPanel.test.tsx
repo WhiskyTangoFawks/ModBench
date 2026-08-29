@@ -1034,6 +1034,98 @@ describe('RecordPanel — LOAD_RECORD state management', () => {
   });
 });
 
+// #544 review finding #3: the ref/state duality (deltaScopeRef mutated synchronously so the
+// LOAD_RECORD handler's own synchronous refreshRef.current(...) call always reads the freshest
+// scope, `deltaScope` state existing only to re-render the banner) exists specifically because of
+// a same-tick ordering subtlety worked through once already — exercised here rather than left
+// implicit.
+describe('RecordPanel — delta mode (#544)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('calls client.load with the deltaScope when LOAD_RECORD carries one', async () => {
+    const { client } = renderPanel(compareResult);
+    await waitFor(() => screen.getByText(/TestNPC/));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Shared.esp',
+          deltaScope: { plugin: 'Shared.esp', winnerOrigin: 'ModA', peerOrigin: 'ModB' },
+        },
+      }));
+    });
+
+    await waitFor(() => expect(client.load).toHaveBeenCalledWith(
+      '000002:Shared.esp', { plugin: 'Shared.esp', winnerOrigin: 'ModA', peerOrigin: 'ModB' },
+    ));
+  });
+
+  it('clears the deltaScope on a subsequent LOAD_RECORD that does not restate one — ordinary browsing unchanged', async () => {
+    const { client } = renderPanel(compareResult);
+    await waitFor(() => screen.getByText(/TestNPC/));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000002:Shared.esp',
+          deltaScope: { plugin: 'Shared.esp', winnerOrigin: 'ModA', peerOrigin: 'ModB' },
+        },
+      }));
+    });
+    await waitFor(() => expect(client.load).toHaveBeenCalledWith(
+      '000002:Shared.esp', { plugin: 'Shared.esp', winnerOrigin: 'ModA', peerOrigin: 'ModB' },
+    ));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: { type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000003:Fallout4.esm' },
+      }));
+    });
+
+    // Exactly one argument, not a trailing explicit `undefined` — the ordinary-open call shape,
+    // proving the scope actually cleared rather than being silently carried onto this new record.
+    await waitFor(() => expect(client.load).toHaveBeenCalledWith('000003:Fallout4.esm'));
+  });
+
+  it('renders a presence banner when the delta-scoped record exists on only one side', async () => {
+    const oneOverrideCompareResult = {
+      conflictAll: 'OnlyOne',
+      overrides: [
+        { formKey: '000004:Shared.esp', plugin: 'Shared.esp', origin: 'ModA', loadOrderIndex: 0, isWinner: true,
+          editorId: 'OnlyInWinner', fields: [{ metadata: strMeta, value: 'Whatever' }], conflictThis: 'OnlyOne', recordType: 'npc_' },
+      ],
+      diffs: [{
+        fieldName: 'Name',
+        values: { [columnKey('Shared.esp', 'ModA')]: 'Whatever' },
+        winnerColumn: columnKey('Shared.esp', 'ModA'),
+        winnerValue: 'Whatever',
+        cellStates: { [columnKey('Shared.esp', 'ModA')]: 'OnlyOne' },
+      }],
+    };
+    const load = vi.fn().mockResolvedValue({
+      ok: true, result: oneOverrideCompareResult, plugins: sameFilenamePluginsResponse,
+      immutableSet: new Set(), notInLoadOrderSet: new Set(), trackedSet: new Set(), conflictsComputed: true,
+    });
+    renderPanel(compareResult, { load });
+    await waitFor(() => screen.getByText(/OnlyInWinner/));
+    expect(screen.queryByText(/Present in the winner/)).not.toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        data: {
+          type: EXTENSION_TO_WEBVIEW.LOAD_RECORD, formKey: '000004:Shared.esp',
+          deltaScope: { plugin: 'Shared.esp', winnerOrigin: 'ModA', peerOrigin: 'ModB' },
+        },
+      }));
+    });
+
+    await waitFor(() => expect(screen.getByText(/Present in the winner \(ModA\) only/)).toBeInTheDocument());
+  });
+});
+
 describe('RecordPanel — column collapse (issue #3)', () => {
   beforeEach(() => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');

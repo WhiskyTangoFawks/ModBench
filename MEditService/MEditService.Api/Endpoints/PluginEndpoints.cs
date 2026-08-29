@@ -38,6 +38,26 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginRecordTypeCount>>();
 
+        // #544: the Stack node's "Compare with winner" bulk seam — every FormKey where this
+        // plugin's copy at winnerOrigin and its copy at peerOrigin disagree, and only those. Both
+        // origins are required (unlike GetPluginRecordTypes' optional origin above): there is no
+        // load-order-resolved default for "the other copy" the way there is for "the copy."
+        app.MapGet("/plugins/{plugin}/delta", (string plugin, string? winnerOrigin, string? peerOrigin, IRecordQueryService svc) =>
+        {
+            if (string.IsNullOrWhiteSpace(winnerOrigin) || string.IsNullOrWhiteSpace(peerOrigin))
+                return Results.Problem("winnerOrigin and peerOrigin are both required.", statusCode: 400);
+            var decoded = Uri.UnescapeDataString(plugin);
+            var delta = svc.GetPluginDelta(decoded, winnerOrigin, peerOrigin);
+            // Null: one of the two named origins is no longer a loaded copy of this plugin (a
+            // vanished peer/winner, #544's own race) — a real 404, not an empty-but-successful list.
+            return delta is null ? Results.NotFound() : Results.Ok(delta);
+        })
+            .WithName("GetPluginDelta")
+            .WithTags(Tag)
+            .Produces<IReadOnlyList<PluginDeltaEntry>>()
+            .ProducesProblem(400)
+            .ProducesProblem(404);
+
         app.MapPost("/plugins/create", CreatePlugin)
             .WithName("CreatePlugin")
             .WithTags(Tag)

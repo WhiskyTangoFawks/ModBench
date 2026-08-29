@@ -589,8 +589,8 @@ that existing index, not a second disk walk.
   [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448) — see Stack node, below — which
   needs the badge above as the signal that a Stack node exists at all. Delta compare (Effective
   vs Effective, "Compare with winner" on a peer) is its own split,
-  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet built. Compile-pending
-  decoration is its own split too — see Compile-pending decoration, below.
+  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544) — see Stack node, below.
+  Compile-pending decoration is its own split too — see Compile-pending decoration, below.
 
 ### Compile-pending decoration ([#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449))
 
@@ -698,10 +698,41 @@ split.
   (`ModListProvider.findModNode` / `getParent`, `vscode.TreeView.reveal`) — changing the winner is
   mod reordering, the Mods tree's own jurisdiction, so this command only ever selects, never
   reorders.
-- **Out of scope here.** Delta compare ("Compare with winner", Effective vs Effective, the two
-  presence icons) is [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet
-  built. The global "show peers everywhere" audit-mode toggle is deferred, not dropped (#397's
-  design record) — no such toggle is contributed anywhere in `package.json`.
+- **Compare with winner** (`modbench.pluginListTree.compareWithWinner`,
+  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), a peer's own context command) —
+  delta compare, Effective vs Effective, differences only. `GetPluginDelta(plugin, winnerOrigin,
+  peerOrigin)` (`RecordQueryService`, `GET /plugins/{plugin}/delta`) is the bulk seam: every FormKey
+  where the two copies disagree (one side missing the record entirely, or both present but
+  resolving differently — classified through the same `ClassifyStack` helper `GetCompare` uses, so
+  this list can never disagree with what the ordinary compare grid would show), and only those — a
+  FormKey identical in both is omitted outright, never included with a "no diff" flag. Null (mapped
+  to 404) when either origin is no longer a loaded copy of the plugin by the time the call lands (a
+  collapsed peer racing the click) — surfaced end to end as a distinguishable outcome
+  (`PluginRepository.getPluginDelta`'s own `{ ok: false, reason: 'vanished' }`, distinct from `{ ok:
+  true, entries: [] }`), so the command shows an explicit error ("the comparison could not run")
+  rather than the misleading "no differences" toast a collapsed-to-empty-list answer would produce
+  for an explicit user-invoked action (ADR-0026).
+  - The command resolves the winner's own origin off `GET /plugins` (only the winner is ever listed
+    normally), fetches the delta, and — a vanished origin: an error message, no grid opens; no
+    differences: an information message, no grid opens; otherwise — opens a native `QuickPick` of
+    the differing records (`$(diff-added)`/`$(diff-removed)`/`$(diff-modified)` codicon-prefixed for
+    every entry, one icon per presence value including an ordinary content difference), the same
+    transient-picker-over-persistent-tree-node shape the Conflicts node's own "list of differing
+    FormKeys, click to open" already establishes, minus the standing surface (this is a one-off
+    action on exactly one peer/winner pair, not a browsable session-wide fact).
+  - Selecting an entry opens the existing compare grid (`RecordPanel.tsx`) scoped to exactly the
+    named plugin's peer/winner origin pair (`LOAD_RECORD`'s own `deltaScope` field — `{ plugin,
+    winnerOrigin, peerOrigin }`, not origins alone: the peer's own mod folder can ship a second
+    plugin file that independently overrides the same FormKey under the same origin, and an
+    origin-only filter would let that unrelated row back in as a bogus third column — threaded
+    through `RecordSessionClient.load` and filtered at the fetch boundary, so every downstream
+    derivation the grid already had reads the pre-scoped set with no changes of its own) rather than
+    every other column `GetCompare` would otherwise include. A record present in only one of the two
+    scoped copies renders a presence banner instead of a two-column diff. Undefined/absent for every
+    ordinary open — "delta mode is scoped to peer
+    comparison; ordinary browsing unchanged."
+- **Out of scope here.** The global "show peers everywhere" audit-mode toggle is deferred, not
+  dropped (#397's design record) — no such toggle is contributed anywhere in `package.json`.
 
 ### Conflicts node and conflict badge ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364))
 

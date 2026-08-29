@@ -381,6 +381,10 @@ describe('modbench command registration', () => {
     // Gated to `viewItem == stackBinaryState` and hidden from the palette — it needs the clicked
     // entry's own (plugin, origin), no ambient fallback.
     'modbench.pluginListTree.diffAgainstSource',
+    // #544: a Stack peer's own "Compare with winner" gesture — differences-only, Effective vs
+    // Effective. Gated to `viewItem == stackPeer` and hidden from the palette, same posture as
+    // revealInModsTree above — it needs the clicked peer row's own (plugin, origin).
+    'modbench.pluginListTree.compareWithWinner',
     // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin` in package.json and hidden
     // from the palette — it needs the clicked row's plugin name.
     'modbench.pluginListTree.track',

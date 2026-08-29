@@ -456,6 +456,11 @@
         "category": "Modbench"
       },
       {
+        "command": "modbench.pluginListTree.compareWithWinner",
+        "title": "Compare with Winner",
+        "category": "Modbench"
+      },
+      {
         "command": "modbench.pluginListTree.track",
         "title": "Track…",
         "category": "Modbench"
@@ -643,6 +648,10 @@
         },
         {
           "command": "modbench.pluginListTree.diffAgainstSource",
+          "when": "false"
+        },
+        {
+          "command": "modbench.pluginListTree.compareWithWinner",
           "when": "false"
         },
         {
@@ -951,6 +960,11 @@
           "command": "modbench.pluginListTree.revealInModsTree",
           "when": "view == modbench.pluginListTree && viewItem == stackPeer",
           "group": "stackPeerActions@1"
+        },
+        {
+          "command": "modbench.pluginListTree.compareWithWinner",
+          "when": "view == modbench.pluginListTree && viewItem == stackPeer",
+          "group": "stackPeerActions@2"
         },
         {
           "command": "modbench.pluginListTree.diffAgainstSource",

@@ -16,11 +16,14 @@ import { columnKey } from './types';
 import { vscode } from './vscode';
 import { editField, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
-import type { RecordSessionClient } from './RecordSessionClient';
+import type { RecordSessionClient, DeltaScope } from './RecordSessionClient';
 import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey: string;
+  // #544: "Compare with winner" opening a freshly-created panel already scoped to a peer/winner
+  // pair — null for every ordinary open (webviewHtml.ts's own default).
+  mEditDeltaScope: DeltaScope | null;
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
@@ -48,6 +51,18 @@ function subtreeFor(
 export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
+  // #544: "Compare with winner" delta mode. `deltaScopeRef` is the value `refresh` actually reads
+  // (see its own comment) — mutated synchronously by `setDeltaScope` below, never left to a
+  // useLayoutEffect round trip, because the LOAD_RECORD handler calls `refreshRef.current`
+  // synchronously in the same tick it updates this, before React would ever get a chance to
+  // commit a state-driven effect. `deltaScope` (state) exists only to re-render the presence
+  // banner; nothing reads it for the load itself.
+  const deltaScopeRef = useRef<DeltaScope | null>(mEditWindow.mEditDeltaScope ?? null);
+  const [deltaScope, setDeltaScopeState] = useState<DeltaScope | null>(mEditWindow.mEditDeltaScope ?? null);
+  function setDeltaScope(scope: DeltaScope | null) {
+    deltaScopeRef.current = scope;
+    setDeltaScopeState(scope);
+  }
   // Issue #167: the Run On target dropdown's catalog (GET /condition-run-on-targets) — a
   // session-wide list, not per-record, so it's fetched once on mount rather than on every
   // refresh()/load(fk). Starts empty (the Run On cell simply has nothing to show until this
@@ -139,7 +154,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (!fk) return;
     try {
       setError(null);
-      const loaded = await client.load(fk);
+      // #544: reads the ref, not the `deltaScope` state — see its own declaration comment on why.
+      // Called with exactly one argument for the ordinary (no scope) case, not a trailing explicit
+      // `undefined` — preserves every pre-#544 `toHaveBeenCalledWith(fk)` assertion's exact arity.
+      const loaded = deltaScopeRef.current
+        ? await client.load(fk, deltaScopeRef.current)
+        : await client.load(fk);
       if (!loaded.ok) throw new Error(loaded.error);
       setResult(loaded.result);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
@@ -363,6 +383,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setResult(null);
         setError(null);
         setFocusedCell(null);
+        // #544: set synchronously, before the refreshRef call below reads it — see deltaScopeRef's
+        // own declaration comment. `?? null`, not left undefined: a LOAD_RECORD that doesn't
+        // restate a scope is exactly the "navigated away from delta mode" case (a FormKey link,
+        // Referenced By, ...) that must drop back to ordinary browsing, per the AC's own "delta
+        // mode is scoped to peer comparison; ordinary browsing unchanged."
+        setDeltaScope(msg.deltaScope ?? null);
         // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
         // open must still re-load (the effect never fires, formKey didn't change) — the
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
@@ -484,6 +510,21 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const displayId = (winner ?? overrides[0])?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
 
+  // #544: "Compare with winner" delta mode's own two presence icons — this record exists in only
+  // one of the two scoped copies (RecordSessionClient.load's own scoping already dropped every
+  // other column, so a single remaining override here can only mean the other named origin has
+  // none). "+"/"−" glyphs, not a VS Code codicon: `$(name)` shorthand is a native-UI (QuickPick/
+  // tree) convention this webview's own HTML never renders as an icon (no codicon font is wired
+  // into it — grep confirms no other component here uses one). Undefined in every other case —
+  // both present (an ordinary two-column diff, no banner needed) or ordinary browsing (deltaScope
+  // null).
+  let deltaPresenceBanner: string | undefined;
+  if (deltaScope && overrides.length === 1) {
+    deltaPresenceBanner = overrides[0].origin === deltaScope.winnerOrigin
+      ? `+ Present in the winner (${deltaScope.winnerOrigin}) only — absent from the peer (${deltaScope.peerOrigin}).`
+      : `− Present in the peer (${deltaScope.peerOrigin}) only — absent from the winner (${deltaScope.winnerOrigin}).`;
+  }
+
   // Issue #231: replaces the old hand-built top-level/array-element/struct-child/grandchild
   // special-casing (three near-duplicate `<DiffRow>` blocks, capped at exactly those three
   // levels) with one recursive builder — the same recursion VMAD's own struct data has always
@@ -578,6 +619,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       {recordPanelIncompleteMessage(conflictsComputed) && (
         <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-warningBorder, #cca700)', borderRadius: 2 }}>
           {recordPanelIncompleteMessage(conflictsComputed)}
+        </div>
+      )}
+      {/* #544: "Compare with winner" delta mode's own presence banner — informational, same
+          in-panel-notice shape as the incomplete-comparison banner above, distinguished from it
+          by using the standard foreground rather than the warning colour (this isn't a fault or
+          an incomplete state, just a fact about this one record). */}
+      {deltaPresenceBanner && (
+        <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)', padding: '3px 6px', border: '1px solid var(--vscode-panel-border, #555)', borderRadius: 2 }}>
+          {deltaPresenceBanner}
         </div>
       )}
       {/* Issue #175: flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport
