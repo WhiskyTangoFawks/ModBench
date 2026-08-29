@@ -97,9 +97,26 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 // codec seam.
                 // #515: explicit strings parameters, not null — see LocalizedStrings' own doc
                 // comment for why "pass nothing" is not neutral for a Localized plugin.
-                var deepParsed = ModFactory.ImportSetter(
-                    new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease,
-                    LocalizedStrings.ForRead(modFolder, session.DataFolderPath));
+                IMod deepParsed;
+                try
+                {
+                    deepParsed = ModFactory.ImportSetter(
+                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease,
+                        LocalizedStrings.ForRead(modFolder, session.DataFolderPath));
+                }
+                catch (Exception ex)
+                {
+                    // #519: this call had no catch at all before — any Mutagen parse exception
+                    // propagated raw, with whatever identity happened to survive in its own
+                    // unlocated Message (never FormKey/EditorID; RecordException carries those only
+                    // on its ToString(), confirmed live). PluginDiagnosis.FromParseException walks
+                    // the exception's own InnerException chain for the innermost RecordException, so
+                    // a real record identity survives even when Mutagen wrapped it in one or more
+                    // AggregateExceptions from its own parallel record-block parsing.
+                    var diagnosis = PluginDiagnosis.FromParseException(ex);
+                    throw new SourceRoundTripFailedException(
+                        $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}", ex);
+                }
 
                 // #515 AC2: refuse by name before anything else — never Mutagen's own listings-path
                 // exception (which the strings parameters above already prevent) and never a silent
