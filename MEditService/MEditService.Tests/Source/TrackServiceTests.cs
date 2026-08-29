@@ -387,24 +387,76 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #514 AC2: the mirror image of the test above — a rewrite that only *adds* subrecords must not
-    // be refused by the new subrecord-inventory check. Mutagen's own Furniture writer
+    // #513's own acceptance criterion: "a fixture whose rewrite changes a field value (forge one, e.g.
+    // a deserializer that mutates a float) is refused, with record type, FormKey and field name in the
+    // message" — the maintainer decision that Track refuses on *any* content difference, not just a
+    // string field like the sibling test above. HeightMin is set to a non-default value first so "the
+    // mutation changed it" is unambiguous.
+    [Fact]
+    public async Task TrackAsync_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-floatroundtrip-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-floatroundtrip-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            var npc = mod.Npcs.AddNew("SomeNpc");
+            npc.HeightMin = 1.5f;
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ISessionManager sessionManager = manager;
+            sessionManager.LoadExplicit(
+                gameDir,
+                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            static async Task<IFallout4Mod> DeserializeThenMutateTheFloat(string folder, CancellationToken ct)
+            {
+                var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+                deserialized.Npcs.First().HeightMin += 1.0f;
+                return deserialized;
+            }
+
+            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
+                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits, DeserializeThenMutateTheFloat));
+
+            Assert.Contains(npc.FormKey.ToString(), ex.Message);
+            Assert.Contains("Npc", ex.Message);
+            Assert.Contains("HeightMin", ex.Message);
+            Assert.False(SourceRepository.IsTracked(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #514 AC2 / #513: a rewrite that only *adds* subrecords must not be refused by the
+    // subrecord-inventory check specifically. Mutagen's own Furniture writer
     // (FurnitureBinaryWriteTranslation.WriteBinaryFlagsCustom/WriteBinaryFlags2Custom, verified by
     // reading it) unconditionally emits FNAM/MNAM on every write regardless of whether the source it
     // read ever had them — Mutagen can never itself *author* a FURN missing them, so the "original"
     // here is hand-stripped from a real Mutagen-written one (the CK/community-tool shape the #511
-    // survey actually observed for FURN), not built through the object API.
+    // survey actually observed for FURN: "subrecord-set: FURN +FNAM/MNAM 22"), not built through the
+    // object API.
     //
-    // This plugin *is* still refused by Track overall — a pre-existing, unrelated behavior: adding
-    // FNAM/MNAM changes the file's bytes, so the outer byte-identity check (line ~198 above) still
-    // trips, exactly as it would for any of the #511 survey's other harmless canonical insertions
-    // (WRLD ONAM/DATA, INNR KSIZ). What AC2 asks is narrower and is what this test actually checks:
-    // that refusal is not attributed to *this* check — the message must be the old model-identity
-    // fallback, not one naming FNAM/MNAM as "missing". Verified by hand while building this test:
-    // Track threw `SourceRoundTripFailedException` with exactly the fallback text asserted below, not
-    // a #514-shaped one.
+    // #513 finding: this one is *not* actually an encoding-only difference. `Furniture.Flags` is a
+    // nullable property FNAM/MNAM back — null when they're absent (the hand-stripped original),
+    // reparses to a real value once Mutagen's writer re-adds them. That is a genuine content change,
+    // and the new model-identity gate is right to still refuse it — the pre-#513 gate refused it too,
+    // but only because *some* byte differed, landing on the generic "but every individual record
+    // matched" fallback (a real, if latent, inaccuracy: comparing the pre-write in-memory object
+    // against original, as the old gate did, could never see the Flags value the *actual write* would
+    // produce). The new gate reparses what was actually written and names the real cause. What #514
+    // AC2 still asks — that refusal isn't attributed to the *subrecord-inventory* check specifically —
+    // still holds.
     [Fact]
-    public async Task TrackAsync_WithARecordThatOnlyGainsSubrecordsOnRewrite_IsNotRefusedBySubrecordInventory()
+    public async Task TrackAsync_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-furn-insert-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-furn-insert-game-").FullName;
@@ -430,7 +482,9 @@ public sealed class TrackServiceTests
             Assert.DoesNotContain("is missing", ex.Message);
             Assert.DoesNotContain("FNAM", ex.Message);
             Assert.DoesNotContain("MNAM", ex.Message);
-            Assert.Contains("but every individual record matched", ex.Message);
+            Assert.Contains("Furniture", ex.Message);
+            Assert.Contains("Flags", ex.Message);
+            Assert.False(SourceRepository.IsTracked(modFolder));
         }
         finally
         {

@@ -43,7 +43,7 @@ public sealed class RoundTripSurvey
             .OrderBy(f => new FileInfo(f).Length)
             .ToList();
 
-        var rows = new List<string> { "plugin,mod,bytes,records,result,model,categories,detail" };
+        var rows = new List<string> { "plugin,mod,bytes,records,result,model,accept,categories,detail" };
         var dumpPrefixes = (Environment.GetEnvironmentVariable("MEDIT_SURVEY_DUMP") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
         var dumped = new HashSet<string>(StringComparer.Ordinal);
         var dump = new StringBuilder();
@@ -57,7 +57,7 @@ public sealed class RoundTripSurvey
                 var name = Path.GetFileName(path);
                 var mod = Path.GetFileName(Path.GetDirectoryName(path)!);
                 var size = new FileInfo(path).Length;
-                string result, categories = "", detail = "", model = "";
+                string result, categories = "", detail = "", model = "", accept = "";
                 int records = 0;
                 try
                 {
@@ -72,10 +72,33 @@ public sealed class RoundTripSurvey
                         .WithRecordCount(RecordCountOption.NoCheck)
                         .WriteAsync();
                     var rewritten = await File.ReadAllBytesAsync(outFile);
+
+                    // #513: "would Track accept" — the same verdict TrackService.VerifyRoundTrip computes in
+                    // production, reusing its own shared checker (MEditService.Core.Source.ModelIdentity)
+                    // rather than this harness's own separate (and, it turned out, incomplete — see
+                    // ModelIdentity's own doc comment on why a single most-derived GetEqualsMask misses
+                    // base-level fields like EditorID) bare-Equals-based "model" column below, kept only for
+                    // continuity with pre-#513 survey runs.
+                    if (rewritten.AsSpan().SequenceEqual(original))
+                    {
+                        accept = "accept";
+                    }
+                    else if (PluginBinaryWalk.FindFirstSubrecordLoss(original, rewritten) is { } loss)
+                    {
+                        accept = $"refuse:subrecord-loss:{loss.RecordType}:{string.Join("+", loss.Signatures)}";
+                    }
+
                     // model identity: parse the rewrite and deep-compare every record (Mutagen's generated Equals)
                     try
                     {
                         var reparsed = Fallout4Mod.CreateFromBinary(new ModPath(ModKey.FromFileName(name), outFile), Fallout4Release.Fallout4);
+
+                        if (accept.Length == 0)
+                        {
+                            var divergence = ModelIdentity.FindFirst(parsed, reparsed);
+                            accept = divergence == null ? "accept" : $"refuse:model:{divergence.RecordType}/{divergence.Description}";
+                        }
+
                         var byKey = reparsed.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
                         var unequalRecords = parsed.EnumerateMajorRecords()
                             .Where(r => !byKey.TryGetValue(r.FormKey, out var q) || !r.Equals(q)).ToList();
@@ -91,8 +114,16 @@ public sealed class RoundTripSurvey
                         if (unequal.Count > 0) foreach (var u in unequal) tally["model-differs:" + u.Split('x')[0]] = tally.GetValueOrDefault("model-differs:" + u.Split('x')[0]) + 1;
                         tally[unequal.Count == 0 ? "_model-equal" : "_model-differs"] = tally.GetValueOrDefault(unequal.Count == 0 ? "_model-equal" : "_model-differs") + 1;
                     }
-                    catch (Exception ex) { model = "model-reparse-error:" + ex.GetType().Name; tally["_model-reparse-error"] = tally.GetValueOrDefault("_model-reparse-error") + 1; }
+                    catch (Exception ex)
+                    {
+                        model = "model-reparse-error:" + ex.GetType().Name;
+                        tally["_model-reparse-error"] = tally.GetValueOrDefault("_model-reparse-error") + 1;
+                        if (accept.Length == 0) accept = "refuse:reparse-error:" + ex.GetType().Name;
+                    }
                     File.Delete(outFile);
+
+                    tally[accept.StartsWith("refuse:", StringComparison.Ordinal) ? "_would-refuse" : "_would-accept"] =
+                        tally.GetValueOrDefault(accept.StartsWith("refuse:", StringComparison.Ordinal) ? "_would-refuse" : "_would-accept") + 1;
 
                     if (original.AsSpan().SequenceEqual(rewritten))
                     {
@@ -117,14 +148,16 @@ public sealed class RoundTripSurvey
                 catch (Exception ex)
                 {
                     result = "error";
+                    accept = "refuse:parse-error:" + ex.GetType().Name;
                     detail = ex.GetType().Name + ": " + ex.Message.Split('\n')[0];
                     dump.AppendLine(CultureInfo.InvariantCulture, $"===== ERROR :: {name} ({mod})");
                     for (Exception? e = ex; e != null; e = e.InnerException) dump.AppendLine("  " + e.GetType().Name + ": " + e.Message.Replace('\n', ' '));
                     if (ex is AggregateException agg) foreach (var ie in agg.Flatten().InnerExceptions) dump.AppendLine("  * " + ie.GetType().Name + ": " + ie.Message.Replace('\n', ' '));
                     tally["error"] = tally.GetValueOrDefault("error") + 1;
+                    tally["_would-refuse"] = tally.GetValueOrDefault("_would-refuse") + 1;
                 }
                 tally[result == "differs" ? "_differs" : "_" + result] = tally.GetValueOrDefault(result == "differs" ? "_differs" : "_" + result) + 1;
-                rows.Add(string.Join(",", Csv(name), Csv(mod), size.ToString(CultureInfo.InvariantCulture), records.ToString(CultureInfo.InvariantCulture), result, model, Csv(categories), Csv(detail)));
+                rows.Add(string.Join(",", Csv(name), Csv(mod), size.ToString(CultureInfo.InvariantCulture), records.ToString(CultureInfo.InvariantCulture), result, model, Csv(accept), Csv(categories), Csv(detail)));
             }
         }
         finally
@@ -179,7 +212,15 @@ public sealed class RoundTripSurvey
     }
 
     /// <summary>Mutagen's generated GetEqualsMask(rhs, Include.OnlyFailures), found by reflection on the record's
-    /// getter interface, printed — names exactly which fields the generated Equals disagrees on.</summary>
+    /// getter interface, printed — names exactly which fields the generated Equals disagrees on.
+    ///
+    /// <para>#513: this is dump-only, kept for its human-readable raw mask text (every field, not just
+    /// the failing ones' names) — the "would Track accept" verdict itself no longer uses this method or
+    /// its single-most-derived-type reflection (which the promoted <c>ModelIdentity</c> found and fixed
+    /// was incomplete: a <c>Mask&lt;TItem&gt;.Print</c> only lists the fields <i>that type itself</i>
+    /// declares, so this method alone could never see a base-level field like <c>EditorID</c> diverge).
+    /// Only <c>ModelIdentity.FindFirst</c>, above, decides <c>accept</c>.</para>
+    /// </summary>
     private static string EqualsMaskFailures(object lhs, object rhs)
     {
         try

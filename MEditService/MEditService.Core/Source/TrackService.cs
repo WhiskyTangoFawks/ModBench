@@ -124,7 +124,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 // (SourceRepository.Track below never runs). Reported under the same Serializing
                 // phase as the plugin whose tree it is verifying: no new TrackPhase, so no wire/API
                 // change and nothing for trackProgress.ts's own exhaustive switch to learn about.
-                await VerifyRoundTrip(deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, deserialize, cancel);
+                await VerifyRoundTrip(deepParsed, plugin.Name, plugin.Path, pluginPristineFiles, deserialize, logger, cancel);
 
                 pristineFiles.AddRange(pluginPristineFiles);
 
@@ -150,29 +150,39 @@ public sealed class TrackService(ILogger<TrackService> logger)
     }
 
     /// <summary>
-    /// ADR-0042 decision 2's gate, run live against the plugin actually being tracked: writes
-    /// <paramref name="pristineFilesForThisPlugin"/> (the tree <see cref="SerializeToPristineFiles"/>
-    /// just produced from <paramref name="original"/>) into a scratch tree, reads it back through
-    /// <paramref name="deserialize"/>, recompiles that to a scratch binary, and refuses unless it is
-    /// byte-identical to <paramref name="originalPluginPath"/>'s own bytes. Byte identity is the
-    /// gate; naming the offender is only reached once the gate has already failed, so a passing
-    /// Track pays one extra deserialize and one extra binary write per plugin, never a diagnostic.
+    /// ADR-0042 decision 2's gate (2026-08 amendment, #513), run live against the plugin actually
+    /// being tracked: writes <paramref name="pristineFilesForThisPlugin"/> (the tree
+    /// <see cref="SerializeToPristineFiles"/> just produced from <paramref name="original"/>) into a
+    /// scratch tree, reads it back through <paramref name="deserialize"/>, recompiles that to a
+    /// scratch binary, and refuses unless <b>every record's own content is model-identical</b> to the
+    /// original — not unless the two binaries are byte-identical. Byte identity is still checked
+    /// first, as a cheap accept short-circuit (byte-identical trivially implies model-identical, and
+    /// skips the cost of a second parse for the common already-canonical case); a byte difference
+    /// alone is never itself refused.
     ///
-    /// <para><b>#514: two independent diagnoses, tried in order.</b> <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>
-    /// runs first, straight over the same two byte buffers this method already has in hand — no
-    /// extra parse, no extra write. It exists because Mutagen's own model can be lossy on the way
-    /// *in*: a record whose original bytes and recompiled bytes both parse into equal objects can
-    /// still differ on disk, when the parser silently dropped a subrecord neither model ever held
-    /// (observed on a real plugin, <c>LitR - TrueStorms.esp</c> REGN <c>001D2AF4</c> — a malformed
-    /// 6-byte <c>RDAT</c> where the format wants 8 desyncs Mutagen's own parse, which then silently
-    /// drops every subrecord after it in that record; see <c>docs/specs/medit-repair.md</c>'s R2 for
-    /// the byte-level diagnosis, and its own note that "second same-type RDAT" — an earlier, now
-    /// retracted theory for this same plugin — was never the real defect). Model equality
-    /// (<see cref="DescribeFirstDivergence"/>) cannot name that record: both sides of its comparison
-    /// come from the same lossy parse, so they agree. Only a byte-level count comparison can, which
-    /// is what makes this check independent of, not a replacement for, the model-identity one below —
-    /// a content or reordering difference the byte walk correctly ignores still needs
-    /// <see cref="DescribeFirstDivergence"/> to name it.</para>
+    /// <para><b>Reparse, not the pre-write object.</b> The model-identity comparison below runs
+    /// against a fresh parse of <paramref name="recompiledPath"/>'s own written bytes
+    /// (<c>recompiledFromBinary</c>), not the in-memory <c>recompiled</c> object handed to
+    /// <c>BeginWrite</c>. <c>recompiled</c> is deserialized straight from the lossless tree
+    /// (decision 3), so it is definitionally equal to <paramref name="original"/> on every field the
+    /// tree carries — comparing against it could never see anything Mutagen's own binary *writer*
+    /// does to a value (zlib re-deflate, <c>-0.0</c>→<c>+0.0</c>, or a writer defect like
+    /// <c>Furniture.Flags</c> materializing from <see langword="null"/> once <c>FNAM</c>/<c>MNAM</c>
+    /// are re-added — #513's own survey finding, real content this amendment exists to still refuse).
+    /// Only a reparse of what was actually written can.</para>
+    ///
+    /// <para><b>#514: an independent diagnosis tried first.</b> <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>
+    /// runs straight over the same two byte buffers this method already has in hand — no extra parse,
+    /// no extra write. It exists because Mutagen's own model can be lossy on the way *in*: a record
+    /// whose original bytes and recompiled bytes both parse into equal objects can still differ on
+    /// disk, when the parser silently dropped a subrecord neither model ever held (observed on a real
+    /// plugin, <c>LitR - TrueStorms.esp</c> REGN <c>001D2AF4</c> — a malformed 6-byte <c>RDAT</c>
+    /// where the format wants 8 desyncs Mutagen's own parse, which then silently drops every
+    /// subrecord after it in that record; see <c>docs/specs/medit-repair.md</c>'s R2 for the
+    /// byte-level diagnosis). Model equality (<see cref="ModelIdentity"/>) cannot name that record:
+    /// both sides of its comparison come from the same lossy parse, so they agree. Only a byte-level
+    /// count comparison can, which is what makes this check independent of, not a replacement for,
+    /// the model-identity one below.</para>
     /// </summary>
     private static async Task VerifyRoundTrip(
         IMod original,
@@ -180,6 +190,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
         string originalPluginPath,
         IReadOnlyList<PristineFile> pristineFilesForThisPlugin,
         Func<string, CancellationToken, Task<IFallout4Mod>> deserialize,
+        ILogger logger,
         CancellationToken cancel)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-trackverify-").FullName;
@@ -221,7 +232,28 @@ public sealed class TrackService(ILogger<TrackService> logger)
                     "present in the original — dropped during parsing, before Track ever wrote its source.");
             }
 
-            throw new SourceRoundTripFailedException(DescribeFirstDivergence(original, recompiled, pluginName));
+            var recompiledFromBinary = Fallout4Mod.CreateFromBinary(
+                new ModPath(ModKey.FromFileName(pluginName), recompiledPath), Fallout4Release.Fallout4);
+
+            if (ModelIdentity.FindFirst(original, recompiledFromBinary) is { } divergence)
+            {
+                throw new SourceRoundTripFailedException(
+                    $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"{divergence.RecordType} {divergence.FormKey} (EditorID '{divergence.EditorId}') " +
+                    divergence.Description);
+            }
+
+            // #513: bytes differ but every record's own content is model-identical — an encoding-only
+            // difference ADR-0042 decision 2 now documents rather than gates (zlib level, negative
+            // zero, subrecord/GRUP-child order, derived sizes and counts, master pruning). Reported,
+            // not silent, and never a refusal.
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "{Plugin} is model-identical to its own tracked source but not byte-identical — " +
+                    "Save & Compile will not reproduce this plugin's exact bytes (ADR-0042 decision 2).",
+                    pluginName);
+            }
         }
         finally
         {
@@ -229,49 +261,6 @@ public sealed class TrackService(ILogger<TrackService> logger)
         }
     }
 
-    /// <summary>
-    /// The diagnostic half of the gate (ADR-0042 decision 2): names the first record — in the
-    /// original plugin's own GRUP order — that does not survive a round trip through its own
-    /// tracked source, using Mutagen's own generated deep equality (every generated major record
-    /// overrides <c>object.Equals</c> to a field-by-field comparison — reached here through the
-    /// common <see cref="IMajorRecordGetter"/> interface type, no per-game downcast needed).
-    /// </summary>
-    private static string DescribeFirstDivergence(IMod original, IFallout4Mod recompiled, string pluginName)
-    {
-        var recompiledByFormKey = recompiled.EnumerateMajorRecords().ToDictionary(r => r.FormKey);
-        var originalFormKeys = new HashSet<FormKey>();
-        foreach (var originalRecord in original.EnumerateMajorRecords())
-        {
-            originalFormKeys.Add(originalRecord.FormKey);
-            if (!recompiledByFormKey.TryGetValue(originalRecord.FormKey, out var recompiledRecord))
-            {
-                return $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"{originalRecord.GetType().Name} {originalRecord.FormKey} (EditorID '{originalRecord.EditorID}') " +
-                    "is missing from the recompiled plugin.";
-            }
-
-            if (!originalRecord.Equals(recompiledRecord))
-            {
-                return $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"{originalRecord.GetType().Name} {originalRecord.FormKey} (EditorID '{originalRecord.EditorID}') " +
-                    "differs after being recompiled from its own tracked source.";
-            }
-        }
-
-        // #506: the other direction — a record the recompile produced that the original never had.
-        foreach (var recompiledRecord in recompiled.EnumerateMajorRecords())
-        {
-            if (!originalFormKeys.Contains(recompiledRecord.FormKey))
-            {
-                return $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"{recompiledRecord.GetType().Name} {recompiledRecord.FormKey} (EditorID '{recompiledRecord.EditorID}') " +
-                    "is present in the recompiled plugin but not present in the original.";
-            }
-        }
-
-        return $"{pluginName} does not round-trip through its own tracked source, but every individual " +
-            "record matched — the divergence is in the plugin header or a container's own structure, not a record's content.";
-    }
 
     /// <summary>
     /// One plugin's complete source tree as a list of <see cref="PristineFile"/>s, ready to commit —
