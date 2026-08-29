@@ -66,11 +66,16 @@ index itself outliving the process.
    joined at read; `records.load_order_idx` is dropped. `plugins.txt` is the index the session
    view is built from, and reordering it touches one row per plugin, never a record.
 
-   The one session derivative that stays materialized on `records` is `is_winner`: it is a
-   function of the registered load order, recomputed by the winner sweep (2 s on the profiled
-   order) whenever registration changes, and it is never a key and never persisted as truth —
-   a file-mirror row carrying a cached session answer, labeled as such. Moving it into a
-   session-owned table is a later refactor if the sweep's cost or the labeling ever bites.
+   **Nothing session-derived is stored on a data row — `is_winner` included.** A record row is
+   the file's fact and only the file's fact. Winners are a function of the registered load order
+   and live in a session-owned derived structure on top of the raw rows: a `winners` table
+   (`form_key → (plugin, origin)`) rebuilt by the existing sweep whenever registration changes,
+   which the read seam and the generated views join. (DuckDB has no incrementally maintained
+   materialized views, so "materialized view" here concretely means that derived table — the
+   same shape `records_head` already uses internally, deriving winners rather than reading a
+   stored flag, since #415 found what a stored flag gets wrong.) If the query side ever needs
+   more — per-plugin winner counts, contested-FormKey sets — it is added as further derived
+   structure over the raw data, never as columns on it.
 
 4. **Validity is by content, never by clock, and it is checked at every door.** `plugins` records
    the content hash of the file each plugin's rows were built from, plus the codec+schema
