@@ -69,11 +69,18 @@ index itself outliving the process.
    **Nothing session-derived is stored on a data row — `is_winner` included.** A record row is
    the file's fact and only the file's fact. Winners are a function of the registered load order
    and live in a session-owned derived structure on top of the raw rows: a `winners` table
-   (`form_key → (plugin, origin)`) rebuilt by the existing sweep whenever registration changes,
-   which the read seam and the generated views join. (DuckDB has no incrementally maintained
-   materialized views, so "materialized view" here concretely means that derived table — the
-   same shape `records_head` already uses internally, deriving winners rather than reading a
-   stored flag, since #415 found what a stored flag gets wrong.) If the query side ever needs
+   (`(ref, form_key) → (plugin, origin)`) rebuilt by the existing sweep whenever registration
+   changes, which the read seam and the generated views join. (DuckDB has no incrementally
+   maintained materialized views, so "materialized view" here concretely means that derived
+   table.) It is keyed by ref, not by FormKey alone, because Effective and Head genuinely
+   disagree: a record the working tree deleted promotes the next plugin down at Effective while
+   Head still holds the original — which is what #415 found a single stored flag getting wrong.
+   `records_head` therefore joins the same table at its own ref rather than deriving a second
+   answer of its own. **The cost of that consolidation is an invalidation obligation, and it is
+   part of the decision, not an implementation detail:** Head's winners were previously a live
+   derivation and so self-correcting, whereas a swept table is only as fresh as its last sweep —
+   so every writer that moves a row into or out of *either* ref's stack must resweep, including
+   the ones that leave Effective untouched. If the query side ever needs
    more — per-plugin winner counts, contested-FormKey sets — it is added as further derived
    structure over the raw data, never as columns on it.
 

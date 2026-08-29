@@ -38,7 +38,6 @@ internal static class HeaderIndexer
         row.AppendValue(FormKeyFor(pluginMod.ModKey));
         row.AppendValue(plugin);
         row.AppendValue(origin);
-        row.AppendValue(false);   // is_winner: corrected by UpdateWinners(), same as every other table
         row.AppendNullValue();    // editor_id: headers have no EditorID concept
 
         // RecordColumns and HeaderColumnExtract are always built in lockstep, one extractor per

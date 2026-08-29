@@ -99,8 +99,8 @@ public sealed class SessionManagerRereadPluginTests
             Assert.Equal("ModB", origin);
             Assert.Equal("FromModB", editorId);
             // AC7: winners are re-swept, so conflict state describes the new file. Index() writes
-            // every row is_winner=false and only UpdateWinners() can flip it, so this is false
-            // unless the sweep actually ran.
+            // no winners row of its own — only UpdateWinners() does — so this is false unless the
+            // sweep actually ran.
             Assert.True(isWinner);
         }
     }

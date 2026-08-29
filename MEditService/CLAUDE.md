@@ -46,16 +46,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 - The per-type views, editor field metadata and record codec are reflection-generated from Mutagen types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
 - **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
-  `is_winner`, `ref`, `content_hash`); the extracted index tables (`form_lookup`,
+  `ref`, `content_hash`); the extracted index tables (`form_lookup`,
   `form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
-  **`load_order_idx` is not a stored column on any of these** (#583 / ADR-0001): a record row
-  carries file-derived facts only, and load order is a fact about a plugin's registration. It lives
-  solely on `plugins`, and the registered view over each raw table (`records`, `records_committed`,
-  `form_lookup`, `header` — see "Registration is visibility" above) joins it back in for every
-  reader that names the view, so `load_order_idx` still reads as an ordinary column everywhere
-  outside `Records/` itself.
+  **Nothing session-derived is stored on a data row** (#583/#584 / ADR-0001): a record row carries
+  file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
+  on `plugins`; `is_winner` is a fact about the registered stack a FormKey sits in and lives solely
+  in `raw.winners` (`(ref, form_key) → (plugin, origin)`, rebuilt wholesale by
+  `DuckDbRecordIndex.UpdateWinners`). The registered view over each raw table (`records`,
+  `records_committed`, `form_lookup`, `header` — see "Registration is visibility" above) joins both
+  back in, so they still read as ordinary columns everywhere outside `Records/` itself. Every writer
+  that moves a row into or out of a ref's stack must resweep — that is why `MarkWorkingTreeOnly` and
+  `SeedCommittedOnly` call `UpdateWinners` even though Effective is untouched.
   - **Typed reads reconstitute; they never read the views.** `GetDocument`/`GetOverrideStack`
     deserialize the document through `RecordTextCodec` and run the same `ColumnSpec.Extract`
     delegates the wide tables were filled with, so values are identical by construction. The
@@ -151,10 +154,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `records_committed` difference table; `records_head` unions it with the rows that never diverged,
   giving Head a relation of the same shape, which is why `At(ref)` is a relation name rather than a
   second read implementation.
-  - `is_winner` is **derived inside `records_head`**, never carried through. A record the working
-    tree deleted promotes the next plugin down at Effective, and the promoted row is a clean row
-    physically shared with that view — reading its stored flag reported two winners for one FormKey
-    at Head.
+  - `is_winner` is **swept per ref**, never carried across them. A record the working tree deleted
+    promotes the next plugin down at Effective, and the promoted row is a clean row physically
+    shared with `records_head` — reusing Effective's answer reported two winners for one FormKey at
+    Head. So `raw.winners` is keyed `(ref, form_key)` and `records_head` joins it at Head.
   - `IRecordIndex.ApplyWorkingTreeChanges` moves Effective against a fixed baseline (null body =
     deletion; bytes equal to committed = convergence back to clean, by byte compare, never by a
     `content_hash` mismatch alone). `SetCommittedBaseline` moves the baseline itself. Neither can

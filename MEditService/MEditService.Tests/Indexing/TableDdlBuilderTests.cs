@@ -140,6 +140,56 @@ public class TableDdlBuilderTests
         Assert.Contains("load_order_idx", cols);
     }
 
+    // #584 / ADR-0001: the same split for `is_winner`. Winning is a fact about the whole registered
+    // stack a FormKey sits in, not about one row's bytes, so no raw table stores it — it is derived
+    // in the registered view by joining `raw.winners`, the session-owned table the sweep rebuilds.
+    [Theory]
+    [InlineData("records")]
+    [InlineData("records_committed")]
+    [InlineData("form_lookup")]
+    [InlineData("header")]
+    public void RawRecordShapedTables_CarryNoWinnerColumn(string tableName)
+    {
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var cols = GetColumns(conn, tableName, schema: "raw");
+        Assert.NotEmpty(cols); // premise: the raw table actually exists
+        Assert.DoesNotContain("is_winner", cols);
+    }
+
+    // The three relations whose readers ask for `is_winner` keep answering it. `records_committed` is
+    // not among them: its stored flag was written FALSE and read by nothing — records_head derives
+    // Head's own answer — so it stops existing rather than becoming a derived column nobody selects.
+    [Theory]
+    [InlineData("records", true)]
+    [InlineData("form_lookup", true)]
+    [InlineData("header", true)]
+    [InlineData("records_head", true)]
+    [InlineData("records_committed", false)]
+    public void RegisteredViews_ExposeWinner_OnlyWhereAReaderAsksForIt(string relation, bool exposesWinner)
+    {
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var cols = GetColumns(conn, relation, schema: "main");
+        Assert.NotEmpty(cols); // premise: the view actually exists
+        Assert.Equal(exposesWinner, cols.Contains("is_winner"));
+    }
+
+    // The winners relation itself: (record_ref, form_key) -> (plugin, origin), carrying the ref
+    // because Effective and Head can name different winners for one FormKey
+    // (TableDdlBuilder.CreateHeadView).
+    [Fact]
+    public void CreateTables_CreatesWinnersTable_MappingARefAndFormKeyToOnePlugin()
+    {
+        using var conn = OpenMemory();
+        _builder.CreateTables(conn, GameRelease.Fallout4);
+
+        var cols = GetColumns(conn, "winners", schema: "raw");
+        Assert.Equal(["record_ref", "form_key", "plugin", "origin"], cols);
+    }
+
     [Fact]
     public void CreateFormReferencesTable_CreatesTargetFormKeyIndex()
     {

@@ -50,7 +50,10 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// <see cref="UpdateWinners"/> sweep.</summary>
     void Unregister(PluginKey key);
 
-    /// <summary>Recomputes <c>is_winner</c> across every indexed table for the whole session.</summary>
+    /// <summary>Rebuilds the whole session's winners — which plugin's copy of each FormKey holds the
+    /// field, at each ref. #584 / ADR-0001: that answer lives in a session-owned derived table, not in
+    /// a column on any indexed row, so this replaces the table rather than updating rows in place.
+    /// Every read still spells it <c>is_winner</c>, projected by the view.</summary>
     void UpdateWinners();
 
     /// <summary>Flips an already-indexed plugin's participation flag — SQL-only, no re-index.

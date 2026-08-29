@@ -198,7 +198,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     row.AppendValue(eid);
                 else
                     row.AppendNullValue();
-                row.AppendValue((bool?)false);
                 row.EndRow();
             }
         }
@@ -380,7 +379,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             row.AppendValue(editorId);
         else
             row.AppendNullValue();
-        row.AppendValue((bool?)false);
         row.AppendValue(SourceRef.Committed);
         row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
         row.AppendValue(prepared.ContentHash);
@@ -570,63 +568,73 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>See <see cref="IRecordIndex.UpdateWinners"/>.</summary>
+    ///
+    /// <remarks>
+    /// #584 / ADR-0001: winning is a function of the registered load order alone, so it lives in
+    /// <c>raw.winners</c> — one row per (ref, FormKey) naming the plugin whose copy wins — and is
+    /// rebuilt wholesale here rather than UPDATEd onto a column of three separate data tables. The
+    /// readers never name this table: the registered views and <c>records_head</c> join it to project
+    /// <c>is_winner</c>, so the projection is written once (<c>TableDdlBuilder</c>) and the rule once
+    /// (here), instead of once per relation in each place.
+    ///
+    /// <para>#271 / ADR-0036: partitioned on (plugin, origin) together — two plugins sharing a
+    /// filename but differing in origin are distinct participants, each judged on its own
+    /// load_order_idx and participation, not folded into one bucket by filename alone. #583 /
+    /// ADR-0001: that load_order_idx is read from the <c>plugins</c> row the participation join
+    /// already needs, never from the record row.</para>
+    ///
+    /// <para>Wholesale rather than incremental because there is no smaller correct unit: registering
+    /// a plugin at a new index can move the winner of every FormKey it holds. #427 measured the
+    /// whole-session sweep over a 48,000-record, 60-plugin fixture — larger than the overwhelming
+    /// majority of real load orders — and #584 re-measured the same shape at parity with the
+    /// three-table UPDATE it replaces (~75ms for both refs against ~37ms per fat table swept), with
+    /// the winner-filtered reads unchanged: the registered view's <c>plugins</c> join already
+    /// dominates them, and joining <c>winners</c> beside it costs nothing measurable.</para>
+    /// </remarks>
     public void UpdateWinners()
     {
-        // ADR-0041 / #413: one sweep over `records` where this used to run the same UPDATE once per
-        // reflected table. #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing
-        // a filename but differing in origin are distinct participants, each judged on its own
-        // load_order_idx and participation, not folded into one MAX() bucket by filename alone.
-        // #583 / ADR-0001: `load_order_idx` no longer lives on the row — a row's own load order is
-        // p1's, the same `plugins` row EXISTS already needs for participation, so the two collapse
-        // into one predicate rather than a bare column compare plus a separate EXISTS.
-        Execute("""
-            UPDATE raw.records AS r
-            SET is_winner = EXISTS (
-                SELECT 1 FROM plugins p1
-                WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                  AND p1.load_order_idx = (
-                    SELECT MAX(p2.load_order_idx) FROM raw.records t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = r.form_key
-                  )
-            )
+        Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
+
+        // Effective. The header table is swept in the same statement rather than in one of its own:
+        // it is the only surviving per-type table (D8, #413) and would otherwise never have a winner
+        // at all — which reads as "no header exists" through every winnerOnly lookup, Open Header
+        // included — and its FormKeys cannot collide with a record's, since HeaderIndexer.FormKeyFor
+        // mints them at FormID 000000, the null form, which no major record can occupy.
+        //
+        // form_lookup gets no branch here at all: ADR-0031 keeps exactly one lookup row per Effective
+        // record row (ingest appends them together, RederiveIndexRowsForRecord and
+        // DeleteDerivationsForRecord keep them in step), so `records`' own winners *are*
+        // form_lookup's, and its registered view joins the same rows. That is what makes
+        // ResolveFormKey's EditorID reflect the winning override by construction rather than by a
+        // second sweep that could drift from this one.
+        InsertWinners(RecordRef.Effective, $"""
+            SELECT form_key, plugin, origin FROM raw.records
+            UNION ALL
+            SELECT form_key, plugin, origin FROM raw."{HeaderIndexer.TableName}"
             """);
 
-        // #413: the header keeps its own sweep. It used to be swept incidentally, as one of the
-        // reflected schema tables the loop above walked; it is now the only surviving per-type table
-        // (D8) and would otherwise never have a winner at all — which reads as "no header exists"
-        // through every winnerOnly lookup, Open Header included.
-        Execute($"""
-            UPDATE raw."{HeaderIndexer.TableName}" AS r
-            SET is_winner = EXISTS (
-                SELECT 1 FROM plugins p1
-                WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                  AND p1.load_order_idx = (
-                    SELECT MAX(p2.load_order_idx) FROM raw."{HeaderIndexer.TableName}" t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = r.form_key
-                  )
-            )
-            """);
-
-        // form_lookup isn't a reflected schema table, so it needs its own winner sweep — same
-        // shape as every other table's, so ResolveFormKey's EditorID reflects the winning override
-        // like every other resolved field, not a winner-agnostic special case (ADR-0031).
-        // #272 / ADR-0036: joined on (plugin, origin) together, same as the reflected-table sweep
-        // above — two plugins sharing a filename but differing in origin are distinct participants.
-        Execute("""
-            UPDATE raw.form_lookup AS r
-            SET is_winner = EXISTS (
-                SELECT 1 FROM plugins p1
-                WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                  AND p1.load_order_idx = (
-                    SELECT MAX(p2.load_order_idx) FROM raw.form_lookup t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = r.form_key
-                  )
-            )
-            """);
+        // Head, over the same membership relation records_head itself is built on. A record the
+        // working tree deleted is gone from Effective but still held at Head, so the two stacks can
+        // name different winners for one FormKey — see TableDdlBuilder.CreateHeadView.
+        InsertWinners(RecordRef.Head, $"SELECT form_key, plugin, origin FROM {TableDdlBuilder.HeadRowsRelation}");
     }
+
+    // The winner rule itself, once: among the rows <paramref name="rowsSql"/> yields, the one whose
+    // plugin is registered, participating, and latest in the load order wins its FormKey. QUALIFY
+    // (rather than the MAX() compare this replaces) is what makes the result a function — a tie on
+    // load_order_idx yields one winner, not two — and the (plugin, origin) tiebreak makes which one
+    // deterministic rather than dependent on scan order.
+    private void InsertWinners(RecordRef @ref, string rowsSql) =>
+        Execute($"""
+            INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
+            SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
+            FROM ({rowsSql}) r
+            JOIN plugins p ON p.plugin = r.plugin AND p.origin = r.origin AND p.participates
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY r.form_key
+                ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
+            """);
 
     // --- Working-tree changes (#415) ---
 
@@ -634,7 +642,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // SELECT *'d so the snapshot copy below is pinned to a column list instead of to the two tables
     // happening to stay in the same order forever.
     private const string RecordColumnList =
-        "form_key, plugin, origin, record_type, editor_id, is_winner, \"ref\", body, content_hash";
+        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash";
 
     /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. One transaction for the whole
     /// batch, matching <see cref="Index"/>'s own discipline: a throw partway leaves the prior read
@@ -764,8 +772,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), FALSE, '{SourceRef.WorkingTree}', $5, $6)
+            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.WorkingTree}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
@@ -849,10 +857,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 """, formKey, key.Name, key.Origin!);
         }
 
-        // No UpdateWinners: nothing was added to or removed from Effective, so that stack is untouched,
-        // and records_head derives its own is_winner per ref rather than reading a stored flag (see
-        // TableDdlBuilder's note on that view) — Head's winner answer is already correct for the
-        // smaller set without a sweep.
+        // Effective is untouched — nothing was added to or removed from it — but Head just lost a row
+        // per FormKey, which can promote the next plugin down at that ref. Head's winners are swept,
+        // not derived per read (#584 / ADR-0001), so the sweep has to run: whole-session, because
+        // UpdateWinners is the one definition of winning in this class and a scoped copy of that SQL
+        // is precisely how the two would come to disagree.
+        UpdateWinners();
         tx.Commit();
     }
 
@@ -867,6 +877,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
         foreach (var (formKey, recordType, body) in records)
             SeedOneCommittedOnly(key, formKey, recordType, body);
+
+        // The mirror of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
+        // demote whoever was winning it at that ref. Effective is untouched either way.
+        UpdateWinners();
         tx.Commit();
     }
 
@@ -882,12 +896,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // Straight into records_committed with no `records` counterpart — the exact inverse of
         // InsertNewWorkingTreeRow's "records row with no snapshot", and it falls out of records_head's
         // existing definition (the snapshot table UNION the still-clean rows) with no change to that
-        // view: present in its first half, absent from its second. is_winner is stored FALSE and never
-        // read — the view derives its own, per ref.
+        // view: present in its first half, absent from its second.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), FALSE, '{SourceRef.Committed}', $5, $6)
+            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.Committed}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
@@ -942,8 +955,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // row whose identity column disagrees with its own body is a read model contradicting itself
         // — a renamed record would keep listing and resolving under its old EditorID everywhere
         // form_key isn't the lookup key. record_type is deliberately not re-derived: a record cannot
-        // change type, and load_order_idx / is_winner are facts about the plugin and the stack, not
-        // about these bytes.
+        // change type. Load order and winning are not on this row at all any more (#583/#584) — they
+        // are facts about the plugin and the stack, not about these bytes.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             UPDATE raw.records
@@ -967,10 +980,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             formKey, key.Name, key.Origin!);
         if (recordType == null || !RequireSchemas().TryGetValue(recordType, out var schema)) return;
 
-        // form_lookup is *updated*, not delete-then-inserted: its is_winner is swept alongside
-        // `records`' own, and re-inserting would silently reset it to false for every ordinary field
-        // edit — which reads as "this FormKey resolves to nothing" through Resolve's winner filter.
-        // record_type cannot change (a record does not change type), so editor_id is the whole delta.
+        // form_lookup is *updated*, not delete-then-inserted: record_type cannot change (a record
+        // does not change type), so editor_id is the whole delta, and a delete-then-insert would be
+        // two statements doing one statement's work on the hot per-edit path.
         ExecuteFor("""
             UPDATE raw.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
@@ -979,8 +991,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // The row is absent when this record was previously deleted in the working tree and has now
         // come back — the one case where there is nothing to update.
         ExecuteFor($"""
-            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id, is_winner)
-            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id, FALSE
+            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id)
+            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id
             FROM raw.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
               AND NOT EXISTS (
