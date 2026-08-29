@@ -498,7 +498,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         public int CreateCallCount { get; private set; }
         public GameRelease? LastGameRelease { get; private set; }
 
-        public IRecordIndex Create(GameRelease gameRelease)
+        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null)
         {
             CreateCallCount++;
             LastGameRelease = gameRelease;
@@ -512,7 +512,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
     {
         public bool FaultNextCall;
 
-        public IRecordIndex Create(GameRelease gameRelease) => new FaultingSetFilterRepository(inner.Create(gameRelease), this);
+        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
+            new FaultingSetFilterRepository(inner.Create(gameRelease, dataFolderPath), this);
     }
 
     private sealed class FaultingSetFilterRepository(IRecordIndex inner, FaultingSetFilterRepositoryFactory owner)
@@ -540,7 +541,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
     // needed to isolate IndexAndStore's own catch (DisposeCurrentSession) from a later call's cleanup.
     private sealed class FaultingUpdateWinnersRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
     {
-        public IRecordIndex Create(GameRelease gameRelease) => new FaultingUpdateWinnersRepository(inner.Create(gameRelease));
+        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
+            new FaultingUpdateWinnersRepository(inner.Create(gameRelease, dataFolderPath));
     }
 
     private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)

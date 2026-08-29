@@ -48,20 +48,26 @@ public class TableDdlBuilderTests
 
         var cols = GetColumns(conn, "plugins");
         Assert.Contains("plugin", cols);
+        Assert.Contains("origin", cols);
         Assert.Contains("load_order_idx", cols);
-        Assert.Contains("file_mtime", cols);
         Assert.Contains("participates", cols); // #267 / ADR-0035
+        // #585 / ADR-0001: the session, and only the session. Nothing about the file — that is
+        // raw.indexed_files below — and above all no `file_mtime`, the clock-based check the
+        // decision exists to rule out.
+        Assert.Equal(["plugin", "origin", "load_order_idx", "participates"], cols);
     }
 
+    // #585 / ADR-0001: the file-mirror half — what the index believes is on disk, kept apart from
+    // the registration so that unregistering a plugin never throws away the hash that makes
+    // re-registering it cheap.
     [Fact]
-    public void CreateTables_CreatesIndexStateTable()
+    public void CreateTables_CreatesIndexedFilesTable()
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
-        var cols = GetColumns(conn, "index_state");
-        Assert.Contains("load_order_hash", cols);
-        Assert.Contains("indexed_at", cols);
+        var cols = GetColumns(conn, "indexed_files", "raw");
+        Assert.Equal(["plugin", "origin", "file_path", "content_hash", "index_version"], cols);
     }
 
     [Fact]

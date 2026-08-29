@@ -22,7 +22,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     // One registered relation: a raw table carrying a plugin identity, plus which session-derived
     // columns its view rebuilds. `plugins` itself is the registration and stays a plain table in
-    // `main`; `index_state` carries no plugin identity, so neither appears below.
+    // `main`, so it does not appear below. Neither does `raw.indexed_files` (#585), which carries a
+    // plugin identity but must answer for plugins *no* session has registered — it is the mirror of
+    // the disk, and scoping it by registration would blind the open-time validation to exactly the
+    // rows it exists to check.
     private readonly record struct RegisteredRelation(
         string Table, string PluginColumn, string OriginColumn, bool DerivesLoadOrder, bool DerivesWinner);
 
@@ -86,7 +89,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         CreatePluginsTable(connection);
         CreateWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
-        CreateIndexStateTable(connection);
+        CreateIndexedFilesTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
         CreatePlacementTables(connection);
@@ -325,28 +328,51 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // #271 / ADR-0036: `origin` (the mod folder that provided this physical file, or a reserved
     // PluginOrigin value) is part of this table's identity alongside `plugin` — two plugins sharing
     // a filename but differing in origin are distinct rows, not a collision.
+    //
+    // #585 / ADR-0001: this table is *the session*, and nothing else. It holds no fact about the
+    // file a plugin's rows came from — that is `raw.indexed_files` below, which outlives every
+    // session the file has ever held. Six columns went with that split, and none of them lost a
+    // consumer in the process because none of them ever had one: `is_master`, `is_light`,
+    // `is_writable`, `masters` and `record_count` were declared in #267 and never written (session
+    // metadata is answered from GameSession's own PluginMetadata), and `file_mtime` was the
+    // clock-based validity check ADR-0001 exists to rule out — "never `mtime`, the trap the 2026-05
+    // cache fell into". The `index_state` table (`indexed_at`, `load_order_hash`) went the same way,
+    // wholly unwritten; the version key it might plausibly have carried lives per-row on
+    // `indexed_files`, where a mismatch can name the rows it invalidates.
     private static void CreatePluginsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
             CREATE TABLE IF NOT EXISTS plugins (
                 plugin VARCHAR NOT NULL,
                 origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 load_order_idx INTEGER NOT NULL,
-                is_master BOOLEAN NOT NULL DEFAULT FALSE,
-                is_light BOOLEAN NOT NULL DEFAULT FALSE,
-                is_writable BOOLEAN NOT NULL DEFAULT FALSE,
-                masters VARCHAR[],
-                record_count INTEGER,
-                file_mtime TIMESTAMP,
                 participates BOOLEAN NOT NULL DEFAULT TRUE,
                 PRIMARY KEY (plugin, origin)
             )
             """);
 
-    private static void CreateIndexStateTable(DuckDBConnection connection) =>
-        Execute(connection, """
-            CREATE TABLE IF NOT EXISTS index_state (
-                indexed_at TIMESTAMP,
-                load_order_hash VARCHAR
+    /// <summary>
+    /// #585 / ADR-0001: what the index believes is on disk — one row per plugin whose rows the file
+    /// holds, naming the physical file they were built from, that file's content hash, and the
+    /// <see cref="IndexVersion"/> they were written under. This is the file-mirror half of the
+    /// decision, and it is a separate table from <c>plugins</c> on purpose: <c>plugins</c> is the
+    /// session, so its rows come and go with every load, unload, enable and reorder, while these
+    /// rows change only when a <i>file</i> does. Storing the hash on the registration row instead
+    /// would throw it away at the first unregister — which is exactly a profile switch, the case
+    /// ADR-0001 exists to make cheap.
+    ///
+    /// <para>Written and deleted only by <c>DuckDbRecordIndex.Index</c>/<c>Unindex</c>, in the same
+    /// transaction as the record rows they describe, so "the index holds current rows for this
+    /// plugin" is one row's existence rather than a claim assembled from several tables.</para>
+    /// </summary>
+    internal static void CreateIndexedFilesTable(DuckDBConnection connection) =>
+        Execute(connection, $"""
+            CREATE TABLE IF NOT EXISTS {RawSchema}.indexed_files (
+                plugin        VARCHAR NOT NULL,
+                origin        VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
+                file_path     VARCHAR NOT NULL,
+                content_hash  VARCHAR NOT NULL,
+                index_version VARCHAR NOT NULL,
+                PRIMARY KEY (plugin, origin)
             )
             """);
 

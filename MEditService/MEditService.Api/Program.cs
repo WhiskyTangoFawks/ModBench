@@ -61,7 +61,14 @@ try
     builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
     builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
-    builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
+    // #585 / ADR-0001: the index is a persistent file per game Data install, under the same local
+    // app data root the logs already use. Registered by hand rather than by type so the root is
+    // stated here, in the composition root, and not read from the environment by Core.
+    builder.Services.AddSingleton<IRecordIndexFactory>(sp => new DuckDbRecordIndexFactory(
+        sp.GetRequiredService<ISchemaReflector>(),
+        sp.GetRequiredService<ITableDdlBuilder>(),
+        sp.GetService<ILogger<DuckDbRecordIndexFactory>>(),
+        IndexFile.DefaultRoot));
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();

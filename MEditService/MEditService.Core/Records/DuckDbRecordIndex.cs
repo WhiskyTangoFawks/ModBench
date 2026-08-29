@@ -2,6 +2,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
@@ -44,18 +45,71 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // dependency it has no say in.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    public DuckDBConnection Connection { get; }
+    /// <summary>#585: the file-mirror table, named once so the writes, the open-time validation
+    /// and the version check cannot drift onto different spellings of it.</summary>
+    private const string IndexedFilesRelation = "raw.indexed_files";
+
+    public DuckDBConnection Connection { get; private set; }
+
+    // #585 / ADR-0001: where this index lives, or null for an index with no home on disk — the
+    // in-memory shape every construction site had before this ticket, kept because it is a real
+    // mode (a caller with no game install to key a file by) and because the suite's several hundred
+    // index fixtures have no business writing to the user's local app data.
+    private readonly string? _databasePath;
+
+    // The version the rows in this file were written under (IndexVersion), resolved at Initialize
+    // once the game release is known.
+    private string? _indexVersion;
 
     public DuckDbRecordIndex(
         ISchemaReflector schemaReflector,
         ITableDdlBuilder ddlBuilder,
-        ILogger logger)
+        ILogger logger,
+        string? databasePath = null)
     {
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
         _logger = logger;
-        Connection = new DuckDBConnection("DataSource=:memory:");
-        Connection.Open();
+        _databasePath = databasePath;
+        Connection = Open();
+    }
+
+    /// <summary>
+    /// Opens the index, rebuilding it from scratch if the file cannot be opened at all — a DuckDB
+    /// storage-format change on upgrade, or a truncated/corrupt file (ADR-0001 point 6). The index
+    /// is derived state and losing it costs one cold load, which is what a load costs today anyway,
+    /// so a rebuild is strictly better than refusing to start.
+    /// </summary>
+    private DuckDBConnection Open()
+    {
+        if (_databasePath == null)
+        {
+            var memory = new DuckDBConnection("DataSource=:memory:");
+            memory.Open();
+            return memory;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)!);
+        try
+        {
+            return OpenFile();
+        }
+        catch (Exception ex)
+        {
+            // Deliberately every exception rather than DuckDBException alone: what a file DuckDB
+            // cannot make sense of throws is its own business and has changed between versions, and
+            // the answer here — throw the file away and start again — is the same for all of them.
+            _logger.LogWarning(ex, "Could not open the index at {Path}; rebuilding it from scratch", _databasePath);
+            File.Delete(_databasePath);
+            return OpenFile();
+        }
+    }
+
+    private DuckDBConnection OpenFile()
+    {
+        var connection = new DuckDBConnection($"DataSource={_databasePath}");
+        connection.Open();
+        return connection;
     }
 
     // Retained for the reconstitution path (#413 D1): reading a record back out of its document
@@ -65,16 +119,181 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     public void Initialize(GameRelease release)
     {
+        _indexVersion = IndexVersion.For(_schemaReflector, release);
+        // Before the DDL, not after: `CREATE TABLE IF NOT EXISTS` leaves an existing file's old
+        // column lists exactly as they are, so a file written under a different shape has to be
+        // thrown away *before* this process starts appending to tables it only half recognizes.
+        DiscardFileWrittenUnderAnotherVersion();
+
         _ddlBuilder.CreateTables(Connection, release);
         _schemas = _schemaReflector.GetSchemas(release);
         _conditionCodec = ConditionCodecRegistry.For(release.ToCategory());
         _release = release;
+
+        ValidateAgainstDisk();
+    }
+
+    /// <summary>
+    /// #585 / ADR-0001: a codec or schema version change invalidates the <b>whole</b> file. There is
+    /// no partial answer — the stored documents are the codec's output and the generated views are
+    /// the reflector's, so a file written under another version describes a read model this process
+    /// does not have — and no in-place migration either, which is what "rebuilt from scratch" means:
+    /// the file is deleted and reopened empty, costing exactly one cold load.
+    /// </summary>
+    private void DiscardFileWrittenUnderAnotherVersion()
+    {
+        if (_databasePath == null) return;
+
+        List<string> versions;
+        try
+        {
+            versions = [];
+            using var cmd = Connection.CreateCommand();
+            cmd.CommandText = $"SELECT DISTINCT index_version FROM {IndexedFilesRelation}";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) versions.Add(reader.GetString(0));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // A file with no such table is the ordinary first-open case, not a fault: nothing was
+            // written under any version, so nothing needs discarding. Anything else that makes the
+            // question unanswerable is a file this process cannot reason about either way, and the
+            // safe reading of an unreadable mirror is that it is stale.
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "No readable index version at {Path}; treating the file as empty", _databasePath);
+            }
+            return;
+        }
+
+        if (versions.Count == 0 || versions.All(v => v == _indexVersion)) return;
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "The index at {Path} was written under a different codec/schema version; rebuilding it from scratch",
+                _databasePath);
+        }
+        Connection.Dispose();
+        File.Delete(_databasePath);
+        Connection = OpenFile();
+    }
+
+    /// <summary>
+    /// #585 / ADR-0001: validity is by content, never by clock. Every plugin the file holds rows for
+    /// is checked against the file those rows were built from — gone means <see cref="Unindex"/>,
+    /// different bytes means <see cref="Unindex"/> too, so the next load re-indexes it in place and
+    /// no read can ever answer from rows the disk no longer backs. A hash, never an <c>mtime</c>:
+    /// MO2, xEdit, Steam and the user all write these files and a preserved timestamp is free.
+    ///
+    /// <para>Registrations are cleared first and unconditionally. A <c>plugins</c> row is a claim
+    /// about the <i>current</i> session, and a freshly opened index is in none — the rows left by
+    /// whichever session last wrote this file would otherwise make its whole load order visible to
+    /// reads before this process's load order has registered a single plugin.</para>
+    /// </summary>
+    private void ValidateAgainstDisk()
+    {
+        if (_databasePath == null) return;
+
+        Execute("DELETE FROM plugins");
+
+        var timer = Stopwatch.StartNew();
+        var checkedCount = 0;
+        foreach (var (key, filePath, contentHash) in IndexedFiles())
+        {
+            checkedCount++;
+            if (!File.Exists(filePath))
+            {
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation(
+                        "{Plugin} ({Origin}) is no longer on disk at {Path}; removing its rows",
+                        key.Name, key.Origin, filePath);
+                }
+                Unindex(key);
+                continue;
+            }
+
+            if (FileContentHash(filePath) is not { } observed || observed != contentHash)
+            {
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation(
+                        "{Plugin} ({Origin}) changed on disk since it was indexed; removing its rows so it is re-indexed",
+                        key.Name, key.Origin);
+                }
+                Unindex(key);
+            }
+        }
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Validated {Count} indexed plugin(s) against disk in {ElapsedMs} ms",
+                checkedCount, timer.ElapsedMilliseconds);
+        }
+    }
+
+    private List<(PluginKey Key, string FilePath, string ContentHash)> IndexedFiles()
+    {
+        var rows = new List<(PluginKey Key, string FilePath, string ContentHash)>();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {IndexedFilesRelation}";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            rows.Add((new PluginKey(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
+        return rows;
+    }
+
+    /// <summary>The content hash of one plugin file, or <see langword="null"/> when it cannot be
+    /// read at all — a file another process is mid-write on, or one whose permissions changed. Null
+    /// counts as a mismatch at <see cref="ValidateAgainstDisk"/>: an unreadable file is not evidence
+    /// that the rows built from it are still true.</summary>
+    private string? FileContentHash(string filePath)
+    {
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            return Convert.ToHexStringLower(SHA256.HashData(stream));
+        }
+        catch (IOException ex)
+        {
+            _logger.LogWarning(ex, "Could not hash {Path} to validate the index against it", filePath);
+            return null;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning(ex, "Could not hash {Path} to validate the index against it", filePath);
+            return null;
+        }
     }
 
     // --- Indexing (absorbed from RecordIndexer) ---
 
-    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
-        Index(plugin, loadOrderIndex, participates, key.Origin!);
+    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null) =>
+        Index(plugin, loadOrderIndex, participates, key.Origin!, filePath);
+
+    /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
+    public string? IndexedContentHash(PluginKey key) =>
+        ScalarString(
+            $"SELECT content_hash FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2",
+            key.Name, key.Origin!);
+
+    // #585 / ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
+    // were written in. Inside Index()'s own transaction, so a re-index that throws partway leaves
+    // neither the rows nor the claim about them behind. A caller that names no file (an in-memory
+    // mod, which is every fixture in the suite and the New Plugin gesture's freshly written one
+    // before it has a stamp worth taking) writes no row: the index then holds those rows without
+    // claiming any disk file backs them, which is exactly true, and the next load re-indexes.
+    private void StampIndexedFile(string plugin, string origin, string? filePath)
+    {
+        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        if (filePath == null || FileContentHash(filePath) is not { } contentHash) return;
+
+        ExecuteFor($"""
+            INSERT INTO {IndexedFilesRelation} (plugin, origin, file_path, content_hash, index_version)
+            VALUES ($1, $2, $3, $4, $5)
+            """, plugin, origin, Path.GetFullPath(filePath), contentHash, _indexVersion!);
+    }
 
     // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
     // PluginOrigin value. Required (#275) — threaded into every per-plugin delete/upsert/append
@@ -82,7 +301,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // plugins sharing a filename but differing in origin no longer collide.
     //
     // #421: private — Index(PluginKey) above is the public seam member and delegates here.
-    private void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
+    private void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin, string? filePath)
     {
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
@@ -99,6 +318,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // #267: one `plugins` row per indexed plugin — UpdateWinners() joins against it so a
         // non-participating plugin's rows never win regardless of load_order_idx.
         UpsertPluginParticipation(plugin, origin, loadOrderIndex, participates);
+        // #585: and the disk claim these rows are about, replaced with them rather than beside them.
+        StampIndexedFile(plugin, origin, filePath);
 
         // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
         // delete does — a re-index replaces its own rows rather than accumulating a second copy.
@@ -268,6 +489,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
         DeleteExistingForOrigin("container_child", plugin, origin);
+        // #585: the file claim goes with the rows it describes — Unindex is the file-gone verb, so
+        // leaving it behind would leave the mirror asserting rows the index no longer holds.
+        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
         DeleteRegistration(plugin, origin);
 
         tx.Commit();

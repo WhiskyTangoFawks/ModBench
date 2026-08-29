@@ -44,8 +44,9 @@ index itself outliving the process.
    - **A session changes** — a plugin is loaded, unloaded, enabled, disabled, reordered — and
      only the *registration* changes. The file did not change, so the rows do not.
 
-   The `plugins` table is the session: a row means "this plugin, from this
-   origin, is in the current session, at this `load_order_idx`, participating or not". Loading a
+   The `plugins` table is the session and nothing else: a row means "this plugin, from this
+   origin, is in the current session, at this `load_order_idx`, participating or not" — it carries
+   no fact about the file the rows came from, which is point 4's `indexed_files`. Loading a
    session registers its plugins; loading, unloading, enabling, disabling and reordering are
    `plugins`-row changes plus the winner sweep. `records` rows for plugins not registered in the
    current session remain in the file and **are invisible to every read** — the read seam and
@@ -84,11 +85,19 @@ index itself outliving the process.
    more — per-plugin winner counts, contested-FormKey sets — it is added as further derived
    structure over the raw data, never as columns on it.
 
-4. **Validity is by content, never by clock, and it is checked at every door.** `plugins` records
-   the content hash of the file each plugin's rows were built from, plus the codec+schema
-   version. At session load every registered plugin's file is hashed (a few seconds for 2.3 GB —
-   never `mtime`, the trap the 2026-05 cache fell into) and any mismatch re-indexes that plugin
-   in place; a codec or reflector version change invalidates the whole file. At runtime,
+4. **Validity is by content, never by clock, and it is checked at every door.** An `indexed_files`
+   row records, per plugin, the file its rows were built from, that file's content hash, and the
+   codec+schema version they were written under. That is a **separate table from `plugins`**, and
+   deliberately so: `plugins` is the session, so its rows come and go with every load, unload,
+   enable and reorder, while these change only when a *file* does. Putting the hash on the
+   registration row would throw it away at the first unregister — which is exactly a profile
+   switch, the case this decision exists to make cheap. The index is opened, then validated: every
+   file it holds rows for is hashed (a few seconds for 2.3 GB — never `mtime`, the trap the 2026-05
+   cache fell into), a mismatch or a missing file `Unindex`es that plugin so the load re-indexes it
+   in place, and a codec or reflector version change invalidates the whole file. Registrations are
+   cleared at the same moment and unconditionally: a freshly opened index is in no session, and the
+   rows the last one left would otherwise make its load order visible before this process has
+   registered a plugin. At runtime,
    `ExternalChangeWatcher` (#417) is extended from tracked binaries to every indexed binary, the
    game's `Data/` included: a debounced change re-hashes and re-indexes through `ReindexPlugin`.
    This is root CLAUDE.md's never-assume-exclusive-ownership rule applied to the index: MO2,
