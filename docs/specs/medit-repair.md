@@ -1,6 +1,6 @@
 # Repair — Surface Specification (malformed-plugin repair)
 
-**Status: Specced — not built.** Grilled to closure 2026-08-27; decision recorded in [ADR-0043](../adr/0043-malformed-plugins-are-repaired-by-a-byte-level-table-driven-engine.md). Depends on the diagnosis floor (#519). Upstream context
+**Status: Specced — not built.** Grilled to closure 2026-08-27; decision recorded in [ADR-0043](../adr/0043-malformed-plugins-are-repaired-by-a-byte-level-table-driven-engine.md). Depends on the diagnosis floor — split at #519's own plan-gate (2026-08-29, past the orchestrator's slice ceiling) into #519 (the `PluginDiagnosis` core and Kind A tail), #569 (the Kind B per-class detector tables), and #570 (the Problems-panel/session-load surface, blocked on #569); every "#519" below means this ticket family unless a specific one is named. Upstream context
 and the Kind A / Kind B split: #516. Survey evidence: #513 (684-plugin LitR survey,
 2026-08-27); harness `MEditService.Tests/RealData/RoundTripSurvey.cs`.
 
@@ -42,7 +42,7 @@ Two surfaces, one engine:
    ~1 ms/plugin, so they also run at **session load** and publish Problems-panel entries —
    a silently-lossy plugin (R1, R2) parses cleanly and would otherwise look healthy until
    Track. Kind A detectors need Mutagen to throw and run only on failure. This spec assumes
-   #519 owns both the detection and the Problems-panel surface.
+   the floor owns both the detection (#569) and the Problems-panel surface (#570).
 2. **Repair** — an explicit gesture on a plugin that has at least one *repairable*
    diagnosis. Shows exactly what it will change, at subrecord granularity, and writes a new
    plugin binary only on confirmation. Never invoked by Track, Compile, or any load path.
@@ -73,7 +73,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
 ### Diagnosis (floor — #519, restated here only where Repair reads it)
 
 - **Where**: the refusal message of Track / Save & Compile (existing path), and the
-  Problems panel at session load for every plugin carrying a Kind B diagnosis (#519).
+  Problems panel at session load for every plugin carrying a Kind B diagnosis (#570).
   There is no separate "Diagnose" command — the Problems entries are the diagnosis and
   Repair's QuickPick is the detailed view.
 - **Shape**: `<Type> <FormKey> (<EditorID>) — <subrecord>: <defect class>; observed …;
@@ -182,7 +182,7 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
    write; the engine re-reads and re-diagnoses at write time and refuses if the bytes moved.
 9. **Kind A is untouchable.** A defect classed *Blocked upstream* is never offered an
    operation, regardless of how trivial the byte fix looks.
-10. **Cost.** Kind B detection is the ~1 ms/plugin byte walk at session load (#519); Kind A
+10. **Cost.** Kind B detection is the ~1 ms/plugin byte walk at session load (#569/#570); Kind A
     detection runs only after a failure. Repair's own cost is one walk + one write; no index
     rebuild unless the plugin is in the session, in which case the standing external-change
     path handles reload.
@@ -200,7 +200,7 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
   over the same module and is not part of this spec.
 - **Engine origin**: the `RoundTripSurvey` walker (`Walk`, `Subrecords`, `Inflate`) is the
   reference implementation, promoted to Core once for #514, #519 and this — one walker.
-- **Detectors are the diagnosis's** (#519); Repair adds only the operation column. The table
+- **Detectors are the diagnosis's** (#569); Repair adds only the operation column. The table
   is data (a static registry in Core, per game release), not configuration.
 - **Compressed records**: inflate, operate, deflate with Mutagen's own level so the bytes
   match what Compile would later write; the size fields cascade (record → GRUPs) exactly as
@@ -234,8 +234,8 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
 - Lossy consent is the unchecked QuickPick item plus the modal naming the byte total — no
   per-record prompt.
 - Backup is the standing ADR-0008 `.bak`; no repair-specific file.
-- Kind B detection runs at session load and publishes to the Problems panel; that surface and
-  the detectors are #519's. No standalone Diagnose command.
+- Kind B detection runs at session load and publishes to the Problems panel; the detectors
+  are #569's, that surface is #570's. No standalone Diagnose command.
 - Vocabulary landed in `CONTEXT.md`; #381 renamed *Crash recovery* in the glossary and the
   version-control spec (code keeps "crash repair").
 - After a repair the endpoint reloads the plugin in the session and republishes its Problems
