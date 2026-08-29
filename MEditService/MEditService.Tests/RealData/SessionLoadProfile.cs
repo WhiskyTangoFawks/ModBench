@@ -135,7 +135,7 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
 
     private sealed class PluginCost
     {
-        public long ImportMs, MetadataMs, IndexMs, DocumentsMs, RefsMs, ExtractedMs, CommitMs, DeserializeMs, ReconcileMs;
+        public long ImportMs, MetadataMs, IndexMs, DocumentsMs, PrepareMs, AppendMs, ExtractedMs, CommitMs, DeserializeMs, ReconcileMs;
         public bool FromSource;
         public long OpenMs => ImportMs + MetadataMs;
         public long TotalMs => OpenMs + IndexMs;
@@ -143,7 +143,7 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
 
     private static readonly Regex Opened = new(@"^\[\d+\] (?<p>.+?) opened in (?<i>\d+) ms \+ (?<m>\d+) ms metadata$");
     private static readonly Regex Indexed = new(@"^Indexed (?<p>.+?) in (?<ms>\d+) ms$");
-    private static readonly Regex IndexPhases = new(@"^Index (?<p>.+?): documents (?<d>\d+) ms, vmad/condition refs (?<r>\d+) ms, extracted tables (?<e>\d+) ms, commit (?<c>\d+) ms$");
+    private static readonly Regex IndexPhases = new(@"^Index (?<p>.+?): documents (?<d>\d+) ms \(prepare (?<pr>\d+) ms, append (?<ap>\d+) ms\), extracted tables (?<e>\d+) ms, commit (?<c>\d+) ms$");
     private static readonly Regex Ingested = new(@"^Ingested (?<p>.+?) from source: deserialize (?<d>\d+) ms, index \d+ ms, reconcile (?<r>\d+) ms$");
     private static readonly Regex RepoInit = new(@"^DuckDB record repository initialized in (?<ms>\d+) ms$");
     private static readonly Regex Loaded = new(@"^Session fully loaded in (?<t>\d+) ms \(first plugin usable after (?<f>\S+) ms, winner sweep (?<w>\d+) ms\)$");
@@ -162,7 +162,7 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
             Match m;
             if ((m = Opened.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.ImportMs = L(m, "i"); c.MetadataMs = L(m, "m"); }
             else if ((m = Indexed.Match(e.Message)).Success) Cost(m.Groups["p"].Value).IndexMs = L(m, "ms");
-            else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = L(m, "d"); c.RefsMs = L(m, "r"); c.ExtractedMs = L(m, "e"); c.CommitMs = L(m, "c"); }
+            else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = L(m, "d"); c.PrepareMs = L(m, "pr"); c.AppendMs = L(m, "ap"); c.ExtractedMs = L(m, "e"); c.CommitMs = L(m, "c"); }
             else if ((m = Ingested.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.FromSource = true; c.DeserializeMs = L(m, "d"); c.ReconcileMs = L(m, "r"); }
             else if ((m = RepoInit.Match(e.Message)).Success) repoInitMs = L(m, "ms");
             else if ((m = Loaded.Match(e.Message)).Success) { loadedMs = L(m, "t"); winnersMs = L(m, "w"); firstUsable = m.Groups["f"].Value; }
@@ -184,7 +184,7 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
         sb.AppendLine("|---|---:|---:|");
         long openImport = costs.Values.Sum(c => c.ImportMs), openMeta = costs.Values.Sum(c => c.MetadataMs);
         long index = costs.Values.Sum(c => c.IndexMs), docs = costs.Values.Sum(c => c.DocumentsMs);
-        long refs = costs.Values.Sum(c => c.RefsMs), extracted = costs.Values.Sum(c => c.ExtractedMs), commit = costs.Values.Sum(c => c.CommitMs);
+        long extracted = costs.Values.Sum(c => c.ExtractedMs), commit = costs.Values.Sum(c => c.CommitMs);
         long deser = costs.Values.Sum(c => c.DeserializeMs), reconcile = costs.Values.Sum(c => c.ReconcileMs);
         void Row(string name, long ms) => sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {ms:N0} | {(wallMs > 0 ? 100.0 * ms / wallMs : 0):F1}% |");
         Row("Wall clock (LoadExplicit round trip)", wallMs);
@@ -192,8 +192,9 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
         Row("Binary open — ModFactory.ImportGetter", openImport);
         Row("Binary open — BuildPluginMetadata (record count)", openMeta);
         Row("Index (all plugins)", index);
-        Row("  ├ documents (enumerate + serialize + hash + append)", docs);
-        Row("  ├ vmad/condition refs", refs);
+        Row("  ├ documents (enumerate + serialize + hash + refs + append)", docs);
+        Row("  │  ├ parallel prepare (serialize, hash, refs, children)", costs.Values.Sum(c => c.PrepareMs));
+        Row("  │  └ sequential append", costs.Values.Sum(c => c.AppendMs));
         Row("  ├ extracted tables (placement, header, lookup/refs/child flush)", extracted);
         Row("  └ commit", commit);
         Row("  tracked-only: source deserialize", deser);
@@ -205,12 +206,12 @@ public sealed class SessionLoadProfile(ITestOutputHelper output)
         sb.AppendLine();
         sb.AppendLine("## Top 20 plugins by cost");
         sb.AppendLine();
-        sb.AppendLine("| Plugin | records | open ms | index ms | documents | refs | extracted | commit | src | total ms | µs/record |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|:-:|---:|---:|");
+        sb.AppendLine("| Plugin | records | open ms | index ms | documents | prepare | append | extracted | commit | src | total ms | µs/record |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|:-:|---:|---:|");
         foreach (var (name, c) in costs.OrderByDescending(kv => kv.Value.TotalMs).Take(20))
         {
             var n = records.GetValueOrDefault(name);
-            sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {n:N0} | {c.OpenMs:N0} | {c.IndexMs:N0} | {c.DocumentsMs:N0} | {c.RefsMs:N0} | {c.ExtractedMs:N0} | {c.CommitMs:N0} | {(c.FromSource ? "src" : "bin")} | {c.TotalMs:N0} | {(n > 0 ? 1000.0 * c.TotalMs / n : 0):F0} |");
+            sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {n:N0} | {c.OpenMs:N0} | {c.IndexMs:N0} | {c.DocumentsMs:N0} | {c.PrepareMs:N0} | {c.AppendMs:N0} | {c.ExtractedMs:N0} | {c.CommitMs:N0} | {(c.FromSource ? "src" : "bin")} | {c.TotalMs:N0} | {(n > 0 ? 1000.0 * c.TotalMs / n : 0):F0} |");
         }
         sb.AppendLine();
         sb.AppendLine("## Cost-per-record outliers (≥ 200 records, top 10 by µs/record)");
