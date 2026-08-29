@@ -137,11 +137,15 @@ public static class PluginBinaryWalk
     /// Walks <paramref name="originalPluginBytes"/> and <paramref name="rewrittenPluginBytes"/> in
     /// parallel (mirroring <c>RoundTripSurvey.Classify</c>'s own positional walk) and returns the first
     /// record — in the original's own GRUP order — whose subrecord inventory shows a genuine drop.
-    /// <c>TES4</c> is not special-cased here: a caller whose write pipeline can legitimately add or prune
-    /// a header subrecord (e.g. re-deriving the master list) must exclude it itself, the way
-    /// <see cref="TrackService.VerifyRoundTrip"/>'s own <c>WithLoadOrderFromHeaderMasters</c> write option
-    /// keeps the header's master list — and therefore its subrecord counts — identical to the original by
-    /// construction, needing no such exclusion.
+    /// <c>TES4</c>'s own <c>MAST</c>/<c>DATA</c> pair is the one exemption (#563): every write in this
+    /// codebase re-derives the header's master list from live content, unconditionally — ADR-0038,
+    /// Mutagen's default <c>MastersListContentOption.Iterate</c> (see <c>PluginWriter</c>'s own comment
+    /// on that same default). <c>WithLoadOrderFromHeaderMasters</c> only fixes the *order* masters are
+    /// written in, not whether an unreferenced one survives — it does not, contrary to what this comment
+    /// used to claim, keep the header's master list identical to the original by construction. A
+    /// MAST/DATA count decrease on the header record is therefore that sanctioned pruning, not a
+    /// parse-time loss, and is excluded from this check's verdict. Nothing else about TES4 is exempted:
+    /// a genuine drop of any other header subrecord still reports.
     ///
     /// <para>Returns <see langword="null"/> both when nothing was dropped and when the two plugins'
     /// records structurally diverge (different type/FormID at the same position, or a compression-flag
@@ -184,6 +188,8 @@ public static class PluginBinaryWalk
             }
 
             var dropped = DroppedSignatures(originalData, rewrittenData);
+            if (original.Type == "TES4")
+                dropped = dropped.Where(sig => sig is not ("MAST" or "DATA")).ToList();
             if (dropped.Count > 0)
                 return new SubrecordLoss(original.Type, original.FormId, dropped);
         }

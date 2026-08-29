@@ -196,6 +196,52 @@ public sealed class PluginBinaryWalkTests
         Assert.Null(loss);
     }
 
+    /// <summary>#563: a TES4 MAST/DATA decrease is ADR-0038's sanctioned master-list pruning (every
+    /// write in this codebase re-derives the header's masters from live content, unconditionally),
+    /// not a parse-time loss — must not trip this check. Verified failing against the pre-#563 rival
+    /// (no TES4 exemption at all): reverting the <c>original.Type == "TES4"</c> filter in
+    /// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/> and rerunning this exact test produced
+    /// <c>Assert.Null() Failure: Value of type 'Nullable&lt;SubrecordLoss&gt;' has a value\nExpected:
+    /// null\nActual: SubrecordLoss { RecordType = TES4, FormId = 0, Signatures = ... }</c> — the
+    /// false-positive #563 exists to fix. Reverted; the shipped implementation (this test asserts)
+    /// reports nothing for a TES4-only MAST/DATA drop.</summary>
+    [Fact]
+    public void FindFirstSubrecordLoss_ATes4MastAndDataDropOnly_IsNotReported()
+    {
+        var originalHeader = BuildRecordHeader("TES4", 0, flags: 0,
+            subrecordBytes: Concat(Sub("HEDR", [1, 2, 3, 4]), Sub("MAST", "Fallout4.esm\0"u8.ToArray()), Sub("DATA", new byte[8])));
+        var rewrittenHeader = BuildRecordHeader("TES4", 0, flags: 0,
+            subrecordBytes: Concat(Sub("HEDR", [1, 2, 3, 4])));
+
+        var loss = PluginBinaryWalk.FindFirstSubrecordLoss(Concat(originalHeader), Concat(rewrittenHeader));
+
+        Assert.Null(loss);
+    }
+
+    /// <summary>Guard test: a plausible over-broad fix for #563 exempts the whole TES4 record rather
+    /// than only its MAST/DATA pair, which would hide a genuine drop of anything else the header
+    /// carries. Verified failing against that rival — skipping the entire TES4 record outright
+    /// (<c>if (original.Type == "TES4") continue;</c> in <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>'s
+    /// loop, in place of the signature-scoped filter) — and rerunning this exact test produced
+    /// <c>Assert.NotNull() Failure: Value of type 'Nullable&lt;SubrecordLoss&gt;' does not have a
+    /// value</c> (nothing found — the whole record, MAST/DATA and SNAM alike, was skipped). Reverted;
+    /// the shipped, signature-scoped implementation (this test asserts) still reports a non-master
+    /// drop.</summary>
+    [Fact]
+    public void FindFirstSubrecordLoss_ATes4NonMasterSubrecordDrop_IsStillReported()
+    {
+        var originalHeader = BuildRecordHeader("TES4", 0, flags: 0,
+            subrecordBytes: Concat(Sub("HEDR", [1, 2, 3, 4]), Sub("MAST", "Fallout4.esm\0"u8.ToArray()), Sub("DATA", new byte[8]), Sub("SNAM", "desc"u8.ToArray())));
+        var rewrittenHeader = BuildRecordHeader("TES4", 0, flags: 0,
+            subrecordBytes: Concat(Sub("HEDR", [1, 2, 3, 4]), Sub("MAST", "Fallout4.esm\0"u8.ToArray()), Sub("DATA", new byte[8])));
+
+        var loss = PluginBinaryWalk.FindFirstSubrecordLoss(Concat(originalHeader), Concat(rewrittenHeader));
+
+        Assert.NotNull(loss);
+        Assert.Equal("TES4", loss!.Value.RecordType);
+        Assert.Equal(["SNAM"], loss.Value.Signatures);
+    }
+
     // ---- byte builders --------------------------------------------------------------------
 
     private static byte[] BuildGrupHeader(string label, int groupSize)
