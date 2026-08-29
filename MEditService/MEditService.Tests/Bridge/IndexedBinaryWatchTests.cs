@@ -40,7 +40,7 @@ public sealed class IndexedBinaryWatchTests
     {
         var events = new List<IndexedBinaryEvent>();
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        watcher.IndexedBinaryChanged += e => { lock (events) events.Add(e); };
+        watcher.IndexedBinaryChanged = e => { lock (events) events.Add(e); return true; };
         watcher.WatchIndexed(Plugin, Origin, fixture.PluginPath, fixture.ContentHash);
         return (watcher, events);
     }
@@ -146,6 +146,45 @@ public sealed class IndexedBinaryWatchTests
                 Assert.Equal(2, events.Count);
                 Assert.Equal(IndexedBinaryChange.Deleted, events[0].Change);
                 Assert.Equal(IndexedBinaryChange.Modified, events[1].Change);
+            }
+        }
+        finally
+        {
+            Directory.Delete(fixture.Folder, recursive: true);
+        }
+    }
+
+    // A change the handler could not apply must not leave the watcher believing the index matches
+    // bytes it never read: the remembered hash goes back, and the next settle reports it again. An
+    // unretried failure would be stale rows nothing on disk backs, silently, until the next load.
+    [Fact]
+    public void AChangeTheHandlerCouldNotApply_IsReportedAgainOnTheNextSettle()
+    {
+        var fixture = NewIndexedBinary("original"u8.ToArray());
+        try
+        {
+            var events = new List<IndexedBinaryEvent>();
+            using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
+            watcher.IndexedBinaryChanged = e =>
+            {
+                lock (events) events.Add(e);
+                return false; // the session was torn down, the file was still held, …
+            };
+            watcher.WatchIndexed(Plugin, Origin, fixture.PluginPath, fixture.ContentHash);
+
+            File.WriteAllBytes(fixture.PluginPath, "changed-by-xedit"u8.ToArray());
+            WaitUntil(() => Count(events) > 0, TimeSpan.FromSeconds(3));
+
+            // The *same* bytes settle again. Had the failed report advanced the remembered hash,
+            // this would raise nothing at all and the index would stay stale.
+            File.SetLastWriteTimeUtc(fixture.PluginPath, DateTime.UtcNow.AddSeconds(5));
+            File.AppendAllText(fixture.PluginPath, "");
+            WaitUntil(() => Count(events) > 1, TimeSpan.FromSeconds(3));
+
+            lock (events)
+            {
+                Assert.True(events.Count >= 2, $"expected the change to be reported again, saw {events.Count}");
+                Assert.All(events, e => Assert.Equal(IndexedBinaryChange.Modified, e.Change));
             }
         }
         finally

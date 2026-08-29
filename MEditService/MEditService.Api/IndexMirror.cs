@@ -17,15 +17,17 @@ namespace MEditService.Api;
 /// (<c>BridgeKnowsNothingOfSessionsTests</c>), so it reports what happened to a file and stops
 /// there.</para>
 ///
-/// <para><b>Nothing escapes <see cref="Apply"/>.</b> It runs on a <see cref="System.Timers.Timer"/>
-/// callback thread with no caller to catch anything, where an escaping exception is a process
-/// crash rather than a failed request — and every failure mode here is ordinary rather than
-/// exceptional: the session torn down between the settle and this call, a plugin no longer held, a
-/// file another tool is still writing.</para>
+/// <para><b>Nothing escapes <see cref="Apply"/>, and it says whether it worked.</b> It runs on a
+/// <see cref="System.Timers.Timer"/> callback thread with no caller to catch anything, where an
+/// escaping exception is a process crash rather than a failed request — and every failure mode here
+/// is ordinary rather than exceptional: the session torn down between the settle and this call, a
+/// plugin no longer held, a file another tool is still writing. Answering <see langword="false"/>
+/// rather than merely logging is what keeps the watcher from concluding the index now matches bytes
+/// it never managed to read (see <see cref="ExternalChangeWatcher.IndexedBinaryChanged"/>).</para>
 /// </summary>
 internal sealed class IndexMirror(ISessionManager sessions, ILogger logger)
 {
-    internal void Apply(IndexedBinaryEvent change)
+    internal bool Apply(IndexedBinaryEvent change)
     {
         var key = new PluginKey(change.PluginName, change.Origin);
         try
@@ -45,12 +47,16 @@ internal sealed class IndexMirror(ISessionManager sessions, ILogger logger)
                     sessions.UnindexPlugin(key);
                     break;
             }
+
+            return true;
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex,
-                "Could not mirror the on-disk change to {Plugin} ({Origin}) into the index",
+                "Could not mirror the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
+                "the next time that file settles, and re-checked at the next session load",
                 change.PluginName, change.Origin);
+            return false;
         }
     }
 }

@@ -2,7 +2,6 @@ using System.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
@@ -94,16 +93,35 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             return OpenFile();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!IsAnotherWriter(ex))
         {
-            // Deliberately every exception rather than DuckDBException alone: what a file DuckDB
-            // cannot make sense of throws is its own business and has changed between versions, and
-            // the answer here — throw the file away and start again — is the same for all of them.
+            // Deliberately every other exception rather than DuckDBException alone: what a file
+            // DuckDB cannot make sense of throws is its own business and has changed between
+            // versions, and the answer here — throw the file away and start again — is the same for
+            // all of them. The index is derived state; losing it costs one cold load.
             _logger.LogWarning(ex, "Could not open the index at {Path}; rebuilding it from scratch", _databasePath);
             File.Delete(_databasePath);
             return OpenFile();
         }
     }
+
+    /// <summary>
+    /// Whether this open failed because <b>another process already holds the file</b> — a second
+    /// Modbench window on the same game (ADR-0001 point 6), which is a different failure from a
+    /// corrupt one and must never be answered by rebuilding: deleting a file another process has
+    /// open succeeds on POSIX and destroys that window's live index, which is precisely the "silent
+    /// divergence" the decision rejects. Such an open is rethrown instead; turning it into a
+    /// structured <c>SessionLoadResponse</c> failure naming the other window is #588's job, and
+    /// until it lands the honest outcome is a failed load rather than a destroyed index.
+    ///
+    /// <para>Matched on DuckDB's own message because that is the only thing it offers — the lock
+    /// conflict and a corrupt file arrive as the same exception type. Both platforms' wordings share
+    /// DuckDB's own prefix, and an unrecognised wording degrades to the rebuild branch, so this is a
+    /// guard against the known case rather than a claim to have enumerated every one.</para>
+    /// </summary>
+    internal static bool IsAnotherWriter(Exception ex) =>
+        ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
+        || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase);
 
     private DuckDBConnection OpenFile()
     {
@@ -147,6 +165,13 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         List<string> versions;
         try
         {
+            // Asked of the catalog first, so that "this file has never been written to" — the
+            // ordinary first open, where the table simply does not exist yet — is an answer rather
+            // than an exception. That separation is what lets the catch below mean something: past
+            // this point, a file that cannot answer is a file this process cannot reason about, and
+            // the safe reading of an unreadable mirror is that it is stale.
+            if (!IndexedFilesTableExists()) return;
+
             versions = [];
             using var cmd = Connection.CreateCommand();
             cmd.CommandText = $"SELECT DISTINCT index_version FROM {IndexedFilesRelation}";
@@ -155,14 +180,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // A file with no such table is the ordinary first-open case, not a fault: nothing was
-            // written under any version, so nothing needs discarding. Anything else that makes the
-            // question unanswerable is a file this process cannot reason about either way, and the
-            // safe reading of an unreadable mirror is that it is stale.
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug(ex, "No readable index version at {Path}; treating the file as empty", _databasePath);
-            }
+            _logger.LogWarning(ex,
+                "Could not read the index version at {Path}; rebuilding it from scratch", _databasePath);
+            RebuildFile();
             return;
         }
 
@@ -174,8 +194,24 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 "The index at {Path} was written under a different codec/schema version; rebuilding it from scratch",
                 _databasePath);
         }
+        RebuildFile();
+    }
+
+    private bool IndexedFilesTableExists()
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'raw' AND table_name = 'indexed_files'";
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+    }
+
+    /// <summary>Throws the file away and opens an empty one in its place. Only reachable once the
+    /// file has already been opened successfully, so it can never race the second-writer case
+    /// <see cref="IsAnotherWriter"/> guards.</summary>
+    private void RebuildFile()
+    {
         Connection.Dispose();
-        File.Delete(_databasePath);
+        File.Delete(_databasePath!);
         Connection = OpenFile();
     }
 
@@ -247,24 +283,17 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>The content hash of one plugin file, or <see langword="null"/> when it cannot be
     /// read at all — a file another process is mid-write on, or one whose permissions changed. Null
     /// counts as a mismatch at <see cref="ValidateAgainstDisk"/>: an unreadable file is not evidence
-    /// that the rows built from it are still true.</summary>
+    /// that the rows built from it are still true. Shared with the runtime mirror
+    /// (<see cref="PluginBinaryHash"/>), which has to produce the identical string for the identical
+    /// bytes or a real change would read as a touch.</summary>
     private string? FileContentHash(string filePath)
     {
-        try
+        var hash = PluginBinaryHash.OfFile(filePath);
+        if (hash == null && _logger.IsEnabled(LogLevel.Warning))
         {
-            using var stream = File.OpenRead(filePath);
-            return Convert.ToHexStringLower(SHA256.HashData(stream));
+            _logger.LogWarning("Could not read {Path} to hash it; treating the index's rows for it as stale", filePath);
         }
-        catch (IOException ex)
-        {
-            _logger.LogWarning(ex, "Could not hash {Path} to validate the index against it", filePath);
-            return null;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogWarning(ex, "Could not hash {Path} to validate the index against it", filePath);
-            return null;
-        }
+        return hash;
     }
 
     // --- Indexing (absorbed from RecordIndexer) ---
@@ -286,7 +315,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // claiming any disk file backs them, which is exactly true, and the next load re-indexes.
     private void StampIndexedFile(string plugin, string origin, string? filePath)
     {
-        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DeleteIndexedFile(plugin, origin);
         if (filePath == null || FileContentHash(filePath) is not { } contentHash) return;
 
         ExecuteFor($"""
@@ -491,7 +520,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("container_child", plugin, origin);
         // #585: the file claim goes with the rows it describes — Unindex is the file-gone verb, so
         // leaving it behind would leave the mirror asserting rows the index no longer holds.
-        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        DeleteIndexedFile(plugin, origin);
         DeleteRegistration(plugin, origin);
 
         tx.Commit();
@@ -1010,6 +1039,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord below reads this row
         // back out of `records`, which is why the insert above must land first.
     }
+
+    private void DeleteIndexedFile(string plugin, string origin) =>
+        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
 
     private bool IsRegisteredPlugin(PluginKey key) =>
         ScalarString("SELECT plugin FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!) != null;

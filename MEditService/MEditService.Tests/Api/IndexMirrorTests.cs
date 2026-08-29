@@ -32,7 +32,7 @@ public sealed class IndexMirrorTests
     {
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
         var mirror = new IndexMirror(fixture.Sessions, NullLogger.Instance);
-        watcher.IndexedBinaryChanged += mirror.Apply;
+        watcher.IndexedBinaryChanged = mirror.Apply;
         ExternalChangeSessionHook.RunAfterLoad(
             fixture.Sessions.Session, fixture.Sessions.Index, watcher, NullLogger.Instance);
         return watcher;
@@ -92,7 +92,7 @@ public sealed class IndexMirrorTests
         using var fixture = TrackedModFixture.Tracked();
         var mirrored = new List<IndexedBinaryEvent>();
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        watcher.IndexedBinaryChanged += e => { lock (mirrored) mirrored.Add(e); };
+        watcher.IndexedBinaryChanged = e => { lock (mirrored) mirrored.Add(e); return true; };
         ExternalChangeSessionHook.RunAfterLoad(
             fixture.Sessions.Session, fixture.Sessions.Index, watcher, NullLogger.Instance);
 

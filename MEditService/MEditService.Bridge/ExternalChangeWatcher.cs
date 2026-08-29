@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Timers;
 using MEditService.Core.Source;
 using Timer = System.Timers.Timer;
@@ -91,8 +90,17 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// <para>Raised <i>outside</i> this class's lock, on the debounce timer's thread: the handler
     /// re-indexes a whole plugin, and holding the watch lock across that would stall every other
     /// watch's settle behind it.</para>
+    ///
+    /// <para><b>The handler answers whether it applied the change</b>, which is why this is a
+    /// delegate rather than an event. This class remembers what it last told anyone about a file so
+    /// that the several events one write raises report it once; if the handler could not act — the
+    /// session torn down mid-settle, the file still held by the writer — remembering the new bytes
+    /// anyway would leave the index holding rows nothing on disk backs, silently, until the next
+    /// load. So a false answer puts the remembered hash back and the next settle retries. One
+    /// subscriber by construction (the composition root), which is also what makes a return value
+    /// meaningful here.</para>
     /// </summary>
-    public event Action<IndexedBinaryEvent>? IndexedBinaryChanged;
+    public Func<IndexedBinaryEvent, bool>? IndexedBinaryChanged { get; set; }
 
     /// <summary>
     /// #587 / ADR-0001: starts mirroring one <b>indexed</b> binary — the game's <c>Data/</c>
@@ -219,47 +227,67 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// <summary>
     /// #587: what a mirror watch does when the writes stop — re-hash, and say what actually
     /// happened. Identical bytes raise nothing, which is what keeps a <c>touch</c>, a mod manager's
-    /// re-link or a rewrite of the same content from costing a re-index; and the remembered hash is
-    /// advanced here rather than after the re-index lands, so the several events one write raises do
-    /// not report it several times.
+    /// re-link or a rewrite of the same content from costing a re-index.
+    ///
+    /// <para>The remembered hash moves ahead of the handler so that the several events one write
+    /// raises report it once, and is put back if the handler says it could not apply the change —
+    /// see <see cref="IndexedBinaryChanged"/> for why an unretried failure would be worse than a
+    /// duplicate. Put back only if nothing newer has landed meanwhile, so a retry never overwrites a
+    /// later settle's answer with an older one.</para>
     /// </summary>
     private void SettleIndexed(string pluginName, string origin, string pluginPath)
     {
+        var key = MirrorKey(origin, pluginName);
         IndexedBinaryEvent notification;
+        string? previousHash;
+        string? reportedHash;
         lock (_gate)
         {
-            if (!_mirrors.TryGetValue(MirrorKey(origin, pluginName), out var mirror)) return;
+            if (!_mirrors.TryGetValue(key, out var mirror)) return;
+            previousHash = mirror.ContentHash;
 
             if (!File.Exists(pluginPath))
             {
                 // Already reported gone: a delete raises several events and the file stays absent,
                 // so without this every one of them would remove the same rows again.
-                if (mirror.ContentHash == null) return;
-                mirror.ContentHash = null;
+                if (previousHash == null) return;
+                reportedHash = null;
                 notification = new IndexedBinaryEvent(pluginName, origin, pluginPath, IndexedBinaryChange.Deleted);
             }
             else
             {
                 // Unreadable is not "changed": a file another process is still writing says nothing
                 // about whether the indexed rows are stale, and the next event settles it.
-                if (HashOf(pluginPath) is not { } observed || observed == mirror.ContentHash) return;
-                mirror.ContentHash = observed;
+                if (PluginBinaryHash.OfFile(pluginPath) is not { } observed || observed == previousHash) return;
+                reportedHash = observed;
                 notification = new IndexedBinaryEvent(pluginName, origin, pluginPath, IndexedBinaryChange.Modified);
             }
+
+            mirror.ContentHash = reportedHash;
         }
 
-        IndexedBinaryChanged?.Invoke(notification);
-    }
-
-    private static string? HashOf(string pluginPath)
-    {
+        bool applied;
         try
         {
-            using var stream = File.OpenRead(pluginPath);
-            return Convert.ToHexStringLower(SHA256.HashData(stream));
+            // No handler at all means nothing is out of step with this file, so there is nothing to
+            // retry — only a handler that ran and failed leaves the index behind the disk.
+            applied = IndexedBinaryChanged?.Invoke(notification) ?? true;
         }
-        catch (IOException) { return null; }
-        catch (UnauthorizedAccessException) { return null; }
+        catch
+        {
+            // The subscriber is expected to answer rather than throw (see IndexMirror), but this
+            // runs on a timer callback with no caller to catch anything: an escaping exception here
+            // would take the process down over one file event.
+            applied = false;
+        }
+
+        if (applied) return;
+
+        lock (_gate)
+        {
+            if (_mirrors.TryGetValue(key, out var mirror) && mirror.ContentHash == reportedHash)
+                mirror.ContentHash = previousHash;
+        }
     }
 
     private static string Key(string modFolder, string pluginName) =>
@@ -312,8 +340,12 @@ public enum IndexedBinaryChange
 
 /// <summary>#587 / ADR-0001: one indexed binary's disk event, carrying the compound plugin identity
 /// (<c>origin</c> plus filename) the index is keyed by. Deliberately says nothing about sessions,
-/// indexes or DuckDB — this assembly knows none of those (<c>BridgeKnowsNothingOfSessionsTests</c>);
-/// what to do about it is <c>MEditService.Api</c>'s to decide.</summary>
+/// indexes or DuckDB — this assembly knows none of those, and that is enforced rather than agreed:
+/// <c>BridgeKnowsNothingOfSessionsTests</c> fails on any reference from here to the session or
+/// record-index namespaces (by literal text, so do not name them even in a comment). That is exactly
+/// why this carries a bare (name, origin) pair where the rest of the codebase carries a
+/// <c>PluginKey</c> — the type is on the wrong side of the boundary. <c>MEditService.Api</c>
+/// reassembles one; deciding what to do about the event is its job.</summary>
 public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
 
 /// <summary>One plugin's unanswered external-change question, as the watcher (or, once the load-time

@@ -96,7 +96,7 @@ try
     var indexMirror = new IndexMirror(
         app.Services.GetRequiredService<ISessionManager>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
-    app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged += indexMirror.Apply;
+    app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
     // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category

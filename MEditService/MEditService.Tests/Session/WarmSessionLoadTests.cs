@@ -74,8 +74,53 @@ public sealed class WarmSessionLoadTests : IDisposable
         Assert.NotEmpty(warm.Index!.GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
+    // AC4, the "during" half: progress is observed from inside the load loop itself, once per
+    // plugin as it is registered. A load that only published its count at the end would satisfy the
+    // final-state assertion below and still leave a warm launch sitting at zero — which is the exact
+    // thing the ticket says must not happen.
+    [Fact]
+    public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
+    {
+        using var data = new PluginFixtureBuilder("warm-during")
+            .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
+            .Build();
+        using (var cold = MakeManager()) cold.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+        var reflector = SharedSchemaReflector.Instance;
+        var observed = new List<int>();
+        var factory = new ProgressWatchingFactory(
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector), null, _indexRoot), observed);
+        using var warm = new SessionManager(factory);
+        factory.Sessions = warm;
+
+        warm.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+
+        // Each registration saw the plugins that had already landed and no more.
+        Assert.Equal([0, 1, 2], observed);
+    }
+
+    // Every registration is asked, as it happens, how much progress the session was reporting at
+    // that moment.
+    private sealed class ProgressWatchingFactory(IRecordIndexFactory inner, List<int> observed) : IRecordIndexFactory
+    {
+        public SessionManager? Sessions { get; set; }
+
+        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
+            new ProgressWatchingIndex(inner.Create(gameRelease, dataFolderPath), this, observed);
+    }
+
+    private sealed class ProgressWatchingIndex(IRecordIndex inner, ProgressWatchingFactory owner, List<int> observed)
+        : DelegatingRecordIndex(inner)
+    {
+        public override void Register(PluginKey key, int loadOrderIndex, bool participates)
+        {
+            observed.Add(owner.Sessions!.Status.IndexedPlugins.Count);
+            base.Register(key, loadOrderIndex, participates);
+        }
+    }
+
     // AC4. The registered plugins are counted exactly as indexed ones are, so a warm launch's
-    // progress advances per plugin instead of sitting at zero until the sweep.
+    // progress reaches the whole load order rather than only the plugins it had to index.
     [Fact]
     public void AWarmLoad_CountsEveryRegisteredPluginAsProgress()
     {

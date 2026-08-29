@@ -12,8 +12,15 @@ namespace MEditService.Tests.Records;
 // #585 / ADR-0001: the index is one persistent file per game Data install, and it validates itself
 // against the disk every time it is opened — by content, never by clock. Everything here is proved
 // at the index seam alone: an index is built, disposed, and opened again on the same file, and what
-// survives is asserted through the seam's own reads and its own log surface, never by looking
-// inside the file.
+// survives is asserted through the seam's own reads. Persistence itself is never asserted by
+// inspecting the file on disk — no existence check, no size, no bytes — only by a second index
+// object finding what the first left.
+//
+// Two assertions do reach past the seam, through `Connection`, and both are the sanctioned white-box
+// door RegistrationScopingTests already established (MEditService/CLAUDE.md, invariant 8): counting
+// `raw.records` rows, because "the rows are physically present and answer nothing" is not expressible
+// through a seam whose whole job is to hide unregistered rows; and ageing `raw.indexed_files`'
+// version, because there is no other way to write rows under a version this build cannot produce.
 public class PersistentIndexTests : IDisposable
 {
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -211,6 +218,42 @@ public class PersistentIndexTests : IDisposable
         IndexFileAt(second, alpha, 0);
         Assert.NotNull(second.IndexedContentHash(KeyOf("Alpha.esp")));
     }
+
+    // ADR-0001 point 6: a second Modbench window on the same game contends for one file, and DuckDB
+    // refuses the second open. That refusal must never be answered by rebuilding — deleting a file
+    // another process holds open succeeds on POSIX and destroys that window's live index, which is
+    // the silent divergence the decision exists to rule out. Turning the throw into a structured
+    // load failure naming the other window is #588; refusing to destroy the file is this ticket's.
+    //
+    // The real contention is between processes and is not reachable from here: DuckDB's .NET binding
+    // shares one database instance per path within a process, so a second index over the same file
+    // simply joins the first. That is asserted below for what it is worth (nothing was rebuilt), and
+    // the classification the guard actually turns on is pinned separately against DuckDB's own
+    // wordings — the honest split, rather than a test whose name promises a lock it never takes.
+    [Fact]
+    public void ASecondIndexOverTheSameFile_LeavesTheFirstOnesRowsIntact()
+    {
+        var alpha = WritePlugin("Alpha.esp", "NpcAlpha");
+        using var holder = OpenIndex();
+        IndexFileAt(holder, alpha, 0);
+
+        OpenIndex().Dispose();
+
+        Assert.NotNull(holder.IndexedContentHash(KeyOf("Alpha.esp")));
+        Assert.True(RecordRowsFor(holder, KeyOf("Alpha.esp")) > 0);
+    }
+
+    // The two failures arrive as the same exception type, so the message is all there is to tell
+    // them apart, and getting it wrong is destructive in one direction only: a corrupt file wrongly
+    // read as a lock costs a failed load, a lock wrongly read as corruption costs another window its
+    // index. These are DuckDB's own wordings on each platform.
+    [Theory]
+    [InlineData("IO Error: Could not set lock on file \"/x/Fallout4-ab.duckdb\": Conflicting lock is held in /usr/bin/dotnet (PID 4242)", true)]
+    [InlineData("IO Error: Could not set lock on file \"C:\\x\\Fallout4-ab.duckdb\": The process cannot access the file because another process has locked a portion of the file.", true)]
+    [InlineData("IO Error: The file is not a valid DuckDB database file!", false)]
+    [InlineData("Serialization Error: Failed to deserialize: unsupported storage version", false)]
+    public void AnOpenFailure_IsClassifiedAsAnotherWriterOnlyWhenItIsALockConflict(string message, bool expected) =>
+        Assert.Equal(expected, DuckDbRecordIndex.IsAnotherWriter(new InvalidOperationException(message)));
 
     // An index given no home is still a working index — the in-memory shape, which is what a caller
     // with no install to key a file by gets, and what every other fixture in this suite uses.
