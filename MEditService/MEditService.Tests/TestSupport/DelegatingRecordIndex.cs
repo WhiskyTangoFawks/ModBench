@@ -47,6 +47,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
     public RecordDocument? GetDocument(string formKey) => Inner.GetDocument(formKey);
     public RecordDocument? GetDocument(string formKey, PluginKey plugin) => Inner.GetDocument(formKey, plugin);
+    public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => Inner.GetDocuments(plugin);
     public RecordOverrides? GetOverrideStack(string formKey) => Inner.GetOverrideStack(formKey);
     public PagedResult<RecordSummary> Search(RecordQuery query) => Inner.Search(query);
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => Inner.GetRecordTypeCounts(plugin);

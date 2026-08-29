@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Core.Edits;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
@@ -220,7 +221,12 @@ public sealed class SessionManager(
     private void IndexAndStore(GameSession session, GameRelease gameRelease, CancellationToken token)
     {
         _logger.LogDebug("Initializing DuckDB record repository");
+        var createTimer = Stopwatch.StartNew();
         var repository = _repositoryFactory.Create(gameRelease);
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("DuckDB record repository initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
+        }
 
         lock (_lock)
         {
@@ -250,6 +256,12 @@ public sealed class SessionManager(
 
     private void IndexProgressively(GameSession session, IRecordIndex repository, CancellationToken token)
     {
+        // #113: two numbers ADR-0035 makes distinct — time to the first queryable plugin (the tree
+        // becomes usable) and time to the winner sweep completing (the session is fully loaded).
+        // Measured here rather than client-side, where the 500 ms status poll caps the resolution.
+        var loadTimer = Stopwatch.StartNew();
+        long? firstUsableMs = null;
+
         // #274: open and index one plugin at a time. Opening the whole load order first cost the
         // same total time but made every plugin wait on the slowest one before any of them could
         // be indexed, and buried each open failure until the end.
@@ -268,6 +280,7 @@ public sealed class SessionManager(
                 _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
             }
             PluginKey key;
+            var indexTimer = Stopwatch.StartNew();
             try
             {
                 // #271 / ADR-0036: threads the origin GameSession already resolved (#269) into the
@@ -275,6 +288,10 @@ public sealed class SessionManager(
                 // alone.
                 key = new PluginKey(plugin.Name, plugin.Origin);
                 IndexOnePlugin(session, repository, plugin, key, mod, token);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
+                }
             }
             catch (Exception ex)
             {
@@ -300,6 +317,7 @@ public sealed class SessionManager(
                 // different form.
                 _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
             }
+            firstUsableMs ??= loadTimer.ElapsedMilliseconds;
         }
 
         // #274: reported after the loop, not before it — the count is not knowable until the load
@@ -313,9 +331,16 @@ public sealed class SessionManager(
         // The whole-set sweep, and the moment conflict information becomes correct: a plugin that
         // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
         _logger.LogDebug("Computing winners");
+        var winnersTimer = Stopwatch.StartNew();
         repository.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
 
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Session fully loaded in {TotalMs} ms (first plugin usable after {FirstUsableMs} ms, winner sweep {WinnersMs} ms)",
+                loadTimer.ElapsedMilliseconds, firstUsableMs, winnersTimer.ElapsedMilliseconds);
+        }
     }
 
     /// <summary>

@@ -97,7 +97,8 @@ internal static class SourceUnitResolver
     /// <param name="release">The game release, for the folder-name reflection.</param>
     internal static SourceUnit? Resolve(
         IRecordReads reads, PluginKey plugin, string modFolder,
-        string formKey, string recordType, string? editorId, GameRelease release)
+        string formKey, string recordType, string? editorId, GameRelease release,
+        SourceUnitResolutionCache? cache = null)
     {
         // A flat record: the path is computed, then corrected if the file has been renamed out from
         // under it. The overwhelmingly common edit pays one File.Exists and searches nothing.
@@ -117,12 +118,12 @@ internal static class SourceUnitResolver
         // resolves with no scan at all, which matters because it is the most common container-shaped
         // edit there is.
         if (reads.GetPlacement(formKey, plugin) is { } placement)
-            return ResolveOwner(reads, plugin, modFolder, placement.ParentCell, release);
+            return ResolveOwner(reads, plugin, modFolder, placement.ParentCell, release, cache);
 
         // Everything else may still have a file of its own — a Cell, a Worldspace, a Quest, a dialog
         // topic, a scene. Look for it before assuming it is embedded.
         var root = Path.Combine(modFolder, SourceRecordPath.RootFor(plugin.Name));
-        if (FindOwnUnit(reads, plugin, root, formKey, recordType, release) is { } own)
+        if (FindOwnUnit(reads, plugin, root, formKey, recordType, release, cache) is { } own)
         {
             return new SourceUnit(
                 own, Path.GetRelativePath(modFolder, own), formKey, recordType, IsEmbedded: false);
@@ -134,7 +135,7 @@ internal static class SourceUnitResolver
         var parent = reads.GetContainerParent(plugin, formKey)?.ParentFormKey
                      ?? reads.GetCellLocation(plugin, formKey)?.ParentWorldspace;
 
-        return parent == null ? null : ResolveOwner(reads, plugin, modFolder, parent, release);
+        return parent == null ? null : ResolveOwner(reads, plugin, modFolder, parent, release, cache);
     }
 
     /// <summary>
@@ -216,15 +217,20 @@ internal static class SourceUnitResolver
     /// descend a tree). A missing owner row returns null and refuses, rather than spinning.</para>
     /// </summary>
     private static SourceUnit? ResolveOwner(
-        IRecordReads reads, PluginKey plugin, string modFolder, string ownerFormKey, GameRelease release)
+        IRecordReads reads, PluginKey plugin, string modFolder, string ownerFormKey, GameRelease release,
+        SourceUnitResolutionCache? cache)
     {
-        var owner = reads.GetDocument(ownerFormKey, plugin);
-        if (owner == null) return null;
+        // #547: one cell's worth of placed refs shares one owner read and one scan.
+        if (cache != null && cache.Owners.TryGetValue(ownerFormKey, out var memoized)) return memoized;
 
-        return Resolve(reads, plugin, modFolder, ownerFormKey, owner.RecordType, owner.EditorId, release)
-            is { } unit
-            ? unit with { IsEmbedded = true }
-            : null;
+        SourceUnit? resolved = null;
+        if (reads.GetDocument(ownerFormKey, plugin) is { } owner
+            && Resolve(reads, plugin, modFolder, ownerFormKey, owner.RecordType, owner.EditorId, release, cache) is { } unit)
+        {
+            resolved = unit with { IsEmbedded = true };
+        }
+        if (cache != null) cache.Owners[ownerFormKey] = resolved;
+        return resolved;
     }
 
     /// <summary>
@@ -314,14 +320,20 @@ internal static class SourceUnitResolver
     /// mid-rename.
     /// </summary>
     private static string? FindOwnUnit(
-        IRecordReads reads, PluginKey plugin, string sourceRoot, string formKey, string recordType, GameRelease release)
+        IRecordReads reads, PluginKey plugin, string sourceRoot, string formKey, string recordType, GameRelease release,
+        SourceUnitResolutionCache? cache)
     {
         var scanRoot = Path.Combine(sourceRoot, ScanSubtree(reads, plugin, formKey, recordType, release) ?? string.Empty);
         if (!Directory.Exists(scanRoot)) return null;
 
         var suffix = FilesafeFormKey(formKey);
-        var matches = Directory
-            .EnumerateFileSystemEntries(scanRoot, $"*{suffix}*", SearchOption.AllDirectories)
+        // #547: with a cache the subtree is listed once for the whole operation and the wildcard's
+        // "leaf contains the FormKey" pre-filter runs in memory; AsSourceUnitFile is the real test
+        // either way, so the two paths cannot disagree on what is a source unit.
+        var candidates = cache == null
+            ? Directory.EnumerateFileSystemEntries(scanRoot, $"*{suffix}*", SearchOption.AllDirectories)
+            : cache.EntriesUnder(scanRoot).Where(e => Path.GetFileName(e).Contains(suffix, StringComparison.OrdinalIgnoreCase));
+        var matches = candidates
             .Select(entry => AsSourceUnitFile(entry, suffix))
             .OfType<string>()
             .Take(2)

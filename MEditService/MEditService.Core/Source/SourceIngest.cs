@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -75,12 +76,25 @@ internal static class SourceIngest
         PluginKey key, GameRelease gameRelease, ISchemaReflector schemaReflector, ILogger logger,
         CancellationToken cancel = default)
     {
+        var timer = Stopwatch.StartNew();
         var mod = RecordTextCodecGeneratorSeed
             .DeserializeWholeMod(sourceTree, InlineWorkDropoff.Instance, cancel)
             .GetAwaiter().GetResult();
+        var deserializeMs = timer.ElapsedMilliseconds;
 
+        timer.Restart();
         index.Index(mod, loadOrderIndex, participates, key);
+        var indexMs = timer.ElapsedMilliseconds;
+
+        timer.Restart();
         ReconcileHead(index, modFolder, key, gameRelease, schemaReflector, logger, mod);
+        // #113: per-phase load timing for the tracked-plugin ingest path.
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug(
+                "Ingested {Plugin} from source: deserialize {DeserializeMs} ms, index {IndexMs} ms, reconcile {ReconcileMs} ms",
+                key.Name, deserializeMs, indexMs, timer.ElapsedMilliseconds);
+        }
     }
 
     /// <summary>

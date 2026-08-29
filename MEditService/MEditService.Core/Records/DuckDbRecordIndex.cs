@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -119,6 +120,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("records_committed", plugin, origin);
         using var documentAppender = Connection.CreateAppender("records");
 
+        var phaseTimer = Stopwatch.StartNew();
         foreach (var (tableName, schema) in schemas)
         {
             // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
@@ -129,6 +131,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
                 containerChildRows, documentAppender, pluginMod.GameRelease);
         }
+        var documentsMs = phaseTimer.ElapsedMilliseconds;
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
         // before the single form_references flush below.
@@ -140,9 +143,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // both collect straight into the shared `refs` list below, walking the live object (already
         // in hand here) rather than round-tripping through the document this same pass just wrote.
         // GetVmad/GetConditions read the document instead, on demand (#413 D1's pattern).
+        phaseTimer.Restart();
         CollectVmadRefs(pluginMod, plugin, refs);
         CollectConditionRefs(pluginMod, plugin, refs);
+        var refsMs = phaseTimer.ElapsedMilliseconds;
 
+        phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
 
         IndexHeader(pluginMod, plugin, origin, loadOrderIndex, schemas);
@@ -199,7 +205,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
         }
 
+        var extractedMs = phaseTimer.ElapsedMilliseconds;
+        phaseTimer.Restart();
         tx.Commit();
+        // #113: per-phase load timing — "documents" spans record enumeration plus the per-record
+        // serialize/hash in AppendDocument, the expected dominant cost; "extracted" spans
+        // placement/header and the form_references/form_lookup/container_child flushes.
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Index {Plugin}: documents {DocumentsMs} ms, vmad/condition refs {RefsMs} ms, extracted tables {ExtractedMs} ms, commit {CommitMs} ms",
+                plugin, documentsMs, refsMs, extractedMs, phaseTimer.ElapsedMilliseconds);
+        }
     }
 
     public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
@@ -1078,6 +1095,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         public RecordDocument? GetDocument(string formKey) => owner.GetWinningDocument(records, formKey);
         public RecordDocument? GetDocument(string formKey, PluginKey plugin) => owner.GetPluginDocument(records, formKey, plugin);
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => owner.GetPluginDocuments(records, plugin);
         public RecordOverrides? GetOverrideStack(string formKey) => owner.GetOverrideStack(records, formKey);
         public PagedResult<RecordSummary> Search(RecordQuery query) => owner.Search(records, query);
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => owner.GetRecordTypeCounts(records, plugin);
@@ -1121,6 +1139,63 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         RequireSchemas();
         var tableName = FindRecordType(records, formKey);
         return tableName == null ? null : ReadDocument(records, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+    }
+
+    public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) =>
+        GetPluginDocuments(EffectiveRelation, plugin);
+
+    // #547: one query where GetPluginDocument's callers used to loop two point queries per record
+    // (FindRecordType + ReadDocument — ~7,880 round trips for one compile of the real 3,940-record
+    // fixture). Rows are materialized before any reconstitution: resolving a referenced FormKey
+    // opens its own command on this same connection, and doing that under a live reader would
+    // interleave two readers (GetOverrideStack's #415 note).
+    private List<RecordDocument> GetPluginDocuments(string records, PluginKey plugin)
+    {
+        var schemas = RequireSchemas();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type
+            FROM {records}
+            WHERE plugin = $1 AND origin = $2
+            """;
+        AddParams(cmd, [plugin.Name, plugin.Origin!]);
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
+            bool IsWinner, string? EditorId, string Body, string RecordType)>();
+        while (reader.Read())
+        {
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.GetInt32(3), reader.GetBoolean(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetString(6), reader.GetString(7)));
+        }
+        reader.Close();
+
+        // One resolution cache for the whole batch, not one per document — the same referenced
+        // FormKey (a shared keyword, a race) recurs across a plugin's records, and every miss is a
+        // form_lookup query of its own. Resolution is a pure lookup, so sharing changes nothing
+        // about any single document's CheckErrors.
+        var cache = new Dictionary<string, RecordLookupEntry?>();
+        RecordLookupEntry? Resolve(string fk)
+        {
+            if (cache.TryGetValue(fk, out var t)) return t;
+            var resolved = ResolveFormKey(fk);
+            cache[fk] = resolved;
+            return resolved;
+        }
+
+        var documents = new List<RecordDocument>(rows.Count);
+        foreach (var row in rows)
+        {
+            // Same defensive skip as RederiveIndexRowsForRecord: a record_type no schema claims
+            // has no reconstitution path.
+            if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
+            documents.Add(DocumentFromBody(
+                row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
+                row.EditorId, row.Body, schema, Resolve));
+        }
+        return documents;
     }
 
     private RecordDocument? ReadDocument(string records, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
@@ -1408,16 +1483,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// that method's own doc comment for why the values are identical to the pre-#413 wide-table
     /// path by construction.</summary>
     private RecordDocument ReadDocumentFromBody(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
-    {
-        var formKey = reader.GetString(0);
-        var plugin = reader.GetString(1);
-        var origin = reader.GetString(2);
-        var loadOrderIndex = reader.GetInt32(3);
-        var isWinner = reader.GetBoolean(4);
-        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
-        var body = reader.GetString(6);
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey) =>
+        DocumentFromBody(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3),
+            reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.GetString(6), schema, resolveFormKey);
 
+    // #547: the construction half of ReadDocumentFromBody, split out so the bulk read can build
+    // documents from rows it materialized before reconstituting any of them.
+    private RecordDocument DocumentFromBody(
+        string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
+        string? editorId, string body, RecordTableSchema schema,
+        Func<string, RecordLookupEntry?> resolveFormKey)
+    {
         var record = _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, schema.TableName)
             .GetAwaiter().GetResult();

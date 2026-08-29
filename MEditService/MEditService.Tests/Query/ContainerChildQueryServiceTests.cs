@@ -36,6 +36,7 @@ public class ContainerChildQueryServiceTests
 
         public RecordDocument? GetDocument(string formKey) => null;
         public RecordDocument? GetDocument(string formKey, PluginKey plugin) => null;
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => [];
         public RecordOverrides? GetOverrideStack(string formKey) => null;
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => [];
         public IReadOnlyList<string> GetContestedFormKeys() => [];
