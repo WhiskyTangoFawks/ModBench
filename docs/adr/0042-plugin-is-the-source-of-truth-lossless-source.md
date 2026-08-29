@@ -29,12 +29,87 @@ Modbench-owned copy, and the plugin is not committed to the mod's repository:
 `refs/medit/last-compile/<plugin>` (ADR-0041) is the reference for "the binary as Modbench last
 wrote it", and the load-time hash check and bridge watcher are how external change is observed.
 
-**2. The source is Modbench's own format, and it is lossless.** The one rule, and the test that
-proves it: **`compile(serialize(plugin))` is byte-identical to `plugin`**
-(`CompileRoundTripGateTests`, no allowlist). Per-record model equality is the diagnostic that
-names the broken record when byte identity fails. The gate runs in tests **and at Track, over
-every record of the plugin being tracked** — a plugin that does not round-trip is refused,
-naming the record (measured cost: roughly +40% on Track, paid once per plugin).
+**2. The source is Modbench's own format, and it is lossless. The round-trip verdict is model
+identity, not byte identity (2026-08 amendment, #513).** A survey of 684 real, mixed-tool LitR
+plugins found only 37% survive `write(parse(plugin)) == plugin` byte-for-byte — the rest diverge
+on Mutagen's own encoding choices (recompressed zlib, `-0.0`→`+0.0`, subrecord/GRUP-child
+reordering, derived sizes, ADR-0038's own master pruning, recomputed derived counters), never on
+content. Byte identity was a test of whichever tool last wrote the file, never of our codec.
+
+The verdict: every record in `parse(original)` has a counterpart in `parse(recompiled)` and vice
+versa, and Mutagen's own generated equality mask
+(`<Type>MixIn.GetEqualsMask(rhs, EqualsMaskHelper.Include.OnlyFailures)`, reached generically by
+reflection — `MEditService.Core.Source.ModelIdentity.FindFirst`, shared by `TrackService`'s live
+gate and the test suite's own Compile assertions, one checker and one exclusion list) reports no
+failing field outside the exclusion table below. The mask, not bare `Equals`: the same survey
+found bare `Equals` false-negatives on byte-identical parses across whole record families (Armor,
+ArmorAddon, Race, Package, Quest, Perk, …) that the mask does not share.
+
+**Refuses on any content difference, including Mutagen's own write-time defects** (a maintainer
+decision, not a defect in this gate) — confirmed against the real LitR corpus: 16 of 684 plugins
+carry a `Furniture` whose original bytes never wrote `FNAM`/`MNAM` (a CK/community-tool shape),
+and Mutagen's writer unconditionally re-adds them, materializing `Furniture.Flags` from
+`null` to a real derived value. That is a genuine content change, correctly refused, naming the
+record type, FormKey and field (`SourceRoundTripFailedException`), until Mutagen is fixed.
+
+*(An earlier draft of this decision cited `NPC_/QNAM` float precision drift on write as a second
+example, "observed in 118 of 684 survey plugins" — that claim does not hold up: `NPC_/QNAM` is
+`System.Drawing.Color`, quantized to a byte per channel at **parse** time, so any precision is
+already destroyed identically on both sides of the comparison before this gate ever runs. Direct
+re-verification against the full LitR corpus found zero genuine float-precision refusals; retracted
+here rather than left uncorrected.)*
+
+**Known limitation, not yet closed: the mask is not literally bit-exact for `Single` fields.**
+Mutagen's generated `FillEqualsMask` compares `Single` (float32) fields with `EqualsWithin`, a
+1e-9 absolute epsilon — a real tolerance band, not the "no tolerance band" this decision otherwise
+states. In practice this is narrower than it sounds: one ulp of a float32 at magnitude *m* is
+≈ *m* × 1.19e-7, so a 1e-9 absolute epsilon is mathematically equivalent to bit-exact for any
+`|value| ≳ 0.01` — the blind spot is confined to values very close to zero. No `Double`-typed
+field in `Mutagen.Bethesda.Fallout4` reaches `EqualsWithin`, so the gap does not extend there.
+`ModelIdentityFloatEpsilonCharacterizationTests` pins the current (accepted, not refused) behavior
+for a sub-epsilon mutation near zero, so the boundary is documented with a test rather than left
+implicit. Whether to accept the epsilon as-is or bypass the mask for bit-exact numeric comparison
+is its own decision, filed separately (#564) rather than resolved here.
+
+**The one exclusion, and the only one:** derived GRUP-header fields Mutagen's own generated model
+backs onto a handful of record types — populated at parse time from the enclosing group's own
+header bytes, never from the record's own subrecord stream. Scoped as `(RecordType, FieldName)`
+pairs, never a bare field name — `Unknown`/`Timestamp`-shaped names collide with genuine content
+elsewhere on their own declaring types (`FaceFxPhonemes.Unknowns`, `PlacedObject.Unknown`,
+`ConditionData.Unknown3` are ordinary subrecord data).
+
+| Record type | Excluded fields | Backing GRUP group |
+|---|---|---|
+| Cell | `Timestamp`, `UnknownGroupData` | CellChildren |
+| Cell | `PersistentTimestamp`, `PersistentUnknownGroupData` | CellPersistentChildren |
+| Cell | `TemporaryTimestamp`, `TemporaryUnknownGroupData` | CellTemporaryChildren |
+| Worldspace | `SubCellsTimestamp`, `SubCellsUnknown` | WorldChildren (the group wrapping every exterior block) |
+| WorldspaceBlock | `LastModified`, `Unknown` | the individual exterior block's own GRUP, one level inside SubCells |
+| WorldspaceSubBlock | `LastModified`, `Unknown` | the individual exterior sub-block's own GRUP, one level inside SubCells |
+| Quest | `Timestamp`, `Unknown` | QuestChildren |
+| DialogTopic | `Timestamp`, `Unknown` | TopicChildren |
+
+The `WorldspaceBlock`/`WorldspaceSubBlock` rows were found live against the real LitR corpus while
+building the survey harness below, not anticipated at plan time — proof that this table is
+expected to grow exactly this way as more real plugins are checked, never by guessing a field name
+in the abstract.
+
+Everything else that changes bytes without changing content — zlib level/implementation,
+negative zero, subrecord order, GRUP child order, derived sizes and counts, master pruning
+(decision 4 below has its own interaction: the tree carries the original's order, a compile back
+out of it emits Mutagen's own) — is **documented here, not gated**: a real plugin written by
+CK/xEdit/another tool is no longer refused for encoding-only differences. Track logs which of
+these an accepted plugin's first Save & Compile will lose, so nothing is silent — informational
+only, deliberately not surfaced on the API response in this amendment (a categorized report is a
+clean, separately-scoped follow-up if wanted).
+
+**Byte identity stays the test for our own codec, unchanged.** `compile(serialize(plugin))` is
+still asserted byte-identical to `plugin` for a Mutagen-written fixture
+(`CompileRoundTripGateTests`, `BinaryRoundTripGateTests`, no allowlist) — a gap there means our
+codec, not Mutagen's writer, lost something, and that stays refused exactly as before. What
+changed is the verdict for a plugin that is not already Mutagen-canonical: Track's live gate, run
+over every record of the plugin being tracked, and the test theories that exercise real
+(CK/xEdit-authored) plugins now compare on model identity instead.
 
 **3. Nothing is omitted and nothing is re-sorted in the files — ever.** Byte identity of the
 files is the safety net, and every omission, however well proven, is a hole in it. Omission and

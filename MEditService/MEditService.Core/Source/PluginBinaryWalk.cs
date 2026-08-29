@@ -107,7 +107,7 @@ public static class PluginBinaryWalk
     /// #514's tripwire itself: every subrecord signature <paramref name="originalData"/> holds more
     /// occurrences of than <paramref name="rewrittenData"/> does — a signature the rewrite silently
     /// dropped one or more instances of. Subrecord <b>order</b> and <b>content</b> are deliberately not
-    /// this check's concern (that is model identity's job — <c>TrackService.DescribeFirstDivergence</c>
+    /// this check's concern (that is model identity's job — <c>ModelIdentity.FindFirst</c>
     /// — and encoding-class differences' — a same-multiset reorder or a byte-for-byte content change to
     /// an unchanged-count signature reports nothing here. A signature the rewrite has <i>more</i> of — a
     /// canonical marker insertion (<c>FURN FNAM/MNAM</c>, <c>WRLD ONAM/DATA</c>, <c>INNR KSIZ</c>,

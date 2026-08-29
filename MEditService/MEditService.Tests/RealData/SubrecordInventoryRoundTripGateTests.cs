@@ -33,9 +33,9 @@ public sealed class SubrecordInventoryRoundTripGateTests
     private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "TestData", FixtureFileName);
 
     /// <summary>AC1: Track refuses this real plugin, naming the record and the dropped signatures —
-    /// not the generic "header or container structure" fallback <see cref="TrackService.DescribeFirstDivergence"/>
-    /// would otherwise produce (its own model-`Equals()` comparison sees no difference here, since both
-    /// sides of it already lost the same bytes at parse time).</summary>
+    /// not silently accepted the way <see cref="ModelIdentity.FindFirst"/> alone would leave it
+    /// (its own mask comparison sees no difference here, since both sides of it already lost the same
+    /// bytes at parse time; only this byte-level check can name it).</summary>
     [Fact]
     public async Task TrackAsync_OfTheRealTrueStormsFixture_RefusesNamingTheRegionAndItsDroppedSignatures()
     {

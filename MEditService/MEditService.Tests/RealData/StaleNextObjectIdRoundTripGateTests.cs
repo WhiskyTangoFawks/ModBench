@@ -36,11 +36,16 @@ namespace MEditService.Tests.RealData;
 /// recompute 149.</item>
 /// </list>
 ///
-/// <para>Only the LitR fixture runs the full Track and Compile theories: the other two clear the
-/// header (proven by <see cref="Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecords"/>)
-/// and then hit #511 — a zlib-compressed NPC_ Mutagen re-deflates at its own level, and REFR
-/// rotations of <c>-0.0</c> Mutagen writes as <c>+0.0</c> — which is a separate product decision.
-/// Adding them to <see cref="TrackAndCompileFixtures"/> is #511's own regression test.</para>
+/// <para>All three now run the full Track and Compile theories (#513): the other two used to clear
+/// the header (proven by <see cref="Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecords"/>)
+/// and then hit #511 — a zlib-compressed NPC_ Mutagen re-deflates at its own level, and REFR rotations
+/// of <c>-0.0</c> Mutagen writes as <c>+0.0</c> — which used to refuse them outright under byte
+/// identity. ADR-0042 decision 2's 2026-08 amendment (#513) makes the round-trip verdict model
+/// identity: neither #511 difference changes any record's own content, so both fixtures now Track
+/// and Compile successfully, and <see cref="Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceBytes"/>
+/// asserts model identity between the original and compiled binaries rather than raw byte identity —
+/// the compiled bytes are no longer expected to match the original's exactly for these two, only its
+/// content.</para>
 /// </summary>
 public sealed class StaleNextObjectIdRoundTripGateTests
 {
@@ -51,7 +56,12 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         { "Hitech Trashcans to BOS.esp", 43, 150 },
     };
 
-    public static TheoryData<string> TrackAndCompileFixtures => new() { "LitR - Settings Holotapes Sorting.esp" };
+    public static TheoryData<string> TrackAndCompileFixtures => new()
+    {
+        "LitR - Settings Holotapes Sorting.esp",
+        "RecruitSierra.esl",
+        "Hitech Trashcans to BOS.esp",
+    };
 
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
@@ -85,20 +95,29 @@ public sealed class StaleNextObjectIdRoundTripGateTests
         Assert.True(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
+    /// <summary>
+    /// #513: model identity, not byte identity, is Compile's own success bar here too — reusing
+    /// <see cref="ModelIdentity"/>, the same shared checker <see cref="TrackService"/>'s gate calls.
+    /// <c>LitR - Settings Holotapes Sorting.esp</c> still happens to compile back byte-for-byte (no
+    /// #511-shaped divergence in that fixture), so this is strictly a widening of what the theory
+    /// accepts, not a weakening of what it checks for the fixture it already covered.
+    /// </summary>
     [Theory]
     [MemberData(nameof(TrackAndCompileFixtures))]
-    public async Task Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceBytes(string fileName)
+    public async Task Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceContent(string fileName)
     {
         using var scratch = new TrackedScratch(fileName);
-        var original = await File.ReadAllBytesAsync(scratch.PluginPath);
+        var original = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
         await scratch.TrackAsync();
 
         var result = scratch.CompileService().Compile(scratch.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        var compiled = await File.ReadAllBytesAsync(scratch.PluginPath);
-        Assert.True(original.AsSpan().SequenceEqual(compiled),
-            $"Compile diverges from the source: original {original.Length:N0} B vs compiled {compiled.Length:N0} B.");
+        var compiled = Fallout4Mod.CreateFromBinary(
+            new ModPath(ModKey.FromFileName(fileName), scratch.PluginPath), Fallout4Release.Fallout4);
+        var divergence = ModelIdentity.FindFirst(original, compiled);
+        Assert.Null(divergence);
     }
 
     /// <summary>
