@@ -1,5 +1,7 @@
 using System.Data;
+using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using System.Text.Json;
 using DuckDB.NET.Data;
@@ -119,6 +121,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("records_committed", plugin, origin);
         using var documentAppender = Connection.CreateAppender("records");
 
+        if (_conditionCodec == null)
+        {
+            _logger.LogWarning("No condition codec for {Game}; skipping condition refs for {Plugin}",
+                pluginMod.GameRelease, plugin);
+        }
+
+        var phaseTimer = Stopwatch.StartNew();
+        var counters = new RefCounters();
         foreach (var (tableName, schema) in schemas)
         {
             // The header table is never a major-record type (ModHeader has no FormKey/EditorID) —
@@ -127,7 +137,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             if (tableName == "header") continue;
             IndexRecordTable(
                 tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
-                containerChildRows, documentAppender, pluginMod.GameRelease);
+                containerChildRows, documentAppender, pluginMod.GameRelease, counters);
+        }
+        var documentsMs = phaseTimer.ElapsedMilliseconds;
+
+        // #217: same summary texts/levels as before (RecordIndexingLoggingTests pins them), now
+        // counted from the one pass above rather than from two further walks of the plugin.
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", counters.Vmad, plugin);
+            _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", counters.Conditions, plugin);
         }
 
         // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
@@ -140,9 +159,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // both collect straight into the shared `refs` list below, walking the live object (already
         // in hand here) rather than round-tripping through the document this same pass just wrote.
         // GetVmad/GetConditions read the document instead, on demand (#413 D1's pattern).
-        CollectVmadRefs(pluginMod, plugin, refs);
-        CollectConditionRefs(pluginMod, plugin, refs);
+        // #113: VMAD and condition refs are collected inside IndexRecordTable's one pass now. The
+        // two whole-plugin walks that used to run here (a typed VMAD enumeration, then a second
+        // EnumerateMajorRecords() with a linear type scan per record) were 29% of a full load
+        // order's index time. What that pass does not see is exactly what has no schema
+        // (SchemaReflector.ExcludedTables — the placed projectile types): those records have no
+        // document and no row, and now contribute no VMAD/condition refs either, where before they
+        // contributed refs from a record the index could not otherwise show.
 
+        phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
 
         IndexHeader(pluginMod, plugin, origin, loadOrderIndex, schemas);
@@ -199,7 +224,18 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
         }
 
+        var extractedMs = phaseTimer.ElapsedMilliseconds;
+        phaseTimer.Restart();
         tx.Commit();
+        // #113: per-phase load timing — "documents" spans record enumeration plus every per-record
+        // cost (serialize, hash, form/VMAD/condition refs, container children, append); "extracted"
+        // spans placement/header and the form_references/form_lookup/container_child flushes.
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Index {Plugin}: documents {DocumentsMs} ms (prepare {PrepareMs} ms, append {AppendMs} ms), extracted tables {ExtractedMs} ms, commit {CommitMs} ms",
+                plugin, documentsMs, counters.PrepareMs, counters.AppendMs, extractedMs, phaseTimer.ElapsedMilliseconds);
+        }
     }
 
     public void Unindex(PluginKey key) => Unindex(key.Name, key.Origin!);
@@ -260,21 +296,57 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         ("Worldspace", "TopCell"), ("Worldspace", "SubCells"),
     ];
 
-    private void AppendDocument(
-        DuckDBAppender documentAppender, IMajorRecordGetter record, string recordType,
-        string plugin, string origin, int loadOrderIndex, GameRelease gameRelease,
-        List<ContainerChildRow> containerChildRows)
+    /// <summary>Everything about one record that the index derives from the record itself, computed
+    /// off the appender thread (#113): the document bytes and their git-blob hash, the extracted
+    /// form/VMAD/condition refs, and the container-child slots. Only writing it is sequential.</summary>
+    private sealed record PreparedRecord(
+        IMajorRecordGetter Record, byte[] Body, string ContentHash, List<FormRef> Refs,
+        List<ContainerChildRow> ChildRows, bool HasVmad, bool HasConditions);
+
+    private sealed class RefCounters
+    {
+        public int Vmad;
+        public int Conditions;
+        public long PrepareMs;
+        public long AppendMs;
+    }
+
+    private PreparedRecord PrepareRecord(
+        IMajorRecordGetter record, string recordType, RecordTableSchema schema, GameRelease gameRelease)
     {
         // #416 S1b: a container's children get a recorded parent slot, for the relationships
         // placement/cell_location don't already carry. Read off the same record about to be
         // serialized, so what is remembered and what is stored cannot describe different graphs.
+        var childRows = new List<ContainerChildRow>();
         var parentType = ContainerChildFields.NormalizedTypeName(record.GetType());
         foreach (var (slotName, slotIndex, child) in ContainerChildFields.EnumerateChildren(record))
         {
             if (CoveredByPlacementTables.Contains((parentType, slotName))) continue;
-            containerChildRows.Add(new ContainerChildRow(
+            childRows.Add(new ContainerChildRow(
                 child.FormKey.ToString(), record.FormKey.ToString(), recordType, slotName, slotIndex));
         }
+
+        var refs = new List<FormRef>();
+        CollectFormRefs(refs, record, recordType, schema);
+
+        // Same per-record NotImplementedException guard the old whole-plugin VMAD walk had: a live
+        // binary-overlay accessor for a not-yet-implemented property type can still throw here.
+        var hasVmad = false;
+        if (record is IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: not null })
+        {
+            try
+            {
+                CollectVmadRefsForRecord(record, recordType, refs);
+                hasVmad = true;
+            }
+            catch (NotImplementedException ex)
+            {
+                _logger.LogWarning(ex,
+                    "Skipping VMAD for {FormKey} — property type not implemented in Mutagen",
+                    record.FormKey);
+            }
+        }
+        var hasConditions = CollectConditionRefsForRecord(record, recordType, refs);
 
         // #450 retires #413 D8's deep-copy-and-strip: every record is serialized straight from the
         // getter ingest already holds, container or not. A container's document now carries the
@@ -289,7 +361,17 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // document that holds them. Do not reopen it with a reconciliation pass; that is the shape
         // ADR-0041's amendment exists to delete.
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
+        // Hashed from the codec's own bytes rather than from a string: identical for the valid
+        // UTF-8 the codec emits, but this keeps the hash defined by what the source file would
+        // contain, not by a round trip through .NET's string encoder.
+        return new PreparedRecord(record, body, GitBlobHash.Of(body), refs, childRows, hasVmad, hasConditions);
+    }
 
+    private static void AppendPrepared(
+        DuckDBAppender documentAppender, PreparedRecord prepared, string recordType,
+        string plugin, string origin, int loadOrderIndex)
+    {
+        var record = prepared.Record;
         var row = documentAppender.CreateRow();
         row.AppendValue(record.FormKey.ToString());
         row.AppendValue(plugin);
@@ -302,11 +384,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         row.AppendValue((int?)loadOrderIndex);
         row.AppendValue((bool?)false);
         row.AppendValue(SourceRef.Committed);
-        row.AppendValue(Encoding.UTF8.GetString(body));
-        // Hashed from the codec's own bytes rather than from the string just above: identical for
-        // the valid UTF-8 the codec emits, but this keeps the hash defined by what the source file
-        // would contain, not by a round trip through .NET's string encoder.
-        row.AppendValue(GitBlobHash.Of(body));
+        row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
+        row.AppendValue(prepared.ContentHash);
         row.EndRow();
     }
 
@@ -315,7 +394,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
         List<ContainerChildRow> containerChildRows,
-        DuckDBAppender documentAppender, GameRelease gameRelease)
+        DuckDBAppender documentAppender, GameRelease gameRelease, RefCounters counters)
     {
         List<IMajorRecordGetter> records;
         try
@@ -338,26 +417,101 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // ADR-0041 / #413: no per-type table to delete from or append to any more. This loop's whole
         // output is now one document per record plus the extracted index rows derived from it — the
         // per-type enumeration survives only because it is how a record's type is known.
-        foreach (var record in records)
+        //
+        // #113: the per-record work is CPU-bound and independent record to record — serialize,
+        // hash, the form-ref walk, container children, VMAD and condition refs — and was 98% of a
+        // full load order's load on one core of eight. It runs in parallel here; only the appender
+        // writes stay sequential, in enumeration order (AsOrdered), so a re-index lands rows in the
+        // same order it always did. The codec and the collectors hold no per-call mutable state
+        // (RecordTextCodec's caches are ConcurrentDictionaries; Mutagen's binary overlays are
+        // immutable views), and a serialize under parallelism was verified byte-identical to the
+        // sequential one (pinned by ParallelPrepareParityTests). A throw from any record surfaces
+        // as the original exception, not as an AggregateException: every failing record has
+        // already been logged individually by PrepareRecordLogged, so when several fail in one
+        // batch the first is the one rethrown and the rest are in the log.
+        // Bounded batches rather than one parallel pass over the whole type: a 1.55M-record master
+        // has single types in the hundreds of thousands, and preparing all of them before appending
+        // any held every body and ref list live at once — measured as ~100 s of GC on Fallout4.esm,
+        // more than the serialize it was overlapping. A batch's worth is what is ever in flight.
+        foreach (var batch in records.Chunk(PrepareBatchSize))
         {
+            List<PreparedRecord> prepared;
+            var batchTimer = Stopwatch.StartNew();
             try
             {
-                AppendDocument(documentAppender, record, tableName, plugin, origin, loadOrderIndex, gameRelease, containerChildRows);
-                CollectFormRefs(refs, record, tableName, schema);
-                lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
-                if (_logger.IsEnabled(LogLevel.Trace))
-                {
-                    _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                        tableName, record.FormKey, record.EditorID, plugin);
-                }
+                prepared = batch
+                    .AsParallel().AsOrdered()
+                    .Select(record => PrepareRecordLogged(record, tableName, schema, plugin, gameRelease))
+                    .ToList();
             }
-            catch (Exception ex)
+            catch (AggregateException ex) when (ex.InnerExceptions.Count > 0)
             {
-                _logger.LogError(ex,
-                    "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
-                    tableName, record.FormKey, record.EditorID, plugin);
+                ExceptionDispatchInfo.Capture(ex.InnerExceptions[0]).Throw();
                 throw;
             }
+            counters.PrepareMs += batchTimer.ElapsedMilliseconds;
+            batchTimer.Restart();
+
+            foreach (var p in prepared)
+            {
+                var record = p.Record;
+                try
+                {
+                    AppendPrepared(documentAppender, p, tableName, plugin, origin, loadOrderIndex);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Failed to append {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                        tableName, record.FormKey, record.EditorID, plugin);
+                    throw;
+                }
+                refs.AddRange(p.Refs);
+                containerChildRows.AddRange(p.ChildRows);
+                lookupRows.Add((record.FormKey.ToString(), tableName, record.EditorID));
+                if (p.HasVmad) counters.Vmad++;
+                if (p.HasConditions) counters.Conditions++;
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    // #217: same per-record trace texts as before (RecordIndexingLoggingTests pins them).
+                    _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                        tableName, record.FormKey, record.EditorID, plugin);
+                    if (p.HasVmad)
+                    {
+                        _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
+                            record.FormKey, tableName, plugin);
+                    }
+                    if (p.HasConditions)
+                    {
+                        _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
+                            record.FormKey, tableName, plugin);
+                    }
+                }
+            }
+            counters.AppendMs += batchTimer.ElapsedMilliseconds;
+        }
+    }
+
+    /// <summary>Records prepared in parallel ahead of the appender at a time (#113). Large enough
+    /// to keep eight cores busy on cheap records; small enough that a batch of the largest cell
+    /// documents stays well inside a few hundred MB.</summary>
+    private const int PrepareBatchSize = 2048;
+
+    private PreparedRecord PrepareRecordLogged(
+        IMajorRecordGetter record, string tableName, RecordTableSchema schema, string plugin, GameRelease gameRelease)
+    {
+        try
+        {
+            return PrepareRecord(record, tableName, schema, gameRelease);
+        }
+        catch (Exception ex)
+        {
+            // Its own message, not AppendPrepared's: nothing has been appended when this fires —
+            // the serialize, hash, ref walk or child enumeration failed for this record.
+            _logger.LogError(ex,
+                "Failed to prepare {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
+                tableName, record.FormKey, record.EditorID, plugin);
+            throw;
         }
     }
 
@@ -1078,6 +1232,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         public RecordDocument? GetDocument(string formKey) => owner.GetWinningDocument(records, formKey);
         public RecordDocument? GetDocument(string formKey, PluginKey plugin) => owner.GetPluginDocument(records, formKey, plugin);
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => owner.GetPluginDocuments(records, plugin);
         public RecordOverrides? GetOverrideStack(string formKey) => owner.GetOverrideStack(records, formKey);
         public PagedResult<RecordSummary> Search(RecordQuery query) => owner.Search(records, query);
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => owner.GetRecordTypeCounts(records, plugin);
@@ -1121,6 +1276,63 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         RequireSchemas();
         var tableName = FindRecordType(records, formKey);
         return tableName == null ? null : ReadDocument(records, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+    }
+
+    public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) =>
+        GetPluginDocuments(EffectiveRelation, plugin);
+
+    // #547: one query where GetPluginDocument's callers used to loop two point queries per record
+    // (FindRecordType + ReadDocument — ~7,880 round trips for one compile of the real 3,940-record
+    // fixture). Rows are materialized before any reconstitution: resolving a referenced FormKey
+    // opens its own command on this same connection, and doing that under a live reader would
+    // interleave two readers (GetOverrideStack's #415 note).
+    private List<RecordDocument> GetPluginDocuments(string records, PluginKey plugin)
+    {
+        var schemas = RequireSchemas();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type
+            FROM {records}
+            WHERE plugin = $1 AND origin = $2
+            """;
+        AddParams(cmd, [plugin.Name, plugin.Origin!]);
+        using var reader = cmd.ExecuteReader();
+
+        var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
+            bool IsWinner, string? EditorId, string Body, string RecordType)>();
+        while (reader.Read())
+        {
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                reader.GetInt32(3), reader.GetBoolean(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                reader.GetString(6), reader.GetString(7)));
+        }
+        reader.Close();
+
+        // One resolution cache for the whole batch, not one per document — the same referenced
+        // FormKey (a shared keyword, a race) recurs across a plugin's records, and every miss is a
+        // form_lookup query of its own. Resolution is a pure lookup, so sharing changes nothing
+        // about any single document's CheckErrors.
+        var cache = new Dictionary<string, RecordLookupEntry?>();
+        RecordLookupEntry? Resolve(string fk)
+        {
+            if (cache.TryGetValue(fk, out var t)) return t;
+            var resolved = ResolveFormKey(fk);
+            cache[fk] = resolved;
+            return resolved;
+        }
+
+        var documents = new List<RecordDocument>(rows.Count);
+        foreach (var row in rows)
+        {
+            // Same defensive skip as RederiveIndexRowsForRecord: a record_type no schema claims
+            // has no reconstitution path.
+            if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
+            documents.Add(DocumentFromBody(
+                row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
+                row.EditorId, row.Body, schema, Resolve));
+        }
+        return documents;
     }
 
     private RecordDocument? ReadDocument(string records, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
@@ -1408,16 +1620,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// that method's own doc comment for why the values are identical to the pre-#413 wide-table
     /// path by construction.</summary>
     private RecordDocument ReadDocumentFromBody(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
-    {
-        var formKey = reader.GetString(0);
-        var plugin = reader.GetString(1);
-        var origin = reader.GetString(2);
-        var loadOrderIndex = reader.GetInt32(3);
-        var isWinner = reader.GetBoolean(4);
-        var editorId = reader.IsDBNull(5) ? null : reader.GetString(5);
-        var body = reader.GetString(6);
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey) =>
+        DocumentFromBody(
+            reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3),
+            reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.GetString(6), schema, resolveFormKey);
 
+    // #547: the construction half of ReadDocumentFromBody, split out so the bulk read can build
+    // documents from rows it materialized before reconstituting any of them.
+    private RecordDocument DocumentFromBody(
+        string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
+        string? editorId, string body, RecordTableSchema schema,
+        Func<string, RecordLookupEntry?> resolveFormKey)
+    {
         var record = _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), _release, schema.TableName)
             .GetAwaiter().GetResult();
@@ -1741,49 +1956,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    // #420: VMAD Object-property ref collection, re-routed off the deleted vmad_scripts/
-    // vmad_properties/vmad_property_list_items tables. Walks the *live* object here (already in
-    // hand during Index()) rather than the record's own reconstituted document, deliberately — the
-    // document this same Index() call just wrote would cost a second serialize/deserialize round
-    // trip per record for no benefit, since the live getter is right here. GetVmad (above) performs
-    // the read-side equivalent of this walk, on demand, from the document. Same per-record
-    // NotImplementedException guard IndexVmad (VmadIndexer, deleted) used to have: a live
-    // binary-overlay accessor for a not-yet-implemented property type can still throw here, unlike
-    // in GetVmad's reconstituted, JSON-materialized path.
-    private void CollectVmadRefs(IModGetter pluginMod, string plugin, List<FormRef> refs)
-    {
-        var vmadCount = 0;
-        foreach (var record in pluginMod.EnumerateMajorRecords<IHaveVirtualMachineAdapterGetter>(
-                     throwIfUnknown: false))
-        {
-            if (record.VirtualMachineAdapter is null) continue;
-            var recordType = ResolveRecordType(record);
-            try
-            {
-                CollectVmadRefsForRecord(record, recordType, refs);
-                vmadCount++;
-                // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests
-                // pins them) — "indexed" still describes what happens to this record's VMAD, even
-                // though the destination is now the shared refs list rather than a side table.
-                if (_logger.IsEnabled(LogLevel.Trace))
-                {
-                    _logger.LogTrace("Indexed VMAD for {FormKey} ({RecordType}) in {Plugin}",
-                        record.FormKey, recordType, plugin);
-                }
-            }
-            catch (NotImplementedException ex)
-            {
-                _logger.LogWarning(ex,
-                    "Skipping VMAD for {FormKey} — property type not implemented in Mutagen",
-                    record.FormKey);
-            }
-        }
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", vmadCount, plugin);
-        }
-    }
-
     // One record's VMAD Object-property refs — the body of the loop above, extracted so #415's
     // per-record re-derivation walks VMAD through the identical code rather than a second copy of it.
     // The parameter is IMajorRecordGetter rather than the VMAD aspect interface because the
@@ -1867,48 +2039,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
     }
 
-    // Walks every major record through the per-game condition codec (ADR-0032). No aspect interface
-    // groups condition-bearing records, so enumeration is unfiltered; the codec's reflect-for-
-    // `Conditions` check is cheap and yields nothing for records without conditions.
-    //
-    // #420: re-routed off the deleted conditions/condition_parameters tables, straight into the same
-    // shared refs list CollectVmadRefs appends to (#166), both flushed to form_references in one
-    // pass after Index()'s per-type loop. Runs on the live object for the same reason
-    // CollectVmadRefs does (record already in hand; no reason to round-trip through the document).
-    // No NotImplementedException guard here, matching the deleted ConditionIndexer's own caller
-    // (IndexConditions): IConditionCodec.Extract's own contract already lets a malformed-data
-    // InvalidOperationException propagate and fail the whole Index() call, unchanged by this ticket.
-    private void CollectConditionRefs(IModGetter pluginMod, string plugin, List<FormRef> refs)
-    {
-        if (_conditionCodec == null)
-        {
-            _logger.LogWarning("No condition codec for {Game}; skipping condition refs for {Plugin}",
-                pluginMod.GameRelease, plugin);
-            return;
-        }
-
-        var count = 0;
-        foreach (var record in pluginMod.EnumerateMajorRecords())
-        {
-            var recordType = ResolveRecordType(record);
-            if (!CollectConditionRefsForRecord(record, recordType, refs)) continue;
-
-            count++;
-            // #217: same log text/levels as before this ticket (RecordIndexingLoggingTests pins
-            // them) — see CollectVmadRefs's identical note.
-            if (_logger.IsEnabled(LogLevel.Trace))
-            {
-                _logger.LogTrace("Indexed conditions for {FormKey} ({RecordType}) in {Plugin}",
-                    record.FormKey, recordType, plugin);
-            }
-        }
-
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", count, plugin);
-        }
-    }
-
     // One record's condition refs — the body of the loop above, extracted so #415's per-record
     // re-derivation walks conditions through the identical code rather than a second copy of it.
     // Returns whether this record owns any conditions at all, which is what the caller's own
@@ -1955,18 +2085,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private static string ConditionSubFieldPath(string fieldPath, int index, string subField) =>
         $@"CTDA\{fieldPath}\{index}\{subField}";
-
-    private string ResolveRecordType(IMajorRecordGetter record)
-    {
-        var schemas = RequireSchemas();
-        foreach (var (tableName, schema) in schemas)
-        {
-            if (schema.RecordType.IsInstanceOfType(record))
-                return tableName;
-        }
-
-        return record.GetType().Name.ToLowerInvariant();
-    }
 
     private static void CollectFormRefs(
         List<FormRef> refs,

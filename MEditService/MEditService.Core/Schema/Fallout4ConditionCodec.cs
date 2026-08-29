@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Text.Json;
 using Mutagen.Bethesda.Fallout4;
@@ -25,9 +26,8 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     public IEnumerable<ConditionOwner> Extract(IMajorRecordGetter record)
     {
         var owners = new List<ConditionOwner>();
-        foreach (var prop in record.GetType().GetProperties())
+        foreach (var prop in ConditionListPropertiesOf(record.GetType()))
         {
-            if (!IsConditionListProperty(prop)) continue;
             if (prop.GetValue(record) is not IEnumerable<IConditionGetter> conditions) continue;
 
             var parsed = conditions.Select(Parse).ToList();
@@ -65,6 +65,19 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // name (e.g. "Effects[2].Conditions[1].Conditions") — the same CTDA\<FieldPath>\<Index>\
     // <SubField> wire path just treats that whole composed string as one opaque FieldPath segment
     // (#169).
+    // #113: the reflection is per *type*, not per record. Extract used to call GetProperties()
+    // and re-test every property on every record it saw — 63 µs a record, ~3 s per 49k-record DLC
+    // and 29% of a full load order's index time — for an answer that only depends on the CLR type.
+    // Cached once per type, a record of a type with no condition-bearing property costs nothing.
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> ConditionListProperties = new();
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> NestableArrayProperties = new();
+
+    private static PropertyInfo[] ConditionListPropertiesOf(Type type) =>
+        ConditionListProperties.GetOrAdd(type, static t => t.GetProperties().Where(IsConditionListProperty).ToArray());
+
+    private static PropertyInfo[] NestableArrayPropertiesOf(Type type) =>
+        NestableArrayProperties.GetOrAdd(type, static t => t.GetProperties().Where(IsArrayOfNestableStructsProperty).ToArray());
+
     private static IEnumerable<ConditionOwner> ExtractNested(IMajorRecordGetter record) =>
         WalkNestedArrays(record, "", depth: 0);
 
@@ -91,9 +104,8 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     {
         if (depth >= MaxNestedDepth) yield break;
 
-        foreach (var prop in container.GetType().GetProperties())
+        foreach (var prop in NestableArrayPropertiesOf(container.GetType()))
         {
-            if (!IsArrayOfNestableStructsProperty(prop)) continue;
             if (prop.GetValue(container) is not IEnumerable items) continue;
 
             foreach (var owner in WalkNestedArrayProperty(items, prop.Name, pathPrefix, depth))

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -238,8 +239,13 @@ public sealed class GameSession : IGameSession
                 // #515: session ingest's binary path — the "binary is for untracked plugins"
                 // overlay (ADR-0041's #452 amendment) — needs the same explicit strings parameters
                 // Track does, or a Localized untracked plugin throws instead of opening.
+                var importTimer = Stopwatch.StartNew();
                 mod = ModFactory.ImportGetter(modPath, GameRelease, LocalizedStrings.ForRead(ModFolders.Of(origin, filePath), DataFolderPath));
+                var importMs = importTimer.ElapsedMilliseconds;
+
+                var metadataTimer = Stopwatch.StartNew();
                 metadata = BuildPluginMetadata(mod, _ordered[i], i);
+                var metadataMs = metadataTimer.ElapsedMilliseconds;
 
                 Register(mod, origin, fileName, metadata);
 
@@ -247,6 +253,13 @@ public sealed class GameSession : IGameSession
                 {
                     _logger.LogInformation("[{Index}] {FileName}: {RecordCount} records, masters: [{Masters}]",
                         i, fileName, metadata.RecordCount, string.Join(", ", metadata.Masters));
+                }
+                // #113: per-phase load timing — the binary open is lazy, so the record count in
+                // BuildPluginMetadata is where most of the parse cost actually lands.
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("[{Index}] {FileName} opened in {ImportMs} ms + {MetadataMs} ms metadata",
+                        i, fileName, importMs, metadataMs);
                 }
             }
             catch (Exception ex)

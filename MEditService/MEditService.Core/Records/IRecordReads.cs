@@ -23,6 +23,12 @@ public interface IRecordReads
     /// that plugin never indexed this FormKey.</summary>
     RecordDocument? GetDocument(string formKey, PluginKey plugin);
 
+    /// <summary>Every document <paramref name="plugin"/>'s copy holds, in one bulk read — the batch
+    /// counterpart of <see cref="GetDocument(string, PluginKey)"/> (#547), for consumers that scan a
+    /// whole plugin (compile's diagnostics pass) and were paying two point queries per record. The
+    /// header is naturally absent: it has no document (D8).</summary>
+    IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin);
+
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
     RecordOverrides? GetOverrideStack(string formKey);
