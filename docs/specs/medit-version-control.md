@@ -48,10 +48,15 @@ for a `FileDecorationProvider` to badge M/A with git's own
 `gitDecoration.modifiedResourceForeground`/`addedResourceForeground` colours. A field edit
 patches the one cached record (never downgrading a still-uncommitted create's Added to
 Modified) and fires the decoration event for just that URI rather than a tree-wide
-refresh. Committing or reverting through the native Source Control panel pushes no live
-signal to these badges — the extension retains no `Repository` handle from
-`openRepository` to react to, so a badge updates only at the next Modbench-driven read,
-the same no-watcher posture the record editor and compare grid already carry. Deleted is
+refresh. A Modbench edit itself prompts the edited plugin's own `Repository.status()`
+(#557), so the native Source Control panel picks up the resulting working-tree change
+without a manual Refresh click — the extension does retain a `Repository` handle from
+`openRepository` for this outbound direction. But committing or reverting through the
+native Source Control panel still pushes no live signal to these badges: nothing yet
+subscribes to that same `Repository`'s `state.onDidChange`, so a badge set by a
+Modbench-driven edit only clears (or a badge a native commit/revert should have changed
+only updates) at the next Modbench-driven read, the same no-watcher posture the record
+editor and compare grid already carry. Deleted is
 out of scope (follow-up filed separately): `Search()` is Effective-only, so a
 working-tree-deleted record has no row to badge at all — the same way VS Code's own
 Explorer drops a deleted file's row rather than badging it; the native Source Control
