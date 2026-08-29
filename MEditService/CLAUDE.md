@@ -46,6 +46,13 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     file. **Bump `IndexVersion.FormatVersion` when you change `TableDdlBuilder`'s fixed tables or
     the codec's conventions** — `CREATE TABLE IF NOT EXISTS` will otherwise meet an old file's
     column list in silence.
+  - **Session load is registration** (#586 / ADR-0001). `SessionManager.IndexProgressively` indexes
+    only what the file has never seen or whose bytes moved (validation already dropped those) and
+    `Register`s everything else at its `plugins.txt` position — a `plugins` row, no re-index. A
+    tracked plugin never takes that path however current its binary: its source tree is its truth
+    (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates the
+    decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones do, so
+    a warm launch's progress advances instead of sitting at zero.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
     `SessionManager.RequirePlugin`, `IGameSession.LoadOrderPlugin`): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"

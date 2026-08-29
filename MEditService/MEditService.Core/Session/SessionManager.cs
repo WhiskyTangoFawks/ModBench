@@ -222,7 +222,9 @@ public sealed class SessionManager(
     {
         _logger.LogDebug("Initializing DuckDB record repository");
         var createTimer = Stopwatch.StartNew();
-        var repository = _repositoryFactory.Create(gameRelease);
+        // #585/#586 / ADR-0001: the Data folder is what gives the index a home — one persistent file
+        // per game install, so this load finds whatever the last one left there.
+        var repository = _repositoryFactory.Create(gameRelease, session.DataFolderPath);
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("DuckDB record repository initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
@@ -274,20 +276,49 @@ public sealed class SessionManager(
             token.ThrowIfCancellationRequested();
 
             var mod = session.GetMod(plugin.Name, plugin.Origin)!;
+            var key = new PluginKey(plugin.Name, plugin.Origin);
+
+            // #586 / ADR-0001: loading a session the index has already seen *registers* its plugins
+            // rather than indexing them. Registering is a single `plugins` row — the rows this
+            // plugin's file produced are already in the file, and the open-time validation has
+            // already re-hashed them against the disk, so a non-null content hash here means "held,
+            // and still matching the bytes on disk". Everything the file has never seen, and
+            // everything whose bytes moved (validation dropped those), falls through and is indexed.
+            //
+            // A tracked plugin never takes this path, however current its binary: its rows come from
+            // its source tree, which is its truth (ADR-0041/0042) and which the index holds no hash
+            // for. That is why the tree is resolved here rather than inside IndexOnePlugin, which is
+            // where it used to live — the register/index decision needs the same answer, and asking
+            // git twice per plugin is a cost a 72-plugin load order notices.
+            var sourceTree = SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name);
+            if (sourceTree == null && repository.IndexedContentHash(key) != null)
+            {
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation(
+                        "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
+                        plugin.Name, plugin.RecordCount);
+                }
+                repository.Register(key, plugin.LoadOrderIndex, plugin.Participates);
+                // Counted exactly as an indexed plugin is, and for the same reason: Status promises a
+                // plugin listed here is wholly queryable, and a registered one is. This is what makes
+                // a warm launch visibly advance rather than sit at zero until the sweep (#586 AC4).
+                lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
+                firstUsableMs ??= loadTimer.ElapsedMilliseconds;
+                continue;
+            }
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation("Indexing {Plugin} ({RecordCount} records)", plugin.Name, plugin.RecordCount);
             }
-            PluginKey key;
             var indexTimer = Stopwatch.StartNew();
             try
             {
                 // #271 / ADR-0036: threads the origin GameSession already resolved (#269) into the
                 // index, so the DuckDB row is identified by (origin, plugin) together, not filename
                 // alone.
-                key = new PluginKey(plugin.Name, plugin.Origin);
-                IndexOnePlugin(session, repository, plugin, key, mod, token);
+                IndexOnePlugin(session, repository, plugin, key, mod, sourceTree, token);
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
                     _logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -370,11 +401,11 @@ public sealed class SessionManager(
     /// </summary>
     private void IndexOnePlugin(
         GameSession session, IRecordIndex repository, PluginMetadata plugin, PluginKey key,
-        IModGetter binary, CancellationToken token)
+        IModGetter binary, string? sourceTree, CancellationToken token)
     {
-        if (SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name) is not { } sourceTree)
+        if (sourceTree == null)
         {
-            repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key);
+            repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key, plugin.Path);
             return;
         }
 
@@ -386,7 +417,7 @@ public sealed class SessionManager(
             }
             SourceIngest.Ingest(
                 repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
-                plugin.LoadOrderIndex, plugin.Participates, key, session.GameRelease,
+                plugin.LoadOrderIndex, plugin.Participates, key, plugin.Path, session.GameRelease,
                 _schemaReflector, _logger, token);
             return;
         }
@@ -410,7 +441,7 @@ public sealed class SessionManager(
                 "compiled binary instead — edits made since the last compile are not reflected.");
         }
 
-        repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key);
+        repository.Index(binary, plugin.LoadOrderIndex, plugin.Participates, key, plugin.Path);
     }
 
     /// <summary>
@@ -465,7 +496,8 @@ public sealed class SessionManager(
 
             var metadata = _session.AddCreatedPlugin(filePath, origin);
             var openedMod = _session.GetMod(metadata.Name, metadata.Origin)!;
-            _repository!.Index(openedMod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
+            _repository!.Index(openedMod, metadata.LoadOrderIndex, metadata.Participates,
+                new PluginKey(metadata.Name, metadata.Origin), metadata.Path);
             return PluginResponse.FromMetadata(metadata);
         }
     }
@@ -503,7 +535,8 @@ public sealed class SessionManager(
             // No UpdateWinners: a non-participating plugin is excluded from the winner sweep by the
             // `plugins` join, so nothing already computed can change. That is the whole reason
             // ADR-0035 lets these arrive lazily while load-order plugins must load together.
-            _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
+            _repository!.Index(mod, metadata.LoadOrderIndex, metadata.Participates,
+                new PluginKey(metadata.Name, metadata.Origin), metadata.Path);
             // #422: this plugin's own records can newly (or no longer) match an active filter.
             ReapplyFilter();
             return PluginResponse.FromMetadata(metadata);
@@ -588,7 +621,8 @@ public sealed class SessionManager(
             // origin's source tree, exactly as IndexOnePlugin already decides for every other plugin
             // this session opens. Two ingestion paths for one "which copy backs this row" question
             // is exactly the drift this method exists to close, not something to reintroduce here.
-            IndexOnePlugin(_session, repository, metadata, new PluginKey(metadata.Name, metadata.Origin), mod, CancellationToken.None);
+            IndexOnePlugin(_session, repository, metadata, new PluginKey(metadata.Name, metadata.Origin), mod,
+                SourceIngest.TreeFor(metadata.Origin, metadata.Path, metadata.Name), CancellationToken.None);
             // AC7: the whole-set sweep, so winner status and conflict badges describe the new file.
             repository.UpdateWinners();
             // #422: the reread changed record content, which can flip filter membership either way.
@@ -647,7 +681,8 @@ public sealed class SessionManager(
 
         lock (_lock)
         {
-            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
+            repository.Index(loaded.Getter, metadata.LoadOrderIndex, metadata.Participates,
+                new PluginKey(metadata.Name, metadata.Origin), metadata.Path);
             repository.UpdateWinners();
             // #422: re-indexed content can flip filter membership either way.
             ReapplyFilter();
@@ -674,7 +709,8 @@ public sealed class SessionManager(
             lock (_lock)
             {
                 foreach (var (metadata, repository, item) in loaded)
-                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates, new PluginKey(metadata.Name, metadata.Origin));
+                    repository.Index(item.Getter, metadata.LoadOrderIndex, metadata.Participates,
+                        new PluginKey(metadata.Name, metadata.Origin), metadata.Path);
                 if (loaded.Count > 0)
                 {
                     loaded[0].Repository.UpdateWinners();
