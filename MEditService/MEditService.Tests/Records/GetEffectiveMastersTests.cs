@@ -14,8 +14,8 @@ namespace MEditService.Tests.Records;
 /// DERIVED from content — the union of (a) the owning plugin of every FormKey this plugin's
 /// records reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey
 /// this plugin carries that isn't native to it (an override forces that master) — never the
-/// plugin's own declared header master list (ADR-0038's read-time derivation retired with the
-/// pending model, but the "effective, not declared" property survives here).
+/// plugin's own declared header master list (ADR-0038's read-time derivation is retired, but the
+/// "effective, not declared" property survives here).
 ///
 /// The fixture is the discriminating case the correction asked for: Patch.esp's header declares
 /// three masters, but only two are actually required by its content. Header-declared semantics

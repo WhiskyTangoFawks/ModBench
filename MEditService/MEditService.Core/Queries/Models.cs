@@ -45,12 +45,12 @@ public record PluginResponse(
     // Derived on every read, never cached: tracking *is* the presence of that directory, and it can
     // appear or vanish outside Modbench between one response and the next.
     bool IsTracked = false,
-    // CompilePending / LastCompiledAt (#449): whether this plugin's tracked source has moved past
+    // CompileStale / LastCompiledAt (#449): whether this plugin's tracked source has moved past
     // what refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet" — and that
     // ref's own commit timestamp for the tooltip that names it. Both false/null for an untracked
     // plugin or one Track never parked a ref for (Source.ModFolders.CompileFreshnessOf's own
     // degrade-safe answer) — same "derived on every read, never cached" posture as IsTracked above.
-    bool CompilePending = false,
+    bool CompileStale = false,
     DateTimeOffset? LastCompiledAt = null)
 {
     public static PluginResponse FromMetadata(
@@ -63,7 +63,7 @@ public record PluginResponse(
         return new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
             masterIssues ?? [], m.InLoadOrder, hasMatchingRecords,
             Source.ModFolders.IsEditable(m.Origin, m.Path),
-            freshness.Pending, freshness.LastCompiledAt);
+            freshness.Stale, freshness.LastCompiledAt);
     }
 }
 

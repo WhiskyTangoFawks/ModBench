@@ -7,7 +7,7 @@ namespace MEditService.Bridge;
 /// <summary>
 /// #417's live-watch half: a <see cref="FileSystemWatcher"/> per watched (mod folder, plugin) pair,
 /// debounced, calling straight into <see cref="ExternalChangeClassifier"/> — the only mechanic this
-/// class owns is the watch lifecycle and the pending-question queue; classification, self-echo
+/// class owns is the watch lifecycle and the unanswered-question queue; classification, self-echo
 /// suppression and crash-marker suppression all live in <c>MEditService.Core.Source</c>, exactly as
 /// the load-time hash check (a different caller entirely, wired from <c>MEditService.Api</c>) also
 /// calls it. See this project's own <c>.csproj</c> description for the boundary this keeps.
@@ -17,7 +17,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     private readonly TimeSpan _debounce;
     private readonly object _gate = new();
     private readonly Dictionary<string, WatchEntry> _entries = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, PendingExternalChange> _pending = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, UnansweredExternalChange> _unanswered = new(StringComparer.Ordinal);
 
     /// <param name="debounce">How long to wait after the last file-system event before reading and
     /// classifying the binary — collapses the several write events one plugin save can raise (xEdit,
@@ -85,20 +85,20 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// <see cref="ExternalChangeClassification.CrashRecovery"/>, which this class filters out before a
     /// question is ever queued. One entry per plugin: a second detection before the first is answered
     /// replaces the queued question rather than duplicating it.</summary>
-    public IReadOnlyList<PendingExternalChange> Pending()
+    public IReadOnlyList<UnansweredExternalChange> Unanswered()
     {
-        lock (_gate) return [.. _pending.Values];
+        lock (_gate) return [.. _unanswered.Values];
     }
 
     /// <summary>Drops a plugin's queued question — called once the dialog has been answered (Absorb,
     /// Keep, or a fresh detection has superseded it), so a stale question never keeps re-surfacing
     /// after it was already resolved through some other path (e.g. the load-time check).</summary>
-    public void ClearPending(string modFolder, string pluginName)
+    public void MarkAnswered(string modFolder, string pluginName)
     {
-        lock (_gate) _pending.Remove(Key(modFolder, pluginName));
+        lock (_gate) _unanswered.Remove(Key(modFolder, pluginName));
     }
 
-    /// <summary>Feeds a classification computed elsewhere straight into the same pending-question
+    /// <summary>Feeds a classification computed elsewhere straight into the same unanswered-question
     /// queue the live watcher itself fills from <see cref="Settle"/> — the load-time hash check
     /// (fired from <c>MEditService.Api</c>'s session-load handlers, which needs no live watch of its
     /// own to ask the question once) uses this so both triggers share one queue and one dialog
@@ -107,10 +107,10 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// <para>Also the one place that sets <see cref="ExternalChangeDeferral"/>'s marker (#417 exit
     /// path 3: the plugin is refused for editing from the instant a question is detected, not only
     /// after an explicit Esc) — both triggers land here, so both get the refusal without either
-    /// remembering to set it themselves. Set <i>inside</i> the same lock, before <see cref="_pending"/>
+    /// remembering to set it themselves. Set <i>inside</i> the same lock, before <see cref="_unanswered"/>
     /// is updated (#500): the lock's exit barrier is what makes "refused from the instant a question
     /// is detected" true for another thread, not merely likely — without it, a caller reacting to
-    /// <see cref="Pending"/> going non-empty (e.g. the live-watch test's own polling loop) can
+    /// <see cref="Unanswered"/> going non-empty (e.g. the live-watch test's own polling loop) can
     /// observe that before the marker file is durably written, since a plain file write has no
     /// ordering relationship with a separate, unlocked dictionary write. Sharing the lock also
     /// serializes two plugins in the same mod folder being reported near-simultaneously, which would
@@ -123,7 +123,7 @@ public sealed class ExternalChangeWatcher : IDisposable
             ExternalChangeDeferral.Set(modFolder, pluginName,
                 $"{pluginName} (in {Path.GetFileName(modFolder.TrimEnd(Path.DirectorySeparatorChar))}) changed outside " +
                 "Modbench and is awaiting an answer — Absorb Upstream Update or Keep as My Edit.");
-            _pending[Key(modFolder, pluginName)] = new PendingExternalChange(modFolder, pluginName, classification);
+            _unanswered[Key(modFolder, pluginName)] = new UnansweredExternalChange(modFolder, pluginName, classification);
         }
     }
 
@@ -179,4 +179,4 @@ public sealed class ExternalChangeWatcher : IDisposable
 /// <summary>One plugin's unanswered external-change question, as the watcher (or, once the load-time
 /// check is wired, the same classification from that path) last observed it — what
 /// <c>GET /plugins/external-changes/status</c> hands the extension to drive the one dialog.</summary>
-public sealed record PendingExternalChange(string ModFolder, string PluginName, ExternalChangeClassification.ExternalChange Classification);
+public sealed record UnansweredExternalChange(string ModFolder, string PluginName, ExternalChangeClassification.ExternalChange Classification);

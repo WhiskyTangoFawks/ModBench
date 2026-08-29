@@ -62,14 +62,14 @@ public sealed class ExternalChangeClassifierTests
     // ── Crash-marker suppression: #381's territory, never #417's dialog for the same event. ──
 
     [Fact]
-    public void Classify_ReportsCrashRecovery_WhenAJournalMarkerIsPending_EvenWithAHashMismatch()
+    public void Classify_ReportsCrashRecovery_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
     {
         var modFolder = NewModFolder();
         try
         {
             Track(modFolder, "Test.esp");
 
-            // A batch that never lands — CompileJournal.RunBatch's own marker stays pending because
+            // A batch that never lands — CompileJournal.RunBatch's own marker stays unlanded because
             // landed.Count never reaches plugins.Count (root CLAUDE.md: exercise the real seam, not
             // a hand-written marker file).
             CompileJournal.RunBatch(modFolder, ["Test.esp"], _ => false);
@@ -85,7 +85,7 @@ public sealed class ExternalChangeClassifierTests
     }
 
     /// <summary>
-    /// The discriminating case for check <i>order</i>: a marker pending in the same repo (for any
+    /// The discriminating case for check <i>order</i>: an unlanded marker in the same repo (for any
     /// plugin — the marker is per-repo, not per-plugin, per <see cref="CompileJournal"/>'s own doc
     /// comment) alongside a binary whose hash *does* match the parked ref (a genuine self-echo
     /// condition on its own). Marker wins regardless — #417 comment 2 on the issue: the two prompts

@@ -65,15 +65,15 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     }
 
     [Fact]
-    public void Absorb_ClearsAnyPendingDeferralForThePlugin()
+    public void Absorb_ClearsAnyUnansweredDeferralForThePlugin()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
         ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
 
-        Assert.Null(ExternalChangeDeferral.Pending(_mod.ModFolder, TrackedModFixture.PluginName));
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
 
     /// <summary>

@@ -9,7 +9,7 @@ export const REPAIR_WORKING_TREE_BUTTON = 'Compile from Working Tree';
 export const REPAIR_AT_MAIN_BUTTON = 'Compile at main';
 
 /** The modal's message + detail text — the evidence shown, not hidden, same posture #417's own
- *  dialog took: the detail names exactly what was detected (a pending journal marker vs a binary
+ *  dialog took: the detail names exactly what was detected (an unfinished journal marker vs a binary
  *  that could not be read), never a generic "something's wrong". */
 export function messageFor(offer: CrashRepairOffer): { message: string; detail: string } {
   const message = `${offer.plugin} (in ${offer.origin}) needs its binary rebuilt.`;

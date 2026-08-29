@@ -205,7 +205,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
 `MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
-lifecycle plus the pending-external-change queue, nothing else — it references only
+lifecycle plus the unanswered-external-change queue, nothing else — it references only
 session/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfSessionsTests`.
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.

@@ -8,7 +8,7 @@ const DEBOUNCE_MS = 200;
  *  picked up the instant it happens — no manual refresh (modbench/CLAUDE.md: reactive over
  *  manual). Events are debounced: an archive extraction or a purge drops/moves many files at
  *  once, firing a burst of fs events; one re-scan per burst is enough. Returned disposable owns
- *  the underlying watcher and cancels any pending debounced call. `clearTimeout` tolerates an
+ *  the underlying watcher and cancels any in-flight debounced call. `clearTimeout` tolerates an
  *  undefined timer, so there's no need to guard it. */
 export function createDebouncedFsWatcher(instanceRoot: string, glob: string, onChange: () => void): vscode.Disposable {
   const pattern = new vscode.RelativePattern(vscode.Uri.file(instanceRoot), glob);

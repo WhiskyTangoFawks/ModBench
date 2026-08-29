@@ -168,4 +168,27 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    /// <summary>
+    /// The write path above is the <i>only</i> one: <c>/records/{formKey}</c> itself serves a read
+    /// and nothing else, so an agent cannot mutate a record by PUTting the route it read from.
+    ///
+    /// <para>Asserted against the served OpenAPI document — the exact artifact
+    /// <c>modbench/src/medit/generated/api.ts</c> is generated from, so "absent here" is what makes
+    /// the frontend unable to call it at all. The positive control matters as much as the absence:
+    /// an emptiness assertion alone passes just as happily against a typo'd JSON pointer or a host
+    /// that mapped no endpoint, so the surviving read verb is asserted through the identical
+    /// lookup.</para>
+    /// </summary>
+    [Fact]
+    public async Task OpenApiDocument_RecordRoute_OffersNoMutatingVerb()
+    {
+        var body = await _client.GetStringAsync("/swagger/v1/swagger.json");
+        var root = JsonDocument.Parse(body).RootElement;
+        var operations = root.GetProperty("paths").GetProperty("/records/{formKey}")
+            .EnumerateObject().Select(p => p.Name).ToList();
+
+        Assert.Contains("get", operations);
+        Assert.Equal([], operations.Where(verb => verb is "patch" or "post" or "put" or "delete").ToArray());
+    }
 }

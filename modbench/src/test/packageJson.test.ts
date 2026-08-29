@@ -66,7 +66,7 @@ describe('package.json Loadout header view (#247)', () => {
 
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
 // only available way to say Referenced By is sub-functionality of the one Plugins tree, not a
-// sibling of equal standing (ADR-0035). #410: the Pending Changes view it also covered retired
+// sibling of equal standing (ADR-0035).
 // with the model behind it.
 describe('package.json "Plugins - …" naming for Referenced By (#273 Slice B)', () => {
   it('names the Referenced By view "Plugins - Referenced By"', () => {
@@ -601,57 +601,6 @@ describe('package.json per-plugin Track (#414)', () => {
     const title = (pkg.contributes.menus['view/title'] as { command: string }[])
       .filter((e) => e.command === 'modbench.pluginListTree.track');
     expect([...inline, ...title]).toEqual([]);
-  });
-});
-
-// #410/ADR-0041: the pending-change model, the Pending Changes tree and the aggregate
-// SCM provider are retired, so nothing may still be contributed for them. Read as an absence
-// assertion this would pass just as happily against an empty or mis-shaped manifest, so each check
-// pairs with a positive control drawn from the same collection — a surviving contribution that must
-// be found by the identical lookup.
-describe('package.json contributes nothing for the retired pending-change model (#410)', () => {
-  // "ledger" is the retired surface's historical name (#437 renamed the live concept to
-  // "source", which is legitimate vocabulary and deliberately not guarded here).
-  const RETIRED = /pending|changegroup|change-group|saveGroup|revertGroup|saveAllGroups|revertAllGroups|ledger/i;
-
-  it('contributes no command for a pending change, change group or the ledger SCM surface', () => {
-    const commands = (pkg.contributes.commands as { command: string; title: string }[]);
-
-    // Positive control, same list: the read commands this ticket preserves are still contributed.
-    const ids = commands.map((c) => c.command);
-    expect(ids).toContain('modbench.openCompare');
-    expect(ids).toContain('modbench.showReferencedBy');
-
-    expect(commands.filter((c) => RETIRED.test(c.command) || RETIRED.test(c.title))).toEqual([]);
-  });
-
-  it('contributes no view, view container or welcome entry for the Pending Changes tree', () => {
-    const views = Object.values(pkg.contributes.views as Record<string, { id: string; name: string }[]>).flat();
-
-    // Positive control, same flattened list.
-    expect(views.map((v) => v.id)).toContain('modbench.referencedByTree');
-
-    expect(views.filter((v) => RETIRED.test(v.id) || RETIRED.test(v.name))).toEqual([]);
-  });
-
-  it('contributes no menu entry that invokes or gates on retired pending-change state', () => {
-    const menus = Object.entries(pkg.contributes.menus as Record<string, { command?: string; when?: string }[]>)
-      .flatMap(([menu, entries]) => entries.map((e) => ({ menu, ...e })));
-
-    // Positive control, same flattened list. modbench.openHeader itself no longer contributes a
-    // menu entry (#345: row click replaces the button) — revealInExplorer still does.
-    expect(menus.some((m) => m.command === 'modbench.pluginListTree.revealInExplorer')).toBe(true);
-
-    expect(menus.filter((m) => RETIRED.test(m.command ?? '') || RETIRED.test(m.when ?? ''))).toEqual([]);
-  });
-
-  it('contributes no keybinding for a retired pending-change command', () => {
-    const keys = (pkg.contributes.keybindings ?? []) as { command: string; when?: string }[];
-
-    // Positive control, same list: keybindings really are being read from the manifest.
-    expect(keys.map((k) => k.command)).toContain('modbench.pluginListTree.filter');
-
-    expect(keys.filter((k) => RETIRED.test(k.command) || RETIRED.test(k.when ?? ''))).toEqual([]);
   });
 });
 

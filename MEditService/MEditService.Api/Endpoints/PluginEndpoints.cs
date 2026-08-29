@@ -125,17 +125,12 @@ public static class PluginEndpoints
 
         // #427: create-record — the plugin hosts the new group, so it owns the route the way Compile
         // does; the FormKey doesn't exist yet, which is exactly why this isn't under /records/{formKey}.
-        // Same route shape a retired pending-change-era endpoint once had (RetiredEditingWireSurfaceTests
-        // used to pin it absent); the summary/description below carry the "same string, new meaning"
-        // distinction onto the surface itself, not just a test comment.
         app.MapPost("/plugins/{plugin}/records", CreateRecord)
             .WithName("CreateRecord")
             .WithSummary("Create a new record as a working-tree change (#427).")
             .WithDescription(
                 "Mints a new record and writes it as a new source file in the plugin's working tree — " +
-                "a git-native create, answering at Effective only until committed and compiled. Not the " +
-                "retired pending-change-era create this same route once served; that mechanism (staged " +
-                "rows, no source text) was removed with ADR-0041/#410.")
+                "a git-native create, answering at Effective only until committed and compiled.")
             .WithTags(Tag)
             .Produces<RecordCreateResponse>()
             .ProducesProblem(400)
@@ -164,12 +159,12 @@ public static class PluginEndpoints
             .ProducesProblem(422);
 
         // #417: polled the same way GET /plugins/track/status is — always 200, an empty list when
-        // nothing is pending, no session dependency of its own (the watcher's queue lives on the
+        // nothing is unanswered, no session dependency of its own (the watcher's queue lives on the
         // singleton ExternalChangeWatcher, same idiom as TrackService.Progress).
         app.MapGet("/plugins/external-changes/status", ExternalChangeStatus)
             .WithName("GetExternalChangeStatus")
             .WithTags(Tag)
-            .Produces<IReadOnlyList<PendingExternalChangeResponse>>();
+            .Produces<IReadOnlyList<UnansweredExternalChangeResponse>>();
 
         // #417: Absorb Upstream Update. 200 either way — a refusal here is the same typed-result
         // posture Compile already established, not an HTTP error a client has to distinguish from a
@@ -553,19 +548,19 @@ public static class PluginEndpoints
         }
     }
 
-    // #417: the watcher's own queue plus (best-effort) the origin each pending plugin currently
+    // #417: the watcher's own queue plus (best-effort) the origin each unanswered plugin currently
     // resolves to in the loaded session — a session that has since reloaded away from a plugin still
     // reports the question with an empty Origin rather than dropping it, since the question itself
     // is still real and unanswered regardless of what's loaded right now.
     internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ISessionManager sessionManager)
     {
         var session = sessionManager.Session;
-        var responses = watcher.Pending().Select(p =>
+        var responses = watcher.Unanswered().Select(p =>
         {
             var origin = session?.Plugins.FirstOrDefault(pl =>
                 pl.Name.Equals(p.PluginName, StringComparison.OrdinalIgnoreCase)
                 && ModFolders.Of(pl.Origin, pl.Path) == p.ModFolder)?.Origin ?? "";
-            return new PendingExternalChangeResponse(p.PluginName, origin, p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion);
+            return new UnansweredExternalChangeResponse(p.PluginName, origin, p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion);
         }).ToList();
         return Results.Ok(responses);
     }
@@ -586,7 +581,7 @@ public static class PluginEndpoints
         try
         {
             ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!);
-            watcher.ClearPending(modFolder, decoded);
+            watcher.MarkAnswered(modFolder, decoded);
             watcher.Watch(modFolder, decoded, pluginPath!);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
         }
@@ -618,7 +613,7 @@ public static class PluginEndpoints
                 sessionManager.Index!, reflector, logger);
             if (result.Applied)
             {
-                watcher.ClearPending(modFolder, decoded);
+                watcher.MarkAnswered(modFolder, decoded);
                 watcher.Watch(modFolder, decoded, pluginPath!);
             }
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
@@ -679,7 +674,7 @@ public static class PluginEndpoints
 
     // Same reason ResolveModFolder above doesn't reuse PluginOriginResolver.Resolve: this must
     // still find a plugin shadowed out of the load order, since that copy is exactly what
-    // absorb/keep target when it's the one whose origin the pending question named.
+    // absorb/keep target when it's the one whose origin the unanswered question named.
     private static (string? ModFolder, string? PluginPath, IGameSession? Session) ResolvePluginPath(
         ISessionManager sessionManager, string pluginName, string origin, ILogger logger)
     {
@@ -730,7 +725,7 @@ public record CompileRequest(string Origin, string? Ref);
 // NewVersion are the evidence the pinned UX contract says must be shown, not hidden, and
 // MetaChanged alone (never acted on server-side) is what the extension uses to pick the default
 // button.
-public record PendingExternalChangeResponse(string Plugin, string Origin, bool MetaChanged, string? OldVersion, string? NewVersion);
+public record UnansweredExternalChangeResponse(string Plugin, string Origin, bool MetaChanged, string? OldVersion, string? NewVersion);
 
 // #417: Absorb Upstream Update / Keep as My Edit both take just an origin — the plugin name already
 // rides the route, matching CompileRequest's own shape.

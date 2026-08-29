@@ -380,7 +380,7 @@ without saying what is not yet known would make that worse, not better.
   ordinary working-tree change (#427); an uncommitted create has no special-cased handling — its
   source file is simply removed the same way, since it was never committed to begin with.
 - **Copy as Override Into…/Copy as New Record Into…** (#281 shipped this; ADR-0041's
-  pending-change sweep tore it out along with the storage layer it sat on; #436/#494 restored it):
+  ADR-0041 sweep tore it out along with the storage layer it sat on; #436/#494 restored it):
   available on both `"record"` and `"recordImmutable"` rows — unlike Remove/Change FormID…,
   copying *from* an immutable or shadowed source is the ordinary case here, not an exception — and
   identically from the record editor's own column header context menu, both entry points sharing
@@ -589,10 +589,10 @@ that existing index, not a second disk walk.
   [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448) — see Stack node, below — which
   needs the badge above as the signal that a Stack node exists at all. Delta compare (Effective
   vs Effective, "Compare with winner" on a peer) is its own split,
-  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet built. Compile-pending
-  decoration is its own split too — see Compile-pending decoration, below.
+  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet built. Compile-staleness
+  decoration is its own split too — see Compile-staleness decoration, below.
 
-### Compile-pending decoration ([#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449))
+### Compile-staleness decoration ([#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449))
 
 Split (d) of #397's design record — the state level of the Resolution stack (`CONTEXT.md`): within
 a tracked plugin, source stacks on the compiled binary, and this is the always-on signal that the
@@ -600,10 +600,10 @@ two have diverged. Where the file-override decoration above is a Mod-Management 
 physical file a name resolves to, this is an Editing fact about a tracked plugin's own git state —
 "the game can't see your edits yet."
 
-- **Trigger.** A plugin row is compile-pending exactly when its source (the working tree, or a
+- **Trigger.** A plugin row is compile-stale exactly when its source (the working tree, or a
   commit landed since — commit stays ungated, ADR-0042's amendment) has moved past what
   `refs/medit/last-compile/<plugin>` parked (`Save & Compile`, `CONTEXT.md`) — computed backend-side
-  (`ModFolders.CompileFreshnessOf`, `PluginResponse.CompilePending`/`LastCompiledAt` on every
+  (`ModFolders.CompileFreshnessOf`, `PluginResponse.CompileStale`/`LastCompiledAt` on every
   `GET /plugins`), cheap and bounded by dirt per the freshness philosophy
   ([medit-version-control.md](medit-version-control.md)): two git calls scoped to the plugin's own
   `source/<plugin>/` subtree, never touching record count or load order. Never shown for an
@@ -613,14 +613,14 @@ physical file a name resolves to, this is an Editing fact about a tracked plugin
 - **Visual encoding — session-derived, the same machinery as the missing-master/load-failure
   decorations above (`PluginsTreeComposite`, icon/description/tooltip, append-never-replace),
   not the file-override family's `FileDecorationProvider` tint:** this is a git-tracked-state fact
-  requiring a session, not a filesystem one. A **description hint** (`⟳ Compile pending`) and a
+  requiring a session, not a filesystem one. A **description hint** (`⟳ Source ahead`) and a
   **tooltip** ("Source ahead of binary — last compiled `<when>`", or "last compiled unknown" for a
   ref with no readable timestamp) are appended after (never replacing) whatever the row already
   carries. Deliberately **never claims the icon slot** — it never steals `iconPath` from a
   higher-severity decoration already on the row (a load failure or a master issue), and renders no
   icon of its own when neither of those claimed it either: the description hint is the primary
   signal here, not an icon.
-- **Coexists with every other decoration on this tree.** A plugin can be compile-pending and carry
+- **Coexists with every other decoration on this tree.** A plugin can be compile-stale and carry
   a master issue, a load failure, or be a file override, all at once, and every decoration remains
   legible — append-only by construction, the same convention the file-override and read-only-note
   decorations above already establish.
@@ -727,7 +727,7 @@ drives anything on this tree — Axis 2 stays the compare grid's own concern
   false→true transition point the incompleteness message and the record panel's own comparison
   refetch already use. A live-mutation re-sweep now re-fires it too for a participation toggle
   (#97, reusing the same signal rather than adding a second state-machine step); reorder's own
-  re-sweep doesn't yet, pending #545.
+  re-sweep doesn't yet, awaiting #545.
 - **Children: `GetConflicts()`** (`RecordQueryService`, `GET /records/conflicts`) — every FormKey
   with more than one override entry (`IRecordReads.GetContestedFormKeys`) whose record-wide
   `ConflictAll` is not `OnlyOne`/`NoConflict`, classified through the same `ClassifyStack` helper

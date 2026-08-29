@@ -107,7 +107,7 @@ public sealed class PluginCompileService(
         // exactly what the marker is for. compileOne is not wrapped in a try/catch: an exception from
         // the write propagates out of RunBatch (and out of this method) with the marker left exactly
         // as CompileJournal.WriteMarker last wrote it — the same observable state a real crash leaves,
-        // which is what PendingRecovery reads back for #381/#417.
+        // which is what UnfinishedBatch reads back for #381/#417.
         var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
         CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
         {

@@ -13,7 +13,7 @@ namespace MEditService.Core.Source;
 /// per repo, and a mod folder can hold more than one plugin whose dialogs answer independently.
 ///
 /// <para>This is the one place both doors #415 pinned onto the single write path consult before
-/// writing anything: <see cref="Edits.RecordEditService.EditField"/> checks <see cref="Pending"/>
+/// writing anything: <see cref="Edits.RecordEditService.EditField"/> checks <see cref="Unanswered"/>
 /// before touching the source file or the index, so every edit gesture that goes through it — today
 /// and whatever #426/#427 add later — inherits the refusal without adding its own check.</para>
 ///
@@ -29,8 +29,8 @@ public static class ExternalChangeDeferral
     private static string MarkerPath(string modFolder) => Path.Combine(modFolder, ".git", MarkerFileName);
 
     /// <summary>Records that <paramref name="plugin"/> has an unanswered external-change question —
-    /// <paramref name="question"/> is the exact user-facing message <see cref="Pending"/> hands back
-    /// to a refused edit, so the signposting names the real pending question rather than a generic
+    /// <paramref name="question"/> is the exact user-facing message <see cref="Unanswered"/> hands back
+    /// to a refused edit, so the signposting names the real unanswered question rather than a generic
     /// "try again later".</summary>
     public static void Set(string modFolder, string plugin, string question)
     {
@@ -41,7 +41,7 @@ public static class ExternalChangeDeferral
 
     /// <summary>Answers the question for <paramref name="plugin"/> — called once Absorb Upstream
     /// Update or Keep as My Edit has landed. Deletes the marker file entirely once no plugin in this
-    /// repo has a pending question left, the same "marker present means something is pending, absent
+    /// repo has a unanswered question left, the same "marker present means something is unanswered, absent
     /// means clean" idiom <see cref="CompileJournal"/> uses.</summary>
     public static void Clear(string modFolder, string plugin)
     {
@@ -59,10 +59,10 @@ public static class ExternalChangeDeferral
         }
     }
 
-    /// <summary>The pending question's message, or null when <paramref name="plugin"/> has none —
+    /// <summary>The unanswered question's message, or null when <paramref name="plugin"/> has none —
     /// safe to call for an untracked folder or one with no marker at all, never a throw (same
     /// degrade-don't-crash posture as every other read in this folder).</summary>
-    public static string? Pending(string modFolder, string plugin)
+    public static string? Unanswered(string modFolder, string plugin)
     {
         var entries = ReadAll(modFolder);
         return entries.TryGetValue(plugin, out var question) ? question : null;

@@ -272,7 +272,7 @@ describe('DiffRow — non-top-level contexts', () => {
 
 // Issue #157 / ADR-0031 regression coverage: the affordance must key off the leaf's own
 // `diff.resolutions` entry, not the parent field's aggregate `checkError` (looked up via
-// `overrideMap`/`pendingLookupField`) — a dangling sibling in the same struct/array must not hide
+// `overrideMap`/the old lookup field) — a dangling sibling in the same struct/array must not hide
 // a live link on the leaf next to it.
 describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
   const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -282,7 +282,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
 
   // Simulates today's aggregate bug: the parent field carries a checkError (e.g. because a
   // *different* sibling element/member is dangling), which the old code read via overrideMap +
-  // pendingLookupField regardless of which leaf row was rendering.
+  // the lookup field regardless of which leaf row was rendering.
   function leafProps(
     kind: 'array-element' | 'struct-child',
     resolution: FormKeyResolution,

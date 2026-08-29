@@ -76,7 +76,7 @@ try
     builder.Services.AddSingleton<RecordEditService>();
     // #416: the write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // #417: the bridge's own live-watch lifecycle and pending-question queue — one instance for the
+    // #417: the bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
     // whole process, so the load-time check (session-load handlers) and the live watcher share it.
     builder.Services.AddSingleton<ExternalChangeWatcher>();
 

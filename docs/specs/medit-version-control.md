@@ -19,7 +19,7 @@ resolving the active record's plugin, tree-row context menu, palette QuickPick f
 source text to the binary through the journaled write pipeline — masters derived from content
 in load order, container structure assembled from the index (`container_child` +
 placement), typed refusals for unemittable states, diagnostics to the Problems panel on
-success, per-repo `.git` journal markers (batch of one, `PendingRecovery` readable), and a
+success, per-repo `.git` journal markers (batch of one, `UnfinishedBatch` readable), and a
 parked `refs/medit/last-compile/<plugin>` advance after every landed write, `AtRef`
 included. External-change handling is live: the Bridge watcher and the load-time hash
 check classify against the parked ref (self-echo suppressed, crash markers routed away
@@ -58,7 +58,7 @@ Explorer drops a deleted file's row rather than badging it; the native Source Co
 panel already shows that D for free. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417) — it replaces the
-retired aggregate-SCM and Pending Changes tree specs, both deleted by #418's closeout.
+retired aggregate-SCM and staged-edit tree specs, both deleted by #418's closeout.
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **tracked mods**
 (glossary: Tracked mod, Track, Source, Edit branch, Baseline, Save & Compile, Working-tree
@@ -67,7 +67,7 @@ vocabulary: tracking is a property of the mod *folder* (where `.git` lives), whi
 other gesture here operates on plugins and records.
 
 **The UX reference is git and VS Code, not xEdit** (ADR-0034's recorded exception — xEdit
-has no pending-change model). Where a gesture exists in VS Code's own git experience, this
+has no staged-edit model). Where a gesture exists in VS Code's own git experience, this
 surface copies it; Modbench invents nothing the platform already renders.
 
 ## Problem Statement
@@ -324,7 +324,7 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
   records — commit or revert as usual. A same-record collision with existing uncommitted
   dirt refuses first, naming the records.
 - **Esc = defer, per-plugin read-only**: nothing is written; the plugin refuses edits
-  (signposting the pending question) until answered; reads keep serving last-known state;
+  (signposting the unanswered question) until answered; reads keep serving last-known state;
   the question re-asks at next detection or load.
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
   untracked, per ADR-0041.
@@ -336,7 +336,7 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
 Live: the load-time hash check (`ExternalChangeSessionHook`, shared with #417) covers two
 states on every tracked plugin, both detected only at session load — the only moment either
 can newly arise, since one is this same process's own interrupted compile and the other is a
-read failure a running session would already have hit once. A pending `CompileJournal` marker
+read failure a running session would already have hit once. An unfinished `CompileJournal` marker
 (a crash, or a kill, between the binary write landing and the marker clearing) classifies as
 `CrashRecovery` and routes here, never to #417's dialog — the two prompts never both fire for
 one event, checked at the classifier itself before any hash compare. A tracked plugin's binary

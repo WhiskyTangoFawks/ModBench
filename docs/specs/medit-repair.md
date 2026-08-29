@@ -100,7 +100,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   written before this returns.
 - **Write**: the repaired binary replaces the plugin file **in the mod folder**, through the
   same prepare/commit path Save & Compile uses (`PluginWriter`: journal markers,
-  `PendingRecovery`, and the ADR-0008 timestamped `<plugin>.bak` beside the file, pruned to
+  `UnfinishedBatch`, and the ADR-0008 timestamped `<plugin>.bak` beside the file, pruned to
   five) — no repair-specific backup file. MO2 recognises plugins by `.esp/.esm/.esl` suffix
   only, so the `.bak` is invisible to its plugin list. Header `HEDR.NumRecords`/`NextObjectID`
   untouched (#506); record and GRUP sizes recomputed by the engine, which is the only

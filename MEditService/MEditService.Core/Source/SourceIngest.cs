@@ -212,8 +212,8 @@ internal static class SourceIngest
             if (headText == null)
             {
                 // In the working tree, at no commit: a record created and not yet committed. #427's
-                // write path never runs `git add`, so this is the ordinary shape of a pending create
-                // (an untracked "??" entry), not a rare one.
+                // write path never runs `git add`, so this is the ordinary shape of a working-tree
+                // create (an untracked "??" entry), not a rare one.
                 workingTreeOnly.Add(record.FormKey.ToString());
                 continue;
             }

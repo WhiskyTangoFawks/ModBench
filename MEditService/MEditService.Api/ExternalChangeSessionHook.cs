@@ -14,7 +14,7 @@ namespace MEditService.Api;
 ///
 /// <para>#381: the same pass also collects crash-repair offers — a plugin's own
 /// <see cref="ExternalChangeClassifier.Classify"/> verdict routes here instead of into the watcher's
-/// queue whenever it is <see cref="ExternalChangeClassification.CrashRecovery"/> (a pending
+/// queue whenever it is <see cref="ExternalChangeClassification.CrashRecovery"/> (an unanswered
 /// <see cref="CompileJournal"/> marker), and a read failure on a tracked plugin's binary — never
 /// classified at all, since there are no bytes to hash — is caught directly. Neither reason is a
 /// question the external-change dialog can honestly ask (#381's own doc comment on

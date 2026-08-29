@@ -32,7 +32,7 @@ function makePlugins(count: number): PluginMetadata[] {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
-    compilePending: false,
+    compileStale: false,
     lastCompiledAt: null,
   }));
 }
@@ -66,7 +66,7 @@ function makeClient({
       }
       // #427: create/delete/renumber — the wire shapes RecordEndpoints/PluginEndpoints actually
       // serve (RecordCreateResponse/RecordDeleteResponse/RecordRenumberResponse), not the retired
-      // pending-change-era shapes (e.g. `groupId`) these paths carried before ADR-0041/#410.
+      // retired-model shapes (e.g. `groupId`) these paths carried before ADR-0041/#410.
       if (path === '/plugins/{plugin}/records') {
         return Promise.resolve(
           createRecordOk
@@ -1099,7 +1099,7 @@ describe('SessionController.createRecord', () => {
       body: { origin: 'ModA', recordType: 'npc_', editorId: 'NewNpc', formKey: null },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: a create is a working-tree change to a tracked plugin's source — the compile-pending
+    // #449: a create is a working-tree change to a tracked plugin's source — the compile-staleness
     // decoration needs the same re-derive refreshTree's sibling facts already get here.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
@@ -1345,7 +1345,7 @@ describe('SessionController.absorbUpstreamUpdate', () => {
     });
     expect(deps.refreshTree).toHaveBeenCalled();
     // #449: absorbing a new baseline moves the source under this plugin the same way a track
-    // does — the compile-pending decoration needs the same re-derive.
+    // does — the compile-staleness decoration needs the same re-derive.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 

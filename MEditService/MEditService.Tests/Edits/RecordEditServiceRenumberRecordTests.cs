@@ -223,15 +223,15 @@ public sealed class RecordEditServiceRenumberRecordTests
     }
 
     [Fact]
-    public void RenumberRecord_Refuses_WhileAnExternalChangeQuestionIsPending()
+    public void RenumberRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = TrackedModFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
     }
 
     [Fact]

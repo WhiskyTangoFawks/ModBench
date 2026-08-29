@@ -11,7 +11,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>
 /// #436 (ADR-0041 restoration): xEdit's "Copy as Override Into…" — #281 shipped this, ADR-0041's
-/// pending-change sweep tore it out along with the storage layer it happened to sit on, and #426/#427's
+/// sweep tore it out along with the storage layer it happened to sit on, and #426/#427's
 /// re-implementation wave never carried it forward. This suite is the entry point's own contract:
 /// same-FormKey landing in the destination's own working tree, the collision/container/untracked
 /// refusals every gesture on this write path either inherits or reuses, and the two read postures

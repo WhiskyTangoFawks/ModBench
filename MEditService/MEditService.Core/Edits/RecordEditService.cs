@@ -18,7 +18,7 @@ namespace MEditService.Core.Edits;
 /// <summary>
 /// The single write path (ADR-0041 / #415): a field edit on a tracked plugin becomes a working-tree
 /// change to that record's source JSON, and nothing else. There is no second path — no direct binary
-/// write, no staged pending state — which is why an untracked plugin is refused here rather than
+/// write, no staged intermediate state — which is why an untracked plugin is refused here rather than
 /// quietly served by some other mechanism.
 ///
 /// <para><b>The source text is the source, not the index.</b> Each edit reads the record's source
@@ -1601,8 +1601,8 @@ public sealed class RecordEditService(
         // gesture on the single write path \u2014 checked before anything else, so neither of the write
         // path's two doors fires: the source file is never touched, and the index call that would
         // tell the DB about it is never reached.
-        return ExternalChangeDeferral.Pending(folder, plugin.Name) is { } pendingQuestion
-            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangePending, pendingQuestion)
+        return ExternalChangeDeferral.Unanswered(folder, plugin.Name) is { } question
+            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
             : null;
     }
 

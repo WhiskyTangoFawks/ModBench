@@ -25,20 +25,20 @@ export interface ModlistTree {
 
 export function groupModlist(entries: ModlistEntry[]): ModlistTree {
   const groups: ModlistGroup[] = [];
-  let pending: Mod[] = [];
+  let buffered: Mod[] = [];
   let activeCount = 0;
   let installedCount = 0;
 
   for (const entry of entries) {
     if (entry.kind === 'separator') {
-      groups.push({ separator: entry, mods: pending });
-      pending = [];
+      groups.push({ separator: entry, mods: buffered });
+      buffered = [];
       continue;
     }
     installedCount++;
     if (entry.enabled) activeCount++;
-    pending.push(entry);
+    buffered.push(entry);
   }
 
-  return { ungrouped: pending, groups, activeCount, installedCount };
+  return { ungrouped: buffered, groups, activeCount, installedCount };
 }

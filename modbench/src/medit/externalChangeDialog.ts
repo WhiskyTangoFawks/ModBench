@@ -1,4 +1,4 @@
-import type { PendingExternalChange } from './ApiClient';
+import type { UnansweredExternalChange } from './ApiClient';
 
 /** #417 pinned UX contract: the two buttons, native cancel (Esc) always a third, unnamed option. */
 export const ABSORB_BUTTON = 'Absorb Upstream Update';
@@ -6,19 +6,19 @@ export const KEEP_BUTTON = 'Keep as My Edit';
 
 export type ExternalChangeDialogAnswer = 'absorb' | 'keep' | 'defer';
 
-/** Every pending question sharing one mod folder — the pinned contract's own unit ("one native
+/** Every unanswered question sharing one mod folder — the pinned contract's own unit ("one native
  *  modal per affected mod **repo**... the repo is the unit of baselines and rebase"), never one
  *  per plugin: a mod folder can hold more than one plugin, and their questions answer together. */
 export interface ExternalChangeRepoGroup {
   origin: string;
-  items: readonly PendingExternalChange[];
+  items: readonly UnansweredExternalChange[];
 }
 
-/** Groups a flat pending list by `origin` — order-preserving (first-seen origin first), so the
+/** Groups a flat unanswered-change list by `origin` — order-preserving (first-seen origin first), so the
  *  sequential dialog loop below visits repos in the order the backend reported them. */
-export function groupByOrigin(pending: readonly PendingExternalChange[]): ExternalChangeRepoGroup[] {
-  const byOrigin = new Map<string, PendingExternalChange[]>();
-  for (const item of pending) {
+export function groupByOrigin(unanswered: readonly UnansweredExternalChange[]): ExternalChangeRepoGroup[] {
+  const byOrigin = new Map<string, UnansweredExternalChange[]>();
+  for (const item of unanswered) {
     const items = byOrigin.get(item.origin);
     if (items) items.push(item);
     else byOrigin.set(item.origin, [item]);
@@ -78,7 +78,7 @@ export type ShowExternalChangeDialog = (
 ) => Thenable<string | undefined> | Promise<string | undefined>;
 
 export interface ExternalChangeDialogOutcome {
-  pending: PendingExternalChange;
+  change: UnansweredExternalChange;
   answer: ExternalChangeDialogAnswer;
 }
 
@@ -95,18 +95,18 @@ export interface ExternalChangeDialogOutcome {
  * and the absorb/keep endpoints are both per-plugin, per the pinned contract).
  */
 export async function runExternalChangeDialogs(
-  pending: readonly PendingExternalChange[],
+  unanswered: readonly UnansweredExternalChange[],
   show: ShowExternalChangeDialog,
 ): Promise<ExternalChangeDialogOutcome[]> {
   const outcomes: ExternalChangeDialogOutcome[] = [];
-  for (const group of groupByOrigin(pending)) {
+  for (const group of groupByOrigin(unanswered)) {
     const [first, second] = buttonsInDefaultOrder(group);
     const { message, detail } = messageFor(group);
     // Sequential by construction, deliberately not Promise.all'd: the pinned contract requires one
     // modal at a time, so the next repo's question must not be posed until this one settles.
     const choice = await show(message, { modal: true, detail }, first, second);
     const answer = toAnswer(choice);
-    for (const item of group.items) outcomes.push({ pending: item, answer });
+    for (const item of group.items) outcomes.push({ change: item, answer });
   }
   return outcomes;
 }

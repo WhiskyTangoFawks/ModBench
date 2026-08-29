@@ -61,14 +61,14 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     }
 
     [Fact]
-    public void Keep_ClearsAnyPendingDeferral()
+    public void Keep_ClearsAnyUnansweredDeferral()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
 
         ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
 
-        Assert.Null(ExternalChangeDeferral.Pending(_mod.ModFolder, TrackedModFixture.PluginName));
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
 
     /// <summary>AC5: an external change colliding with uncommitted dirt on the same record refuses

@@ -14,7 +14,7 @@ function makeOverride(plugin: string): RecordDetail {
 }
 
 describe('buildColumns', () => {
-  // #410/ADR-0041: one column per override — the pending companion column is gone.
+  // #410/ADR-0041: one column per override — the retired companion column is gone.
   it('builds one disk column per override', () => {
     const cols = buildColumns([makeOverride('A'), makeOverride('B')]);
     expect(cols).toHaveLength(2);

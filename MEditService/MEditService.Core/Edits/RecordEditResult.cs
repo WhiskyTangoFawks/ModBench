@@ -40,9 +40,9 @@ public enum RecordEditRefusal
 
     /// <summary>#417 exit path 3: the plugin's binary changed outside Modbench and the one dialog
     /// (Absorb Upstream Update / Keep as My Edit) has not been answered yet. Refused rather than
-    /// silently served, per-plugin, until answered — the way out is answering the pending question,
+    /// silently served, per-plugin, until answered — the way out is answering the unanswered question,
     /// not a command.</summary>
-    ExternalChangePending,
+    ExternalChangeUnanswered,
 
     /// <summary>#427 create: no schema table of that name (or it names the header, which is not a
     /// major record and cannot be created this way).</summary>

@@ -16,7 +16,7 @@ public sealed class ReferencePluginFixture : IApiPluginFixture<ReferencePluginFi
     /// <summary>NPC that has KeywordFormKey in its Keywords list (committed reference).</summary>
     public FormKey NpcWithKeywordFormKey { get; }
 
-    /// <summary>NPC with no keywords (used for pending-addition test).</summary>
+    /// <summary>NPC with no keywords (used for the keyword-addition test).</summary>
     public FormKey NpcWithoutKeywordFormKey { get; }
 
     private readonly PluginFixtureData _data;

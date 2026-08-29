@@ -67,7 +67,7 @@ public interface IRecordReads
     /// The distinct master plugins <paramref name="plugin"/>'s content actually requires at this
     /// ref — <b>derived</b>, never the plugin's own declared header list (ADR-0038's "effective
     /// masters": committed masters unioned with the origin plugins everything the plugin's
-    /// content, committed and (from #415) pending, actually references). A master a plugin
+    /// content, committed and (from #415) uncommitted alike, actually references). A master a plugin
     /// declares but nothing in it references or overrides is not effective and is excluded.
     /// Computed as the union of (a) the owning plugin of every FormKey this plugin's records
     /// reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey this

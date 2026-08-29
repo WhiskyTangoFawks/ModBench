@@ -35,7 +35,7 @@ describe('createDebouncedFsWatcher', () => {
     expect(watcher.disposed).toBe(true);
   });
 
-  it('disposing before the debounce window elapses cancels the pending onChange', () => {
+  it('disposing before the debounce window elapses cancels the in-flight onChange', () => {
     const onChange = vi.fn();
     const disposable = createDebouncedFsWatcher('/instance', 'test/**', onChange);
     watchers[0].fireCreate();

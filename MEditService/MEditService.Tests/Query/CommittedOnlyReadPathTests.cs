@@ -10,16 +10,14 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #410/ADR-0041: the read path answers from the index alone. Every surface below used to read
-/// through a pending overlay — a record list that appended staged-only rows, a compare whose
-/// override values could be a staged value rather than the committed one, a reference list that
-/// subtracted superseded references and unioned staged ones back in — and now reports exactly what
-/// the loaded plugins declare.
+/// ADR-0041: the read path answers from the index alone. A record list reports exactly the records
+/// its plugin declares, a compare's override values are the committed ones, and a reference list is
+/// what the plugin declares and nothing else — no surface reconstructs a second answer on the way
+/// out.
 ///
-/// These are green on arrival: with the pending model gone there is no longer any way to stage the
-/// thing they forbid. Each one's non-vacuity was therefore established by rival (#410 execution
-/// notes): the deleted overlay branch was re-applied by hand against a synthetic staged row, each
-/// test observed failing, and the rival reverted from a file copy.
+/// Each test's non-vacuity was established by rival: an overlay branch that appended synthetic
+/// unindexed rows was applied by hand, each test observed failing, and the rival reverted from a
+/// file copy.
 /// </summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable

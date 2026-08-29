@@ -2160,9 +2160,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // #421: private — GetReferencedBy(string) above is the public seam member and delegates here.
     private List<ReferenceResult> GetReferences(string targetFormKey)
     {
-        // #410/ADR-0041: committed references only. The pending overlay this query used to carry
+        // ADR-0041: committed references only. The read overlay this query used to carry
         // (subtracting references an uncommitted edit had superseded, then unioning that edit's own
-        // references back in) retires with the pending model — a reference is what the indexed
+        // references back in) is retired — a reference is what the indexed
         // plugin actually declares.
         const string sql = """
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
