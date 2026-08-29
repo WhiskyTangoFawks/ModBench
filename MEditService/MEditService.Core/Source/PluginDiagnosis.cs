@@ -23,16 +23,24 @@ namespace MEditService.Core.Source;
 /// factories below anchor to whichever vocabulary that seam's own exceptions actually offer, rather
 /// than forcing one shape onto both.</para>
 ///
-/// <para><b>Chain-walk, not the caught exception's own properties.</b> Mutagen enriches identity
-/// onto the exception nearest where a record was actually being parsed and rethrows outward,
-/// sometimes through one or more <see cref="AggregateException"/>s from its own parallel
-/// record-block parsing — proven live against <c>SouthOfTheSea.esm</c>'s real REFR
+/// <para><b>Tree-walk, not a linear chain and not the caught exception's own properties.</b> Mutagen
+/// enriches identity onto the exception nearest where a record was actually being parsed and
+/// rethrows outward, sometimes through one or more <see cref="AggregateException"/>s from its own
+/// parallel record-block parsing (<c>ListBinaryTranslation.ParseParallel</c>, a real
+/// <c>Parallel.ForEach</c>) — proven live against <c>SouthOfTheSea.esm</c>'s real REFR
 /// <c>XWPG</c>/<c>XWPN</c> defect: the exception <c>Fallout4Mod.CreateFromBinary</c> actually throws
 /// is a bare <see cref="RecordException"/> with no identity at all (only <c>EnrichAndThrow(ex,
 /// modKey)</c> ran on it), three levels above the <c>SubrecordException</c> that carries the real
 /// <c>FormKey</c>/<c>EditorID</c>. Reading only the caught exception's own properties would silently
-/// regress to plugin-level-only anchoring for exactly this parallel-parse case, so both factories
-/// walk the full <see cref="Exception.InnerException"/> chain for the innermost occurrence.</para>
+/// regress to plugin-level-only anchoring for exactly this parallel-parse case. A single-branch walk
+/// of <see cref="Exception.InnerException"/> is not enough either: when concurrent iterations fail
+/// simultaneously, <see cref="AggregateException"/> holds <i>every</i> one in
+/// <see cref="AggregateException.InnerExceptions"/>, and <c>.InnerException</c> only ever forwards to
+/// <c>InnerExceptions[0]</c> — realistic for any plugin with more than one corrupt record, and a
+/// second corrupt record whose own exception happens to land elsewhere in that list would otherwise
+/// never be visited at any depth. Both factories therefore recurse into every branch
+/// (<see cref="FindDeepest{T}"/>) and keep the deepest match found anywhere in the tree, not merely
+/// the first one a linear walk would have reached.</para>
 /// </summary>
 public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string? Tail, string Message)
 {
@@ -60,17 +68,12 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         ("All FNAM strings should be the same", "blocked upstream: Mutagen #687"),
     ];
 
-    /// <summary>Track's own seam: the innermost <see cref="RecordException"/> in <paramref name="ex"/>'s
-    /// chain anchors the diagnosis when Mutagen's binary parser attached one; otherwise the plugin
-    /// itself is all that can honestly be named — never a fabricated record identity.</summary>
+    /// <summary>Track's own seam: the deepest <see cref="RecordException"/> anywhere in <paramref name="ex"/>'s
+    /// own exception tree anchors the diagnosis when Mutagen's binary parser attached one; otherwise
+    /// the plugin itself is all that can honestly be named — never a fabricated record identity.</summary>
     public static PluginDiagnosis FromParseException(Exception ex)
     {
-        RecordException? deepest = null;
-        for (var e = ex; e != null; e = e.InnerException)
-        {
-            if (e is RecordException re) deepest = re;
-        }
-
+        var deepest = FindDeepest<RecordException>(ex);
         var message = deepest?.Message ?? ex.Message;
         return new PluginDiagnosis(DescribeRecord(deepest), UnknownClass, TailFor(message), message);
     }
@@ -78,22 +81,49 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// <summary>Compile's own seam: reading a source file back into the object model is a JSON
     /// operation with no <see cref="RecordException"/> in reach at all — the source file itself
     /// (the same identity unit <c>PluginCompileService.RefuseIfSourceDoesNotRoundTrip</c> already
-    /// names as "the offender") is the anchor, taken from the innermost
-    /// <see cref="FilePathedException"/> in <paramref name="ex"/>'s chain. <paramref name="treeRoot"/>
-    /// is the <c>source/&lt;plugin&gt;/</c> directory itself, so the anchor reads as a path within it
-    /// (e.g. <c>Npcs/[0] FixtureNpc - 000802_Fixture.esp.json</c>) — the file's own name already
-    /// carries EditorID and FormKey by <c>SourceUnitResolver</c>'s own naming convention.</summary>
+    /// names as "the offender") is the anchor, taken from the deepest
+    /// <see cref="FilePathedException"/> anywhere in <paramref name="ex"/>'s own exception tree.
+    /// <paramref name="treeRoot"/> is the <c>source/&lt;plugin&gt;/</c> directory itself, so the
+    /// anchor reads as a path within it (e.g. <c>Npcs/[0] FixtureNpc - 000802_Fixture.esp.json</c>) —
+    /// the file's own name already carries EditorID and FormKey by <c>SourceUnitResolver</c>'s own
+    /// naming convention.</summary>
     public static PluginDiagnosis FromSourceReadException(Exception ex, string treeRoot)
     {
-        FilePathedException? deepest = null;
-        for (var e = ex; e != null; e = e.InnerException)
-        {
-            if (e is FilePathedException fpe) deepest = fpe;
-        }
-
+        var deepest = FindDeepest<FilePathedException>(ex);
         var message = deepest?.InnerException?.Message ?? ex.Message;
         var anchor = deepest == null ? null : Path.GetRelativePath(treeRoot, deepest.Path);
         return new PluginDiagnosis(anchor, UnknownClass, TailFor(message), message);
+    }
+
+    /// <summary>
+    /// The deepest exception of type <typeparamref name="T"/> anywhere in <paramref name="ex"/>'s own
+    /// exception tree — not a linear <see cref="Exception.InnerException"/> walk, which only ever
+    /// reaches <see cref="AggregateException.InnerExceptions"/>'s first element and would silently
+    /// miss a second, independently-failed branch (see this class's own doc comment). "Deepest" mirrors
+    /// what a linear walk that kept overwriting its result on every step would have found along a
+    /// single path — the record identity Mutagen enriches nearest the actual parse failure — extended
+    /// to pick the deepest match across every branch when more than one exists, breaking ties by
+    /// <see cref="AggregateException.InnerExceptions"/>'s own order (first found at the winning depth).
+    /// </summary>
+    private static T? FindDeepest<T>(Exception ex) where T : Exception => FindDeepest<T>(ex, depth: 0).Found;
+
+    private static (T? Found, int Depth) FindDeepest<T>(Exception ex, int depth) where T : Exception
+    {
+        var best = ex is T match ? (Found: match, Depth: depth) : (Found: null, Depth: -1);
+
+        IEnumerable<Exception> children;
+        if (ex is AggregateException aggregate) children = aggregate.InnerExceptions;
+        else if (ex.InnerException is { } inner) children = [inner];
+        else children = [];
+
+        foreach (var child in children)
+        {
+            var candidate = FindDeepest<T>(child, depth + 1);
+            if (candidate.Found != null && candidate.Depth > best.Depth)
+                best = candidate;
+        }
+
+        return best;
     }
 
     private static string? TailFor(string message) =>

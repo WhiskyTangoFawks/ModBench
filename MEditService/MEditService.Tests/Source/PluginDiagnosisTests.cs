@@ -12,7 +12,7 @@ namespace MEditService.Tests.Source;
 /// <c>Edits/PluginCompileServiceDiagnosisTests.cs</c>. This file's own job is the shapes those real
 /// fixtures can't reach cheaply — chiefly the nested-<see cref="AggregateException"/> chain-walk
 /// (Finding B) — built from a real defect's own captured messages
-/// (<c>SouthOfTheSea.esm</c> REFR <c>07431EDC</c>, found live during #519's planning) rather than a
+/// (<c>SouthOfTheSea.esm</c> REFR <c>431EDC</c>, found live during #519's planning) rather than a
 /// 6.8 MB real <c>.esm</c> this repo has no reason to commit.
 /// </summary>
 public sealed class PluginDiagnosisTests
@@ -49,6 +49,37 @@ public sealed class PluginDiagnosisTests
         Assert.Equal("Expected header was not read in: XWPN", diagnosis.Message);
         Assert.Equal(PluginDiagnosis.UnknownClass, diagnosis.DefectClass);
         Assert.Null(diagnosis.Tail);
+    }
+
+    /// <summary>
+    /// The multi-exception half of Finding B: Mutagen's own parallel record-block parsing
+    /// (<c>ListBinaryTranslation.ParseParallel</c>, a real <c>Parallel.ForEach</c>) can produce an
+    /// <see cref="AggregateException"/> holding more than one failure when concurrent iterations fail
+    /// simultaneously — realistic for any plugin with more than one corrupt record.
+    /// <see cref="Exception.InnerException"/> on a multi-exception <see cref="AggregateException"/>
+    /// only ever forwards to <see cref="AggregateException.InnerExceptions"/>'s first element, so a
+    /// walk that follows only <c>.InnerException</c> would see the unrelated first branch, never visit
+    /// the second branch at all, and silently anchor on nothing — exactly the failure mode this test
+    /// exists to catch. The identity-bearing exception is deliberately placed second, not first.
+    /// </summary>
+    [Fact]
+    public void FromParseException_WalksEveryBranchOfAMultiExceptionAggregateNotJustTheFirst()
+    {
+        var formKey = FormKey.Factory("431EDC:SouthOfTheSea.esm");
+        var modKey = Mutagen.Bethesda.Plugins.ModKey.FromFileName("SouthOfTheSea.esm");
+        var unrelatedFirstBranch = new InvalidOperationException("unrelated failure in a different parallel iteration");
+        var identityBearingSecondBranch = new SubrecordException(
+            new RecordType("XWPN"), formKey, typeof(PlacedObject), modKey, "SecondBranchRef",
+            "Expected header was not read in: XWPN");
+        var aggregate = new AggregateException("One or more errors occurred.", unrelatedFirstBranch, identityBearingSecondBranch);
+        var outer = new RecordException(formKey: null, recordType: null, modKey: modKey, edid: null, innerException: aggregate);
+
+        var diagnosis = PluginDiagnosis.FromParseException(outer);
+
+        Assert.NotNull(diagnosis.Anchor);
+        Assert.Contains("PlacedObject", diagnosis.Anchor);
+        Assert.Contains("431EDC:SouthOfTheSea.esm", diagnosis.Anchor);
+        Assert.Contains("SecondBranchRef", diagnosis.Anchor);
     }
 
     /// <summary>AC1's other half at the unit level: nothing in the chain is a <see cref="RecordException"/>
