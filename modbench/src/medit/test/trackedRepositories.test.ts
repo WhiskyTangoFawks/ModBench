@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { trackedModFoldersOf, registerTrackedRepositories } from '../trackedRepositories';
+import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from '../trackedRepositories';
 import type { PluginMetadata } from '../ApiClient';
 
 function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin: string }): PluginMetadata {
@@ -88,5 +88,70 @@ describe('registerTrackedRepositories', () => {
     await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/A']);
 
     expect(openRepository).toHaveBeenCalledTimes(1);
+  });
+
+  // #557: the returned repository handles are what extension.ts now keeps around to prompt a
+  // post-edit Source Control status refresh — previously this function returned `Promise<void>`
+  // and threw every resolved `Repository` away, which is why nothing could ever be refreshed.
+  it('resolves to a Map of folder to the repository openRepository returned', async () => {
+    const repoA = { name: 'repoA' };
+    const repoB = { name: 'repoB' };
+    const openRepository = vi.fn((folder: string) => Promise.resolve(folder === '/mods/A' ? repoA : repoB));
+
+    const repositories = await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/B']);
+
+    expect(repositories).toEqual(new Map([['/mods/A', repoA], ['/mods/B', repoB]]));
+  });
+
+  it('omits a folder whose openRepository call resolved null', async () => {
+    // The real `vscode.git` API's own `openRepository` return type is `Repository | null` — a
+    // null here must not become a null-valued map entry a later `.status()` call would crash on.
+    const openRepository = vi.fn().mockResolvedValue(null);
+
+    const repositories = await registerTrackedRepositories(openRepository, ['/mods/A']);
+
+    expect(repositories.size).toBe(0);
+  });
+});
+
+// ── pluginRepositoriesOf (#557 review: extension.ts carries no business logic) ─────────────────
+
+describe('pluginRepositoriesOf', () => {
+  it("maps each plugin's own filename to the repository resolved for its mod folder", () => {
+    const repoA = { name: 'repoA' };
+    const repoB = { name: 'repoB' };
+    const plugins = [
+      makePlugin({ path: '/mods/ModA/A.esp', origin: 'ModA' }),
+      makePlugin({ path: '/mods/ModB/B.esp', origin: 'ModB' }),
+    ];
+    const folderRepositories = new Map([['/mods/ModA', repoA], ['/mods/ModB', repoB]]);
+
+    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories);
+
+    expect(byPlugin).toEqual(new Map([['A.esp', repoA], ['B.esp', repoB]]));
+  });
+
+  it('gives two plugins sharing one mod folder the same repository', () => {
+    const repo = { name: 'repo' };
+    const plugins = [
+      makePlugin({ path: '/mods/SharedMod/A.esp', origin: 'SharedMod' }),
+      makePlugin({ path: '/mods/SharedMod/B.esp', origin: 'SharedMod' }),
+    ];
+    const folderRepositories = new Map([['/mods/SharedMod', repo]]);
+
+    const byPlugin = pluginRepositoriesOf(plugins, folderRepositories);
+
+    expect(byPlugin).toEqual(new Map([['A.esp', repo], ['B.esp', repo]]));
+  });
+
+  it('omits a plugin whose own mod folder has no entry in folderRepositories', () => {
+    // e.g. an untracked plugin, or one whose openRepository call declined (registerTrackedRepositories
+    // already dropped that folder from the map) — never a null-valued entry a later `.status()` call
+    // would crash on.
+    const plugins = [makePlugin({ path: '/mods/Untracked/U.esp', origin: 'Untracked' })];
+
+    const byPlugin = pluginRepositoriesOf(plugins, new Map());
+
+    expect(byPlugin.size).toBe(0);
   });
 });

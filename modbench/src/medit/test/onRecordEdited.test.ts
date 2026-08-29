@@ -28,7 +28,7 @@ describe('makeOnRecordEdited — compile-pending refresh (#449)', () => {
   it('calls the injected refreshCompilePending on every edit', () => {
     const refreshCompilePending = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshCompilePending,
+      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshCompilePending, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
@@ -42,7 +42,7 @@ describe('makeOnRecordEdited — compile-pending refresh (#449)', () => {
     // compile-pending decoration must not be gated on the record-row cache's own hit/miss.
     const refreshCompilePending = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshCompilePending,
+      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshCompilePending, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
@@ -52,7 +52,7 @@ describe('makeOnRecordEdited — compile-pending refresh (#449)', () => {
 
   it('still refreshes the M/A badge decoration (#428), unchanged by the #449 addition', () => {
     const decorationProvider = fakeDecorationProvider();
-    const onRecordEdited = makeOnRecordEdited(fakeTreeProvider(true), decorationProvider, new Set(), vi.fn());
+    const onRecordEdited = makeOnRecordEdited(fakeTreeProvider(true), decorationProvider, new Set(), vi.fn(), vi.fn());
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
@@ -66,5 +66,36 @@ describe('makeOnRecordEdited — compile-pending refresh (#449)', () => {
     broadcastToRecordPanels(panels as unknown as Set<import('vscode').WebviewPanel>, { type: 'recordEdited', formKey: 'x' } as never);
 
     for (const panel of panels) expect(panel.webview.postMessage).toHaveBeenCalledWith({ type: 'recordEdited', formKey: 'x' });
+  });
+});
+
+// #557: the native Source Control panel doesn't pick up a field edit's working-tree dirt on its
+// own — this is the wiring that closes that gap, driven through the same real call every other
+// onRecordEdited-fires test in this file uses, not by hand-feeding some other accessor directly.
+describe('makeOnRecordEdited — Source Control refresh (#557)', () => {
+  it('calls the injected refreshSourceControl with the edited plugin filename on every edit', () => {
+    const refreshSourceControl = vi.fn();
+    const onRecordEdited = makeOnRecordEdited(
+      fakeTreeProvider(), fakeDecorationProvider(), new Set(), vi.fn(), refreshSourceControl,
+    );
+
+    onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
+
+    expect(refreshSourceControl).toHaveBeenCalledTimes(1);
+    expect(refreshSourceControl).toHaveBeenCalledWith('Test.esp');
+  });
+
+  it('calls refreshSourceControl even when the record-row cache has no entry for this FormKey', () => {
+    // Same reasoning as refreshCompilePending above (#449): the edit already landed server-side
+    // by the time this fires, so the Source Control refresh must not be gated on the record-row
+    // cache's own hit/miss either.
+    const refreshSourceControl = vi.fn();
+    const onRecordEdited = makeOnRecordEdited(
+      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), vi.fn(), refreshSourceControl,
+    );
+
+    onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
+
+    expect(refreshSourceControl).toHaveBeenCalledTimes(1);
   });
 });
