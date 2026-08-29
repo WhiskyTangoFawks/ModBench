@@ -399,6 +399,10 @@ plugins are never probed at all.
   Mutagen-free) compares the original and recompiled binaries' subrecord signatures per record;
   any signature occurring fewer times in the rewrite is refused naming the record type, FormID
   and dropped signature(s) (more occurrences — a canonical marker insertion — is not a refusal).
+  One exemption (#563): a TES4 record's `MAST`/`DATA` pair dropping is ADR-0038's sanctioned
+  master-list pruning, not a loss — Mutagen unconditionally re-derives the header's master list
+  from live content on every write, so this exact signature pair is excluded from the check (72%
+  of all real Track refusals in the one available real-world corpus, before this exemption).
   Compile has no independent binary to diff against and gets no live version of this gate; the
   guarantee is inherited transitively, since this loss class can only be introduced by
   deserializing an external binary, which happens at Track, never Compile.
