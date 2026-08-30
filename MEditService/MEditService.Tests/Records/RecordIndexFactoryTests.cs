@@ -22,7 +22,10 @@ public class RecordIndexFactoryTests : IDisposable
     private static IRecordIndexFactory MakeFactory() =>
         new DuckDbRecordIndexFactory(Reflector, new TableDdlBuilder(Reflector));
 
-    private string Instance(string name)
+    /// <summary>A directory to hold a mod folder. An <i>instance</i> only when a Create call keys
+    /// on it — which is the distinction <see cref="Create_WithNoInstanceRoot_KeepsNothingBetweenIndexes"/>
+    /// turns on, so the two cases share this and differ only in what they hand the factory.</summary>
+    private string Folder(string name)
     {
         var path = Path.Combine(_root, name);
         Directory.CreateDirectory(path);
@@ -63,8 +66,8 @@ public class RecordIndexFactoryTests : IDisposable
     [Fact]
     public void Create_KeysTheFileOnTheInstanceRoot_SoTwoInstancesShareNothing()
     {
-        var a = Instance("instance-a");
-        var b = Instance("instance-b");
+        var a = Folder("instance-a");
+        var b = Folder("instance-b");
         var factory = MakeFactory();
 
         PluginKey key;
@@ -87,7 +90,7 @@ public class RecordIndexFactoryTests : IDisposable
     {
         var factory = MakeFactory();
         PluginKey key;
-        using (var first = factory.Create(GameRelease.Fallout4)) key = IndexOnePlugin(first, Instance("no-home"), "NpcNowhere");
+        using (var first = factory.Create(GameRelease.Fallout4)) key = IndexOnePlugin(first, Folder("no-home"), "NpcNowhere");
 
         using var second = factory.Create(GameRelease.Fallout4);
         Assert.Null(second.IndexedContentHash(key));

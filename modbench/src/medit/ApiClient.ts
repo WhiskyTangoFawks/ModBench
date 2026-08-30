@@ -115,7 +115,7 @@ export interface UnansweredExternalChange {
  *  wire boundary, same posture WorkingTreeState above already established). */
 export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
 
-/** #381: one plugin's crash-repair offer, riding `POST /session/load[-explicit]`'s own response
+/** #381: one plugin's crash-repair offer, riding `POST /session/load-explicit`'s own response
  *  the same way `failures` already does (ADR-0026) — there is no separate poller or endpoint for
  *  this: the only way either reason can newly arise is a compile this same process drives, or a
  *  process restart, and a session load already observes both. */

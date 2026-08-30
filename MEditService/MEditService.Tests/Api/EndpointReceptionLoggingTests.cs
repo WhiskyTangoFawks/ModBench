@@ -41,7 +41,7 @@ public sealed class EndpointReceptionLoggingTests
     // --- SessionEndpoints.LoadExplicitSession ---
 
     [Fact]
-    public void LoadSession_ValidRequest_LogsReceivedWithGameDirectory()
+    public void LoadExplicitSession_ValidRequest_LogsReceivedWithGameDirectory()
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
@@ -61,7 +61,7 @@ public sealed class EndpointReceptionLoggingTests
     }
 
     [Fact]
-    public void LoadSession_GameDirectoryMissing_StillLogsReceived()
+    public void LoadExplicitSession_GameDirectoryMissing_StillLogsReceived()
     {
         // Acceptance criterion: the reception line fires on every call, including ones that go on to
         // fail — this request fails validation (400) before SessionManager.LoadExplicit is called.

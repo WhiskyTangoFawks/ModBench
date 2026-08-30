@@ -15,7 +15,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
     private readonly TestPluginFixture _fixture = loaded.Plugin;
 
     [Fact]
-    public async Task PostSessionLoad_Returns200AndLoadsPlugin()
+    public async Task PostSessionLoadExplicit_Returns200AndLoadsPlugin()
     {
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
@@ -32,7 +32,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
     }
 
     [Fact]
-    public async Task PostSessionLoad_ThenGetRecords_ReturnsIndexedRecords()
+    public async Task PostSessionLoadExplicit_ThenGetRecords_ReturnsIndexedRecords()
     {
         var load = await _client.PostAsJsonAsync("/session/load-explicit", new
         {

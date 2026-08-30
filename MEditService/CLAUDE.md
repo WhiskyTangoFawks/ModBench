@@ -43,7 +43,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     an MO2-style instance and nothing else, and a load that can name no mod folders can key no index.
     `plugins` is **the session and nothing else** — the file facts live in `raw.indexed_files` (`file_path`, `content_hash`, `index_version`), a separate
     table precisely so that unregistering a plugin does not throw away what makes re-registering it
-    cheap. `Initialize` clears every registration (a fresh process is in no session), rehashes every
+    cheap. Registrations are **not** cleared on open (ADR-0044): they are the last known load order,
+    and the first reconcile from Mod Management corrects them. `Initialize` rehashes every
     indexed file — **content, never `mtime`** — and `Unindex`es any plugin whose file is gone or
     whose bytes moved; a version mismatch (`IndexVersion`: hand-bumped format const + Mutagen
     assembly version + reflected-schema digest) or a file DuckDB cannot open rebuilds the whole

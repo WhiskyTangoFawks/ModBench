@@ -28,7 +28,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("badGameDir", null, "Fallout4")]
     [InlineData(null, "badInstance", "Fallout4")]
     [InlineData(null, null, "NotAGame")]
-    public async Task SessionLoad_InvalidInput_ReturnsProblemDetails400(
+    public async Task SessionLoadExplicit_InvalidInput_ReturnsProblemDetails400(
         string? badGameDir, string? badInstance, string gameRelease)
     {
         var resp = await _client.PostAsJsonAsync("/session/load-explicit", new
@@ -53,7 +53,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     // below) rather than the shared LoadedApiFixture's client — reusing that client here would
     // silently dispose the fixture's session out from under every other test in this class.
     [Fact]
-    public async Task SessionLoad_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
+    public async Task SessionLoadExplicit_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();

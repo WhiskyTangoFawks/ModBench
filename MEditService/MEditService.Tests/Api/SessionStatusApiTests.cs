@@ -64,7 +64,7 @@ public sealed class SessionStatusApiTests : IDisposable
     }
 
     [Fact]
-    public async Task PostSessionLoad_StillReturnsOnlyOnceTheSweepHasRun()
+    public async Task PostSessionLoadExplicit_StillReturnsOnlyOnceTheSweepHasRun()
     {
         using var fx = new PluginFixtureBuilder("api-status-contract")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))

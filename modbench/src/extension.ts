@@ -366,7 +366,7 @@ function makeSetFilterActive(filterProvider: FilterCodeLensProvider) {
 }
 
 /** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
- *  Shared by the session wizard, the deploy commands, and editing launch. */
+ *  Shared by the deploy commands and editing launch. */
 function makeDetectPaths(): DetectPaths {
   return () => {
     const c = meditConfig();

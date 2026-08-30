@@ -9,29 +9,15 @@ public class IndexFileTests
 {
     private static readonly string Instance = Path.Combine(Path.GetTempPath(), "medit-index-file-tests");
 
+    // AC1 names the location, so the test pins it: inside the instance root, and — since the
+    // instance root is MO2's own working directory but `mods/`, `overwrite/`, `profiles/` and
+    // `downloads/` are content it manages — in none of those. A mod reinstall, a profile delete or
+    // a download sweep would take an index under any of them with it, and a mod archiver would pick
+    // it up as content.
     [Fact]
-    public void For_LivesInsideTheInstanceRoot()
+    public void For_LivesInTheInstanceRoot_BesideTheContentMO2Manages_NeverInsideIt()
     {
-        var path = IndexFile.For(Instance);
-
-        Assert.StartsWith(Instance, path, StringComparison.Ordinal);
-        Assert.EndsWith(".duckdb", path, StringComparison.Ordinal);
-    }
-
-    // The instance root is MO2's own working directory, but the four folders below are content it
-    // manages: a mod reinstall, a profile delete or a download sweep would take the index with it,
-    // and a mod archiver would pick it up as content.
-    [Theory]
-    [InlineData("mods")]
-    [InlineData("overwrite")]
-    [InlineData("profiles")]
-    [InlineData("downloads")]
-    public void For_IsNeverInsideAFolderMO2ManagesContentIn(string folder)
-    {
-        var path = IndexFile.For(Instance);
-
-        Assert.DoesNotContain(
-            Path.Combine(Instance, folder) + Path.DirectorySeparatorChar, path, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(Path.Combine(Instance, "modbench", "index.duckdb"), IndexFile.For(Instance));
     }
 
     // Profiles within one instance share the file — that is what keeps a profile switch cheap — so

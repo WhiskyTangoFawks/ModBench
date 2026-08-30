@@ -1,8 +1,7 @@
 // A plugin skipped during session load (records Mutagen can't parse) means its
 // records are missing from the session. Per ADR-0026 (integrity tier) this must
-// never be silent — warn the user and log every reason. Shared by the wizard
-// (POST /session/load) and the load-explicit path (POST /session/load-explicit),
-// which return the identical SessionLoadResponse.failures shape.
+// never be silent — warn the user and log every reason. Fed from the one session
+// load there is (POST /session/load-explicit, #592) and its SessionLoadResponse.failures.
 
 export interface FailureSink {
   log: (msg: string) => void;

@@ -147,9 +147,11 @@ public sealed record PluginFixtureData(
     string DataFolder, IReadOnlyList<ExplicitPluginInput> Plugins, string CleanupRoot) : IDisposable
 {
     /// <summary>The MO2 instance root this fixture stands in for (#592 / ADR-0001) — the temp
-    /// directory the Data folder sits under, never the Data folder itself. Only tests that want a
-    /// <i>persistent</i> index pass it to a load; omitting it asks for an in-memory one, which is
-    /// what the great majority of fixtures want.</summary>
+    /// directory the Data folder sits under, never the Data folder itself. Every load over HTTP
+    /// names one (the endpoint rejects a request that can't), so the API suite runs against a real
+    /// on-disk index under this root, torn down with the fixture. An in-process load may omit it,
+    /// asking for an in-memory index instead — which is what most unit fixtures do, since only the
+    /// warm-launch tests care what survives a load.</summary>
     public string InstanceRoot => CleanupRoot;
 
     public void Dispose() => Directory.Delete(CleanupRoot, recursive: true);
