@@ -676,12 +676,22 @@ public sealed class RecordEditService(
         // exterior SubCells cell (real block/sub/grid coordinates once placed) and for a Worldspace's
         // own TopCell (PlacementWalker.WalkWorldspace hardcodes isInterior: false for it, even though
         // TopCell carries no block/sub/grid either — the same "no coordinates to compute" property that
-        // justifies interior auto-create). The refusal below is correct for both today regardless: a
-        // missing TopCell parent still needs a brand-new Worldspace directory minting, which is #549's
-        // spatial-placement scope exactly as much as a genuine exterior cell is. Nothing here currently
-        // needs to tell the two apart — flagged for #549's own benefit if it ever does.
+        // justifies interior auto-create). #549 Arc B only widens the genuine-SubCells-cell case (it has
+        // a real CellLocationRow with block/sub/grid to mint from); a TopCell's own cell_location row
+        // carries none of those (WalkWorldspace's own hardcoded nulls), so it still falls through to the
+        // refusal below exactly as before — TopCell's own spatial placement is Arc B's own WRLD-scale
+        // follow-up (#596), not this AC.
         var isCell = RecordTypeDispatch.For(release).ConcreteFor(document.RecordType)?.Name == "Cell";
-        if (isCell && index.GetCellLocation(sourcePlugin, formKey)?.IsInterior != true)
+        var cellLocation = isCell ? index.GetCellLocation(sourcePlugin, formKey) : null;
+        if (isCell && cellLocation?.IsInterior == false && cellLocation.Value.BlockX != null)
+        {
+            var cellRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
+            ContainerChildFields.ClearAllChildSlots(cellRecord);
+            return MintExteriorCell(
+                sourcePlugin, formKey, cellLocation.Value, cellRecord, document.RecordType,
+                destinationPlugin, destinationModFolder, index, release);
+        }
+        if (isCell && cellLocation?.IsInterior != true)
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
@@ -766,8 +776,47 @@ public sealed class RecordEditService(
         var cellDocument = index.GetDocument(cellFormKey, destinationPlugin);
         if (cellDocument == null)
         {
-            // IsInterior's own double-duty note lives on CopyRecordAsOverride's identical check.
-            if (index.GetCellLocation(sourcePlugin, cellFormKey)?.IsInterior != true)
+            // IsInterior's own double-duty note lives on CopyRecordAsOverride's identical check —
+            // #549 Arc B only widens the genuine-SubCells case (a real BlockX to mint from); a
+            // TopCell ref's own cell_location row carries none, so it still falls to the refusal below.
+            var sourceCellLocation = index.GetCellLocation(sourcePlugin, cellFormKey);
+            if (sourceCellLocation?.IsInterior == false && sourceCellLocation.Value.BlockX != null)
+            {
+                var cellSchema = schemaReflector.GetSchemas(release)["cell"];
+                var bareCellRecord = MajorRecordInstantiator.Activator(FormKey.Factory(cellFormKey), release, cellSchema.RecordType);
+                PartialFormFlag.Set(bareCellRecord, true);
+
+                var childRecordForMint = _codec
+                    .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
+                    .GetAwaiter().GetResult();
+                var mintSlotName = placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
+                ContainerChildFields.AddChildToSlot(bareCellRecord, mintSlotName, childRecordForMint);
+
+                var mintResult = MintExteriorCell(
+                    sourcePlugin, cellFormKey, sourceCellLocation.Value, bareCellRecord, "cell",
+                    destinationPlugin, destinationModFolder, index, release);
+                if (!mintResult.Applied) return mintResult;
+
+                // MintExteriorCell already wrote the worldspace's and cell's own rows (the REFR
+                // embedded in the cell's freshly-minted body); only the REFR's own row remains —
+                // the same "child first" ordering CreateInteriorCellParent's own sibling path uses,
+                // moot here since the cell's row already carries the child inline either way.
+                index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
+                sessions.ReapplyFilter();
+
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
+                        "{DestinationPlugin} ({DestinationOrigin}) — minted exterior cell {CellFormKey} " +
+                        "and its worldspace as Partial Form ancestors",
+                        formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name,
+                        destinationPlugin.Origin, cellFormKey);
+                }
+                return RecordEditResult.Success();
+            }
+
+            if (sourceCellLocation?.IsInterior != true)
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.ContainerParentMissingInDestination,
@@ -829,6 +878,79 @@ public sealed class RecordEditService(
                 formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
                 cellFormKey, slotName);
         }
+        return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// #549 Arc B (AC1): mints <paramref name="cellLocation"/>'s exterior CELL
+    /// (<paramref name="cellRecord"/> — already the right shape, either the real requested copy with
+    /// its embedded children stripped, or a bare auto-created ancestor holding just a copied REFR) at
+    /// its exact worldspace block/sub-block, auto-creating a bare, Partial-Form WRLD ancestor first
+    /// when the destination has none (Q2, the same idiom <see cref="CreateInteriorCellParent"/> already
+    /// uses one level up — bare fields, no EditorID, <see cref="PartialFormFlag.Set"/> before
+    /// serializing). Shared by <see cref="CopyRecordAsOverride"/>'s own exterior-Cell branch and
+    /// <see cref="CopyPlacedReferenceAsOverride"/>'s own exterior branch — the two places #440 left an
+    /// explicit "spatial placement not computed yet" refusal for #549 to widen.
+    ///
+    /// <para>Never mints into a worldspace the destination already overrides: a second mint into an
+    /// already-existing WRLD directory risks a colliding sibling folder for the same FormKey rather
+    /// than landing inside the one that already exists there — genuinely out of AC1's scope ("no
+    /// CELL/WRLD override" in the destination to start with), refused rather than silently routed
+    /// around or half-implemented.</para>
+    ///
+    /// <para>Writes the worldspace's and cell's own index rows from the exact bytes
+    /// <see cref="SpatialContainerMint.MintAsync"/> wrote to the working tree
+    /// (<see cref="SpatialContainerMint.SpatialMintResult"/>), never a second, independently-serialized
+    /// copy — the same "the source text is the source, not the index" rule this class states for every
+    /// other write path.</para>
+    /// </summary>
+    private RecordEditResult MintExteriorCell(
+        PluginKey sourcePlugin, string cellFormKey, CellLocationRow cellLocation, IMajorRecord cellRecord,
+        string cellRecordType, PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index,
+        GameRelease release)
+    {
+        if (!IsFreeAtBothRefs(index, destinationPlugin, cellFormKey))
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.FormKeyCollision,
+                $"{cellFormKey} is already held by a record in {destinationPlugin.Name} at some ref.");
+        }
+
+        if (cellLocation.ParentWorldspace is not { } worldspaceFormKey)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ContainerParentMissingInDestination,
+                $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
+        }
+
+        if (index.GetDocument(worldspaceFormKey, destinationPlugin) != null)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.ContainerParentMissingInDestination,
+                $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey} — minting a " +
+                "second spatial subtree into an existing override needs spatial placement this write path " +
+                "does not support yet, tracked separately.");
+        }
+
+        var sourceWorldspaceDocument = index.GetDocument(worldspaceFormKey, sourcePlugin)
+            ?? throw new InvalidOperationException(
+                $"{sourcePlugin.Name} does not hold {worldspaceFormKey} — cell_location resolved this FormKey from its own row.");
+
+        var worldspaceSchema = schemaReflector.GetSchemas(release)["wrld"];
+        var worldspaceAncestor = MajorRecordInstantiator.Activator(FormKey.Factory(worldspaceFormKey), release, worldspaceSchema.RecordType);
+        PartialFormFlag.Set(worldspaceAncestor, true);
+
+        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
+            destinationPlugin, worldspaceAncestor, cellLocation, cellRecord);
+        var minted = SpatialContainerMint.MintAsync(syntheticMod, destinationModFolder, destinationPlugin.Name)
+            .GetAwaiter().GetResult();
+
+        index.CreateWorkingTreeRecord(
+            destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
+            Encoding.UTF8.GetString(minted.WorldspaceBody));
+        index.CreateCellLocation(destinationPlugin, cellLocation);
+        index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, cellRecordType, Encoding.UTF8.GetString(minted.CellBody));
+
         return RecordEditResult.Success();
     }
 

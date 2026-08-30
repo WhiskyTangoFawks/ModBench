@@ -62,6 +62,11 @@ public class RecordTextCodecGeneratorSeedTests
     // door as it ships"; TrackService.cs is listed because it really does name it. The gateway-method
     // scans below are what actually cover a door's call, one per gateway method.
     //
+    // #549 (Arc B, AC1) deliberately did NOT widen this set either, for the identical reason: its own
+    // door (SpatialContainerMint.cs) reaches the mixin only through SerializeWholeMod, so it never
+    // spells the mixin's own type name — it is listed in the SerializeWholeMod-caller whitelist below
+    // instead, the same way TrackService.cs already is.
+    //
     // Deliberately checking the type name only, not the containing namespace
     // (Mutagen.Bethesda.Serialization.Newtonsoft) as originally proposed: that namespace also holds
     // the JSON kernel types RecordTextCodec.cs legitimately imports for unrelated reasons (its own
@@ -110,7 +115,8 @@ public class RecordTextCodecGeneratorSeedTests
         const string gatewayFile = "RecordTextCodecGeneratorSeed.cs";
         var designatedDoors = new HashSet<string>(StringComparer.Ordinal)
         {
-            "TrackService.cs", // #451: Track
+            "TrackService.cs",          // #451: Track
+            "SpatialContainerMint.cs",  // #549: exterior WRLD/CELL spatial mint (Arc B, AC1)
         };
 
         var sourceFiles = Directory.GetFiles(CoreSourceRoot(), "*.cs", SearchOption.AllDirectories);

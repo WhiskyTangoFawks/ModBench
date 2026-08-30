@@ -42,6 +42,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.RepointContainerChildParent(key, oldParentFormKey, newParentFormKey);
     public virtual void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         Inner.RepointCellLocationParent(key, oldParentFormKey, newParentFormKey);
+    public virtual void CreateCellLocation(PluginKey plugin, CellLocationRow row) => Inner.CreateCellLocation(plugin, row);
     public virtual void Dispose() => Inner.Dispose();
 
     public virtual IRecordReads At(RecordRef recordRef) => Inner.At(recordRef);
