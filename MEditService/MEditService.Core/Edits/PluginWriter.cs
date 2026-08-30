@@ -142,7 +142,19 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         }
         catch
         {
-            Directory.Delete(tmpDir, recursive: true);
+            // The cleanup below is a courtesy, never allowed to outrank the exception it's cleaning
+            // up after: a failed WriteAsync can plausibly leave a file handle open on tmpDir (Mutagen's
+            // writer or the StringsWriter not having released it on the throwing path), and a locked
+            // directory is exactly when Directory.Delete itself throws — if that escaped unguarded it
+            // would replace the real exception (UnmappableFormIDException, the one
+            // PluginDiagnosis.HasUnmappableFormID and every catch downstream is built to recognize)
+            // with a confusing IOException about a temp directory, silently reverting to the
+            // pre-#520 crash exactly when the filesystem is uncooperative. This method is static, so
+            // there is no ILogger in scope to note the failed cleanup with; an orphaned tmpDir is
+            // strictly better than losing the diagnosis, so it is swallowed rather than escalated.
+            try { Directory.Delete(tmpDir, recursive: true); }
+            catch (IOException) { /* best-effort; tmpDir will remain on disk */ }
+            catch (UnauthorizedAccessException) { /* Windows file lock (AV/game); tmpDir will remain */ }
             throw;
         }
     }
