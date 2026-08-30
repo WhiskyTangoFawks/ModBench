@@ -276,6 +276,20 @@ public sealed class TrackService(ILogger<TrackService> logger)
                     divergence.Description);
             }
 
+            // #568: ModelIdentity.FindFirst above never reaches ModHeader (not an IMajorRecordGetter,
+            // never walked by EnumerateMajorRecords) — this is the header's own model-identity check,
+            // scoped to ModelIdentity.OpaqueHeaderFields' allow-list rather than every Mask field (see
+            // that allow-list's own doc comment for why a blanket sweep is wrong: MasterReferences and
+            // Stats both have confirmed legitimate divergence paths that must not start
+            // false-positive-refusing). The (IFallout4ModGetter) cast mirrors recompiledFromBinary's
+            // own pre-existing FO4 narrowing three lines above, not a new one.
+            if (ModelIdentity.FindFirstHeaderFieldDivergence(((IFallout4ModGetter)original).ModHeader, recompiledFromBinary.ModHeader) is { } headerField)
+            {
+                throw new SourceRoundTripFailedException(
+                    $"{pluginName} does not round-trip through its own tracked source: " +
+                    $"TES4 header field '{headerField}' changed after being recompiled from its own tracked source.");
+            }
+
             // #513: bytes differ but every record's own content is model-identical — an encoding-only
             // difference ADR-0042 decision 2 now documents rather than gates (zlib level, negative
             // zero, subrecord/GRUP-child order, derived sizes and counts, master pruning). Reported,

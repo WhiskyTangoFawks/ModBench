@@ -94,6 +94,47 @@ building the survey harness below, not anticipated at plan time — proof that t
 expected to grow exactly this way as more real plugins are checked, never by guessing a field name
 in the abstract.
 
+**#568 amendment: the gate also checks a fixed allow-list of `ModHeader` (TES4) fields.**
+`ModelIdentity.FindFirst`'s own per-record walk never reaches `ModHeader` — it is not an
+`IMajorRecordGetter`, so `EnumerateMajorRecords()` never yields it. `TrackService.VerifyRoundTrip`
+runs a second, header-only check (`ModelIdentity.FindFirstHeaderFieldDivergence`) against the same
+generated equality mask, narrowed to the fields below rather than every `Fallout4ModHeader.Mask`
+field. `Fallout4ModHeader.Mask<TItem>` has exactly 16 members; the two tables below account for all
+16, so the partition can be verified against the type rather than trusted:
+
+| Allow-listed field | Subrecord | Checked with a test that corrupts it alone (both `ModelIdentityTests` and `TrackServiceTests`) |
+|---|---|---|
+| `TypeOffsets` | OFST | yes |
+| `Deleted` | DELE | yes |
+| `Screenshot` | SCRN | yes |
+| `INTV` | INTV | yes |
+| `INCC` | INCC | yes |
+| `Author` | CNAM | yes |
+| `Description` | SNAM | yes |
+
+`Author`/`Description` were checked empirically before joining this list, not assumed:
+`OpaqueHeaderFieldsRoundTripTests` proves both survive the whole-mod JSON door with distinguishable
+values, and `Mutagen.Bethesda.Core`'s `ModHeaderWriteLogic` (the shared write path every header write
+goes through) never touches either field — the same "nothing normalizes it on write" logic that puts
+the other five fields on this list.
+
+| Excluded field | Why excluded |
+|---|---|
+| `Flags` | Write-time-derived from `IsMaster`/`UsingLocalization`/`IsSmallMaster` — a legitimate normalization, not opaque data. |
+| `FormID` | Always `0` on a header record; structurally inert. |
+| `Version`, `FormVersion`, `Version2` | Well-typed, semantically interpreted format fields, not opaque byte data. |
+| `Stats` (`NumRecords`/`NextFormID`) | This same write's own `NoNextFormIDProcessing`/`RecordCountOption.NoCheck` (#506) skip Mutagen's recompute rather than force agreement — whatever the codec parsed survives the write untouched, so a divergence here would be a codec question, not a Track-gate one. |
+| `MasterReferences` | ADR-0038's content-derived master pruning is a confirmed, currently-tested legitimate divergence (`MasterPruningRoundTripGateTests`, real fixtures). |
+| `OverriddenForms` (ONAM) | `OverriddenFormsOption` is its own write option with a legitimate divergence path. |
+| `TransientTypes` (TNAM) | **Not a legitimate-divergence exclusion — a confirmed gap in what this mechanism can detect**, deliberately not papered over. `Fallout4ModHeader.Mask.TransientTypes` is a nested indexed-list mask; a per-item corruption is reported by the shared mask-walking helper against the nested leaf's own declaring type (`TransientType`/`FormType`), never against the outer `TransientTypes` name this allow-list would need to match — reproduced live: a per-item `FormType` corruption yields no allow-list match. A list-count divergence is worse: Mutagen's own generated mask does not flag a 1-item-vs-0-item list as unequal at all, confirmed live, so no field-name mapping fix could catch that shape either. A corrupted or dropped `TransientTypes` entry round-trips silently through this gate today; tracked as a follow-up, not fixed here. |
+
+The seven allow-listed fields are exactly the ones Mutagen's own model never interprets and never
+normalizes on write — carried through as raw data — which is why a content corruption on one of them
+is a real defect rather than an encoding artifact, and why a blanket sweep of every `Mask` field would
+instead false-positive-refuse the `MasterReferences`/`Stats` cases above (the two rows with their own
+permanent accept fixtures) as well as silently over-claim coverage `TransientTypes` cannot actually
+back.
+
 Everything else that changes bytes without changing content — zlib level/implementation,
 negative zero, subrecord order, GRUP child order, derived sizes and counts, master pruning
 (decision 4 below has its own interaction: the tree carries the original's order, a compile back
