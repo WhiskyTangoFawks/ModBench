@@ -110,29 +110,24 @@ there is no separate load-load order step.
    a richer load-order-derived verdict exists for the same master, I want the two merged into one
    badge rather than shown as a second decoration that might contradict the first (see Missing-
    master badge (order-aware) and load-order-derived master/load-failure decoration).
-8. As a user, I want a plugin whose filename more than one enabled mod provides marked with a
-   badge, tint, description and tooltip naming every providing mod with the winner marked, so
-   that I have a reason to suspect the plugin I'm about to edit shadows — or is shadowed by —
-   another mod's copy, instead of discovering it the hard way (#447; see File-override
-   decoration).
-9. As a user, I want to drag a plugin to a new position and have `plugins.txt` reordered
+8. As a user, I want to drag a plugin to a new position and have `plugins.txt` reordered
    immediately, so that fixing a load-order problem is a direct manipulation, not a form.
-10. As a user, I want to ctrl/shift-click to select multiple plugins and drag them together as
+9. As a user, I want to ctrl/shift-click to select multiple plugins and drag them together as
     a block, so that reordering a cluster of related plugins doesn't take one drag per plugin.
-11. As a user, I want a filter that narrows the list to plugins whose filename matches
+10. As a user, I want a filter that narrows the list to plugins whose filename matches
     what I type, so that I can find one without scrolling a 100+-entry load order.
-12. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
+11. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
     them looks stale (e.g. after an external MO2 edit), so that I never have to remember
     which tree owns which refresh (#247 — it lives on the
     [Loadout header](loadout-header.md)).
-13. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
+12. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
     can go inspect the actual file behind a badge without hunting for it myself.
-14. As a user, I want this list visible at all times, with no separate open/launch step, so
+13. As a user, I want this list visible at all times, with no separate open/launch step, so
     that it behaves like the Mods tree it's stacked with, not like the occasional-use
     Downloads tab.
-15. As a user, I want a clear error state if `plugins.txt` can't be read, so that a corrupt or
+14. As a user, I want a clear error state if `plugins.txt` can't be read, so that a corrupt or
     missing file doesn't just silently show an empty list.
-16. As a user, I want installing, uninstalling or reprioritising a mod to update a loaded
+15. As a user, I want installing, uninstalling or reprioritising a mod to update a loaded
     plugin's records automatically when that changes *which file* the plugin name resolves to,
     so that I am never stuck quietly browsing records from bytes my loadout no longer points at
     — and never have to notice or ask for it myself.
@@ -259,10 +254,13 @@ there is no separate load-load order step.
   FormKey and never takes part in conflict classification.
 - **Every physical plugin copy is registered, not only the load order's picks** (ADR-0044). A
   copy losing the Mod override order, and a file no `plugins.txt` line names, arrive in the same
-  snapshot as the winners and are held beside them — non-participating, read-only, browsable on
-  request under the winner row's Stack node (below). The user-facing show/hide toggles for
-  non-participating rows — one per reason (disabled, losing, unlisted) — are a separate
-  `needs-ux` ticket; today `PluginListProvider` reads only `plugins.txt`'s own line set for rows.
+  snapshot as the winners and are held beside them — non-participating and read-only, but **not
+  displayed**: `PluginListProvider` reads only `plugins.txt`'s own line set for rows, and a
+  plugin more than one enabled mod provides renders exactly like any other row. How a losing or
+  unlisted copy surfaces — per-reason show/hide toggles, dimming, origin labelling — is an open
+  UX design ([#576](https://github.com/WhiskyTangoFawks/ModBench/issues/576)); the earlier
+  always-on Stack node and file-override badge were reviewed live, rejected, and removed
+  ([#595](https://github.com/WhiskyTangoFawks/ModBench/issues/595)).
 - **The seam is a thin composite at the composition root** (`PluginsTreeComposite`), not a change
   to either provider: Mod Management owns the rows, the record browser owns the children, and
   neither imports the other's vocabulary — enforced by `src/test/contextBoundary.test.ts`, not by
@@ -542,57 +540,6 @@ reconcile toast (`EditingController.putLoadOrder`, one aggregated warning per lo
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
 
-### File-override decoration (#447)
-
-**File override** (Resolution stack, `CONTEXT.md`) — file level: more than one enabled mod
-provides the same plugin filename; Mod override order resolves which physical copy the plugin
-name actually points at (MO2's own "overwritten" dialect for the same fact). No backend required
-— this is a Mod Management fact about a Mod Management row, computed from the same
-`FileConflictIndex` (`fileConflictIndex.ts`) the Mods tree's own conflict badges and the
-order-aware missing-master badge above already walk; `rootLevelFileConflicts` is a filter over
-that existing index, not a second disk walk.
-
-- **Trigger.** A plugin row is a file override exactly when `rootLevelFileConflicts` carries an
-  entry for its filename — two or more enabled mods provide it. An uncontested plugin (zero or
-  one provider) renders exactly as every other decoration in this spec leaves it: untouched.
-- **Visual encoding — the git-modified idiom, the same `FileDecorationProvider` mechanism the
-  record-row `M`/`A` badge (#428, below) already uses, applied here at the plugin-file level for
-  the first time on this tree:**
-  - A **badge + themed color tint** (`FileOverrideDecorationProvider`,
-    `gitDecoration.modifiedResourceForeground`) on the row, keyed on a `resourceUri` `PluginNode`
-    sets to the winning physical file **only when it is a file override** — never unconditionally,
-    since a `resourceUri` on every row would make VS Code infer a file-type base icon for every
-    plugin whether contested or not, which is what "uncontested plugins render exactly as today"
-    (below) would otherwise silently regress.
-  - A **description suffix** (e.g. "2 mods") appended after (never replacing) whatever the
-    order-aware badge above already put there.
-  - A **tooltip** naming every providing mod, with the winner marked, appended after (never
-    replacing) whatever tooltip the row already carries — the same append-not-overwrite
-    convention the read-only note and the reconciled master-issue decoration above already use.
-- **Coexists with the missing-master badge.** Both decorations write to the same row's
-  description/tooltip by appending, so a plugin can carry an order-aware master issue *and* be a
-  file override at once, and both remain legible — this is not a new reconciliation (there is
-  nothing to disagree about, unlike the two missing-master signals above): the file-override
-  decoration has no load-order-derived counterpart to merge with.
-- **Scope.** Plugin rows only (`PluginNode`) — not an implicit (vanilla/DLC) master row, which
-  already owns its own, distinct gray-tint decoration (`ImplicitMasterDecorationProvider`).
-- **Refresh.** No new watcher: file-override facts are computed inside the same
-  `PluginListProvider.buildRows()` pass as the order-aware badge, so they refresh on exactly the
-  triggers that already refresh it today — a plugin checkbox toggle, mEdit start/stop, or the
-  title-bar Refresh (`makeRefreshAll`) — clearing the signal the next time any of those runs, with
-  no reconcile required.
-- **Vocabulary.** "File conflict" (`modmanager/CONTEXT.md`) is Mod Management's own, pre-existing
-  term for this fact and stays untouched in code (`ConflictEntry`, `buildFileConflictIndex`,
-  `providers`, `winner`, `winnerMod`) — this section, and the user-facing badge/tooltip copy, use
-  "file override" per the Resolution stack's level-qualified vocabulary (`CONTEXT.md`), since this
-  is the surface where the two contexts' language meets.
-- **Out of scope here.** The Stack expansion node, peer loading, and diff/compile actions are
-  [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448) — see Stack node, below — which
-  needs the badge above as the signal that a Stack node exists at all. Delta compare (Effective
-  vs Effective, "Compare with winner" on a peer) is its own split,
-  [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet built. Compile-staleness
-  decoration is its own split too — see Compile-staleness decoration, below.
-
 ### Compile-staleness decoration ([#449](https://github.com/WhiskyTangoFawks/ModBench/issues/449))
 
 Split (d) of #397's design record — the state level of the Resolution stack (`CONTEXT.md`): within
@@ -633,74 +580,8 @@ physical file a name resolves to, this is an Editing fact about a tracked plugin
   compile changes nothing about any plugin's git state and triggers no refresh.
 - **Scope.** Plugin rows only, tracked plugins only — an untracked plugin has no state layer to
   diverge (`CONTEXT.md`: "Editing requires tracking; viewing never does").
-- **Out of scope here.** Any auto-compile behavior. The Stack node's own binary-entry state split
-  (source/binary as two expandable rows, [#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448),
-  below) is the sibling "investigate the stack" surface — this is only the always-on row-level
+- **Out of scope here.** Any auto-compile behavior — this is only the always-on row-level
   signal that something there is worth investigating.
-
-### Stack node ([#448](https://github.com/WhiskyTangoFawks/ModBench/issues/448))
-
-Split (c) of #397's design record — the "investigate the stack" surface for a contested plugin,
-CONTEXT.md's "Resolution stack" made explorable. Where the file-override decoration above only
-*flags* that a plugin's filename resolves to more than one enabled mod's copy, this node is where
-a user actually goes to look at the other copy, or at the tracked winner's own source/binary
-split.
-
-- **Trigger and placement.** A plugin row whose filename `PluginListProvider.stackPeers()` carries
-  peers for (i.e. `fileOverrides()` also flags it — the two always agree) gets a synthetic **Stack**
-  node, pinned first among its children — the Worldspaces-node precedent (a synthetic node ahead
-  of the flat record-type list), not a spatial grouping. Absent entirely for an uncontested
-  plugin, never rendered empty. The row's own file-override badge is the discoverability signal;
-  the chevron itself can't be, since every plugin row always expands (ADR-0035).
-- **The hand-off is exactly ADR-0036's boundary object.** `PluginsTreeCompositeDeps` gains an
-  optional `stackPeersOf(row): { name, path, origin }[] | undefined` accessor (`PluginsTreeComposite.ts`),
-  structurally identical to `unlistedPlugins.ts`'s own `UnlistedPlugin` — origin + physical
-  path, nothing richer ever crosses. `PluginTreeProvider.getPluginChildren` gained a third,
-  optional `stackPeers` parameter carrying it through; the composite computes it once, at the
-  join, from `PluginListProvider.stackPeers()` (itself a grouping over #34's existing
-  `findUnlistedPlugins`, not a new computation).
-- **Children, in resolution order:**
-  1. **`source (working tree) — <mod>`** and **`binary (last compile…) — <mod>`** — the winner's
-     own state-level stack, *tracked plugins only* (CONTEXT.md: "Editing requires tracking;
-     viewing never does" — an untracked winner has no working tree to show a state split for at
-     all). Gated on the composition root's own `.git`-presence check (`isTracked`,
-     `trackedRepositories.ts`, exported for this reuse) plus each plugin's own loaded origin
-     (`PluginTreeProvider.setTrackedPlugins`/`setPluginOrigins`, populated from the same
-     `GET /plugins` answer `applyLoadOrderToTree` already reads). Map + links, not duplicated function
-     (maintainer decision): the source entry is informational only; the binary entry's own
-     context menu offers **Diff against source** and **Save & Compile** — commit/revert stay in
-     the native SCM panel.
-  2. **Every file-level peer** (`<plugin> — <mod>`), greyed (lock icon) and read-only regardless
-     of tracking — load-order membership decides write access (CONTEXT.md), never re-derived per
-     row.
-- **Diff against source** (`modbench.pluginListTree.diffAgainstSource`, the binary entry's own
-  context command) opens a native `vscode.diff` of the working tree against
-  `refs/medit/last-compile/<plugin>` (`SourceRepository`'s own parked snapshot) via the `git:`
-  URI scheme VS Code's built-in git extension resolves. **Scoped to the plugin's own root source
-  file** (`source/<plugin>/RecordData.json` — CONTEXT.md's "one *source unit* = one file"
-  invariant guarantees this file always exists) rather than every file the compile touched; a
-  plugin with group-folder content (`Weapons/`, `Cells/`, …) can have changes this diff does not
-  show. A true whole-tree multi-file diff is `vscode.changes` (VS Code 1.94+, past this
-  extension's current `^1.85.0` engine floor) — a disclosed follow-up, not built here.
-- **Save & Compile** from the binary entry reuses `modbench.saveAndCompile` unchanged — the
-  handler recognizes a `StackBinaryStateNode` argument and compiles its exact `(plugin, origin)`
-  directly, skipping the ordinary row/active-record/QuickPick resolution tiers (`compileTarget.ts`)
-  since the entry already carries both.
-- **Expanding a peer browses a copy the backend already holds** (ADR-0044): every losing copy is
-  in the snapshot and registered beside its winner, so `PluginTreeProvider.fetchStackPeerChildren`
-  simply recurses into the same `getPluginChildren(name, origin)` every other origin-bearing copy
-  already uses — nothing to load first, nothing to unload on collapse; read-only falls out of the
-  pre-existing `isImmutable` short-circuit (`origin !== undefined ⇒ immutable`, #281/ADR-0036),
-  not new logic.
-- **Reveal in Mods tree** (`modbench.pluginListTree.revealInModsTree`, a peer's own context
-  command) selects and focuses the providing mod's row in the Mods tree
-  (`ModListProvider.findModNode` / `getParent`, `vscode.TreeView.reveal`) — changing the winner is
-  mod reordering, the Mods tree's own jurisdiction, so this command only ever selects, never
-  reorders.
-- **Out of scope here.** Delta compare ("Compare with winner", Effective vs Effective, the two
-  presence icons) is [#544](https://github.com/WhiskyTangoFawks/ModBench/issues/544), not yet
-  built. The global "show peers everywhere" audit-mode toggle is deferred, not dropped (#397's
-  design record) — no such toggle is contributed anywhere in `package.json`.
 
 ### Conflicts node and conflict badge ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364))
 
@@ -709,15 +590,14 @@ model (record-wide `ConflictAll` / per-cell `ConflictThis`) is the settled desig
 drives anything on this tree — Axis 2 stays the compare grid's own concern
 ([medit-record-editor.md](medit-record-editor.md)'s "Conflict color coding").
 
-- **Trigger and placement — root-level, not per-plugin.** Unlike the Stack node above (a
-  per-plugin child `getPluginChildren` builds), the Conflicts node is a load-order-wide sibling of
-  the plugin rows — a record's override stack inherently spans more than one plugin, so there is
+- **Trigger and placement — root-level, not per-plugin.** Not a per-plugin child
+  `getPluginChildren` builds: the Conflicts node is a load-order-wide sibling of the plugin rows — a record's override stack inherently spans more than one plugin, so there is
   no single plugin row it could belong under. `PluginsTreeCompositeDeps.children` gains an
   optional `conflictsNode(): TChild | undefined` accessor, consulted once at the root and
   prepended ahead of every plugin row when present — never added to the composite's `rowsSeen`,
   so it routes through the `children` side for its own `getChildren`/`getTreeItem` the same way
-  every other record-side node does (confirmed disjoint from the Stack node's own insertion point
-  by an executable routing test, not merely by construction).
+  every other record-side node does (confirmed by an executable routing test, not merely by
+  construction).
 - **Gated on `conflictsComputed`, omitted entirely — never rendered empty (#307's invariant).**
   `PluginTreeProvider.setConflictsComputed`/`conflictsNode` mirror `loadOrderProgress.ts`'s own "no
   conflict badge before the sweep completes" rule: `conflictsNode()` answers `undefined` (the
