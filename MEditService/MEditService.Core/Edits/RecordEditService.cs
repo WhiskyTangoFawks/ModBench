@@ -802,7 +802,7 @@ public sealed class RecordEditService(
                 // the same "child first" ordering CreateInteriorCellParent's own sibling path uses,
                 // moot here since the cell's row already carries the child inline either way.
                 index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
-                sessions.ReapplyFilter();
+                mirror.ReapplyFilter();
 
                 if (logger.IsEnabled(LogLevel.Information))
                 {

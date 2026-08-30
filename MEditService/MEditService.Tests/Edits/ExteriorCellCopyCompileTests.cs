@@ -27,10 +27,10 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() =>
-        new(_fixture.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private PluginCompileService CompileService() =>
-        new(_fixture.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(_fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     [Fact]
     public void CopyExteriorPlacedReference_CompilesToBinary_AndPlacesTheRefUnderTheSourcesOwnBlockAndSubBlock()

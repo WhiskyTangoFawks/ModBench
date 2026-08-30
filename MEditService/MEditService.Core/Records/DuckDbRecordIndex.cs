@@ -2774,9 +2774,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.CreateCellLocation"/>.</summary>
     public void CreateCellLocation(PluginKey plugin, CellLocationRow row)
     {
-        ExecuteFor("DELETE FROM cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             row.CellFormKey, plugin.Name, plugin.Origin!);
-        using var appender = Connection.CreateAppender("cell_location");
+        using var appender = Connection.CreateAppender("mirror", "cell_location");
         AppendCellLocationRow(appender, row, plugin.Name, plugin.Origin!);
     }
 

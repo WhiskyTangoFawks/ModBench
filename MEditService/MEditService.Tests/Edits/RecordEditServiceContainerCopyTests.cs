@@ -171,12 +171,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var index = fixture.Sessions.Index!;
+        var index = fixture.Mirror.Index!;
         var worldspaceDoc = index.GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(worldspaceDoc);
         Assert.True(worldspaceDoc!.IsPartialForm);
@@ -210,12 +210,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var index = fixture.Sessions.Index!;
+        var index = fixture.Mirror.Index!;
         var worldspaceDoc = index.GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(worldspaceDoc);
         Assert.True(worldspaceDoc!.IsPartialForm);

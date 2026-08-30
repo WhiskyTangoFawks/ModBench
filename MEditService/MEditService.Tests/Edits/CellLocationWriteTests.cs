@@ -23,7 +23,7 @@ public sealed class CellLocationWriteTests : IDisposable
     [Fact]
     public void CreateCellLocation_MakesTheRowReadableThroughGetCellLocation()
     {
-        var index = _fixture.Sessions.Index!;
+        var index = _fixture.Mirror.Index!;
         var row = new CellLocationRow(
             SyntheticCellFormKey, SyntheticWorldspaceFormKey,
             BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, GridX: 12, GridY: -5, IsInterior: false);
@@ -40,7 +40,7 @@ public sealed class CellLocationWriteTests : IDisposable
     [Fact]
     public void CreateCellLocation_CalledTwiceForTheSameCell_ReplacesRatherThanDuplicates()
     {
-        var index = _fixture.Sessions.Index!;
+        var index = _fixture.Mirror.Index!;
         index.CreateCellLocation(_fixture.Plugin, new CellLocationRow(
             SyntheticCellFormKey, SyntheticWorldspaceFormKey,
             BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, GridX: 12, GridY: -5, IsInterior: false));
