@@ -21,33 +21,33 @@ function fakeDecorationProvider(): RecordDecorationProvider {
 
 // #449: this is the actual production callback a field edit drives — driven here through a real
 // call, not by hand-feeding a decoration's own accessor the way PluginsTreeComposite.test.ts's own
-// compile-pending tests do. That distinction is the point: those tests prove the decoration renders
-// correctly *given* a compile-pending answer; this proves an edit is what makes that answer change
+// compile-staleness tests do. That distinction is the point: those tests prove the decoration renders
+// correctly *given* a compile-staleness answer; this proves an edit is what makes that answer change
 // in the first place — the exact seam #449's review found unwired.
-describe('makeOnRecordEdited — compile-pending refresh (#449)', () => {
-  it('calls the injected refreshCompilePending on every edit', () => {
-    const refreshCompilePending = vi.fn();
+describe('makeOnRecordEdited — compile-staleness refresh (#449)', () => {
+  it('calls the injected refreshCompileStale on every edit', () => {
+    const refreshCompileStale = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshCompilePending, vi.fn(),
+      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshCompileStale, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
-    expect(refreshCompilePending).toHaveBeenCalledTimes(1);
+    expect(refreshCompileStale).toHaveBeenCalledTimes(1);
   });
 
-  it('calls refreshCompilePending even when the record-row cache has no entry for this FormKey', () => {
+  it('calls refreshCompileStale even when the record-row cache has no entry for this FormKey', () => {
     // markWorkingTreeState returning false means "not cached", not "the edit didn't happen" — the
     // edit already landed server-side by the time onRecordEdited fires, so the plugin row's
-    // compile-pending decoration must not be gated on the record-row cache's own hit/miss.
-    const refreshCompilePending = vi.fn();
+    // compile-staleness decoration must not be gated on the record-row cache's own hit/miss.
+    const refreshCompileStale = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshCompilePending, vi.fn(),
+      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshCompileStale, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
-    expect(refreshCompilePending).toHaveBeenCalledTimes(1);
+    expect(refreshCompileStale).toHaveBeenCalledTimes(1);
   });
 
   it('still refreshes the M/A badge decoration (#428), unchanged by the #449 addition', () => {

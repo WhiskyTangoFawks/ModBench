@@ -36,7 +36,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() =>
-        new(_fixture.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -85,7 +85,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     {
         Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("3.5")).Applied);
 
-        var child = _fixture.Sessions.Index!.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
+        var child = _fixture.Mirror.Index!.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin);
         Assert.NotNull(child);
         Assert.Contains("\"Scale\": 3.5", child!.Body!, StringComparison.Ordinal);
     }
@@ -93,7 +93,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void AfterAnEmbeddedEdit_TheOwningCellReadsDirtyAtEffective()
     {
-        var index = _fixture.Sessions.Index!;
+        var index = _fixture.Mirror.Index!;
         // Clean before: the tree is exactly what Track committed, so both refs agree.
         Assert.Equal(
             index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body,
@@ -102,8 +102,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("4.5")).Applied);
 
         // The parent is the source unit, so the parent is what went dirty — Effective has moved and
-        // Head still holds what was committed. That is what makes the edit visible as a pending
-        // change on the record the file actually belongs to.
+        // Head still holds what was committed. That is what makes the edit visible as a
+        // working-tree change on the record the file actually belongs to.
         var effective = index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
         var head = index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
         Assert.NotEqual(effective, head);
@@ -124,7 +124,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // the first time. RefuseIfContainmentField now refuses it by name, the same way Grid is
         // refused for cell_location above: Position is mirrored into `placement` (PlacementWalker),
         // and nothing on this write path re-derives that row.
-        var index = _fixture.Sessions.Index!;
+        var index = _fixture.Mirror.Index!;
         Assert.Equal(11f, index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
 
         var result = EditService().EditField(
@@ -163,10 +163,10 @@ public sealed class EmbeddedChildEditTests : IDisposable
         // The child records are all still exactly where they were...
         Assert.Equal(
             _fixture.EmbedCell.ToString(),
-            _fixture.Sessions.Index!.GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString())!.Value.ParentFormKey);
+            _fixture.Mirror.Index!.GetContainerParent(_fixture.Plugin, _fixture.Navmesh.ToString())!.Value.ParentFormKey);
         Assert.Equal(
             _fixture.EmbedCell.ToString(),
-            _fixture.Sessions.Index!.GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString())!.Value.ParentFormKey);
+            _fixture.Mirror.Index!.GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString())!.Value.ParentFormKey);
         // ...and AC3's own claim, at the level it names: three refusals, not one byte of tree dirt.
         Assert.Empty(_fixture.GitStatus());
     }
@@ -238,7 +238,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
             File.ReadAllText(file));
         Assert.Contains(
             "\"Scale\": 9.5",
-            _fixture.Sessions.Index!.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin)!.Body!,
+            _fixture.Mirror.Index!.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin)!.Body!,
             StringComparison.Ordinal);
     }
 

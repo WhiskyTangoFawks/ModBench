@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Tests.RealData;
 using Mutagen.Bethesda;
 
@@ -38,6 +38,7 @@ public class WorldspaceQueryServiceTests
         }
         public RecordDocument? GetDocument(string formKey) => null;
         public RecordDocument? GetDocument(string formKey, PluginKey plugin) => null;
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => [];
         public RecordOverrides? GetOverrideStack(string formKey) => null;
         public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => [];
         public IReadOnlyList<string> GetContestedFormKeys() => [];
@@ -62,47 +63,41 @@ public class WorldspaceQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    private sealed class StubSession(IRecordReads repo, IGameSession? session = null) : ISessionManager
+    private sealed class StubMirror(IRecordReads repo, ILoadOrder? loadOrder = null) : ILoadOrderMirror
     {
-        public IGameSession? Session => session;
+        public ILoadOrder? LoadOrder => loadOrder;
         public IRecordReads? Repository => repo;
         // #415: read-side double — the worldspace queries never write to the index.
         public IRecordIndex? Index => null;
-        // #274: these stubs never load, so they are always in the no-session state.
-        public SessionStatus Status => SessionStatus.None;
-        public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) => throw new NotSupportedException();
-        public void Unload() => throw new NotSupportedException();
+        // #274: these stubs never load, so they are always in the no-load order state.
+        public LoadOrderStatus Status => LoadOrderStatus.None;
+        public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
+        public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
-        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
-        public PluginResponse SetPluginParticipation(string plugin, bool participates) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> p) => throw new NotSupportedException();
+        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
+        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
         public void ReapplyFilter() => throw new NotSupportedException();
     }
 
-    // #296: a minimal fake session whose Plugins list is real enough to exercise
+    // #296: a minimal fake load order whose Plugins list is real enough to exercise
     // PluginOriginResolver.Resolve — used only by the origin-resolution plumbing test below.
-    private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
+    private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
     {
         public string DataFolderPath => "";
+        public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
         public string? FilterSql { get; set; }
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
-        public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
-        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
-        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 
     private static WorldspaceQueryService Service(IReadOnlyList<CellLocationSummary> cells) =>
-        new(new StubSession(new StubReader(cells)));
+        new(new StubMirror(new StubReader(cells)));
 
     [Fact]
     public void GetWorldspaceBlocks_GroupsCellsIntoBlocksAndSubBlocks()
@@ -161,7 +156,7 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaces_RealRepository_ReturnsCommonwealthWorldspace()
     {
         using var fixture = new CutDownPluginFixture();
-        var svc = new WorldspaceQueryService(new StubSession(fixture.Repo));
+        var svc = new WorldspaceQueryService(new StubMirror(fixture.Repo));
 
         var result = svc.GetWorldspaces(CutDownPluginFixture.PluginFileName);
 
@@ -169,10 +164,10 @@ public class WorldspaceQueryServiceTests
     }
 
     [Fact]
-    public void WorldspaceQuery_NoSession_ThrowsInvalidOperation()
+    public void WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation()
     {
-        // No session loaded → Repository is null → a clear InvalidOperationException, not an NRE.
-        var svc = new WorldspaceQueryService(new StubSession(null!));
+        // No load order held → Repository is null → a clear InvalidOperationException, not an NRE.
+        var svc = new WorldspaceQueryService(new StubMirror(null!));
         Assert.Throws<InvalidOperationException>(() => svc.GetInteriorCells("M.esp", 50, 0));
     }
 
@@ -183,7 +178,7 @@ public class WorldspaceQueryServiceTests
             new RecordSummary("0001:M.esp", "M.esp", 0, true, "WorldA", "Data"),
             new RecordSummary("0002:M.esp", "M.esp", 0, true, null, "Data"),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader));
+        var svc = new WorldspaceQueryService(new StubMirror(reader));
 
         var result = svc.GetWorldspaces("M.esp");
 
@@ -196,16 +191,16 @@ public class WorldspaceQueryServiceTests
     // #296: GetWorldspaces called repo.GetRecords("wrld", plugin, ...) with no origin at all — the
     // same class of bug as the other worldspace-tree reads, just one hop further away (through
     // GetRecords rather than a repository method GetWorldspaceCells/GetInteriorCells/
-    // GetCellReferences own directly). Verifies the plumbing resolves the session's real origin for
+    // GetCellReferences own directly). Verifies the plumbing resolves the load order's real origin for
     // the plugin and passes it down, independent of DuckDB.
     [Fact]
-    public void GetWorldspaces_ResolvesRealOriginFromSession_AndPassesItToGetRecords()
+    public void GetWorldspaces_ResolvesRealOriginFromLoadOrder_AndPassesItToGetRecords()
     {
         var reader = new StubReader([]);
-        var session = new StubGameSession([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        var loadOrder = new StubLoadOrder([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session));
+        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
 
         svc.GetWorldspaces("M.esp");
 
@@ -215,16 +210,16 @@ public class WorldspaceQueryServiceTests
     // #305: a caller that already knows which copy it's browsing (a tree row built from a
     // specific origin) states it explicitly, and that must win over whatever the load order would
     // otherwise resolve — the same shape RecordQueryService.GetRecords already has (#34). The
-    // session here resolves "M.esp" to "ModA", so a passing "ModB" through only proves the
+    // load order here resolves "M.esp" to "ModA", so a passing "ModB" through only proves the
     // explicit value, not the fallback, actually reached GetRecords.
     [Fact]
     public void GetWorldspaces_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var session = new StubGameSession([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        var loadOrder = new StubLoadOrder([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session));
+        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
 
         svc.GetWorldspaces("M.esp", origin: "ModB");
 
@@ -235,10 +230,10 @@ public class WorldspaceQueryServiceTests
     public void GetWorldspaceBlocks_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var session = new StubGameSession([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        var loadOrder = new StubLoadOrder([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session));
+        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
 
         svc.GetWorldspaceBlocks("M.esp", "wrld:M.esp", origin: "ModB");
 
@@ -249,10 +244,10 @@ public class WorldspaceQueryServiceTests
     public void GetInteriorCells_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var session = new StubGameSession([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        var loadOrder = new StubLoadOrder([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new WorldspaceQueryService(new StubSession(reader, session));
+        var svc = new WorldspaceQueryService(new StubMirror(reader, loadOrder));
 
         svc.GetInteriorCells("M.esp", 50, 0, origin: "ModB");
 
@@ -260,7 +255,7 @@ public class WorldspaceQueryServiceTests
     }
 
     // #305: the only prior coverage of GetInteriorCells with an omitted origin
-    // (WorldspaceQuery_NoSession_ThrowsInvalidOperation, above) only proves the no-session guard —
+    // (WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation, above) only proves the no-load order guard —
     // it asserts nothing about real content flowing through with the load-order-resolved origin.
     // Mirrors GetWorldspaces_MapsRecordsToSummaries so the omitted-origin path stays pinned by a
     // real assertion, not just "it doesn't throw", once GetInteriorCells takes an optional origin.

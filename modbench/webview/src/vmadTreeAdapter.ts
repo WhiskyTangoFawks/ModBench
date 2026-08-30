@@ -1,7 +1,7 @@
 // Issue #231: maps VMAD (Papyrus script data) into the same node shape the compare grid's
 // ordinary fields already use (FieldDiff + FieldMetadata), so VmadSection's bespoke row/cell
 // renderers can be deleted and VMAD rows become ordinary rows in the one tree — focus, keyboard,
-// clipboard, drag, conflict coloring, and pending columns all come from DiffRow/RecordPanel
+// clipboard, drag, conflict coloring, and overlay columns all come from DiffRow/RecordPanel
 // unchanged, nothing VMAD-specific re-derives them.
 //
 // Shape: one top-level synthesized FieldDiff per script (a struct-like container: no editable

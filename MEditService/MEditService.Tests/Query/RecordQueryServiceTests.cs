@@ -1,9 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -15,15 +15,15 @@ namespace MEditService.Tests.Query;
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class RecordQueryServiceTests : IDisposable
 {
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _svc;
 
     public RecordQueryServiceTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory);
-        _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(factory);
+        _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
@@ -43,7 +43,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
     }
 
-    // #277 / ADR-0037: a plugin whose master is absent from the whole session is flagged on the
+    // #277 / ADR-0037: a plugin whose master is absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
@@ -55,9 +55,9 @@ public sealed class RecordQueryServiceTests : IDisposable
             .WithPlugin("Patch.esp", mod => mod.Npcs.AddNew("PatchedNpc").Race.SetTo(
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
-        using var manager = new SessionManager(
+        using var manager = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var plugins = svc.GetPlugins();
@@ -71,8 +71,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     // #277 / ADR-0037 AC6: pinning, not new behavior — ADR-0037 states this already works
     // (Mutagen builds FormKeys from a plugin's own header, so reading never requires a master to
     // exist, and a FormLink into an absent one already resolves to nothing and already falls back
-    // to the raw FormKey). This is the true end-to-end version of that claim: a whole session
-    // built via GameSession/SessionManager (not a hand-fed DuckDbRecordIndex), where the
+    // to the raw FormKey). This is the true end-to-end version of that claim: a whole load order
+    // built via LoadOrder/LoadOrderMirror (not a hand-fed DuckDbRecordIndex), where the
     // referenced master is never part of the load order at all — no plugins.txt line, no file.
     [Fact]
     public void GetRecord_ReferenceIntoAbsentMaster_RendersUnresolvedRatherThanErroring()
@@ -86,9 +86,9 @@ public sealed class RecordQueryServiceTests : IDisposable
                 npc.Race.SetTo(new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800));
             })
             .Build();
-        using var manager = new SessionManager(
+        using var manager = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var detail = svc.GetRecord(npcFormKey.ToString());
@@ -139,9 +139,9 @@ public sealed class RecordQueryServiceTests : IDisposable
     // --- GET /condition-functions ---
 
     [Fact]
-    public void GetConditionFunctions_Fallout4Session_ReturnsMutagenResolvedFunctionNames()
+    public void GetConditionFunctions_Fallout4LoadOrder_ReturnsMutagenResolvedFunctionNames()
     {
-        // Filtered to what Mutagen actually resolves for the loaded session's game (#152) — not a
+        // Filtered to what Mutagen actually resolves for the loaded load order's game (#152) — not a
         // hardcoded list. GetIsID and GetDistance are ordinary FO4 condition functions; a name from
         // a different game's Function enum (e.g. Skyrim-only) must not appear.
         var functions = _svc.GetConditionFunctions();
@@ -154,11 +154,11 @@ public sealed class RecordQueryServiceTests : IDisposable
     // --- GET /condition-run-on-targets ---
 
     [Fact]
-    public void GetConditionRunOnTargets_Fallout4Session_ReturnsMutagenResolvedRunOnTypeNames()
+    public void GetConditionRunOnTargets_Fallout4LoadOrder_ReturnsMutagenResolvedRunOnTypeNames()
     {
-        // Filtered to what Mutagen actually resolves for the loaded session's game (#167) — not a
+        // Filtered to what Mutagen actually resolves for the loaded load order's game (#167) — not a
         // hardcoded frontend array. PlayerShip is a Starfield-only RunOnType member; it must not
-        // appear for an FO4 session, proving this isn't a hand-maintained cross-game list.
+        // appear for an FO4 load order, proving this isn't a hand-maintained cross-game list.
         var targets = _svc.GetConditionRunOnTargets();
 
         Assert.Contains("Subject", targets);
@@ -338,8 +338,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            using var manager = new LoadOrderMirror(factory);
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
@@ -433,8 +433,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            using var manager = new LoadOrderMirror(factory);
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
@@ -698,9 +698,9 @@ public sealed class RecordQueryServiceTests : IDisposable
     // --- GetConflicts (#364: the Conflicts node's own listing) ---
 
     [Fact]
-    public void GetConflicts_SinglePluginSession_ReturnsEmpty()
+    public void GetConflicts_SinglePluginLoadOrder_ReturnsEmpty()
     {
-        // TestPluginFixture's default session has exactly one plugin — nothing is contested, so
+        // TestPluginFixture's default load order has exactly one plugin — nothing is contested, so
         // there is nothing for GetContestedFormKeys to hand GetConflicts in the first place.
         var conflicts = _svc.GetConflicts();
 
@@ -783,8 +783,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            using var manager = new LoadOrderMirror(factory);
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
             Assert.Contains(svc.GetConflicts(), c => c.Record.FormKey == npcKey.ToString());
 
@@ -798,8 +798,8 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        using var manager = new SessionManager(factory);
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using var manager = new LoadOrderMirror(factory);
+        manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
         test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
     }
 
@@ -891,22 +891,22 @@ public sealed class RecordQueryServiceTests : IDisposable
     // (explicitly, not relocated) — its resolution behaviour is exercised indirectly by every
     // GetDocument/GetOverrideStack test that resolves a FormKey without a stated type.
 
-    // --- No-session guard clauses ---
+    // --- No-load order guard clauses ---
 
     [Fact]
-    public void GetPlugins_NoSession_ThrowsInvalidOperationException()
+    public void GetPlugins_NoLoadOrder_ThrowsInvalidOperationException()
     {
         var unloaded = MakeUnloadedService();
         var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetPlugins());
-        Assert.Contains("No session loaded", ex.Message);
+        Assert.Contains("No load order", ex.Message);
     }
 
     [Fact]
-    public void GetRecords_NoSession_ThrowsInvalidOperationException()
+    public void GetRecords_NoLoadOrder_ThrowsInvalidOperationException()
     {
         var unloaded = MakeUnloadedService();
         var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
-        Assert.Contains("No session loaded", ex.Message);
+        Assert.Contains("No load order", ex.Message);
     }
 
     [Fact]
@@ -923,8 +923,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            using var manager = new LoadOrderMirror(factory);
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
@@ -962,8 +962,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            using var manager = new LoadOrderMirror(factory);
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var detail = svc.GetRecord("000000:HeaderQuery.esp");
@@ -991,8 +991,8 @@ public sealed class RecordQueryServiceTests : IDisposable
         {
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-            using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            using var manager = new LoadOrderMirror(factory);
+            manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare("000000:CompareA.esp");
@@ -1007,7 +1007,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new SessionManager(factory);
+        var manager = new LoadOrderMirror(factory);
         return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
 

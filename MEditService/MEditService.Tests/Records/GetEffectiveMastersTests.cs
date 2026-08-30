@@ -14,8 +14,8 @@ namespace MEditService.Tests.Records;
 /// DERIVED from content — the union of (a) the owning plugin of every FormKey this plugin's
 /// records reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey
 /// this plugin carries that isn't native to it (an override forces that master) — never the
-/// plugin's own declared header master list (ADR-0038's read-time derivation retired with the
-/// pending model, but the "effective, not declared" property survives here).
+/// plugin's own declared header master list (ADR-0038's read-time derivation is retired, but the
+/// "effective, not declared" property survives here).
 ///
 /// The fixture is the discriminating case the correction asked for: Patch.esp's header declares
 /// three masters, but only two are actually required by its content. Header-declared semantics
@@ -76,7 +76,7 @@ public sealed class GetEffectiveMastersTests : IDisposable
             var name = PluginOrder[i];
             var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
             var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-            repo.Index(mod, i, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+            repo.Index(mod, Registration.Participating(i), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
             if (name == "Patch.esp")
                 declared = [.. mod.MasterReferences.Select(m => m.Master.FileName.ToString())];
         }

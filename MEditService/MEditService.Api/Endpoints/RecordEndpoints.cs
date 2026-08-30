@@ -123,10 +123,7 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #427: renumber — a delete+create pair plus the cross-plugin reference cascade (Q5). Same
-        // route shape a retired pending-change-era endpoint once had (RetiredEditingWireSurfaceTests
-        // used to pin it absent); the summary/description below carry the "same string, new meaning"
-        // distinction onto the surface itself, not just a test comment.
+        // #427: renumber — a delete+create pair plus the cross-plugin reference cascade (Q5).
         app.MapPost("/records/{formKey}/renumber", (
             string formKey, RecordRenumberRequest request, RecordEditService edits) =>
             RenumberRecord(formKey, request, edits, logger))
@@ -136,9 +133,7 @@ public static class RecordEndpoints
             "Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs " +
             "collision-safe, or an explicit target) as a working-tree delete of the old source file " +
             "plus a create of the new one, cascading the FormKey change into every tracked plugin that " +
-            "references it. Not the retired pending-change-era renumber this same route once served; " +
-            "that mechanism (staged rows, no source text, no reference cascade) was removed with " +
-            "ADR-0041/#410.")
+            "references it.")
         .WithTags("Records")
         .Produces<RecordRenumberResponse>()
         .ProducesProblem(400)
@@ -151,10 +146,7 @@ public static class RecordEndpoints
         .ProducesProblem(503);
 
         // #436 (ADR-0041 restoration): Copy as Override Into… — the source record's own bytes,
-        // landing under the same FormKey in the destination's working tree. A new route shape (not
-        // the retired /records/{formKey}/copy-to/{targetPlugin}, pinned absent by
-        // RetiredEditingWireSurfaceTests — that was the staged pending-change copy this ticket does
-        // not resurrect).
+        // landing under the same FormKey in the destination's working tree.
         app.MapPost("/records/{formKey}/copy-as-override", (
             string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits) =>
             CopyRecordAsOverride(formKey, request, edits, logger))
@@ -241,9 +233,9 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            // 503, matching every sibling's own mapping for it: the session went away underneath the
+            // 503, matching every sibling's own mapping for it: the load order went away underneath the
             // request, which is a "not right now", never a bad request.
-            logger.LogError(ex, "No usable session while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
+            logger.LogError(ex, "No usable loadOrder while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -271,7 +263,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while deleting {FormKey}", decoded);
+            logger.LogError(ex, "No usable loadOrder while deleting {FormKey}", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -315,7 +307,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while renumbering {FormKey}", decoded);
+            logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -352,7 +344,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while copying {FormKey} as an override", decoded);
+            logger.LogError(ex, "No usable loadOrder while copying {FormKey} as an override", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -399,7 +391,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while copying {FormKey} as a new record", decoded);
+            logger.LogError(ex, "No usable loadOrder while copying {FormKey} as a new record", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }

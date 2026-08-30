@@ -21,7 +21,7 @@ namespace MEditService.Core.Source;
 /// re-reads the source text) before concluding anything. The reason is measured, not theoretical.
 /// Ingest hashes bytes serialized from a plugin's <i>binary overlay</i>; Track wrote the source file
 /// from a <i>deep parse</i> of the same plugin, and the two readers are not always structurally
-/// faithful to each other (#369, which is why Mutagen stays pinned pending #385). Serializing all
+/// faithful to each other (#369, which is why Mutagen stays pinned until #385). Serializing all
 /// 3,940 records of the committed cut-down plugin both ways found 4 divergences — three populated
 /// exterior Cells inlining children (handled separately by the ingest-side container strip, #413 D8)
 /// and one genuine reader-fidelity difference, Cell <c>092A18:Fallout4.esm</c>, whose overlay emits

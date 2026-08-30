@@ -16,14 +16,11 @@ import { columnKey } from './types';
 import { vscode } from './vscode';
 import { editField, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview } from './messages';
-import type { RecordSessionClient, DeltaScope } from './RecordSessionClient';
-import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
+import type { RecordPanelClient } from './RecordPanelClient';
+import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
 
 const mEditWindow = window as Window & typeof globalThis & {
   mEditFormKey: string;
-  // #544: "Compare with winner" opening a freshly-created panel already scoped to a peer/winner
-  // pair — null for every ordinary open (webviewHtml.ts's own default).
-  mEditDeltaScope: DeltaScope | null;
 };
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
@@ -48,27 +45,15 @@ function subtreeFor(
 
 // ── RecordPanel ───────────────────────────────────────────────────────────────
 
-export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }>) {
+export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
-  // #544: "Compare with winner" delta mode. `deltaScopeRef` is the value `refresh` actually reads
-  // (see its own comment) — mutated synchronously by `setDeltaScope` below, never left to a
-  // useLayoutEffect round trip, because the LOAD_RECORD handler calls `refreshRef.current`
-  // synchronously in the same tick it updates this, before React would ever get a chance to
-  // commit a state-driven effect. `deltaScope` (state) exists only to re-render the presence
-  // banner; nothing reads it for the load itself.
-  const deltaScopeRef = useRef<DeltaScope | null>(mEditWindow.mEditDeltaScope ?? null);
-  const [deltaScope, setDeltaScopeState] = useState<DeltaScope | null>(mEditWindow.mEditDeltaScope ?? null);
-  function setDeltaScope(scope: DeltaScope | null) {
-    deltaScopeRef.current = scope;
-    setDeltaScopeState(scope);
-  }
   // Issue #167: the Run On target dropdown's catalog (GET /condition-run-on-targets) — a
-  // session-wide list, not per-record, so it's fetched once on mount rather than on every
+  // load-order-wide list, not per-record, so it's fetched once on mount rather than on every
   // refresh()/load(fk). Starts empty (the Run On cell simply has nothing to show until this
   // resolves) rather than falling back to any hardcoded list. No `.catch` needed here:
   // client.conditionRunOnTargets() never rejects — it logs and degrades to [] on both a non-ok
-  // response and a thrown network error itself (RecordSessionClient.ts), the same contract
+  // response and a thrown network error itself (RecordPanelClient.ts), the same contract
   // PluginRepository.getConditionFunctions() gives its own callers.
   const [runOnTargets, setRunOnTargets] = useState<string[]>([]);
   useEffect(() => { void client.conditionRunOnTargets().then(setRunOnTargets); }, [client]);
@@ -81,7 +66,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // a load says otherwise — fail-closed, so a panel that has not heard from /plugins offers no
   // editing rather than offering edits that cannot land.
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey>>(new Set());
-  // #308 / ADR-0035: whether the winner sweep has run — GET /session/status's own field, read by
+  // #308 / ADR-0035: whether the winner sweep has run — GET /load-order/status's own field, read by
   // client.load() alongside compare/changes/plugins. Initial `true` only matters until the first
   // load lands (the `!result` early-return below renders "Loading…" until then, so this can never
   // read as a false "settled" to the user); every value after that comes straight off the load's
@@ -104,7 +89,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   // Issue #3: collapsed plugin columns, keyed by column identity (#272: ColumnKey, not the bare
   // plugin name — two same-filename columns must collapse independently). Deliberately NOT reset
   // by the LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
-  // navigation within the same panel session.
+  // navigation within the same panel load order.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
   // #426 Track 5: Add Property's own dialog state — which script/column VMAD_OPEN_ADD_PROPERTY
   // named, or null when no dialog is open. AddPropertyDialog itself (VmadPropertyOps.tsx) collects
@@ -154,12 +139,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
     if (!fk) return;
     try {
       setError(null);
-      // #544: reads the ref, not the `deltaScope` state — see its own declaration comment on why.
-      // Called with exactly one argument for the ordinary (no scope) case, not a trailing explicit
-      // `undefined` — preserves every pre-#544 `toHaveBeenCalledWith(fk)` assertion's exact arity.
-      const loaded = deltaScopeRef.current
-        ? await client.load(fk, deltaScopeRef.current)
-        : await client.load(fk);
+      const loaded = await client.load(fk);
       if (!loaded.ok) throw new Error(loaded.error);
       setResult(loaded.result);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
@@ -169,7 +149,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
       // so a null must actively clear the set rather than leave a previous record's answer standing.
       setTrackedSet(loaded.trackedSet ?? new Set());
       // #308: no `?? true` fallback. Against a real client, `conflictsComputed` is required on
-      // LoadResult (RecordSessionClient.ts), so a genuine response omitting it fails to compile.
+      // LoadResult (RecordPanelClient.ts), so a genuine response omitting it fails to compile.
       // That guarantee does *not* reach this webview's own test fixtures — RecordPanel.test.tsx's
       // fakeClient builds its LoadResult as `as unknown as LoadResult`, which bypasses structural
       // checking entirely, so a fixture that forgot this field would compile fine and read
@@ -367,7 +347,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const handleOpenExtendedRef = useRef(handleOpenExtended);
   useLayoutEffect(() => { handleOpenExtendedRef.current = handleOpenExtended; }, [handleOpenExtended]);
 
-  // Listen for loadRecord messages from the extension (panel reuse), the session's own
+  // Listen for loadRecord messages from the extension (panel reuse), the load order's own
   // conflicts-computed signal, and the array-op right-click commands (#426 Track 4) — the one
   // remaining broadcast-and-self-filter shape (the extension host has no live reference into this
   // panel's own React state, which alone holds the record's current values).
@@ -383,12 +363,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         setResult(null);
         setError(null);
         setFocusedCell(null);
-        // #544: set synchronously, before the refreshRef call below reads it — see deltaScopeRef's
-        // own declaration comment. `?? null`, not left undefined: a LOAD_RECORD that doesn't
-        // restate a scope is exactly the "navigated away from delta mode" case (a FormKey link,
-        // Referenced By, ...) that must drop back to ordinary browsing, per the AC's own "delta
-        // mode is scoped to peer comparison; ordinary browsing unchanged."
-        setDeltaScope(msg.deltaScope ?? null);
         // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
         // open must still re-load (the effect never fires, formKey didn't change) — the
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
@@ -398,17 +372,17 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         // path re-serialized the record through the codec, and this record's conflict picture
         // across every other column may have moved with it.
         if (msg.formKey === prevFormKeyRef.current) void refreshRef.current(msg.formKey);
-      } else if (msg.type === EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED) {
+      } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
         // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
         // data, not just clear its own banner over stale content — refresh() re-runs client.load()
-        // in full, so the grid and the banner update together in one state change. Session-wide,
+        // in full, so the grid and the banner update together in one state change. Load-order-wide,
         // not record-specific, so no self-filter — every open panel reacts.
         void refreshRef.current(prevFormKeyRef.current);
       } else if (
         msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE
         || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN
       ) {
-        // #426 Track 4: self-filter on formKey — a changeId-less broadcast (unlike the pending-cell
+        // #426 Track 4: self-filter on formKey — a changeId-less broadcast (unlike the retired cell
         // commands #410 retired, there is no per-change id here), the same convention #227's
         // original array-op broadcasts used. Only reachable while this exact record is open, so a
         // stale/background panel showing a different record ignores it.
@@ -473,7 +447,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   );
 
   // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
-  // filename" — computed from this response's own overrides (never the session's whole plugin
+  // filename" — computed from this response's own overrides (never the load order's whole plugin
   // list), same source columns already comes from.
   const collidingPluginNames = useMemo(
     () => collidingFilenames(result?.overrides ?? []),
@@ -509,21 +483,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
   const winner = overrides.find(o => o.isWinner);
   const displayId = (winner ?? overrides[0])?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
-
-  // #544: "Compare with winner" delta mode's own two presence icons — this record exists in only
-  // one of the two scoped copies (RecordSessionClient.load's own scoping already dropped every
-  // other column, so a single remaining override here can only mean the other named origin has
-  // none). "+"/"−" glyphs, not a VS Code codicon: `$(name)` shorthand is a native-UI (QuickPick/
-  // tree) convention this webview's own HTML never renders as an icon (no codicon font is wired
-  // into it — grep confirms no other component here uses one). Undefined in every other case —
-  // both present (an ordinary two-column diff, no banner needed) or ordinary browsing (deltaScope
-  // null).
-  let deltaPresenceBanner: string | undefined;
-  if (deltaScope && overrides.length === 1) {
-    deltaPresenceBanner = overrides[0].origin === deltaScope.winnerOrigin
-      ? `+ Present in the winner (${deltaScope.winnerOrigin}) only — absent from the peer (${deltaScope.peerOrigin}).`
-      : `− Present in the peer (${deltaScope.peerOrigin}) only — absent from the winner (${deltaScope.winnerOrigin}).`;
-  }
 
   // Issue #231: replaces the old hand-built top-level/array-element/struct-child/grandchild
   // special-casing (three near-duplicate `<DiffRow>` blocks, capped at exactly those three
@@ -615,19 +574,10 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
           badge, it actively paints a verdict nothing has checked yet. Same in-panel-notice shape
           as the actionError banner below it (there is no WebviewPanel.message the way TreeView
           has one), clears itself with no user action once refresh() next lands a settled
-          `conflictsComputed` — see the SESSION_CONFLICTS_COMPUTED handler above. */}
+          `conflictsComputed` — see the CONFLICTS_COMPUTED handler above. */}
       {recordPanelIncompleteMessage(conflictsComputed) && (
         <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-editorWarning-foreground, #cca700)', padding: '3px 6px', border: '1px solid var(--vscode-inputValidation-warningBorder, #cca700)', borderRadius: 2 }}>
           {recordPanelIncompleteMessage(conflictsComputed)}
-        </div>
-      )}
-      {/* #544: "Compare with winner" delta mode's own presence banner — informational, same
-          in-panel-notice shape as the incomplete-comparison banner above, distinguished from it
-          by using the standard foreground rather than the warning colour (this isn't a fault or
-          an incomplete state, just a fact about this one record). */}
-      {deltaPresenceBanner && (
-        <div style={{ flex: '0 0 auto', marginBottom: 8, fontSize: '11px', color: 'var(--vscode-descriptionForeground, #999)', padding: '3px 6px', border: '1px solid var(--vscode-panel-border, #555)', borderRadius: 2 }}>
-          {deltaPresenceBanner}
         </div>
       )}
       {/* Issue #175: flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport

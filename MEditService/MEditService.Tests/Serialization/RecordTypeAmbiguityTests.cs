@@ -80,7 +80,7 @@ public sealed class RecordTypeAmbiguityTests
     /// Ingest hands the serializer binary-overlay getters, whose runtime type is
     /// <c>&lt;Concrete&gt;BinaryOverlay</c> and which do <b>not</b> derive from the concrete setter
     /// class. A rule that tested assignability against the abstract group element directly would
-    /// therefore answer "unambiguous" for every record a real session indexes, and every GLOB in the
+    /// therefore answer "unambiguous" for every record a real load order indexes, and every GLOB in the
     /// index would come back as the schema's discovery winner. Pinned against the real type name
     /// rather than a hand-written string.
     /// </summary>

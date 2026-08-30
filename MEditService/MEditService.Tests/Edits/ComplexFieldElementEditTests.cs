@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -30,11 +30,11 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService Service() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private string NpcBody() => _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+    private string NpcBody() => _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
 
     // ── per-element payloads are refused, not silently dropped ────────────────
 
@@ -367,7 +367,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     /// <summary>
     /// An OMOD carrying one <c>ObjectModIntProperty</c> — the struct-element array #503 was reported
     /// against, which <see cref="TrackedModFixture"/>'s three-record NPC shape has no equivalent of.
-    /// Same posture as that fixture: a real mod folder, a real tracked session, no mocks.
+    /// Same posture as that fixture: a real mod folder, a real tracked load order, no mocks.
     /// </summary>
     private sealed class OmodFixture : IDisposable
     {
@@ -376,7 +376,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
         private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-omod-mod-").FullName;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-omod-game-").FullName;
-        private readonly SessionManager _sessions;
+        private readonly LoadOrderMirror _mirror;
 
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public FormKey ArmorMod { get; }
@@ -394,23 +394,23 @@ public sealed class ComplexFieldElementEditTests : IDisposable
             mod.WriteToBinary(pluginPath);
             ArmorMod = armor.FormKey;
 
-            _sessions = new SessionManager(
+            _mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)_sessions).LoadExplicit(
-                _gameDirectory, [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)], GameRelease.Fallout4);
+            ((ILoadOrderMirror)_mirror).Reconcile(
+                _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits)
+                .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 
         public RecordEditService Service() =>
-            new(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-        public string Body() => _sessions.Index!.GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
+        public string Body() => _mirror.Index!.GetDocument(ArmorMod.ToString(), Plugin)!.Body!;
 
         public void Dispose()
         {
-            _sessions.Dispose();
+            _mirror.Dispose();
             TryDelete(_modFolder);
             TryDelete(_gameDirectory);
         }

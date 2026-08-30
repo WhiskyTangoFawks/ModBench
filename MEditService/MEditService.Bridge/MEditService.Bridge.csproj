@@ -9,7 +9,7 @@
          reading of that sentence: it exists so the property is a compile-time fact (MEditService.
          Tests/Bridge/BridgeKnowsNothingOfSessionsTests.cs greps its own sources for the forbidden
          namespaces), not a discipline someone has to remember. It stays thin by design — the watch
-         lifecycle and an in-memory pending-question queue are all that live here. Every git/codec
+         lifecycle and an in-memory unanswered-question queue are all that live here. Every git/codec
          mechanic it calls (classification, plumbing commit, rebase, the deferral marker) lives in
          MEditService.Core/Source instead, next to SourceRepository/CompileJournal/SourceFreshness,
          which are already session/DB-free by the same construction — that's what lets the load-time

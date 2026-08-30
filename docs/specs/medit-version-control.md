@@ -19,7 +19,7 @@ resolving the active record's plugin, tree-row context menu, palette QuickPick f
 source text to the binary through the journaled write pipeline — masters derived from content
 in load order, container structure assembled from the index (`container_child` +
 placement), typed refusals for unemittable states, diagnostics to the Problems panel on
-success, per-repo `.git` journal markers (batch of one, `PendingRecovery` readable), and a
+success, per-repo `.git` journal markers (batch of one, `UnfinishedBatch` readable), and a
 parked `refs/medit/last-compile/<plugin>` advance after every landed write, `AtRef`
 included. External-change handling is live: the Bridge watcher and the load-time hash
 check classify against the parked ref (self-echo suppressed, crash markers routed away
@@ -34,7 +34,7 @@ editor (#230 redirect), VMAD structural ops via the op-envelope through `EditFie
 array add/remove/move (withheld on sorted arrays). Lifecycle gestures are live (#427),
 on the Plugins-tree context menus with xEdit's own captions (Add / Remove / Change
 FormID…): create allocates the next-free FormID collision-safe against both refs and
-lands as a working-tree source file (absent at Head; rediscovered at session load if
+lands as a working-tree source file (absent at Head; rediscovered at reconcile if
 uncompiled), delete confirms modally and removes the source file (still served at Head),
 renumber is a delete+create pair with a cross-repo reference cascade — referencing repos
 write first, the target last, any untracked referencer refuses up front, and a typed
@@ -63,7 +63,7 @@ Explorer drops a deleted file's row rather than badging it; the native Source Co
 panel already shows that D for free. This is the Track/Compile surface spec the
 milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
 and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417) — it replaces the
-retired aggregate-SCM and Pending Changes tree specs, both deleted by #418's closeout.
+retired aggregate-SCM and staged-edit tree specs, both deleted by #418's closeout.
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **tracked mods**
 (glossary: Tracked mod, Track, Source, Edit branch, Baseline, Save & Compile, Working-tree
@@ -72,7 +72,7 @@ vocabulary: tracking is a property of the mod *folder* (where `.git` lives), whi
 other gesture here operates on plugins and records.
 
 **The UX reference is git and VS Code, not xEdit** (ADR-0034's recorded exception — xEdit
-has no pending-change model). Where a gesture exists in VS Code's own git experience, this
+has no staged-edit model). Where a gesture exists in VS Code's own git experience, this
 surface copies it; Modbench invents nothing the platform already renders.
 
 ## Problem Statement
@@ -147,7 +147,7 @@ using git.
    upstream", so that my fork is inspectable and redistributable by construction.
 6. As a user, I want a binary that changed outside Modbench to surface one question —
    upstream update or my own edit — with the likely answer pre-selected, so that xEdit
-   sessions and mod updates both have a safe, obvious path back in.
+   edits and mod updates both have a safe, obvious path back in.
 7. As a user, I want an upstream update to land as new baselines with a rebase I can take
    now or later, conflicts opening in the merge editor I already know, so that updating a
    forked mod is ordinary git work, structured for me.
@@ -225,7 +225,7 @@ using git.
   the partially-written `source/` tree are all removed on any failure, not just `.git`. One
   catch block wraps the whole init→checkout sequence, so cleanup is uniform regardless of
   which step failed.
-- **Localized plugins** (#515): Track, Compile and session ingest resolve `TranslatedString`
+- **Localized plugins** (#515): Track, Compile and load order ingest resolve `TranslatedString`
   values from the plugin's own mod-folder `Strings/` folder first, then the game Data
   folder — every deep parse passes an explicit strings lookup rather than relying on
   Mutagen's own game-listings fallback (which throws on non-Windows hosts with no
@@ -243,7 +243,7 @@ using git.
 ### Review & commit: the native Source Control panel
 
 - The extension calls `vscode.git`'s `openRepository(uri)` for each tracked mod in the
-  loaded session, re-registered on every activation (`extensionDependencies:
+  loaded load order, re-registered on every activation (`extensionDependencies:
   ["vscode.git"]`; git on PATH is a product requirement — VS Code itself prompts to
   install it). One native repo group per tracked mod. Modbench contributes **no** SCM
   provider, resource groups, decorations, or diff commands of its own here — the retired
@@ -316,7 +316,7 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
 - **Buttons**: `Absorb Upstream Update` / `Keep as My Edit` / Esc. The default (first)
   button follows the `Meta-SHA256` compare — trailers may inform defaults, never actions
   (ADR-0041 amendment); the human always answers. The dialog is uniform across
-  workflows: for an authored mod's own xEdit session the meta tell doesn't fire and the
+  workflows: for an authored mod's own xEdit load order the meta tell doesn't fire and the
   default is already `Keep as My Edit`.
 - **Absorb Upstream Update**: new baselines committed to `main` by plumbing (no checkout,
   fresh trailers), then a non-modal notification offers the rebase (`Rebase Now` /
@@ -329,7 +329,7 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
   records — commit or revert as usual. A same-record collision with existing uncommitted
   dirt refuses first, naming the records.
 - **Esc = defer, per-plugin read-only**: nothing is written; the plugin refuses edits
-  (signposting the pending question) until answered; reads keep serving last-known state;
+  (signposting the unanswered question) until answered; reads keep serving last-known state;
   the question re-asks at next detection or load.
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
   untracked, per ADR-0041.
@@ -338,10 +338,10 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
 
 (Glossary term: *Crash recovery* — "crash repair" survives as the code/API name. *Repair* now means malformed-plugin repair, [medit-repair.md](medit-repair.md).)
 
-Live: the load-time hash check (`ExternalChangeSessionHook`, shared with #417) covers two
-states on every tracked plugin, both detected only at session load — the only moment either
+Live: the load-time hash check (`ExternalChangeLoadOrderHook`, shared with #417) covers two
+states on every tracked plugin, both detected only at reconcile — the only moment either
 can newly arise, since one is this same process's own interrupted compile and the other is a
-read failure a running session would already have hit once. A pending `CompileJournal` marker
+read failure a running load order would already have hit once. An unfinished `CompileJournal` marker
 (a crash, or a kill, between the binary write landing and the marker clearing) classifies as
 `CrashRecovery` and routes here, never to #417's dialog — the two prompts never both fire for
 one event, checked at the classifier itself before any hash compare. A tracked plugin's binary
@@ -349,9 +349,9 @@ that cannot be read at all (deleted, moved, or torn, while the mod folder and it
 survive — distinct from the repo itself being destroyed, which reads as untracked per
 ADR-0041 and is a different path entirely) is caught directly, with nothing to classify
 against. Both surface identically to the extension as `CrashRepairOffer`s riding
-`POST /session/load[-explicit]`'s own response (`SessionLoadResponse.CrashRepairOffers`,
+`PUT /load-order`'s own response (`LoadOrderResponse.CrashRepairOffers`,
 the same structured-failures posture `Failures` already has, ADR-0026) — no second endpoint,
-no poller: a session load already observes both triggers.
+no poller: a reconcile already observes both triggers.
 
 One native modal per offer, sequential, run once right after a completed load settles the
 tree: **Compile from Working Tree** (default/first — an interrupted compile means the user
@@ -363,7 +363,7 @@ detected (interrupted compile vs missing/unreadable binary), the evidence shown,
 same posture as #417's own dialog. Esc/dismiss is a true decline: nothing is written, the
 marker or missing binary stays exactly as it is, editing stays live throughout (text at `main`
 is authoritative for tracked records regardless of binary staleness — nothing gates edits on
-this state), and the offer re-appears at the next session load by construction. Untracked
+this state), and the offer re-appears at the next reconcile by construction. Untracked
 plugins are never probed at all.
 
 ## Implementation Decisions

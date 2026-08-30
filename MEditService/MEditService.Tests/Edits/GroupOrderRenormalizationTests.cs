@@ -32,10 +32,10 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService EditService() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private PluginCompileService CompileService() =>
-        new(_mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     private IFallout4ModGetter CompileAndReimport(out IDisposable handle)
     {
@@ -111,9 +111,9 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     public void DeletingTheMiddleOfThreeDialogTopics_ThenCompiling_Succeeds_KeepingSurvivorsInOrder()
     {
         using var container = new ContainerModFixture();
-        var editService = new RecordEditService(container.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var editService = new RecordEditService(container.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
         var compileService = new PluginCompileService(
-            container.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            container.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
         var deleted = editService.DeleteRecord(container.Plugin, container.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);

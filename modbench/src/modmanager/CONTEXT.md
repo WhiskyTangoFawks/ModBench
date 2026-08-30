@@ -28,9 +28,9 @@ _Avoid_: fork, convert
 The lineage of pristine content a Downloaded mod derives from — the author's releases, as installed. What a mod's divergence is measured against. For a tracked mod's *plugins*, that measurement is Editing's (pristine `main` vs the edit branch, ADR-0041) and Mod Management never sees it; for *assets* it is the deferred Anchor concern below.
 _Avoid_: origin (Editing's plugin-identity term, ADR-0036), source
 
-**Drift**:
-A loaded plugin whose name no longer resolves to the file its records were read from — a mod-level change (install, uninstall, reprioritise) moved which copy wins the Mod override order. Absorbed automatically: the session re-reads the plugin, the same way a clean VS Code buffer follows the disk (ADR-0035 § Live mutation; `pluginDrift.ts`). Not a user-facing concept. A plugin's *bytes* changing under Modbench is a different thing and Editing's concern (load-time hash check, bridge watcher, one dialog — ADR-0041).
-_Avoid_: desync, out-of-band change, "drift classification" (a retired mechanism)
+**Drift** _(retired, ADR-0044)_:
+There is no drift. A mod-level change (install, uninstall, reprioritise) that moves which copy wins the Mod override order is just the next Plugin load order snapshot Mod Management sends Editing — every copy is already registered there, and the `winning` flag moves. A plugin's *bytes* changing under Modbench is a different thing and Editing's concern (hash check, bridge watcher, one dialog — ADR-0041).
+_Avoid_: drift, desync, out-of-band change, reread
 
 **Anchor**:
 The recorded identity of the upstream state a mod's *asset* divergence would be measured from — Nexus identity and version (from MO2 metadata) plus a hash of the pristine installed content. Deferred: nothing computes or stores one today; plugin divergence is git's (ADR-0041), and asset history waits for a real need.
@@ -73,7 +73,7 @@ A named label that **wraps** a contiguous run of mods in the Mod override order 
 _Avoid_: group/category (say separator), "the mods under a separator" without saying in which order, treating a separator as a priority position.
 
 **Plugin load order**:
-The **Plugin override order** as written in `plugins.txt` — the order the game engine loads plugins (`.esm`/`.esp`/`.esl`); the last-loaded wins at the record level and base masters (`Fallout4.esm`) are losing-most (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Editing consumes it read-only to build a session. Distinct from the Mod override order (file-level winner).
+The **Plugin override order** as written in `plugins.txt` — the order the game engine loads plugins (`.esm`/`.esp`/`.esl`); the last-loaded wins at the record level and base masters (`Fallout4.esm`) are losing-most (Editing context concern). Owned and written by the Plugins tab ([plugins.md](../../../docs/specs/plugins.md)); Mod Management sends it to Editing whole — every plugin copy in the instance, with its slot, `*` state and whether it wins the Mod override order — whenever it changes (ADR-0044). Distinct from the Mod override order (file-level winner).
 _Avoid_: load order (ambiguous), plugin list, higher/lower priority (say "winning"/"losing")
 
 **Deploy** (a.k.a. Build):

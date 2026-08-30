@@ -66,7 +66,7 @@ describe('package.json Loadout header view (#247)', () => {
 
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
 // only available way to say Referenced By is sub-functionality of the one Plugins tree, not a
-// sibling of equal standing (ADR-0035). #410: the Pending Changes view it also covered retired
+// sibling of equal standing (ADR-0035).
 // with the model behind it.
 describe('package.json "Plugins - …" naming for Referenced By (#273 Slice B)', () => {
   it('names the Referenced By view "Plugins - Referenced By"', () => {
@@ -76,7 +76,7 @@ describe('package.json "Plugins - …" naming for Referenced By (#273 Slice B)',
   });
 });
 
-describe('package.json Loadout views stay visible through an editing session (#268)', () => {
+describe('package.json Loadout views stay visible through an editing backend (#268)', () => {
   const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
 
@@ -290,11 +290,6 @@ describe('package.json Refresh is one command (#247)', () => {
     expect(entries[0].group).toBe('navigation@1');
   });
 
-  it('leaves Reload Session distinct and in overflow — it costs seconds and can disturb staged work', () => {
-    const entry = titleMenus().find((e) => e.command === 'modbench.reloadSession');
-    expect(entry, 'expected Reload Session on the header').toBeTruthy();
-    expect(entry!.group.startsWith('navigation')).toBe(false);
-  });
 });
 
 describe('package.json title-bar rubric (#247)', () => {
@@ -304,9 +299,10 @@ describe('package.json title-bar rubric (#247)', () => {
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter(Boolean) as string[]);
 
   // Rule 1, scope first: an action that isn't about this tree's own domain doesn't go on this
-  // tree. These four are workspace-scope — they swap the modlist, act on the whole deployment,
-  // or reload the session — and each landed on whichever view happened to exist when it
-  // shipped. Launch mEdit / Close mEdit dropped out of this list under #352: the maintainer's
+  // tree. These three are workspace-scope — they swap the modlist or act on the whole deployment
+  // — and each landed on whichever view happened to exist when it shipped. (Reload Load order went
+  // with the load order concept itself under ADR-0044: the load order is reconciled on every
+  // change, so there is nothing to reload.) Launch mEdit / Close mEdit dropped out of this list under #352: the maintainer's
   // ruling there was that mEdit is *not* workspace-scope, it is an option on the Plugins view's
   // own domain — see 'package.json Launch/Close mEdit on the Plugins view (#352)' below for its
   // placement assertions.
@@ -314,7 +310,6 @@ describe('package.json title-bar rubric (#247)', () => {
     'modbench.modList.switchProfile',
     'modbench.modList.deploy',
     'modbench.modList.purge',
-    'modbench.reloadSession',
   ];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
@@ -388,8 +383,8 @@ describe('package.json Launch/Close mEdit on the Plugins view (#352)', () => {
   it('is exactly one context-key toggle pair — only ever one of the two visible', () => {
     const launch = entriesFor('modbench.modList.launchMedit')[0];
     const close = entriesFor('modbench.closeMedit')[0];
-    expect(launch.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.sessionRunning');
-    expect(close.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.sessionRunning');
+    expect(launch.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.backendRunning');
+    expect(close.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.backendRunning');
   });
 
   it('carries the same MO2-instance gating the header withheld it behind', () => {
@@ -504,15 +499,6 @@ describe('package.json command titles and categories (#280)', () => {
     'modbench.modList.separator.delete',
     'modbench.modList.overwrite.reveal',
     'modbench.pluginListTree.revealInExplorer',
-    // #448 AC5: needs the clicked Stack peer row's own origin — a palette invocation has no
-    // peer row to resolve it from, same posture as revealInExplorer.
-    'modbench.pluginListTree.revealInModsTree',
-    // #448 AC4: needs the clicked Stack binary-entry's own (plugin, origin) — same posture as
-    // revealInModsTree.
-    'modbench.pluginListTree.diffAgainstSource',
-    // #544: needs the clicked Stack peer row's own (plugin, origin) to resolve the winner to
-    // compare against — same posture as revealInModsTree/diffAgainstSource above.
-    'modbench.pluginListTree.compareWithWinner',
     // #414: needs the clicked row's plugin name to resolve which mod folder to track.
     'modbench.pluginListTree.track',
     // #416: needs the clicked row's plugin name — compiling "at main" from the palette with no
@@ -540,7 +526,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(41);
+    expect(PALETTE_GATED).toHaveLength(38);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
@@ -604,57 +590,6 @@ describe('package.json per-plugin Track (#414)', () => {
     const title = (pkg.contributes.menus['view/title'] as { command: string }[])
       .filter((e) => e.command === 'modbench.pluginListTree.track');
     expect([...inline, ...title]).toEqual([]);
-  });
-});
-
-// #410/ADR-0041: the pending-change model, the Pending Changes tree and the aggregate
-// SCM provider are retired, so nothing may still be contributed for them. Read as an absence
-// assertion this would pass just as happily against an empty or mis-shaped manifest, so each check
-// pairs with a positive control drawn from the same collection — a surviving contribution that must
-// be found by the identical lookup.
-describe('package.json contributes nothing for the retired pending-change model (#410)', () => {
-  // "ledger" is the retired surface's historical name (#437 renamed the live concept to
-  // "source", which is legitimate vocabulary and deliberately not guarded here).
-  const RETIRED = /pending|changegroup|change-group|saveGroup|revertGroup|saveAllGroups|revertAllGroups|ledger/i;
-
-  it('contributes no command for a pending change, change group or the ledger SCM surface', () => {
-    const commands = (pkg.contributes.commands as { command: string; title: string }[]);
-
-    // Positive control, same list: the read commands this ticket preserves are still contributed.
-    const ids = commands.map((c) => c.command);
-    expect(ids).toContain('modbench.openCompare');
-    expect(ids).toContain('modbench.showReferencedBy');
-
-    expect(commands.filter((c) => RETIRED.test(c.command) || RETIRED.test(c.title))).toEqual([]);
-  });
-
-  it('contributes no view, view container or welcome entry for the Pending Changes tree', () => {
-    const views = Object.values(pkg.contributes.views as Record<string, { id: string; name: string }[]>).flat();
-
-    // Positive control, same flattened list.
-    expect(views.map((v) => v.id)).toContain('modbench.referencedByTree');
-
-    expect(views.filter((v) => RETIRED.test(v.id) || RETIRED.test(v.name))).toEqual([]);
-  });
-
-  it('contributes no menu entry that invokes or gates on retired pending-change state', () => {
-    const menus = Object.entries(pkg.contributes.menus as Record<string, { command?: string; when?: string }[]>)
-      .flatMap(([menu, entries]) => entries.map((e) => ({ menu, ...e })));
-
-    // Positive control, same flattened list. modbench.openHeader itself no longer contributes a
-    // menu entry (#345: row click replaces the button) — revealInExplorer still does.
-    expect(menus.some((m) => m.command === 'modbench.pluginListTree.revealInExplorer')).toBe(true);
-
-    expect(menus.filter((m) => RETIRED.test(m.command ?? '') || RETIRED.test(m.when ?? ''))).toEqual([]);
-  });
-
-  it('contributes no keybinding for a retired pending-change command', () => {
-    const keys = (pkg.contributes.keybindings ?? []) as { command: string; when?: string }[];
-
-    // Positive control, same list: keybindings really are being read from the manifest.
-    expect(keys.map((k) => k.command)).toContain('modbench.pluginListTree.filter');
-
-    expect(keys.filter((k) => RETIRED.test(k.command) || RETIRED.test(k.when ?? ''))).toEqual([]);
   });
 });
 

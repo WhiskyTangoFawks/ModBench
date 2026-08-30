@@ -8,7 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
-import type { RecordSessionClient } from './RecordSessionClient';
+import type { RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 
@@ -45,7 +45,7 @@ const vmadEditableCompareResult = {
   },
 };
 
-function fakeVmadClient(): RecordSessionClient {
+function fakeVmadClient(): RecordPanelClient {
   return {
     load: vi.fn().mockResolvedValue({
       ok: true, result: vmadEditableCompareResult,

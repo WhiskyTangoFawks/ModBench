@@ -13,7 +13,7 @@ the restart because a backend "looks up".
 # kill stale backend
 pkill -f "MEditService.Api" 2>/dev/null; sleep 1
 
-# fresh start — no args needed (--data-folder optional; web host + /health boot regardless).
+# fresh start — no args needed; the web host + /health boot regardless.
 # Run this one with Bash run_in_background: true, from the repo root:
 dotnet run --project MEditService/MEditService.Api
 

@@ -23,7 +23,7 @@ public class FilterTests(TestPluginFixture fixture)
             ModKey.FromFileName(TestPluginFixture.PluginName),
             Path.Combine(_fixture.DataFolder, TestPluginFixture.PluginName));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -151,8 +151,8 @@ public class FilterTests(TestPluginFixture fixture)
 
             using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
             repo.Initialize(GameRelease.Fallout4);
-            repo.Index(modALoaded, 0, participates: true, key: new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
-            repo.Index(modB, 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
+            repo.Index(modALoaded, Registration.Participating(0), new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
+            repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
             repo.UpdateWinners();
             Assert.Contains(npcKey.ToString(), repo.GetContestedFormKeys());
 

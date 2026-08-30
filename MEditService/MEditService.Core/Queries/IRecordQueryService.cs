@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 
 namespace MEditService.Core.Queries;
 
@@ -8,7 +8,7 @@ public interface IRecordQueryService
 {
     IReadOnlyList<PluginResponse> GetPlugins();
     IReadOnlyList<string> GetRecordTypes();
-    // origin (#34 / ADR-0036): which copy of `plugin` to browse, when the session holds two of one
+    // origin (#34 / ADR-0036): which copy of `plugin` to browse, when the load order holds two of one
     // filename. Optional because most callers legitimately have only a filename — omitted, the
     // origin is resolved server-side from the load order, which is what every caller did before
     // #34 and is still correct wherever a filename names one loaded copy.
@@ -16,19 +16,6 @@ public interface IRecordQueryService
     RecordDetail? GetRecord(string formKey);
 
     CompareResult? GetCompare(string formKey);
-
-    /// <summary>#544: the Stack node's "Compare with winner" bulk seam — every FormKey where
-    /// <paramref name="plugin"/>'s copy at <paramref name="winnerOrigin"/> and its copy at
-    /// <paramref name="peerOrigin"/> disagree (one side missing the record entirely, or both
-    /// present but resolving differently), and only those — a FormKey identical in both is
-    /// omitted, never included with a "no diff" flag. The bulk shape a per-FormKey
-    /// <see cref="GetCompare"/> loop from the frontend would be the wrong one for: this is one
-    /// backend-side scan bounded by the plugin's own record count, not the whole session.
-    /// Null when either origin is no longer a loaded copy of <paramref name="plugin"/> — a peer
-    /// unloaded (Stack-peer collapse, #448) or a winner reordered away between the context-menu
-    /// click and this call reaching the backend — never a misleading "every winner record is
-    /// winner-only" answer computed against a copy that no longer exists.</summary>
-    IReadOnlyList<PluginDeltaEntry>? GetPluginDelta(string plugin, string winnerOrigin, string peerOrigin);
 
     /// <summary>#364: the Conflicts node's own listing — every contested record whose record-wide
     /// ConflictAll is not OnlyOne/NoConflict, filter-narrowed the same way GetRecords/
@@ -38,11 +25,11 @@ public interface IRecordQueryService
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
-    // The condition function picker's catalog (#152): every function name the loaded session's
+    // The condition function picker's catalog (#152): every function name the loaded load order's
     // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableFunctions.
     IReadOnlyList<string> GetConditionFunctions();
 
-    // The Run On target list's catalog (#167): every RunOnType name the loaded session's
+    // The Run On target list's catalog (#167): every RunOnType name the loaded load order's
     // game/category actually resolves — see ConditionCodecRegistry / IConditionCodec.AvailableRunOnTargets.
     // Same rationale as GetConditionFunctions: not a hardcoded frontend array, so a future game's
     // differently-shaped RunOnType enum never silently offers a name it can't parse or write.

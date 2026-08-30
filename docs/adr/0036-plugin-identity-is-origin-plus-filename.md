@@ -10,12 +10,12 @@ Amends [ADR-0006](0006-one-row-per-formkey-plugin.md).
 
 ADR-0006 makes `(form_key, plugin)` the composite primary key of every record table, where `plugin`
 is the bare filename. That holds only while exactly one physical file can ever answer to a given
-filename in a session.
+filename in a load order.
 
 Three things break that assumption at once:
 
 - **Shadowed copies.** When two mods ship `Foo.esp`, MO2 priority picks one and the other is
-  discarded before the session is built. `FileConflictIndex.filesByMod` already knows about both;
+  discarded before the load order is built. `FileConflictIndex.filesByMod` already knows about both;
   loading them together collides on the key. This is the blocker recorded on
   [#34](https://github.com/WhiskyTangoFawks/ModBench/issues/34).
 - **Drift.** Once mod content is reflected live

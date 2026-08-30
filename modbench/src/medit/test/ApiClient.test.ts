@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createApiClient } from '../ApiClient';
+import { createApiClient, errorText } from '../ApiClient';
 
 describe('createApiClient', () => {
   it('uses the supplied port in the base URL', () => {
@@ -16,5 +16,28 @@ describe('createApiClient', () => {
     const a = createApiClient(5172);
     const b = createApiClient(5173);
     expect(a).not.toBe(b);
+  });
+});
+
+// The backend answers every failure as RFC 7807 ProblemDetails; the toast wants the sentence
+// written for the user, not the envelope around it (#588 made this visible: "open in another
+// Modbench window" was arriving inside a JSON blob).
+describe('errorText', () => {
+  it('passes a string body through', () => {
+    expect(errorText('bad dir')).toBe('bad dir');
+  });
+
+  it('is empty for no body', () => {
+    expect(errorText(undefined)).toBe('');
+    expect(errorText(null)).toBe('');
+  });
+
+  it("prefers a problem's detail, then its title, over the JSON envelope", () => {
+    expect(errorText({ type: 'about:blank', title: 'Locked', status: 423, detail: 'held elsewhere' })).toBe('held elsewhere');
+    expect(errorText({ title: 'Locked', status: 423 })).toBe('Locked');
+  });
+
+  it('falls back to JSON for an object that is not a problem', () => {
+    expect(errorText({ form_key: '000801:Fallout4.esm' })).toBe('{"form_key":"000801:Fallout4.esm"}');
   });
 });

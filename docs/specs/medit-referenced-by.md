@@ -8,7 +8,7 @@ Editing context — operates on **records**, **FormKeys**, and **plugins**; the 
 vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not here
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
 
-One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared session lifecycle,
+One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared load order lifecycle,
 status bar, command palette, and architecture seams. Siblings:
 [Plugins tree](plugins.md) (a record node's own context menu, no longer this tree's
 entry point — see below), [Record editor panel](medit-record-editor.md) (the active record this
@@ -72,17 +72,17 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   nesting/grouping within a container to say so structurally; referred to here by its short name
   for readability), contributed to its own Panel-location `viewsContainers` entry
   (`modbenchReferencedBy`) rather than stacked under the `modbench` activity-bar container with
-  the Plugins tree — a per-record relationship query is not the always-relevant session state
+  the Plugins tree — a per-record relationship query is not the always-relevant load order state
   that tree is, and Panel placement is VS Code's own answer to "a tab beside the thing it
   describes." **Carries no gate at all** — always present, exactly like Mods/Plugins/Downloads
   (#273 retired `modbench.viewMode` and, with it, the old `'editing'`-only gate; there was never a
   separate visibility context key before that — the old `modbench.referencedByShown`, set by the
   first `modbench.showReferencedBy` invocation, was already gone by #282). The consequence is
-  deliberate, not an oversight: with no session and no active record, the view still renders —
+  deliberate, not an oversight: with no backend running and no active record, the view still renders —
   its own empty state (`NoActiveRecordNode`, "Open a record to see what references it.") covers
   it, the same way it already covers "a record is active but has zero referrers." No fetch is
   attempted until `ActiveRecordTracker` actually reports a FormKey, which cannot happen without a
-  session, so an idle Referenced By panel costs nothing.
+  load order, so an idle Referenced By panel costs nothing.
 - **Retargeting is driven by `ActiveRecordTracker`** (`src/medit/ActiveRecordTracker.ts`), not by
   a command argument. `openRecordPanel` (the record editor's own panel-open/reuse/retarget choke
   point) reports each panel's currently displayed FormKey and which panel is active; the tracker

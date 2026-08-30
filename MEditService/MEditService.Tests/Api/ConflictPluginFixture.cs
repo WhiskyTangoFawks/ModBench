@@ -1,17 +1,19 @@
+using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>#364: a two-plugin session with one contested record (an uncontested field override —
+/// <summary>#364: a two-plugin load order with one contested record (an uncontested field override —
 /// ConflictAll.Override, not .Conflict; a genuine two-sided disagreement needs a third plugin,
 /// already covered at the service layer) and one uncontested (single-plugin) record —
 /// <c>ConflictsApiTests</c>' fixture for <c>GET /records/conflicts</c>.</summary>
 public sealed class ConflictPluginFixture : IApiPluginFixture<ConflictPluginFixture>
 {
     public string DataFolder => _data.DataFolder;
-    public string PluginsTxtPath => _data.PluginsTxtPath;
+    public IReadOnlyList<LoadOrderEntry> Plugins => _data.Plugins;
+    public string InstanceRoot => _data.InstanceRoot;
     public const string BasePluginName = "ConflictBase.esp";
     public const string OverridePluginName = "ConflictOverride.esp";
 

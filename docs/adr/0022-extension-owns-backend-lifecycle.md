@@ -18,7 +18,7 @@ level.
 
 - `BackendManager` owns spawn/teardown: attach if a healthy backend is already listening, else
   spawn the bundled binary; crash-restart; poll `GET /health`.
-- The backend's session source is `load-explicit` (ordered `{name, physicalPath}` list), with
+- The backend's load order source is `load-explicit` (ordered `{name, physicalPath}` list), with
   each plugin's winning physical path resolved by Mod Management's `FileConflictIndex`. This is
   also the foundation for loading an arbitrary overriding-plugin set.
 - Deploy (hardlinks into the game directory) is decoupled from editing — it is needed only to run

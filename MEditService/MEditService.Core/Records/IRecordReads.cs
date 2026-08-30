@@ -23,6 +23,12 @@ public interface IRecordReads
     /// that plugin never indexed this FormKey.</summary>
     RecordDocument? GetDocument(string formKey, PluginKey plugin);
 
+    /// <summary>Every document <paramref name="plugin"/>'s copy holds, in one bulk read — the batch
+    /// counterpart of <see cref="GetDocument(string, PluginKey)"/> (#547), for consumers that scan a
+    /// whole plugin (compile's diagnostics pass) and were paying two point queries per record. The
+    /// header is naturally absent: it has no document (D8).</summary>
+    IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin);
+
     /// <summary>Every plugin's copy of <paramref name="formKey"/>, in load order. Null if the
     /// FormKey isn't indexed anywhere.</summary>
     RecordOverrides? GetOverrideStack(string formKey);
@@ -35,7 +41,7 @@ public interface IRecordReads
 
     /// <summary>Every FormKey with more than one override entry in its stack — the Conflicts
     /// node's candidate population (#364), before <c>IConflictClassifier</c> decides whether that
-    /// multiplicity is an actual conflict or just an uncontested/benign override. Session-wide, not
+    /// multiplicity is an actual conflict or just an uncontested/benign override. Load-order-wide, not
     /// scoped to a plugin (a contested FormKey inherently spans more than one). Respects the active
     /// filter the same way every other filterable read here does (<c>BuildWhere</c>'s
     /// <c>filterActive</c>) — #278's already-shipped mechanism, not a second filter path.</summary>
@@ -61,7 +67,7 @@ public interface IRecordReads
     /// The distinct master plugins <paramref name="plugin"/>'s content actually requires at this
     /// ref — <b>derived</b>, never the plugin's own declared header list (ADR-0038's "effective
     /// masters": committed masters unioned with the origin plugins everything the plugin's
-    /// content, committed and (from #415) pending, actually references). A master a plugin
+    /// content, committed and (from #415) uncommitted alike, actually references). A master a plugin
     /// declares but nothing in it references or overrides is not effective and is excluded.
     /// Computed as the union of (a) the owning plugin of every FormKey this plugin's records
     /// reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey this

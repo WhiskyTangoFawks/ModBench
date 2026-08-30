@@ -4,13 +4,11 @@ import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
 import {
-  buildFileConflictIndex, rootLevelFileConflicts, rootLevelWinnerMods, foldPath,
-  type ConflictEntry, type FileConflictIndex,
+  buildFileConflictIndex,
 } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
-import { resolvePluginPaths } from './explicitSession';
+import { resolvePluginPaths } from './loadOrderSnapshot';
 import { discoverImplicitMasters } from './vanillaMasters';
-import { findUnlistedPlugins, type UnlistedPlugin } from './unlistedPlugins';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -40,23 +38,16 @@ export interface PluginListProviderOptions {
  *  when a declared master isn't loaded before this plugin — deliberately worded
  *  distinctly from the Mods tree's presence-only "Missing master:" badge.
  *
- *  #447: `fileOverride` (this plugin filename's `ConflictEntry`, present only when more than one
- *  enabled mod provides it — see `rootLevelFileConflicts`) appends a "file override" description
- *  suffix and tooltip naming every providing mod with the winner marked, and — this is the one
- *  fact that also has to reach outside this class — sets `resourceUri` to the winner's physical
- *  path, which is what lets `FileOverrideDecorationProvider` key its badge/tint off this row.
- *  `resourceUri` is left unset for every other row (undefined `fileOverride`, exactly like today)
- *  rather than always set: VS Code infers a file-type base icon from a `resourceUri` whenever no
- *  explicit `iconPath` overrides it, so setting it unconditionally would change every uncontested
- *  row's rendered icon — a regression no unit test here could catch (`iconPath` itself would stay
- *  untouched), so it is closed by construction instead: an uncontested row never gets a
- *  resourceUri at all, the same as before this ticket. */
+ *  No `resourceUri`: VS Code infers a file-type base icon from one whenever no explicit
+ *  `iconPath` overrides it, so setting one would change every row's rendered icon — a regression
+ *  no unit test here could catch (`iconPath` itself would stay untouched). #595: a plugin whose
+ *  filename more than one enabled mod provides renders exactly like any other row — the losing
+ *  copies are registered (ADR-0044) but not displayed; their surface is an open UX design (#576). */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
     public readonly plugin: PluginEntry,
     public readonly orderStatus?: PluginOrderStatus,
-    public readonly fileOverride?: ConflictEntry,
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
@@ -79,25 +70,12 @@ export class PluginNode extends vscode.TreeItem {
         : `✗ ${masters.length} masters not loaded before this plugin`;
       this.tooltip = [plugin.name, ...masters.map((m) => `Master ${m} is not loaded before this plugin`)].join('\n');
     }
-    if (fileOverride) {
-      this.resourceUri = vscode.Uri.file(fileOverride.winner);
-      // Appended (never overwrites) so the order-aware badge above and this decoration can
-      // legitimately coexist on the same row (#447 AC3 — the Missing-master badge is unaffected).
-      this.description = [this.description, `${fileOverride.providers.length} mods`].filter(Boolean).join(' ');
-      const overrideLines = [
-        `File override: ${fileOverride.providers.length} mods provide this plugin — winner: ${fileOverride.winnerMod}`,
-        ...fileOverride.providers.map((p) => p === fileOverride.winnerMod ? `${p} (winner)` : p),
-      ];
-      this.tooltip = typeof this.tooltip === 'string'
-        ? `${this.tooltip}\n${overrideLines.join('\n')}`
-        : [plugin.name, ...overrideLines].join('\n');
-    }
   }
 }
 
 /** This row's order-aware badge's flagged master names, or undefined when it carries none
  *  (#277 / ADR-0037 AC8) — the composite's structured access to what `PluginNode`'s constructor
- *  above otherwise only bakes into rendered icon/description/tooltip text, so the session-aware
+ *  above otherwise only bakes into rendered icon/description/tooltip text, so the load order-aware
  *  reconciliation there can dedupe by master name without parsing that text. */
 export function orderIssueMastersOf(node: PluginListNode): string[] | undefined {
   return node.kind === 'plugin' && node.orderStatus?.kind === 'masterNotLoadedBefore'
@@ -214,7 +192,7 @@ export function pluginNamesInSelection(clicked: PluginListNode | undefined, sele
 /** #97 / ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
  *  and its new `plugins.txt` `*` state, exactly as `setPluginEnabled` just wrote it. Fired only
  *  from a real toggle, never from `invalidate()`'s generic re-render (a filter keystroke, an
- *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend session
+ *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend
  *  to apply. The composition root (`extension.ts`) is the only subscriber: Mod Management itself
  *  never calls the backend (root CLAUDE.md), so this event is as far as this module's own
  *  knowledge of the mutation goes. */
@@ -303,7 +281,7 @@ export class PluginListProvider
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
    *  invalidate so the tree re-reads the persisted state. Fires `onDidChangeParticipation`
    *  after the write succeeds (#97 / ADR-0035 § Live mutation) — the composition root's cue to
-   *  apply the same change to a running backend session, live. */
+   *  apply the same change to a running backend, live. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
@@ -313,7 +291,7 @@ export class PluginListProvider
   /** Resolve a plugin NAME to its winning physical path — the MO2-priority
    *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
    *  folder for an unmanaged vanilla/DLC/CC plugin (the same resolution the
-   *  editing-session builder performs via `resolvePluginPaths`). Used by the
+   *  editing-load order builder performs via `resolvePluginPaths`). Used by the
    *  Reveal in Explorer row action (issue #69). Returns undefined when no
    *  instanceRoot is configured or resolution fails (ini/index unreadable) — a
    *  fresh read each call, since reveal is a rare explicit action. */
@@ -394,17 +372,11 @@ export class PluginListProvider
     const enabledSet = new Set(enabled);
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
-    const facts = await this.computeRowFacts(fullOrder);
+    const statuses = await this.computeOrderStatuses(fullOrder);
     this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
-    this.lastFileOverrides = facts?.fileOverrides ?? new Map();
-    this.lastStackPeers = facts?.stackPeers ?? new Map();
     const rows: PluginListNode[] = [
       ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
-      ...dedupedOrder.map((name) => new PluginNode(
-        { name, enabled: enabledSet.has(name) },
-        facts?.statuses.get(name),
-        facts?.fileOverrides.get(name.toLowerCase()),
-      )),
+      ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
     ];
     return { kind: 'ok', cache: { rows } };
   }
@@ -420,81 +392,24 @@ export class PluginListProvider
 
   private lastImplicitNames: ReadonlySet<string> = new Set();
 
-  /** #447: every root-level (plugin) `ConflictEntry` more than one enabled mod currently
-   *  provides, from the last render, keyed by lowercased plugin filename — what
-   *  `FileOverrideDecorationProvider` matches a row's `resourceUri` against for its badge/tint,
-   *  and (for #448) the signal a plugin's row has peers to expand into a Stack node from. Empty
-   *  before the first render; a live read (not a snapshot), same convention as
-   *  `implicitMasterNames()`. */
-  fileOverrides(): ReadonlyMap<string, ConflictEntry> {
-    return this.lastFileOverrides;
-  }
-
-  private lastFileOverrides: ReadonlyMap<string, ConflictEntry> = new Map();
-
-  /** #448: every root-level plugin's own file-level peers — the losers `fileOverrides()`' entry
-   *  already names as `providers` minus the winner — keyed the same way (lowercased filename), so
-   *  `stackPeers().has(name)` and `fileOverrides().has(name)` always agree on which plugins are
-   *  contested. Each value is #34's own `UnlistedPlugin` shape (origin + physical path,
-   *  ADR-0036's boundary object) — nothing richer than that ever crosses to Editing's Stack node.
-   *  Reuses `findUnlistedPlugins` unchanged: a file-level peer *is* an unlisted plugin by that
-   *  function's own definition (a copy the load order doesn't point at), so this is a grouping
-   *  over its existing output, not a new computation. Empty before the first render, same
-   *  convention as `fileOverrides()`. */
-  stackPeers(): ReadonlyMap<string, UnlistedPlugin[]> {
-    return this.lastStackPeers;
-  }
-
-  private lastStackPeers: ReadonlyMap<string, UnlistedPlugin[]> = new Map();
-
-  /** Order-aware missing-master verdicts *and* (#447) file-override facts for `order` (the
-   *  implicit-first, deduped full row order — see `getChildren`), or undefined when no
-   *  instanceRoot is configured. One `FileConflictIndex` build feeds both — they are two
-   *  different views over the same enabled-mod file walk, not two separate ones. A secondary,
-   *  non-blocking step (modmanager/CLAUDE.md): on any failure both badges degrade to absent —
-   *  the tree still renders every row — with a warning surfaced (ADR-0026: silently missing
-   *  badges would look identical to "nothing to flag"). */
-  private async computeRowFacts(order: string[]): Promise<
-    {
-      statuses: Map<string, PluginOrderStatus>;
-      fileOverrides: Map<string, ConflictEntry>;
-      stackPeers: Map<string, UnlistedPlugin[]>;
-    } | undefined
-  > {
+  /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped full row order
+   *  — see `getChildren`), or undefined when no instanceRoot is configured. A secondary,
+   *  non-blocking step (modmanager/CLAUDE.md): on any failure the badge degrades to absent — the
+   *  tree still renders every row — with a warning surfaced (ADR-0026: a silently missing badge
+   *  would look identical to "nothing to flag"). */
+  private async computeOrderStatuses(order: string[]): Promise<Map<string, PluginOrderStatus> | undefined> {
     if (!this.instanceRoot) return undefined;
     try {
       const entries = await this.source.readModlist();
       const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
       const dataFolder = await this.dataFolder();
-      const statuses = await computePluginOrderStatuses(order, index, dataFolder, this.log);
-      return { statuses, fileOverrides: rootLevelFileConflicts(index), stackPeers: this.computeStackPeers(order, index) };
+      return await computePluginOrderStatuses(order, index, dataFolder, this.log);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
       this.reporter?.report('warning', 'Could not compute plugin master-order status — badges may be inaccurate.', message);
       return undefined;
     }
-  }
-
-  /** #448: `order`'s own mod-provided members, paired with their winning mod (the `LoadedPlugin`
-   *  shape `findUnlistedPlugins` expects), then grouped by filename. A name `rootLevelWinnerMods`
-   *  has no entry for (an implicit master or an unmanaged vanilla/DLC/CC plugin — neither is
-   *  provided by any mod) is skipped: it never had a mod-folder origin to begin with, so it can
-   *  never be "shadowed" by one — the same reasoning `findUnlistedPlugins`' own scope note gives
-   *  for why disabled mods are out of scope here. */
-  private computeStackPeers(order: string[], index: FileConflictIndex): Map<string, UnlistedPlugin[]> {
-    const winnerMods = rootLevelWinnerMods(index);
-    const loadOrder = order
-      .map((name) => ({ name, origin: winnerMods.get(foldPath(name)) }))
-      .filter((p): p is { name: string; origin: string } => p.origin !== undefined);
-    const unlisted = findUnlistedPlugins(index, loadOrder);
-    const byName = new Map<string, UnlistedPlugin[]>();
-    for (const peer of unlisted) {
-      const key = foldPath(peer.name);
-      const list = byName.get(key);
-      if (list) list.push(peer); else byName.set(key, [peer]);
-    }
-    return byName;
   }
 
   /** Serialise the dragged selection. VS Code passes the whole selection when the

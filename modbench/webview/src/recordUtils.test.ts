@@ -51,8 +51,8 @@ describe('buildColumns', () => {
 
 // #304: the *reason* a column is read-only, distinct from the fact that it is — `immutableSet`
 // alone can't tell a vanilla master (isImmutable, still inLoadOrder) apart from a copy the load
-// order doesn't name (isImmutable *because* !inLoadOrder — GameSession.AddUnlistedPlugin always
-// pairs the two). PluginHeader needs both to word the tooltip and decide whether to dim.
+// order doesn't name (isImmutable *because* !inLoadOrder — a losing copy's registration derives
+// both, ADR-0044). PluginHeader needs both to word the tooltip and decide whether to dim.
 describe('readOnlyReason', () => {
   it('is null for a mutable column, regardless of inLoadOrder', () => {
     expect(readOnlyReason(false, true)).toBeNull();
@@ -88,7 +88,7 @@ describe('readOnlyReason', () => {
 });
 
 // #304 / ADR-0036: "origin inline only on collision" — computed from the overrides a single
-// compare response already carries (CompareResult.Overrides), never from the session's whole
+// compare response already carries (CompareResult.Overrides), never from the load order's whole
 // plugin list. A filename appearing once is the overwhelming common case and must not collide.
 describe('collidingFilenames', () => {
   it('is empty when every override has a distinct filename', () => {
@@ -127,10 +127,10 @@ describe('parseElementIndex', () => {
 
 
 // Issue #231: the generalized, path-based replacement for the old top-level/array-element/
-// struct-child/grandchild switch DiffRow used to extract a row's own pending value out of the
-// root's raw pending value — one implementation for every depth, including depths the old switch
+// struct-child/grandchild switch DiffRow used to extract a row's own overlay value out of the
+// root's raw overlay value — one implementation for every depth, including depths the old switch
 // could not express (a struct nested more than one level deep, or a member below an array below a
-// member). Supersedes the old extractPendingElementValue (array-element case) and the struct-
+// member). Supersedes the old element-value extractor (array-element case) and the struct-
 // child/grandchild cases the old DiffRow switch hand-rolled directly — deleted along with its own
 // call site, now that this one function covers every depth those three used to split across.
 

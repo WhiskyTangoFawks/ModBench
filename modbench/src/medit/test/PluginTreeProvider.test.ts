@@ -32,11 +32,10 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
-  StackNode, StackSourceStateNode, StackBinaryStateNode, StackPeerNode,
   ConflictsNode,
   ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
-import type { PluginTreeNode, StackPeer } from '../PluginTreeProvider';
+import type { PluginTreeNode } from '../PluginTreeProvider';
 import { recordResourceUri } from '../recordResourceUri';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -51,10 +50,11 @@ function makePlugin(i: number): PluginMetadata {
     masters: [],
     recordCount: 100,
     isImmutable: false,
+    enabled: true, winning: true, participates: true, inLoadOrder: true,
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
-    compilePending: false,
+    compileStale: false,
     lastCompiledAt: null,
   };
 }
@@ -77,7 +77,7 @@ function makeRepository(overrides: Partial<{
 }> = {}): PluginRepository {
   return {
     getPlugins: vi.fn().mockResolvedValue(overrides.plugins ?? [makePlugin(0), makePlugin(1)]),
-    getSessionStatus: vi.fn().mockResolvedValue(
+    getLoadOrderStatus: vi.fn().mockResolvedValue(
       { totalPlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [] }),
     // #414 review F2.
     getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }),
@@ -105,13 +105,8 @@ function makeRepository(overrides: Partial<{
     peekNextFreeFormKey: vi.fn(),
     // #494: the tree provider never copies either — same "whole surface, unused here" note.
     getRecordOverridePlugins: vi.fn(),
-    // #448: the unlisted-plugin door a Stack peer's own expansion/collapse drives.
-    loadUnlistedPlugin: vi.fn().mockResolvedValue(undefined),
-    unloadUnlistedPlugin: vi.fn().mockResolvedValue(undefined),
     // #364: the Conflicts node's own listing.
     getConflicts: vi.fn().mockResolvedValue([]),
-    // #544: the Stack node's "Compare with winner" bulk seam.
-    getPluginDelta: vi.fn().mockResolvedValue({ ok: true, entries: [] }),
   };
 }
 
@@ -962,238 +957,7 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy
   });
 });
 
-// ── #448: the Stack node (split (c) of #397's design record) ───────────────────
-
-const PEER_B: StackPeer = { name: 'Shared.esp', path: '/mods/ModB/Shared.esp', origin: 'ModB' };
-const PEER_C: StackPeer = { name: 'Shared.esp', path: '/mods/ModC/Shared.esp', origin: 'ModC' };
-
-describe('PluginTreeProvider — Stack node existence & ordering (#448 AC1)', () => {
-  it('is absent when getPluginChildren is called with no stack peers', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getPluginChildren('Solo.esp');
-
-    expect(children.some(c => c instanceof StackNode)).toBe(false);
-  });
-
-  it('is absent when handed an empty peer array — never rendered empty (ADR-0026)', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getPluginChildren('Solo.esp', undefined, []);
-
-    expect(children.some(c => c instanceof StackNode)).toBe(false);
-  });
-
-  // Rival named per the orchestrator's standing instruction: "always append the Stack node last"
-  // would still pass an existence-only assertion — this is the one that actually distinguishes
-  // pinned-first (the Worldspaces-node precedent) from merely present.
-  it('is pinned first among children — before Worldspaces and flat record-type nodes', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getPluginChildren('Shared.esp', undefined, [PEER_B]);
-
-    expect(children[0]).toBeInstanceOf(StackNode);
-    expect(children.some(c => c instanceof WorldspacesNode)).toBe(true);
-  });
-
-  it('carries the full ordered peer list', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-
-    const [stack] = await provider.getPluginChildren('Shared.esp', undefined, [PEER_B, PEER_C]);
-
-    expect((stack as StackNode).peers).toEqual([PEER_B, PEER_C]);
-  });
-
-  // A peer's own children recurse into getPluginChildren with its own origin (see the lazy-load
-  // describe block below) — that recursive call must never grow a second, nested Stack node even
-  // if a stray peers array were passed, since a Stack node is a file-level structure keyed to one
-  // plugin identity, not something a peer's own browse ever has an opinion about.
-  it('never nests a second Stack node under a peer\'s own children', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-
-    const children = await provider.getPluginChildren('Shared.esp', 'ModB', [PEER_C]);
-
-    expect(children.some(c => c instanceof StackNode)).toBe(false);
-  });
-
-  it('expanding the Stack node itself lists one StackPeerNode per peer when the winner is untracked, with no repository call', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    const stack = new StackNode('Shared.esp', 'ModA', [PEER_B, PEER_C]);
-
-    const children = await provider.getChildren(stack);
-
-    expect(children).toHaveLength(2);
-    expect(children.every(c => c instanceof StackPeerNode)).toBe(true);
-    expect((children[0] as StackPeerNode).peer).toEqual(PEER_B);
-    expect((children[1] as StackPeerNode).peer).toEqual(PEER_C);
-    expect(repo.getRecordTypes).not.toHaveBeenCalled();
-  });
-
-  it('a peer node\'s label and description read "<plugin> — <mod>", greyed/read-only', () => {
-    const node = new StackPeerNode('Shared.esp', PEER_B);
-
-    expect(node.label).toBe('Shared.esp — ModB');
-    expect(node.description).toBe('read-only');
-  });
-});
-
-// ── #448 AC1/AC4: the winner's own state entries, tracked-gated ────────────────
-
-describe('PluginTreeProvider — Stack node state entries (#448 AC1/AC4)', () => {
-  it('an untracked winner gets zero state entries — the Stack node opens directly on peers', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    provider.setPluginOrigins(new Map([['shared.esp', 'ModA']])); // origin known, but never marked tracked
-    const stack = new StackNode('Shared.esp', 'ModA', [PEER_B]);
-
-    const children = await provider.getChildren(stack);
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(StackPeerNode);
-  });
-
-  it('a tracked winner gets both state entries, in resolution order, ahead of every peer', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    provider.setPluginOrigins(new Map([['shared.esp', 'ModA']]));
-    provider.setTrackedPlugins(new Set(['shared.esp']));
-    const stack = new StackNode('Shared.esp', 'ModA', [PEER_B]);
-
-    const children = await provider.getChildren(stack);
-
-    expect(children).toHaveLength(3);
-    expect(children[0]).toBeInstanceOf(StackSourceStateNode);
-    expect(children[1]).toBeInstanceOf(StackBinaryStateNode);
-    expect(children[2]).toBeInstanceOf(StackPeerNode);
-    expect((children[0] as StackSourceStateNode).label).toBe('source (working tree) — ModA');
-    expect((children[1] as StackBinaryStateNode).label).toBe('binary (last compile…) — ModA');
-  });
-
-  it('matches tracked/origin plugin keys case-insensitively', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    provider.setPluginOrigins(new Map([['SHARED.ESP', 'ModA']]));
-    provider.setTrackedPlugins(new Set(['SHARED.ESP']));
-    const stack = new StackNode('Shared.esp', 'ModA', []);
-
-    const children = await provider.getChildren(stack);
-
-    expect(children.filter(c => c instanceof StackSourceStateNode)).toHaveLength(1);
-  });
-
-  // A winner nothing has told this provider's origin for degrades the same way an untracked
-  // winner does — never a crash, never a mislabeled entry built off an undefined origin.
-  it('degrades to no state entries when the winner\'s origin is unknown, even if marked tracked', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    provider.setTrackedPlugins(new Set(['shared.esp'])); // tracked, but setPluginOrigins never called
-    const stack = new StackNode('Shared.esp', undefined, [PEER_B]);
-
-    const children = await provider.getChildren(stack);
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(StackPeerNode);
-  });
-});
-
-// ── #448 AC2: expanding a peer lazy-loads it read-only via the unlisted-plugin door (#34) ──────
-
-describe('PluginTreeProvider — Stack peer lazy load & read-only browsing (#448 AC2)', () => {
-  it('loads the peer through the unlisted-plugin door on first expansion, then browses its records', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    const children = await provider.getChildren(peerNode);
-
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledWith(PEER_B.path, PEER_B.origin);
-    expect(children.some(c => c instanceof RecordTypeNode)).toBe(true);
-    expect(repo.getRecordTypes).toHaveBeenCalledWith('Shared.esp', 'ModB');
-  });
-
-  it('loads at most once per expansion streak — a second expansion skips straight to the fetch', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    await provider.getChildren(peerNode);
-    await provider.getChildren(peerNode);
-
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(1);
-  });
-
-  // The read-only guarantee itself already holds structurally — a peer's records recurse through
-  // getPluginChildren(name, origin) with origin defined, and isImmutable(plugin, origin) already
-  // treats any defined origin as immutable (#281 / ADR-0036) — so this is a regression pin on that
-  // existing short-circuit covering the new caller, not new immutability logic. The rival named in
-  // the plan (temporarily stripping `origin !== undefined` from isImmutable) is verified manually,
-  // not committed — see the task's own report for the observed failure.
-  it('a peer\'s own record rows are read-only: contextValue recordImmutable', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-    const [typeNode] = await provider.getChildren(peerNode) as RecordTypeNode[];
-
-    const [rec] = await provider.getChildren(typeNode);
-
-    expect((rec as RecordNode).contextValue).toBe('recordImmutable');
-  });
-
-  it('a load failure renders an ErrorNode instead of silently showing nothing (ADR-0026)', async () => {
-    const repo = makeRepository();
-    (repo.loadUnlistedPlugin as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    const children = await provider.getChildren(peerNode);
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
-  });
-
-  it('unloadStackPeer unloads through the door and lets a later re-expand load again', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-    await provider.getChildren(peerNode);
-
-    await provider.unloadStackPeer(peerNode);
-
-    expect(repo.unloadUnlistedPlugin).toHaveBeenCalledWith(PEER_B.name, PEER_B.origin);
-    await provider.getChildren(peerNode);
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(2); // loaded, unloaded, re-loaded
-  });
-
-  it('unloadStackPeer is a no-op for a peer that was never expanded', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    await provider.unloadStackPeer(peerNode);
-
-    expect(repo.unloadUnlistedPlugin).not.toHaveBeenCalled();
-  });
-
-  it('refresh() forgets what was loaded, matching a fresh session that has loaded nothing yet', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-    await provider.getChildren(peerNode);
-
-    provider.refresh();
-    await provider.getChildren(peerNode);
-
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(2);
-  });
-});
-
-// ── #364: the Conflicts node (root-level, unlike Stack above which is per-plugin) ──────────────
+// ── #364: the Conflicts node (root-level) ─────────────────────────────────────
 
 describe('PluginTreeProvider — Conflicts node existence & gating (#364, #307\'s invariant)', () => {
   it('conflictsNode() is undefined before conflictsComputed is ever set', () => {
@@ -1213,7 +977,7 @@ describe('PluginTreeProvider — Conflicts node existence & gating (#364, #307\'
     expect(provider.conflictsNode()).toBeInstanceOf(ConflictsNode);
   });
 
-  it('conflictsNode() reverts to undefined after setConflictsComputed(false) — a stale session must not keep showing it', () => {
+  it('conflictsNode() reverts to undefined after setConflictsComputed(false) — a stale load order must not keep showing it', () => {
     const provider = new PluginTreeProvider(makeRepository());
     provider.setConflictsComputed(true);
 
@@ -1272,7 +1036,7 @@ describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () 
   // that version first and running it, it stayed green with the gate removed — vacuous, exactly
   // the trap the standing instruction warns about). The real scenario the gate exists for is an
   // in-flight getConflicts() call that resolves *after* conflictsComputed has already gone back to
-  // false — ADR-0035's live-mutation re-sweep racing a still-pending Conflicts-node fetch — which
+  // false — ADR-0035's live-mutation re-sweep racing a in-flight Conflicts-node fetch — which
   // populates the cache post-clear with nothing left to clear it again. Only conflictAllOf's own
   // independent check catches that.
   it('returns undefined for a late-arriving cache entry — a getConflicts() call still in flight when conflictsComputed goes back to false', async () => {

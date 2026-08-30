@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Core.Schema;
@@ -8,9 +9,35 @@ internal static class FormRefPathBuilder
 {
     public delegate void RefVisitor(string fieldPath, string targetFormKey);
 
-    public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor) =>
-        Walk(col.ToFieldMetadata(), getValue(col), col.Name,
+    public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor)
+    {
+        // #113: a column whose metadata tree holds no formKey leaf cannot yield a ref, so its value
+        // is never even extracted — for an array/struct column that extraction is a JSON serialize
+        // (SchemaReflector) the walk below would only parse straight back, per record. Decided once
+        // per ColumnSpec: the metadata is a pure function of the schema, which is built at startup.
+        var (meta, carriesFormKeys) = Plans.GetOrAdd(col, static c =>
+        {
+            var m = c.ToFieldMetadata();
+            return (m, CarriesFormKeys(m));
+        });
+        if (!carriesFormKeys) return;
+        Walk(meta, getValue(col), col.Name,
             (path, raw, _, _) => { if (IsRealRef(raw)) visitor(path, raw!); });
+    }
+
+    // Keyed by reference: ColumnSpec is a record whose value equality would hash every member
+    // (delegates included) on each lookup, and the schema's own instances are the only ones here.
+    private static readonly ConcurrentDictionary<ColumnSpec, (FieldMetadata Meta, bool CarriesFormKeys)> Plans =
+        new(ReferenceEqualityComparer.Instance);
+
+    internal static bool CarriesFormKeys(FieldMetadata meta) =>
+        meta.Type switch
+        {
+            "formKey" => true,
+            "struct" => meta.Fields?.Any(CarriesFormKeys) == true,
+            "array" => meta.ElementType != null && CarriesFormKeys(meta.ElementType),
+            _ => false,
+        };
 
     internal static void Walk(
         FieldMetadata meta, object? value, string path,

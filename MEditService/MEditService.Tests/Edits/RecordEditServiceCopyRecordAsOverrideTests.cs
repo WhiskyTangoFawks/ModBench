@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -11,7 +11,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>
 /// #436 (ADR-0041 restoration): xEdit's "Copy as Override Into…" — #281 shipped this, ADR-0041's
-/// pending-change sweep tore it out along with the storage layer it happened to sit on, and #426/#427's
+/// sweep tore it out along with the storage layer it happened to sit on, and #426/#427's
 /// re-implementation wave never carried it forward. This suite is the entry point's own contract:
 /// same-FormKey landing in the destination's own working tree, the collision/container/untracked
 /// refusals every gesture on this write path either inherits or reuses, and the two read postures
@@ -20,15 +20,15 @@ namespace MEditService.Tests.Edits;
 /// </summary>
 public sealed class RecordEditServiceCopyRecordAsOverrideTests
 {
-    private static RecordEditService ServiceFor(ISessionManager sessions) =>
-        new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
+        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void CopyRecordAsOverride_FromAnUntrackedSource_LandsUnderTheSameFormKey_AndAnswersAtEffective()
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         // Not NewFormKey: an override echoes the caller's own FormKey rather than minting one
@@ -39,12 +39,12 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         var sourceFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", CopyFixture.SourceNpcEditorId);
         Assert.True(File.Exists(sourceFile));
 
-        var doc = mod.Sessions.Index!.GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var doc = mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(CopyFixture.SourceNpcEditorId, doc!.EditorId);
 
         // The source plugin's own copy is untouched — this is a copy, not a move.
-        Assert.NotNull(mod.Sessions.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
+        Assert.NotNull(mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin));
     }
 
     [Fact]
@@ -52,15 +52,15 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin));
+        Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(mod.SourceNpc.ToString(), mod.DestinationPlugin));
     }
 
     // #452/#453's own read posture: a tracked source reads its current file, not a stale index
     // snapshot — proven by mutating the file on disk directly (never-assume-exclusive-ownership) after
-    // the session has already indexed it, then observing the copy carries the mutated bytes forward.
+    // the load order has already indexed it, then observing the copy carries the mutated bytes forward.
     [Fact]
     public void CopyRecordAsOverride_FromATrackedSource_ReadsItsCurrentFileBytes_NotAStaleIndexSnapshot()
     {
@@ -69,7 +69,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         var mutatedText = File.ReadAllText(sourceFile).Replace(CopyFixture.SourceNpcEditorId, "MutatedOnDisk");
         File.WriteAllText(sourceFile, mutatedText);
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
         var destinationFile = mod.SourceFileFor(mod.DestinationPlugin, mod.SourceNpc, "npc_", "MutatedOnDisk");
@@ -85,7 +85,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         // TrackedModFixture.Untracked() does — no .git in the folder at all.
         Directory.Delete(Path.Combine(mod.DestinationModFolder, ".git"), recursive: true);
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -99,10 +99,10 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         // Seeded directly at the index layer (bypassing the service), the same way
         // RecordEditServiceCreateRecordTests seeds a both-refs collision fixture — this is what "the
         // destination already carries this FormKey at some ref" looks like in the index.
-        var seedBody = mod.Sessions.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin)!.Body!;
-        mod.Sessions.Index!.CreateWorkingTreeRecord(mod.DestinationPlugin, mod.SourceNpc.ToString(), "npc_", seedBody);
+        var seedBody = mod.Mirror.Index!.GetDocument(mod.SourceNpc.ToString(), mod.SourcePlugin)!.Body!;
+        mod.Mirror.Index!.CreateWorkingTreeRecord(mod.DestinationPlugin, mod.SourceNpc.ToString(), "npc_", seedBody);
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
@@ -119,7 +119,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
     {
         using var fixture = new ContainerModFixture();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(fixture.Plugin, fixture.DialogTopic.ToString(), fixture.Plugin);
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(fixture.Plugin, fixture.DialogTopic.ToString(), fixture.Plugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerRecordNotYetSupported, result.Refusal);
@@ -130,7 +130,7 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
     {
         using var mod = CopyFixture.Create();
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, "ABCDEF:Source.esm", mod.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordNotFound, result.Refusal);
@@ -141,14 +141,14 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
     public void CopyRecordAsOverride_MakesTheCopyAppearInAnActiveFilteredListing()
     {
         using var mod = CopyFixture.Create();
-        mod.Sessions.SetFilter("SELECT form_key FROM npc_");
+        mod.Mirror.SetFilter("SELECT form_key FROM npc_");
         var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.DestinationPlugin, Limit: 50, Offset: 0);
-        var before = mod.Sessions.Repository!.Search(query).Total;
+        var before = mod.Mirror.Repository!.Search(query).Total;
 
-        var result = ServiceFor(mod.Sessions).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
+        var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Sessions.Repository!.Search(query);
+        var after = mod.Mirror.Repository!.Search(query);
         Assert.Equal(before + 1, after.Total);
     }
 }

@@ -17,7 +17,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     /// <summary>An external tool's in-place save: the same FormKeys as the fixture's own plugin
-    /// (built the same way <c>SessionManagerRereadPluginTests.WriteCopy</c> establishes agreement),
+    /// (built the same way <c>LoadOrderMirrorTests.WriteCopy</c> establishes agreement),
     /// one field changed — exactly what xEdit does when a user tweaks a value and saves.</summary>
     private void WriteExternalBinaryChange(float newHeightMax)
     {
@@ -39,7 +39,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
 
         var relativePath = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
@@ -57,7 +57,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
 
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
 
         Assert.Equal(branchBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Equal(headBefore, GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "HEAD").Trim());
@@ -65,15 +65,15 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     }
 
     [Fact]
-    public void Absorb_ClearsAnyPendingDeferralForThePlugin()
+    public void Absorb_ClearsAnyUnansweredDeferralForThePlugin()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
 
-        Assert.Null(ExternalChangeDeferral.Pending(_mod.ModFolder, TrackedModFixture.PluginName));
+        Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var tree = GitCli.Run(gitDir, _mod.ModFolder, "ls-tree", "-r", "--name-only", "main")
@@ -119,7 +119,7 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
         WriteExternalBinaryChange(0.9f);
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
 
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var mainSha = GitCli.Run(gitDir, _mod.ModFolder, "rev-parse", "refs/heads/main").Trim();

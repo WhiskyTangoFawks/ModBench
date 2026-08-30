@@ -1,27 +1,25 @@
 using DuckDB.NET.Data;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Tests.Api;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #410/ADR-0041: pending changes have no storage. The session database used to gain
-/// <c>pending_changes</c> and <c>pending_form_references</c> the moment a session loaded — the
-/// pending model's store, sitting in the same connection as the index it overlaid.
+/// ADR-0041 / #413: what a loaded load order's database actually holds. The reflected per-type wide
+/// tables, the VMAD tables and the condition tables are all gone — each type's name now belongs to
+/// a <c>json_extract</c> view over <c>records</c>, which is what keeps user filter SQL reading the
+/// same across the swap.
 ///
-/// Asserted against a real backend host (<see cref="LoadedApiFixture{TPlugin}"/>), not a
-/// hand-built SessionManager: the tables were only ever created by the production DI graph wiring
-/// a pending-change service into the session lifecycle, so a hand-built manager would report them
-/// absent whether or not the machinery still existed.
+/// Asserted against a real backend host (<see cref="LoadedApiFixture{TPlugin}"/>) rather than a
+/// hand-built LoadOrderMirror, so the shape under test is the one the production DI graph builds.
 ///
-/// The absence assertion carries a positive control drawn from the same table listing: surviving
-/// index tables must be found by the identical query. Without it, an empty result, a wrong
-/// connection or a typo'd catalog name would satisfy "the pending tables are absent" just as well
-/// as a real deletion does.
+/// Every absence assertion carries a positive control drawn from the same catalog listing: a
+/// surviving relation must be found by the identical query. Without it, an empty result, a wrong
+/// connection or a typo'd catalog name would satisfy "X is absent" just as well as a real deletion.
 /// </summary>
-public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixture> loaded)
+public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
     private static IReadOnlyList<string> TableNamesOf(DuckDBConnection connection) =>
@@ -46,22 +44,7 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
     }
 
     private DuckDBConnection Connection() =>
-        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ISessionManager>().Repository!).Connection;
-
-    [Fact]
-    public void ALoadedSession_HasNoPendingChangeTables()
-    {
-        var tables = TableNamesOf(Connection());
-
-        // Positive control, same listing: the index tables this ticket preserves are really here,
-        // which is what makes the assertions below mean "deleted" rather than "not looking".
-        Assert.Contains("form_lookup", tables);
-        Assert.Contains("form_references", tables);
-        Assert.Contains("npc_", tables);
-
-        Assert.DoesNotContain("pending_changes", tables);
-        Assert.DoesNotContain("pending_form_references", tables);
-    }
+        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Repository!).Connection;
 
     /// <summary>
     /// #413 / AC1: the reflected per-type wide tables are gone, and each type's name now belongs to
@@ -75,7 +58,7 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
     /// absence is a real deletion rather than an empty result.
     /// </summary>
     [Fact]
-    public void ALoadedSession_HasNoPerTypeWideTables_OnlyViewsOverRecords()
+    public void AHeldLoadOrder_HasNoPerTypeWideTables_OnlyViewsOverRecords()
     {
         var connection = Connection();
         var baseTables = BaseTableNamesOf(connection);
@@ -102,7 +85,7 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
     /// object, #420 AC4), so its presence proves the listing is real rather than empty.
     /// </summary>
     [Fact]
-    public void ALoadedSession_HasNoVmadTables()
+    public void AHeldLoadOrder_HasNoVmadTables()
     {
         var tables = TableNamesOf(Connection());
 
@@ -116,10 +99,10 @@ public sealed class SessionDatabaseTablesTests(LoadedApiFixture<TestPluginFixtur
     /// <summary>
     /// #420: conditions' two side tables are gone — <c>GetConditions</c> reconstitutes from the
     /// record's own document via <c>IConditionCodec.Extract</c> instead. Same positive control as
-    /// <see cref="ALoadedSession_HasNoVmadTables"/>, for the same reason.
+    /// <see cref="AHeldLoadOrder_HasNoVmadTables"/>, for the same reason.
     /// </summary>
     [Fact]
-    public void ALoadedSession_HasNoConditionTables()
+    public void AHeldLoadOrder_HasNoConditionTables()
     {
         var tables = TableNamesOf(Connection());
 

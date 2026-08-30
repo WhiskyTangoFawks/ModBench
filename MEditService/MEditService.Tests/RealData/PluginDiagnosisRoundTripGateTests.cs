@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #519's diagnosis floor at Track's own deep-parse seam (<see cref="TrackService.TrackAsync(IGameSession, string, SourcePreset, System.Threading.CancellationToken)"/>'s
+/// #519's diagnosis floor at Track's own deep-parse seam (<see cref="TrackService.TrackAsync(ILoadOrder, string, SourcePreset, System.Threading.CancellationToken)"/>'s
 /// <c>ModFactory.ImportSetter</c> call), which had no try/catch at all before this ticket — any
 /// Mutagen parse exception propagated raw, naming whatever survived in its own unlocated
 /// <c>Message</c> (never <c>FormKey</c>/<c>EditorID</c> — those live only on <c>RecordException</c>'s
@@ -85,7 +85,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     }
 
     /// <summary>One real, unrelated, malformed fixture copied into a scratch mod folder and loaded as
-    /// a session — the same shape <c>SubrecordInventoryRoundTripGateTests.TrueStormsScratch</c>
+    /// a load order — the same shape <c>SubrecordInventoryRoundTripGateTests.TrueStormsScratch</c>
     /// builds, generalized over the fixture filename since this file needs it for two different real
     /// plugins rather than one. Stub masters are built generically from the fixture's own declared
     /// master list — Track's round-trip write needs those names present in the header's own master
@@ -93,7 +93,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
     private sealed class RealFixtureScratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-diagnosis-game-").FullName;
-        private readonly SessionManager _sessions;
+        private readonly LoadOrderMirror _mirror;
         private const string Origin = "DiagnosisFixtureMod";
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-diagnosis-mod-").FullName;
@@ -104,7 +104,7 @@ public sealed class PluginDiagnosisRoundTripGateTests
             var pluginPath = Path.Combine(ModFolder, fixtureFileName);
             File.Copy(fixturePath, pluginPath);
 
-            var inputs = new List<ExplicitPluginInput>();
+            var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(fixtureFileName), pluginPath), Fallout4Release.Fallout4))
             {
@@ -112,22 +112,22 @@ public sealed class PluginDiagnosisRoundTripGateTests
                 {
                     var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
                     new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new ExplicitPluginInput(master.Master.FileName, stubPath, "Stubs", true));
+                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
                 }
             }
-            inputs.Add(new ExplicitPluginInput(fixtureFileName, pluginPath, Origin, true));
+            inputs.Add(new LoadOrderEntry(fixtureFileName, pluginPath, Origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _sessions = new SessionManager(
+            _mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)_sessions).LoadExplicit(_gameDirectory, inputs, GameRelease.Fallout4);
+            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits);
 
         public void Dispose()
         {
-            _sessions.Dispose();
+            _mirror.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

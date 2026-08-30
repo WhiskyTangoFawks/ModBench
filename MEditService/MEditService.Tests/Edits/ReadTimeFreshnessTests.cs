@@ -27,10 +27,10 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService EditService() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_mod.Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_mod.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -78,7 +78,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         Reads().GetCompare(_mod.Npc.ToString());
 
-        var entry = _mod.Sessions.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Effective.Body, entry.Head.Body);
     }
@@ -112,7 +112,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         Reads().GetRecord(_mod.Npc.ToString());
 
-        var entry = _mod.Sessions.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Equal(entry.Head.Body, entry.Effective.Body);
     }
@@ -147,8 +147,8 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.NotNull(again);
         Assert.Equal("RenamedByHand", again!.EditorId);
         // Still live at Effective, and still resolvable — a record marked deleted loses both.
-        Assert.NotNull(_mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
-        Assert.NotNull(_mod.Sessions.Index!.Resolve(_mod.Npc.ToString()));
+        Assert.NotNull(_mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Mirror.Index!.Resolve(_mod.Npc.ToString()));
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // for, and the flat path is the one that used never to look.
         Assert.False(File.Exists(originalPath));
         Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
-        Assert.NotNull(_mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
+        Assert.NotNull(_mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
     // #422: the self-heal above folds an externally-changed source file into the read model as a
@@ -188,15 +188,15 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void AHandEditToASourceFileOutsideModbench_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
     {
-        _mod.Sessions.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
-        Assert.Equal(0, _mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'RenamedByHand'");
+        Assert.Equal(0, _mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         var text = File.ReadAllText(_mod.NpcSourceFile);
         File.WriteAllText(_mod.NpcSourceFile, text.Replace("\"FixtureNpc\"", "\"RenamedByHand\"", StringComparison.Ordinal));
 
         Reads().GetRecord(_mod.Npc.ToString()); // triggers SourceFreshness.Validate's self-heal
 
-        var result = _mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = _mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
     }
@@ -216,7 +216,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // "Committed" has moved, so the record is clean and *both* refs serve the new bytes. A pass
         // that refreshed only the working-tree side would still report this as dirt against a
         // baseline no ref holds any more.
-        var entry = _mod.Sessions.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.False(entry.HasWorkingTreeChange);
         Assert.Contains("0.75", entry.Head.Body!, StringComparison.Ordinal);
         Assert.Equal(_mod.GitShowHead(NpcRelativePath), entry.Head.Body);
@@ -236,7 +236,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
 
         Reads().GetCompare(_mod.Npc.ToString());
 
-        var entry = _mod.Sessions.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        var entry = _mod.Mirror.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
         Assert.True(entry.HasWorkingTreeChange);
         Assert.Contains("0.25", entry.Effective.Body!, StringComparison.Ordinal);
         Assert.Equal(_mod.GitShowHead(NpcRelativePath), entry.Head.Body);
@@ -249,7 +249,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         // Positive control for the whole mechanism: freshness is a tracked-mod concern, and an
         // untracked plugin has no source text to be fresh against. The read must still work.
         using var untracked = TrackedModFixture.Untracked();
-        var reads = new RecordQueryService(untracked.Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
+        var reads = new RecordQueryService(untracked.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         Assert.Equal("FixtureNpc", reads.GetRecord(untracked.Npc.ToString())!.EditorId);
     }

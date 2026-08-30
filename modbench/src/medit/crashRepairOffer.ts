@@ -9,7 +9,7 @@ export const REPAIR_WORKING_TREE_BUTTON = 'Compile from Working Tree';
 export const REPAIR_AT_MAIN_BUTTON = 'Compile at main';
 
 /** The modal's message + detail text — the evidence shown, not hidden, same posture #417's own
- *  dialog took: the detail names exactly what was detected (a pending journal marker vs a binary
+ *  dialog took: the detail names exactly what was detected (an unfinished journal marker vs a binary
  *  that could not be read), never a generic "something's wrong". */
 export function messageFor(offer: CrashRepairOffer): { message: string; detail: string } {
   const message = `${offer.plugin} (in ${offer.origin}) needs its binary rebuilt.`;
@@ -18,7 +18,7 @@ export function messageFor(offer: CrashRepairOffer): { message: string; detail: 
       'on disk no longer matches what Modbench last wrote.'
     : 'The compiled binary is missing or could not be read.';
   const detail = `${what} Compile now from your working tree, or restore the pristine version at ` +
-    '"main". Declining leaves it exactly as it is — you\'ll be asked again next time this session loads.';
+    '"main". Declining leaves it exactly as it is — you\'ll be asked again next time this reconciles.';
   return { message, detail };
 }
 
@@ -31,7 +31,7 @@ export type ShowCrashRepairOffer = (
 
 /** Called only when the user accepted — `atRef` is `undefined` for "Compile from Working Tree"
  *  (the normal Save & Compile source) or `'main'` for "Compile at main", the same two values
- *  `SessionController.compile`'s own `atRef` parameter already takes. */
+ *  `LoadOrderController.compile`'s own `atRef` parameter already takes. */
 export type AcceptCrashRepair = (offer: CrashRepairOffer, atRef: string | undefined) => Promise<void>;
 
 /**
@@ -39,7 +39,7 @@ export type AcceptCrashRepair = (offer: CrashRepairOffer, atRef: string | undefi
  * same posture #417's `runExternalChangeDialogs` already established for the sibling dialog (see
  * that module's own doc comment). Esc/dismiss (the resolved value matching neither button) is a
  * true no-op: nothing is written, `onAccept` is never called, and the offer re-appears at the next
- * session load by construction — nothing here or downstream clears the journal marker or fixes the
+ * reconcile by construction — nothing here or downstream clears the journal marker or fixes the
  * missing binary on a decline.
  */
 export async function presentCrashRepairOffers(

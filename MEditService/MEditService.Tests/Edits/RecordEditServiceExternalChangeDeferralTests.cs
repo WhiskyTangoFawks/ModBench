@@ -19,12 +19,12 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService Service() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     [Fact]
-    public void EditField_Refuses_WhileAnExternalChangeQuestionIsPendingForThePlugin()
+    public void EditField_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName,
             "Fixture.esp (in FixtureMod) changed outside Modbench.");
@@ -32,7 +32,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
         Assert.Contains("changed outside Modbench", result.Message, StringComparison.Ordinal);
     }
 
@@ -43,7 +43,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     public void EditField_Refuses_BeforeTouchingTheSourceFile()
     {
         var before = File.ReadAllText(_mod.NpcSourceFile);
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
@@ -58,13 +58,13 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_Refuses_BeforeTheIndexEverLearnsOfTheAttemptedChange()
     {
-        var before = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+        var before = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "height_max").Value;
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
-        var after = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
+        var after = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!
             .Fields.Single(f => f.Metadata.Name == "height_max").Value;
         Assert.Equal(before, after);
     }
@@ -72,7 +72,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_SucceedsAgain_OnceTheDeferralIsCleared()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         ExternalChangeDeferral.Clear(_mod.ModFolder, TrackedModFixture.PluginName);
 
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
@@ -83,7 +83,7 @@ public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable
     [Fact]
     public void EditField_OnADifferentPlugin_IsUnaffectedByAnotherPluginsDeferral()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, "SomeOtherPlugin.esp", "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, "SomeOtherPlugin.esp", "unanswered");
 
         var result = Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 

@@ -1,5 +1,5 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -37,12 +37,12 @@ public interface IContainerChildQueryService
 /// SubCells slots aren't in <see cref="SlotOrder"/>, so a call against one of those FormKeys
 /// answers empty rather than guessing at a presentation xEdit doesn't use for them here.</para>
 /// </summary>
-public sealed class ContainerChildQueryService(ISessionManager session, ILogger<ContainerChildQueryService>? logger = null)
+public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogger<ContainerChildQueryService>? logger = null)
     : IContainerChildQueryService
 {
     private const int UnlimitedRecords = int.MaxValue;
 
-    private readonly ISessionManager _session = session;
+    private readonly ILoadOrderMirror _mirror = loadOrder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // (Order, RecordType) per slot name — xEdit's own presentation order, restated as data.
@@ -56,7 +56,7 @@ public sealed class ContainerChildQueryService(ISessionManager session, ILogger<
 
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
     {
-        origin ??= PluginOriginResolver.Resolve(_session.Session, plugin);
+        origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
         var repo = RequireRepository();
         var pluginKey = new PluginKey(plugin, origin);
 
@@ -99,5 +99,5 @@ public sealed class ContainerChildQueryService(ISessionManager session, ILogger<
     }
 
     private IRecordReads RequireRepository() =>
-        _session.Repository ?? throw new InvalidOperationException("No session loaded.");
+        _mirror.Repository ?? throw new InvalidOperationException("No load order has been received.");
 }

@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
+using MEditService.Core.Plugins;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -12,8 +12,8 @@ using Noggog.WorkEngine;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #414's orchestration seam: the Track gesture end to end. Resolves every plugin the session
-/// loaded under one mod-folder origin, deep-parses each (the session's own overlay reader is
+/// #414's orchestration seam: the Track gesture end to end. Resolves every plugin the load order
+/// loaded under one mod-folder origin, deep-parses each (the load order's own overlay reader is
 /// read-only and, per #369's pinned defect, not always structurally faithful), then serializes the
 /// whole mod through the whole-mod door (#451 slice A — ADR-0041's #444 amendment: "the source tree
 /// adopts Spriggit's layout wholesale"), computes provenance, then hands the git mechanics to
@@ -30,15 +30,15 @@ public sealed class TrackService(ILogger<TrackService> logger)
 {
     // #414 review F2: "reports progress" (AC4) — one shared instance on this singleton, read
     // concurrently by GET /plugins/track/status while a track's own POST is still in flight, same
-    // idiom SessionManager.Status/GET /session/status already established for the session load. A
+    // idiom LoadOrderMirror.Status/GET /load-order/status already established for the reconcile. A
     // reference-type field, so Volatile.Read/Write is enough for cross-thread visibility of each
-    // whole snapshot (GameSession's own _pluginsSnapshot uses the same pattern) — no lock needed
+    // whole snapshot (LoadOrder's own _pluginsSnapshot uses the same pattern) — no lock needed
     // since nothing here ever mutates a snapshot in place, only replaces it wholesale.
     private TrackProgress _progress = TrackProgress.Idle;
     public TrackProgress Progress => Volatile.Read(ref _progress);
 
-    public Task TrackAsync(IGameSession session, string origin, SourcePreset preset, CancellationToken cancel = default) =>
-        TrackAsync(session, origin, preset, deserializeForVerification: null, cancel);
+    public Task TrackAsync(ILoadOrder loadOrder, string origin, SourcePreset preset, CancellationToken cancel = default) =>
+        TrackAsync(loadOrder, origin, preset, deserializeForVerification: null, cancel);
 
     /// <summary>
     /// Same gesture as the public overload, with one extra seam: which function reads the tree
@@ -55,7 +55,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
     /// entirely.
     /// </summary>
     internal async Task TrackAsync(
-        IGameSession session,
+        ILoadOrder loadOrder,
         string origin,
         SourcePreset preset,
         Func<string, CancellationToken, Task<IFallout4Mod>>? deserializeForVerification,
@@ -64,7 +64,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
         var deserialize = deserializeForVerification
             ?? ((folder, ct) => RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct));
 
-        var plugins = session.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)).ToList();
+        var plugins = loadOrder.Plugins.Where(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)).ToList();
         if (plugins.Count == 0)
             throw new KeyNotFoundException($"No loaded plugin has origin '{origin}' to track.");
 
@@ -90,8 +90,8 @@ public sealed class TrackService(ILogger<TrackService> logger)
             {
                 cancel.ThrowIfCancellationRequested();
 
-                // A fresh deep parse, deliberately — not the session's own already-open overlay,
-                // which belongs to the session and whose lifetime Track does not control.
+                // A fresh deep parse, deliberately — not the load order's own already-open overlay,
+                // which belongs to the load order and whose lifetime Track does not control.
                 // Reader-agnosticism between the two — that a deep-parsed record and an overlay
                 // serialize to the same bytes — is what RecordTextCodecRealDataTests protects at the
                 // codec seam.
@@ -101,8 +101,8 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 try
                 {
                     deepParsed = ModFactory.ImportSetter(
-                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), session.GameRelease,
-                        LocalizedStrings.ForRead(modFolder, session.DataFolderPath));
+                        new ModPath(ModKey.FromFileName(plugin.Name), plugin.Path), loadOrder.GameRelease,
+                        LocalizedStrings.ForRead(modFolder, loadOrder.DataFolderPath));
                 }
                 catch (Exception ex)
                 {
@@ -122,11 +122,11 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 // exception (which the strings parameters above already prevent) and never a silent
                 // empty string (TranslatedString.TryLookup returns false for a missing file with no
                 // exception at all).
-                if (LocalizedStrings.FindMissingStringsFile(deepParsed, plugin.Name, modFolder, session.DataFolderPath, session.GameRelease) is { } missingFile)
+                if (LocalizedStrings.FindMissingStringsFile(deepParsed, plugin.Name, modFolder, loadOrder.DataFolderPath, loadOrder.GameRelease) is { } missingFile)
                 {
                     throw new MissingLocalizationStringsException(
                         $"{plugin.Name} is a localized plugin but its strings file '{missingFile}' was not found " +
-                        $"in {LocalizedStrings.FolderFor(modFolder, session.DataFolderPath)}. Restore the file, then track again.");
+                        $"in {LocalizedStrings.FolderFor(modFolder, loadOrder.DataFolderPath)}. Restore the file, then track again.");
                 }
 
                 parsedDone++;
@@ -223,7 +223,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
             // write, never the plugin the user is tracking, so it must not drop a .bak beside the
             // real plugin as a side effect of merely checking it. WithLoadOrderFromHeaderMasters
             // mirrors BinaryRoundTripGateTests' own precedent for exactly this "reproduce the
-            // original's own bytes" shape (as opposed to PluginCompileService's session-derived
+            // original's own bytes" shape (as opposed to PluginCompileService's load-order-derived
             // load order, which answers a different question: what should the masters be now).
             // NoNextFormIDProcessing/RecordCountOption.NoCheck mirror PluginWriter (#506): the
             // source's own stored HEDR.NextObjectID/NumRecords are the bytes to reproduce, not
@@ -357,7 +357,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
         Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(filePath)));
 }
 
-/// <summary>Thrown by <see cref="TrackService.TrackAsync(IGameSession, string, SourcePreset, CancellationToken)"/>
+/// <summary>Thrown by <see cref="TrackService.TrackAsync(ILoadOrder, string, SourcePreset, CancellationToken)"/>
 /// when a plugin fails ADR-0042 decision 2's round-trip gate — its own message names the first
 /// record (or, failing that, the header/container structure) that does not survive being recompiled
 /// from its own freshly-tracked source. Named and actionable, the same way
@@ -379,7 +379,7 @@ public sealed class SourceRoundTripFailedException : Exception
     }
 }
 
-/// <summary>Thrown by <see cref="TrackService.TrackAsync(IGameSession, string, SourcePreset, CancellationToken)"/>
+/// <summary>Thrown by <see cref="TrackService.TrackAsync(ILoadOrder, string, SourcePreset, CancellationToken)"/>
 /// when a Localized plugin is missing one of its own <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c>
 /// files (#515, AC2) — named so the endpoint layer maps it to its own HTTP response, the same way
 /// <see cref="SourceRoundTripFailedException"/> is, rather than surfacing as a bare

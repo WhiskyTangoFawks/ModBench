@@ -1,9 +1,9 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -39,9 +39,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() =>
-        new(_fixture.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    private IRecordIndex Index => _fixture.Sessions.Index!;
+    private IRecordIndex Index => _fixture.Mirror.Index!;
 
     // ---- AC1: a container's own record ----
 
@@ -107,8 +107,8 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
         var injectingIndex = new WorldspaceCellInjectingIndex(
             Index, _fixture.Worldspace.ToString(), [.. realRows, extraRow]);
-        var sessions = new IndexOverridingSessionManager(_fixture.Sessions, injectingIndex);
-        var service = new RecordEditService(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var mirror = new IndexOverridingMirror(_fixture.Mirror, injectingIndex);
+        var service = new RecordEditService(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
         var result = service.DeleteRecord(_fixture.Plugin, _fixture.Worldspace.ToString());
 
@@ -135,30 +135,25 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             worldspaceFormKeyArg == worldspaceFormKey ? rows : base.GetWorldspaceCells(plugin, worldspaceFormKeyArg);
     }
 
-    /// <summary>#496: forwards every <see cref="ISessionManager"/> member to a real session except
+    /// <summary>#496: forwards every <see cref="ILoadOrderMirror"/> member to a real load order except
     /// <see cref="Index"/>, which <see cref="RecordEditService"/> reads its <see cref="IRecordIndex"/>
-    /// from — the only way to hand it an intercepted index, since <see cref="MEditService.Core.Session.SessionManager"/>'s
+    /// from — the only way to hand it an intercepted index, since <see cref="MEditService.Core.Plugins.LoadOrderMirror"/>'s
     /// own <c>Index</c> getter has no setter a test can reach.</summary>
-    private sealed class IndexOverridingSessionManager(ISessionManager inner, IRecordIndex overrideIndex) : ISessionManager
+    private sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex overrideIndex) : ILoadOrderMirror
     {
-        public IGameSession? Session => inner.Session;
+        public ILoadOrder? LoadOrder => inner.LoadOrder;
         public IRecordReads? Repository => inner.Repository;
         public IRecordIndex? Index => overrideIndex;
-        public SessionStatus Status => inner.Status;
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
-            inner.Load(dataFolderPath, pluginsTxtPath, gameRelease);
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
-            inner.LoadExplicit(gameDirectory, plugins, gameRelease);
-        public void Unload() => inner.Unload();
+        public LoadOrderStatus Status => inner.Status;
+        public void Reconcile(
+            string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
+            string? instanceRoot = null) =>
+            inner.Reconcile(gameDirectory, plugins, gameRelease, instanceRoot);
+        public void Close() => inner.Close();
         public PluginResponse CreatePlugin(string name, string path, string origin) => inner.CreatePlugin(name, path, origin);
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);
-        public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) =>
-            inner.RereadPlugin(plugin, newPath, newOrigin);
-        public PluginResponse SetPluginParticipation(string plugin, bool participates) =>
-            inner.SetPluginParticipation(plugin, participates);
         public Task ReindexPlugin(string plugin) => inner.ReindexPlugin(plugin);
-        public Task ReindexPlugins(IReadOnlyList<string> plugins) => inner.ReindexPlugins(plugins);
+        public Task ReindexPlugin(PluginKey key) => inner.ReindexPlugin(key);
+        public void UnindexPlugin(PluginKey key) => inner.UnindexPlugin(key);
         public void SetFilter(string sql) => inner.SetFilter(sql);
         public void ClearFilter() => inner.ClearFilter();
         public void ReapplyFilter() => inner.ReapplyFilter();
@@ -298,19 +293,19 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             mod.Cells.Records.Add(block);
             mod.WriteToBinary(pluginPath);
 
-            using var sessions = new SessionManager(
+            using var mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
             var plugin = new PluginKey(pluginName, origin);
-            ((ISessionManager)sessions).LoadExplicit(
-                gameDirectory, [new ExplicitPluginInput(pluginName, pluginPath, origin, true)], GameRelease.Fallout4);
-            Track(sessions, origin);
+            ((ILoadOrderMirror)mirror).Reconcile(
+                gameDirectory, [new LoadOrderEntry(pluginName, pluginPath, origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
+            Track(mirror, origin);
 
             var file = Directory.EnumerateFiles(
                     Path.Combine(modFolder, SourceRecordPath.RootFor(pluginName)), "RecordData.json", SearchOption.AllDirectories)
                 .Single(f => File.ReadAllText(f).Contains("\"ReferencerRef\"", StringComparison.Ordinal));
             Assert.Contains(npc.FormKey.ToString(), File.ReadAllText(file), StringComparison.Ordinal);
 
-            var result = new RecordEditService(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+            var result = new RecordEditService(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
                 .RenumberRecord(plugin, npc.FormKey.ToString());
 
             Assert.True(result.Applied, result.Message);
@@ -335,9 +330,9 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     // Not inlined into the [Fact] above: xUnit1031 flags a blocking Task wait directly inside a test
     // method, the same reason ContainerModFixture's own TrackAsync call lives in its constructor
     // rather than in a test body.
-    private static void Track(SessionManager sessions, string origin) =>
+    private static void Track(LoadOrderMirror mirror, string origin) =>
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(sessions.Session!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackAsync(mirror.LoadOrder!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
     // ---- AC5: order preservation ----
 
@@ -395,7 +390,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         // #489's own promise: this now compiles (it refused before the fix), and the compiled binary's
         // DialogTopics preserve the survivors' relative order.
         var compileResult = new PluginCompileService(
-                _fixture.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
+                _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
             .Compile(_fixture.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
 

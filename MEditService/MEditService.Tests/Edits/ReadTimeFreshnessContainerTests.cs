@@ -27,10 +27,10 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() =>
-        new(_fixture.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 

@@ -26,7 +26,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService Service() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -42,7 +42,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         var relative = _mod.RelativeSourcePath(_mod.Npc, "npc_", TrackedModFixture.NpcEditorId).Replace('\\', '/');
         Assert.Equal([$"M {relative}"], _mod.GitStatus());
 
-        var body = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains("NewScript", body, StringComparison.Ordinal);
     }
 
@@ -59,7 +59,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Counter", Json("""{"op":"remove_property"}"""));
 
         Assert.True(result.Applied, result.Message);
-        var body = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
         Assert.DoesNotContain("Counter", body, StringComparison.Ordinal);
     }
 
@@ -87,7 +87,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         var result = service.EditField(_mod.Plugin, _mod.Npc.ToString(), @"VMAD\Scr\Counter", Json("42"));
 
         Assert.True(result.Applied, result.Message);
-        var body = _mod.Sessions.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains("42", body, StringComparison.Ordinal);
     }
 
@@ -131,7 +131,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
     // removed.
 
     [Fact]
-    public void EditField_AddScriptOp_Refuses_WhileAnExternalChangeQuestionIsPendingForThePlugin()
+    public void EditField_AddScriptOp_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "Fixture.esp changed outside Modbench.");
 
@@ -139,7 +139,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\NewScript", Json("""{"op":"add_script"}"""));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
         Assert.Empty(_mod.GitStatus());
     }
 
@@ -147,7 +147,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
     public void EditField_AddScriptOp_OnAnUntrackedModFolder_IsRefused_NamingTheTrackCommand()
     {
         using var untracked = TrackedModFixture.Untracked();
-        var service = new RecordEditService(untracked.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var service = new RecordEditService(untracked.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
         var result = service.EditField(
             untracked.Plugin, untracked.Npc.ToString(), @"VMAD\NewScript", Json("""{"op":"add_script"}"""));

@@ -44,8 +44,8 @@ public sealed class PluginWriterSaveTests
     }
 
     // ── Timestamped .bak (ADR-0008) ────────────────────────────────────────────
-    // #410: relocated here intact from the deleted PluginWriterApplyTests, which was the pending-
-    // change apply suite. The behaviour they guard is on ADR-0041's keep-list and did not change;
+    // #410: relocated here intact from the deleted PluginWriterApplyTests, the retired apply
+    // suite. The behaviour they guard is on ADR-0041's keep-list and did not change;
     // only their home did. Rivalled on the move (the .bak write removed from PrepareAsync) so the
     // relocation could not quietly turn them decorative.
 

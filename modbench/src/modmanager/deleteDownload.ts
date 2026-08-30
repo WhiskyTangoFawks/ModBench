@@ -1,7 +1,7 @@
 // Delete-to-trash sequencing for the Downloads tab, extracted from the VS Code
 // adapter so the destructive ordering is unit-testable. No VS Code types in the
 // interface — the panel injects the confirm / trash / report surface, per the
-// repo's testability rule (mirrors SessionController's injected reporter).
+// repo's testability rule (mirrors LoadOrderController's injected reporter).
 
 export interface DeleteDownloadDeps {
   /** Absolute path of the archive to trash. */

@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using MEditService.Core.Session;
+using MEditService.Core.Plugins;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
 
@@ -32,16 +32,16 @@ namespace MEditService.Core.Source;
 /// </summary>
 public static class ExternalChangeAbsorber
 {
-    public static void Absorb(string modFolder, string pluginName, string pluginPath, IGameSession session)
+    public static void Absorb(string modFolder, string pluginName, string pluginPath, ILoadOrder loadOrder)
     {
-        // A fresh deep parse of the binary now on disk — not any cached/session view of the plugin,
+        // A fresh deep parse of the binary now on disk — not any cached/load order view of the plugin,
         // which is exactly the state this method exists to react to (the binary changed out from
-        // under whatever a session last read). #515: explicit strings parameters, same reason
+        // under whatever a load order last read). #515: explicit strings parameters, same reason
         // TrackService's own deep parse needs them — this path always has a mod folder (Absorb only
         // ever runs against an already-tracked plugin), so LocalizedStrings.ForRead's single-argument
         // overload applies.
         var deepParsed = ModFactory.ImportSetter(
-            new ModPath(ModKey.FromFileName(pluginName), pluginPath), session.GameRelease,
+            new ModPath(ModKey.FromFileName(pluginName), pluginPath), loadOrder.GameRelease,
             LocalizedStrings.ForRead(modFolder));
 
         var pristineFiles = TrackService

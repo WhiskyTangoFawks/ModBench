@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -57,7 +57,7 @@ public sealed class IndexVisibilityTests
                 }
             })).ToArray();
 
-            repository.Index(loaded, 0, participates: true, key: new PluginKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
+            repository.Index(loaded, Registration.Participating(0), new PluginKey(loaded.ModKey.FileName.ToString(), PluginOrigin.DataDirectory));
             await indexing.CancelAsync();
             await Task.WhenAll(readers);
 

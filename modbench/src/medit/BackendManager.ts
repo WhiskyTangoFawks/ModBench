@@ -69,7 +69,7 @@ export class BackendManager extends EventEmitter {
   /** In-flight start(), so concurrent callers share it instead of double-spawning. */
   private startPromise?: Promise<void>;
   /** Bumped by stop(); an in-flight start()/connect() from an older generation
-   *  aborts instead of resurrecting a session the user already closed. */
+   *  aborts instead of resurrecting a load order the user already closed. */
   private generation = 0;
   private restartAttempts = 0;
   private static readonly MAX_RESTARTS = 3;

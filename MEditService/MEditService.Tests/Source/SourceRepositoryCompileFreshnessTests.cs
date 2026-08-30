@@ -24,7 +24,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_RightAfterTrack_IsNotPending()
+    public void CompileFreshnessOf_RightAfterTrack_IsNotStale()
     {
         var modFolder = NewModFolder();
         try
@@ -33,7 +33,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
 
-            Assert.False(freshness.Pending);
+            Assert.False(freshness.Stale);
             Assert.NotNull(freshness.LastCompiledAt);
         }
         finally
@@ -43,7 +43,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_WithAnUncommittedWorkingTreeEdit_IsPending()
+    public void CompileFreshnessOf_WithAnUncommittedWorkingTreeEdit_IsUnanswered()
     {
         var modFolder = NewModFolder();
         try
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
 
-            Assert.True(freshness.Pending);
+            Assert.True(freshness.Stale);
         }
         finally
         {
@@ -62,7 +62,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_WithANewUncommittedSourceFile_IsPending()
+    public void CompileFreshnessOf_WithANewUncommittedSourceFile_IsUnanswered()
     {
         // The rival this pins against: an implementation that only diffs *tracked* paths (plain
         // `git diff <ref>`, no status check) would miss a brand-new record file that was never
@@ -76,7 +76,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
 
-            Assert.True(freshness.Pending);
+            Assert.True(freshness.Stale);
         }
         finally
         {
@@ -85,7 +85,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_ReturningToTheOriginalContent_IsNotPendingAgain()
+    public void CompileFreshnessOf_ReturningToTheOriginalContent_IsNotStaleAgain()
     {
         var modFolder = NewModFolder();
         try
@@ -96,7 +96,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
 
-            Assert.False(freshness.Pending);
+            Assert.False(freshness.Stale);
         }
         finally
         {
@@ -105,7 +105,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_CommittedButNeverRecompiled_IsPending()
+    public void CompileFreshnessOf_CommittedButNeverRecompiled_IsUnanswered()
     {
         // The rival this pins against: an implementation that only checks working-tree dirt
         // (`git status`) would wrongly answer false here — the working tree is clean (it matches
@@ -122,7 +122,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
 
-            Assert.True(freshness.Pending);
+            Assert.True(freshness.Stale);
         }
         finally
         {
@@ -139,12 +139,12 @@ public sealed class SourceRepositoryCompileFreshnessTests
             var filePath = TrackOnePlugin(modFolder);
             var before = SourceRepository.CompileFreshnessOf(modFolder, Plugin).LastCompiledAt;
             File.WriteAllText(filePath, "{\"edited\":true}");
-            Assert.True(SourceRepository.CompileFreshnessOf(modFolder, Plugin).Pending);
+            Assert.True(SourceRepository.CompileFreshnessOf(modFolder, Plugin).Stale);
 
             SourceRepository.ParkCompileSnapshot(modFolder, Plugin, atRef: null, binarySha256: "DEADBEEF");
 
             var after = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
-            Assert.False(after.Pending);
+            Assert.False(after.Stale);
             Assert.NotNull(after.LastCompiledAt);
             Assert.True(after.LastCompiledAt >= before);
         }
@@ -155,7 +155,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_ForAnUntrackedFolder_IsNeverPending()
+    public void CompileFreshnessOf_ForAnUntrackedFolder_IsNeverStale()
     {
         var modFolder = NewModFolder();
         try
@@ -164,7 +164,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, Plugin);
 
-            Assert.False(freshness.Pending);
+            Assert.False(freshness.Stale);
             Assert.Null(freshness.LastCompiledAt);
         }
         finally
@@ -174,10 +174,10 @@ public sealed class SourceRepositoryCompileFreshnessTests
     }
 
     [Fact]
-    public void CompileFreshnessOf_ForAPluginTrackNeverParkedARefFor_IsNeverPending()
+    public void CompileFreshnessOf_ForAPluginTrackNeverParkedARefFor_IsNeverStale()
     {
         // #288: a plugin created after Track into an already-tracked mod folder may have no parked
-        // ref at all yet — degrade-safe "never pending" rather than a false positive with nothing to
+        // ref at all yet — degrade-safe "never stale" rather than a false positive with nothing to
         // compare against (first compile is what parks the ref).
         var modFolder = NewModFolder();
         try
@@ -186,7 +186,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
 
             var freshness = SourceRepository.CompileFreshnessOf(modFolder, "NeverTracked.esp");
 
-            Assert.False(freshness.Pending);
+            Assert.False(freshness.Stale);
             Assert.Null(freshness.LastCompiledAt);
         }
         finally
@@ -200,7 +200,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     {
         // #459's own lesson, applied here: '[' and ']' are git pathspec glob magic characters. A
         // pathspec built without :(literal) would silently fail to match this plugin's own source
-        // folder, or match something else, either of which reads as "never pending" no matter what
+        // folder, or match something else, either of which reads as "never stale" no matter what
         // actually changed.
         const string bracketedPlugin = "[ARRETH] FGEP-DE.esp";
         var modFolder = NewModFolder();
@@ -211,11 +211,11 @@ public sealed class SourceRepositoryCompileFreshnessTests
             var trailers = new TrackProvenance(null, null, new Dictionary<string, string> { [bracketedPlugin] = "AAAA" });
             SourceRepository.Track(modFolder, SourcePreset.Edits, files, trailers);
 
-            Assert.False(SourceRepository.CompileFreshnessOf(modFolder, bracketedPlugin).Pending);
+            Assert.False(SourceRepository.CompileFreshnessOf(modFolder, bracketedPlugin).Stale);
 
             File.WriteAllText(Path.Combine(modFolder, relPath), "{\"edited\":true}");
 
-            Assert.True(SourceRepository.CompileFreshnessOf(modFolder, bracketedPlugin).Pending);
+            Assert.True(SourceRepository.CompileFreshnessOf(modFolder, bracketedPlugin).Stale);
         }
         finally
         {

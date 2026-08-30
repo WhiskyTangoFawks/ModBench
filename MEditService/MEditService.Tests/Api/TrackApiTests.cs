@@ -8,7 +8,7 @@ namespace MEditService.Tests.Api;
 
 /// <summary>
 /// #414/ADR-0041: the wire contract for the Track gesture — the fourth of #414's touch points
-/// (backend endpoint, the others are the frontend command chain). Real HTTP host, real session,
+/// (backend endpoint, the others are the frontend command chain). Real HTTP host, real load order,
 /// real mod folder on disk.
 /// </summary>
 public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
@@ -23,11 +23,12 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
 
     private async Task LoadOnly(ScatteredFixtureData fx, string origin)
     {
-        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
+        var load = await _client.PutAsJsonAsync("/load-order", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Where(p => p.Origin == origin)
-                .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = true }),
+                .Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();

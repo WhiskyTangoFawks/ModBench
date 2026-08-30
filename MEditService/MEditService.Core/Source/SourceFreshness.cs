@@ -1,7 +1,7 @@
 using System.Text;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
 
@@ -28,23 +28,23 @@ namespace MEditService.Core.Source;
 /// <para><b>The cost is bounded by dirt, not by load order.</b> The file compare is a small read per
 /// record of the FormKey being looked at. git is consulted only for records the index already
 /// believes are dirty — for a clean record the stored committed bytes, the file and <c>HEAD</c> agree
-/// by construction, so there is nothing a git call could discover. In a session where nothing has
+/// by construction, so there is nothing a git call could discover. In a load order where nothing has
 /// been edited, this pass runs no git processes at all.</para>
 ///
 /// <para>A <c>content_hash</c> mismatch is never treated as proof of a user edit — it routes to a
 /// byte compare, which decides (<see cref="GitBlobHash"/>'s one-directional contract).</para>
 ///
-/// <para><b>Narrowed by #452 to mid-session external moves — in meaning, not in code.</b> This class
+/// <para><b>Narrowed by #452 to while the backend runs external moves — in meaning, not in code.</b> This class
 /// used to carry a second, unstated job: correcting a read model seeded from the <i>binary</i>, where
-/// the very first read of a record whose source file had changed before the session even started was
+/// the very first read of a record whose source file had changed before the load order even started was
 /// doing catch-up work. Ingest-from-source removes that job at the root — <see cref="SourceIngest"/>
 /// seeds both refs from the tree, so at load time there is nothing here to correct. Nothing was
 /// deleted to achieve it, and nothing should be: every method below is still exactly the right
-/// re-check for a file that moves <i>after</i> the session is up (a <c>git restore</c> from the Source
+/// re-check for a file that moves <i>after</i> the load order is up (a <c>git restore</c> from the Source
 /// Control panel, a terminal commit, an agent's script), which no ingest can anticipate. What changed
-/// is that on a freshly loaded session the first read now finds the answer already correct.</para>
+/// is that on a freshly loaded load order the first read now finds the answer already correct.</para>
 /// </summary>
-public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFreshness> logger, RecordTextCodec codec)
+public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFreshness> logger, RecordTextCodec codec)
 {
     // #561: the per-record codec RecordEditService already writes through — needed here too, now
     // that an embedded child's own body has to be extracted out of its owner's document rather than
@@ -56,15 +56,15 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
 
     /// <summary>
     /// Re-validates every tracked plugin's copy of <paramref name="formKey"/>. Safe to call for an
-    /// unknown FormKey, an untracked plugin or with no session loaded — each is simply nothing to do,
+    /// unknown FormKey, an untracked plugin or with no backend running loaded — each is simply nothing to do,
     /// never a failure: this runs on the read path, and a read must not start throwing because a mod
     /// folder was deleted while the editor was open.
     /// </summary>
     public void Validate(string formKey)
     {
-        var index = sessions.Index;
-        var session = sessions.Session;
-        if (index == null || session == null) return;
+        var index = mirror.Index;
+        var loadOrder = mirror.LoadOrder;
+        if (index == null || loadOrder == null) return;
 
         var stack = index.GetOverrideStack(formKey);
         if (stack == null) return;
@@ -73,7 +73,7 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
         {
             try
             {
-                ValidateOne(index, session, entry, stack.RecordType, formKey);
+                ValidateOne(index, loadOrder, entry, stack.RecordType, formKey);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException)
             {
@@ -99,11 +99,11 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
     }
 
     private void ValidateOne(
-        IRecordIndex index, IGameSession session, OverrideStackEntry entry, string recordType, string formKey)
+        IRecordIndex index, ILoadOrder loadOrder, OverrideStackEntry entry, string recordType, string formKey)
     {
-        if (ModFolders.TrackedOf(session, entry.Plugin) is not { } modFolder) return;
+        if (ModFolders.TrackedOf(loadOrder, entry.Plugin) is not { } modFolder) return;
 
-        var release = session.GameRelease;
+        var release = loadOrder.GameRelease;
 
         // #561: through the general SourceUnitResolver.Resolve rather than the flat-only
         // FlatSourcePath — the same resolver RecordEditService already writes through. This is what
@@ -135,7 +135,7 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
             index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
             // #422: a read-time self-heal is still a mutation — the row it just folded in can newly
             // (or no longer) match an active filter, same as an explicit edit would.
-            sessions.ReapplyFilter();
+            mirror.ReapplyFilter();
             if (logger.IsEnabled(LogLevel.Debug))
             {
                 logger.LogDebug(

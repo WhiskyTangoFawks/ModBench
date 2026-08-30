@@ -27,7 +27,7 @@ public sealed class MalformedFormKeyEndpointTests
     private const string MalformedFormKey = "not-a-formkey";
 
     private static RecordEditService ServiceFor(TrackedModFixture mod) =>
-        new(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void CreateRecord_MalformedTypedFormKey_Returns400_NotAnUnhandledException()

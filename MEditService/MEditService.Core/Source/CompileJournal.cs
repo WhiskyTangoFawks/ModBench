@@ -24,7 +24,7 @@ namespace MEditService.Core.Source;
 ///
 /// <para><b>Built, not wired</b> (#416 review): this ticket owns the primitive and its own tests; the
 /// crash-repair loud offer (#381) and #417's dialog suppression are the callers that will read
-/// <see cref="PendingRecovery"/>, on their own tickets.</para>
+/// <see cref="UnfinishedBatch"/>, on their own tickets.</para>
 /// </summary>
 public static class CompileJournal
 {
@@ -36,9 +36,9 @@ public static class CompileJournal
     /// Runs <paramref name="compileOne"/> once per plugin in <paramref name="plugins"/>, journaling
     /// the batch around it: the marker is written before the first call (naming every plugin in the
     /// batch, none yet landed), rewritten after each successful compile (that plugin moves from
-    /// pending to landed), and deleted only once every plugin has landed. A plugin that refuses
+    /// unlanded to landed), and deleted only once every plugin has landed. A plugin that refuses
     /// (<paramref name="compileOne"/> returns <see langword="false"/>) stops the batch there — its own
-    /// name, and everything after it, stays in the marker's pending set, which is exactly what a crash
+    /// name, and everything after it, stays in the marker's unlanded set, which is exactly what a crash
     /// at that same point would also leave behind; the two cases are deliberately indistinguishable to
     /// a reader; both mean "some assumed the compiled state of this repo forward and it wasn't there".
     /// </summary>
@@ -70,7 +70,7 @@ public static class CompileJournal
     /// external-change dialog both route on: a marker here means the mismatch between what's on disk
     /// and what the parked refs say is Modbench's own interrupted compile, not an external change.
     /// </summary>
-    public static CompileJournalState? PendingRecovery(string modFolder)
+    public static CompileJournalState? UnfinishedBatch(string modFolder)
     {
         var path = MarkerPath(modFolder);
         if (!File.Exists(path)) return null;
@@ -99,9 +99,9 @@ public static class CompileJournal
 }
 
 /// <summary>A journal marker's content: every plugin the interrupted batch named, and which of them
-/// had already landed. <see cref="Pending"/> is everything the batch didn't reach — recovery's own
+/// had already landed. <see cref="Unlanded"/> is everything the batch didn't reach — recovery's own
 /// job, never this record's.</summary>
 public sealed record CompileJournalState(IReadOnlyList<string> Plugins, IReadOnlyList<string> Landed)
 {
-    public IReadOnlyList<string> Pending => [.. Plugins.Except(Landed, StringComparer.Ordinal)];
+    public IReadOnlyList<string> Unlanded => [.. Plugins.Except(Landed, StringComparer.Ordinal)];
 }

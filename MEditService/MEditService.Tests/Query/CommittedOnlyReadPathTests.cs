@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Tests.Api;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -10,29 +10,27 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #410/ADR-0041: the read path answers from the index alone. Every surface below used to read
-/// through a pending overlay — a record list that appended staged-only rows, a compare whose
-/// override values could be a staged value rather than the committed one, a reference list that
-/// subtracted superseded references and unioned staged ones back in — and now reports exactly what
-/// the loaded plugins declare.
+/// ADR-0041: the read path answers from the index alone. A record list reports exactly the records
+/// its plugin declares, a compare's override values are the committed ones, and a reference list is
+/// what the plugin declares and nothing else — no surface reconstructs a second answer on the way
+/// out.
 ///
-/// These are green on arrival: with the pending model gone there is no longer any way to stage the
-/// thing they forbid. Each one's non-vacuity was therefore established by rival (#410 execution
-/// notes): the deleted overlay branch was re-applied by hand against a synthetic staged row, each
-/// test observed failing, and the rival reverted from a file copy.
+/// Each test's non-vacuity was established by rival: an overlay branch that appended synthetic
+/// unindexed rows was applied by hand, each test observed failing, and the rival reverted from a
+/// file copy.
 /// </summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable
 {
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _svc;
 
     public CommittedOnlyReadPathTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory);
-        _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(factory);
+        _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
@@ -61,7 +59,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     [Fact]
     public void GetCompare_OverrideCarriesTheCommittedFieldValue()
     {
-        var formKey = _manager.Session!.Plugins.Count > 0
+        var formKey = _manager.LoadOrder!.Plugins.Count > 0
             ? _svc.GetRecords("npc_", TestPluginFixture.PluginName, "TestNPC01", 1, 0).Items[0].FormKey
             : throw new InvalidOperationException("fixture did not load");
 
@@ -86,7 +84,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
 /// </summary>
 public sealed class CommittedOnlyReferencesTests : IDisposable
 {
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _svc;
     private readonly ReferencePluginFixture _fixture = new();
 
@@ -94,8 +92,8 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory);
-        _manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(factory);
+        _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
