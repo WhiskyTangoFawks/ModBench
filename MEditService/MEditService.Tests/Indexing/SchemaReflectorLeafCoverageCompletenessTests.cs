@@ -1,4 +1,5 @@
 using System.Reflection;
+using MEditService.Core.Queries;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -91,26 +92,36 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     // behind). No entries remain for either.
     private static readonly HashSet<(string Owner, string Property)> KnownGaps = new()
     {
-        // ── Category 2: abstract Loqui "leaf union" types — a base interface (Mutagen's own "A<Name>"
-        // naming convention: ABookTeachTarget, AColorRecordData, AHolotapeData, ANpcLevel,
-        // AQuestAlias, ANavmeshParent, ALocationTarget, ASceneActionType, ...) whose real per-
-        // subclass data lives on named sibling leaf interfaces it never inherits from, the same shape
-        // #360 already solved narrowly for exactly one case (OMOD's own Properties element,
-        // BuildObjectModPropertyLeafFields — "the real per-element data lives on 7 separate leaf
-        // getter interfaces... rather than the other way around, so none of their own members are
-        // ever reached by [a plain interface] walk alone"). Every one of these is a genuinely bigger,
-        // separate undertaking than #541 (a discriminator scheme per abstract type, #360's own
-        // per-case verification work) — filed as #548 (tracked separately) rather than silently swept
-        // into this exclusion list. Not P3-related; not a struct-nested list.
-        ("IBookGetter", "Teaches"),               // BookTeachTarget
-        ("IColorRecordGetter", "Data"),           // AColorRecordData
-        ("IHolotapeGetter", "Data"),              // AHolotapeData
-        ("INpcGetter", "Level"),                  // ANpcLevel
-        ("IQuestGetter", "Aliases"),               // IReadOnlyList<AQuestAlias> — list of abstract union
-        ("ISoundDescriptorGetter", "Data"),       // ASoundDescriptorData
-        ("INavmeshGeometryGetter", "Parent"),     // ANavmeshParent (Activator/Furniture/Static's own NavmeshGeometry)
-        ("ILocationTargetRadiusGetter", "Target"),// ALocationTarget (Faction.VendorLocation)
-        ("ISceneActionGetter", "Type"),           // ASceneActionType
+        // ── Category 2 (closed by #548 for every real abstract union): a base interface (Mutagen's
+        // own "A<Name>" naming convention) whose real per-subclass data lives on concrete classes
+        // that inherit *from* the abstract base, the same shape #360 already solved narrowly for one
+        // case (OMOD's own Properties element, BuildObjectModPropertyLeafFields). #548 generalizes
+        // this reflectively (SchemaReflector.BuildAbstractUnionLeafFields) for every "A<Name>" type
+        // whose generated C# class is actually `abstract` — most of them are excluded here no more;
+        // CoveredAbstractUnions/CoveredNestedAbstractUnions below are the "asserted, not incidental"
+        // set this mechanism now covers instead, including two name corrections against the real
+        // Mutagen source this file's own prior entries had wrong: BookTeachTarget (not
+        // ABookTeachTarget) and ASoundDescriptor (not ASoundDescriptorData).
+        //
+        // ASceneActionType is the one "A<Name>"-named exception: its generated class
+        // (ASceneActionType_Generated.cs) is `public partial class ASceneActionType`, not `public
+        // abstract partial class` — confirmed against the real source, not assumed from the naming
+        // convention. #548's own mechanism keys off IsAbstract precisely so it never guesses a
+        // discriminator scheme onto a type it cannot safely tell apart from an ordinary instantiable
+        // one (WhiskyTangoFawks triage: "any type the mechanism cannot faithfully model must fall
+        // through to today's empty sub-schema") — so this one correctly declines rather than being
+        // silently mis-covered, and needs its own follow-up naming a different discriminator shape
+        // (SceneAction's own subclass is presumably signaled some other way — not audited here).
+        // #548 review (Finding 1): Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
+        // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
+        // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
+        // SchemaReflector.AbstractUnionExcludedTypeNames names both explicitly, because they are
+        // permanently outside the reflected schema by documented architectural boundary
+        // (MEditService/CLAUDE.md:232-235), not because the mechanism can't model them. Not this
+        // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field
+        // as a gap to begin with (BaseSkip/IsConditionListField/vmadInterfaceType already keep them
+        // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
+        ("ISceneActionGetter", "Type"),            // ASceneActionType — NOT abstract; follow-up needed
 
         // ── Category 3: a real, non-abstract Loqui struct whose only members are themselves an
         // unrecognized shape — a raw byte blob, not a Noggog vector struct (that was the former
@@ -134,6 +145,108 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         ("IDamageTypeItemGetter", "ActorValue"),
         ("IDamageTypeItemGetter", "Spell"),
     };
+
+    // #548: every (Owner, Property) pair the general abstract-union mechanism covers — named here
+    // rather than left as an incidental byproduct of removing most of Category 2 above, per the
+    // ticket's own triage note ("a byproduct type quietly changing shape you would not [notice]").
+    // The two mandatory types (ANpcLevel, AQuestAlias) plus every other real abstract union (its
+    // generated C# class actually `abstract` — see ASceneActionType's own Category 2 comment for the
+    // one "A<Name>"-named exception that is not), verified by reading the real generated Mutagen
+    // source rather than assumed to share the same structural shape: an abstract base backed by an
+    // ordinary non-generic Setter class, one or more concrete baseClass="X" subclasses in the same
+    // assembly, no cross-leaf same-name shape disagreement. ANavmeshParent/ALocationTarget's own
+    // leaves mix a FormLink with a P2Int16/scalar — BuildSubField's own already-recognized shapes,
+    // not a new one; APerkEffect/APerkEntryPointEffect's two-level baseClass chain resolves the same
+    // way IsAssignableFrom always does, transitively, with no depth-specific code needed.
+    //
+    // Owner is a schema-registered RecordType's own getter interface name for the first list — these
+    // are checked directly off GetSchemas. NavmeshGeometry and LocationTargetRadius are common
+    // subrecords embedded inside several *other* record types (Activator/Furniture/Static's own
+    // NavmeshGeometry; Faction's own VendorLocation) rather than schema-registered record types of
+    // their own, so they are checked the second, nested way instead — one level inside whichever
+    // record's own column reaches them, the same walk EveryStructOrArrayColumns_... already does.
+    private static readonly (string Owner, string Property)[] CoveredAbstractUnions =
+    [
+        ("INpcGetter", "Level"),                    // ANpcLevel: NpcLevel / PcLevelMult — mandatory
+        ("IQuestGetter", "Aliases"),                 // AQuestAlias: QuestReferenceAlias / QuestLocationAlias / QuestCollectionAlias — mandatory
+        ("IBookGetter", "Teaches"),                  // BookTeachTarget
+        ("IColorRecordGetter", "Data"),              // AColorRecordData
+        ("IHolotapeGetter", "Data"),                 // AHolotapeData
+        ("ISoundDescriptorGetter", "Data"),          // ASoundDescriptor
+        ("IPerkGetter", "Effects"),                  // APerkEffect / APerkEntryPointEffect (two-level chain)
+        // #548 review (Finding 2): the census's own re-run turned these two up as also-covered —
+        // named here rather than left invisible the same way the original 9 would have been.
+        ("IMagicEffectGetter", "Archetype"),         // AMagicEffectArchetype
+        ("IAudioEffectChainGetter", "Effects"),      // AAudioEffect
+    ];
+
+    private static readonly (string Owner, string Property)[] CoveredNestedAbstractUnions =
+    [
+        ("INavmeshGeometryGetter", "Parent"),        // ANavmeshParent
+        ("ILocationTargetRadiusGetter", "Target"),   // ALocationTarget
+    ];
+
+    [Fact]
+    public void EveryCoveredAbstractUnion_ExposesNonEmptySubSchemaWithConcreteTypeDiscriminator()
+    {
+        var schemas = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
+
+        var regressed = new List<string>();
+        foreach (var (owner, property) in CoveredAbstractUnions)
+        {
+            var schema = schemas.Values.SingleOrDefault(s => s.RecordType.Name == owner);
+            if (schema == null) { regressed.Add($"{owner} (schema not found)"); continue; }
+
+            var column = schema.RecordColumns.SingleOrDefault(c => c.PropertyName == property);
+            AssertCovered(regressed, $"{owner}.{property}",
+                column == null ? null : column.IsArray ? column.ElementType?.Fields : column.SubFields);
+        }
+
+        // The nested set: found one level inside whichever record's own column reaches this getter
+        // type, mirroring EveryStructOrArrayColumns_...'s own NestedGetterType walk rather than a
+        // second, bespoke lookup.
+        foreach (var (owner, property) in CoveredNestedAbstractUnions)
+        {
+            IReadOnlyList<FieldMetadata>? found = null;
+            foreach (var schema in schemas.Values)
+            {
+                foreach (var column in schema.RecordColumns)
+                {
+                    var nestedFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
+                    if (nestedFields == null) continue;
+                    var match = nestedFields.SingleOrDefault(f => f.Name == SchemaReflector.ToSnakeCase(property));
+                    if (match == null) continue;
+                    // Confirm this column's own nested type is really `owner`, not a same-named
+                    // property on some unrelated struct — cheap enough: re-derive via NestedGetterType.
+                    var ownProp = DirectDataProperties(schema.RecordType, BaseSkip)
+                        .FirstOrDefault(p => p.Name == column.PropertyName);
+                    if (ownProp == null || NestedGetterType(ownProp.PropertyType)?.Name != owner) continue;
+                    found = match.Fields;
+                    break;
+                }
+                if (found != null) break;
+            }
+
+            AssertCovered(regressed, $"{owner}.{property}", found);
+        }
+
+        Assert.True(regressed.Count == 0,
+            $"An abstract-union field CoveredAbstractUnions/CoveredNestedAbstractUnions names as " +
+            $"covered regressed: {string.Join(", ", regressed)}. Either the general mechanism no " +
+            "longer reaches it, or it was never actually covered and this list is wrong — " +
+            "investigate, don't just remove it.");
+
+        static void AssertCovered(List<string> regressed, string label, IReadOnlyList<FieldMetadata>? fields)
+        {
+            if (fields == null || fields.Count == 0)
+            {
+                regressed.Add($"{label} (empty or missing sub-schema)");
+                return;
+            }
+            if (fields.All(f => f.Name != "concrete_type"))
+                regressed.Add($"{label} (no concrete_type discriminator)");
+        }
+    }
 
     [Fact]
     public void EveryDirectRecordProperty_IsRepresentedInItsSchemaOrExplicitlyExcluded()

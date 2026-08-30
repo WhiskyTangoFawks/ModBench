@@ -1,7 +1,7 @@
 {
   "conflicted-npc": {
     "ConflictAll": "Conflict",
-    "DiffFieldCount": 41,
+    "DiffFieldCount": 42,
     "Diffs": [
       {
         "CellStates": {
@@ -135,6 +135,11 @@
           "keywords": null,
           "legendary_chance": null,
           "legendary_template": null,
+          "level": {
+            "concrete_type": "NpcLevel",
+            "level": 0,
+            "level_mult": null
+          },
           "major_flags": "0",
           "mood": "Neutral",
           "morphs": [],
@@ -246,6 +251,11 @@
           "keywords": null,
           "legendary_chance": null,
           "legendary_template": null,
+          "level": {
+            "concrete_type": "NpcLevel",
+            "level": 0,
+            "level_mult": null
+          },
           "major_flags": "0",
           "mood": "Neutral",
           "morphs": [],
@@ -357,6 +367,11 @@
           "keywords": null,
           "legendary_chance": null,
           "legendary_template": null,
+          "level": {
+            "concrete_type": "NpcLevel",
+            "level": 0,
+            "level_mult": null
+          },
           "major_flags": "0",
           "mood": "Neutral",
           "morphs": [],
@@ -412,7 +427,7 @@
   },
   "injected-npc": {
     "ConflictAll": "OnlyOne",
-    "DiffFieldCount": 41,
+    "DiffFieldCount": 42,
     "Diffs": [],
     "HasConditionData": false,
     "HasVmad": true,
@@ -478,6 +493,11 @@
           "keywords": null,
           "legendary_chance": null,
           "legendary_template": null,
+          "level": {
+            "concrete_type": "NpcLevel",
+            "level": 0,
+            "level_mult": null
+          },
           "major_flags": "0",
           "mood": "Neutral",
           "morphs": [],
@@ -533,7 +553,7 @@
   },
   "sole-npc": {
     "ConflictAll": "OnlyOne",
-    "DiffFieldCount": 40,
+    "DiffFieldCount": 41,
     "Diffs": [],
     "HasConditionData": false,
     "HasVmad": true,
@@ -599,6 +619,11 @@
           "keywords": null,
           "legendary_chance": null,
           "legendary_template": null,
+          "level": {
+            "concrete_type": "NpcLevel",
+            "level": 0,
+            "level_mult": null
+          },
           "major_flags": "0",
           "mood": "Neutral",
           "morphs": [],
