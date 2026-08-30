@@ -155,7 +155,10 @@ public sealed class ModelIdentityTests
     /// <summary>#568: the header counterpart to <see cref="FindFirst"/>'s per-record check. Every
     /// <see cref="ModelIdentity.OpaqueHeaderFields"/> member set to a distinguishable, matching value
     /// on both sides — the accept case a real Track that only recompiles (never edits) a plugin's
-    /// header must hit.</summary>
+    /// header must hit. <c>TransientTypes</c> is also set (matching, on both sides) despite not being
+    /// allow-listed — this test is about the accept path staying quiet, not about which fields are
+    /// covered; <see cref="FindFirstHeaderFieldDivergence_ForEveryAllowListedField_NamesItWhenItAloneDiverges"/>
+    /// below is what proves coverage, per field.</summary>
     [Fact]
     public void FindFirstHeaderFieldDivergence_WithMatchingOpaqueFields_ReturnsNull()
     {
@@ -170,22 +173,40 @@ public sealed class ModelIdentityTests
         Assert.Null(field);
     }
 
-    /// <summary>#568's own live gap, closed: a genuine content corruption on an allow-listed opaque
-    /// field is named. Mirrors the real defect this ticket exists for — INTV surviving with the wrong
-    /// bytes, not dropped outright (a drop is already caught upstream by
-    /// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>).</summary>
-    [Fact]
-    public void FindFirstHeaderFieldDivergence_WhenAnAllowListedFieldDiffers_NamesTheField()
+    /// <summary>
+    /// #568 review: an allow-list entry with no test that corrupts <i>that field alone</i> and asserts
+    /// the refusal names it is a claim nobody can cash — the exact vacuity that let a dead
+    /// <c>TransientTypes</c> entry sit on this list undetected. One case per
+    /// <see cref="ModelIdentity.OpaqueHeaderFields"/> member, each leaving every other header field at
+    /// its default so the divergence really is isolated to the one under test.
+    /// </summary>
+    public static IEnumerable<object[]> AllowListedHeaderFieldCorruptions()
+    {
+        yield return new object[] { "TypeOffsets", Setter(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), Setter(h => h.TypeOffsets = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "Deleted", Setter(h => h.Deleted = new byte[] { 1, 2, 3 }), Setter(h => h.Deleted = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "Screenshot", Setter(h => h.Screenshot = new byte[] { 1, 2, 3 }), Setter(h => h.Screenshot = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "INTV", Setter(h => h.INTV = new byte[] { 1, 0, 0, 0 }), Setter(h => h.INTV = new byte[] { 99, 0, 0, 0 }) };
+        yield return new object[] { "INCC", Setter(h => h.INCC = 1), Setter(h => h.INCC = 2) };
+        yield return new object[] { "Author", Setter(h => h.Author = "Original"), Setter(h => h.Author = "Corrupted") };
+        yield return new object[] { "Description", Setter(h => h.Description = "Original"), Setter(h => h.Description = "Corrupted") };
+
+        static Action<Fallout4ModHeader> Setter(Action<Fallout4ModHeader> action) => action;
+    }
+
+    [Theory]
+    [MemberData(nameof(AllowListedHeaderFieldCorruptions))]
+    public void FindFirstHeaderFieldDivergence_ForEveryAllowListedField_NamesItWhenItAloneDiverges(
+        string fieldName, Action<Fallout4ModHeader> setOriginal, Action<Fallout4ModHeader> setCorrupted)
     {
         var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        original.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
+        setOriginal(original.ModHeader);
 
         var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
-        recompiled.ModHeader.INTV = new byte[] { 99, 0, 0, 0 };
+        setCorrupted(recompiled.ModHeader);
 
         var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
 
-        Assert.Equal("INTV", field);
+        Assert.Equal(fieldName, field);
     }
 
     /// <summary>The allow-list's own boundary, proven rather than merely asserted: <c>Flags</c> is a
@@ -205,6 +226,50 @@ public sealed class ModelIdentityTests
         Assert.Null(field);
     }
 
+    /// <summary>
+    /// #568 review Finding 2, pinned so it stays honestly documented rather than quietly forgotten:
+    /// <c>TransientTypes</c> is deliberately not on <see cref="ModelIdentity.OpaqueHeaderFields"/> (see
+    /// that field's own doc comment) because a per-item corruption is reported by
+    /// <see cref="ModelIdentity.FailingFields"/> against the nested leaf's own declaring type
+    /// (<c>"TransientType"</c>/<c>"FormType"</c>), never against the outer <c>"TransientTypes"</c> name
+    /// the allow-list would need to match. This test proves that stays true: a real per-item
+    /// corruption is not named by this gate. If this ever starts returning "TransientTypes", the
+    /// nested-name mapping described in <c>OpaqueHeaderFields</c>' doc comment has changed and that
+    /// doc comment (and the ADR-0042 #568 amendment) need updating alongside whatever fixed it.
+    /// </summary>
+    [Fact]
+    public void FindFirstHeaderFieldDivergence_WithATransientTypesItemCorruption_KnownGap_ReturnsNull()
+    {
+        var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        original.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        recompiled.ModHeader.TransientTypes.Add(new TransientType { FormType = 99 });
+
+        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+
+        Assert.Null(field);
+    }
+
+    /// <summary>
+    /// #568 review Finding 2's second half, independently pinned: Mutagen's own generated equality
+    /// mask does not flag a <c>TransientTypes</c> list-count divergence as unequal at all (a
+    /// pre-existing Mutagen quirk, not introduced here) — <see cref="ModelIdentity.FailingFields"/>
+    /// itself returns nothing for a 1-item-vs-0-item list, before this gate's allow-list even runs.
+    /// </summary>
+    [Fact]
+    public void FailingFields_WithATransientTypesCountDivergence_MutagenMaskDoesNotFlagIt()
+    {
+        var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        original.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+
+        var failing = ModelIdentity.FailingFields(original.ModHeader, recompiled.ModHeader);
+
+        Assert.Empty(failing);
+    }
+
     private static void SetOpaqueHeaderFields(Fallout4Mod mod)
     {
         mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
@@ -212,6 +277,8 @@ public sealed class ModelIdentityTests
         mod.ModHeader.TypeOffsets = new byte[] { 9, 8, 7 };
         mod.ModHeader.Deleted = new byte[] { 1, 2, 3 };
         mod.ModHeader.Screenshot = new byte[] { 4, 5, 6 };
+        mod.ModHeader.Author = "Some Author";
+        mod.ModHeader.Description = "Some Description";
         mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
     }
 

@@ -119,27 +119,60 @@ public static class ModelIdentity
 
     /// <summary>
     /// #568's own allow-list: the <c>Fallout4ModHeader.Mask</c> fields Mutagen's own model treats as
-    /// opaque — never interpreted, never normalized on write, carried through purely as data. A
-    /// content corruption on any of these previously round-tripped silently, because <see cref="FindFirst"/>
-    /// only ever walks <c>original.EnumerateMajorRecords()</c>, and a <c>ModHeader</c> is not an
+    /// opaque or otherwise never normalizes on write — carried through purely as data, so a content
+    /// corruption on any of them is a real defect, never an encoding artifact. A corruption on any of
+    /// these previously round-tripped silently, because <see cref="FindFirst"/> only ever walks
+    /// <c>original.EnumerateMajorRecords()</c>, and a <c>ModHeader</c> is not an
     /// <c>IMajorRecordGetter</c> (see <c>MEditService/CLAUDE.md</c>'s own "the header is the one
     /// surviving per-type table" note) — no per-record mask check has ever reached it.
     ///
-    /// <para><b>Deliberately an allow-list, not every <c>Mask</c> field — ADR-0042's #568 amendment
-    /// records why each excluded field is excluded, not repeated here.</b> In short: <c>Flags</c>,
-    /// <c>FormID</c>, <c>Version</c>, <c>FormVersion</c>, <c>Version2</c> are well-typed, semantically
-    /// interpreted fields outside this ticket's "opaque byte array" scope; <c>Stats</c> is already
-    /// forced byte-identical by this same write's own <c>NoNextFormIDProcessing</c>/
-    /// <c>RecordCountOption.NoCheck</c> (#506, <see cref="Source.TrackService"/>'s own
-    /// <c>VerifyRoundTrip</c>); <c>MasterReferences</c> and <c>OverriddenForms</c> both have their own
-    /// confirmed, currently-tested legitimate divergence paths (ADR-0038's content-derived master
-    /// pruning — real fixtures in <c>MasterPruningRoundTripGateTests</c> — and
-    /// <c>OverriddenFormsOption</c> respectively). A blanket mask sweep over every field would refuse
-    /// those already-accepted cases; this list only ever fires on a field nothing else already
-    /// explains.</para>
+    /// <para><b>Every one of these 7 has a test that corrupts that field alone and asserts the
+    /// resulting refusal names it</b> (<c>ModelIdentityTests</c>' own
+    /// <c>FindFirstHeaderFieldDivergence_ForEveryAllowListedField_...</c> theory, plus
+    /// <c>TrackServiceTests</c>' end-to-end companion) — an allow-list entry with no such test does not
+    /// belong here. <c>Author</c>/<c>Description</c> were checked empirically before joining this list,
+    /// not assumed: <c>OpaqueHeaderFieldsRoundTripTests</c> proves they survive the whole-mod JSON door
+    /// with distinguishable values, and Mutagen's own <c>ModHeaderWriteLogic</c> (the shared write path
+    /// every header write goes through) never touches either — confirmed by reading it, not inferred.
+    /// </para>
+    ///
+    /// <para><b>Deliberately an allow-list, not every <c>Mask</c> field, and the allow-list plus the
+    /// exclusion table below together account for all 16 <c>Fallout4ModHeader.Mask</c> fields — ADR-0042's
+    /// #568 amendment carries the full partition and the excluded-field reasoning, not repeated here.
+    /// </b> In short: <c>Flags</c>, <c>FormID</c>, <c>Version</c>, <c>FormVersion</c>, <c>Version2</c>
+    /// are well-typed, semantically interpreted fields outside this ticket's "opaque data" scope;
+    /// <c>Stats</c>' own <c>NoNextFormIDProcessing</c>/<c>RecordCountOption.NoCheck</c> (#506,
+    /// <see cref="Source.TrackService"/>'s own <c>VerifyRoundTrip</c>) skip Mutagen's recompute rather
+    /// than compare it, so whatever the codec parsed survives this write untouched by construction;
+    /// <c>MasterReferences</c> and <c>OverriddenForms</c> both have their own confirmed,
+    /// currently-tested legitimate divergence paths (ADR-0038's content-derived master pruning — real
+    /// fixtures in <c>MasterPruningRoundTripGateTests</c> — and <c>OverriddenFormsOption</c>
+    /// respectively). A blanket mask sweep over every field would refuse those already-accepted cases;
+    /// this list only ever fires on a field nothing else already explains.</para>
+    ///
+    /// <para><b><c>TransientTypes</c> is deliberately not on this list, despite being exactly the kind
+    /// of opaque data this check exists for — a real, confirmed gap in what this mechanism can detect,
+    /// not a legitimate-divergence exclusion.</b> <c>Fallout4ModHeader.Mask.TransientTypes</c> is a
+    /// nested indexed-list mask (<c>MaskItem&lt;bool, IEnumerable&lt;MaskItemIndexed&lt;bool,
+    /// TransientType.Mask&lt;bool&gt;?&gt;&gt;?&gt;</c>): <see cref="CollectFailingFields"/> recurses
+    /// into a failing element and reports it against its own declaring type
+    /// (<c>("TransientType", "FormType")</c>), never against the outer <c>TransientTypes</c> field name
+    /// — by design, the same recursion that correctly scopes <see cref="GroupHeaderDerivedFields"/> to a
+    /// nested record's own true owner. Matching <c>OpaqueHeaderFields</c> against raw
+    /// <see cref="FailingFields"/> output therefore can never see a <c>TransientTypes</c> divergence,
+    /// confirmed live: a per-item <c>FormType</c> corruption yields <c>[("TransientType", "FormType")]</c>,
+    /// no allow-list match. Reattributing a nested leaf back to its outer field would require carrying
+    /// the recursion path through <see cref="CollectFailingFields"/>, which is shared with the
+    /// per-record check above and whose current per-leaf-type scoping is load-bearing there — not
+    /// attempted here. Worse, a genuine list-<i>count</i> divergence (one side has an entry the other
+    /// lacks) is invisible even in principle: confirmed live that <c>FailingFields</c> returns empty for
+    /// a 1-item-vs-0-item <c>TransientTypes</c> list — Mutagen's own generated mask does not flag that
+    /// shape as unequal at all. This mechanism cannot cover TNAM; a corrupted or dropped
+    /// <c>TransientTypes</c> entry round-trips silently today. Follow-up filed to close this
+    /// separately.</para>
     /// </summary>
     internal static readonly HashSet<string> OpaqueHeaderFields =
-        ["TypeOffsets", "Deleted", "Screenshot", "TransientTypes", "INTV", "INCC"];
+        ["TypeOffsets", "Deleted", "Screenshot", "INTV", "INCC", "Author", "Description"];
 
     /// <summary>
     /// The header counterpart to <see cref="FindFirst"/>'s per-record mask check: the first

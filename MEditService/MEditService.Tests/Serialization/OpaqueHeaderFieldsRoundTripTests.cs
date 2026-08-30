@@ -15,6 +15,20 @@ namespace MEditService.Tests.Serialization;
 /// below <c>TrackServiceTests.TrackAsync_WithOpaqueHeaderFieldsSet_TracksSuccessfully</c>'s end-to-end
 /// companion — a defect here would show up as a codec-only failure with no Track machinery in the way.
 ///
+/// <para><b>#568 review Finding 1: <c>Author</c>/<c>Description</c> checked here empirically, not
+/// assumed.</b> Both were run through this exact round trip with distinguishable values before joining
+/// <c>OpaqueHeaderFields</c> — this test is that check, made permanent, not a retrofit.
+/// <c>Mutagen.Bethesda.Core</c>'s <c>ModHeaderWriteLogic</c> (the shared write path every header write
+/// goes through — confirmed by reading it) never touches either field, so a divergence on either is a
+/// real defect by the same logic as the other five allow-listed fields.</para>
+///
+/// <para><b><c>TransientTypes</c> is set here too, matching on both sides, despite not being
+/// allow-listed</b> (#568 review Finding 2 — see <c>ModelIdentity.OpaqueHeaderFields</c>' own doc
+/// comment and <c>ModelIdentityTests</c>' <c>..._KnownGap_ReturnsNull</c> pair for why a
+/// <c>TransientTypes</c> corruption is not detected by this gate at all): kept here to prove the codec
+/// itself preserves it correctly even though the round-trip *gate* cannot currently see a corruption of
+/// it — a codec question, not a gate-coverage one.</para>
+///
 /// <para><b>Named rival, applied and observed while writing this test (not committed):</b> a codec
 /// defect that silently drops one opaque field is exactly what the ticket's own root-cause hypothesis
 /// named (<c>Mutagen.Bethesda.Serialization</c>'s generated <c>Fallout4ModHeader_Serialization</c> not
@@ -37,6 +51,8 @@ public sealed class OpaqueHeaderFieldsRoundTripTests
         mod.ModHeader.TypeOffsets = new byte[] { 9, 8, 7, 6, 5 };
         mod.ModHeader.Deleted = new byte[] { 1, 2, 3 };
         mod.ModHeader.Screenshot = new byte[] { 4, 5, 6, 7, 8, 9 };
+        mod.ModHeader.Author = "Distinguishable Author Value";
+        mod.ModHeader.Description = "Distinguishable Description Value";
         mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
 
         var folder = Directory.CreateTempSubdirectory("medit-568-opaqueheader-").FullName;
@@ -50,6 +66,8 @@ public sealed class OpaqueHeaderFieldsRoundTripTests
             Assert.Equal(mod.ModHeader.TypeOffsets!.Value.ToArray(), recompiled.ModHeader.TypeOffsets!.Value.ToArray());
             Assert.Equal(mod.ModHeader.Deleted!.Value.ToArray(), recompiled.ModHeader.Deleted!.Value.ToArray());
             Assert.Equal(mod.ModHeader.Screenshot!.Value.ToArray(), recompiled.ModHeader.Screenshot!.Value.ToArray());
+            Assert.Equal(mod.ModHeader.Author, recompiled.ModHeader.Author);
+            Assert.Equal(mod.ModHeader.Description, recompiled.ModHeader.Description);
             Assert.Single(recompiled.ModHeader.TransientTypes);
             Assert.Equal(7u, recompiled.ModHeader.TransientTypes[0].FormType);
         }
