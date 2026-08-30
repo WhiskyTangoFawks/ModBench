@@ -13,12 +13,18 @@ using Xunit.Abstractions;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #113: the reconcile profiling harness. Loads a real MO2 instance's active profile exactly the
-/// way the extension does (<c>modbench/src/modmanager/snapshot.ts</c>: plugins.txt order,
+/// #113 / #589: the reconcile profiling harness. Loads a real MO2 instance's active profile exactly
+/// the way the extension does (<c>modbench/src/modmanager/snapshot.ts</c>: plugins.txt order,
 /// every line enabled or not, each name resolved overwrite → first enabled mod in modlist.txt order
-/// → game Data folder) through <see cref="LoadOrderMirror.LoadExplicit"/>, and aggregates the
-/// per-phase timing lines the load path logs (#113) into a report — total, phase split, top plugins
-/// by cost, cost-per-record outliers.
+/// → game Data folder) through <see cref="ILoadOrderMirror.Reconcile"/> <b>twice</b> — cold, then
+/// dispose, then the identical order again over the index file the cold run left (a warm launch,
+/// ADR-0001) — and aggregates the per-phase timing lines the load path logs into one report with
+/// the two side by side (<see cref="LoadOrderProfileReport"/>): totals and phase split for both,
+/// top plugins by cost and cost-per-record outliers for the cold run.
+///
+/// <para><b>Deletes the instance's index file first</b> (<see cref="IndexFile.For"/>), so the cold
+/// number is honestly cold. That costs the instance one cold launch it would otherwise have skipped;
+/// the file is left behind, freshly built, so the next real launch is warm.</para>
 ///
 /// Environment-dependent and slow, so gated: set <c>MEDIT_PROFILE_INSTANCE</c> to the MO2 instance
 /// root (the folder holding <c>ModOrganizer.ini</c>, <c>mods/</c>, <c>profiles/</c>). The game Data
@@ -40,6 +46,10 @@ public sealed class LoadOrderProfile(ITestOutputHelper output)
 
     private sealed record ModEntry(string Name, bool Enabled);
 
+    /// <summary>What the report needs from a load order, copied out before the mirror that holds it
+    /// is disposed.</summary>
+    internal sealed record HeldOrder(List<(string Name, int RecordCount)> Plugins, List<(string Name, string Reason)> Failures);
+
     [ProfileFact]
     public void ProfileReconcile()
     {
@@ -52,6 +62,29 @@ public sealed class LoadOrderProfile(ITestOutputHelper output)
 
         var plugins = ResolveExplicitPlugins(instanceRoot, profileDir, dataFolder);
 
+        // The file and any write-ahead log a crashed run left beside it — a cold open that replays a
+        // WAL is not cold.
+        var indexPath = IndexFile.For(instanceRoot);
+        foreach (var stale in new[] { indexPath, indexPath + ".wal" })
+            if (File.Exists(stale)) File.Delete(stale);
+
+        var cold = Measure(instanceRoot, dataFolder, plugins, out var loadOrder);
+        var warm = Measure(instanceRoot, dataFolder, plugins, out _);
+
+        var header = new ProfileHeader(instanceRoot, profile, dataFolder, plugins.Count, loadOrder.Plugins.Count, loadOrder.Failures.Count);
+        var records = loadOrder.Plugins.ToDictionary(p => p.Name, p => p.RecordCount, StringComparer.OrdinalIgnoreCase);
+        var report = LoadOrderProfileReport.Render(header, cold, warm, records, loadOrder.Failures);
+
+        var outPath = Environment.GetEnvironmentVariable("MEDIT_PROFILE_OUT") ?? "load-order-profile.md";
+        File.WriteAllText(outPath, report);
+        output.WriteLine(report);
+        output.WriteLine($"Report written to {Path.GetFullPath(outPath)}");
+    }
+
+    /// <summary>One reconcile over a fresh mirror, disposed before returning — so the second call is
+    /// the next launch, not a same-process no-op reconcile.</summary>
+    internal static ProfileRun Measure(string instanceRoot, string dataFolder, IReadOnlyList<LoadOrderEntry> plugins, out HeldOrder loadOrder)
+    {
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.SetMinimumLevel(LogLevel.Debug).AddProvider(new CollectingLoggerProvider(entries)));
         using var mirror = new LoadOrderMirror(
@@ -61,16 +94,14 @@ public sealed class LoadOrderProfile(ITestOutputHelper output)
             loggerFactory.CreateLogger<LoadOrderMirror>());
 
         var wall = Stopwatch.StartNew();
-        ((ILoadOrderMirror)mirror).Reconcile(dataFolder, plugins, GameRelease.Fallout4);
+        ((ILoadOrderMirror)mirror).Reconcile(dataFolder, plugins, GameRelease.Fallout4, instanceRoot);
         wall.Stop();
 
-        var loadOrder = mirror.LoadOrder!;
-        var report = BuildReport(instanceRoot, profile, dataFolder, plugins.Count, loadOrder, entries, wall.ElapsedMilliseconds);
-
-        var outPath = Environment.GetEnvironmentVariable("MEDIT_PROFILE_OUT") ?? "load-order-profile.md";
-        File.WriteAllText(outPath, report);
-        output.WriteLine(report);
-        output.WriteLine($"Report written to {Path.GetFullPath(outPath)}");
+        var held = mirror.LoadOrder!;
+        loadOrder = new HeldOrder(
+            held.Plugins.Select(p => (p.Name, p.RecordCount)).ToList(),
+            held.LoadFailures.Select(f => (f.Name, f.Reason)).ToList());
+        return ProfileRun.Parse(entries, wall.ElapsedMilliseconds);
     }
 
     // --- MO2 resolution, mirroring snapshot.ts ---
@@ -130,113 +161,4 @@ public sealed class LoadOrderProfile(ITestOutputHelper output)
         if (path.Length > 2 && path[1] == ':') path = path[2..]; // Z:\home\... → \home\...
         return path.Replace('\\', '/');
     }
-
-    // --- Report ---
-
-    private sealed class PluginCost
-    {
-        public long ImportMs, MetadataMs, IndexMs, DocumentsMs, PrepareMs, AppendMs, ExtractedMs, CommitMs, DeserializeMs, ReconcileMs;
-        public bool FromSource;
-        public long OpenMs => ImportMs + MetadataMs;
-        public long TotalMs => OpenMs + IndexMs;
-    }
-
-    private static readonly Regex Opened = new(@"^\[\d+\] (?<p>.+?) opened in (?<i>\d+) ms \+ (?<m>\d+) ms metadata$");
-    private static readonly Regex Indexed = new(@"^Indexed (?<p>.+?) in (?<ms>\d+) ms$");
-    private static readonly Regex IndexPhases = new(@"^Index (?<p>.+?): documents (?<d>\d+) ms \(prepare (?<pr>\d+) ms, append (?<ap>\d+) ms\), extracted tables (?<e>\d+) ms, commit (?<c>\d+) ms$");
-    private static readonly Regex Ingested = new(@"^Ingested (?<p>.+?) from source: deserialize (?<d>\d+) ms, index \d+ ms, reconcile (?<r>\d+) ms$");
-    private static readonly Regex RepoInit = new(@"^DuckDB record repository initialized in (?<ms>\d+) ms$");
-    private static readonly Regex Loaded = new(@"^LoadOrder fully loaded in (?<t>\d+) ms \(first plugin usable after (?<f>\S+) ms, winner sweep (?<w>\d+) ms\)$");
-
-    private static string BuildReport(
-        string instanceRoot, string profile, string dataFolder, int explicitCount,
-        ILoadOrder loadOrder, List<LogEntry> entries, long wallMs)
-    {
-        var costs = new Dictionary<string, PluginCost>(StringComparer.OrdinalIgnoreCase);
-        PluginCost Cost(string p) => costs.TryGetValue(p, out var c) ? c : costs[p] = new PluginCost();
-        long repoInitMs = 0, loadedMs = 0, winnersMs = 0;
-        string firstUsable = "?";
-
-        foreach (var e in entries)
-        {
-            Match m;
-            if ((m = Opened.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.ImportMs = Ms(m, "i"); c.MetadataMs = Ms(m, "m"); }
-            else if ((m = Indexed.Match(e.Message)).Success) Cost(m.Groups["p"].Value).IndexMs = Ms(m, "ms");
-            else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = Ms(m, "d"); c.PrepareMs = Ms(m, "pr"); c.AppendMs = Ms(m, "ap"); c.ExtractedMs = Ms(m, "e"); c.CommitMs = Ms(m, "c"); }
-            else if ((m = Ingested.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.FromSource = true; c.DeserializeMs = Ms(m, "d"); c.ReconcileMs = Ms(m, "r"); }
-            else if ((m = RepoInit.Match(e.Message)).Success) repoInitMs = Ms(m, "ms");
-            else if ((m = Loaded.Match(e.Message)).Success) { loadedMs = Ms(m, "t"); winnersMs = Ms(m, "w"); firstUsable = m.Groups["f"].Value; }
-        }
-
-        // The regexes above parse the load path's own Debug lines; a wording change there must fail
-        // here loudly rather than silently zero a phase.
-        if (costs.Count == 0 || loadedMs == 0 || costs.Values.All(c => c.IndexMs == 0))
-            throw new InvalidOperationException("No per-phase timing lines matched — the log texts in LoadOrder/LoadOrderMirror/DuckDbRecordIndex changed; update the regexes.");
-        var records = loadOrder.Plugins.ToDictionary(p => p.Name, p => p.RecordCount, StringComparer.OrdinalIgnoreCase);
-        var totalRecords = records.Values.Sum();
-        var sb = new StringBuilder();
-        sb.AppendLine("# LoadOrder-load profile (#113)");
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- Instance: `{instanceRoot}` profile `{profile}`; Data: `{dataFolder}`");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- Plugins: {explicitCount} explicit + forced masters/CC = {loadOrder.Plugins.Count} opened, {totalRecords:N0} records, {loadOrder.LoadFailures.Count} load failures");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- Machine: {RuntimeInformation.OSDescription}, {Environment.ProcessorCount} logical cores, {RuntimeInformation.FrameworkDescription}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- Date: {DateTime.Now:yyyy-MM-dd}");
-        sb.AppendLine();
-        sb.AppendLine("## Totals");
-        sb.AppendLine();
-        sb.AppendLine("| Phase | ms | share |");
-        sb.AppendLine("|---|---:|---:|");
-        long openImport = costs.Values.Sum(c => c.ImportMs), openMeta = costs.Values.Sum(c => c.MetadataMs);
-        long index = costs.Values.Sum(c => c.IndexMs), docs = costs.Values.Sum(c => c.DocumentsMs);
-        long extracted = costs.Values.Sum(c => c.ExtractedMs), commit = costs.Values.Sum(c => c.CommitMs);
-        long deser = costs.Values.Sum(c => c.DeserializeMs), reconcile = costs.Values.Sum(c => c.ReconcileMs);
-        void Row(string name, long ms) => sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {ms:N0} | {(wallMs > 0 ? 100.0 * ms / wallMs : 0):F1}% |");
-        Row("Wall clock (LoadExplicit round trip)", wallMs);
-        Row("DuckDB repository create (DDL + views)", repoInitMs);
-        Row("Binary open — ModFactory.ImportGetter", openImport);
-        Row("Binary open — BuildPluginMetadata (record count)", openMeta);
-        Row("Index (all plugins)", index);
-        Row("  ├ documents (enumerate + serialize + hash + refs + append)", docs);
-        Row("  │  ├ parallel prepare (serialize, hash, refs, children)", costs.Values.Sum(c => c.PrepareMs));
-        Row("  │  └ sequential append", costs.Values.Sum(c => c.AppendMs));
-        Row("  ├ extracted tables (placement, header, lookup/refs/child flush)", extracted);
-        Row("  └ commit", commit);
-        Row("  tracked-only: source deserialize", deser);
-        Row("  tracked-only: reconcile head", reconcile);
-        Row("Winner sweep (UpdateWinners)", winnersMs);
-        sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"LoadOrder fully loaded in {loadedMs:N0} ms; first plugin usable after {firstUsable} ms. " +
-                      $"Unattributed (wall − repo − open − index − winners): {wallMs - repoInitMs - openImport - openMeta - index - winnersMs:N0} ms.");
-        sb.AppendLine();
-        sb.AppendLine("## Top 20 plugins by cost");
-        sb.AppendLine();
-        sb.AppendLine("| Plugin | records | open ms | index ms | documents | prepare | append | extracted | commit | src | total ms | µs/record |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|:-:|---:|---:|");
-        foreach (var (name, c) in costs.OrderByDescending(kv => kv.Value.TotalMs).Take(20))
-        {
-            var n = records.GetValueOrDefault(name);
-            sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {n:N0} | {c.OpenMs:N0} | {c.IndexMs:N0} | {c.DocumentsMs:N0} | {c.PrepareMs:N0} | {c.AppendMs:N0} | {c.ExtractedMs:N0} | {c.CommitMs:N0} | {(c.FromSource ? "src" : "bin")} | {c.TotalMs:N0} | {(n > 0 ? 1000.0 * c.TotalMs / n : 0):F0} |");
-        }
-        sb.AppendLine();
-        sb.AppendLine("## Cost-per-record outliers (≥ 200 records, top 10 by µs/record)");
-        sb.AppendLine();
-        sb.AppendLine("| Plugin | records | total ms | µs/record |");
-        sb.AppendLine("|---|---:|---:|---:|");
-        foreach (var (name, c) in costs.Where(kv => records.GetValueOrDefault(kv.Key) >= 200)
-                     .OrderByDescending(kv => (double)kv.Value.TotalMs / records[kv.Key]).Take(10))
-        {
-            var n = records[name];
-            sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {n:N0} | {c.TotalMs:N0} | {1000.0 * c.TotalMs / n:F0} |");
-        }
-        if (loadOrder.LoadFailures.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("## Load failures");
-            sb.AppendLine();
-            foreach (var f in loadOrder.LoadFailures) sb.AppendLine(CultureInfo.InvariantCulture, $"- {f.Name}: {f.Reason}");
-        }
-        return sb.ToString();
-    }
-
-    private static long Ms(Match m, string group) => long.Parse(m.Groups[group].Value, CultureInfo.InvariantCulture);
 }

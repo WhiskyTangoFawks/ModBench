@@ -118,6 +118,13 @@ public sealed class LoadOrderMirror(
             _logger.LogWarning(ex, "Load order reconcile was superseded before it completed");
             throw;
         }
+        catch (IndexHeldElsewhereException ex)
+        {
+            // #588: refused, not failed — the user has two windows on one instance, and nothing is
+            // held here (EnsureScope tore the previous scope down before the open that refused).
+            _logger.LogWarning(ex, "Load order refused: the index at {Path} is held by another window", ex.IndexPath);
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Load order reconcile failed");

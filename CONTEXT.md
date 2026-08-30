@@ -84,7 +84,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 ### Load order & index
 
-**Participation**: Whether a registered plugin copy competes for winner and counts in a conflict: `enabled` (its `plugins.txt` `*`) and `winning` (the Mod override order resolves its name to this copy) and listed (some line names it). Derived, never stored; the three facts come from Mod Management. A non-participating copy is registered, browsable on request, and never a winner (ADR-0035, ADR-0044). _Avoid: loaded/unloaded (every copy is registered), active/inactive, shadowed._
+**Participation**: Whether a registered plugin copy competes for winner and counts in a conflict: `enabled` (its `plugins.txt` `*`) and `winning` (the Mod override order resolves its name to this copy) and listed (some line names it). Derived, never stored; the three facts come from Mod Management. A non-participating copy is registered, not displayed (its surface is an open UX design, #576), and never a winner (ADR-0035, ADR-0044). _Avoid: loaded/unloaded (every copy is registered), active/inactive, shadowed._
 
 **Session** _(retired, ADR-0044)_: There is no session. Editing holds the Plugin load order and the index, both mirrors kept true by reconcile and observation; "session management" is profile management, which is Mod Management's and MO2's. _Avoid: session, load/reload session, session settled, workspace, environment._
 

@@ -93,7 +93,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             return OpenFile();
         }
-        catch (Exception ex) when (!IsAnotherWriter(ex))
+        catch (Exception ex) when (IsAnotherWriter(ex))
+        {
+            throw IndexHeldElsewhereException.For(_databasePath, ex);
+        }
+        catch (Exception ex)
         {
             // Deliberately every other exception rather than DuckDBException alone: what a file
             // DuckDB cannot make sense of throws is its own business and has changed between
@@ -110,9 +114,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// Modbench window on the same game (ADR-0001 point 6), which is a different failure from a
     /// corrupt one and must never be answered by rebuilding: deleting a file another process has
     /// open succeeds on POSIX and destroys that window's live index, which is precisely the "silent
-    /// divergence" the decision rejects. Such an open is rethrown instead; turning it into a
-    /// structured <c>LoadOrderResponse</c> failure naming the other window is #588's job, and
-    /// until it lands the honest outcome is a failed load rather than a destroyed index.
+    /// divergence" the decision rejects. Such an open throws <see cref="IndexHeldElsewhereException"/>
+    /// naming the file instead (#588), which <c>PUT /load-order</c> answers 423 Locked.
     ///
     /// <para>Matched on DuckDB's own message because that is the only thing it offers — the lock
     /// conflict and a corrupt file arrive as the same exception type. Both platforms' wordings share

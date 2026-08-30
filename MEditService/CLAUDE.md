@@ -57,7 +57,13 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     assembly version + reflected-schema digest) or a file DuckDB cannot open rebuilds the whole
     file. **Bump `IndexVersion.FormatVersion` when you change `TableDdlBuilder`'s fixed tables or
     the codec's conventions** — `CREATE TABLE IF NOT EXISTS` will otherwise meet an old file's
-    column list in silence.
+    column list in silence. **A file another process holds is never rebuilt over** (#588 / ADR-0001
+    point 6): DuckDB's lock error (`DuckDbRecordIndex.IsAnotherWriter`) becomes
+    `IndexHeldElsewhereException`, which `PUT /load-order` answers `423 Locked` and the mirror
+    holds nothing — deleting a locked file succeeds on POSIX and would destroy the other window's
+    live index. The lock is per *process* (DuckDB.NET shares one database per path in-process), so
+    the test for it holds the file from a second process (`TestSupport/ForeignIndexHolder`, `python3`
+    on PATH — a test prerequisite, not a runtime one; the two #588 tests skip without it).
   - **Reconcile is registration** (#586 / ADR-0001). `LoadOrderMirror.Reconcile` indexes
     only what the file has never seen or whose bytes moved (validation already dropped those) and
     `Register`s everything else at its `plugins.txt` position — a `registrations` row, no re-index. A

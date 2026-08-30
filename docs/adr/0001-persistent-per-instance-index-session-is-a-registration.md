@@ -136,9 +136,10 @@ index itself outliving the process.
    writing process, and Modbench runs one service per VS Code window, so two windows on the same
    instance (a second profile, the same folder twice) contend for one file. Two windows on two
    *different* instances of one game no longer contend at all — that is the other half of #592.
-   The second load fails with a structured `LoadOrderResponse` failure naming the cause ("this
-   instance's index is open in another Modbench window") — DuckDB's own open error is the trigger,
-   surfaced honestly. No read-only mode (a second mode every index-writing path would have to
+   The second load fails by name: DuckDB's own lock error is the trigger, surfaced honestly as
+   `IndexHeldElsewhereException` ("this instance's index is open in another Modbench window") and
+   answered by `PUT /load-order` as `423 Locked` — distinct from a failed reconcile (500) and a
+   superseded snapshot (409), so the client can tell the three apart (#588). No read-only mode (a second mode every index-writing path would have to
    detect, for a window that could not edit), no waiting (a hang with no signal), never a second
    file (silent divergence). Concurrent editing of one game from two windows is not a workflow
    the git-native model supports anyway. A file that cannot be opened (DuckDB

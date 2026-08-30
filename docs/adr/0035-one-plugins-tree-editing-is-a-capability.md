@@ -44,19 +44,21 @@ not a choice a user makes; participation is three choices they already made in L
 
 ### The tree
 
-- Rows are `plugins.txt`'s lines, in Plugin load order, plus lazily-added non-participating files.
+- Rows are `plugins.txt`'s lines, in Plugin load order.
 - With no backend the rows are leaves. Starting the backend makes them collapsible — chevrons
   appear across the tree, which is the whole of the "editing is available now" signal.
 - **The leading slot answers exactly one question — "can you change whether this loads?"**: a
   checkbox where you decide, a lock on an implicit master that is forced on, nothing at all on a
   file that is not in the load order. Read-only-for-editing is never an icon; it is conveyed by
   absent actions and the tooltip.
-- Non-participating copies render dimmed and read-only, hidden by default behind show/hide
-  toggles — one per reason (disabled, losing the Mod override order, unlisted), the same gesture
-  for all three. Hidden means **absent from the tree and from the compare grid's columns alike**,
-  not collapsed; and a non-participating row, hidden or shown, **never influences winners or
-  conflicts** ([ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md)). A shown losing copy
-  carries its origin, since it shares a filename with the winning one.
+- Non-participating copies are registered ([ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md))
+  but **not displayed in the Plugins tree**: a copy losing the Mod override order, or one no
+  `plugins.txt` line names, has no row, and a plugin more than one enabled mod provides renders
+  exactly like any other row. (The compare grid still lists a losing copy as a dimmed non-winner
+  column — #446's never-hide-data posture; whether that survives is part of the same open design.)
+  A non-participating copy **never influences winners or conflicts**. How such copies surface — per-reason show/hide
+  toggles, dimming, origin labelling — is an open UX design (#576); the earlier always-on Stack
+  node and file-override badge were reviewed live, rejected and removed (#595).
 
 ### Filters
 

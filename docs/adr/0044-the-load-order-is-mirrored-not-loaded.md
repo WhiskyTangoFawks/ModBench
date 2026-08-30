@@ -89,8 +89,9 @@ still received as a command rather than as state. There was no moment at which E
   it — MO2 does not deploy them, and Mod Management does not walk them — so enabling a mod that
   ships plugins is the moment its copies first arrive and pay their one index. Widening the walk to
   disabled mods is a Mod Management change if ever wanted, not a boundary change.
-- Two visible rows can share a filename (a winning copy and a losing copy). The tree already keys
-  rows by `(origin, name)`; showing origin on a non-participating row is a display obligation.
+- Two registered copies can share a filename (a winning copy and a losing copy). Editing keys
+  them by `(origin, name)`; the losing copy is not displayed today — whether and how it surfaces
+  is an open UX design (#576), and showing its origin will be a display obligation when it does.
 - Editing still cannot verify the load order against the profile files on its own after a
   restart; it trusts the next snapshot, and the extension sends one on activation. Whether Editing
   should read the profile itself — which would move Mod override order resolution across the

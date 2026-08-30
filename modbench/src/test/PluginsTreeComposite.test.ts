@@ -41,7 +41,7 @@ import { PluginsTreeComposite } from '../PluginsTreeComposite';
 // is whatever the record provider hands back. Both fakes are structural — the real providers
 // satisfy the same shapes without an adapter.
 
-interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[]; stackPeers?: FakeStackPeer[] }
+interface FakeRow { file?: string; kind: string; orderIssueMasters?: string[] }
 interface FakeChild { id: string }
 
 class FakeRows {
@@ -69,15 +69,10 @@ class FakeRows {
   private items?: Map<FakeRow, vscode.TreeItem>;
 }
 
-interface FakeStackPeer { name: string; path: string; origin: string }
-
 class FakeChildren {
   private readonly emitter = new vscode.EventEmitter<FakeChild | undefined | null>();
   readonly onDidChangeTreeData = this.emitter.event;
   pluginChildrenCalls: string[] = [];
-  // #448: the (file, peers) pair each call arrived with — pluginChildrenCalls above stays as the
-  // pre-#448 shape so every existing assertion here keeps reading it unchanged.
-  pluginChildrenCallsWithPeers: { file: string; peers: FakeStackPeer[] | undefined }[] = [];
   getChildrenCalls: FakeChild[] = [];
   constructor(
     private readonly byPlugin: Record<string, FakeChild[]> = {},
@@ -87,9 +82,8 @@ class FakeChildren {
     // interface's own optionality with a children object that omits the method entirely.
     private readonly conflictsChild?: FakeChild,
   ) {}
-  getPluginChildren(file: string, peers?: FakeStackPeer[]): Promise<FakeChild[]> {
+  getPluginChildren(file: string): Promise<FakeChild[]> {
     this.pluginChildrenCalls.push(file);
-    this.pluginChildrenCallsWithPeers.push({ file, peers });
     return Promise.resolve(this.byPlugin[file] ?? []);
   }
   getChildren(child: FakeChild): Promise<FakeChild[]> {
@@ -117,7 +111,6 @@ function make(
     children,
     pluginFileOf: (row) => row.file,
     orderIssueMastersOf: (row) => row.orderIssueMasters,
-    stackPeersOf: (row) => row.stackPeers,
     hasMatchingRecords,
     compileStaleOf,
   });
@@ -380,58 +373,12 @@ describe('PluginsTreeComposite expansion', () => {
 
     expect(fired).toEqual([undefined]);
   });
-
-  // #448: the Stack node's own peer list crosses the boundary the same way order-aware master
-  // names do (`orderIssueMastersOf`) — an optional row-level accessor the composite reads and
-  // hands straight to the record provider's `getPluginChildren`, never interpreting it itself
-  // (CONTEXT-MAP.md: the composite's whole knowledge of either domain is a plugin filename; the
-  // peer list is the boundary object ADR-0036 already names — origin + physical path, nothing
-  // richer).
-  it('#448: hands a row\'s stack peers to getPluginChildren when expanding it', async () => {
-    const peers: FakeStackPeer[] = [{ name: 'A.esp', path: '/mods/ModB/A.esp', origin: 'ModB' }];
-    const row: FakeRow = { file: 'A.esp', kind: 'plugin', stackPeers: peers };
-    const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
-    const { composite, render } = make([row], children);
-    await render();
-    composite.setLoadOrder(new Set(['A.esp']));
-
-    await composite.getChildren(row);
-
-    expect(children.pluginChildrenCallsWithPeers).toEqual([{ file: 'A.esp', peers }]);
-  });
-
-  it('#448: hands undefined through for an uncontested row (no stackPeersOf entry)', async () => {
-    const row: FakeRow = { file: 'A.esp', kind: 'plugin' };
-    const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
-    const { composite, render } = make([row], children);
-    await render();
-    composite.setLoadOrder(new Set(['A.esp']));
-
-    await composite.getChildren(row);
-
-    expect(children.pluginChildrenCallsWithPeers).toEqual([{ file: 'A.esp', peers: undefined }]);
-  });
-
-  it('#448: works without a wired stackPeersOf at all — degrades to undefined, never throws', async () => {
-    const rowSource = new FakeRows([PLUGIN_ROW]);
-    const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
-    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
-      rows: rowSource, children, pluginFileOf: (row) => row.file,
-    });
-    await composite.getChildren();
-    composite.setLoadOrder(new Set(['A.esp']));
-
-    await composite.getChildren(PLUGIN_ROW);
-
-    expect(children.pluginChildrenCallsWithPeers).toEqual([{ file: 'A.esp', peers: undefined }]);
-  });
 });
 
 // #364: the Conflicts node — root-level, a TChild the record side (`children`) hands back for the
-// root listing itself, structurally disjoint from #448's Stack node above (a per-row TChild
-// `getPluginChildren` builds when a specific row expands). Different insertion point, different
-// test block, no shared fixture — proving that disjointness with an executable check, not just
-// prose, is exactly what the "routes through children, not rows" assertions below are for.
+// root listing itself, not a per-row child `getPluginChildren` builds when a specific row expands.
+// Different insertion point from every row's own children, so the "routes through children, not
+// rows" assertions below are what prove it never gets treated as a TRow.
 describe('PluginsTreeComposite — Conflicts node root-wiring (#364)', () => {
   const CONFLICTS_CHILD: FakeChild = { id: 'conflicts' };
 
@@ -474,10 +421,9 @@ describe('PluginsTreeComposite — Conflicts node root-wiring (#364)', () => {
   // The one check that actually distinguishes "prepended as a real TChild routed through the
   // children side" from a rival that (wrongly) treated the returned node as a TRow — e.g. adding
   // it to rowsSeen, which would route its own getChildren/getTreeItem through deps.rows instead
-  // and misattribute it to Mod Management's own vocabulary. #448's Stack node is a TChild
-  // `getPluginChildren` builds for a specific row's own expansion; the Conflicts node is a TChild
-  // the root itself hands back — same element kind, different origin, and this is the assertion
-  // that they never get confused with a TRow either.
+  // and misattribute it to Mod Management's own vocabulary. The Conflicts node is a TChild the
+  // root itself hands back — the same element kind a row's own expansion produces, different
+  // origin — and this is the assertion that it never gets confused with a TRow either.
   it('routes the Conflicts node\'s own getChildren/getTreeItem through the children side, never the rows side', async () => {
     const children = new FakeChildren({}, CONFLICTS_CHILD);
     const { composite, rowSource } = make([PLUGIN_ROW], children);
@@ -737,8 +683,8 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
 // #449: a tracked plugin whose source has moved past refs/medit/last-compile/<plugin> — "the game
 // can't see your edits yet". Load-order-derived, same family as the master-issue/load-failure
 // decorations above (icon/description/tooltip, append-never-replace, never the leading slot) rather
-// than the file-override family's FileDecorationProvider tint — this is a git-tracked-state fact,
-// not a filesystem one, and it must coexist with whatever else already decorated the row.
+// than a FileDecorationProvider tint — this is a git-tracked-state fact, not a filesystem one, and
+// it must coexist with whatever else already decorated the row.
 describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
   it('appends a description hint and tooltip to a stale row', async () => {
     const { composite, render } = make([PLUGIN_ROW], undefined, undefined, (file) =>
