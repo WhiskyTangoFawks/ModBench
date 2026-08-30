@@ -2,9 +2,11 @@
 status: accepted
 ---
 
-# The index is a persistent per-game database; a session is a registration over it
+# The index is a persistent per-instance database; a session is a registration over it
 
-Decided 2026-08-29, rewriting the 2026-05-31 decision in place (that one — "no cross-session
+Decided 2026-08-29 and revised in place 2026-08-30 (#592, point 1: the file lives in the MO2
+instance, not under local app data keyed by the game's Data install), itself rewriting the
+2026-05-31 decision in place (that one — "no cross-session
 cache, in-memory DuckDB, rebuild on every load" — named its own expiry: *"if persistent DuckDB is
 ever introduced, an mtime or hash strategy can be revisited then"*; this is that revisit). The
 incremental-mutation half of the original decision (`AddPlugin`/`CreatePlugin` mutate the live
@@ -29,9 +31,29 @@ index itself outliving the process.
 
 ## Decision
 
-1. **The DuckDB database is a file, one per game Data install**, under the service's local app
-   data (`%LOCALAPPDATA%/mEdit/index/<game>-<hash of Data path>.duckdb`). Every MO2 instance and
-   profile on that game shares it; the vanilla masters are indexed once, ever.
+1. **The DuckDB database is a file, one per MO2 instance**, inside the instance root
+   (`<instance>/modbench/index.duckdb`). Every profile in that instance shares it, which is what
+   keeps a profile switch cheap.
+
+   The instance is the only scope it can live at (#592, revising this point in place). Every mirror
+   table is keyed `(plugin, origin)` and `origin` is a mod folder *name*
+   ([ADR-0036](0036-plugin-identity-is-origin-plus-filename.md)), not a path — unique only within
+   one instance. Two instances on the same game that both have a mod folder called
+   `Unofficial Patch` holding different builds of `UFO4P.esp` collide on that key: keyed by the Data
+   install, one instance's load rehashes the *other's* `file_path`, finds it unchanged, and
+   registers (point 3) rather than indexing — reading the other instance's records. The cost of the
+   fix is that vanilla masters are indexed once per instance rather than once per game. Accepted:
+   instances are rare, profiles are common, and Modbench manages an MO2-style instance and nothing
+   else — which is also why `SessionManager.LoadExplicit` is the only session load there is, and
+   the plain-Data-folder path (`plugins.txt` beside the game's own `Data`, every origin the reserved
+   Data-directory value) is deleted rather than kept as an alternative: it could name no mod folders,
+   so it could key no index.
+
+   Inside the instance root, never inside the content MO2 manages there: not `mods/`, `overwrite/`,
+   `profiles/` or `downloads/`, any of which a reinstall, a profile delete or a download sweep would
+   take the index with. The instance root itself is MO2's own working directory
+   (`ModOrganizer.ini`, `webcache/`), so writing derived state beside those does not violate root
+   CLAUDE.md's never-assume-exclusive-ownership rule.
 
 2. **The index mirrors file state; a session is built over it.** Two different things happen
    to a plugin and they get two different verbs, never conflated:
@@ -110,11 +132,12 @@ index itself outliving the process.
    persisting working-tree/committed divergence across restarts. Their rows persist like any
    other and are simply replaced.
 
-6. **One writer; a second session on the same game is refused.** A DuckDB file admits one
-   writing process, and Modbench runs one service per VS Code window, so two windows on the
-   same game (a second instance, a second profile, the same folder twice) contend for one file.
-   The second load fails with a structured `SessionLoadResponse` failure naming the cause ("the
-   Fallout 4 index is open in another Modbench window") — DuckDB's own open error is the trigger,
+6. **One writer; a second session on the same instance is refused.** A DuckDB file admits one
+   writing process, and Modbench runs one service per VS Code window, so two windows on the same
+   instance (a second profile, the same folder twice) contend for one file. Two windows on two
+   *different* instances of one game no longer contend at all — that is the other half of #592.
+   The second load fails with a structured `SessionLoadResponse` failure naming the cause ("this
+   instance's index is open in another Modbench window") — DuckDB's own open error is the trigger,
    surfaced honestly. No read-only mode (a second mode every index-writing path would have to
    detect, for a window that could not edit), no waiting (a hang with no signal), never a second
    file (silent divergence). Concurrent editing of one game from two windows is not a workflow
@@ -126,7 +149,7 @@ index itself outliving the process.
 
 - Launch of an unchanged load order is dominated by open + hash-validate + register + winner
   sweep, not by indexing: tens of seconds on the profiled order rather than 285.
-- Profile switches on the same game re-index only plugins the file has never seen; RAM drops
+- Profile switches within one instance re-index only plugins the file has never seen; RAM drops
   (buffer pool instead of a resident 2.3 M-record index).
 - Every read path and every generated view must scope by registration — an audit of
   `DuckDbRecordIndex` and `RecordViewBuilder`, and the invariant in `MEditService/CLAUDE.md`

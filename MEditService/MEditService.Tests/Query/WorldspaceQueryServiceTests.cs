@@ -71,8 +71,7 @@ public class WorldspaceQueryServiceTests
         public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
-        public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
@@ -93,6 +92,7 @@ public class WorldspaceQueryServiceTests
     private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
     {
         public string DataFolderPath => "";
+        public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];

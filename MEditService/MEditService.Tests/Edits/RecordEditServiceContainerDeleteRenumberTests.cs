@@ -145,10 +145,10 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         public IRecordReads? Repository => inner.Repository;
         public IRecordIndex? Index => overrideIndex;
         public SessionStatus Status => inner.Status;
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
-            inner.Load(dataFolderPath, pluginsTxtPath, gameRelease);
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
-            inner.LoadExplicit(gameDirectory, plugins, gameRelease);
+        public void LoadExplicit(
+            string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+            string? instanceRoot = null) =>
+            inner.LoadExplicit(gameDirectory, plugins, gameRelease, instanceRoot);
         public void Unload() => inner.Unload();
         public PluginResponse CreatePlugin(string name, string path, string origin) => inner.CreatePlugin(name, path, origin);
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);

@@ -17,10 +17,11 @@ public sealed class LoadedApiFixture<TPlugin> : IAsyncLifetime, IDisposable
     public async Task InitializeAsync()
     {
         Client = _app.CreateClient();
-        var resp = await Client.PostAsJsonAsync("/session/load", new
+        var resp = await Client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = Plugin.DataFolder,
-            pluginsTxtPath = Plugin.PluginsTxtPath,
+            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = Plugin.DataFolder,
+            instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",
         });
         resp.EnsureSuccessStatusCode();

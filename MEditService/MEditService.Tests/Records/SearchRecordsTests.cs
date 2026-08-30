@@ -17,7 +17,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         var manager = new SessionManager(factory);
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return manager;
     }
 

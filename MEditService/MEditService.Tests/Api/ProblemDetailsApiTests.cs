@@ -22,19 +22,20 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         Assert.Equal(expectedStatus, doc.GetProperty("status").GetInt32());
     }
 
-    // --- POST /session/load ---
+    // --- POST /session/load-explicit ---
 
     [Theory]
-    [InlineData("badFolder", null, "Fallout4")]
-    [InlineData(null, "badPlugins", "Fallout4")]
+    [InlineData("badGameDir", null, "Fallout4")]
+    [InlineData(null, "badInstance", "Fallout4")]
     [InlineData(null, null, "NotAGame")]
-    public async Task SessionLoad_InvalidInput_ReturnsProblemDetails400(
-        string? badFolder, string? badPlugins, string gameRelease)
+    public async Task SessionLoadExplicit_InvalidInput_ReturnsProblemDetails400(
+        string? badGameDir, string? badInstance, string gameRelease)
     {
-        var resp = await _client.PostAsJsonAsync("/session/load", new
+        var resp = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = badFolder ?? _fixture.DataFolder,
-            pluginsTxtPath = badPlugins ?? _fixture.PluginsTxtPath,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = badGameDir ?? _fixture.DataFolder,
+            instanceRoot = badInstance ?? _fixture.InstanceRoot,
             gameRelease,
         });
 
@@ -45,22 +46,23 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     // #445: a syntactically valid GameRelease this build has no Mutagen assembly for (SkyrimSE,
     // genuinely unreferenced — see SchemaReflectorAvailabilityTests) is a client error, not a
     // server fault: 400 with the typed, actionable message, not a 500 wrapping an assembly-load
-    // exception. Data folder/plugins.txt are the fixture's real (FO4) paths, never actually read —
+    // exception. Game directory/instance root are the fixture's real (FO4) paths, never actually read —
     // SessionManager.RunLoad's BeginLoad unconditionally tears down whatever session was
     // previously loaded before the new load's assembly-support probe even runs, so this uses its
     // own isolated WebApplicationFactory (same pattern as Endpoint_NoSession_ReturnsProblemDetails
     // below) rather than the shared LoadedApiFixture's client — reusing that client here would
     // silently dispose the fixture's session out from under every other test in this class.
     [Fact]
-    public async Task SessionLoad_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
+    public async Task SessionLoadExplicit_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
 
-        var resp = await client.PostAsJsonAsync("/session/load", new
+        var resp = await client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
             gameRelease = "SkyrimSE",
         });
 

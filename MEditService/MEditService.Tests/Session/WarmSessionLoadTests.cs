@@ -15,20 +15,12 @@ namespace MEditService.Tests.Session;
 // indexing them. Every test here loads twice over one persistent index — the second manager stands
 // in for the next launch — and asserts what the second load did through the session's own status
 // and its existing per-plugin log lines, never by looking inside the index file.
-public sealed class WarmSessionLoadTests : IDisposable
+public sealed class WarmSessionLoadTests
 {
-    private readonly string _indexRoot = Path.Combine(Path.GetTempPath(), $"medit-warm-{Guid.NewGuid():N}");
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_indexRoot)) Directory.Delete(_indexRoot, recursive: true);
-    }
-
-    private SessionManager MakeManager(ILogger<SessionManager>? logger = null)
+    private static SessionManager MakeManager(ILogger<SessionManager>? logger = null)
     {
         var reflector = SharedSchemaReflector.Instance;
-        return new SessionManager(
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector), null, _indexRoot), logger);
+        return new SessionManager(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), logger);
     }
 
     private static (ILoggerFactory Factory, List<LogEntry> Entries) Capturing()
@@ -57,12 +49,12 @@ public sealed class WarmSessionLoadTests : IDisposable
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = MakeManager()) cold.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using (var cold = MakeManager()) cold.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
         using var warm = MakeManager(loggerFactory.CreateLogger<SessionManager>());
-        warm.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        warm.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(0, Indexed(entries, "A.esp"));
         Assert.Equal(0, Indexed(entries, "B.esp"));
@@ -84,16 +76,16 @@ public sealed class WarmSessionLoadTests : IDisposable
         using var data = new PluginFixtureBuilder("warm-during")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = MakeManager()) cold.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using (var cold = MakeManager()) cold.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var reflector = SharedSchemaReflector.Instance;
         var observed = new List<int>();
         var factory = new ProgressWatchingFactory(
-            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector), null, _indexRoot), observed);
+            new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)), observed);
         using var warm = new SessionManager(factory);
         factory.Sessions = warm;
 
-        warm.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        warm.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         // Each registration saw the plugins that had already landed and no more.
         Assert.Equal([0, 1, 2], observed);
@@ -105,8 +97,8 @@ public sealed class WarmSessionLoadTests : IDisposable
     {
         public SessionManager? Sessions { get; set; }
 
-        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
-            new ProgressWatchingIndex(inner.Create(gameRelease, dataFolderPath), this, observed);
+        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
+            new ProgressWatchingIndex(inner.Create(gameRelease, instanceRoot), this, observed);
     }
 
     private sealed class ProgressWatchingIndex(IRecordIndex inner, ProgressWatchingFactory owner, List<int> observed)
@@ -127,10 +119,10 @@ public sealed class WarmSessionLoadTests : IDisposable
         using var data = new PluginFixtureBuilder("warm-progress")
             .WithPlugin("A.esp").WithPlugin("B.esp").WithPlugin("C.esp")
             .Build();
-        using (var cold = MakeManager()) cold.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using (var cold = MakeManager()) cold.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         using var warm = MakeManager();
-        warm.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        warm.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(3, warm.Status.TotalPlugins);
         Assert.Equal(
@@ -147,7 +139,7 @@ public sealed class WarmSessionLoadTests : IDisposable
             .WithPlugin("A.esp", m => m.Npcs.AddNew("NpcA"))
             .WithPlugin("B.esp", m => m.Npcs.AddNew("NpcB"))
             .Build();
-        using (var cold = MakeManager()) cold.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using (var cold = MakeManager()) cold.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         var edited = new Fallout4Mod(ModKey.FromFileName("B.esp"), Fallout4Release.Fallout4);
         edited.Npcs.AddNew("NpcBEdited");
@@ -156,7 +148,7 @@ public sealed class WarmSessionLoadTests : IDisposable
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
         using var warm = MakeManager(loggerFactory.CreateLogger<SessionManager>());
-        warm.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        warm.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
         Assert.Equal(0, Indexed(entries, "A.esp"));
@@ -178,14 +170,16 @@ public sealed class WarmSessionLoadTests : IDisposable
             .WithPlugin("A.esp")
             .WithPlugin("B.esp", listed: false)
             .Build();
-        using (var cold = MakeManager()) cold.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        using (var cold = MakeManager()) cold.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, data.InstanceRoot);
 
-        File.WriteAllText(data.PluginsTxtPath, "*A.esp\n*B.esp\n");
+        // The profile switch: the same order plus one plugin the index has never been shown.
+        var withB = data.Plugins.Append(new ExplicitPluginInput(
+            "B.esp", Path.Combine(data.DataFolder, "B.esp"), PluginOrigin.DataDirectory, Participates: true)).ToList();
 
         var (loggerFactory, entries) = Capturing();
         using var _ = loggerFactory;
         using var warm = MakeManager(loggerFactory.CreateLogger<SessionManager>());
-        warm.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        warm.LoadExplicit(data.DataFolder, withB, GameRelease.Fallout4, data.InstanceRoot);
 
         Assert.Equal(1, Registered(entries, "A.esp"));
         Assert.Equal(1, Indexed(entries, "B.esp"));
@@ -199,7 +193,8 @@ public sealed class WarmSessionLoadTests : IDisposable
     {
         const string origin = "TrackedMod";
         const string plugin = "Tracked.esp";
-        var modFolder = Directory.CreateTempSubdirectory("medit-warm-tracked-").FullName;
+        var instanceRoot = Directory.CreateTempSubdirectory("medit-warm-instance-").FullName;
+        var modFolder = Directory.CreateDirectory(Path.Combine(instanceRoot, "mods", origin)).FullName;
         var gameDirectory = Directory.CreateTempSubdirectory("medit-warm-game-").FullName;
         try
         {
@@ -212,7 +207,7 @@ public sealed class WarmSessionLoadTests : IDisposable
 
             using (var cold = MakeManager())
             {
-                cold.LoadExplicit(gameDirectory, order, GameRelease.Fallout4);
+                cold.LoadExplicit(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
                 await new TrackService(NullLogger<TrackService>.Instance)
                     .TrackAsync(cold.Session!, origin, SourcePreset.Edits);
             }
@@ -220,12 +215,12 @@ public sealed class WarmSessionLoadTests : IDisposable
             // Loaded twice *after* tracking, so both loads see a tracked plugin whose binary the
             // index already holds a current hash for — the exact state a register would wrongly
             // shortcut.
-            using (var second = MakeManager()) second.LoadExplicit(gameDirectory, order, GameRelease.Fallout4);
+            using (var second = MakeManager()) second.LoadExplicit(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
 
             var (loggerFactory, entries) = Capturing();
             using var _ = loggerFactory;
             using var third = MakeManager(loggerFactory.CreateLogger<SessionManager>());
-            third.LoadExplicit(gameDirectory, order, GameRelease.Fallout4);
+            third.LoadExplicit(gameDirectory, order, GameRelease.Fallout4, instanceRoot);
 
             Assert.Equal(0, Registered(entries, plugin));
             Assert.Equal(1, Indexed(entries, plugin));
@@ -234,7 +229,7 @@ public sealed class WarmSessionLoadTests : IDisposable
         }
         finally
         {
-            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(instanceRoot, recursive: true);
             Directory.Delete(gameDirectory, recursive: true);
         }
     }

@@ -23,7 +23,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         _manager = new SessionManager(factory);
-        _manager.Load(fixture.DataFolder, fixture.PluginsTxtPath, GameRelease.Fallout4);
+        _manager.LoadExplicit(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
@@ -57,7 +57,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             .Build();
         using var manager = new SessionManager(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var plugins = svc.GetPlugins();
@@ -88,7 +88,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             .Build();
         using var manager = new SessionManager(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(manager, SharedSchemaReflector.Instance, new ConflictClassifier());
 
         var detail = svc.GetRecord(npcFormKey.ToString());
@@ -339,7 +339,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
@@ -434,7 +434,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare(npcKey.ToString());
@@ -784,7 +784,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
             Assert.Contains(svc.GetConflicts(), c => c.Record.FormKey == npcKey.ToString());
 
@@ -799,7 +799,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var manager = new SessionManager(factory);
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
         test(new RecordQueryService(manager, reflector, new ConflictClassifier()));
     }
 
@@ -924,7 +924,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var result = svc.GetRecords(type: null, plugin: null, search: null, limit: 10, offset: 0);
@@ -963,7 +963,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var detail = svc.GetRecord("000000:HeaderQuery.esp");
@@ -992,7 +992,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             var reflector = SharedSchemaReflector.Instance;
             var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
             using var manager = new SessionManager(factory);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var svc = new RecordQueryService(manager, reflector, new ConflictClassifier());
 
             var compare = svc.GetCompare("000000:CompareA.esp");

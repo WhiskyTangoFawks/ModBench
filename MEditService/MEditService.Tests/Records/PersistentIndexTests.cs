@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #585 / ADR-0001: the index is one persistent file per game Data install, and it validates itself
+// #585 / ADR-0001: the index is one persistent file per MO2 instance (#592), and it validates itself
 // against the disk every time it is opened — by content, never by clock. Everything here is proved
 // at the index seam alone: an index is built, disposed, and opened again on the same file, and what
 // survives is asserted through the seam's own reads. Persistence itself is never asserted by
@@ -44,7 +44,7 @@ public class PersistentIndexTests : IDisposable
         }
     }
 
-    private string IndexPath => IndexFile.PathFor(Path.Combine(_root, "appdata"), GameRelease.Fallout4, DataFolder);
+    private string IndexPath => IndexFile.For(Path.Combine(_root, "instance"));
 
     private DuckDbRecordIndex OpenIndex()
     {

@@ -32,14 +32,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   **unregistered, never answering** — `IRecordIndex.Unregister` removes the `plugins` row and
   nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
   missing at validation), never the meaning of unload.
-  - **The index is a persistent file per game Data install, and it validates itself on open**
-    (#585 / ADR-0001). `IndexFile.PathFor` keys it by the Data folder under
-    `%LOCALAPPDATA%/mEdit/index/`, so every MO2 instance and profile on one install shares it and
-    the vanilla masters are indexed once, ever; an index handed no Data folder is in-memory, which
-    is what the suite's fixtures use. `plugins` is **the session and nothing else** — the file
-    facts live in `raw.indexed_files` (`file_path`, `content_hash`, `index_version`), a separate
+  - **The index is a persistent file per MO2 instance, and it validates itself on open**
+    (#585/#592 / ADR-0001). `IndexFile.For` puts it at `<instance>/modbench/index.duckdb`, so every
+    profile in one instance shares it (a profile switch stays cheap) and no two instances can ever
+    share one: `origin` is a mod folder *name*, unique only within an instance, and every mirror
+    table is keyed `(plugin, origin)`. The instance root arrives on the load request and rides
+    `IGameSession.InstanceRoot`; an index handed no instance is in-memory, which is what the suite's
+    fixtures use. **`LoadExplicit` is the only session load** — the plain-Data-folder path
+    (`SessionManager.Load`, `POST /session/load`, the CLI startup path) is deleted: Modbench manages
+    an MO2-style instance and nothing else, and a load that can name no mod folders can key no index.
+    `plugins` is **the session and nothing else** — the file facts live in `raw.indexed_files` (`file_path`, `content_hash`, `index_version`), a separate
     table precisely so that unregistering a plugin does not throw away what makes re-registering it
-    cheap. `Initialize` clears every registration (a fresh process is in no session), rehashes every
+    cheap. Registrations are **not** cleared on open (ADR-0044): they are the last known load order,
+    and the first reconcile from Mod Management corrects them. `Initialize` rehashes every
     indexed file — **content, never `mtime`** — and `Unindex`es any plugin whose file is gone or
     whose bytes moved; a version mismatch (`IndexVersion`: hand-bumped format const + Mutagen
     assembly version + reflected-schema digest) or a file DuckDB cannot open rebuilds the whole
@@ -222,7 +227,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - **Anything derived from the whole plugin set must gate on `ISessionManager.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load session reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `SessionState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready session with stale winners.
   - **Everything a reader touches on `GameSession` is an immutable snapshot** (copy-on-write under `_mutation`), because readers now walk those lists while the load appends to them. A plain `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin landing.
   - **Never dispose a session or repository without draining the load first.** `EnterExclusive()` cancels the in-flight load *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Unload`, `Dispose` and every load path go through it.
-  `POST /session/load` and `/session/load-explicit` stay blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /session/status` reports progress alongside the in-flight POST (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
+  `POST /session/load-explicit` stays blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /session/status` reports progress alongside the in-flight POST (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
 
 ## Folder structure
 

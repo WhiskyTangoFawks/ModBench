@@ -16,7 +16,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("Disabled.esp", enabled: false)
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var enabled = session.Plugins.Single(p => p.Name == "Enabled.esp");
         var disabled = session.Plugins.Single(p => p.Name == "Disabled.esp");
@@ -33,7 +33,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("UserMod.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var fo4 = session.Plugins.Single(p => p.Name == "Fallout4.esm");
         Assert.True(fo4.Participates);
@@ -46,7 +46,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("Existing.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var newPath = Path.Combine(session.DataFolderPath, "New.esp");
         var mod = Mutagen.Bethesda.Plugins.Records.ModFactory.Activator(
             Mutagen.Bethesda.Plugins.ModKey.FromFileName("New.esp"), GameRelease.Fallout4);
@@ -65,7 +65,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("Disabled.esp", enabled: false)
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var disabled = session.Plugins.Single(p => p.Name == "Disabled.esp");
 
         var response = PluginResponse.FromMetadata(disabled);
@@ -115,7 +115,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("Enabled.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var previous = session.Plugins.Single(p => p.Name == "Enabled.esp");
         Assert.True(previous.Participates);
 
@@ -137,7 +137,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("B.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var previous = session.Plugins.Single(p => p.Name == "A.esp");
 
         session.SetParticipation(previous, false);
@@ -152,7 +152,7 @@ public sealed class GameSessionParticipationTests
             .WithPlugin("A.esp")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var ghost = session.Plugins.Single(p => p.Name == "A.esp") with { Name = "Ghost.esp" };
 
         Assert.Throws<KeyNotFoundException>(() => session.SetParticipation(ghost, false));

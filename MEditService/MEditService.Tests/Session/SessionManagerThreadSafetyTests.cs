@@ -23,7 +23,7 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture)
     private SessionManager MakeLoadedManager()
     {
         var m = MakeManager();
-        m.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        m.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }
 
@@ -34,7 +34,7 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture)
     {
         using var data = new PluginFixtureBuilder("cp-deadlock").WithPlugin("Base.esp").Build();
         using var manager = MakeManager();
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
         // If CreatePlugin() calls Load() from inside lock(_lock) with a non-reentrant lock,
         // the same thread deadlocks. Use a timeout to catch that case.
@@ -50,7 +50,7 @@ public class SessionManagerThreadSafetyTests(TestPluginFixture fixture)
     {
         using var data = new PluginFixtureBuilder("cp-metadata").WithPlugin("Base.esp").Build();
         using var manager = MakeManager();
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
         var task = Task.Run(() => manager.CreatePlugin("Created.esp", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod"));
         var completed = await Task.WhenAny(task, Task.Delay(5000));

@@ -12,7 +12,6 @@ using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
-using Mutagen.Bethesda;
 using Serilog;
 using Serilog.Events;
 
@@ -61,14 +60,9 @@ try
     builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
     builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
-    // #585 / ADR-0001: the index is a persistent file per game Data install, under the same local
-    // app data root the logs already use. Registered by hand rather than by type so the root is
-    // stated here, in the composition root, and not read from the environment by Core.
-    builder.Services.AddSingleton<IRecordIndexFactory>(sp => new DuckDbRecordIndexFactory(
-        sp.GetRequiredService<ISchemaReflector>(),
-        sp.GetRequiredService<ITableDdlBuilder>(),
-        sp.GetService<ILogger<DuckDbRecordIndexFactory>>(),
-        IndexFile.DefaultRoot));
+    // #592 / ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —
+    // the load request names it, so there is nothing for the composition root to state here.
+    builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
@@ -133,66 +127,7 @@ try
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapContainerChildEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
 
-    var cliArgs = CliArgs.Parse(args);
-    if (cliArgs.DataFolderPath != null)
-    {
-        var gameRelease = cliArgs.GameRelease ?? GameRelease.Fallout4;
-        var pluginsTxt = cliArgs.PluginsTxtPath ?? AutoDetectPluginsTxt(cliArgs.DataFolderPath, gameRelease);
-        if (pluginsTxt != null)
-        {
-            Log.Information("CLI auto-load: data={DataFolder} plugins={PluginsTxt} game={Game}",
-                cliArgs.DataFolderPath, pluginsTxt, gameRelease);
-            app.Services.GetRequiredService<ISessionManager>()
-                .Load(cliArgs.DataFolderPath, pluginsTxt, gameRelease);
-        }
-        else
-        {
-            Log.Warning("--data-folder provided but Plugins.txt could not be found; pass --plugins-txt explicitly");
-        }
-    }
-
     await app.RunAsync();
-
-    static string? AutoDetectPluginsTxt(string dataFolderPath, GameRelease gameRelease)
-    {
-        var gameFolder = gameRelease.ToCategory() switch
-        {
-            GameCategory.Fallout4 => "Fallout4",
-            GameCategory.Skyrim => "Skyrim Special Edition",
-            GameCategory.Oblivion => "Oblivion",
-            GameCategory.Starfield => "Starfield",
-            _ => null
-        };
-
-        return gameFolder switch
-        {
-            null => null,
-            _ when OperatingSystem.IsWindows() => Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                gameFolder, "Plugins.txt"),
-            _ => FindProtonPluginsTxt(dataFolderPath, gameRelease, gameFolder),
-        };
-    }
-
-    // Linux/Proton: data folder is {steamLibrary}/steamapps/common/{Game}/Data
-    // Plugins.txt lives under {steamLibrary}/steamapps/compatdata/{appId}/pfx/...
-    static string? FindProtonPluginsTxt(string dataFolderPath, GameRelease gameRelease, string gameFolder)
-    {
-        var steamAppId = gameRelease.ToCategory() switch
-        {
-            GameCategory.Fallout4 => "377160",
-            GameCategory.Skyrim => "489830",
-            GameCategory.Starfield => "1716740",
-            _ => null
-        };
-
-        if (steamAppId == null) return null;
-
-        var steamapps = Path.GetFullPath(Path.Combine(dataFolderPath, "..", "..", ".."));
-        var candidate = Path.Combine(steamapps, "compatdata", steamAppId, "pfx",
-            "drive_c", "users", "steamuser", "AppData", "Local", gameFolder, "Plugins.txt");
-        return File.Exists(candidate) ? candidate : null;
-    }
 }
 catch (Exception ex)
 {

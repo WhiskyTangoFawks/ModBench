@@ -1,66 +1,42 @@
 using MEditService.Core.Records;
-using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Records;
 
-// #585 / ADR-0001: one index file per game Data install, under the service's local app data —
-// never in a mod folder and never in the game directory, both of which belong to MO2, the
-// installers and the user.
+// #592 / ADR-0001: one index file per MO2 instance, inside the instance root. `origin` is a mod
+// folder name (ADR-0036), unique only within an instance, and every mirror table is keyed
+// (plugin, origin) — so the instance is the only scope an index can honestly live at.
 public class IndexFileTests
 {
-    private static readonly string Root = Path.Combine(Path.GetTempPath(), "medit-index-file-tests");
+    private static readonly string Instance = Path.Combine(Path.GetTempPath(), "medit-index-file-tests");
 
+    // AC1 names the location, so the test pins it: inside the instance root, and — since the
+    // instance root is MO2's own working directory but `mods/`, `overwrite/`, `profiles/` and
+    // `downloads/` are content it manages — in none of those. A mod reinstall, a profile delete or
+    // a download sweep would take an index under any of them with it, and a mod archiver would pick
+    // it up as content.
     [Fact]
-    public void PathFor_LivesUnderTheGivenRoot_AndNamesTheRelease()
+    public void For_LivesInTheInstanceRoot_BesideTheContentMO2Manages_NeverInsideIt()
     {
-        var path = IndexFile.PathFor(Root, GameRelease.Fallout4, Path.Combine(Root, "game", "Data"));
-
-        Assert.StartsWith(Path.Combine(Root, "index"), path, StringComparison.Ordinal);
-        Assert.Contains("Fallout4", Path.GetFileName(path), StringComparison.Ordinal);
-        Assert.EndsWith(".duckdb", path, StringComparison.Ordinal);
+        Assert.Equal(Path.Combine(Instance, "modbench", "index.duckdb"), IndexFile.For(Instance));
     }
 
-    // The file is never inside the install it describes: a mod reinstall or a game verify would
-    // sweep it away, and a mod archiver would pick it up as content.
+    // Profiles within one instance share the file — that is what keeps a profile switch cheap — so
+    // trailing separators and relative segments must not mint a second file for one instance.
     [Fact]
-    public void PathFor_IsNeverInsideTheDataFolder()
+    public void For_IsTheSameFile_ForTheSameInstanceSpeltDifferently()
     {
-        var dataFolder = Path.Combine(Path.GetTempPath(), "some-game", "Data");
-        var path = IndexFile.PathFor(Root, GameRelease.Fallout4, dataFolder);
+        var spelledOtherwise = Path.Combine(Instance, "mods", "..") + Path.DirectorySeparatorChar;
 
-        Assert.DoesNotContain(dataFolder, path, StringComparison.Ordinal);
+        Assert.Equal(IndexFile.For(Instance), IndexFile.For(spelledOtherwise));
     }
 
-    // Every MO2 instance and profile on one install shares one file — that is what makes the
-    // vanilla masters indexed once, ever, rather than once per profile. Keyed by the Data folder,
-    // so trailing separators and relative segments must not mint a second file for one install.
+    // Two instances on one game have their own same-named mod folders holding different bytes, so
+    // they must never share a mirror — the whole point of #592.
     [Fact]
-    public void PathFor_IsTheSameFile_ForTheSameInstallSpeltDifferently()
-    {
-        var dataFolder = Path.Combine(Path.GetTempPath(), "some-game", "Data");
-        var spelledOtherwise = Path.Combine(Path.GetTempPath(), "some-game", "Mods", "..", "..", "some-game", "Data")
-            + Path.DirectorySeparatorChar;
-
-        Assert.Equal(
-            IndexFile.PathFor(Root, GameRelease.Fallout4, dataFolder),
-            IndexFile.PathFor(Root, GameRelease.Fallout4, spelledOtherwise));
-    }
-
-    // Two installs of one game — a Steam copy and a GOG copy, a sandbox beside the played install —
-    // are two different sets of files and must not share one mirror.
-    [Fact]
-    public void PathFor_IsADifferentFile_ForADifferentInstall()
+    public void For_IsADifferentFile_ForADifferentInstance()
     {
         Assert.NotEqual(
-            IndexFile.PathFor(Root, GameRelease.Fallout4, Path.Combine(Path.GetTempPath(), "steam", "Data")),
-            IndexFile.PathFor(Root, GameRelease.Fallout4, Path.Combine(Path.GetTempPath(), "gog", "Data")));
-    }
-
-    [Fact]
-    public void DefaultRoot_IsUnderLocalApplicationData()
-    {
-        Assert.StartsWith(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            IndexFile.DefaultRoot, StringComparison.Ordinal);
+            IndexFile.For(Path.Combine(Path.GetTempPath(), "instance-a")),
+            IndexFile.For(Path.Combine(Path.GetTempPath(), "instance-b")));
     }
 }

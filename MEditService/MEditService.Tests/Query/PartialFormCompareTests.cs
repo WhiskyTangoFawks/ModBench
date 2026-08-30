@@ -77,7 +77,7 @@ public sealed class PartialFormCompareTests : IDisposable
 
         var reflector = SharedSchemaReflector.Instance;
         _manager = new SessionManager(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        _manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        _manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 

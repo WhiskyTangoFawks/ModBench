@@ -344,7 +344,7 @@ that cannot be read at all (deleted, moved, or torn, while the mod folder and it
 survive — distinct from the repo itself being destroyed, which reads as untracked per
 ADR-0041 and is a different path entirely) is caught directly, with nothing to classify
 against. Both surface identically to the extension as `CrashRepairOffer`s riding
-`POST /session/load[-explicit]`'s own response (`SessionLoadResponse.CrashRepairOffers`,
+`POST /session/load-explicit`'s own response (`SessionLoadResponse.CrashRepairOffers`,
 the same structured-failures posture `Failures` already has, ADR-0026) — no second endpoint,
 no poller: a session load already observes both triggers.
 

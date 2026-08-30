@@ -24,7 +24,7 @@ internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, str
     /// a load can assert on the abandoned one as well as the survivor.</summary>
     public List<GatedIndexRepository> Created { get; } = [];
 
-    public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null)
+    public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {
         // Only the first load is gated: a test that supersedes one load with another wants the
         // second to run unobstructed to completion, and a second park would just be scaffolding to

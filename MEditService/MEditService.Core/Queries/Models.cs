@@ -280,8 +280,13 @@ public record SessionFilterResponse(string? Sql);
 // process itself drives, or a process restart, both of which this load call already observes.
 public record SessionLoadResponse(
     string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
+// InstanceRoot (#592 / ADR-0001): the MO2 instance these mod folders belong to — the working
+// directory holding ModOrganizer.ini, mods/ and profiles/. It is what the index file is keyed on,
+// and it must be the instance rather than anything wider: Origin below is a mod folder *name*, so
+// two instances that both have a folder called "Unofficial Patch" would otherwise collide on one
+// (plugin, origin) key and read each other's records.
 public record SessionLoadExplicitRequest(
-    IReadOnlyList<ExplicitPlugin> Plugins, string GameDirectory, string GameRelease = "Fallout4");
+    IReadOnlyList<ExplicitPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
 // Origin (#269 / ADR-0036): Mod Management resolves this — the mod folder that provided the
 // file, or one of the reserved values (PluginOrigin.DataDirectory / MO2's overwrite). Required —
 // the one production caller (modbench/src/modmanager/explicitSession.ts) already resolves it, so

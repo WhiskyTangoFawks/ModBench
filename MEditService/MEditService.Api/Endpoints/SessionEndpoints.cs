@@ -12,14 +12,6 @@ public static class SessionEndpoints
 
     public static IEndpointRouteBuilder MapSessionEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/session/load", LoadSession)
-            .WithName("LoadSession")
-            .WithTags(Tag)
-            .Produces<SessionLoadResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(409)
-            .ProducesProblem(500);
-
         app.MapPost("/session/load-explicit", LoadExplicitSession)
             .WithName("LoadExplicitSession")
             .WithTags(Tag)
@@ -86,48 +78,7 @@ public static class SessionEndpoints
             : Results.Problem($"Unknown game release: '{raw}'. Valid values: {string.Join(", ", Enum.GetNames<GameRelease>())}", statusCode: 400);
     }
 
-    internal static IResult LoadSession(SessionLoadRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(SessionEndpoints));
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received LoadSession for {DataFolder}", req.DataFolderPath);
-        }
-        if (!Directory.Exists(req.DataFolderPath))
-            return Results.Problem($"Data folder not found: {req.DataFolderPath}", statusCode: 400);
-        if (!File.Exists(req.PluginsTxtPath))
-            return Results.Problem($"Plugins.txt not found: {req.PluginsTxtPath}", statusCode: 400);
-
-        if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
-
-        try
-        {
-            sessionManager.Load(req.DataFolderPath, req.PluginsTxtPath, gameRelease);
-            // #417 AC4 / #381: the load-time hash check, plus (re-)registering the live watch for
-            // every tracked plugin this load now holds — one pass, right after the completion
-            // signal this endpoint has always been (POST /session/load returns only once loading
-            // finishes). Its return is #381's crash-repair offers, riding the response the same way
-            // LoadFailures already does.
-            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(
-                sessionManager.Session, sessionManager.Index, externalChangeWatcher, logger);
-            return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? [], crashRepairOffers));
-        }
-        catch (OperationCanceledException ex)
-        {
-            return SupersededLoad(logger, ex);
-        }
-        catch (UnsupportedGameReleaseException ex)
-        {
-            return UnsupportedGameRelease(logger, ex);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to load session for {DataFolder}", req.DataFolderPath);
-            return Results.Problem(ex.Message, statusCode: 500);
-        }
-    }
-
-    // internal (not private), matching LoadSession/Compile/ExternalChangeStatus's own visibility in
+    // internal (not private), matching Compile/ExternalChangeStatus's own visibility in
     // this codebase: the door SessionEndpointsTests exercises directly, real fixture and all — same
     // "thin, mapping-only" precedent ExternalChangeEndpointsTests already established.
     internal static IResult LoadExplicitSession(SessionLoadExplicitRequest req, ISessionManager sessionManager, ExternalChangeWatcher externalChangeWatcher, ILoggerFactory loggerFactory)
@@ -139,6 +90,10 @@ public static class SessionEndpoints
         }
         if (!Directory.Exists(req.GameDirectory))
             return Results.Problem($"Game directory not found: {req.GameDirectory}", statusCode: 400);
+        // #592 / ADR-0001: the MO2 instance root is what the index file is keyed on, so a load that
+        // cannot name one has nowhere to keep its rows — a bad request, not a degraded load.
+        if (!Directory.Exists(req.InstanceRoot))
+            return Results.Problem($"Instance root not found: {req.InstanceRoot}", statusCode: 400);
 
         if (ParseGameRelease(req.GameRelease, out var gameRelease) is { } releaseErr) return releaseErr;
 
@@ -157,7 +112,12 @@ public static class SessionEndpoints
             var explicitPlugins = req.Plugins
                 .Select(p => new ExplicitPluginInput(p.Name, p.Path, p.Origin, p.Participates!.Value))
                 .ToList();
-            sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
+            sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease, req.InstanceRoot);
+            // #417 AC4 / #381: the load-time hash check, plus (re-)registering the live watch for
+            // every tracked plugin this load now holds — one pass, right after the completion signal
+            // this endpoint has always been (the POST returns only once loading finishes). Its
+            // return is #381's crash-repair offers, riding the response the same way LoadFailures
+            // already does.
             var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(
                 sessionManager.Session, sessionManager.Index, externalChangeWatcher, logger);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? [], crashRepairOffers));
@@ -246,5 +206,3 @@ public static class SessionEndpoints
             : Results.Ok(new SessionFilterResponse(sessionManager.Session.FilterSql));
     }
 }
-
-public record SessionLoadRequest(string DataFolderPath, string PluginsTxtPath, string GameRelease = "Fallout4");

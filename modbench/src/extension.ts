@@ -366,7 +366,7 @@ function makeSetFilterActive(filterProvider: FilterCodeLensProvider) {
 }
 
 /** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
- *  Shared by the session wizard, the deploy commands, and editing launch. */
+ *  Shared by the deploy commands and editing launch. */
 function makeDetectPaths(): DetectPaths {
   return () => {
     const c = meditConfig();
@@ -2714,7 +2714,7 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
       say(`Indexing ${plugins.length} plugins… Conflict information is not yet computed.`);
       outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
       const result = await controller.loadExplicitSession(
-        plugins, gd.dataFolder, undefined, { onProgress: treeProgress.onProgress, signal });
+        plugins, gd.dataFolder, instanceRoot, undefined, { onProgress: treeProgress.onProgress, signal });
       // #307 AC7: a load that was deliberately abandoned — superseded by a newer load, or
       // aborted because the user closed the session — leaves *silently*. Nothing to surface
       // (loadExplicitSession only logged it) and, the bug this fixes, nothing to tear down: the

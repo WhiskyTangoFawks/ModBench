@@ -41,10 +41,11 @@ public sealed class SessionStatusApiTests : IDisposable
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .Build();
 
-        var load = await _client.PostAsJsonAsync("/session/load", new
+        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = fx.DataFolder,
-            pluginsTxtPath = fx.PluginsTxtPath,
+            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = fx.DataFolder,
+            instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
@@ -63,17 +64,18 @@ public sealed class SessionStatusApiTests : IDisposable
     }
 
     [Fact]
-    public async Task PostSessionLoad_StillReturnsOnlyOnceTheSweepHasRun()
+    public async Task PostSessionLoadExplicit_StillReturnsOnlyOnceTheSweepHasRun()
     {
         using var fx = new PluginFixtureBuilder("api-status-contract")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
             .WithPlugin("B.esp", mod => mod.Npcs.AddNew("FromB"))
             .Build();
 
-        var load = await _client.PostAsJsonAsync("/session/load", new
+        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = fx.DataFolder,
-            pluginsTxtPath = fx.PluginsTxtPath,
+            plugins = fx.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = fx.DataFolder,
+            instanceRoot = fx.InstanceRoot,
             gameRelease = "Fallout4",
         });
 

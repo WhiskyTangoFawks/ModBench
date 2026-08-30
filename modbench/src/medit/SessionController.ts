@@ -129,10 +129,13 @@ export class SessionController {
 
   /** Load the editing session from an ordered { name, path, origin, participates } list built
    *  from the active modlist (POST /session/load-explicit). `gameDirectory` must be the
-   *  resolved Data folder — the backend prepends implicit masters from it. `origin` is
-   *  required (#269 / ADR-0036, #275) — the caller resolves it before this point; the
-   *  backend no longer defaults a missing origin. So is `participates` (#270 / ADR-0035): the
-   *  list is every plugins.txt line, and the `*` prefix rides along rather than filtering it.
+   *  resolved Data folder — the backend prepends implicit masters from it. `instanceRoot` is the
+   *  MO2 instance the mod folders belong to: the backend keys its persistent index on it
+   *  (#592 / ADR-0001), because `origin` is a mod folder *name* and so is unique only within one
+   *  instance. `origin` is required (#269 / ADR-0036, #275) — the caller resolves it before this
+   *  point; the backend no longer defaults a missing origin. So is `participates`
+   *  (#270 / ADR-0035): the list is every plugins.txt line, and the `*` prefix rides along rather
+   *  than filtering it.
    *
    *  Resolves with a tagged {@link SessionLoadOutcome}; on `loaded` it carries the load's own
    *  `failures` (#277 / ADR-0037 AC7) — the same data the toast below already consumes, so the
@@ -141,6 +144,7 @@ export class SessionController {
   async loadExplicitSession(
     plugins: { name: string; path: string; origin: string; participates: boolean }[],
     gameDirectory: string,
+    instanceRoot: string,
     gameRelease = 'Fallout4',
     options: SessionLoadOptions = {},
   ): Promise<SessionLoadOutcome> {
@@ -152,7 +156,7 @@ export class SessionController {
     let result;
     try {
       result = await this.deps.client.POST('/session/load-explicit', {
-        body: { plugins, gameDirectory, gameRelease },
+        body: { plugins, gameDirectory, instanceRoot, gameRelease },
         // #307 AC7: aborts the request itself rather than leaving it to notice a dead socket.
         ...(options.signal ? { signal: options.signal } : {}),
       });

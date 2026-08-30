@@ -41,7 +41,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using var manager = MakeManager();
 
         var ex = Assert.Throws<UnsupportedGameReleaseException>(
-            () => manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.SkyrimSE));
+            () => manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.SkyrimSE));
 
         Assert.Contains("SkyrimSE", ex.Message);
     }
@@ -66,7 +66,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
             using var manager = new SessionManager(faulting);
 
             Assert.Throws<InvalidOperationException>(() =>
-                manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4));
+                manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4));
 
             Assert.Null(manager.Session);
             Assert.Null(manager.Repository);
@@ -82,7 +82,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         var spy = new SpyRepositoryFactory(inner);
         using var manager = new SessionManager(spy);
 
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(1, spy.CreateCallCount);
         Assert.Equal(GameRelease.Fallout4, spy.LastGameRelease);
@@ -92,7 +92,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_PopulatesSessionAndRepository()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.NotNull(manager.Session);
         Assert.NotNull(manager.Repository);
@@ -104,7 +104,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_IndexesRecordsIntoRepository()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var count = manager.Repository!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
@@ -116,7 +116,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_SetsIsWinnerOnSinglePlugin()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
@@ -128,7 +128,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Unload_ClearsReferencesAndDisposesRepository()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.Repository;
         manager.Unload();
 
@@ -142,10 +142,10 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_ReplacesExistingSession()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var firstRepo = manager.Repository;
 
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.NotSame(firstRepo, manager.Repository);
         Assert.NotNull(manager.Session);
@@ -155,7 +155,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_WithGameRelease_SessionHasCorrectGameRelease()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.Equal(GameRelease.Fallout4, manager.Session!.GameRelease);
     }
@@ -179,7 +179,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var repositoryBefore = manager.Repository;
             var modFolder = Path.Combine(data.DataFolder, "SomeMod");
 
@@ -195,11 +195,12 @@ public class SessionManagerTests(TestPluginFixture fixture)
 
     // The rival this guards against is #288's own starting point: the pre-#288 CreatePlugin
     // unconditionally appended "*<name>\n" to plugins.txt as part of the same call. Applied as a
-    // rival (a one-line File.AppendAllText re-added to CreatePlugin, same target this fixture's
-    // plugins.txt resolves to) and run standalone, this test fails — observed 2026-08-20, the
-    // appended line landing exactly where the assertion below now forbids it. plugins.txt is Mod
-    // Management's file (CONTEXT-MAP.md); appending the load-order line is now the caller's job,
-    // done only once the whole create (and any Track it triggers) has actually succeeded.
+    // rival (a one-line File.AppendAllText re-added to CreatePlugin), this test fails — observed
+    // 2026-08-20, the appended line landing exactly where the assertion below now forbids it.
+    // plugins.txt is Mod Management's file (CONTEXT-MAP.md); appending the load-order line is the
+    // caller's job, done only once the whole create (and any Track it triggers) has succeeded.
+    // Since #592 this side never reads a plugins.txt either, so the assertion is that no such file
+    // is brought into existence at all — a stronger statement than the byte comparison it replaces.
     [Fact]
     public void CreatePlugin_NeverWritesPluginsTxt()
     {
@@ -209,13 +210,12 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
-            var before = File.ReadAllText(data.PluginsTxtPath);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var modFolder = Path.Combine(data.DataFolder, "SomeMod");
 
             manager.CreatePlugin("NewPlugin.esp", modFolder, "SomeMod");
 
-            Assert.Equal(before, File.ReadAllText(data.PluginsTxtPath));
+            Assert.Empty(Directory.EnumerateFiles(data.CleanupRoot, "Plugins.txt", SearchOption.AllDirectories));
         }
     }
 
@@ -283,7 +283,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
             Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
@@ -312,7 +312,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
             Assert.Equal(1, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
@@ -340,7 +340,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
             Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
@@ -369,7 +369,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'MatchesFilter'");
             Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
@@ -400,7 +400,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var loadOrderIndex = manager.Session!.Plugins
                 .Single(p => p.InLoadOrder && p.Name == "Base.esp").LoadOrderIndex;
 
@@ -428,7 +428,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var maxLoadOrderIndex = manager.Session!.Plugins.Where(p => p.InLoadOrder).Max(p => p.LoadOrderIndex);
 
             var result = manager.LoadUnlistedPlugin(Path.Combine(data.DataFolder, "Unlisted.esp"), "SomeMod");
@@ -446,7 +446,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             Assert.Empty(manager.Session!.Plugins);
 
             var result = manager.LoadUnlistedPlugin(Path.Combine(data.DataFolder, "Unlisted.esp"), "SomeMod");
@@ -478,7 +478,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
             });
             using var manager = new SessionManager(faulting, loggerFactory.CreateLogger<SessionManager>());
 
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             manager.SetFilter("SELECT form_key FROM npc_");
             faulting.FaultNextCall = true;
 
@@ -498,7 +498,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         public int CreateCallCount { get; private set; }
         public GameRelease? LastGameRelease { get; private set; }
 
-        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null)
+        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
         {
             CreateCallCount++;
             LastGameRelease = gameRelease;
@@ -512,8 +512,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
     {
         public bool FaultNextCall;
 
-        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
-            new FaultingSetFilterRepository(inner.Create(gameRelease, dataFolderPath), this);
+        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
+            new FaultingSetFilterRepository(inner.Create(gameRelease, instanceRoot), this);
     }
 
     private sealed class FaultingSetFilterRepository(IRecordIndex inner, FaultingSetFilterRepositoryFactory owner)
@@ -541,8 +541,8 @@ public class SessionManagerTests(TestPluginFixture fixture)
     // needed to isolate IndexAndStore's own catch (DisposeCurrentSession) from a later call's cleanup.
     private sealed class FaultingUpdateWinnersRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory
     {
-        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
-            new FaultingUpdateWinnersRepository(inner.Create(gameRelease, dataFolderPath));
+        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
+            new FaultingUpdateWinnersRepository(inner.Create(gameRelease, instanceRoot));
     }
 
     private sealed class FaultingUpdateWinnersRepository(IRecordIndex inner) : DelegatingRecordIndex(inner)
@@ -569,7 +569,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var modFolder = Path.Combine(data.DataFolder, "SomeMod");
             manager.CreatePlugin("Duplicate.esp", modFolder, "SomeMod"); // first call creates it
             var ex = Assert.Throws<IOException>(() => manager.CreatePlugin("Duplicate.esp", modFolder, "SomeMod"));
@@ -585,14 +585,6 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using var manager = MakeManager(); // no Load — extension check fires first
         var ex = Assert.Throws<ArgumentException>(() => manager.CreatePlugin("Mod.txt", "/tmp/SomeMod", "SomeMod"));
         Assert.Contains("extension", ex.Message);
-    }
-
-    [Fact]
-    public void Load_WithNonExistentPath_Throws()
-    {
-        using var manager = MakeManager();
-        Assert.ThrowsAny<Exception>(() =>
-            manager.Load("/no-such-path", "/no-such-path/Plugins.txt", GameRelease.Fallout4));
     }
 
     [Fact]
@@ -634,7 +626,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             var result = manager.CreatePlugin("NewMaster.esm", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod");
 
@@ -650,7 +642,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             var result = manager.CreatePlugin("NewLight.esl", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod");
 
@@ -666,7 +658,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
             var modFolder = Path.Combine(data.DataFolder, "BrandNewMod");
             Assert.False(Directory.Exists(modFolder));
 
@@ -682,10 +674,10 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Load_SecondLoad_OldRepositoryBecomesUnusable()
     {
         using var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.Repository;
 
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.ThrowsAny<Exception>(() =>
             oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
@@ -696,7 +688,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     public void Dispose_RepositoryBecomesUnusable()
     {
         var manager = MakeManager();
-        manager.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         var oldRepo = manager.Repository;
 
         manager.Dispose();
@@ -717,7 +709,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         {
             var spy = new SpyModImporter();
             using var manager = MakeManager(modImporter: spy);
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             await manager.ReindexPlugins(["Plugin.esp"]);
 
@@ -745,7 +737,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
         using (data)
         {
             using var manager = MakeManager();
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             // #410: the binary changes underneath the session with nothing in Modbench told about
             // it — written straight through Mutagen, which is also the shape the never-assume-
@@ -781,7 +773,7 @@ public class SessionManagerTests(TestPluginFixture fixture)
     private SessionManager MakeLoadedManager()
     {
         var m = MakeManager();
-        m.Load(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4);
+        m.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return m;
     }
 

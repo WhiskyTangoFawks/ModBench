@@ -1,3 +1,4 @@
+using MEditService.Core.Session;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
@@ -6,7 +7,8 @@ namespace MEditService.Tests;
 public sealed class TestPluginFixture : IApiPluginFixture<TestPluginFixture>
 {
     public string DataFolder => _data.DataFolder;
-    public string PluginsTxtPath => _data.PluginsTxtPath;
+    public IReadOnlyList<ExplicitPluginInput> Plugins => _data.Plugins;
+    public string InstanceRoot => _data.InstanceRoot;
     public const string PluginName = "TestPlugin.esp";
     public const int RecordCount = 2;
     public FormKey Npc1FormKey { get; }

@@ -47,7 +47,7 @@ public sealed class SessionLoadLoggingTests
         using var _ = loggerFactory;
         var logger = loggerFactory.CreateLogger(nameof(GameSession));
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, logger).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, logger: logger).Opened();
 
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("A.esp"));
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("B.esp"));
@@ -70,7 +70,7 @@ public sealed class SessionLoadLoggingTests
         using var _ = loggerFactory;
         using var manager = MakeManager(loggerFactory.CreateLogger<SessionManager>());
 
-        manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
         Assert.Contains(entries, e =>
             e.Level == LogLevel.Information && e.Message.Contains("Indexing") && e.Message.Contains("A.esp"));
@@ -78,36 +78,14 @@ public sealed class SessionLoadLoggingTests
         string[] pipelineFragments =
         [
             "Session load starting",
+            // #592 left one load path, so this is the whole pipeline — the second, near-identical
+            // test that used to cover `LoadExplicit`'s own log lines went with the entry point it
+            // was distinguishing this one from.
             "Creating game session",
             "Game session indexed",
             "Initializing DuckDB record repository",
             "Computing winners",
             "Session load complete",
-        ];
-        foreach (var fragment in pipelineFragments)
-        {
-            Assert.Contains(entries, e => e.Level == LogLevel.Debug && e.Message.Contains(fragment));
-            Assert.DoesNotContain(entries, e => e.Level == LogLevel.Information && e.Message.Contains(fragment));
-        }
-    }
-
-    [Fact]
-    public void SessionManager_LoadExplicit_PipelineStepsAtDebug()
-    {
-        using var fx = new PluginFixtureBuilder("s216-sm-explicit")
-            .WithPlugin("A.esp")
-            .BuildScattered();
-        var (loggerFactory, entries) = CapturingLoggerFactory();
-        using var _ = loggerFactory;
-        using var manager = MakeManager(loggerFactory.CreateLogger<SessionManager>());
-
-        manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-
-        string[] pipelineFragments =
-        [
-            "Explicit session load starting",
-            "Creating explicit game session from scattered paths",
-            "Explicit session load complete",
         ];
         foreach (var fragment in pipelineFragments)
         {
