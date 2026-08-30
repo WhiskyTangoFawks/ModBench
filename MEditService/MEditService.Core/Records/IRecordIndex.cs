@@ -291,6 +291,25 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
 
     /// <summary>
+    /// #549: gives a cell its own <c>cell_location</c> row directly, copied from wherever the caller
+    /// already has it (typically the source plugin's own <see cref="IRecordReads.GetCellLocation"/>
+    /// answer for the same FormKey) — a copy-in, never a derivation. Every existing write of this
+    /// table (<c>DuckDbRecordIndex.RederiveContainmentForRecord</c>) only ever re-derives a
+    /// <c>Worldspace.TopCell</c>'s row from its parent's freshly-reserialized document; a genuine
+    /// exterior cell reached through <c>SubCells</c> is never that document's embedded child
+    /// (<c>Source.ContainerChildFields</c>'s own doc comment — <c>WorldspaceBlock</c> is not
+    /// <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>), so nothing today can ever
+    /// produce its row from a record body alone. This is that missing write, for the one caller that
+    /// already knows the row's exact values because it just read them off the source.
+    ///
+    /// <para>Delete-then-insert for <paramref name="row"/>'s own <c>CellFormKey</c>, matching every
+    /// other single-row rebuild in this table (<c>RederiveContainmentForRecord</c>'s own
+    /// <c>TopCell</c> write) — safe to call again for the same cell (e.g. a retried or re-applied
+    /// copy) without leaving a duplicate row behind.</para>
+    /// </summary>
+    void CreateCellLocation(PluginKey plugin, CellLocationRow row);
+
+    /// <summary>
     /// Materializes a <c>_filter</c> table from <paramref name="sql"/> (null clears it) — the one
     /// door SQL crosses this seam through, since it is itself a published contract for user filter
     /// SQL (ADR-0041). Throws <see cref="ArgumentException"/> if the SQL doesn't return a

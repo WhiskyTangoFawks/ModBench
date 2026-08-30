@@ -125,11 +125,14 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.False(cellDoc!.IsPartialForm);
     }
 
-    // #440 Slice 6's own permanent boundary (#549's own scope to widen): an exterior reference whose
-    // Cell the destination does not already override refuses rather than guessing where to place a
-    // brand-new worldspace/cell directory.
+    // #440 Slice 6's own permanent boundary — still current for a Worldspace's own TopCell
+    // specifically, post-#549: TopCell's own cell_location row carries no block/sub/grid at all
+    // (PlacementWalker.WalkWorldspace hardcodes those null for it), so there is nothing for
+    // MintExteriorCell to place it at — genuinely out of #549 Arc B's own scope (a real SubCells
+    // exterior cell), not a residual gap in it. That genuine case is
+    // CopyRecordAsOverride_OnAGenuineExteriorPlacedReference_MintsWrldAndCellOverrides below.
     [Fact]
-    public void CopyRecordAsOverride_OnAnExteriorPlacedReference_Refuses_WhenDestinationHasNoCellOverride()
+    public void CopyRecordAsOverride_OnATopCellPlacedReference_Refuses_WhenDestinationHasNoCellOverride()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -142,11 +145,12 @@ public sealed class RecordEditServiceContainerCopyTests
     }
 
     // #440 review (Spec 2): the direct sibling of the placed-reference test above — copying the
-    // exterior Cell itself as override (not one of its children) hits its own, separate check
+    // TopCell itself as override (not one of its children) hits its own, separate check
     // (RecordEditService.cs's isCell branch in CopyRecordAsOverride, not CopyPlacedReferenceAsOverride)
     // and needs its own test rather than relying on the placed-reference variant to stand in for it.
+    // Still refuses post-#549 for the same reason as its sibling above.
     [Fact]
-    public void CopyRecordAsOverride_OnAnExteriorCellItself_Refuses()
+    public void CopyRecordAsOverride_OnATopCellItself_Refuses()
     {
         using var fixture = ContainerCopyFixture.Create();
 
@@ -156,6 +160,95 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
         Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+    }
+
+    // #549 Arc B (AC1): the genuine SubCells exterior case — destination has neither the worldspace
+    // nor the cell. Both mint as bare, Partial Form ancestors; the REFR itself lands with its real
+    // fields, in the same slot (Persistent/Temporary) the source has it in; cell_location for the new
+    // cell matches the source's own row exactly (Slice 1's write, exercised end to end).
+    [Fact]
+    public void CopyRecordAsOverride_OnAGenuineExteriorPlacedReference_MintsWrldAndCellOverrides_WhenDestinationHasNeither()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+
+        var index = fixture.Mirror.Index!;
+        var worldspaceDoc = index.GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
+        Assert.NotNull(worldspaceDoc);
+        Assert.True(worldspaceDoc!.IsPartialForm);
+
+        var cellDoc = index.GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
+        Assert.NotNull(cellDoc);
+        Assert.True(cellDoc!.IsPartialForm);
+
+        var refDoc = index.GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin);
+        Assert.NotNull(refDoc);
+        Assert.Equal(ContainerCopyFixture.ExteriorPersistentRefEditorId, refDoc!.EditorId);
+
+        var cellFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.ExteriorPersistentRefEditorId);
+        var cellText = File.ReadAllText(cellFile);
+        Assert.Contains(ContainerCopyFixture.ExteriorPersistentRefEditorId, cellText, StringComparison.Ordinal);
+        // The negative control: the sibling temporary ref never copied, and never rode along.
+        Assert.DoesNotContain(ContainerCopyFixture.ExteriorTemporaryRefEditorId, cellText, StringComparison.Ordinal);
+        Assert.Null(index.GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
+
+        var expectedLocation = index.GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString());
+        Assert.Equal(expectedLocation, index.GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
+    }
+
+    // #549 Arc B (AC1) review: "REFR in the same Persistent/Temporary slot as the source" — the
+    // Temporary half, so an implementation that hardcodes the Persistent slot cannot pass.
+    [Fact]
+    public void CopyRecordAsOverride_OnAGenuineExteriorTemporaryPlacedReference_LandsInTheTemporarySlot()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var index = fixture.Mirror.Index!;
+        Assert.True(index.GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
+        Assert.NotNull(index.GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(index.GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin));
+        Assert.Equal("temporary", index.GetPlacement(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin)?.PlacementGroup);
+    }
+
+    // #549 Arc B (AC1): the direct sibling of the placed-reference case above — copying the exterior
+    // Cell itself as override. The requested record (the Cell) lands with its own real fields and is
+    // NOT Partial Form; only the auto-created WRLD ancestor is. The rival this guards against: an
+    // implementation that Partial-Forms everything in the newly-minted chain, including the record the
+    // caller actually asked to copy.
+    [Fact]
+    public void CopyRecordAsOverride_OnAGenuineExteriorCellItself_MintsWrldOverride_CellLandsOwnFieldsOnly()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+
+        var index = fixture.Mirror.Index!;
+        var worldspaceDoc = index.GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
+        Assert.NotNull(worldspaceDoc);
+        Assert.True(worldspaceDoc!.IsPartialForm);
+
+        var cellDoc = index.GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
+        Assert.NotNull(cellDoc);
+        Assert.Equal(ContainerCopyFixture.ExteriorCellEditorId, cellDoc!.EditorId);
+        Assert.False(cellDoc.IsPartialForm);
+
+        // Own fields only: neither ref rides along with a plain (non-deep) copy of the Cell.
+        Assert.Null(index.GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(index.GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
+
+        var expectedLocation = index.GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString());
+        Assert.Equal(expectedLocation, index.GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
     }
 
     // #440 Slice 7: the interior sibling of the case above — no destination override of the Cell

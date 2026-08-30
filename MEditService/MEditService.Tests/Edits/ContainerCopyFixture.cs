@@ -78,6 +78,26 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string TopCellRefEditorId = "SourceTopCellRef";
     public FormKey TopCellRef { get; }
 
+    // #549 Arc B (AC1): the genuine spatial-exterior shape TopCell above deliberately isn't — a real
+    // SubCells cell with its own block/sub-block/grid position, distinct in every coordinate (and not
+    // reproducible by a naive floor(grid/N)-style formula) so a wrong implementation that recomputed
+    // rather than copied CellLocationRow's own numbers cannot pass by coincidence.
+    public const int ExteriorBlockX = 3;
+    public const int ExteriorBlockY = -2;
+    public const int ExteriorSubX = 0;
+    public const int ExteriorSubY = -1;
+    public const int ExteriorGridX = 200;
+    public const int ExteriorGridY = -199;
+
+    public const string ExteriorCellEditorId = "SourceExteriorCell";
+    public FormKey ExteriorCell { get; }
+
+    public const string ExteriorPersistentRefEditorId = "SourceExteriorPersistentRef";
+    public FormKey ExteriorPersistentRef { get; }
+
+    public const string ExteriorTemporaryRefEditorId = "SourceExteriorTemporaryRef";
+    public FormKey ExteriorTemporaryRef { get; }
+
     private ContainerCopyFixture()
     {
         SourceModFolder = Directory.CreateTempSubdirectory("medit-container-copy-source-").FullName;
@@ -123,6 +143,32 @@ public sealed class ContainerCopyFixture : IDisposable
         };
         topCell.Temporary.Add(topCellRef);
         worldspace.TopCell = topCell;
+
+        var exteriorCell = new Cell(sourceMod)
+        {
+            EditorID = ExteriorCellEditorId,
+            Grid = new CellGrid { Point = new P2Int(ExteriorGridX, ExteriorGridY) },
+        };
+        var exteriorPersistentRef = new PlacedObject(sourceMod)
+        {
+            EditorID = ExteriorPersistentRefEditorId,
+            Position = new P3Float(10f, 11f, 12f),
+            Scale = 1f,
+        };
+        var exteriorTemporaryRef = new PlacedObject(sourceMod)
+        {
+            EditorID = ExteriorTemporaryRefEditorId,
+            Position = new P3Float(13f, 14f, 15f),
+            Scale = 1f,
+        };
+        exteriorCell.Persistent.Add(exteriorPersistentRef);
+        exteriorCell.Temporary.Add(exteriorTemporaryRef);
+        var exteriorSubBlock = new WorldspaceSubBlock { BlockNumberX = (short)ExteriorSubX, BlockNumberY = (short)ExteriorSubY };
+        exteriorSubBlock.Items.Add(exteriorCell);
+        var exteriorBlock = new WorldspaceBlock { BlockNumberX = (short)ExteriorBlockX, BlockNumberY = (short)ExteriorBlockY };
+        exteriorBlock.Items.Add(exteriorSubBlock);
+        worldspace.SubCells.Add(exteriorBlock);
+
         sourceMod.Worldspaces.Add(worldspace);
 
         sourceMod.WriteToBinary(sourcePath);
@@ -131,6 +177,8 @@ public sealed class ContainerCopyFixture : IDisposable
         (PersistentRef, TemporaryRef) = (persistentRef.FormKey, temporaryRef.FormKey);
         (Navmesh, Landscape) = (navmesh.FormKey, landscape.FormKey);
         (Worldspace, TopCell, TopCellRef) = (worldspace.FormKey, topCell.FormKey, topCellRef.FormKey);
+        ExteriorCell = exteriorCell.FormKey;
+        (ExteriorPersistentRef, ExteriorTemporaryRef) = (exteriorPersistentRef.FormKey, exteriorTemporaryRef.FormKey);
 
         var destinationPath = Path.Combine(DestinationModFolder, DestinationPluginName);
         var destinationMod = new Fallout4Mod(ModKey.FromFileName(DestinationPluginName), Fallout4Release.Fallout4);
