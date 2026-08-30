@@ -35,7 +35,7 @@ import { routeRecordPanelMessage, pickScriptNameViaInputBox, type RouteRecordPan
 import { RecordDecorationProvider } from './medit/RecordDecorationProvider';
 import { broadcastToRecordPanels, makeOnRecordEdited } from './medit/onRecordEdited';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
-import { isMo2Instance } from './modmanager/detectMo2Instance';
+import { isMo2Instance, mo2InstanceContext } from './modmanager/detectMo2Instance';
 import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNode } from './modmanager/ModListProvider';
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
@@ -171,12 +171,23 @@ const meditConfig = () => vscode.workspace.getConfiguration('modbench');
 
 /** #192: stub provider for the Mods view when the workspace isn't an MO2
  *  instance. Always empty so VS Code's `viewsWelcome` contribution (gated on
- *  `modbench.workspaceIsMo2Instance`) renders instead of the tree — getTreeItem
- *  is unreachable since getChildren never yields an element to render. */
+ *  `modbench.workspaceMo2CheckDone` and `modbench.workspaceIsMo2Instance` together — #554)
+ *  renders instead of the tree — getTreeItem is unreachable since getChildren never yields
+ *  an element to render. */
 const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getTreeItem: () => { throw new Error('unreachable — NOT_MO2_INSTANCE_PROVIDER never yields children'); },
   getChildren: () => [],
 };
+
+/** #554: the only place either MO2-instance context key is set — see mo2InstanceContext's own
+ *  comment for why the two keys must always travel together. Every registerLoadoutView exit
+ *  path (no workspace, not an instance, valid instance) calls this instead of `setContext`
+ *  directly. */
+function setMo2InstanceContext(isInstance: boolean): void {
+  for (const [key, value] of Object.entries(mo2InstanceContext(isInstance))) {
+    void vscode.commands.executeCommand('setContext', key, value);
+  }
+}
 
 /** #270 / #276 / #277: which plugin files Editing's load order actually names — the backend's own
  *  list, not the snapshot we sent it, because the backend prepends the game's implicit masters and
@@ -2040,16 +2051,16 @@ function registerModsAutoRegisterWatcher(
 /** #192: the workspace is open but isn't an MO2 instance (ModOrganizer.ini,
  *  mods/, profiles/ absent). Don't build a provider that would only fail
  *  lazily on first read — register the Mods view with an always-empty stub so
- *  its native `viewsWelcome` contribution (gated on
- *  `modbench.workspaceIsMo2Instance`) renders an actionable message instead
- *  of an error tree node. */
+ *  its native `viewsWelcome` contribution (gated on `modbench.workspaceMo2CheckDone`
+ *  and `modbench.workspaceIsMo2Instance` together — #554) renders an actionable
+ *  message instead of an error tree node. */
 function registerNotMo2InstanceWelcome(
   instanceRoot: string,
   context: vscode.ExtensionContext,
   outputChannel: vscode.LogOutputChannel,
 ): void {
   outputChannel.info(`[extension] Workspace "${instanceRoot}" is not an MO2 instance — showing welcome content instead of the Mods tree.`);
-  void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', false);
+  setMo2InstanceContext(false);
   context.subscriptions.push(
     vscode.window.createTreeView('modbench.modList', { treeDataProvider: NOT_MO2_INSTANCE_PROVIDER }),
   );
@@ -2164,11 +2175,11 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
-    // #192: explicit, not left implicitly falsy — the viewsWelcome `when` clause
-    // also guards on VS Code's own `workspaceFolderCount != 0`, so this key's
-    // value never actually matters with no workspace open, but every exit path
-    // sets it rather than leaving a third, implicit "never set" state.
-    void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', false);
+    // #192/#554: explicit, not left implicitly falsy — the viewsWelcome `when` clause
+    // also guards on VS Code's own `workspaceFolderCount != 0`, so neither key's value
+    // actually matters with no workspace open, but every exit path sets both rather than
+    // leaving a fourth, implicit "never set" state.
+    setMo2InstanceContext(false);
     return undefined;
   }
   // #192: an MO2 instance is the folder containing ModOrganizer.ini, mods/, and
@@ -2178,7 +2189,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     registerNotMo2InstanceWelcome(instanceRoot, context, outputChannel);
     return undefined;
   }
-  void vscode.commands.executeCommand('setContext', 'modbench.workspaceIsMo2Instance', true);
+  setMo2InstanceContext(true);
     const modListReporter = makeReporter(outputChannel, 'modList');
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
     // #357: the single GameDirectory resolver (config override → ini gamePath → autodetect),

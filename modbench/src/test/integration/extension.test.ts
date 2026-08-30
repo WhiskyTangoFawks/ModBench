@@ -228,6 +228,17 @@ describe('modbench activation', () => {
   it('auto-activates on startup without any explicit activate() call', () => {
     assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
   });
+
+  // #554: NOT tested here. The bug (and the fix) live entirely in the window between the
+  // workspace opening and this activation completing — the Mods view's `viewsWelcome` is a
+  // static package.json contribution the workbench can render before any extension code runs,
+  // which is exactly how "not an MO2 instance" used to flash for a valid one. There is no
+  // public API to read a context key's current value back, and no property on TreeView (or
+  // anywhere else) exposing whether its `viewsWelcome` content is currently showing — so this
+  // window can't be observed from extension test code, only from a human watching the real UI.
+  // Manual check (full procedure: issue #554): open a real MO2 instance as the workspace root
+  // and watch the Mods view from the moment the window appears — a *brief flash* of "This
+  // isn't an MO2 instance" counts as a fail, not just it staying up.
 });
 
 // ── Build integrity (#299) ─────────────────────────────────────────────────────
