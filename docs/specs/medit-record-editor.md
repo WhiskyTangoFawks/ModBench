@@ -855,6 +855,25 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    each element's own type from a `value_type` discriminator sub-field at write time; an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
    than guessing or crashing (#531; #360 landed the same polymorphism read-side).
+
+   Mutagen's own generated code has a second, more common shape for a polymorphic field: an
+   abstract `A<Name>` base (`ANpcLevel`, `AQuestAlias`, ...) whose real per-subclass data lives on
+   concrete classes that *inherit from* the base, rather than #360's OMOD-only leaves (generic
+   sibling interfaces the base never inherits from, each needing its own hand-verified value-type
+   table). #548 generalizes the same discriminator pattern reflectively — `SchemaReflector` finds
+   every concrete subclass of an abstract base in the same Mutagen assembly, exposes each leaf's own
+   members as a sparse union keyed by a synthesized `concrete_type` sub-field (the leaf's own class
+   name, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/`"QuestLocationAlias"`/
+   `"QuestCollectionAlias"`), and writes back by resolving `concrete_type` the same way OMOD's
+   `value_type` resolves — no per-type table, and #360's own `BuildObjectModPropertyLeafFields`
+   stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
+   generic base with no reflectively-enumerable subclasses of its own), not a special case of this
+   one. `Npc.Level` (a single struct field, xEdit's `ACBS\Level`/`Level Mult`) and `Quest.Aliases`
+   (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two record editor fields this closes; not
+   every `A<Name>` type in the assembly qualifies — one (`ASceneActionType`) shares the naming
+   convention without its generated class actually being `abstract`, so the mechanism correctly
+   declines it (empty sub-schema, same as before) rather than guessing a discriminator scheme onto a
+   type it cannot safely tell apart from an ordinary one.
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
    change already overlaid (#413); there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
