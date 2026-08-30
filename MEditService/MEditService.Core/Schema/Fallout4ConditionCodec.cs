@@ -42,7 +42,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         {
             // ExtractNested's own array-path/index detail (from WalkNestedArrayProperty) says
             // *where* in the record the malformed data is; this adds *which record*, since that's
-            // reported per-plugin (SessionManager.IndexAndStore), not per-record — without it, a
+            // reported per-plugin (LoadOrderMirror.IndexAndStore), not per-record — without it, a
             // user can't find the offending entry in xEdit.
             var editorId = record.EditorID is { } eid ? $" ('{eid}')" : "";
             throw new InvalidOperationException(

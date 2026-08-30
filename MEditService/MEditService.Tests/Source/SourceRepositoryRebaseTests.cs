@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,7 +27,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     private string RunGit(params string[] args) => GitCli.Run(GitDir, _mod.ModFolder, args);
 
     private RecordEditService EditService() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -53,7 +53,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
     }
 
     /// <summary>An upstream update that adds a brand-new NPC — a path the edit branch's own commit
@@ -70,7 +70,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         var pluginPath = Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName);
         externalMod.WriteToBinary(pluginPath);
-        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_mod.ModFolder, TrackedModFixture.PluginName, pluginPath, _mod.Mirror.LoadOrder!);
     }
 
     [Fact]
@@ -109,17 +109,17 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     }
 
     /// <summary>
-    /// The whole #417 flow through to the next session load: absorb an upstream update, take the
+    /// The whole #417 flow through to the next reconcile: absorb an upstream update, take the
     /// rebase it offers, then reload — and the plugin still ingests <b>from its source tree</b>.
     ///
     /// <para><b>This is the test whose absence hid a shipping bug</b> (#454). Nothing in the suite
-    /// reloaded a session after an Absorb, and Absorb's own tests could not have caught it: Absorb
+    /// reloaded a load order after an Absorb, and Absorb's own tests could not have caught it: Absorb
     /// commits to <c>main</c> without a checkout, so the edit branch's working tree — the one both
     /// ingest and compile read — is still Track's own complete tree until a rebase replays onto the new
     /// baseline. Only then does the incomplete baseline become the working tree, and only then does the
     /// missing root <c>RecordData.json</c> bite. It bit compile first, in
     /// <see cref="RebaseEditBranch_Conflicts_OnOverlappingRecordEdits_AndTheResolvedResultCompiles"/>,
-    /// but ingest-from-source calls the same whole-mod door on the same directory (#452), so a session
+    /// but ingest-from-source calls the same whole-mod door on the same directory (#452), so a load order
     /// load would have thrown identically the moment a user took the offered rebase.</para>
     ///
     /// <para>The conflict-free upstream update on purpose: this is about the tree being <i>complete</i>
@@ -134,15 +134,11 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
 
         Assert.Equal(RebaseOutcome.Clean, SourceRepository.RebaseEditBranch(_mod.ModFolder).Outcome);
 
-        using var reloaded = new SessionManager(
+        using var reloaded = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)reloaded).LoadExplicit(
+        ((ILoadOrderMirror)reloaded).Reconcile(
             _mod.GameDirectory,
-            [new ExplicitPluginInput(
-                TrackedModFixture.PluginName,
-                Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName),
-                TrackedModFixture.ModFolderOrigin,
-                true)],
+            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         // No degraded load, and the record reads with the edit that survived the replay — which it can
@@ -177,7 +173,7 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
         Assert.Equal("edit", RunGit("rev-parse", "--abbrev-ref", "HEAD").Trim());
         Assert.Empty(SourceRepository.WorkingTreeStatus(_mod.ModFolder));
 
-        var compileService = new PluginCompileService(_mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        var compileService = new PluginCompileService(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
         var compileResult = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
         Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
     }

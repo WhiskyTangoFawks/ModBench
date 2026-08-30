@@ -8,7 +8,7 @@ import {
   type ConflictEntry, type FileConflictIndex,
 } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
-import { resolvePluginPaths } from './explicitSession';
+import { resolvePluginPaths } from './loadOrderSnapshot';
 import { discoverImplicitMasters } from './vanillaMasters';
 import { findUnlistedPlugins, type UnlistedPlugin } from './unlistedPlugins';
 
@@ -97,7 +97,7 @@ export class PluginNode extends vscode.TreeItem {
 
 /** This row's order-aware badge's flagged master names, or undefined when it carries none
  *  (#277 / ADR-0037 AC8) — the composite's structured access to what `PluginNode`'s constructor
- *  above otherwise only bakes into rendered icon/description/tooltip text, so the session-aware
+ *  above otherwise only bakes into rendered icon/description/tooltip text, so the load order-aware
  *  reconciliation there can dedupe by master name without parsing that text. */
 export function orderIssueMastersOf(node: PluginListNode): string[] | undefined {
   return node.kind === 'plugin' && node.orderStatus?.kind === 'masterNotLoadedBefore'
@@ -214,7 +214,7 @@ export function pluginNamesInSelection(clicked: PluginListNode | undefined, sele
 /** #97 / ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
  *  and its new `plugins.txt` `*` state, exactly as `setPluginEnabled` just wrote it. Fired only
  *  from a real toggle, never from `invalidate()`'s generic re-render (a filter keystroke, an
- *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend session
+ *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend
  *  to apply. The composition root (`extension.ts`) is the only subscriber: Mod Management itself
  *  never calls the backend (root CLAUDE.md), so this event is as far as this module's own
  *  knowledge of the mutation goes. */
@@ -303,7 +303,7 @@ export class PluginListProvider
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
    *  invalidate so the tree re-reads the persisted state. Fires `onDidChangeParticipation`
    *  after the write succeeds (#97 / ADR-0035 § Live mutation) — the composition root's cue to
-   *  apply the same change to a running backend session, live. */
+   *  apply the same change to a running backend, live. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
     this.invalidate();
@@ -313,7 +313,7 @@ export class PluginListProvider
   /** Resolve a plugin NAME to its winning physical path — the MO2-priority
    *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
    *  folder for an unmanaged vanilla/DLC/CC plugin (the same resolution the
-   *  editing-session builder performs via `resolvePluginPaths`). Used by the
+   *  editing-load order builder performs via `resolvePluginPaths`). Used by the
    *  Reveal in Explorer row action (issue #69). Returns undefined when no
    *  instanceRoot is configured or resolution fails (ini/index unreadable) — a
    *  fresh read each call, since reveal is a rare explicit action. */

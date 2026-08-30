@@ -132,7 +132,7 @@ const PLUGIN_ROW: FakeRow = { file: 'A.esp', kind: 'plugin' };
 const OTHER_ROW: FakeRow = { file: 'B.esp', kind: 'plugin' };
 const ERROR_ROW: FakeRow = { kind: 'error' };
 
-describe('PluginsTreeComposite with no session', () => {
+describe('PluginsTreeComposite with no backend running', () => {
   it('renders exactly the load-order rows, in order', async () => {
     const { composite } = make([PLUGIN_ROW, OTHER_ROW]);
 
@@ -157,32 +157,32 @@ describe('PluginsTreeComposite with no session', () => {
   });
 });
 
-describe('PluginsTreeComposite when a session starts', () => {
-  it('makes rows in the session collapsible', async () => {
+describe('PluginsTreeComposite when a mEdit starts', () => {
+  it('makes rows in the load order collapsible', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  it('matches the session case-insensitively, like every other plugins.txt name comparison', async () => {
+  it('matches the load order case-insensitively, like every other plugins.txt name comparison', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['a.ESP']));
+    composite.setLoadOrder(new Set(['a.ESP']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
-  // A chevron on a row the session never indexed would open onto an empty list, which reads as
+  // A chevron on a row the load order never indexed would open onto an empty list, which reads as
   // "this plugin has no records" rather than "this plugin isn't loaded" (ADR-0026).
-  it('leaves a row the session does not hold as a leaf', async () => {
+  it('leaves a row the load order does not hold as a leaf', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(OTHER_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
@@ -191,7 +191,7 @@ describe('PluginsTreeComposite when a session starts', () => {
     const { composite, render } = make([ERROR_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(ERROR_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
@@ -204,7 +204,7 @@ describe('PluginsTreeComposite when a session starts', () => {
     const before = await render();
     const readsBefore = rowSource.getChildrenCalls;
 
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
 
     expect(rowSource.getChildrenCalls).toBe(readsBefore);
     expect(await composite.getChildren()).toEqual(before);
@@ -215,7 +215,7 @@ describe('PluginsTreeComposite when a session starts', () => {
     const fired: unknown[] = [];
     composite.onDidChangeTreeData((e) => fired.push(e));
 
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(fired).toHaveLength(1);
   });
@@ -229,25 +229,25 @@ describe('PluginsTreeComposite when a session starts', () => {
 describe('PluginsTreeComposite — a record filter hides a plugin with no matches (#396 / ADR-0035)', () => {
   it('omits a plugin with no matching records from the row set entirely', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp');
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
 
     expect(await render()).toEqual([OTHER_ROW]);
   });
 
   it('keeps a plugin the filter still matches visible and expandable', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp');
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
     await render();
 
     expect(composite.getTreeItem(OTHER_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
   });
 
   // No filter machinery wired (the accessor absent) has to read the same as "no filter active" —
-  // every existing session-start test above already asserts a visible, expandable row with no
+  // every existing load order-start test above already asserts a visible, expandable row with no
   // third argument at all, so this only has to hold the line rather than prove it fresh.
-  it('keeps every session row present and expandable when hasMatchingRecords is not wired', async () => {
+  it('keeps every load order row present and expandable when hasMatchingRecords is not wired', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(await render()).toEqual([PLUGIN_ROW]);
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.Collapsed);
@@ -258,7 +258,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
   // a candidate for the chevron.
   it('never hides a row that stands for no plugin file', async () => {
     const { composite, render } = make([PLUGIN_ROW, ERROR_ROW], new FakeChildren(), () => false);
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(await render()).toEqual([ERROR_ROW]);
   });
@@ -268,10 +268,10 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
     const { composite, render } = make(
       [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp' || matches,
     );
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
     expect(await render()).toEqual([OTHER_ROW]);
 
-    // Stands in for SessionController.clearFilter's real hand-off: refreshMatchingPlugins flips
+    // Stands in for LoadOrderController.clearFilter's real hand-off: refreshMatchingPlugins flips
     // the per-plugin fact, then fires the same re-render refreshDecorations does.
     matches = true;
     composite.refreshDecorations();
@@ -290,7 +290,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
     const { composite, rowSource, render } = make(
       [PLUGIN_ROW, OTHER_ROW], new FakeChildren(), (file) => file !== 'A.esp' || matches,
     );
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
     expect(await render()).toEqual([OTHER_ROW]);
 
     rowSource.rows.reverse();
@@ -302,12 +302,12 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
 
   // Issue #396's own explicit AC: "this applies even to a plugin with a load error / missing
   // master that would normally always stay visible — the maintainer's explicit call". Both facts
-  // ride the same setSession hand-off as hasMatchingRecords (extension.ts's SessionPluginFiles),
+  // ride the same setLoadOrder hand-off as hasMatchingRecords (extension.ts's LoadOrderPluginFiles),
   // and isHiddenByFilter reads only pluginFileOf/hasMatchingRecords — never masterIssues or
   // loadFailures — so a plugin flagged either way is hidden right along with an ordinary one.
   it('hides a plugin with a missing-master flag while the filter matches none of its records', async () => {
     const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -316,7 +316,7 @@ describe('PluginsTreeComposite — a record filter hides a plugin with no matche
 
   it('hides a plugin that failed to load while the filter matches none of its records', async () => {
     const { composite, render } = make([PLUGIN_ROW], new FakeChildren(), () => false);
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
 
     expect(await render()).toEqual([]);
   });
@@ -330,7 +330,7 @@ describe('PluginsTreeComposite expansion', () => {
     const children = new FakeChildren({ 'A.esp': [WORLDSPACES, RECORD_TYPE] });
     const { composite, render } = make([PLUGIN_ROW], children);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(await composite.getChildren(PLUGIN_ROW)).toEqual([WORLDSPACES, RECORD_TYPE]);
     expect(children.pluginChildrenCalls).toEqual(['A.esp']);
@@ -340,7 +340,7 @@ describe('PluginsTreeComposite expansion', () => {
     const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
     const { composite, render } = make([PLUGIN_ROW], children);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
     const [recordType] = await composite.getChildren(PLUGIN_ROW);
 
     await composite.getChildren(recordType);
@@ -355,7 +355,7 @@ describe('PluginsTreeComposite expansion', () => {
     const children = new FakeChildren({ 'A.esp': [errorNode] });
     const { composite, render } = make([PLUGIN_ROW], children);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(await composite.getChildren(PLUGIN_ROW)).toEqual([errorNode]);
   });
@@ -393,7 +393,7 @@ describe('PluginsTreeComposite expansion', () => {
     const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
     const { composite, render } = make([row], children);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     await composite.getChildren(row);
 
@@ -405,7 +405,7 @@ describe('PluginsTreeComposite expansion', () => {
     const children = new FakeChildren({ 'A.esp': [RECORD_TYPE] });
     const { composite, render } = make([row], children);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     await composite.getChildren(row);
 
@@ -419,7 +419,7 @@ describe('PluginsTreeComposite expansion', () => {
       rows: rowSource, children, pluginFileOf: (row) => row.file,
     });
     await composite.getChildren();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     await composite.getChildren(PLUGIN_ROW);
 
@@ -491,13 +491,13 @@ describe('PluginsTreeComposite — Conflicts node root-wiring (#364)', () => {
   });
 });
 
-describe('PluginsTreeComposite when the session closes', () => {
+describe('PluginsTreeComposite when the mEdit closes', () => {
   it('returns every row to a leaf', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
-    composite.setSession(undefined);
+    composite.setLoadOrder(undefined);
 
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
@@ -505,10 +505,10 @@ describe('PluginsTreeComposite when the session closes', () => {
   it('keeps the load order intact', async () => {
     const { composite, rowSource, render } = make([PLUGIN_ROW, OTHER_ROW]);
     await render();
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
     const readsBefore = rowSource.getChildrenCalls;
 
-    composite.setSession(undefined);
+    composite.setLoadOrder(undefined);
 
     expect(rowSource.getChildrenCalls).toBe(readsBefore);
     expect(await composite.getChildren()).toEqual([PLUGIN_ROW, OTHER_ROW]);
@@ -516,26 +516,26 @@ describe('PluginsTreeComposite when the session closes', () => {
 });
 
 // #97 / ADR-0035 § Live mutation: the composition root's gate for whether a load-order mutation
-// (a checkbox toggle) has a running backend session to apply itself to at all.
-describe('PluginsTreeComposite.hasSession', () => {
-  it('is false before any session is set', () => {
+// (a checkbox toggle) has a running backend to apply itself to at all.
+describe('PluginsTreeComposite.hasLoadOrder', () => {
+  it('is false before any load order is set', () => {
     const { composite } = make([PLUGIN_ROW]);
-    expect(composite.hasSession()).toBe(false);
+    expect(composite.hasLoadOrder()).toBe(false);
   });
 
-  it('is true once a session is set, even an empty one', () => {
+  it('is true once a load order is set, even an empty one', () => {
     const { composite } = make([PLUGIN_ROW]);
-    composite.setSession(new Set());
-    expect(composite.hasSession()).toBe(true);
+    composite.setLoadOrder(new Set());
+    expect(composite.hasLoadOrder()).toBe(true);
   });
 
-  it('is false again once the session closes', () => {
+  it('is false again once the mEdit closes', () => {
     const { composite } = make([PLUGIN_ROW]);
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
-    composite.setSession(undefined);
+    composite.setLoadOrder(undefined);
 
-    expect(composite.hasSession()).toBe(false);
+    expect(composite.hasLoadOrder()).toBe(false);
   });
 });
 
@@ -543,26 +543,26 @@ describe('PluginsTreeComposite.hasSession', () => {
 // PluginMetadata.isImmutable) is decided and rendered here — the one place already exempted from
 // contextBoundary.test.ts's import scan because it has to be able to say in prose what it joins —
 // so that neither PluginListProvider.ts (Mod Management) nor PluginTreeProvider.ts (Editing) has
-// to learn the other's vocabulary. One setter carries both facts a session hands off (which files
+// to learn the other's vocabulary. One setter carries both facts a load order hands off (which files
 // it holds, which of those are read-only), since the two never change independently: nothing in
 // extension.ts calls one without the other. AC5's other half — hiding editing actions from a
 // read-only plugin's context menu — has no command to gate yet (no per-row editing command is
 // contributed in package.json today), so it isn't tested here; see plugins.md.
 describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
-  it('tags a read-only plugin\'s tooltip once the session says so', async () => {
+  it('tags a read-only plugin\'s tooltip once the load order says so', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
   });
 
-  it('matches read-only case-insensitively, like the session set itself', async () => {
+  it('matches read-only case-insensitively, like the load order set itself', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(['a.ESP']));
+    composite.setLoadOrder(new Set(['A.esp']), new Set(['a.ESP']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
   });
@@ -571,7 +571,7 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set());
+    composite.setLoadOrder(new Set(['A.esp']), new Set());
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
   });
@@ -580,12 +580,12 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
   });
 
-  it('clears on session close along with everything else', async () => {
+  it('clears on mEdit close along with everything else', async () => {
     // Both real row providers return the row itself as its own TreeItem (getTreeItem(el) { return
     // el; }), so decorating it mutates the one object the tree keeps reusing across renders —
     // reading the tooltip *while* read-only, before it clears, is what makes this a real
@@ -593,10 +593,10 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
     // place" (which the previous, pre-fix version of this test could not have told apart).
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setSession(new Set(['A.esp']), new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('read-only');
 
-    composite.setSession(undefined);
+    composite.setLoadOrder(undefined);
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBeUndefined();
   });
@@ -610,7 +610,7 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
     });
     await composite.getChildren();
 
-    composite.setSession(new Set(['A.esp']), new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']), new Set(['A.esp']));
 
     const tooltip = composite.getTreeItem(PLUGIN_ROW).tooltip as string;
     expect(tooltip).toContain('Master A.esp is not loaded before this plugin');
@@ -618,13 +618,13 @@ describe('PluginsTreeComposite — read-only tooltip (#276 AC4/AC5)', () => {
 
     // Going read-only → editable on the same (reused) row object must restore exactly the row
     // provider's own tooltip, not leave the read-only note stuck on top of it.
-    composite.setSession(new Set(['A.esp']), new Set());
+    composite.setLoadOrder(new Set(['A.esp']), new Set());
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toBe('Master A.esp is not loaded before this plugin');
   });
 });
 
-// #277 / ADR-0037 AC1/AC2/AC4: a plugin declaring a master absent from the session is flagged
+// #277 / ADR-0037 AC1/AC2/AC4: a plugin declaring a master absent from the load order is flagged
 // with an error decoration and stays fully browsable — never deactivated, excluded or hidden.
 // The wording distinguishes a directly-missing master from one that is itself unloadable, per
 // ADR-0037's own examples ("Missing master: X.esm" vs. "Master Foo.esp cannot be loaded").
@@ -633,7 +633,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -649,7 +649,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Broken.esm', kind: 'Unloadable' as const }]],
     ]));
 
@@ -658,11 +658,11 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     expect(tooltip).not.toContain('Missing master');
   });
 
-  it('matches the plugin key case-insensitively, like the session set itself', async () => {
+  it('matches the plugin key case-insensitively, like the load order set itself', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['A.ESP', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -674,7 +674,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
   it('never touches collapsibleState — AC2, and the leading slot stays the checkbox\'s alone', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -688,7 +688,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     await render();
 
-    composite.setSession(new Set(['A.esp', 'B.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -702,12 +702,12 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
   it('clears icon, description and tooltip once the master resolves (reused-row hazard)', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Missing master');
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map());
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map());
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBeUndefined();
@@ -724,7 +724,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    expect(() => composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    expect(() => composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', undefined as unknown as { masterName: string; kind: 'DirectlyMissing' | 'Unloadable' }[]],
     ]))).not.toThrow();
 
@@ -735,7 +735,7 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
 });
 
 // #449: a tracked plugin whose source has moved past refs/medit/last-compile/<plugin> — "the game
-// can't see your edits yet". Session-derived, same family as the master-issue/load-failure
+// can't see your edits yet". Load-order-derived, same family as the master-issue/load-failure
 // decorations above (icon/description/tooltip, append-never-replace, never the leading slot) rather
 // than the file-override family's FileDecorationProvider tint — this is a git-tracked-state fact,
 // not a filesystem one, and it must coexist with whatever else already decorated the row.
@@ -744,7 +744,7 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
     const { composite, render } = make([PLUGIN_ROW], undefined, undefined, (file) =>
       file === 'a.esp' ? { stale: true, lastCompiledAt: '2026-08-20T12:00:00Z' } : undefined);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
 
@@ -756,7 +756,7 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
   it('never claims the icon slot — the description hint is the primary signal', async () => {
     const { composite, render } = make([PLUGIN_ROW], undefined, undefined, () => ({ stale: true, lastCompiledAt: null }));
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     expect(composite.getTreeItem(PLUGIN_ROW).iconPath).toBeUndefined();
   });
@@ -765,7 +765,7 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW], undefined, undefined, (file) =>
       file === 'a.esp' ? { stale: true, lastCompiledAt: null } : { stale: false, lastCompiledAt: null });
     await render();
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
 
     const item = composite.getTreeItem(OTHER_ROW);
     expect(item.description).toBeUndefined();
@@ -778,7 +778,7 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
   it('coexists with an existing master-issue decoration on the same row, without stealing its icon', async () => {
     const { composite, render } = make([PLUGIN_ROW], undefined, undefined, () => ({ stale: true, lastCompiledAt: null }));
     await render();
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -795,7 +795,7 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
     const { composite, render } = make([PLUGIN_ROW], undefined, undefined, () =>
       stale ? { stale: true, lastCompiledAt: null } : { stale: false, lastCompiledAt: null });
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
     expect(composite.getTreeItem(PLUGIN_ROW).description).toContain('Source ahead');
 
     stale = false;
@@ -809,7 +809,7 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
   it('never decorates when the accessor has nothing to say (untracked plugin, or not wired)', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setSession(new Set(['A.esp']));
+    composite.setLoadOrder(new Set(['A.esp']));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.description).toBeUndefined();
@@ -818,18 +818,18 @@ describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
 });
 
 // #277 / ADR-0037 AC7: a plugin that fails to open or parse still has a row — Mod Management
-// builds rows from plugins.txt, not from the session — so this decorates an existing row with
+// builds rows from plugins.txt, not from the load order — so this decorates an existing row with
 // its recorded reason rather than synthesising a missing one. Data already crosses the wire via
-// SessionLoadResponse.failures (no new endpoint); this covers the tree receiving it.
+// LoadOrderLoadResponse.failures (no new endpoint); this covers the tree receiving it.
 describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)', () => {
   it('flags a row whose plugin failed to load, with the reason', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    // #395: the reason can be a multi-line exception-chain summary (GameSession.PluginLoadFailure
+    // #395: the reason can be a multi-line exception-chain summary (LoadOrder.PluginLoadFailure
     // now joins outer through innermost message) — the tooltip must carry every line, readably.
     const reason = 'InvalidOperationException: Malformed record\nFormatException: bad subrecord at offset 12';
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', reason]]));
+    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', reason]]));
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.iconPath).toBeInstanceOf(vscode.ThemeIcon);
@@ -839,12 +839,12 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
   });
 
   // AC2: the row stays put — plugins.txt still lists it — but it never got indexed, so it's
-  // honestly a leaf, the same non-expandable state a row not yet in the session always has.
+  // honestly a leaf, the same non-expandable state a row not yet in the load order always has.
   it('never abandons the row, but it stays a leaf — it was never indexed', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).collapsibleState).toBe(vscode.TreeItemCollapsibleState.None);
   });
@@ -853,7 +853,7 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
 
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['A.ESP', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['A.ESP', 'Malformed record']]));
 
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
   });
@@ -861,10 +861,10 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
   it('clears once the plugin is no longer reported failed', async () => {
     const { composite, render } = make([PLUGIN_ROW]);
     await render();
-    composite.setSession(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
     expect(composite.getTreeItem(PLUGIN_ROW).tooltip).toContain('Failed to load');
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map(), new Map());
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map(), new Map());
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBeUndefined();
@@ -875,7 +875,7 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     await render();
 
-    composite.setSession(new Set(['B.esp']), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
+    composite.setLoadOrder(new Set(['B.esp']), new Set(), new Map(), new Map([['a.esp', 'Malformed record']]));
 
     const item = composite.getTreeItem(OTHER_ROW);
     expect(item.tooltip).toBeUndefined();
@@ -884,15 +884,15 @@ describe('PluginsTreeComposite — load-failure decoration (#277 / ADR-0037 AC7)
 });
 
 // #277 / ADR-0037 AC8: the order-aware missing-master badge (issue #67, Mod Management, no
-// session needed) and this session-derived state are one concept in the merged tree, never two
+// load order needed) and this load-order-derived state are one concept in the merged tree, never two
 // decorations that can disagree.
-describe('PluginsTreeComposite — reconciling the order-aware badge with session state (#277 AC8)', () => {
+describe('PluginsTreeComposite — reconciling the order-aware badge with load order state (#277 AC8)', () => {
   it('reports a master both signals flag only once, in the backend\'s richer wording', async () => {
     const row: FakeRow = { file: 'A.esp', kind: 'plugin', orderIssueMasters: ['Ghost.esm'] };
     const { composite, render } = make([row]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -909,7 +909,7 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
     const { composite, render } = make([row]);
     await render();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -929,7 +929,7 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
     });
     await composite.getChildren();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map());
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map());
 
     const item = composite.getTreeItem(PLUGIN_ROW);
     expect(item.tooltip).toBe('A.esp\nMaster Ghost.esm is not loaded before this plugin');
@@ -943,7 +943,7 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
     });
     await composite.getChildren();
 
-    composite.setSession(new Set(['A.esp']), new Set(), new Map([
+    composite.setLoadOrder(new Set(['A.esp']), new Set(), new Map([
       ['a.esp', [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' as const }]],
     ]));
 
@@ -952,7 +952,7 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
 });
 
 // #356: a mod-level change that alters which file a plugin name resolves to is absorbed
-// automatically (`pluginDrift.ts` + `SessionController.rereadPlugin`) — there is no longer
+// automatically (`pluginDrift.ts` + `LoadOrderController.rereadPlugin`) — there is no longer
 // anything for this composite to render about it. This guards the retirement: nothing in
 // `PluginsTreeCompositeDeps` names drift any more (TypeScript itself refuses a `driftOf` field —
 // the compiler-enforced half of the retirement), and no combination of inputs produces a
@@ -960,9 +960,9 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with sessio
 // origin change. `PluginListProvider`'s own `contextValue: 'plugin'` is therefore the only value
 // a plugin row can carry out of this composite now.
 describe('PluginsTreeComposite has no drift decoration left to apply (#356)', () => {
-  it('renders every plugin row exactly as its own provider built it, regardless of session state', async () => {
+  it('renders every plugin row exactly as its own provider built it, regardless of load order state', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
-    composite.setSession(new Set(['A.esp', 'B.esp']));
+    composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
     await render();
 
     for (const row of [PLUGIN_ROW, OTHER_ROW]) {

@@ -11,10 +11,10 @@ namespace MEditService.Tests.Api;
 
 /// <summary>
 /// #587 / ADR-0001: the runtime mirror, wired the way the composition root wires it — a real
-/// session, the real <see cref="ExternalChangeWatcher"/>, the real
-/// <see cref="ExternalChangeSessionHook"/> deciding which plugins get an index-mirror watch, and
+/// load order, the real <see cref="ExternalChangeWatcher"/>, the real
+/// <see cref="ExternalChangeLoadOrderHook"/> deciding which plugins get an index-mirror watch, and
 /// <see cref="IndexMirror"/> turning each disk event into an index verb. What is asserted is what
-/// the session <i>answers</i> afterwards, mid-session, with no reload anywhere in the test.
+/// the load order <i>answers</i> afterwards, while the backend runs, with no reload anywhere in the test.
 /// </summary>
 public sealed class IndexMirrorTests
 {
@@ -31,10 +31,10 @@ public sealed class IndexMirrorTests
     private static ExternalChangeWatcher StartMirroring(TrackedModFixture fixture)
     {
         var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-        var mirror = new IndexMirror(fixture.Sessions, NullLogger.Instance);
+        var mirror = new IndexMirror(fixture.Mirror, NullLogger.Instance);
         watcher.IndexedBinaryChanged = mirror.Apply;
-        ExternalChangeSessionHook.RunAfterLoad(
-            fixture.Sessions.Session, fixture.Sessions.Index, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(
+            fixture.Mirror.LoadOrder, fixture.Mirror.Index, watcher, NullLogger.Instance);
         return watcher;
     }
 
@@ -50,12 +50,12 @@ public sealed class IndexMirrorTests
     }
 
     private static IReadOnlyList<string?> EditorIds(TrackedModFixture fixture, PluginKey key) =>
-        [.. fixture.Sessions.Index!.GetDocuments(key).Select(d => d.EditorId)];
+        [.. fixture.Mirror.Index!.GetDocuments(key).Select(d => d.EditorId)];
 
-    // AC1. An untracked plugin's bytes move mid-session and the index follows, with no reload — the
+    // AC1. An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the
     // whole point of extending the watcher past the tracked binaries.
     [Fact]
-    public void AnUntrackedPluginChangedMidSession_IsReindexedWithNoReload()
+    public void AnUntrackedPluginChangedMidReconcile_IsReindexedWithNoReload()
     {
         using var fixture = TrackedModFixture.Untracked();
         using var watcher = StartMirroring(fixture);
@@ -70,7 +70,7 @@ public sealed class IndexMirrorTests
     // AC2. A deletion removes the rows rather than re-reading a file that is not there: the index
     // holds exactly what exists, and the copy stops answering.
     [Fact]
-    public void AnIndexedPluginDeletedMidSession_StopsAnswering()
+    public void AnIndexedPluginDeletedMidReconcile_StopsAnswering()
     {
         using var fixture = TrackedModFixture.Untracked();
         using var watcher = StartMirroring(fixture);
@@ -80,21 +80,21 @@ public sealed class IndexMirrorTests
 
         WaitUntil(() => EditorIds(fixture, fixture.Plugin).Count == 0, TimeSpan.FromSeconds(10));
         Assert.Empty(EditorIds(fixture, fixture.Plugin));
-        Assert.Null(fixture.Sessions.Index!.IndexedContentHash(fixture.Plugin));
+        Assert.Null(fixture.Mirror.Index!.IndexedContentHash(fixture.Plugin));
     }
 
     // AC4. A tracked plugin keeps the behaviour it had: its binary changing is a question for the
     // user (Absorb / Keep), never a silent re-index — its rows come from its source tree, so
     // re-reading the binary would overwrite the working tree with the compiled artifact.
     [Fact]
-    public void ATrackedPluginChangedMidSession_AsksTheUser_AndIsNeverSilentlyReindexed()
+    public void ATrackedPluginChangedMidReconcile_AsksTheUser_AndIsNeverSilentlyReindexed()
     {
         using var fixture = TrackedModFixture.Tracked();
         var mirrored = new List<IndexedBinaryEvent>();
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
         watcher.IndexedBinaryChanged = e => { lock (mirrored) mirrored.Add(e); return true; };
-        ExternalChangeSessionHook.RunAfterLoad(
-            fixture.Sessions.Session, fixture.Sessions.Index, watcher, NullLogger.Instance);
+        ExternalChangeLoadOrderHook.RunAfterReconcile(
+            fixture.Mirror.LoadOrder, fixture.Mirror.Index, watcher, NullLogger.Instance);
 
         RewriteBinaryWithExtraNpc(fixture, "ChangedByXEdit");
 
@@ -110,11 +110,11 @@ public sealed class IndexMirrorTests
     // A change to a plugin the index holds no rows for is not the mirror's business — there is
     // nothing to compare against and nothing to refresh.
     [Fact]
-    public void RunAfterLoad_MirrorsNothing_WhenThereIsNoSession()
+    public void RunAfterReconcile_MirrorsNothing_WhenThereIsNoLoadOrder()
     {
         using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
 
-        var offers = ExternalChangeSessionHook.RunAfterLoad(null, null, watcher, NullLogger.Instance);
+        var offers = ExternalChangeLoadOrderHook.RunAfterReconcile(null, null, watcher, NullLogger.Instance);
 
         Assert.Empty(offers);
         Assert.Empty(watcher.Unanswered());

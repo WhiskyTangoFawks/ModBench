@@ -50,8 +50,8 @@ interface PluginHeaderProps {
 // — "load order" bare is the exact ambiguity both call out). Following the old advice would do
 // nothing.
 //
-// It is also not the only cause: `GameSession.AddUnlistedPlugin`/`SessionManager.
-// LoadUnlistedPlugin` (MEditService.Core/Session/) open a copy the effective load order doesn't
+// It is also not the only cause: `LoadOrder.Open`/`LoadOrderMirror.
+// LoadUnlistedPlugin` (MEditService.Core/Load order/) open a copy the effective load order doesn't
 // name for either of two reasons the frontend can't currently tell apart — a copy shadowed by a
 // higher-priority mod, *or* a plugin file `plugins.txt` never lists at all (an enabled mod's own
 // optional/extra .esp). `LoadUnlistedPlugin`'s own comment and `modmanager/unlistedPlugins.ts`'s

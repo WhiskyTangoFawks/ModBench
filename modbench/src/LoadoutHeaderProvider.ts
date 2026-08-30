@@ -6,9 +6,9 @@ import * as vscode from 'vscode';
  *  all; the rubric's first rule ("scope first") needs somewhere for them to go, and VS Code's
  *  container-level `…` is its own auto-generated Views menu, not a contribution point.
  *
- *  #352: the editing session (Launch/Close mEdit) moved off this header onto the Plugins view
+ *  #352: the editing backend (Launch/Close mEdit) moved off this header onto the Plugins view
  *  — the maintainer's ruling was that mEdit is an option on Plugins, not a workspace action —
- *  so this view no longer reads backend/session state at all.
+ *  so this view no longer reads backend/load order state at all.
  *
  *  Lives at the composition root, not in either bounded context: it reads a Mod-Management
  *  readout, so importing either context's internals would put the language boundary inside

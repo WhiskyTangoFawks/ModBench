@@ -1,5 +1,5 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -21,12 +21,12 @@ public interface IWorldspaceQueryService
 /// placement / cell_location side tables — everything that plugin declares (its own records and
 /// overrides), never a cross-plugin winner. See ADR-0023.
 /// </summary>
-public sealed class WorldspaceQueryService(ISessionManager session, ILogger<WorldspaceQueryService>? logger = null)
+public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<WorldspaceQueryService>? logger = null)
     : IWorldspaceQueryService
 {
     private const int WorldspaceListLimit = 5000;
 
-    private readonly ISessionManager _session = session;
+    private readonly ILoadOrderMirror _mirror = loadOrder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     public IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null)
@@ -90,11 +90,11 @@ public sealed class WorldspaceQueryService(ISessionManager session, ILogger<Worl
         RequireRepository().GetInteriorCells(new PluginKey(plugin, origin ?? ResolveOrigin(plugin)), limit, offset);
 
     private IRecordReads RequireRepository() =>
-        _session.Repository ?? throw new InvalidOperationException("No session loaded.");
+        _mirror.Repository ?? throw new InvalidOperationException("No load order has been received.");
 
     // #296 / #305: wire-facing (WorldspaceEndpoints) — an ordinary load-order row has no origin to
     // give, so this stays the fallback. #34/#305 gave the callers that *do* know (a tree row built
     // from a specific copy) an explicit origin parameter on every method above instead.
     private string ResolveOrigin(string plugin) =>
-        PluginOriginResolver.Resolve(_session.Session, plugin);
+        PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
 }

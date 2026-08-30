@@ -30,12 +30,12 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
 
     private async Task LoadOnly(ScatteredFixtureData fx)
     {
-        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
+        var load = await _client.PutAsJsonAsync("/load-order", new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Where(p => p.Origin == Origin)
-                .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = true }),
+                .Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();

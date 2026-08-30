@@ -4,7 +4,7 @@ import * as path from 'path';
 
 /**
  * ADR-0041 / #415: the webview writes through exactly one message, EDIT_FIELD, posted from exactly
- * one module. Not through RecordSessionClient, which stays read-only — an edit travels
+ * one module. Not through RecordPanelClient, which stays read-only — an edit travels
  * webview → extension host → backend so that a refusal can become a native notification, a surface
  * only the host has.
  *
@@ -14,14 +14,14 @@ import * as path from 'path';
  */
 describe('the record editor webview writes through exactly one path (#415)', () => {
   const dir = __dirname;
-  const clientSrc = fs.readFileSync(path.join(dir, 'RecordSessionClient.ts'), 'utf8');
+  const clientSrc = fs.readFileSync(path.join(dir, 'RecordPanelClient.ts'), 'utf8');
   const memberNames = [...clientSrc.matchAll(/^ {2}(\w+)\s*[(:]/gm)].map((m) => m[1]);
 
   const sources = fs.readdirSync(dir)
     .filter((f) => (f.endsWith('.ts') || f.endsWith('.tsx')) && !f.endsWith('.test.ts') && !f.endsWith('.test.tsx'));
   const read = (f: string) => fs.readFileSync(path.join(dir, f), 'utf8');
 
-  it('RecordSessionClient stays read-only — the backend client is not the write path', () => {
+  it('RecordPanelClient stays read-only — the backend client is not the write path', () => {
     // Positive control, same scan: the reads the compare grid is built on are still declared.
     expect(memberNames).toContain('load');
     expect(memberNames).toContain('conditionRunOnTargets');

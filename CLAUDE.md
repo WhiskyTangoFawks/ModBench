@@ -67,7 +67,7 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   there matches nothing and returns success, which reads as "no such convention
   upstream" rather than "you looked in the wrong place".
 - New end-to-end command = 4 touch points, else half-wired: backend endpoint +
-  `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) →
+  `/regenerate-api` → frontend (`PluginRepository`/`EditingController`) →
   `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in
   integration test.
 - **xEdit decides plugin-editing UX; VS Code decides the vehicle.** Before designing

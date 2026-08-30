@@ -1,6 +1,6 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -11,7 +11,7 @@ namespace MEditService.Tests.RealData;
 /// <summary>
 /// #512: the once-per-class half of <see cref="CompileRoundTripGateTests"/>' setup. xUnit
 /// constructs exactly one of these per test class run (via <c>IClassFixture&lt;T&gt;</c>), so the
-/// ~36s <see cref="TrackService.TrackAsync"/> call — copy the #369 fixture plugin, load a session,
+/// ~36s <see cref="TrackService.TrackAsync"/> call — copy the #369 fixture plugin, load a load order,
 /// Track it — runs once instead of once per <c>[Fact]</c>. That repeated Track (present since #416)
 /// was 6 of the backend suite's 9 minutes on its own.
 ///
@@ -32,7 +32,7 @@ public sealed class CompileRoundTripGateFixture : IDisposable
     public string TrackedTemplateFolder { get; } =
         Directory.CreateTempSubdirectory("medit-compile-roundtrip-template-").FullName;
     public string GameDirectory { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-game-").FullName;
-    public SessionManager Sessions { get; }
+    public LoadOrderMirror Mirror { get; }
     public PluginKey Plugin { get; } = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public CompileRoundTripGateFixture()
@@ -40,15 +40,15 @@ public sealed class CompileRoundTripGateFixture : IDisposable
         var pluginPath = Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        Sessions = new SessionManager(
+        Mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)Sessions).LoadExplicit(
+        ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
-            [new ExplicitPluginInput(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin!, true)],
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Sessions.Session!, Plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(Mirror.LoadOrder!, Plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         CopyDirectory(ModFolder, TrackedTemplateFolder);
@@ -56,14 +56,14 @@ public sealed class CompileRoundTripGateFixture : IDisposable
 
     public void Dispose()
     {
-        Sessions.Dispose();
+        Mirror.Dispose();
         TryDelete(ModFolder);
         TryDelete(TrackedTemplateFolder);
         TryDelete(GameDirectory);
     }
 
     public PluginCompileService CompileService() =>
-        new(Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     public string SourceRoot => SourceRootFor(ModFolder);
 

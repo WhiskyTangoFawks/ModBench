@@ -40,10 +40,10 @@ public sealed class ContainerRecordRegressionTests : IDisposable
     public void Dispose() => _fixture.Dispose();
 
     private RecordEditService EditService() =>
-        new(_fixture.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_fixture.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private IRecordQueryService Reads() =>
-        new RecordQueryService(_fixture.Sessions, SharedSchemaReflector.Instance, new ConflictClassifier());
+        new RecordQueryService(_fixture.Mirror, SharedSchemaReflector.Instance, new ConflictClassifier());
 
     // ---- Reads degrade (SourceFreshness) ----
 
@@ -88,7 +88,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
             File.ReadAllText(file));
         // Scope 4: the source unit's own indexed document moved with the file.
         Assert.Contains(
-            "250.0", _fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
+            "250.0", _fixture.Mirror.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin)!.Body!, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().DeleteRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.Null(_fixture.Mirror.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
     }
 
     [Fact]
@@ -201,8 +201,8 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var result = EditService().RenumberRecord(_fixture.Plugin, _fixture.Cell.ToString());
 
         Assert.True(result.Applied, result.Message);
-        Assert.Null(_fixture.Sessions.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
-        Assert.NotNull(_fixture.Sessions.Index!.GetDocument(result.NewFormKey!, _fixture.Plugin));
+        Assert.Null(_fixture.Mirror.Index!.GetDocument(_fixture.Cell.ToString(), _fixture.Plugin));
+        Assert.NotNull(_fixture.Mirror.Index!.GetDocument(result.NewFormKey!, _fixture.Plugin));
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var pluginPath = Path.Combine(_fixture.ModFolder, ContainerModFixture.PluginName);
         var beforeMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
 
-        ExternalChangeAbsorber.Absorb(_fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, _fixture.Sessions.Session!);
+        ExternalChangeAbsorber.Absorb(_fixture.ModFolder, ContainerModFixture.PluginName, pluginPath, _fixture.Mirror.LoadOrder!);
 
         var afterMain = GitCli.Run(Path.Combine(_fixture.ModFolder, ".git"), _fixture.ModFolder, "rev-parse", "main").Trim();
         Assert.NotEqual(beforeMain, afterMain);
@@ -264,7 +264,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -290,7 +290,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.Cell.ToString(), result.LandedFormKeys);
@@ -323,7 +323,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Contains(_fixture.EmbedCell.ToString(), result.LandedFormKeys);
@@ -350,7 +350,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
 
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
+            _fixture.Mirror.Index!, SharedSchemaReflector.Instance, NullLogger<ContainerRecordRegressionTests>.Instance);
 
         Assert.False(result.Applied);
         Assert.Contains(_fixture.Cell.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -382,7 +382,7 @@ public sealed class ContainerRecordRegressionTests : IDisposable
         var entries = new List<LogEntry>();
         var result = ExternalChangeEditLander.Keep(
             _fixture.ModFolder, _fixture.Plugin, pluginPath, GameRelease.Fallout4,
-            _fixture.Sessions.Index!, SharedSchemaReflector.Instance, new CollectingLogger(entries));
+            _fixture.Mirror.Index!, SharedSchemaReflector.Instance, new CollectingLogger(entries));
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.DoesNotContain(brandNewCellKey.ToString(), result.LandedFormKeys);

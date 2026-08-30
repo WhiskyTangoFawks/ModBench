@@ -162,7 +162,7 @@ public sealed class ConditionIndexerTests : IDisposable
             ModKey.FromFileName("CtdaTest.esp"),
             Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }
@@ -180,8 +180,8 @@ public sealed class ConditionIndexerTests : IDisposable
             Path.Combine(_fixture.DataFolder, "CtdaTest.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
 
-        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(mod, 1, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         Assert.NotEmpty(GetConditions(repo, _cobjFormKey.ToString(), "CtdaTest.esp", "ModA"));

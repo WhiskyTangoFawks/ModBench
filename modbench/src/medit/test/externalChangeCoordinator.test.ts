@@ -175,7 +175,7 @@ describe('runRebase', () => {
 });
 
 // #432: the poller has no reason to exist before a backend does — these prove the gate reacts to
-// the backend's health signal alone (never a timer, never session state, which this fixture has no
+// the backend's health signal alone (never a timer, never load order state, which this fixture has no
 // concept of at all).
 describe('gateExternalChangePolling', () => {
   function makeGateDeps() {

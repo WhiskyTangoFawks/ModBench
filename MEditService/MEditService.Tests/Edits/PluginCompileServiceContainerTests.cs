@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -51,7 +51,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
 
     private readonly string _modFolder;
     private readonly string _gameDirectory;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
     private readonly PluginKey _plugin = new(PluginName, Origin);
 
     private readonly FormKey _cellA;
@@ -139,21 +139,21 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
         (_worldspace, _topCell, _exteriorCell) = (worldspace.FormKey, topCell.FormKey, exteriorCell.FormKey);
         (_questA, _questB) = (questA.FormKey, questB.FormKey);
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
+        ((ILoadOrderMirror)_mirror).Reconcile(
             _gameDirectory,
-            [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)],
+            [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -166,7 +166,7 @@ public sealed class PluginCompileServiceContainerTests : IDisposable
     }
 
     private PluginCompileService CompileService() =>
-        new(_sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(_mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     /// <summary>Compiles, asserts success, and hands back the binary that landed — every test here is
     /// "compile, then read what was written", never "compile and trust the result object".</summary>

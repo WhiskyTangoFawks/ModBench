@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -25,7 +25,7 @@ public sealed class HeadRelationDisjointnessTests
 {
     /// <summary>
     /// The case no amount of care inside <c>SourceIngest</c> can cover, because it never goes near it:
-    /// <see cref="ISessionManager.ReindexPlugin"/> re-reads the <i>binary</i> and calls
+    /// <see cref="ILoadOrderMirror.ReindexPlugin"/> re-reads the <i>binary</i> and calls
     /// <see cref="IRecordIndex.Index"/> straight, for a plugin whose records are already dirty.
     /// </summary>
     [Fact]
@@ -33,19 +33,19 @@ public sealed class HeadRelationDisjointnessTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var edited = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(mod.Plugin, mod.Npc.ToString(), "height_max", System.Text.Json.JsonDocument.Parse("0.75").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
         // Precondition: the record really is dirty, so a snapshot row exists to be duplicated.
         Assert.Equal(
             WorkingTreeState.Modified,
-            mod.Sessions.Index!.Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
+            mod.Mirror.Index!.Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
-        await ((ISessionManager)mod.Sessions).ReindexPlugin(TrackedModFixture.PluginName);
+        await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(TrackedModFixture.PluginName);
 
-        var atHead = mod.Sessions.Index!.At(RecordRef.Head)
+        var atHead = mod.Mirror.Index!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))
             .Items.Count(r => string.Equals(r.FormKey, mod.Npc.ToString(), StringComparison.Ordinal));
 
@@ -54,18 +54,18 @@ public sealed class HeadRelationDisjointnessTests
 
     /// <summary>The same invariant for the inverse verb: <see cref="IRecordIndex.Unindex"/> promises to
     /// remove every trace of a key, and a surviving snapshot would keep answering at Head for a plugin
-    /// the session no longer holds — the opposite of #34/ADR-0035's "hidden means absent".</summary>
+    /// the load order no longer holds — the opposite of #34/ADR-0035's "hidden means absent".</summary>
     [Fact]
     public void UnindexingAPluginWithADirtyRecord_LeavesNothingAtHead()
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var edited = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edited = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(mod.Plugin, mod.Npc.ToString(), "height_max", System.Text.Json.JsonDocument.Parse("0.8").RootElement);
         Assert.True(edited.Applied, edited.Message);
 
-        mod.Sessions.Index!.Unindex(mod.Plugin);
+        mod.Mirror.Index!.Unindex(mod.Plugin);
 
-        Assert.Null(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
+        Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
     }
 }

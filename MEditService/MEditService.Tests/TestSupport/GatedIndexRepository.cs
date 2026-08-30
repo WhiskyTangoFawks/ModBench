@@ -62,7 +62,7 @@ internal sealed class GatedIndexRepository(
     public bool WinnersComputed { get; private set; }
     public bool Disposed { get; private set; }
 
-    public override void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null)
+    public override void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null)
     {
         var pluginName = plugin.ModKey.FileName.ToString();
         if (gateBefore != null && pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase))
@@ -77,7 +77,7 @@ internal sealed class GatedIndexRepository(
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"injected index failure for {pluginName}");
 
-        base.Index(plugin, loadOrderIndex, participates, key, filePath);
+        base.Index(plugin, registration, key, filePath);
         Indexed.Add(pluginName);
     }
 

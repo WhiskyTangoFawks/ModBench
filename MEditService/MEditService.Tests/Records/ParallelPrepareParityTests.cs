@@ -33,7 +33,7 @@ public class ParallelPrepareParityTests
         using var repo = new DuckDbRecordIndex(Reflector, new TableDdlBuilder(Reflector), NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
         var key = new PluginKey("Parity.esp", "ModA");
-        repo.Index(mod, loadOrderIndex: 0, participates: true, key: key);
+        repo.Index(mod, Registration.Participating(0), key);
 
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
         var stored = repo.GetDocuments(key).ToDictionary(d => d.FormKey, d => d.Body!);

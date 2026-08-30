@@ -165,7 +165,7 @@ function rootLevelEntries(index: FileConflictIndex): ConflictEntry[] {
 }
 
 /** Winning absolute path of every root-level plugin the index knows, keyed by lowercased
- *  basename. Shared by the editing-session builder and the Plugin List's order check.
+ *  basename. Shared by the editing-load order builder and the Plugin List's order check.
  *  Root-level-only is this function's own documented contract: every key it produces is a bare
  *  basename (no `/`, since a root-level relativePath already is one), matching how both real
  *  callers (resolvePluginPaths here, computePluginOrderStatuses in statusChecker.ts) query it —
@@ -178,7 +178,7 @@ export function rootLevelWinners(index: FileConflictIndex): Map<string, string> 
 
 /** Winning mod's folder name for every root-level plugin the index knows, keyed by lowercased
  *  basename — the origin-resolution twin of rootLevelWinners above (#269 / ADR-0036). Same
- *  root-level-only contract; used by explicitSession.ts to record a mod-provided plugin's
+ *  root-level-only contract; used by loadOrderSnapshot.ts to record a mod-provided plugin's
  *  origin. */
 export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));

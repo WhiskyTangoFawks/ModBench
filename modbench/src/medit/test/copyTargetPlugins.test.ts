@@ -10,7 +10,7 @@ import type { PluginMetadata } from '../ApiClient';
 function plugin(name: string, isImmutable = false): PluginMetadata {
   return {
     name, path: `/data/${name}`, loadOrderIndex: 0, isLight: false, isMaster: false,
-    masters: [], recordCount: 0, isImmutable, origin: 'Data', masterIssues: [],
+    masters: [], recordCount: 0, isImmutable, enabled: true, winning: true, participates: true, inLoadOrder: true, origin: 'Data', masterIssues: [],
     hasMatchingRecords: true, compileStale: false, lastCompiledAt: null,
   };
 }

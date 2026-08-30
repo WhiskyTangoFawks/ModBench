@@ -206,11 +206,6 @@
         "category": "Modbench"
       },
       {
-        "command": "modbench.reloadSession",
-        "title": "Reload Session",
-        "category": "Modbench"
-      },
-      {
         "command": "modbench.refresh",
         "title": "Refresh",
         "icon": "$(refresh)",
@@ -704,11 +699,6 @@
           "group": "2_deployment"
         },
         {
-          "command": "modbench.reloadSession",
-          "when": "view == modbench.loadoutHeader",
-          "group": "1_session"
-        },
-        {
           "command": "modbench.pluginListTree.filter",
           "when": "view == modbench.pluginListTree && !modbench.pluginListTree.filterActive",
           "group": "navigation@1"
@@ -735,12 +725,12 @@
         },
         {
           "command": "modbench.modList.launchMedit",
-          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.sessionRunning",
+          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.backendRunning",
           "group": "1_medit"
         },
         {
           "command": "modbench.closeMedit",
-          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.sessionRunning",
+          "when": "view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.backendRunning",
           "group": "1_medit"
         },
         {

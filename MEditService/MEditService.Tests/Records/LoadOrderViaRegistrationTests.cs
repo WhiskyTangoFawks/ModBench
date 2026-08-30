@@ -9,9 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #583 / ADR-0001: load order lives only on `session_plugins`. Reordering `plugins.txt` — modelled
+// #583 / ADR-0001: load order lives only on `registrations`. Reordering `plugins.txt` — modelled
 // here as two Register calls with swapped load_order_idx values and no re-index — touches one
-// `session_plugins` row per plugin and no record: override stacks and conflict classification follow
+// `registrations` row per plugin and no record: override stacks and conflict classification follow
 // the new order purely from that join, exactly as they would from a re-index at the new order.
 public class LoadOrderViaRegistrationTests
 {
@@ -55,8 +55,8 @@ public class LoadOrderViaRegistrationTests
         var bKey = new PluginKey("PluginB.esp", "Data");
 
         using var repo = OpenRepo();
-        repo.Index(modA, 0, participates: true, key: aKey);
-        repo.Index((IModGetter)modB, 1, participates: true, key: bKey);
+        repo.Index(modA, Registration.Participating(0), aKey);
+        repo.Index((IModGetter)modB, Registration.Participating(1), bKey);
         repo.UpdateWinners();
 
         var beforeA = MirrorRecordCount(repo, aKey);
@@ -64,9 +64,9 @@ public class LoadOrderViaRegistrationTests
         Assert.True(repo.GetOverrideStack(npcKey.ToString())!.Entries
             .Single(e => e.Plugin.Name == bKey.Name).IsWinner, "B, later in load order, should win before reorder.");
 
-        // Reorder via `session_plugins` only — B now sorts before A — no Index() call.
-        repo.Register(aKey, loadOrderIndex: 1, participates: true);
-        repo.Register(bKey, loadOrderIndex: 0, participates: true);
+        // Reorder via `registrations` only — B now sorts before A — no Index() call.
+        repo.Register(aKey, Registration.Participating(1));
+        repo.Register(bKey, Registration.Participating(0));
         repo.UpdateWinners();
 
         var stack = repo.GetOverrideStack(npcKey.ToString())!.Entries;

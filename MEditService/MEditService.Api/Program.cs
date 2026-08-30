@@ -6,11 +6,11 @@ using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Serilog;
 using Serilog.Events;
@@ -21,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
 
 // #515: the "LocalAppData" env var default this used to set by hand now lives in
 // LocalizedStrings.EnsureLocalAppDataDefault, called from every Core deep-parse call site
-// (Source.LocalizedStrings.ForRead) before Mutagen ever needs it — no session loads (and no
+// (Source.LocalizedStrings.ForRead) before Mutagen ever needs it — no reconcile runs (and no
 // Mutagen call at all) before this process's first plugin parse, so nothing here needs to set it
 // up front any more.
 
@@ -66,7 +66,7 @@ try
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
-    builder.Services.AddSingleton<ISessionManager, SessionManager>();
+    builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
     builder.Services.AddSingleton<IContainerChildQueryService, ContainerChildQueryService>();
@@ -78,17 +78,17 @@ try
     // #416: the write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
     // #417: the bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
-    // whole process, so the load-time check (session-load handlers) and the live watcher share it.
+    // whole process, so the reconcile-time check (PUT /load-order) and the live watcher share it.
     builder.Services.AddSingleton<ExternalChangeWatcher>();
 
     var app = builder.Build();
 
-    // #587 / ADR-0001: the index keeps mirroring the disk while a session is live. Subscribed once
-    // here rather than per load — the watcher is a process singleton, and re-subscribing on every
-    // load would stack a handler per load; which plugins are watched is re-decided per load instead
-    // (ExternalChangeSessionHook.RunAfterLoad).
+    // #587 / ADR-0001: the index keeps mirroring the disk while a load order is held. Subscribed
+    // once here rather than per reconcile — the watcher is a process singleton, and re-subscribing
+    // on every reconcile would stack a handler per reconcile; which plugins are watched is re-decided
+    // per reconcile instead (ExternalChangeLoadOrderHook.RunAfterReconcile).
     var indexMirror = new IndexMirror(
-        app.Services.GetRequiredService<ISessionManager>(),
+        app.Services.GetRequiredService<ILoadOrderMirror>(),
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
@@ -121,7 +121,7 @@ try
         .WithName("Health")
         .WithTags("Health");
 
-    app.MapSessionEndpoints();
+    app.MapLoadOrderEndpoints();
     app.MapPluginEndpoints();
     app.MapRecordEndpoints(app.Services.GetRequiredService<ILoggerFactory>());
     app.MapWorldspaceEndpoints(app.Services.GetRequiredService<ILoggerFactory>());

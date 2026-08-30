@@ -1,4 +1,4 @@
-using MEditService.Core.Session;
+using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Queries;
 
@@ -13,7 +13,7 @@ namespace MEditService.Core.Queries;
 // PluginOrigin.DataDirectory is elided: a plugin resolved from the game's single Data directory is
 // already uniquely identified by its filename (there is only one Data/), so the plain filename is
 // itself a collision-free key for that case, not a shortcut that loses information. This keeps
-// every existing single-origin fixture/session (the overwhelming common case today, since two
+// every existing single-origin fixture/load order (the overwhelming common case today, since two
 // same-filename plugins can't load together until #34) producing the exact plain-filename keys it
 // always has — the whole test suite doesn't need rekeying for a case nothing exercises yet.
 public static class ColumnKey

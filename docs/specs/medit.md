@@ -6,7 +6,7 @@ commit, Save & Compile, and external-change handling. This document covers what 
 across mEdit's surfaces, unaffected by that model.
 
 This is the **overview** for the mEdit view, not a surface spec. It covers what is shared
-across mEdit's surfaces — the session lifecycle, the status bar, the command palette, and the
+across mEdit's surfaces — the load order lifecycle, the status bar, the command palette, and the
 architecture seams — and points at the spec for each surface. Anything specific to one surface
 lives in that surface's spec.
 
@@ -21,7 +21,7 @@ that launches this one is specified in [mods.md](mods.md).
 
 **Vocabulary note:** navigation starts from the **Plugins tree** ([plugins.md](plugins.md)) — one
 merged surface, owned jointly by Mod Management (the rows: identity, Plugin load order, checkbox)
-and Editing (a row's children: record types, records, the spatial hierarchy, whenever a session
+and Editing (a row's children: record types, records, the spatial hierarchy, whenever a load order
 is running). [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) is the design;
 [#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) built it.
 
@@ -40,22 +40,22 @@ blind to the loadout context.
 ## Solution
 
 The **mEdit view** — a set of native VS Code surfaces driven by a lazily-spawned C# backend
-session over the active loadout:
+load order over the active loadout:
 
 | Surface | What it is | Spec |
 | --- | --- | --- |
-| **Plugins tree** | Sidebar tree; the entry point for all navigation — records by type, a spatial worldspace/cell tree, and the SQL record filter, once a session is running | [plugins.md](plugins.md) |
+| **Plugins tree** | Sidebar tree; the entry point for all navigation — records by type, a spatial worldspace/cell tree, and the SQL record filter, once the backend is running | [plugins.md](plugins.md) |
 | **Record editor panel** | Editor-tab webview; the per-field, per-plugin compare grid with conflict color coding and in-place editing that writes working-tree source text | [medit-record-editor.md](medit-record-editor.md) |
 | **Referenced By tree** | Panel-container tree that follows the active record editor; what points at this record | [medit-referenced-by.md](medit-referenced-by.md) |
 | **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
-| **Status bar item** | Backend/session state | This document |
+| **Status bar item** | Backend/load order state | This document |
 
 **Launch mEdit** (from the [Plugins view](plugins.md)'s title-bar overflow, #352) spawns the
-backend and builds the session from every line of the active profile's `plugins.txt` — disabled
+backend and builds the load order from every line of the active profile's `plugins.txt` — disabled
 entries included, carrying their participation (#270 / ADR-0035) — plus vanilla masters
-(`load-explicit`); **Close mEdit** tears the session down. The Plugins tree's rows gain chevrons
-once the session is ready — no other surface swap happens: the Loadout views (Mods, Plugins,
-Downloads) are always visible regardless of session state, and Referenced By is
+(`load-explicit`); **Close mEdit** tears the load order down. The Plugins tree's rows gain chevrons
+once the load order is ready — no other surface swap happens: the Loadout views (Mods, Plugins,
+Downloads) are always visible regardless of load order state, and Referenced By is
 always-present-and-following rather than gated on a mode.
 Editing writes records to the working-tree source text of tracked plugins (ADR-0041); writing the
 physical plugin file is a separate Save & Compile gesture, and neither requires a deploy.
@@ -64,17 +64,17 @@ physical plugin file is a separate Save & Compile gesture, and neither requires 
 
 Surface-specific stories live in the surface specs above. These are the cross-cutting ones:
 
-1. As a mod author, I want to start an editing session from my loadout with a single action, so that
+1. As a mod author, I want to start an editing backend from my loadout with a single action, so that
    the editor opens against exactly the plugins my active profile loads, with no separate
-   session-setup step.
+   load order-setup step.
 2. As a user, I want a status bar item that tells me whether the backend is running,
-   connecting, attached, or has a session loaded (and for which game, with a plugin count), so
+   connecting, attached, or has a reconcileed (and for which game, with a plugin count), so
    that I always know the editor's state.
 3. As a user, I want clicking the status bar item when the backend isn't running to tell me how
    to start it, so that I'm not stuck guessing.
-4. As a user, I want closing the editor to tear the session down, so that a backend I'm not
+4. As a user, I want closing the editor to tear the load order down, so that a backend I'm not
    using isn't left running against my loadout.
-5. As a user, I want to run a script against the whole session or a specific record/plugin
+5. As a user, I want to run a script against the whole load order or a specific record/plugin
    (planned), so that I can automate repetitive edits.
 6. As a user, I want all of these actions reachable from the command palette as well as the
    tree, so that I can drive the editor by keyboard.
@@ -91,11 +91,11 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   `modbench.viewMode`, [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273)): every
   Loadout and mEdit view is contributed unconditionally, and each surface that needs to hide
   does so on its own signal rather than a shared mode — the Plugins tree's rows gain chevrons
-  once a session exists (ADR-0035), and Referenced By is always present, following the active
+  once a load order exists (ADR-0035), and Referenced By is always present, following the active
   record editor ([medit-referenced-by.md](medit-referenced-by.md)). **Launch mEdit** spawns the
-  backend and loads the active modlist as the session; **Close mEdit** tears it down. Both are
+  backend and loads the active modlist as the load order; **Close mEdit** tears it down. Both are
   reached from the **[Plugins view](plugins.md)'s title-bar overflow** ([#352](https://github.com/WhiskyTangoFawks/ModBench/issues/352))
-  — a two-command/context-key toggle (`modbench.sessionRunning`) showing whichever direction
+  — a two-command/context-key toggle (`modbench.backendRunning`) showing whichever direction
   applies, gated on `modbench.workspaceIsMo2Instance` — superseding the original #247 placement
   on the Loadout header's own mEdit row, which this ticket removed: the maintainer's ruling was
   that mEdit is "an option on the plugins view", not a workspace action.
@@ -107,27 +107,24 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 
 ### Status bar
 
-- A bottom-right item reflects backend/session state: **not running** ("backend not running",
-  warning color), **connecting**, **attached with no session**, and **attached with a session**
+- A bottom-right item reflects backend/load order state: **not running** ("backend not running",
+  warning color), **connecting**, **attached with no backend running**, and **attached with a load order**
   ("{GameRelease} — {N} plugins", success color).
-- Clicking it while the backend is not running shows start-up instructions. Sessions are
-  created via **Launch mEdit** from the Loadout surface, never from the status bar.
+- Clicking it while the backend is not running shows start-up instructions. The backend is
+  started via **Launch mEdit** from the Loadout surface, never from the status bar.
 
 ### Command palette
 
 - All `modbench.*` commands are available in the palette; `package.json`'s
   `contributes.commands` is the canonical registry. Navigation/workflow commands include Launch
-  mEdit (enter editing; spawn backend; load the session), Close mEdit (return to Loadout; tear
-  down), Reload Session (re-runs the session load — re-resolves the game directory, rebuilds
-  the explicit plugin set, reloads it into the backend, the same path Launch mEdit and the
-  crash-restart handler take; no confirm — ADR-0041/#410 — since a reload destroys no
-  uncommitted working-tree change; deliberately *not* the same command as Refresh, and in the
-  Loadout header's overflow rather than its navigation group — #247, #295), Open Editor
+  mEdit (enter editing; spawn backend; send it the load order snapshot), Close mEdit (return to
+  Loadout; tear down) — there is no Reload: the load order is reconciled on every loadout change
+  (ADR-0044) —, Open Editor
   (internal; also bound to
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
 - A new end-to-end command is four touch points, or it is half-wired: backend endpoint →
-  `/regenerate-api` → frontend (`PluginRepository`/`SessionController`) → `package.json`
+  `/regenerate-api` → frontend (`PluginRepository`/`EditingController`) → `package.json`
   commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in the integration test.
 
 ### Architecture / seams
@@ -155,13 +152,13 @@ Per-surface testing decisions live in the surface specs. Shared:
   tested there (`MEditService/CLAUDE.md`), never re-asserted from the frontend. Frontend tests
   consume representative responses as fixtures.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the Plugins tree
-  builds from a session, navigation opens a record panel, the record filter prunes the tree, and
+  builds from a load order, navigation opens a record panel, the record filter prunes the tree, and
   command registration holds — add any new command id(s) to `EXPECTED_COMMANDS` (per
   `modbench/CLAUDE.md`).
 
 ## Out of Scope
 
-- **Run Script…** across session/record/plugin — planned, not yet shipped.
+- **Run Script…** across load order/record/plugin — planned, not yet shipped.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side is a
   Loadout-adjacent concern (see [mods.md](mods.md) Out of Scope); deferred.
 - **Load-order editing** (checkbox, drag reorder, the missing-master badge) — Mod Management's
@@ -174,7 +171,7 @@ Per-surface testing decisions live in the surface specs. Shared:
 - Record browsing is the **only** capability that requires the C# backend; the Mod-Management
   surfaces ([mods.md](mods.md), [downloads.md](downloads.md)) and the Plugin load order half of
   the merged Plugins tree ([plugins.md](plugins.md)) all run without it — a row is a leaf until a
-  session exists, per ADR-0035. The backend lifecycle (spawn on Launch mEdit, teardown on Close
+  load order exists, per ADR-0035. The backend lifecycle (spawn on Launch mEdit, teardown on Close
   mEdit / profile switch / workspace close, restart on crash) is owned by the extension per
   [ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md) and specified from the Loadout
   side in [mods.md](mods.md).

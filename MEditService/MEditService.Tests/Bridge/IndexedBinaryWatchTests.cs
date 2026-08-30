@@ -168,7 +168,7 @@ public sealed class IndexedBinaryWatchTests
             watcher.IndexedBinaryChanged = e =>
             {
                 lock (events) events.Add(e);
-                return false; // the session was torn down, the file was still held, …
+                return false; // the load order was torn down, the file was still held, …
             };
             watcher.WatchIndexed(Plugin, Origin, fixture.PluginPath, fixture.ContentHash);
 
@@ -193,7 +193,7 @@ public sealed class IndexedBinaryWatchTests
         }
     }
 
-    // A watch must not outlive the load order that asked for it, or a plugin the session no longer
+    // A watch must not outlive the load order that asked for it, or a plugin the load order no longer
     // holds would keep re-indexing itself into it.
     [Fact]
     public void UnwatchAllIndexed_StopsTheMirror()

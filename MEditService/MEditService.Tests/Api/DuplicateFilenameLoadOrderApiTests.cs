@@ -1,0 +1,229 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Records;
+
+namespace MEditService.Tests.Api;
+
+// #34 / ADR-0036: the end-to-end guard rail the identity migration (#271/#272/#275/#296) never
+// had. Every one of those tickets proved its own seam against a hand-constructed pair built
+// *below* LoadOrder — `repo.Index(mod, origin: "ModA")` at the repository seam, fake mirror,
+// webview fixtures — because no load order could hold two same-filename plugins to build a real pair
+// from. This test is the one that goes through the real load path: two physical copies of one
+// filename, in two mod folders, loaded together and read back over the wire.
+//
+// It is deliberately the first thing this ticket does, because three of the five live bugs the
+// migration found were at the *joins* between phases rather than inside them — exactly what a
+// seam-local test cannot see. It also removes ColumnKey.Of's blind spot by construction: that
+// method elides the reserved DataDirectory origin, so any fixture using the default origin passes
+// whether or not the code is correct, and both copies here carry real mod-folder origins.
+public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
+    : IClassFixture<LoadedApiFixture<TestPluginFixture>>
+{
+    private readonly HttpClient _client = loaded.Client;
+
+    // Both copies answer to one filename and are distinguishable only by content: each carries a
+    // single NPC whose EditorID names the mod folder it came from. Both NPCs land on the same
+    // FormKey (each copy runs its own NextFormID sequence from the same ModKey), which is what
+    // makes this the delta-comparison case the ticket is named for rather than two unrelated files.
+    private static ScatteredFixtureData BuildTwoCopies() =>
+        new PluginFixtureBuilder("api-duplicate-filename")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
+            .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModB").Name = "NameFromModB", origin: "ModB")
+            // An ordinary editable plugin mastering Shared.esp, so a copy-as-override out of
+            // either column has somewhere legitimate to land.
+            .WithPlugin("Target.esp", (mod, _) =>
+                mod.ModHeader.MasterReferences.Add(new MasterReference { Master = ModKey.FromFileName("Shared.esp") }),
+                origin: "TargetMod")
+            .BuildScattered();
+
+    private async Task PutBothCopies(ScatteredFixtureData fx)
+    {
+        // ADR-0044: both copies travel in the one snapshot — ModA as the copy the Mod override
+        // order resolves the name to, ModB as the losing copy at the same slot — and both are
+        // registered; only the winning, enabled, listed one ever participates.
+        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
+        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
+            ? p with { Slot = winner.Slot, Winning = false }
+            : p);
+
+        var put = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
+            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            gameRelease = "Fallout4",
+        });
+        put.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task LosingCopy_IsAHeldPluginAlongsideTheCopyThatShadowsIt()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        var copies = plugins.EnumerateArray()
+            .Where(p => p.GetProperty("name").GetString() == "Shared.esp")
+            .Select(p => p.GetProperty("origin").GetString())
+            .ToList();
+
+        Assert.Equal(["ModA", "ModB"], copies);
+    }
+
+    [Fact]
+    public async Task LosingCopy_IndexesItsOwnRecordsNotTheOtherCopys()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        // Deliberately unfiltered by plugin: `?plugin=` resolves origin from the filename
+        // server-side (PluginOriginResolver, #296), so it can only ever answer for one of two
+        // same-filename copies. Giving that route an explicit origin is its own slice; what this
+        // one proves is that the *index* holds each copy's own content.
+        var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
+        var byOrigin = records.GetProperty("items").EnumerateArray()
+            .Where(r => r.GetProperty("plugin").GetString() == "Shared.esp")
+            .ToDictionary(r => r.GetProperty("origin").GetString()!, r => r.GetProperty("editorId").GetString());
+
+        // Both NPCs share a FormKey and differ only in content, so a load order that keyed its opened
+        // mods by filename alone reports two rows with the right origins and the *same* content —
+        // the failure this pins down is not a missing row.
+        Assert.Equal("FromModA", byOrigin["ModA"]);
+        Assert.Equal("FromModB", byOrigin["ModB"]);
+    }
+
+    [Fact]
+    public async Task BrowsingByOrigin_ReturnsThatCopysOwnRecordsAndCounts()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        // The tree row knows which copy it stands for, so it says so rather than leaving the server
+        // to guess from the filename — which is the one thing a filename can no longer answer.
+        var records = await _client.GetFromJsonAsync<JsonElement>("/records?plugin=Shared.esp&origin=ModB&type=npc_&limit=10");
+        var editorIds = records.GetProperty("items").EnumerateArray()
+            .Select(r => r.GetProperty("editorId").GetString())
+            .ToList();
+        Assert.Equal(["FromModB"], editorIds);
+
+        var types = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/record-types?origin=ModB");
+        Assert.Equal(1, types.EnumerateArray().Single(t => t.GetProperty("type").GetString() == "npc_").GetProperty("count").GetInt32());
+    }
+
+    [Fact]
+    public async Task LosingCopy_IsItsOwnCompareColumn()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        var compare = await _client.GetFromJsonAsync<JsonElement>(
+            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
+        var columns = compare.GetProperty("overrides").EnumerateArray()
+            .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
+
+        // The two copies are one column each, carrying their own record — this is the delta
+        // comparison the ticket exists for. GetCompare builds its masters and participation
+        // lookups keyed by bare filename, so a second copy of one filename makes them ambiguous
+        // (in fact a duplicate-key throw) rather than merely mis-keyed.
+        Assert.Equal("FromModA", columns["ModA"].GetProperty("editorId").GetString());
+        Assert.Equal("FromModB", columns["ModB"].GetProperty("editorId").GetString());
+    }
+
+    [Fact]
+    public async Task LosingCopy_NeverWinsAndDoesNotConflictWithTheCopyThatShadowsIt()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        var compare = await _client.GetFromJsonAsync<JsonElement>(
+            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
+        var columns = compare.GetProperty("overrides").EnumerateArray()
+            .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
+
+        // ADR-0044's derived participation is what makes registering every copy safe: a copy the
+        // game does not load can never take the winner, and two copies differing in EditorID must
+        // not read as a conflict between them.
+        Assert.True(columns["ModA"].GetProperty("isWinner").GetBoolean());
+        Assert.False(columns["ModB"].GetProperty("isWinner").GetBoolean());
+        // OnlyOne, not NoConflict: classification sees a single participating copy, so this record
+        // is exactly as unconflicted as a single-copy record — which is the whole claim, that a
+        // losing copy changes no classification.
+        Assert.Equal("OnlyOne", compare.GetProperty("conflictAll").GetString());
+    }
+
+    [Fact]
+    public async Task ASnapshotWithoutTheLosingCopy_LeavesNoRowNoColumnAndNoRecords()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        // ADR-0044: a copy absent from the snapshot is unregistered. To the user its records are
+        // simply not there — not the row, not the compare column, not a single indexed record —
+        // while the copy that wins is untouched, because a reconcile is not a reload.
+        var without = await _client.PutAsJsonAsync("/load-order", new
+        {
+            gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
+            plugins = fx.Plugins.Where(p => p.Origin != "ModB").Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
+            gameRelease = "Fallout4",
+        });
+        without.EnsureSuccessStatusCode();
+
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        Assert.DoesNotContain(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
+
+        var compare = await _client.GetFromJsonAsync<JsonElement>(
+            $"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
+        Assert.DoesNotContain(compare.GetProperty("overrides").EnumerateArray(),
+            o => o.GetProperty("origin").GetString() == "ModB");
+
+        var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
+        Assert.DoesNotContain(records.GetProperty("items").EnumerateArray(),
+            r => r.GetProperty("origin").GetString() == "ModB");
+
+        Assert.Contains(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModA");
+    }
+
+    [Fact]
+    public async Task TheSameSnapshotTwice_LeavesOneEntryPerCopyAndAWorkingCompare()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+        await PutBothCopies(fx);
+
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        Assert.Single(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModB");
+        Assert.Single(plugins.EnumerateArray(), p => p.GetProperty("origin").GetString() == "ModA");
+
+        // A duplicate entry would make every column-keyed lookup ambiguous — GetCompare builds its
+        // masters/participation dictionaries by ColumnKey and would throw on the pair.
+        var compare = await _client.GetAsync($"/records/{Uri.EscapeDataString("000800:Shared.esp")}/compare");
+        Assert.Equal(HttpStatusCode.OK, compare.StatusCode);
+    }
+
+    [Fact]
+    public async Task LosingCopy_IsReadOnlyAndOutsideTheLoadOrder()
+    {
+        using var fx = BuildTwoCopies();
+        await PutBothCopies(fx);
+
+        var plugins = await _client.GetFromJsonAsync<JsonElement>("/plugins");
+        var shadowed = plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModB");
+
+        // ADR-0036: read-only, because an edit to a file the game does not load produces no
+        // observable change anywhere. ADR-0035: non-participating, so it can never take a winner
+        // from the copy that shadows it.
+        Assert.True(shadowed.GetProperty("isImmutable").GetBoolean());
+        Assert.False(shadowed.GetProperty("participates").GetBoolean());
+        Assert.False(shadowed.GetProperty("inLoadOrder").GetBoolean());
+        // It shares the shadowing copy's slot so the two render adjacent in the compare grid.
+        Assert.Equal(
+            plugins.EnumerateArray().Single(p => p.GetProperty("origin").GetString() == "ModA").GetProperty("loadOrderIndex").GetInt32(),
+            shadowed.GetProperty("loadOrderIndex").GetInt32());
+    }
+}

@@ -6,7 +6,7 @@ import type { PluginMetadata } from './ApiClient';
  *  check, no backend call and no registry, mirroring `SourceRepository.IsTracked` on the backend
  *  side of the same claim. Deliberately no `vscode` import: this stays a pure Node function so it
  *  is testable under Vitest without a VS Code host (modbench/CLAUDE.md's "vscode types stay out of
- *  SessionController/repositories" applies the same way here). Exported (#448): the Stack node's
+ *  LoadOrderController/repositories" applies the same way here). Exported (#448): the Stack node's
  *  state entries (source/binary) are tracked-gated the same way — reused rather than re-derived,
  *  never a second `.git`-presence check drifting from this one. */
 export function isTracked(modFolder: string): boolean {

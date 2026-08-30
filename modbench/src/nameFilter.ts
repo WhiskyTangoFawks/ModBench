@@ -51,7 +51,7 @@ export interface NameFilter extends vscode.Disposable {
    *  the base rather than replace it. */
   setBaseDescription(text: string | undefined): void;
   /** Restate the readout. For the one view where something else legitimately writes the same
-   *  message surface — the Plugins tree, whose session load speaks there (#307) — this is how
+   *  message surface — the Plugins tree, whose reconcile speaks there (#307) — this is how
    *  the filter's own statement comes back once the load has stopped talking. */
   refresh(): void;
 }
@@ -70,7 +70,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   };
 
   /** The no-matches statement (`TreeView.message`), or nothing. Only ever *clears* a message it
-   *  put there itself: the Plugins view uses the same property for the session load's own
+   *  put there itself: the Plugins view uses the same property for the reconcile's own
    *  statement (#307's `say`), and a filter keystroke must not silently erase it.
    *
    *  `generation` drops the answer of a `hasRows` call that a later keystroke has already

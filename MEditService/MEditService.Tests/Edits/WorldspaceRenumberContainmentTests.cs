@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -31,7 +31,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     private readonly PluginKey _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-wrld-renumber-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-wrld-renumber-game-").FullName;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
     private readonly string _topCellFormKey;
     private readonly string _extCellFormKey;
     private readonly string _worldspaceFormKey;
@@ -59,19 +59,19 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         _topCellFormKey = topCell.FormKey.ToString();
         _extCellFormKey = extCell.FormKey.ToString();
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
-            _gameDirectory, [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)], GameRelease.Fallout4);
+        ((ILoadOrderMirror)_mirror).Reconcile(
+            _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -84,14 +84,14 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     }
 
     private RecordEditService EditService() =>
-        new(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     // ---- Slice 1: the confirmed gap ----
 
     [Fact]
-    public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameSession()
+    public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
     {
-        var index = _sessions.Index!;
+        var index = _mirror.Index!;
         Assert.Equal(_worldspaceFormKey, index.GetCellLocation(_plugin, _extCellFormKey)!.Value.ParentWorldspace);
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
@@ -120,7 +120,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     [Fact]
     public void RenumberingAWorldspace_LeavesExactlyOneCellLocationRowForItsTopCell_NoDuplicate()
     {
-        var index = _sessions.Index!;
+        var index = _mirror.Index!;
 
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
@@ -131,25 +131,25 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         Assert.Equal(newFormKey, index.GetCellLocation(_plugin, _topCellFormKey)!.Value.ParentWorldspace);
     }
 
-    // ---- Slice 3: parity against a fresh session-load ingest ----
+    // ---- Slice 3: parity against a fresh reconcile ingest ----
 
     [Fact]
-    public void AfterRenumberingAWorldspace_AFreshSessionReload_AgreesWithTheLiveSessionsCellLocationRows()
+    public void AfterRenumberingAWorldspace_AFreshReopen_AgreesWithTheLiveCellLocationRows()
     {
         var result = EditService().RenumberRecord(_plugin, _worldspaceFormKey);
         Assert.True(result.Applied, result.Message);
         var newFormKey = result.NewFormKey!;
 
-        var live = _sessions.Index!.GetWorldspaceCells(_plugin, newFormKey)
+        var live = _mirror.Index!.GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();
 
-        using var reloaded = new SessionManager(
+        using var reloaded = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)reloaded).LoadExplicit(
+        ((ILoadOrderMirror)reloaded).Reconcile(
             _gameDirectory,
-            [new ExplicitPluginInput(PluginName, Path.Combine(_modFolder, PluginName), Origin, true)],
+            [new LoadOrderEntry(PluginName, Path.Combine(_modFolder, PluginName), Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
 
         var freshlyIngested = reloaded.Index!.GetWorldspaceCells(_plugin, newFormKey)
             .OrderBy(c => c.FormKey).ToList();

@@ -1,5 +1,5 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
-using MEditService.Core.Session;
 
 namespace MEditService.Tests.Query;
 
@@ -22,7 +22,7 @@ public class ColumnKeyTests
     {
         // A Data-directory-resolved plugin is already uniquely identified by its filename — there's
         // only one Data/ — so the reserved origin is elided rather than appended, keeping every
-        // existing single-origin fixture/session producing the plain-filename keys it always has.
+        // existing single-origin fixture/load order producing the plain-filename keys it always has.
         Assert.Equal("Shared.esp", ColumnKey.Of("Shared.esp", PluginOrigin.DataDirectory));
     }
 }

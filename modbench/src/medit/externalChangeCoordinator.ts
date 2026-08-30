@@ -1,5 +1,5 @@
 import type { PluginRepository } from './PluginRepository';
-import type { SessionController } from './SessionController';
+import type { EditingController } from './EditingController';
 import type { ExternalChangeDialogAnswer, ShowExternalChangeDialog } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
 import type { UnansweredExternalChange, RebaseResult } from './ApiClient';
@@ -32,23 +32,23 @@ export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable
 
 export interface ExternalChangeCoordinatorDeps {
   repository: PluginRepository;
-  controller: SessionController;
+  controller: EditingController;
   showDialog: ShowExternalChangeDialog;
   showRebaseOffer: ShowRebaseOffer;
   openMergeEditor: OpenMergeEditor;
   log?: (msg: string) => void;
 }
 
-/** How often the queue is polled for a new question — matches `SESSION_STATUS_POLL_INTERVAL_MS`'s
+/** How often the queue is polled for a new question — matches `STATUS_POLL_INTERVAL_MS`'s
  *  order of magnitude but slower: an external change is rare and never latency-sensitive the way a
- *  running session load is, so there is no reason to poll at the same cadence. */
+ *  running reconcile is, so there is no reason to poll at the same cadence. */
 export const EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000;
 
 /**
  * Starts polling `GET /plugins/external-changes/status`; whenever it reports one or more unanswered
  * questions, runs the one dialog for each (sequentially — {@link runExternalChangeDialogs} itself
  * enforces that) and dispatches every answer. Returns a stop function. Self-rescheduling
- * `setTimeout`, same idiom `SessionController`'s own pollers use, so a slow poll (or a slow dialog
+ * `setTimeout`, same idiom `EditingController`'s own pollers use, so a slow poll (or a slow dialog
  * a user leaves open) can never stack ticks behind itself.
  */
 export function startExternalChangePolling(
@@ -92,8 +92,8 @@ export interface ExternalChangePollerGateDeps {
  * `poll failed: fetch failed` line every tick, ADR-0026 background tier, but a call that can never
  * succeed).
  *
- * Gated on the backend's health signal alone, deliberately never on session load (the triage
- * comment's own binding call on #432): a backend that is up with no session loaded still answers
+ * Gated on the backend's health signal alone, deliberately never on reconcile (the triage
+ * comment's own binding call on #432): a backend that is up with no backend running loaded still answers
  * the endpoint normally, so the poller has no reason to wait for one. Starts on the first healthy
  * transition, never double-starts on a repeated one (e.g. a crash-restart's own second "attached"),
  * stops on any not-healthy transition (deliberate Close mEdit, a lost connection, or a restart

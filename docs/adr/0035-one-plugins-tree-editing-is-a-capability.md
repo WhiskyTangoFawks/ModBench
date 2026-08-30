@@ -107,7 +107,7 @@ ADR-0027's conflation objection is met structurally, not by assertion.
 - A participation predicate in `UpdateWinners()` and in `ConflictClassifier`'s load-order-index
   comparison is the correctness centre of the design.
 - Startup cost grows — the eager set gains every disabled entry — which puts pressure on
-  what was then ADR-0001's no-cache position (since rewritten, 2026-08-29: the index is a persistent per-game file and a session is a registration over it, which is what removes this pressure).
+  what was then ADR-0001's no-cache position (since rewritten, 2026-08-29: the index is a persistent per-game file and a load order is a registration over it, which is what removes this pressure).
 - `CONTEXT.md` names the three narrowing axes explicitly (plugin-name filter, record filter,
   non-participating visibility) so a fourth term does not get invented. "Focus" is deliberately
   **not** a term.

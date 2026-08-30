@@ -82,7 +82,7 @@ describe('crashRepairOffer.presentCrashRepairOffers', () => {
   });
 
   // Esc/dismiss: a true no-op. The marker (or missing binary) stays exactly as it is — nothing
-  // written, nothing called — and the offer re-appears at the next session load by construction
+  // written, nothing called — and the offer re-appears at the next reconcile by construction
   // (nothing here clears it).
   it('declining (Esc/dismiss) calls onAccept for nothing and does not throw', async () => {
     const show = vi.fn().mockResolvedValue(undefined);

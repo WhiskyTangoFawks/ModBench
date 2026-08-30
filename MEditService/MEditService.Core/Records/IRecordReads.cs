@@ -41,7 +41,7 @@ public interface IRecordReads
 
     /// <summary>Every FormKey with more than one override entry in its stack — the Conflicts
     /// node's candidate population (#364), before <c>IConflictClassifier</c> decides whether that
-    /// multiplicity is an actual conflict or just an uncontested/benign override. Session-wide, not
+    /// multiplicity is an actual conflict or just an uncontested/benign override. Load-order-wide, not
     /// scoped to a plugin (a contested FormKey inherently spans more than one). Respects the active
     /// filter the same way every other filterable read here does (<c>BuildWhere</c>'s
     /// <c>filterActive</c>) — #278's already-shipped mechanism, not a second filter path.</summary>

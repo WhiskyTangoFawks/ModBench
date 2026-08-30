@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -53,14 +53,14 @@ public sealed class SubrecordInventoryRoundTripGateTests
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    /// <summary>One real fixture copied into a scratch mod folder and loaded as a session — the same
+    /// <summary>One real fixture copied into a scratch mod folder and loaded as a load order — the same
     /// shape <c>StaleNextObjectIdRoundTripGateTests.TrackedScratch</c> builds — with an empty stub for
     /// each of the fixture's own masters (Track's round-trip write needs those names present in the
     /// header's own master list, not their content).</summary>
     private sealed class TrueStormsScratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-truestorms-game-").FullName;
-        private readonly SessionManager _sessions;
+        private readonly LoadOrderMirror _mirror;
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-truestorms-").FullName;
 
@@ -69,7 +69,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
             var pluginPath = Path.Combine(ModFolder, FixtureFileName);
             File.Copy(FixturePath, pluginPath);
 
-            var inputs = new List<ExplicitPluginInput>();
+            var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(FixtureFileName), pluginPath), Fallout4Release.Fallout4))
             {
@@ -77,22 +77,22 @@ public sealed class SubrecordInventoryRoundTripGateTests
                 {
                     var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
                     new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new ExplicitPluginInput(master.Master.FileName, stubPath, "Stubs", true));
+                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
                 }
             }
-            inputs.Add(new ExplicitPluginInput(FixtureFileName, pluginPath, "TrueStormsMod", true));
+            inputs.Add(new LoadOrderEntry(FixtureFileName, pluginPath, "TrueStormsMod", Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _sessions = new SessionManager(
+            _mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)_sessions).LoadExplicit(_gameDirectory, inputs, GameRelease.Fallout4);
+            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_sessions.Session!, "TrueStormsMod", SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_mirror.LoadOrder!, "TrueStormsMod", SourcePreset.Edits);
 
         public void Dispose()
         {
-            _sessions.Dispose();
+            _mirror.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

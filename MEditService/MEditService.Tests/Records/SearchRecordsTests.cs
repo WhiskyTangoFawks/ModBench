@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
@@ -12,12 +12,12 @@ public class SearchRecordsTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
 
-    private SessionManager MakeLoadedManager()
+    private LoadOrderMirror MakeLoadedManager()
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        var manager = new SessionManager(factory);
-        manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        var manager = new LoadOrderMirror(factory);
+        manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         return manager;
     }
 

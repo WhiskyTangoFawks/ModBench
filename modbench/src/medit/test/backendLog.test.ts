@@ -14,12 +14,12 @@ describe('makeBackendLogForwarder', () => {
     forward('[08:30:45 DBG] Extracted column Name', 'stdout');
     forward('[08:30:45 INF] Indexed 500 records for Fallout4.esm', 'stdout');
     forward('[08:30:46 WRN] Skipped plugin Broken.esp', 'stdout');
-    forward('[08:30:47 ERR] Session load failed', 'stdout');
+    forward('[08:30:47 ERR] Reconcile failed', 'stdout');
 
     expect(channel.debug).toHaveBeenCalledWith('[backend] Extracted column Name');
     expect(channel.info).toHaveBeenCalledWith('[backend] Indexed 500 records for Fallout4.esm');
     expect(channel.warn).toHaveBeenCalledWith('[backend] Skipped plugin Broken.esp');
-    expect(channel.error).toHaveBeenCalledWith('[backend] Session load failed');
+    expect(channel.error).toHaveBeenCalledWith('[backend] Reconcile failed');
   });
 
   it('treats VRB as debug and FTL as error', () => {
@@ -44,12 +44,12 @@ describe('makeBackendLogForwarder', () => {
     const channel = fakeChannel();
     const forward = makeBackendLogForwarder(channel);
 
-    forward('[08:30:47 ERR] Session load failed', 'stdout');
+    forward('[08:30:47 ERR] Reconcile failed', 'stdout');
     forward('System.IO.FileNotFoundException: Could not find Broken.esp', 'stdout');
-    forward('   at MEditService.Core.Session.SessionManager.Load()', 'stdout');
+    forward('   at MEditService.Core.Load order.LoadOrderManager.Load()', 'stdout');
 
     expect(channel.error).toHaveBeenCalledTimes(3);
-    expect(channel.error).toHaveBeenLastCalledWith('[backend]    at MEditService.Core.Session.SessionManager.Load()');
+    expect(channel.error).toHaveBeenLastCalledWith('[backend]    at MEditService.Core.Load order.LoadOrderManager.Load()');
     expect(channel.info).not.toHaveBeenCalled();
   });
 

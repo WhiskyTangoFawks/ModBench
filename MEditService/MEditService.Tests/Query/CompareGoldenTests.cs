@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -11,7 +11,7 @@ namespace MEditService.Tests.Query;
 
 /// <summary>
 /// #413 slice S0 — the other half of the AC3 safety net: conflict classification and the compare
-/// grid, captured from the pre-swap implementation over a session that actually conflicts.
+/// grid, captured from the pre-swap implementation over a load order that actually conflicts.
 ///
 /// <see cref="RealData.RealDataReadGoldenTests"/> pins per-record *values* against authentic
 /// Bethesda data; this pins what the classifier makes of several plugins disagreeing about the same
@@ -23,7 +23,7 @@ namespace MEditService.Tests.Query;
 public sealed class CompareGoldenTests : IDisposable
 {
     private readonly PluginFixtureData _fixture;
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _service;
 
     private static readonly FormKey ConflictedNpc = MakeKey("Base.esm", 0x800);
@@ -83,8 +83,8 @@ public sealed class CompareGoldenTests : IDisposable
             .Build();
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new SessionManager(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        _manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
@@ -170,6 +170,6 @@ public sealed class CompareGoldenTests : IDisposable
                 .OrderBy(r => r.FormKey, StringComparer.Ordinal).ToList(),
         };
 
-        Golden.Verify("compare-session-listings", captured);
+        Golden.Verify("compare-load-order-listings", captured);
     }
 }

@@ -8,13 +8,13 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #515: every deep parse (Track, compile round-trip verification, session ingest's binary path,
+/// #515: every deep parse (Track, compile round-trip verification, load order ingest's binary path,
 /// external-change absorption) needs to tell Mutagen where a Localized plugin's own
 /// <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c> files live. Passing no
 /// <see cref="BinaryReadParameters"/> at all does not mean "no localization support" — Mutagen still
 /// tries to resolve one, via a plugin-listings path that only exists in a genuine game install
 /// (<c>%LocalAppData%\&lt;Game&gt;\Plugins.txt</c> on Windows) and throws outright when it can't be
-/// determined, which is always on a non-Windows host with no such folder. Modbench's sessions are
+/// determined, which is always on a non-Windows host with no such folder. Modbench's mirror are
 /// always explicit (ADR-0022) and never consult that file, so the fix is not "give it a real one" —
 /// it's "stop the implicit lookup from ever running", by handing Mutagen a strings folder directly.
 /// </summary>

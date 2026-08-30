@@ -28,7 +28,7 @@ export class HiddenDownloadDecorationProvider implements vscode.FileDecorationPr
     if (!uri.fsPath.startsWith(this.downloadsDir + '/')) return undefined;
     const name = uri.fsPath.slice(this.downloadsDir.length + 1);
     if (!this.hiddenNames().has(name)) return undefined;
-    // needs-solo-session (#238): how much dim reads as "hidden" vs "disabled"/"deleted" is a
+    // needs-solo-load order (#238): how much dim reads as "hidden" vs "disabled"/"deleted" is a
     // visual call against both a light and dark theme — this colour is a provisional pick.
     return { color: new vscode.ThemeColor('disabledForeground') };
   }

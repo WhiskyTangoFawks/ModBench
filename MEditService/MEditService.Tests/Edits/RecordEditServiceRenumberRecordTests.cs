@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -18,18 +18,18 @@ namespace MEditService.Tests.Edits;
 /// </summary>
 public sealed class RecordEditServiceRenumberRecordTests
 {
-    private static RecordEditService ServiceFor(ISessionManager sessions) =>
-        new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
+        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void RenumberRecord_MovesToNewFormKey_OldGoneAtEffective_StillAtHead_NewAbsentAtHead()
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var index = mod.Sessions.Index!;
+        var index = mod.Mirror.Index!;
         Assert.Null(index.GetDocument(mod.Npc.ToString(), mod.Plugin));
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
         Assert.NotNull(index.GetDocument(result.NewFormKey!, mod.Plugin));
@@ -42,7 +42,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = TrackedModFixture.Tracked();
         const string requested = "900000:Fixture.esp";
 
-        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString(), requested);
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString(), requested);
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(requested, result.NewFormKey);
@@ -56,7 +56,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = TrackedModFixture.TrackedLight();
 
-        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString(), "001000:Fixture.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
@@ -69,13 +69,13 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void RenumberRecord_MakesTheRecordUnderItsNewFormKeyAppearInAnActiveFilteredListing()
     {
         using var mod = TrackedModFixture.Tracked();
-        mod.Sessions.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'FixtureNpc'");
-        Assert.Equal(1, mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'FixtureNpc'");
+        Assert.Equal(1, mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
-        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var after = mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, after.Total);
         Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
     }
@@ -85,7 +85,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions)
+        var result = ServiceFor(mod.Mirror)
             .RenumberRecord(mod.Plugin, mod.Npc.ToString(), "900000:SomeOtherPlugin.esp");
 
         Assert.False(result.Applied);
@@ -93,12 +93,12 @@ public sealed class RecordEditServiceRenumberRecordTests
     }
 
     // Review finding #1: the auto-allocator's own exhaustion must be a typed refusal here too, not
-    // an InvalidOperationException the endpoint's session-missing catch would misreport.
+    // an InvalidOperationException the endpoint's load order-missing catch would misreport.
     [Fact]
     public void RenumberRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -115,7 +115,7 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // Npc, native to Base.esm, overridden (unedited copy) in Winner.esp — renumbering it from
         // Winner.esp's side is exactly the override case this gesture refuses.
-        var result = ServiceFor(two.Sessions).RenumberRecord(two.WinnerPlugin, two.Npc.ToString());
+        var result = ServiceFor(two.Mirror).RenumberRecord(two.WinnerPlugin, two.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
@@ -127,10 +127,10 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var two = TwoModFixture.Create(trackReferencer: true);
 
-        var result = ServiceFor(two.Sessions).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var index = two.Sessions.Index!;
+        var index = two.Mirror.Index!;
         var referencer = index.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!;
         Assert.Contains(result.NewFormKey!, referencer.Body, StringComparison.Ordinal);
         Assert.DoesNotContain(two.TargetRace.ToString(), referencer.Body, StringComparison.Ordinal);
@@ -152,16 +152,16 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // Matches nothing yet: form_references still points every source at TargetRace's *old*
         // FormKey, not the one this renumber is about to move it to.
-        two.Sessions.SetFilter(
+        two.Mirror.SetFilter(
             $"SELECT source_form_key AS form_key FROM form_references " +
             $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
-        Assert.Equal(0, two.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(0, two.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
         try
         {
             var ex = Assert.Throws<IOException>(() =>
-                ServiceFor(two.Sessions).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
+                ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString(), requestedTarget));
             Assert.Contains(TwoModFixture.ReferencerPluginName, ex.Message, StringComparison.Ordinal);
         }
         finally
@@ -171,7 +171,7 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // The referencer's rewrite is durably on disk (write order: referencers first, target last),
         // so the filter — re-materialized even though the overall gesture threw — must show it.
-        var result = two.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = two.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(two.ReferencerNpc.ToString(), result.Items[0].FormKey);
     }
@@ -197,7 +197,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var two = TwoModFixture.Create(trackReferencer: false);
         var oldRaceSourceFile = two.SourceFileFor(two.TargetPlugin, two.TargetRace, "race", "TargetRace");
 
-        var result = ServiceFor(two.Sessions).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
+        var result = ServiceFor(two.Mirror).RenumberRecord(two.TargetPlugin, two.TargetRace.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.UntrackedReferencer, result.Refusal);
@@ -205,8 +205,8 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // Q5(a)/AC "no half-applied state": refused before any write, on either side of the cascade.
         Assert.True(File.Exists(oldRaceSourceFile));
-        Assert.NotNull(two.Sessions.Index!.GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
-        var referencerBody = two.Sessions.Index!.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
+        Assert.NotNull(two.Mirror.Index!.GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
+        var referencerBody = two.Mirror.Index!.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
         Assert.Contains(two.TargetRace.ToString(), referencerBody, StringComparison.Ordinal);
     }
 
@@ -215,7 +215,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = TrackedModFixture.Untracked();
 
-        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -228,7 +228,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         using var mod = TrackedModFixture.Tracked();
         ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
-        var result = ServiceFor(mod.Sessions).RenumberRecord(mod.Plugin, mod.Npc.ToString());
+        var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -238,7 +238,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void PeekNextFreeFormKey_MatchesWhatRenumberWouldActuallyAllocate()
     {
         using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
 
         var suggested = service.PeekNextFreeFormKey(mod.Plugin);
         var result = service.RenumberRecord(mod.Plugin, mod.Npc.ToString());
@@ -248,12 +248,12 @@ public sealed class RecordEditServiceRenumberRecordTests
     }
 
     [Fact]
-    public void PeekNextFreeFormKey_Refuses_WhenNoSessionIsLoaded()
+    public void PeekNextFreeFormKey_Refuses_WhenNoLoadOrderIsLoaded()
     {
         using var mod = TrackedModFixture.Tracked();
-        mod.Sessions.Dispose();
+        mod.Mirror.Dispose();
 
-        var suggested = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var suggested = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .PeekNextFreeFormKey(mod.Plugin);
 
         Assert.False(suggested.Applied);
@@ -265,7 +265,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     public void PeekNextFreeFormKey_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -278,7 +278,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     /// <summary>
     /// Base.esm holds a native Race (the renumber target) and Winner.esp both overrides an unrelated
     /// Npc (giving the override-refusal test something to point at) and holds its own native Npc
-    /// referencing Base.esm's Race — the cross-repo referencer <see cref="TwoModFixture.Sessions"/>
+    /// referencing Base.esm's Race — the cross-repo referencer <see cref="TwoModFixture.Mirror"/>
     /// loads both plugins into.
     /// </summary>
     private sealed class TwoModFixture : IDisposable
@@ -291,7 +291,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         public string TargetModFolder { get; }
         public string ReferencerModFolder { get; }
         public string GameDirectory { get; }
-        public SessionManager Sessions { get; }
+        public LoadOrderMirror Mirror { get; }
         public PluginKey TargetPlugin { get; } = new(TargetPluginName, TargetOrigin);
         public PluginKey WinnerPlugin { get; } = new(ReferencerPluginName, ReferencerOrigin);
         public PluginKey ReferencerPlugin => WinnerPlugin;
@@ -321,22 +321,22 @@ public sealed class RecordEditServiceRenumberRecordTests
             referencerMod.WriteToBinary(referencerPath);
             ReferencerNpc = referencerNpc.FormKey;
 
-            Sessions = new SessionManager(
+            Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)Sessions).LoadExplicit(
+            ((ILoadOrderMirror)Mirror).Reconcile(
                 GameDirectory,
                 [
-                    new ExplicitPluginInput(TargetPluginName, targetPath, TargetOrigin, true),
-                    new ExplicitPluginInput(ReferencerPluginName, referencerPath, ReferencerOrigin, true),
+                    new LoadOrderEntry(TargetPluginName, targetPath, TargetOrigin, Slot: 0, Enabled: true, Winning: true),
+                    new LoadOrderEntry(ReferencerPluginName, referencerPath, ReferencerOrigin, Slot: 1, Enabled: true, Winning: true),
                 ],
                 GameRelease.Fallout4);
 
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Sessions.Session!, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+                .TrackAsync(Mirror.LoadOrder!, TargetOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
             if (trackReferencer)
             {
                 new TrackService(NullLogger<TrackService>.Instance)
-                    .TrackAsync(Sessions.Session!, ReferencerOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+                    .TrackAsync(Mirror.LoadOrder!, ReferencerOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
             }
         }
 
@@ -351,7 +351,7 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         public void Dispose()
         {
-            Sessions.Dispose();
+            Mirror.Dispose();
             TryDelete(TargetModFolder);
             TryDelete(ReferencerModFolder);
             TryDelete(GameDirectory);

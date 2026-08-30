@@ -17,7 +17,7 @@ Siblings: [Mods](mods.md), [Plugins load order](plugins.md), [Downloads](downloa
 
 Five view title bars each grew independently as their own features shipped, and roughly half
 the icons they accumulated were not about those trees at all. Switch Profile swapped the
-modlist *and* `plugins.txt` *and* invalidated any running session, but sat on the Mods tree
+modlist *and* `plugins.txt` *and* invalidated any running load order, but sat on the Mods tree
 because Mods existed first. Launch mEdit and Close mEdit sat on whichever view happened to be
 visible at the time. Refresh was re-invented three times under three command ids for one need.
 Deploy, Purge and Launch Game sat on Mods because Mods was the only host. The Mods tree
@@ -73,7 +73,7 @@ stays quiet rather than repeating it.
 Sliced out of #346 during triage: "launch mEdit should be an option on the plugins view —
 mEdit isn't a universal option, it's an option on the plugins view" (maintainer's ruling).
 This header no longer carries an mEdit row of any kind, running or not, and reads no
-backend/session state — `LoadoutHeaderProvider` only ever reads Mod-Management state now.
+backend/load order state — `LoadoutHeaderProvider` only ever reads Mod-Management state now.
 Launch mEdit / Close mEdit are the same two command ids as before
 (`modbench.modList.launchMedit` / `modbench.closeMedit`), now reachable from the
 [Plugins view](plugins.md)'s own title-bar overflow, gated the same way it was withheld here —
@@ -86,7 +86,6 @@ placement and its context-key toggle.
 | --- | --- | --- |
 | `navigation@1` | Refresh | always |
 | `navigation@2` | Launch… | standalone deployment only |
-| overflow | Reload Session | always |
 | overflow | Deploy, Purge | standalone deployment only |
 
 **Refresh** is one command id (`modbench.refresh`) that re-reads every Mod-Management source
@@ -95,16 +94,9 @@ state where the user believes they have resynced and one tree still quietly disa
 remains a safety net for flaky watch events, never the primary path: every one of those
 sources is watcher-driven.
 
-**Reload Session** is not Refresh: it concerns the Editing session and costs seconds, so it is
-separately named and lives in overflow. It re-runs the session load — re-resolves the game
-directory, rebuilds the explicit plugin set from the current modlist, and reloads it into the
-backend — the same `makeEnterEditing` path Launch mEdit and the crash-restart handler take
-([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)). **No confirm** (ADR-0041/#410):
-#295's confirm existed to warn that a reload would discard staged edits against the copy being
-reloaded; with no staged-edit model a reload rebuilds read state and destroys no
-uncommitted working-tree change, so it reloads outright. A failed reload tears the session down
-the same way a failed launch does (`exitToLoadout`) rather than leave the Plugins tree decorated
-for a session the backend has already discarded.
+There is no reload of the editing backend to offer (ADR-0044): the load order it holds is
+reconciled on every loadout change, so Refresh — a re-read of Mod Management's own sources — is
+the only re-read gesture, and the backend's picture follows it through the same watchers.
 
 ### Launch…
 
@@ -139,7 +131,7 @@ script-extender loader exits immediately and its exit code says nothing about th
   composition root and imports from neither bounded context. Every piece of state arrives as
   an injected getter — `activeProfile`, `deployment` — which is both the language-boundary
   constraint (#241 records the same one for the merged plugins provider) and what makes the
-  whole surface unit-testable without a VS Code harness. It reads no backend/session state at
+  whole surface unit-testable without a VS Code harness. It reads no backend/load order state at
   all since #352 moved the mEdit row off it (see above).
 - **It owns no state.** Profile comes from `Mo2ModlistSource`, deployment from the deploy
   manifest. The header re-reads; it never caches.

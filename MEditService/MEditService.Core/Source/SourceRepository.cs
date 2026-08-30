@@ -529,7 +529,7 @@ public static class SourceRepository
     /// own format) — <b>explicitly <c>refs/heads/main</c></b>, never bare <c>HEAD</c>: the edit
     /// branch is checked out in normal use, and <c>main</c> is never checked out (ADR-0041), so
     /// reading "the branch git happens to have checked out" would silently answer for the wrong ref
-    /// the moment this is called against a real session. <see cref="TrackProvenance.BinarySha256ByPlugin"/>
+    /// the moment this is called against a real load order. <see cref="TrackProvenance.BinarySha256ByPlugin"/>
     /// is per-plugin on one shared commit (a mod folder can hold more than one plugin); everything
     /// else is folder-wide. Null when the folder isn't tracked or <c>main</c> has no commit yet.
     /// </summary>

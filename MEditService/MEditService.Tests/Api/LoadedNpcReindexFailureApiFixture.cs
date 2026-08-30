@@ -1,8 +1,8 @@
 using System.Net.Http.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,9 +12,9 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// A loaded NPC session whose post-commit reindex always throws. Drives #127's stale-index case
+/// A loaded NPC load order whose post-commit reindex always throws. Drives #127's stale-index case
 /// through the real save path (the file swap still happens) and the
-/// <see cref="ISessionManager.ReindexPlugins"/> seam — not by reaching into PluginSaver internals.
+/// <see cref="ILoadOrderMirror.ReindexPlugin(string)"/> seam — not by reaching into PluginSaver internals.
 /// </summary>
 public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposable
 {
@@ -30,19 +30,19 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         _app = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<ISessionManager>();
-                services.AddSingleton<SessionManager>();
-                services.AddSingleton<ISessionManager>(sp =>
-                    new ReindexThrowingSessionManager(sp.GetRequiredService<SessionManager>()));
+                services.RemoveAll<ILoadOrderMirror>();
+                services.AddSingleton<LoadOrderMirror>();
+                services.AddSingleton<ILoadOrderMirror>(sp =>
+                    new ReindexThrowingMirror(sp.GetRequiredService<LoadOrderMirror>()));
             }));
     }
 
     public async Task InitializeAsync()
     {
         Client = _app.CreateClient();
-        var resp = await Client.PostAsJsonAsync("/session/load-explicit", new
+        var resp = await Client.PutAsJsonAsync("/load-order", new
         {
-            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = Plugin.DataFolder,
             instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",
@@ -65,30 +65,25 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         return Task.CompletedTask;
     }
 
-    /// <summary>Delegates everything to the real session manager but forces reindex to fail.</summary>
-    private sealed class ReindexThrowingSessionManager(ISessionManager inner) : ISessionManager
+    /// <summary>Delegates everything to the real load order manager but forces reindex to fail.</summary>
+    private sealed class ReindexThrowingMirror(ILoadOrderMirror inner) : ILoadOrderMirror
     {
-        public IGameSession? Session => inner.Session;
+        public ILoadOrder? LoadOrder => inner.LoadOrder;
         public IRecordReads? Repository => inner.Repository;
         public IRecordIndex? Index => inner.Index;
-        // #274: these stubs never load, so they are always in the no-session state.
-        public SessionStatus Status => SessionStatus.None;
+        // #274: these stubs never load, so they are always in the no-load order state.
+        public LoadOrderStatus Status => LoadOrderStatus.None;
 
         public Task ReindexPlugin(string plugin) => throw new IOException("reindex failed (injected)");
         public Task ReindexPlugin(PluginKey key) => throw new IOException("reindex failed (injected)");
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new IOException("reindex failed (injected)");
 
-        public void LoadExplicit(
-            string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+        public void Reconcile(
+            string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
             string? instanceRoot = null) =>
-            inner.LoadExplicit(gameDirectory, plugins, gameRelease, instanceRoot);
-        public void Unload() => inner.Unload();
+            inner.Reconcile(gameDirectory, plugins, gameRelease, instanceRoot);
+        public void Close() => inner.Close();
         public PluginResponse CreatePlugin(string name, string path, string origin) => inner.CreatePlugin(name, path, origin);
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);
-        public void UnloadUnlistedPlugin(string plugin, string origin) => inner.UnloadUnlistedPlugin(plugin, origin);
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => inner.RereadPlugin(plugin, newPath, newOrigin);
-        public PluginResponse SetPluginParticipation(string plugin, bool participates) => inner.SetPluginParticipation(plugin, participates);
         public void SetFilter(string sql) => inner.SetFilter(sql);
         public void ClearFilter() => inner.ClearFilter();
         public void ReapplyFilter() => inner.ReapplyFilter();

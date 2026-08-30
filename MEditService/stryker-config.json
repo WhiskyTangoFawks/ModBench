@@ -17,7 +17,7 @@
     "mutate": [
       "**/MEditService.Core/**/*.cs",
       "!**/MEditService.Core/Queries/RecordQueryService.cs",
-      "!**/MEditService.Core/Session/SessionStatus.cs"
+      "!**/MEditService.Core/Plugins/LoadOrderStatus.cs"
     ],
     "ignore-methods": [
       "Log*"

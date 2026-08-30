@@ -81,7 +81,7 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // "Data"/"data"/"DATA" must all elide the same way regardless of which casing a given response
 // happens to use. The *returned* key otherwise preserves the caller's own casing verbatim (does
 // not lowercase plugin/origin into the output) — deliberately: pervasively folding the whole key
-// would mean the immutableSet/RecordSessionClient mismatch this guards against (two independently
+// would mean the immutableSet/RecordPanelClient mismatch this guards against (two independently
 // -fetched responses disagreeing only in case) trades for making every ColumnKey unreadable and
 // disagreeing with the exact plugin string every existing caller already threads through
 // (onFocusCell/onEdit/onCellDragStart/onCellDrop's payloads, action broadcasts) for no case-
@@ -97,8 +97,8 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // types claims it never will be. Investigated: it provably can't be, today — the
 // backend fields behind all three (`RecordDetail.Origin`/`CompareOverride.Origin`/
 // `PluginResponse.Origin`, MEditService.Core/Queries/Models.cs and
-// Session/PluginMetadata.cs) are non-nullable C# `string`s, always populated from
-// `PluginOrigin.DataDirectory` or an already-normalized value (`SessionEndpoints.cs`'s
+// Load order/PluginMetadata.cs) are non-nullable C# `string`s, always populated from
+// `PluginOrigin.DataDirectory` or an already-normalized value (`LoadOrderEndpoints.cs`'s
 // `string.IsNullOrEmpty(p.Origin) ? PluginOrigin.DataDirectory : p.Origin` is the one place a
 // nullable origin — `ExplicitPlugin.Origin`, a *request* shape, never returned to a client —
 // exists at all, and it's resolved before touching any read-side DTO), and every one of those
@@ -107,7 +107,7 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // one of these fields `string | null` regardless (`api.ts`'s `origin?: string | null` — an
 // artifact of the OpenAPI generator not reading C# nullable-reference-type annotations, applied
 // uniformly to every string field on the wire, not something specific to origin), and
-// RecordSessionClient's `load()` casts that raw response straight into these hand types with an
+// RecordPanelClient's `load()` casts that raw response straight into these hand types with an
 // unchecked `as` (its own comment: the generated per-operation types are "looser than this
 // webview's own hand-declared DTOs" by design — every call site already trusts a non-nullable
 // backend field stays non-null past that cast). `columnKey()` is the one place in the whole client

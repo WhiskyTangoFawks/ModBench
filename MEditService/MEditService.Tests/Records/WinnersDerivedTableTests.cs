@@ -11,7 +11,7 @@ namespace MEditService.Tests.Records;
 
 /// <summary>
 /// #584 / ADR-0001: winning is a function of the registered load order, so it lives in a
-/// session-owned derived table — <c>session_winners</c>, one row per (ref, FormKey) naming the plugin
+/// load order-owned derived table — <c>winners</c>, one row per (ref, FormKey) naming the plugin
 /// whose copy wins — and never as a column on a data row. These tests read that table directly,
 /// because "where the answer is stored" is the whole point of the ticket: the behavioural half
 /// (a promotion after a delete, a reorder flipping the stack) is already pinned by
@@ -60,8 +60,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
     {
         var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
         index.Index(
-            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4),
-            loadOrderIndex, participates: true, new PluginKey(name, "Data"));
+            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
     }
 
     /// <summary>The (plugin, origin) named as winning <paramref name="formKey"/> at
@@ -69,7 +68,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
     private static (string Plugin, string Origin)? WinnerOf(DuckDbRecordIndex index, RecordRef recordRef, string formKey)
     {
         using var cmd = index.Connection.CreateCommand();
-        cmd.CommandText = "SELECT plugin, origin FROM session_winners WHERE record_ref = $1 AND form_key = $2";
+        cmd.CommandText = "SELECT plugin, origin FROM winners WHERE record_ref = $1 AND form_key = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = WinnerRef.Of(recordRef) });
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         using var reader = cmd.ExecuteReader();
@@ -96,7 +95,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         // The table is a function, not a set of flags: (record_ref, form_key) is its key, so a
         // reader can LEFT JOIN it without risking a duplicated record row. Two plugins share this
         // FormKey and exactly one row per ref names a winner for it.
-        Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM session_winners WHERE form_key = '{_npc}'"));
+        Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE form_key = '{_npc}'"));
 
         // Every plugin header is swept in the same pass — the header table is the one surviving
         // per-type table and would otherwise never have a winner at all, which reads as "no header
@@ -108,9 +107,9 @@ public sealed class WinnersDerivedTableTests : IDisposable
         }
 
         // Re-running the sweep is idempotent — it rebuilds the table wholesale rather than adding to it.
-        var before = Scalar(index, "SELECT COUNT(*) FROM session_winners");
+        var before = Scalar(index, "SELECT COUNT(*) FROM winners");
         index.UpdateWinners();
-        Assert.Equal(before, Scalar(index, "SELECT COUNT(*) FROM session_winners"));
+        Assert.Equal(before, Scalar(index, "SELECT COUNT(*) FROM winners"));
     }
 
     [Fact]
@@ -118,17 +117,17 @@ public sealed class WinnersDerivedTableTests : IDisposable
     {
         using var index = LoadedIndex();
 
-        index.SetPluginParticipation(OverKey, participates: false);
+        index.Register(OverKey, Registration.Disabled(1));
         index.UpdateWinners();
 
         // Disabled in plugins.txt: Over.esp is registered (so its rows are still visible) but out of
         // the stack, so the plugin below it holds the field at both refs.
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM session_winners WHERE plugin = '{OverKey.Name}'"));
+        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
         Assert.Equal(BaseKey.Name, index.GetDocument(_npc)!.Plugin.Name);
 
-        index.SetPluginParticipation(OverKey, participates: true);
+        index.Register(OverKey, Registration.Participating(1));
         index.UpdateWinners();
 
         Assert.Equal(Expected(OverKey), WinnerOf(index, RecordRef.Effective, _npc));
@@ -145,7 +144,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
 
         Assert.True(Scalar(index, $"SELECT COUNT(*) FROM mirror.records WHERE plugin = '{OverKey.Name}'") > 0,
             "Premise: unregistering leaves the mirror rows in place (#582).");
-        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM session_winners WHERE plugin = '{OverKey.Name}'"));
+        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM winners WHERE plugin = '{OverKey.Name}'"));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
     }
 

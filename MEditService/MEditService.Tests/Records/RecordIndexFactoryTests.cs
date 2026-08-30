@@ -45,8 +45,8 @@ public class RecordIndexFactoryTests : IDisposable
 
         var key = new PluginKey("UFO4P.esp", "Unofficial Patch");
         using var overlay = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-        index.Index(overlay, 0, participates: true, key, path);
-        index.Register(key, 0, participates: true);
+        index.Index(overlay, Registration.Participating(0), key, path);
+        index.Register(key, Registration.Participating(0));
         index.UpdateWinners();
         return key;
     }

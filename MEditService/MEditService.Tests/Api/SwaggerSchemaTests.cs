@@ -7,8 +7,8 @@ namespace MEditService.Tests.Api;
 // Issue #161: OpenAPI 3.0 forbids sibling keywords next to $ref, so Swashbuckle never emits
 // `nullable: true` alongside a bare $ref for a nullable object-typed property. These assert the
 // generated swagger.json directly — the actual contract openapi-typescript/api.ts consumes — via
-// a bare WebApplicationFactory (schema generation needs no loaded session, matching
-// ProblemDetailsApiTests.Endpoint_NoSession_ReturnsProblemDetails).
+// a bare WebApplicationFactory (schema generation needs no loaded load order, matching
+// ProblemDetailsApiTests.Endpoint_NoLoadOrder_ReturnsProblemDetails).
 public sealed class SwaggerSchemaTests
 {
     private static async Task<JsonElement> GetSchemaAsync()

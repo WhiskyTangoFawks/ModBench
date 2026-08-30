@@ -1,7 +1,7 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -33,7 +33,7 @@ public sealed class DialogueOrderDamageTests : IDisposable
 {
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-order-damage-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-order-damage-game-").FullName;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
     private readonly PluginKey _plugin = new(CutDownPluginFixture.PluginFileName, "FixtureMod");
 
     public DialogueOrderDamageTests()
@@ -41,21 +41,21 @@ public sealed class DialogueOrderDamageTests : IDisposable
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
+        ((ILoadOrderMirror)_mirror).Reconcile(
             _gameDirectory,
-            [new ExplicitPluginInput(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, true)],
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, _plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }

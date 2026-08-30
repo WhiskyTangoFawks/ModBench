@@ -1,4 +1,4 @@
-using MEditService.Core.Session;
+using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -8,7 +8,7 @@ namespace MEditService.Tests.Api;
 public sealed class ReferencePluginFixture : IApiPluginFixture<ReferencePluginFixture>
 {
     public string DataFolder => _data.DataFolder;
-    public IReadOnlyList<ExplicitPluginInput> Plugins => _data.Plugins;
+    public IReadOnlyList<LoadOrderEntry> Plugins => _data.Plugins;
     public string InstanceRoot => _data.InstanceRoot;
     public const string PluginName = "RefPlugin.esp";
 

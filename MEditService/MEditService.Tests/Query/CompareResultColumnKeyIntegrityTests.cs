@@ -2,10 +2,10 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -139,16 +139,16 @@ public sealed class CompareResultColumnKeyIntegrityTests
     private static IEnumerable<Type> CandidateInterfaces(Type type) =>
         type.IsInterface ? [type, .. type.GetInterfaces()] : type.GetInterfaces();
 
-    // ---- minimal ISessionManager/IGameSession fakes ----
+    // ---- minimal ILoadOrderMirror/ILoadOrder fakes ----
     //
     // The repository is hand-indexed twice directly, matching the established pattern from #272's
-    // other AC5 tests (DuckDbRecordIndexTests/PlacementIndexingTests). session.Plugins gets
+    // other AC5 tests (DuckDbRecordIndexTests/PlacementIndexingTests). load order.Plugins gets
     // exactly one entry, which is all this test needs: it asserts the *shape* of the response's
     // column keys, not classification. Since #34 made pluginMasters/pluginParticipates
     // ColumnKey-keyed, that lone entry resolves masters/participation only for its own origin and
     // the other column falls back to the fail-open defaults — neither of which this test reads.
-    // A real two-copy session is exercised end-to-end in DuplicateFilenameSessionApiTests.
-    private sealed class FakeGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
+    // A real two-copy load order is exercised end-to-end in DuplicateFilenameLoadOrderApiTests.
+    private sealed class FakeLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
     {
         public string DataFolderPath => throw new NotSupportedException();
         public string? InstanceRoot => throw new NotSupportedException();
@@ -157,31 +157,23 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
         public string? FilterSql { get; set; }
         public IModGetter? GetMod(string pluginName, string origin) => throw new NotSupportedException();
-        public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
-        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
-        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 
-    private sealed class FakeSessionManager(IGameSession session, IRecordReads repository) : ISessionManager
+    private sealed class FakeMirror(ILoadOrder loadOrder, IRecordReads repository) : ILoadOrderMirror
     {
-        public IGameSession? Session => session;
+        public ILoadOrder? LoadOrder => loadOrder;
         public IRecordReads? Repository => repository;
         // #415: this double exists for read-model shape assertions only — nothing here writes.
         public IRecordIndex? Index => null;
-        // #274: these stubs never load, so they are always in the no-session state.
-        public SessionStatus Status => SessionStatus.None;
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
-        public void Unload() => throw new NotSupportedException();
+        // #274: these stubs never load, so they are always in the no-load order state.
+        public LoadOrderStatus Status => LoadOrderStatus.None;
+        public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
+        public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
-        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
-        public PluginResponse SetPluginParticipation(string plugin, bool participates) => throw new NotSupportedException();
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
         public void ReapplyFilter() => throw new NotSupportedException();
@@ -246,13 +238,13 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var ddl = new TableDdlBuilder(reflector);
         using var repo = new DuckDbRecordIndex(reflector, ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
-        repo.Index((IModGetter)mod, 1, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
+        repo.Index((IModGetter)mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "ModA"));
+        repo.Index((IModGetter)mod, Registration.Participating(1), new PluginKey(mod.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
-        var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data") };
-        var session = new FakeSessionManager(new FakeGameSession(plugins), repo);
-        var svc = new RecordQueryService(session, reflector, new ConflictClassifier());
+        var plugins = new[] { new PluginMetadata("Shared.esp", "", 0, false, false, [], 1, false, Origin: "Data", Enabled: true, Winning: true) };
+        var loadOrder = new FakeMirror(new FakeLoadOrder(plugins), repo);
+        var svc = new RecordQueryService(loadOrder, reflector, new ConflictClassifier());
 
         var compare = svc.GetCompare(perk.FormKey.ToString());
 
@@ -288,7 +280,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         // classification.PluginStates.GetValueOrDefault(o.Plugin, OnlyOne) missed both compound
         // keys (PluginStates is keyed by ColumnKey.Of since B3) and silently defaulted both
         // overrides to OnlyOne instead. Not a two-origin-only bug: elision only spares Data-origin
-        // plugins, and almost no plugin in a real MO2 session is Data-origin (#269), so this was
+        // plugins, and almost no plugin in a real MO2 load order is Data-origin (#269), so this was
         // live for essentially every conflicted record.
         var modA = compare.Overrides.Single(o => o.Origin == "ModA");
         var modB = compare.Overrides.Single(o => o.Origin == "ModB");

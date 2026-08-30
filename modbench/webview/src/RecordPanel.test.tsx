@@ -8,11 +8,11 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
-import { recordPanelIncompleteMessage } from '../../src/medit/sessionProgress';
+import { recordPanelIncompleteMessage } from '../../src/medit/loadOrderProgress';
 import { DIMMED_OPACITY } from './gridStyles';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
-import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
+import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 
 // ── shared metadata fixtures ──────────────────────────────────────────────────
 
@@ -386,25 +386,25 @@ interface FakeOpts {
   // case, and the one every pre-#308 test implicitly assumed. The two banner-specific tests below
   // override it.
   conflictsComputed?: boolean;
-  load?: RecordSessionClient['load'];
-  conditionRunOnTargets?: RecordSessionClient['conditionRunOnTargets'];
+  load?: RecordPanelClient['load'];
+  conditionRunOnTargets?: RecordPanelClient['conditionRunOnTargets'];
 }
 
-// Issue #122: a fake record-session client. `load` returns the composite view built from the
+// Issue #122: a fake record-load order client. `load` returns the composite view built from the
 // given compare fixture; write methods are spies tests can assert on and override.
-function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient {
+function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordPanelClient {
   const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean; isTracked?: boolean }[];
   const okLoad = {
     ok: true, result: compare, plugins: pl,
-    // #272 / ADR-0036: mirrors RecordSessionClient.load()'s own columnKey()-keyed construction —
+    // #272 / ADR-0036: mirrors RecordPanelClient.load()'s own columnKey()-keyed construction —
     // a fake that built this as a bare-plugin-name Set (pre-#272) would silently pass every AC5
     // test that exercises immutableSet, since the fake itself wouldn't reproduce the bug.
     immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin ?? null))),
-    // #304 / ADR-0035: mirrors RecordSessionClient.load()'s own `=== false` filter — a fixture
+    // #304 / ADR-0035: mirrors RecordPanelClient.load()'s own `=== false` filter — a fixture
     // that never sets inLoadOrder (every pre-#304 fixture) must default every column to
     // in-load-order, the same defensive default the real client applies.
     notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
-    // #415 / ADR-0041: mirrors RecordSessionClient.load()'s own `=== true` filter — every
+    // #415 / ADR-0041: mirrors RecordPanelClient.load()'s own `=== true` filter — every
     // pre-existing fixture here omits isTracked, so every column defaults to untracked exactly as
     // the real client's own fail-closed default does.
     trackedSet: new Set(pl.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin ?? null))),
@@ -412,7 +412,7 @@ function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordSessionClient 
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
-    // Issue #167: the Run On target dropdown's catalog — session-wide, fetched once on mount.
+    // Issue #167: the Run On target dropdown's catalog — load-order-wide, fetched once on mount.
     conditionRunOnTargets: opts.conditionRunOnTargets ?? vi.fn().mockResolvedValue([]),
   };
 }
@@ -506,7 +506,7 @@ describe('RecordPanel', () => {
 // (plugin, origin) identity can tell them apart. Nothing loads such a pair today (blocked on
 // #34), but the backend already returns this shape (ColumnKey-keyed dictionaries, per-override
 // Origin) once two rows exist for one FormKey — this fixture is that shape, built by hand rather
-// than through a real session load, the same way the backend's own AC5 tests do.
+// than through a real reconcile, the same way the backend's own AC5 tests do.
 
 describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -954,7 +954,7 @@ describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () =>
   // its own banner over stale content — this asserts both halves land together (the refetch, and
   // the banner clearing as a consequence of the fresher conflictsComputed it carries), not just
   // that the message was heard.
-  it('refetches and reflects settled data when SESSION_CONFLICTS_COMPUTED arrives (AC4)', async () => {
+  it('refetches and reflects settled data when CONFLICTS_COMPUTED arrives (AC4)', async () => {
     const load = vi.fn()
       .mockResolvedValueOnce({
         ok: true, result: compareResult, changes: [], plugins: pluginsResponse,
@@ -968,7 +968,7 @@ describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () =>
     await waitFor(() => screen.getByText(recordPanelIncompleteMessage(false)!));
 
     act(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } }));
     });
 
     await waitFor(() => expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument());
@@ -978,13 +978,13 @@ describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () =>
   // A panel this message reaches before it has ever loaded a record (no formKey) must not throw
   // or attempt a fetch — refresh() itself already no-ops on an empty formKey; this pins that the
   // broadcast handler doesn't bypass that guard.
-  it('does nothing when SESSION_CONFLICTS_COMPUTED arrives before any record is loaded', () => {
+  it('does nothing when CONFLICTS_COMPUTED arrives before any record is loaded', () => {
     vi.stubGlobal('mEditFormKey', '');
     const load = vi.fn();
     renderPanel(compareResult, { load });
 
     act(() => {
-      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED } }));
+      window.dispatchEvent(new MessageEvent('message', { data: { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED } }));
     });
 
     expect(load).not.toHaveBeenCalled();
@@ -1082,7 +1082,7 @@ describe('RecordPanel — column collapse (issue #3)', () => {
     });
 
     await waitFor(() => screen.getByText('Fallout4.esm'));
-    // Still collapsed after navigating to a new record in the same panel session.
+    // Still collapsed after navigating to a new record in the same panel load order.
     expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
   });
 });

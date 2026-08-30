@@ -9,8 +9,8 @@ import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog
 import { createApiClient, type ApiClient, type MasterIssue, type CompileResult, type CrashRepairOffer } from './medit/ApiClient';
 import { presentCrashRepairOffers } from './medit/crashRepairOffer';
 import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
-import { SessionController, type SessionLoadProgress } from './medit/SessionController';
-import { makeLoadProgressHandler } from './medit/sessionProgress';
+import { EditingController, type LoadOrderProgress } from './medit/EditingController';
+import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
 import {
   InteriorLoadMoreNode, PluginTreeNode, PluginTreeProvider, RecordTypeNode, RecordNode, PlacedNode, headerFormKeyFor,
   StackPeerNode, StackBinaryStateNode,
@@ -41,18 +41,19 @@ import { ModListProvider, ModNode, OverwriteNode, SeparatorNode, type ModlistNod
 import { createOverwriteWatcher } from './modmanager/overwriteWatcher';
 import { createModsWatcher } from './modmanager/modsWatcher';
 import { createModlistWatcher } from './modmanager/modlistWatcher';
+import { createPluginsTxtWatcher } from './modmanager/pluginsTxtWatcher';
 import { OverwriteDecorationProvider } from './modmanager/OverwriteDecorationProvider';
 import {
   PluginListProvider, pluginFileOf, orderIssueMastersOf, pluginNamesInSelection, type PluginListNode,
 } from './modmanager/PluginListProvider';
 import { buildSelectedPluginsFilterSql } from './medit/filterSelectedPluginsSql';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
-import { createDriftTracker, type DriftTracker } from './pluginDrift';
+import { createLoadOrderSync, type LoadOrderSync } from './loadOrderSync';
 import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
-import { buildExplicitPluginsWithOrigin, resolveCurrentPluginOrigins } from './modmanager/explicitSession';
+import { buildLoadOrderSnapshot } from './modmanager/loadOrderSnapshot';
 import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
@@ -76,13 +77,15 @@ let backendManager: BackendManager | undefined;
 // level for the same reason pluginsTree below is — the choke points that move that state
 // (exitToLoadout, switchProfile) are module-level functions too.
 let loadoutHeaderProvider: LoadoutHeaderProvider | undefined;
-// #270: the merged Plugins tree. Module level for the same reason as the above — the session
+// #270: the merged Plugins tree. Module level for the same reason as the above — mEdit
 // starting and stopping is what puts chevrons on its rows, and both choke points for that
 // (enterEditing, exitToLoadout) are module-level.
 let pluginsTree: PluginsTreeComposite<PluginListNode, PluginTreeNode> | undefined;
-// #279: module-level for the same reason pluginsTree is — the session lifecycle (enter,
-// close, backend death) hands it state from call sites that never see the view's wiring.
-let driftTracker: DriftTracker | undefined;
+// ADR-0044: the one path by which the Plugin load order reaches Editing — "recompute the
+// snapshot, PUT it", coalesced. Module level for the same reason pluginsTree is: the profile
+// switch and the checkbox toggle are module-level or registered before the view's wiring exists,
+// and both have to be able to ask for a fresh snapshot.
+let loadOrderSync: LoadOrderSync | undefined;
 // #307: the same view, as a TreeView — what carries the load's own progress (a native header
 // progress indicator, addressed by this view id) and its incompleteness statement
 // (`TreeView.message`). Module level for the same reason as pluginsTree above: enterEditing and
@@ -92,13 +95,13 @@ let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefine
 // record filter (a second, independent narrowing axis) has to be able to add itself to this
 // view's readout from `activate`'s own setFilterActive, which runs before the view exists.
 let pluginsNameFilter: NameFilter | undefined;
-// #307 AC7: the in-flight load's abort handle. Module level for the same reason as the above —
-// exitToLoadout is where a load gets deliberately abandoned, and it is module-level. Replaced by
-// each new load; a superseded one does not need aborting, since the backend answers it 409.
+// #307 AC7: the in-flight reconcile's abort handle. Module level for the same reason as the above —
+// exitToLoadout is where a reconcile gets deliberately abandoned, and it is module-level. Replaced
+// by each new reconcile; a superseded one does not need aborting, since the backend answers it 409.
 let loadAbort: AbortController | undefined;
 // #278 / ADR-0035 amending ADR-0018: per-plugin filter matches, lowercased filename → does this
 // plugin own at least one record the active record filter matches. Module level for the same
-// reason as pluginsTree above — SessionController's setFilter/clearFilter are the choke points
+// reason as pluginsTree above — EditingController's setFilter/clearFilter are the choke points
 // that invalidate it (via refreshMatchingPlugins below), and they run before the composite that
 // reads it exists. `undefined` (never fetched, or no filter active) reads as "matches" everywhere
 // it's consulted — the same safe default PluginsTreeComposite.hasMatchingRecords itself falls
@@ -107,7 +110,7 @@ let matchingPlugins: Map<string, boolean> | undefined;
 // #449: per-plugin compile freshness, lowercased filename → PluginMetadata's own
 // {compileStale, lastCompiledAt}. Module level for the same reason as matchingPlugins above —
 // it changes on its own independent trigger (Save & Compile lands a new binary; the record filter
-// changes nothing about it) rather than through setSession's once-per-load bundle, and
+// changes nothing about it) rather than through setLoadOrder's once-per-reconcile bundle, and
 // refreshMatchingPlugins below already re-fetches GET /plugins for the same reason, so this rides
 // that fetch rather than a second one. `undefined` reads as "nothing to show" — PluginsTreeComposite
 // .compileStaleOf's own safe default when the accessor has nothing to say.
@@ -148,21 +151,12 @@ function withPluginsViewProgress(work: () => Promise<void>): Promise<void> {
   ));
 }
 // #281: the record browser behind the merged tree's children. Module level for the same reason as
-// pluginsTree directly above — the session starting/stopping is what tells its record rows which
+// pluginsTree directly above — mEdit starting/stopping is what tells its record rows which
 // plugins are immutable (Remove hidden via contextValue), through the same choke points.
 let recordBrowserProvider: PluginTreeProvider | undefined;
-// #295: `enterEditing` itself, built once inside `registerLoadoutView`. Module level for the
-// same reason as the above — not a registration-order race (registerLoadoutSurfaces, which
-// calls registerLoadoutView, already runs before registerEditorCommands registers
-// modbench.reloadSession), but because registerLoadoutView returns *before* ever building this
-// closure when there is no workspace, or the workspace isn't an MO2 instance (see that
-// function's own early returns), leaving it permanently unset for the lifetime of that
-// activation. Assigned exactly once, where `enterEditing` is built; every reader treats it as
-// possibly-absent for that reason, not as a race to guard against.
-let enterEditingFn: (() => Promise<void>) | undefined;
 // #354: module level for the same reason as the above — exitToLoadout has to reach the record
 // filter's single writer (the context key its Clear action is gated on, the code lens's active
-// SQL, and the readout) to end the filter's UI state on session close, and a local `const` inside
+// SQL, and the readout) to end the filter's UI state when mEdit closes, and a local `const` inside
 // activate() is structurally unreachable from there. Assigned exactly once, alongside where
 // makeSetFilterActive builds it.
 let setFilterActive: ReturnType<typeof makeSetFilterActive> | undefined;
@@ -178,31 +172,35 @@ const NOT_MO2_INSTANCE_PROVIDER: vscode.TreeDataProvider<never> = {
   getChildren: () => [],
 };
 
-/** #270 / #276 / #277: which plugin files the running session actually holds — the session's own
- *  list, not the one we sent it, because the backend prepends the game's implicit masters and
+/** #270 / #276 / #277: which plugin files Editing's load order actually names — the backend's own
+ *  list, not the snapshot we sent it, because the backend prepends the game's implicit masters and
  *  those are rows in the Plugins tree too — plus, of that set, which are read-only for editing
  *  (Editing's "Immutable plugin", `PluginMetadata.isImmutable`) and each plugin's own master
  *  issues (`PluginMetadata.masterIssues`, #277 / ADR-0037). Bundled as one fact, not three
  *  separate reads: all three come off the same `getPlugins()` call and are handed to
- *  `PluginsTreeComposite.setSession` together, so there is never a moment where a caller could
- *  have one without the others. */
-interface SessionPluginFiles {
+ *  `PluginsTreeComposite.setLoadOrder` together, so there is never a moment where a caller could
+ *  have one without the others.
+ *
+ *  ADR-0044: `GET /plugins` lists every held copy, losing ones included, and two copies can share
+ *  a filename; every map here is keyed by filename, so it reads the `inLoadOrder` copy — the one
+ *  plugins.txt names, which is the one a tree row stands for. */
+interface HeldPluginFiles {
   files: Set<string>;
   readOnly: Set<string>;
   masterIssues: Map<string, MasterIssue[]>;
-  /** #279: the origin each held plugin was actually read from — half of the drift comparison, the
-   *  other half being what Mod Management says the name resolves to now. Carried in the same
-   *  hand-off as everything else the session reports about its plugins, for the same reason. */
+  /** #448: the origin each load-order plugin's copy was read from — what labels the Stack node's
+   *  own state entries. Carried in the same hand-off as everything else the load order reports
+   *  about its plugins, for the same reason. */
   origins: Map<string, string>;
   /** #278 / ADR-0035 amending ADR-0018: lowercased filename → does this plugin own at least one
    *  record the *current* record filter matches. Carried in the same hand-off, for the same
-   *  reason as `origins` — this call already asked `GET /plugins` the question, and every session
-   *  (re)load reaches it downstream of `SessionController.syncFilterState()`
-   *  (`makeEnterEditing`'s `enter()`, shared by Launch mEdit, the crash-restart handler and
-   *  `modbench.reloadSession` alike), so this is the one hand-off through which the filter state
-   *  a fresh or reloaded session actually has — not the one an in-session `setFilter`/`clearFilter`
-   *  last left behind — reaches `matchingPlugins`. That is what keeps the map from outliving a
-   *  session it no longer describes. */
+   *  reason as `origins` — this call already asked `GET /plugins` the question, and every
+   *  reconcile reaches it downstream of `EditingController.syncFilterState()`
+   *  (`makeReconcileLoadOrder`'s own sequence, shared by Launch mEdit, the crash-restart handler
+   *  and every snapshot the sync sends), so this is the one hand-off through which the filter
+   *  state the backend actually has — not the one an earlier `setFilter`/`clearFilter` last left
+   *  behind — reaches `matchingPlugins`. That is what keeps the map from outliving the state it
+   *  describes. */
   matches: Map<string, boolean>;
   /** #448: every plugin whose own physical folder is tracked (`isTracked`, `trackedRepositories.ts`
    *  — `.git` present) — the Stack node's own state-entry gate (CONTEXT.md: "Editing requires
@@ -211,15 +209,15 @@ interface SessionPluginFiles {
   trackedPlugins: Set<string>;
   /** #449: lowercased filename → this plugin's own compile-freshness answer, off the same
    *  `GET /plugins` call as everything else in this hand-off — seeds the module-level
-   *  `compileStale` at session (re)load, the same way `matches` seeds `matchingPlugins`; the
+   *  `compileStale` at every reconcile, the same way `matches` seeds `matchingPlugins`; the
    *  independent post-compile refresh (`refreshMatchingPlugins`, extended for #449) updates it
-   *  again without a session reload. */
+   *  again without a reconcile. */
   compileStale: Map<string, { stale: boolean; lastCompiledAt: string | null }>;
 }
 
-function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<SessionPluginFiles> {
+function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<HeldPluginFiles> {
   return async () => {
-    const plugins = await repository.getPlugins();
+    const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
     return {
       files: new Set(plugins.map((p) => p.name)),
       readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
@@ -237,13 +235,13 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
   };
 }
 
-/** #278 / ADR-0035 amending ADR-0018: `SessionController.setFilter`/`clearFilter`'s
+/** #278 / ADR-0035 amending ADR-0018: `EditingController.setFilter`/`clearFilter`'s
  *  `refreshMatchingPlugins` — re-derives `matchingPlugins` off a fresh `GET /plugins` and
  *  re-renders, so `PluginsTreeComposite`'s chevron reads the filter that is active now, not the
  *  one that produced the last set. The *other* path that can change which filter is active —
- *  a session (re)load, which can start already-filtered or unfiltered — does not come through
- *  here; it is covered by `applyLoadedSessionToTree` reusing this same `GET /plugins` answer via
- *  `SessionPluginFiles.matches` below, not by a second call site into this function. A read
+ *  a reconcile, which can start already-filtered or unfiltered — does not come through
+ *  here; it is covered by `applyLoadOrderToTree` reusing this same `GET /plugins` answer via
+ *  `HeldPluginFiles.matches` below, not by a second call site into this function. A read
  *  failure here degrades to "no data" (matches everywhere) rather than throwing — a chevron guess
  *  is wrong in the same direction `hasMatchingRecords` already treats as safe, and a record
  *  filter's whole *point* is to be applied and inspected, so silently freezing every chevron would
@@ -252,13 +250,14 @@ function sessionPluginFilesFrom(repository: ApiPluginRepository): () => Promise<
  *  #449: also re-derives `compileStale` off the same `GET /plugins` call, and is now called
  *  after a successful Save & Compile too (`compileAndReport`) — not just after a filter change.
  *  Riding the fetch this function already makes rather than adding a second near-identical one:
- *  both facts change on their own independent trigger, neither through `setSession`'s once-per-
+ *  both facts change on their own independent trigger, neither through `setLoadOrder`'s once-per-
  *  load bundle, so one shared "re-derive everything GET /plugins alone can answer, and re-render"
  *  function covers both. A read failure degrades `compileStale` to "no data" (nothing decorated)
  *  the same safe direction `matchingPlugins` already takes. */
 async function refreshMatchingPlugins(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
-    const plugins = await repository.getPlugins();
+    // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
+    const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
     matchingPlugins = new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const));
     compileStale = new Map(plugins.map((p) =>
       [p.name.toLowerCase(), { stale: p.compileStale, lastCompiledAt: p.lastCompiledAt }] as const));
@@ -282,12 +281,12 @@ interface GitExtensionExports {
 }
 
 /** #414/ADR-0041: one `openRepository` per distinct tracked mod folder, so each shows its own
- *  native Source Control group — re-run whenever the session becomes newly readable
+ *  native Source Control group — re-run whenever the load order becomes newly readable
  *  (`notifyConflictsComputed`'s own call site) and immediately after a successful Track, so a
  *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
  *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI this
  *  ticket adds, never blocks reading or editing. */
-async function registerTrackedRepositoriesForSession(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
+async function registerHeldTrackedRepositories(repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
     const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
     if (!gitExtension) {
@@ -309,21 +308,16 @@ async function registerTrackedRepositoriesForSession(repository: ApiPluginReposi
  *  to switch back to any more — the loadout views were never hidden (#268), and Referenced By
  *  governs its own visibility. */
 function exitToLoadout(): void {
-  // #307 AC7: abandon any load still in flight *first* — it aborts the POST outright, so the
-  // load stops polling and returns 'abandoned' rather than discovering a killed backend as a
+  // #307 AC7: abandon any reconcile still in flight *first* — it aborts the PUT outright, so the
+  // reconcile stops polling and returns 'abandoned' rather than discovering a killed backend as a
   // network error and reporting that to the user as a failure.
   loadAbort?.abort();
   loadAbort = undefined;
-  // #270: the chevrons go with the session. Cleared before the backend stops, so no row can be
-  // expanded into a backend that is on its way down. #281: the immutable set goes with it.
-  pluginsTree?.setSession(undefined);
-  // #279: and so does drift — it is a statement about the plugins *this* session read, so it
-  // cannot outlive it. Cleared directly rather than recomputed, for the same reason as the
-  // decorations below: with no session there is nothing to compare against, so the
-  // answer is known without asking.
-  driftTracker?.setLoaded(undefined);
-  // #307: so does anything the load was saying about itself. A statement about a session that no
-  // longer exists is the same class of silent-wrong-state as a stale chevron.
+  // #270: the chevrons go with the backend. Cleared before it stops, so no row can be expanded
+  // into a backend that is on its way down. #281: the immutable set goes with it.
+  pluginsTree?.setLoadOrder(undefined);
+  // #307: so does anything the reconcile was saying about itself. A statement about a load order
+  // that is no longer held is the same class of silent-wrong-state as a stale chevron.
   say(undefined);
   // #255 / #354: and so does the record filter's whole UI state — the Clear action's context key,
   // the code lens's active SQL, and the Plugins tree readout's record-filter half — all through
@@ -332,16 +326,16 @@ function exitToLoadout(): void {
   // filters load-order rows, which are still there.)
   setFilterActive?.(false);
   // #278 / ADR-0035 amending ADR-0018: and so does the match set it drove — a statement about
-  // which plugins *this* session's records matched, same reasoning as drift just above.
+  // which held plugins' records matched, same reasoning as the chevrons just above.
   matchingPlugins = undefined;
   recordBrowserProvider?.setImmutablePlugins([]);
-  // #448: no session means nothing is tracked or origin-known any more either — the Stack node's
+  // #448: no backend means nothing is tracked or origin-known any more either — the Stack node's
   // own state entries clear along with everything else this reset already clears.
   recordBrowserProvider?.setTrackedPlugins([]);
   recordBrowserProvider?.setPluginOrigins(new Map());
-  // #364: no session means no conflict information either — the Conflicts node and the badge both
+  // #364: no backend means no conflict information either — the Conflicts node and the badge both
   // have to disappear along with everything else this reset already clears, not linger describing
-  // a session that's gone.
+  // a load order that's gone.
   recordBrowserProvider?.setConflictsComputed(false);
   backendManager?.stop();
 }
@@ -350,12 +344,12 @@ function exitToLoadout(): void {
  *  action is gated on, the code lens's notion of which SQL is live, and (#255) the Plugins
  *  tree's readout — where the record filter is one of two independent narrowing axes and is
  *  named by its *source*, never by its SQL, because a `WHERE` clause is not a readout. `SQL` is
- *  the honest fallback for a filter read back off the backend at session start, whose source
+ *  the honest fallback for a filter read back off the backend when it comes up, whose source
  *  this frontend never saw.
  *
  *  The single writer for all three, called with `false` and nothing else by #354's exitToLoadout
- *  to end the record filter's UI state on session close, the same way SessionController's own
- *  setFilter/clearFilter/syncFilterState call it in session. `modbench.filterActive` is written
+ *  to end the record filter's UI state when mEdit closes, the same way EditingController's own
+ *  setFilter/clearFilter/syncFilterState call it while it runs. `modbench.filterActive` is written
  *  from exactly this one place. */
 function makeSetFilterActive(filterProvider: FilterCodeLensProvider) {
   return (active: boolean, sql?: string, label?: string) => {
@@ -410,27 +404,24 @@ function createReferencedByTree(
   return { referencedByTreeProvider, referencedByTreeView, activeRecordSubscription };
 }
 
-/** `SessionController`'s own `notifyConflictsComputed` dep — pulled out of `activate` (#364,
+/** `EditingController`'s own `notifyConflictsComputed` dep — pulled out of `activate` (#364,
  *  which pushed that function over the lint line budget) purely to stay under it, same shape as
- *  `makeSetFilterActive` above. Fires on the load-completing false→true `conflictsComputed`
- *  transition only (this dep's own doc comment): tells every open record panel to refetch its
- *  comparison, (re-)registers every tracked mod's repo with `vscode.git`, and (#364) flips the
- *  Conflicts node/badge gate on `treeProvider`. */
+ *  `makeSetFilterActive` above. Fires on every completed reconcile (this dep's own doc comment):
+ *  tells every open record panel to refetch its comparison, (re-)registers every tracked mod's
+ *  repo with `vscode.git`, and (#364) flips the Conflicts node/badge gate on `treeProvider`. */
 function makeNotifyConflictsComputed(
   treeProvider: PluginTreeProvider, recordPanels: Set<vscode.WebviewPanel>,
   repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
 ): () => void {
   return () => {
-    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED });
-    // #414/ADR-0041: the session just became newly readable — the one reliable point (see this
-    // dep's own doc comment) to (re-)register every tracked mod's repo with vscode.git.
-    void registerTrackedRepositoriesForSession(repository, outputChannel);
+    broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED });
+    // #414/ADR-0041: the load order just settled — the one reliable point (see this dep's own
+    // doc comment) to (re-)register every tracked mod's repo with vscode.git, which is also what
+    // makes a plugin whose winning copy moved to a newly tracked folder pick that repo up.
+    void registerHeldTrackedRepositories(repository, outputChannel);
     // #364: the Conflicts node's own gate and the badge's own gate — same fact, same call site as
-    // the two above, and the same documented forward-coupling gap (SessionController's own comment
-    // on this dep): a live-mutation re-sweep (#97) does not yet call this again on the way *out* of
-    // settled, so a stale true can outlive a reorder/enable/disable until #97 wires that
-    // notification too. Not a regression this ticket introduces — the message-based consumers
-    // (`sessionProgress.ts`) already inherit the identical gap.
+    // the two above. ADR-0044: every reconcile re-sweeps and fires this, so a reorder/enable/
+    // disable can no longer leave a stale true behind — the gap #97 used to owe is closed.
     treeProvider.setConflictsComputed(true);
   };
 }
@@ -451,7 +442,7 @@ export function activate(context: vscode.ExtensionContext) {
   const compileDiagnostics = vscode.languages.createDiagnosticCollection('modbench-compile');
   context.subscriptions.push(compileDiagnostics);
   backendManager = createBackendManager(port, outputChannel, statusBarItem);
-  wireSessionRunningContext(backendManager);
+  wireBackendRunningContext(backendManager);
 
   const client = createApiClient(port, createUnlimitedFetch());
   const repository = new ApiPluginRepository(client, log);
@@ -466,7 +457,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   setFilterActive = makeSetFilterActive(filterProvider);
 
-  const controller = new SessionController({
+  const controller = new EditingController({
     client,
     repository,
     log,
@@ -480,7 +471,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics, repository, outputChannel);
-  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, sessionPluginFiles: sessionPluginFilesFrom(repository), showCrashRepairOffers });
+  const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
 
   wireExternalChangePolling(repository, controller, outputChannel, log);
 
@@ -522,7 +513,7 @@ interface EditorCommandDeps {
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>;
   port: number;
   treeProvider: PluginTreeProvider;
-  controller: SessionController;
+  controller: EditingController;
   repository: ApiPluginRepository;
   scriptsPath: string;
   // Issue #282: the Referenced By view itself — needed for its Copy command's selection
@@ -731,7 +722,6 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
   return [
     vscode.window.registerFileDecorationProvider(recordDecorationProvider),
     vscode.commands.registerCommand('modbench.closeMedit', () => exitToLoadout()),
-    registerReloadSessionCommand(controller, outputChannel),
     vscode.commands.registerCommand('modbench.openEditor', (args?: { formKey?: string; label?: string }) => {
       openRecordPanel(context, openPanels, args?.label ?? args?.formKey ?? 'mEdit', args?.formKey, port,
         vscode.ViewColumn.One, { routerDeps, recordPanels, activeRecordTracker, singleton: true });
@@ -781,10 +771,10 @@ function registerRecordViewCommands(deps: EditorCommandDeps): vscode.Disposable[
 
 // #340: modbench.setFilter/setFilterFromDocument/clearFilter — pulled out of
 // registerRecordViewCommands purely to stay under the lint budget, same reasoning as
-// registerReloadSessionCommand below — no other reason to split it out. The three commands are
+// the other command groups — no other reason to split it out. The three commands are
 // one concern (select/apply/clear the active SQL filter), distinct from the record-panel and
 // reveal commands that dominate the rest of that function.
-function registerFilterCommands(scriptsPath: string, controller: SessionController): vscode.Disposable[] {
+function registerFilterCommands(scriptsPath: string, controller: EditingController): vscode.Disposable[] {
   return [
     // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
     // modbench.pluginListTree.filter over the same rows once the merged tree made this
@@ -829,45 +819,6 @@ function registerFilterCommands(scriptsPath: string, controller: SessionControll
         await controller.setFilter(buildSelectedPluginsFilterSql(names), 'Selected Plugins');
       }),
   ];
-}
-
-// #295: modbench.reloadSession — pulled out of registerRecordViewCommands purely for its line
-// budget, same reasoning as registerReferencedByCopyCommand below. Re-runs the session load
-// (makeEnterEditing — the same path Launch mEdit and the crash-restart handler take), not a
-// tree re-read.
-// Guarded on enterEditingFn: registerLoadoutView (which builds it) runs before this command is
-// even registered, so a set-but-not-yet-assigned race isn't the risk — the guard covers
-// enterEditingFn staying permanently unset, which happens when registerLoadoutView returns
-// early because there is no workspace, or the workspace isn't an MO2 instance (see that
-// function's own early returns). Invoking the command in that state must fail visibly, not
-// throw a TypeError at the user.
-function registerReloadSessionCommand(controller: SessionController, outputChannel: vscode.LogOutputChannel): vscode.Disposable {
-  return vscode.commands.registerCommand('modbench.reloadSession', async () => {
-    const enter = enterEditingFn;
-    if (!enter) {
-      outputChannel.error('[extension] modbench.reloadSession: no editing session to reload (no workspace, or not an MO2 instance)');
-      void vscode.window.showErrorMessage('Modbench: There is no editing session to reload.');
-      return;
-    }
-    // #410/ADR-0041: reloads outright, with no confirm. #295's confirm existed only to warn that
-    // a reload discards uncommitted work; with that model gone a reload rebuilds read state and
-    // destroys nothing.
-    //
-    // #295 AC4: matches modbench.modList.launchMedit's own try/catch — enterEditing's own
-    // undefined-failures branch (loadExplicitSession) already calls exitToLoadout() itself, but
-    // every *other* way it can fail (buildExplicitPluginsWithOrigin rethrowing a non-ENOENT readdir
-    // error, backendManager.start() rejecting, …) would otherwise propagate unhandled, leaving the
-    // tree claiming a session that either never came up or is now half-torn-down.
-    try {
-      // #307 AC2: the progress indicator moved into enterEditing itself, addressed at the Plugins
-      // view's header — two indicators for one operation was noise.
-      await enter();
-    } catch (err) {
-      outputChannel.error(`[extension] reloadSession failed: ${err instanceof Error ? err.message : String(err)}`);
-      exitToLoadout();
-      void vscode.window.showErrorMessage('Modbench: Failed to reload the session.');
-    }
-  });
 }
 
 // #282: the Referenced By view's own Copy — pulled out of registerRecordViewCommands purely for
@@ -928,12 +879,14 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
           { placeHolder: 'Switch profile' },
         );
         if (!picked || picked.label === active) return;
-        // New session boundary — tear down any live editing backend so a stale
-        // session can't survive the profile change (no-op if already stopped).
-        exitToLoadout();
         await modListProvider.switchProfile(picked.label);
         void updateProfileDescription();
         loadoutHeaderProvider?.refresh();
+        // ADR-0044: a profile switch is the next snapshot, not a teardown — the backend keeps
+        // running, and the index (keyed on the instance, shared by every profile — #592) makes
+        // the reconcile cheap. The profile files themselves are not watched for this (switching
+        // writes ModOrganizer.ini, not modlist/plugins.txt), so this asks explicitly.
+        loadOrderSync?.request();
       }),
       vscode.commands.registerCommand('modbench.modList.launchMedit', async () => {
         // #270 / #307: enterEditing now puts chevrons on the merged tree's rows *as each plugin
@@ -1138,19 +1091,14 @@ interface PluginListDeps {
   instanceRoot: string;
   // #357: a getter through the single game-directory resolver, not a Promise settled once —
   // see ModListProviderOptions/PluginListProviderOptions for why. Folds a resolution failure to
-  // undefined (degrading vanilla-master lookups/badges), unlike `gameDirResolver` below.
+  // undefined (degrading vanilla-master lookups/badges).
   dataFolder: () => Promise<string | undefined>;
-  // #357: the same resolver `dataFolder` reads through, passed through raw (not folded to
-  // undefined on failure) for the drift tracker below — #334 relies on a thrown resolution
-  // reaching its own try/catch so a failed refresh keeps the last known drift state rather than
-  // reading a misconfigured directory as "nothing resolves".
-  gameDirResolver: GameDirectoryResolver;
   /** The record browser that supplies a plugin row's children (#270). Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
-  /** #279 / #356: the per-plugin re-read's HTTP half, injected into the drift tracker so an origin
-   *  change is absorbed automatically — there is no longer a command that calls this directly. */
-  controller: SessionController;
+  /** ADR-0044: "recompute the snapshot, PUT it, apply the answer to the tree" — what the
+   *  load-order sync built here sends on every loadout change. */
+  reconcile: ReconcileLoadOrder;
 }
 /** The Plugins tree: a view of plugins.txt, stacked below the Mods tree. A row's checkbox toggles
  *  its enabled state (writing plugins.txt immediately); rows drag-and-drop to reorder (single or
@@ -1158,7 +1106,7 @@ interface PluginListDeps {
  *  `instanceRoot` enables the order-aware missing-master badge (issue #67).
  *
  *  #270 / ADR-0035: the view is now a `PluginsTreeComposite` over two providers — these rows and
- *  the record browser's children — so that with a session running each row expands into its
+ *  the record browser's children — so that with the backend running each row expands into its
  *  records. The composite is built here, at the composition root, because it is the only place
  *  that may know both; `PluginListProvider` is unchanged and still owns everything about a row. */
 /** The Plugins tree's own `PluginsTreeComposite` construction, pulled out of
@@ -1187,16 +1135,16 @@ function buildPluginsTreeComposite(
       conflictsNode: () => recordBrowser.conflictsNode(),
     },
     pluginFileOf,
-    // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with session state
+    // #277 / ADR-0037 AC8: lets the composite reconcile the order-aware badge with load order state
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
     // #278 / ADR-0035 amending ADR-0018: matchingPlugins is refreshed off the module-level
-    // refreshMatchingPlugins function above, whenever SessionController's setFilter/clearFilter
+    // refreshMatchingPlugins function above, whenever EditingController's setFilter/clearFilter
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
     hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
     // #449: refreshed off the same module-level refreshMatchingPlugins function above (extended
-    // for this), seeded at session (re)load and re-derived after a successful Save & Compile.
+    // for this), seeded at reconcile and re-derived after a successful Save & Compile.
     // Undefined reads as "nothing to show" — the composite's own fallback for an accessor with
     // nothing to say.
     compileStaleOf: (file) => compileStale?.get(file.toLowerCase()),
@@ -1211,13 +1159,13 @@ function buildPluginsTreeComposite(
 }
 
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser, reconcile } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const tracker = makeDriftTracker(modlistSource, instanceRoot, outputChannel, gameDirResolver, controller);
-  driftTracker = tracker;
+  const sync = makeLoadOrderSync(reconcile, outputChannel);
+  loadOrderSync = sync;
   const composite = buildPluginsTreeComposite(pluginListProvider, recordBrowser);
   pluginsTree = composite;
-  clearSessionWhenBackendDies(composite, recordBrowser, tracker);
+  clearTreeWhenBackendDies(composite, recordBrowser);
   const pluginListView = vscode.window.createTreeView('modbench.pluginListTree', {
     treeDataProvider: composite,
     canSelectMany: true,
@@ -1245,7 +1193,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new FileOverrideDecorationProvider(() => pluginListProvider.fileOverrides()),
     ),
-    ...wireDriftTracker(tracker, instanceRoot),
+    ...wireLoadOrderWatchers(sync, instanceRoot),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
         if (node.kind !== 'plugin') continue;
@@ -1261,15 +1209,8 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
       }
     }),
     registerRevealInExplorerCommand(pluginListProvider, outputChannel),
-    registerParticipationLiveMutation(pluginListProvider, controller),
+    registerParticipationSync(pluginListProvider),
     pluginsNameFilter,
-    // #448 / #34: a Stack peer's collapse is the unlisted-plugin door's own mirror of its
-    // expand-time load — dropping the loaded copy so a browsed-then-abandoned peer never lingers
-    // in the session ("hidden means absent"). `unloadStackPeer` is itself a no-op for a peer that
-    // was never expanded, so this fires for every collapse without first checking which kind.
-    pluginListView.onDidCollapseElement((e) => {
-      if (e.element instanceof StackPeerNode) void recordBrowser.unloadStackPeer(e.element);
-    }),
   ] };
 }
 
@@ -1298,28 +1239,18 @@ function registerRevealInExplorerCommand(
   });
 }
 
-/** #97 / ADR-0035 § Live mutation: the checkbox gesture's other half — applies the same
- *  participation change `PluginListProvider.setPluginEnabled` just wrote to `plugins.txt` onto a
- *  running backend session, live, with the Plugins view's own header progress indicator as the
- *  only feedback (`withPluginsViewProgress`, AC7). A no-op when no backend session is loaded
- *  (`pluginsTree.hasSession()`) — Mod Management works with no backend running, and that is the
- *  ordinary case, not a failure to report (`PluginsTreeComposite.hasSession`'s own doc comment) —
- *  so this never even attempts the call rather than surfacing it as a network-error toast.
- *  `pluginsTree` is read fresh on every event rather than closed over at registration time,
- *  since it is reassigned by every `enterEditing`/`exitToLoadout` cycle a session's whole
- *  lifetime after this listener is wired.
+/** #97 / ADR-0044: the checkbox gesture's other half — the participation change
+ *  `PluginListProvider.setPluginEnabled` just wrote to `plugins.txt` is the next snapshot, sent
+ *  through the same coalescing sync every other loadout gesture uses. The plugins.txt watcher
+ *  would fire for the same write; asking explicitly as well makes the gesture's own path not
+ *  depend on a watcher event, and the sync folds the two into one PUT. The sync itself drops the
+ *  request when no backend is receiving — Mod Management works with no backend running, and that
+ *  is the ordinary case, not a failure to report.
  *
  *  Pulled out of `registerPluginListView` purely to keep that function under the lint line
  *  budget, same as `registerRevealInExplorerCommand` alongside it. */
-function registerParticipationLiveMutation(
-  pluginListProvider: PluginListProvider, controller: SessionController,
-): vscode.Disposable {
-  return pluginListProvider.onDidChangeParticipation(({ plugin, enabled }) => {
-    if (!pluginsTree?.hasSession()) return;
-    void withPluginsViewProgress(async () => {
-      await controller.setPluginParticipation(plugin, enabled);
-    });
-  });
+function registerParticipationSync(pluginListProvider: PluginListProvider): vscode.Disposable {
+  return pluginListProvider.onDidChangeParticipation(() => loadOrderSync?.request());
 }
 
 /** `modbench.pluginListTree.revealInModsTree` (#448 AC5): a Stack peer's own "jump to the
@@ -1356,14 +1287,14 @@ function registerRevealInModsTreeCommand(
  *  `registerEditorCommands`'s own grouping, one level up (plugin-tree rows rather than the record
  *  editor's own commands). */
 function registerPluginRowCommands(
-  controller: SessionController,
+  controller: EditingController,
   repository: ApiPluginRepository,
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
   outputChannel: vscode.LogOutputChannel,
   compileDiagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable[] {
   return [
-    registerTrackCommand(controller, outputChannel, () => registerTrackedRepositoriesForSession(repository, outputChannel)),
+    registerTrackCommand(controller, outputChannel, () => registerHeldTrackedRepositories(repository, outputChannel)),
     registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(controller, repository, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
@@ -1377,17 +1308,17 @@ function registerPluginRowCommands(
 }
 
 /** #414/ADR-0041: the Track gesture. Resolves the clicked row's plugin name to the mod folder the
- *  session actually loaded it from, asks which `.gitignore` preset to generate (Edits is the
+ *  load order actually loaded it from, asks which `.gitignore` preset to generate (Edits is the
  *  default — Everything is the opt-in authoring choice), then delegates the HTTP call to
- *  `SessionController`. `onTracked` re-registers the native SCM panel for the newly tracked repo
+ *  `EditingController`. `onTracked` re-registers the native SCM panel for the newly tracked repo
  *  immediately, without waiting for the next activation.
  *
  *  AC: "reports progress" — a mega-plugin's complete serialization is a one-time, worst-case
  *  tens-of-seconds cost (ADR-0041), so the whole `track` call runs under the same Plugins-view
  *  progress indicator #307 already built for the other long, blocking-POST operation this view
- *  has (the session load) — same surface, same `say` narration, no second bespoke indicator. */
+ *  has (the reconcile) — same surface, same `say` narration, no second bespoke indicator. */
 function registerTrackCommand(
-  controller: SessionController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
+  controller: EditingController, outputChannel: vscode.LogOutputChannel, onTracked: () => Promise<void>,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.track', async (node: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -1501,7 +1432,7 @@ async function appendCreatedPluginToLoadOrder(
 }
 
 function registerCreatePluginCommand(
-  controller: SessionController,
+  controller: EditingController,
   modlistSource: Mo2ModlistSource | undefined,
   instanceRoot: string | undefined,
   pluginListProvider: PluginListProvider | undefined,
@@ -1528,7 +1459,7 @@ function registerCreatePluginCommand(
     }
     if (!destination) return; // user cancelled a prompt
 
-    // SessionController.createPlugin already surfaces its own failure (ADR-0026) — nothing more
+    // EditingController.createPlugin already surfaces its own failure (ADR-0026) — nothing more
     // to do here than stop.
     const created = await controller.createPlugin(name, destination.path, destination.origin);
     if (!created) return;
@@ -1548,7 +1479,7 @@ function registerCreatePluginCommand(
  *  ordinary load-order plugin, per ADR-0036) — there is no ambient fallback worth a QuickPick, which
  *  is why all three are palette-gated (`packageJson.test.ts`'s `PALETTE_GATED`). */
 function registerRecordLifecycleCommands(
-  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+  controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
 
@@ -1617,7 +1548,7 @@ function registerRecordLifecycleCommands(
  *  reports and returns undefined when neither answers (there is no ambient fallback worth a
  *  QuickPick, which is why every command that needs this is palette-gated). */
 function makeResolveOriginOrReport(
-  controller: SessionController, outputChannel: vscode.LogOutputChannel,
+  controller: EditingController, outputChannel: vscode.LogOutputChannel,
 ): (node: { origin?: string; pluginName: string }) => Promise<string | undefined> {
   return async (node) => {
     const origin = node.origin ?? await controller.resolveOrigin(node.pluginName);
@@ -1639,7 +1570,7 @@ function makeResolveOriginOrReport(
  *  function's own line budget, same reason registerArrayOpCommands/registerVmadOpCommands split
  *  off registerEditorCommands. */
 function registerRecordCopyCommands(
-  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+  controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable[] {
   const resolveOriginOrReport = makeResolveOriginOrReport(controller, outputChannel);
 
@@ -1678,7 +1609,7 @@ function recordCopyIdentity(
  *  invoking row's own carried `origin` usually lets it skip entirely), this step's two repository
  *  calls are unconditional — the real exposure window is the backend dying after the copy
  *  surfaces (a record row, or the record-header webview) have already rendered, which needs a
- *  live session and so isn't reachable pre-launch. Either awaited call rejecting is deliberately
+ *  live load order and so isn't reachable pre-launch. Either awaited call rejecting is deliberately
  *  caught wholesale — this destination-picking step has no further fallback tier below it, the
  *  same "no tier left, so report and resolve to no target" posture `resolveCompileTarget`'s own
  *  #530 fix gives its `pickPlugin` tier — and any rejection gets the same treatment, not just a
@@ -1709,13 +1640,13 @@ async function pickCopyDestination(
 
 /** #436/#494: the shared body behind both `modbench.record.copyAsOverride`/`copyAsNewRecord` —
  *  resolve which record was right-clicked and from where, pick a destination, call the matching
- *  `SessionController` method, toast on success. No confirmation modal (xEdit's own CopyInto asks
+ *  `EditingController` method, toast on success. No confirmation modal (xEdit's own CopyInto asks
  *  nothing before an override copy, only before an EditorID-changing copy-as-new — and Copy as New
  *  Record here prompts for neither an EditorID nor a FormKey, the same "land immediately, rename
  *  via the grid afterward" posture `record.create` already established for a blank creation). */
 async function runCopyRecordCommand(
   gesture: CopyGesture, arg: RecordNode | ColumnHeaderContext | undefined,
-  controller: SessionController, repository: PluginRepository,
+  controller: EditingController, repository: PluginRepository,
   resolveOriginOrReport: (node: { origin?: string; pluginName: string }) => Promise<string | undefined>,
   outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
@@ -1740,12 +1671,12 @@ async function runCopyRecordCommand(
 
 /** #432: the poller has no backend to answer it until Launch mEdit's spawn succeeds — gated on
  *  BackendManager's own 'status'/isHealthy signal (`gateExternalChangePolling`'s own doc comment),
- *  the same idiom `clearSessionWhenBackendDies` already reacts to. Pulled out of `activate()`
+ *  the same idiom `clearTreeWhenBackendDies` already reacts to. Pulled out of `activate()`
  *  purely for that function's own line budget. No disposable to register: a deliberate Close mEdit
  *  and this file's own deactivate() (backendManager.dispose()) both already emit 'stopped', which
  *  this reacts to like any other transition. */
 function wireExternalChangePolling(
-  repository: PluginRepository, controller: SessionController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
 ): void {
   gateExternalChangePolling({
     onBackendStatusChange: (cb) => backendManager!.on('status', cb),
@@ -1758,7 +1689,7 @@ function wireExternalChangePolling(
  *  its load-time hash check) and runs the one dialog, sequentially, for whatever it finds — pulled
  *  out of `activate()` purely for that function's own line budget. Returns the stop function. */
 function startExternalChangeDialogPolling(
-  repository: PluginRepository, controller: SessionController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
+  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel, log: (msg: string) => void,
 ): () => void {
   return startExternalChangePolling({
     repository,
@@ -1772,11 +1703,11 @@ function startExternalChangeDialogPolling(
 
 /** #381: composes the loud crash-repair offer sequence over Save & Compile's existing tail
  *  (`compileAndReport`) — pulled out of `activate()` purely for that function's own line budget,
- *  same reason `startExternalChangeDialogPolling` above was. Run once per completed session load
+ *  same reason `startExternalChangeDialogPolling` above was. Run once per completed reconcile
  *  (`makeEnterEditing`'s own call site), never a poller: see `crashRepairOffer.ts`'s own doc
- *  comment for why a session load is the only moment either offer reason can newly arise. */
+ *  comment for why a reconcile is the only moment either offer reason can newly arise. */
 function makeCrashRepairOffersPresenter(
-  controller: SessionController, diagnostics: vscode.DiagnosticCollection,
+  controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
 ): (offers: CrashRepairOffer[]) => Promise<void> {
   return (offers) => presentCrashRepairOffers(
@@ -1794,7 +1725,7 @@ function makeCrashRepairOffersPresenter(
  *  resumption-aware design means this same command both starts a rebase and resumes one left
  *  conflicted after the user resolves it in the native merge editor. */
 function registerRebaseCommand(
-  controller: SessionController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
+  controller: EditingController, repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.rebase', async (node?: PluginListNode) => {
     if (node?.kind !== 'plugin') return;
@@ -1807,7 +1738,7 @@ function registerRebaseCommand(
     }
 
     const result = await runRebase({ controller, openMergeEditor: makeMergeEditorOpener(repository, outputChannel) }, origin);
-    if (!result) return; // transport failure already surfaced by SessionController
+    if (!result) return; // transport failure already surfaced by EditingController
 
     if (result.outcome === 'Refused') {
       void vscode.window.showWarningMessage(`Modbench: ${result.refusalReason ?? 'Rebase refused.'}`);
@@ -1846,7 +1777,7 @@ function makeMergeEditorOpener(repository: PluginRepository, outputChannel: vsco
 /** #416: Save & Compile — reachable from a tracked plugin row's context menu (`node` given), the
  *  record editor's title-bar icon (compiles the *active* record's owning plugin — #416 review: this
  *  used to fall straight through to an unfiltered QuickPick, risking compiling the wrong plugin in a
- *  multi-mod session), and the command palette (QuickPick fallback only when neither a tree row nor
+ *  multi-mod load order), and the command palette (QuickPick fallback only when neither a tree row nor
  *  an active record is in hand — see `resolveCompileTarget` in `./medit/compileTarget` for the exact
  *  order). */
 /** Builds the `git:` scheme URI VS Code's own built-in git extension resolves a file's content at
@@ -1854,7 +1785,7 @@ function makeMergeEditorOpener(repository: PluginRepository, outputChannel: vsco
  *  used by many extensions without importing the git extension's own types, the same "structural,
  *  not a dependency" posture this file already takes with `openRepository` (`trackedRepositories.ts`).
  *  Requires the file's own repo to already be registered with `vscode.git` — true for every tracked
- *  mod folder here (`registerTrackedRepositories`, called at the same session-load hand-off this
+ *  mod folder here (`registerTrackedRepositories`, called at the same reconcile hand-off this
  *  command's own target reads its plugin list from). */
 function gitRefUri(fsPath: string, ref: string): vscode.Uri {
   return vscode.Uri.file(fsPath).with({ scheme: 'git', query: JSON.stringify({ path: fsPath, ref }) });
@@ -1883,8 +1814,8 @@ function registerDiffAgainstSourceCommand(
       const plugins = await repository.getPlugins();
       const winner = plugins.find((p) => p.name === plugin && p.origin === origin);
       if (!winner) {
-        outputChannel.error(`[extension] diffAgainstSource: "${plugin}" (${origin}) is not in the current session`);
-        void vscode.window.showErrorMessage(`Modbench: "${plugin}" is not in the current session.`);
+        outputChannel.error(`[extension] diffAgainstSource: "${plugin}" (${origin}) is not in the current load order`);
+        void vscode.window.showErrorMessage(`Modbench: "${plugin}" is not in the current load order.`);
         return;
       }
       const sourceRoot = path.join(path.dirname(winner.path), 'source', plugin, 'RecordData.json');
@@ -1910,7 +1841,7 @@ function registerDiffAgainstSourceCommand(
 }
 
 function registerSaveAndCompileCommand(
-  controller: SessionController,
+  controller: EditingController,
   repository: PluginRepository,
   activeRecordTracker: ActiveRecordTracker<vscode.WebviewPanel>,
   outputChannel: vscode.LogOutputChannel,
@@ -1960,7 +1891,7 @@ function registerSaveAndCompileCommand(
  *  palette with no plugin in hand isn't a gesture worth a QuickPick, so `pickPlugin` here is a no-op
  *  (`resolveCompileTarget`'s third tier never fires without a tree row). */
 function registerCompileAtRefCommand(
-  controller: SessionController, repository: PluginRepository,
+  controller: EditingController, repository: PluginRepository,
   outputChannel: vscode.LogOutputChannel, diagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable {
   return vscode.commands.registerCommand('modbench.pluginListTree.compileAtMain', async (node?: PluginListNode) => {
@@ -1994,8 +1925,8 @@ function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, comman
 }
 
 /** The shared tail both compile commands share once they have a target: call through
- *  `SessionController.compile`, publish diagnostics, and report the one of two outcomes
- *  (`CompileResult.succeeded`) the user got. `SessionController.compile` already surfaces a
+ *  `EditingController.compile`, publish diagnostics, and report the one of two outcomes
+ *  (`CompileResult.succeeded`) the user got. `EditingController.compile` already surfaces a
  *  transport/HTTP failure itself (`null`), so this has nothing to report in that case.
  *
  *  #449: a successful compile re-parks `refs/medit/last-compile/<plugin>` on the backend, which
@@ -2005,7 +1936,7 @@ function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, comman
  *  second `GET /plugins` fetch — same call the record-filter toggle already makes. Never run on a
  *  refusal: nothing about any plugin's git state changed. */
 async function compileAndReport(
-  controller: SessionController, diagnostics: vscode.DiagnosticCollection,
+  controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
   repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
@@ -2053,94 +1984,78 @@ function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, orig
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** #279 / #356 / ADR-0035 § Live mutation: origin drift is the comparison
- *  between the origin a plugin's records were read from and the origin its name resolves to now,
- *  absorbed automatically when the two disagree. The tracker owns both the comparison and the
- *  reaction, and imports from neither bounded context; this is where both halves are injected —
- *  Mod Management's (`currentOrigins`) and Editing's (`reread`) — which is the only place allowed
- *  to know both sides.
- *
- *  The walk is done fresh per refresh rather than against a cached index: it runs off a debounced
- *  watcher, and the whole question it answers is "what does the loadout say *now*". */
-function makeDriftTracker(
-  modlistSource: Mo2ModlistSource,
-  instanceRoot: string,
-  outputChannel: vscode.LogOutputChannel,
-  gameDirResolver: GameDirectoryResolver,
-  controller: SessionController,
-): DriftTracker {
-  return createDriftTracker({
+/** ADR-0044: the sync every loadout gesture feeds — see `loadOrderSync.ts`. `send` is the whole
+ *  reconcile (snapshot → PUT → tree), under the Plugins view's own header progress indicator
+ *  (`withPluginsViewProgress`), the same surface a launch uses. It receives only while the backend
+ *  is up: with none, a request is dropped silently, since a loadout-only workspace is the ordinary
+ *  case. 250 ms of debounce covers the bursts that matter — the modlist and mods watchers both
+ *  firing for one install, a drag reorder's own write plus its watcher event, a checkbox toggle's
+ *  explicit request plus the plugins.txt event it causes. */
+function makeLoadOrderSync(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel): LoadOrderSync {
+  return createLoadOrderSync({
+    isReceiving: () => backendManager?.isHealthy === true,
+    send: () => withPluginsViewProgress(async () => { await reconcile(); }),
+    debounceMs: 250,
     log: (msg) => outputChannel.debug(msg),
-    currentOrigins: async (names) => resolveCurrentPluginOrigins(
-      names,
-      await buildFileConflictIndex(await modlistSource.readModlist(), instanceRoot, (msg) => outputChannel.debug(msg)),
-      instanceRoot,
-      // #357: read through the single game-directory resolver every other consumer (views,
-      // session launch, deploy) shares — memoised and invalidated only when
-      // modbench.mods.gameDirectory changes, so this always agrees with what the session actually
-      // loaded even though the setting is editable while Modbench runs.
-      (await gameDirResolver.resolve())?.dataFolder,
-    ),
-    reread: (plugin, path, origin) => controller.rereadPlugin(plugin, path, origin),
   });
 }
 
-/** #352: modbench.sessionRunning drives the Launch mEdit / Close mEdit toggle on the Plugins
+/** #352: modbench.backendRunning drives the Launch mEdit / Close mEdit toggle on the Plugins
  *  view's title bar — the same two-command/context-key toggle shape as sort direction and
  *  show-hidden, just contributed to overflow instead of a navigation icon slot. Explicit
  *  initial value, not left implicitly falsy, matching modbench.workspaceIsMo2Instance's own
  *  "every exit path sets it" convention. Every backend lifecycle transition — attach,
  *  disconnect, crash, and a deliberate stop — moves it, the same set of transitions
- *  clearSessionWhenBackendDies below reacts to. */
-function wireSessionRunningContext(manager: BackendManager): void {
-  void vscode.commands.executeCommand('setContext', 'modbench.sessionRunning', false);
+ *  clearTreeWhenBackendDies below reacts to. */
+function wireBackendRunningContext(manager: BackendManager): void {
+  void vscode.commands.executeCommand('setContext', 'modbench.backendRunning', false);
   manager.on('status', () => {
-    void vscode.commands.executeCommand('setContext', 'modbench.sessionRunning', manager.isHealthy);
+    void vscode.commands.executeCommand('setContext', 'modbench.backendRunning', manager.isHealthy);
   });
 }
 
-/** A backend that dies takes the session with it, and `exitToLoadout` is not on that path — a
+/** A backend that dies takes the load order with it, and `exitToLoadout` is not on that path — a
  *  crash or a lost connection reaches us only as a status change. Without this the rows keep their
- *  chevrons and expanding one fetches against a backend that is gone (#270), the record rows keep
- *  a read-only set nothing backs (#281), and the drift markers keep describing a session that no
- *  longer exists (#279). All three are statements about a live session, so all three go together. */
-function clearSessionWhenBackendDies(
+ *  chevrons and expanding one fetches against a backend that is gone (#270), and the record rows
+ *  keep a read-only set nothing backs (#281). Both are statements about a live backend, so both
+ *  go together. */
+function clearTreeWhenBackendDies(
   composite: PluginsTreeComposite<PluginListNode, PluginTreeNode>,
   recordBrowser: PluginTreeProvider,
-  tracker: DriftTracker,
 ): void {
   backendManager?.on('status', () => {
     if (backendManager?.isHealthy) return;
-    composite.setSession(undefined);
+    composite.setLoadOrder(undefined);
     recordBrowser.setImmutablePlugins([]);
-    // #448: same reasoning as setImmutablePlugins above — a dead session's Stack-node state
+    // #448: same reasoning as setImmutablePlugins above — a dead backend's Stack-node state
     // entries must not survive it.
     recordBrowser.setTrackedPlugins([]);
     recordBrowser.setPluginOrigins(new Map());
-    // #364: same reasoning again — a dead session's Conflicts node and badge must not survive it.
+    // #364: same reasoning again — a dead backend's Conflicts node and badge must not survive it.
     recordBrowser.setConflictsComputed(false);
-    tracker.setLoaded(undefined);
     // #278 / ADR-0035 amending ADR-0018: same reasoning as the three above — a statement about
-    // which plugins the dead session's records matched must not seed the next one.
+    // which plugins the dead backend's records matched must not seed the next one.
     matchingPlugins = undefined;
   });
 }
 
-/** #279 / #356: what keeps the drift tracker current — Mod Management's own reactive watchers,
- *  never a timer (modbench/CLAUDE.md: reactive over manual, and this ticket adds no polling). Each
- *  `refresh()` now absorbs what it finds (re-reading a plugin whose origin changed) as well as
- *  detecting it, so these two watchers are the whole of the automatic-absorption wiring — there is
- *  no separate render step, and no command, downstream of them any more.
+/** ADR-0044: what keeps Editing's load order true — Mod Management's own reactive watchers, never
+ *  a timer (modbench/CLAUDE.md: reactive over manual). Every event is "recompute the snapshot, PUT
+ *  it", coalesced by the sync, so these three watchers plus the two explicit asks (a checkbox
+ *  toggle, a profile switch) are the whole of the wiring — there is no command downstream of them.
  *
- *  Two watchers because one does not cover the three gestures. `modlist.txt` is rewritten by
- *  install, uninstall *and* reprioritise, so it catches all three; `mods/**` catches a folder
- *  appearing or vanishing without a `modlist.txt` write, which is what a hand-dropped or
- *  hand-deleted mod folder looks like before auto-registration notices it. */
-function wireDriftTracker(tracker: DriftTracker, instanceRoot: string): vscode.Disposable[] {
+ *  Three watchers because one does not cover every gesture. `modlist.txt` is rewritten by
+ *  install, uninstall *and* reprioritise, so it catches all three on the Mod axis; `mods/**`
+ *  catches a folder appearing or vanishing without a `modlist.txt` write, which is what a
+ *  hand-dropped or hand-deleted mod folder looks like before auto-registration notices it;
+ *  `plugins.txt` is the Plugin axis — a reorder or an enable/disable, whether Modbench wrote it or
+ *  MO2/the user did (root CLAUDE.md: never assume exclusive ownership of a file on disk). */
+function wireLoadOrderWatchers(sync: LoadOrderSync, instanceRoot: string): vscode.Disposable[] {
   return [
-    tracker,
-    createModlistWatcher(instanceRoot, () => void tracker.refresh()),
-    createModsWatcher(instanceRoot, () => void tracker.refresh()),
+    sync,
+    createModlistWatcher(instanceRoot, () => sync.request()),
+    createModsWatcher(instanceRoot, () => sync.request()),
+    createPluginsTxtWatcher(instanceRoot, () => sync.request()),
   ];
 }
 
@@ -2316,14 +2231,14 @@ interface LoadoutViewDeps {
   log: (msg: string) => void;
   outputChannel: vscode.LogOutputChannel;
   revealLog: () => void;
-  controller: SessionController;
+  controller: EditingController;
   /** #270: the record browser the Plugins tree's rows expand into. Threaded from `activate`,
    *  which owns the single instance both plugin trees read through. */
   recordBrowser: PluginTreeProvider;
-  /** #270: the plugin files the running session holds, for deciding which rows can expand.
+  /** #270: the plugin files the backend's load order names, for deciding which rows can expand.
    *  Injected as a getter so the composite's own wiring stays at the composition root. */
-  sessionPluginFiles: () => Promise<SessionPluginFiles>;
-  /** #381: run the loud crash-repair offer sequence for whatever a completed session load found.
+  heldPluginFiles: () => Promise<HeldPluginFiles>;
+  /** #381: run the loud crash-repair offer sequence for whatever a completed reconcile found.
    *  Composed once at the composition root (activate()), where the diagnostics collection and
    *  compileAndReport's own compile door already live. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
@@ -2333,7 +2248,7 @@ interface LoadoutViewDeps {
  *  tests), or undefined with a neutral log when no workspace is open, or when the
  *  workspace isn't an MO2 instance (#192 — the Mods view shows welcome content instead). */
 function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListProvider; downloadsProvider: DownloadsProvider; pluginListProvider: PluginListProvider; modlistSource: Mo2ModlistSource; instanceRoot: string; refreshAll: () => void } | undefined {
-  const { context, log, outputChannel, revealLog, controller, recordBrowser, sessionPluginFiles, showCrashRepairOffers } = deps;
+  const { context, log, outputChannel, revealLog, controller, recordBrowser, heldPluginFiles, showCrashRepairOffers } = deps;
   const instanceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (!instanceRoot) {
     outputChannel.info('[extension] No workspace folder open — Mod List view not registered.');
@@ -2356,7 +2271,7 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const modlistSource = new Mo2ModlistSource(instanceRoot, log, modListReporter);
     // #357: the single GameDirectory resolver (config override → ini gamePath → autodetect),
     // memoised and invalidated only when modbench.mods.gameDirectory changes — the one thing every
-    // consumer of the game directory (these views, the drift tracker, session launch, deploy)
+    // consumer of the game directory (these views, the load-order snapshot, deploy)
     // reads through, so none of them can disagree about which folder is current. Replaces the old
     // activation-scoped `dataFolder: Promise<string | undefined>`, which was resolved once here and
     // then frozen for the life of the window regardless of later edits to the setting.
@@ -2372,17 +2287,15 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
       outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
+    const reconcile = makeReconcileLoadOrder({
+      instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
+    });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, gameDirResolver, recordBrowser, controller });
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser, reconcile });
     const { modListView, modListFilter, updateProfileDescription, revealInModsTreeCommand } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing({
-      instanceRoot, modlistSource, controller, outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
-    });
-    // #295: the one assignment — see the module-level declaration's comment for why this can't
-    // be threaded as a parameter instead.
-    enterEditingFn = enterEditing;
+    const enterEditing = makeEnterEditing(reconcile, outputChannel, revealLog);
 
     backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
@@ -2477,7 +2390,7 @@ function registerLoadoutHeaderView(deps: LoadoutHeaderDepsWiring): void {
       provider.refresh();
     }),
   );
-  // #352: the header's rows (profile, deployment) no longer read backend/session state — the
+  // #352: the header's rows (profile, deployment) no longer read backend/load order state — the
   // mEdit row moved to the Plugins view — so there is nothing here left for a backend status
   // transition to invalidate.
 }
@@ -2519,91 +2432,84 @@ function registerDownloadsView(
   };
 }
 
-/** The completed load's whole hand-off to the tree: which plugins the session holds, which are
- *  read-only for editing (#276), each one's master issues (#277) and each one's load failure.
+/** The completed reconcile's whole hand-off to the tree: which plugins the load order names, which
+ *  are read-only for editing (#276), each one's master issues (#277) and each one's open failure.
  *
  *  #270 / ADR-0035: rows gain chevrons here — and, since #307, *finish* gaining them here. A
- *  progressive load's ticks carry only the indexed set and the failures, because read-only state
- *  and master issues are whole-session derivations a partial session cannot answer; this is the
- *  call that fills them in. **A tick must never be the last word** — if one were, both those
- *  decorations would silently vanish from a fully loaded tree.
+ *  progressive reconcile's ticks carry only the indexed set and the failures, because read-only
+ *  state and master issues are whole-load-order derivations a partial one cannot answer; this is
+ *  the call that fills them in. **A tick must never be the last word** — if one were, both those
+ *  decorations would silently vanish from a fully reconciled tree.
  */
-async function applyLoadedSessionToTree(
-  sessionPluginFiles: () => Promise<SessionPluginFiles>,
+async function applyLoadOrderToTree(
+  heldPluginFiles: () => Promise<HeldPluginFiles>,
   failures: { name?: string | null; reason?: string | null }[],
   outputChannel: vscode.LogOutputChannel,
-  // #342: the backend's own reported plugin count (the last poll's `SessionStatus.totalPlugins`,
+  // #342: the backend's own reported plugin count (the last poll's `LoadOrderStatus.totalPlugins`,
   // via `makeTreeProgressHandler`'s `lastTotalPlugins()`) — carried in only so this can be logged
   // next to what actually reached the tree, not because this function needs it for anything else.
-  // Deliberately not `plugins.length` from the caller's own request list: that list is what the
-  // frontend asked the backend to load, and omits the implicit masters the backend prepends, so
-  // comparing against it would read every healthy load as short.
+  // Deliberately not `plugins.length` from the caller's own snapshot: that list is every copy
+  // the frontend sent, and omits the implicit masters the backend prepends, so comparing against
+  // it would read every healthy reconcile as short.
   totalPlugins: number,
 ): Promise<void> {
   try {
-    const session = await sessionPluginFiles();
-    // #342: this is the one line standing between a stuck-tail load and a diagnosable one — do
-    // not remove it as logging noise. `totalPlugins` is the backend's own count; `failures` is
-    // what the load already reported as unopenable or unindexable, so a plugin counted there is
-    // accounted for, not missing. `session.files.size + failures.length` should land close to
-    // `totalPlugins` for an ordinary load — a gap bigger than that, or a load that otherwise
-    // reaches "editing session ready" with no line at all, is what points at this hand-off rather
-    // than at something upstream (most likely the backend's own `GET /plugins`).
+    const held = await heldPluginFiles();
+    // #342: this is the one line standing between a stuck-tail reconcile and a diagnosable one —
+    // do not remove it as logging noise. `totalPlugins` is the backend's own count; `failures` is
+    // what the reconcile already reported as unopenable or unindexable, so a plugin counted there
+    // is accounted for, not missing. `held.files.size + failures.length` should land close to
+    // `totalPlugins` for an ordinary reconcile — a gap bigger than that, or a reconcile that
+    // otherwise reaches "load order ready" with no line at all, is what points at this hand-off
+    // rather than at something upstream (most likely the backend's own `GET /plugins`).
     outputChannel.info(
-      `[extension] applying completed session to tree: ${session.files.size} indexed, ${failures.length} failed, of ${totalPlugins} planned`,
+      `[extension] applying reconciled load order to tree: ${held.files.size} in the load order, ${failures.length} failed, of ${totalPlugins} copies`,
     );
-    // #277 / ADR-0037 AC7: the same failures the toast inside loadExplicitSession already
-    // consumed — held here (not re-derived, not a second endpoint) and handed to the tree
-    // through the same setSession bundle as everything else the session reports.
+    // #277 / ADR-0037 AC7: the same failures the toast inside putLoadOrder already consumed —
+    // held here (not re-derived, not a second endpoint) and handed to the tree through the same
+    // setLoadOrder bundle as everything else the reconcile reports.
     const loadFailures = new Map(failures.map((f) => [f.name ?? '?', f.reason ?? 'Unknown error'] as const));
-    // #278 / ADR-0035 amending ADR-0018: set before setSession fires its re-render, so no row
-    // renders off a match set stale from whatever session (if any) preceded this one — this is
-    // the fix for a stale `matchingPlugins` surviving a session (re)load, `modbench.reloadSession`
-    // included, since that command re-runs this exact hand-off (`makeEnterEditing`'s `enter()`).
-    matchingPlugins = session.matches;
-    // #449: same fix, same reason — a stale compileStale surviving a session (re)load would
-    // decorate rows off the previous session's git state.
-    compileStale = session.compileStale;
-    pluginsTree?.setSession(session.files, session.readOnly, session.masterIssues, loadFailures);
-    // #279: the loaded half of the drift comparison. Handed over at the same moment as everything
-    // else the completed load reports, then computed once against the loadout as it stands — so a
-    // mod change made *before* the session opened is already reflected, not only ones made after.
-    driftTracker?.setLoaded(session.origins);
-    void driftTracker?.refresh();
+    // #278 / ADR-0035 amending ADR-0018: set before setLoadOrder fires its re-render, so no row
+    // renders off a match set stale from whatever reconcile preceded this one — every reconcile
+    // re-runs this exact hand-off.
+    matchingPlugins = held.matches;
+    // #449: same fix, same reason — a stale compileStale surviving a reconcile would decorate
+    // rows off the previous git state.
+    compileStale = held.compileStale;
+    pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
     // #281: the same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note (#276).
-    recordBrowserProvider?.setImmutablePlugins(session.readOnly);
+    recordBrowserProvider?.setImmutablePlugins(held.readOnly);
     // #448: the Stack node's own state-entry facts — tracked-ness (a filesystem check only the
-    // composition root can make) and each plugin's own loaded origin (the same fact driftTracker
-    // just consumed above), from the same GET /plugins answer everything else in this hand-off
-    // already reads.
-    recordBrowserProvider?.setTrackedPlugins(session.trackedPlugins);
-    recordBrowserProvider?.setPluginOrigins(session.origins);
+    // composition root can make) and each plugin's own origin, from the same GET /plugins answer
+    // everything else in this hand-off already reads.
+    recordBrowserProvider?.setTrackedPlugins(held.trackedPlugins);
+    recordBrowserProvider?.setPluginOrigins(held.origins);
   } catch (err) {
-    // Leaving every row a leaf is a safe *render*, but it is not an honest one: the session
-    // did load, so the tree would be telling the user editing is unavailable when it is
+    // Leaving every row a leaf is a safe *render*, but it is not an honest one: the reconcile
+    // did land, so the tree would be telling the user editing is unavailable when it is
     // available, with nothing on screen to say why. ADR-0026 integrity tier — notify, don't
     // just log.
     const message = err instanceof Error ? err.message : String(err);
-    outputChannel.error(`[extension] reading the session's plugin list failed; plugin rows will not expand: ${message}`);
+    outputChannel.error(`[extension] reading the backend's plugin list failed; plugin rows will not expand: ${message}`);
     void vscode.window.showWarningMessage(
-      'Modbench: The editing session loaded, but its plugin list could not be read — plugin rows will not expand into records. Reload the session to retry.',
+      'Modbench: The load order was reconciled, but the plugin list could not be read — plugin rows will not expand into records. Close and relaunch mEdit to retry.',
     );
   }
 }
 
-/** #307 AC7: arm this launch's cancellation, and the check every step past an await makes.
+/** #307 AC7: arm this launch's (or reconcile's) cancellation, and the check every step past an
+ *  await makes.
  *
- *  Armed **before the launch's first await**, not just before the load POST. A launch has two
- *  phases — bring the backend up and walk the mod tree, then load — and closing the session during
- *  the first one has to be honoured too: AC7 says "closing the session mid-load" with no
- *  qualification by phase, and a backend spawn plus a filesystem walk is a realistic window to
- *  land in. Armed late, `exitToLoadout`'s `abort()` found nothing to cancel, and the stale launch
- *  ran on past the close to meet the backend it had just stopped — reporting "Backend failed to
- *  start" for something the user deliberately did.
+ *  Armed **before the first await**, not just before the PUT. A launch has two phases — bring the
+ *  backend up, then walk the mod tree and reconcile — and closing mEdit during the first one has to
+ *  be honoured too: AC7 says "closing mid-load" with no qualification by phase, and a backend spawn
+ *  plus a filesystem walk is a realistic window to land in. Armed late, `exitToLoadout`'s `abort()`
+ *  found nothing to cancel, and the stale launch ran on past the close to meet the backend it had
+ *  just stopped — reporting "Backend failed to start" for something the user deliberately did.
  *
  *  The controller is held locally as well as in `loadAbort`, because that module-level slot
- *  belongs to whichever load is newest; only the closure below names *this* launch's own
+ *  belongs to whichever reconcile is newest; only the closure below names *this* one's own
  *  cancellation. Every exit past one is silent and touches nothing — the close has already torn
  *  the view down, so there is nothing to report and nothing to reset. Both failure modes (the
  *  spurious toast, and repopulating a tree the user just cleared) come from continuing. */
@@ -2614,28 +2520,28 @@ function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSi
     signal: abort.signal,
     abandoned: () => {
       if (!abort.signal.aborted) return false;
-      outputChannel.info('[extension] the editing session launch was abandoned before it loaded; leaving the closed view alone');
+      outputChannel.info('[extension] the reconcile was abandoned before it landed; leaving the closed view alone');
       return true;
     },
   };
 }
 
-/** #307: the progressive-load tick handler, wired to this extension's own surfaces. Whether a
- *  tick is worth applying is decided in `medit/sessionProgress.ts` and unit-tested there; this
+/** #307: the progressive-reconcile tick handler, wired to this extension's own surfaces. Whether a
+ *  tick is worth applying is decided in `medit/loadOrderProgress.ts` and unit-tested there; this
  *  supplies the hand-off itself, the only part that needs VS Code types. The empty read-only and
- *  master-issue arguments mid-load are deliberate — see `makeLoadProgressHandler`.
+ *  master-issue arguments mid-reconcile are deliberate — see `makeReconcileProgressHandler`.
  *
  *  #342: also remembers each tick's own `totalPlugins`. That is the backend's count (implicit
  *  masters included, since the backend prepends them before this is ever reported) — a different,
- *  larger number than the frontend's own pre-load request list (`plugins.length` in `enter()`
- *  below), which never includes them. `applyLoadedSessionToTree`'s completion log needs something
- *  to compare its own count against; a tick already carries the right number, and it does not
- *  change over the load, so the last one seen is as good as asking again. */
-function makeTreeProgressHandler(): { onProgress: (status: SessionLoadProgress) => void; lastTotalPlugins: () => number } {
+ *  larger number than the frontend's own snapshot (`plugins.length` in `reconcile()` below),
+ *  which never includes them. `applyLoadOrderToTree`'s completion log needs something to compare
+ *  its own count against; a tick already carries the right number, and it does not change over
+ *  the reconcile, so the last one seen is as good as asking again. */
+function makeTreeProgressHandler(): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
   let totalPlugins = 0;
-  const applyTick = makeLoadProgressHandler({
+  const applyTick = makeReconcileProgressHandler({
     say,
-    applySession: (indexedPlugins, failures) => pluginsTree?.setSession(
+    applyLoadOrder: (indexedPlugins, failures) => pluginsTree?.setLoadOrder(
       new Set(indexedPlugins),
       new Set(),
       new Map(),
@@ -2648,111 +2554,126 @@ function makeTreeProgressHandler(): { onProgress: (status: SessionLoadProgress) 
   };
 }
 
-interface EnterEditingDeps {
+interface ReconcileDeps {
   instanceRoot: string;
   modlistSource: Mo2ModlistSource;
-  controller: SessionController;
+  controller: EditingController;
   outputChannel: vscode.LogOutputChannel;
-  /** #270: the plugin files the loaded session holds — read once the session is up, to decide
-   *  which rows can expand. */
-  sessionPluginFiles: () => Promise<SessionPluginFiles>;
-  /** Surface the Modbench output channel so the user can watch the launch steps. */
-  revealLog: () => void;
-  /** #381: run once a load completes, for whatever crash-repair offers it reported. */
+  /** #270: the plugin files the backend's load order names — read once a reconcile lands, to
+   *  decide which rows can expand. */
+  heldPluginFiles: () => Promise<HeldPluginFiles>;
+  /** #381: run once a reconcile completes, for whatever crash-repair offers it reported. */
   showCrashRepairOffers: (offers: CrashRepairOffer[]) => Promise<void>;
-  /** #357: the single game-directory resolver, shared with the views and the drift tracker —
-   *  memoised and invalidated only when modbench.mods.gameDirectory changes, so a session launch
-   *  always agrees with what they currently show. */
+  /** #357: the single game-directory resolver, shared with the views — memoised and invalidated
+   *  only when modbench.mods.gameDirectory changes, so a snapshot always agrees with what they
+   *  currently show. */
   gameDirResolver: GameDirectoryResolver;
 }
-/** Build the enter-editing action: spawn/attach the backend and load the active
- *  modlist as a load-explicit session, then reveal the editing view. Also the
- *  crash-restart reload path.
+
+/** How one reconcile ended, for the two callers that care: Launch mEdit (which exits to Loadout
+ *  with no game directory, the same as before) and the sync (which does nothing more either way). */
+type ReconcileOutcome = 'reconciled' | 'no-game-directory' | 'failed' | 'abandoned';
+type ReconcileLoadOrder = () => Promise<ReconcileOutcome>;
+
+/** ADR-0044: one reconcile — recompute the snapshot (every physical plugin copy, with its slot,
+ *  `*` prefix and winning flag), `PUT /load-order`, then hand the backend's answer to the tree. The
+ *  one path every trigger takes: Launch mEdit, the crash-restart handler, and every loadout change
+ *  the sync coalesces. Reports its steps through `say`; the caller owns the progress indicator. */
+function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
+  const { instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
+  // One reconcile at a time, whoever asks. Launch mEdit and the sync both come through here, and
+  // a watcher can fire while a launch's own PUT is still in flight — two concurrent PUTs would
+  // have the backend cancel the first (409) and the launch report an abandonment for a snapshot
+  // the sync then owned. Chained past both outcomes so one throw never wedges the next.
+  let tail: Promise<unknown> = Promise.resolve();
+  const reconcile = (): Promise<ReconcileOutcome> => {
+    const run = tail.then(reconcileOnce);
+    tail = run.then(() => undefined, () => undefined);
+    return run;
+  };
+  const reconcileOnce = async (): Promise<ReconcileOutcome> => {
+    const { signal, abandoned } = armLoadAbort(outputChannel);
+    const treeProgress = makeTreeProgressHandler();
+    const gd = await gameDirResolver.resolve();
+    if (abandoned()) return 'abandoned';
+    if (!gd) {
+      void vscode.window.showErrorMessage(
+        'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
+      );
+      return 'no-game-directory';
+    }
+    say('Building the load order snapshot…');
+    const plugins = await buildLoadOrderSnapshot(modlistSource, instanceRoot, gd.dataFolder, (entries, root) =>
+      buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)));
+    if (abandoned()) return 'abandoned';
+    // The PUT is one blocking call that opens and indexes every copy new to the load order — the
+    // slow part on a cold start, SQL-only otherwise. The polled status takes over from here
+    // (treeProgress.onProgress), naming real counts as they land; this states the total for the
+    // window before the first poll answers.
+    say(`Reconciling ${plugins.length} plugin copies… Conflict information is not yet computed.`);
+    outputChannel.info(`[extension] sending the load order snapshot (${plugins.length} plugin copies)`);
+    const result = await controller.putLoadOrder(
+      plugins, gd.dataFolder, instanceRoot, undefined, { onProgress: treeProgress.onProgress, signal });
+    // #307 AC7: a reconcile that was deliberately abandoned — superseded by a newer snapshot, or
+    // aborted because the user closed mEdit — leaves *silently*. Nothing to surface (putLoadOrder
+    // only logged it) and nothing to tear down: the newer snapshot owns the load order now.
+    if (result.outcome === 'abandoned') {
+      outputChannel.info('[extension] the load order snapshot was abandoned; leaving the one that replaced it alone');
+      return 'abandoned';
+    }
+    // ADR-0044: a failed PUT tore nothing down — the backend still holds whatever it held — so
+    // the view stays as it is, the error already surfaced (ADR-0026 "explicit action failed").
+    // There is no "exit to Loadout on load failure" any more: a copy that fails is a row in an
+    // error state, and a request the backend refused outright is reported and left for the next
+    // snapshot to retry.
+    if (result.outcome === 'failed') return 'failed';
+    await controller.syncFilterState();
+    await applyLoadOrderToTree(heldPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
+    // #381: the loud detect-and-offer, run once per reconcile — after the tree has already
+    // settled, awaited and sequential (one native modal at a time; see crashRepairOffer.ts's own
+    // doc comment). Declining leaves the marker/missing binary exactly as it is; nothing here
+    // clears it, so the offer re-appears at the next reconcile by construction.
+    if (result.crashRepairOffers.length > 0) {
+      outputChannel.info(`[extension] ${result.crashRepairOffers.length} crash-repair offer(s) to present`);
+      await showCrashRepairOffers(result.crashRepairOffers);
+    }
+    outputChannel.info('[extension] load order reconciled');
+    return 'reconciled';
+  };
+  return reconcile;
+}
+
+/** Build the enter-editing action: spawn/attach the backend, then send it the load order. Also the
+ *  crash-restart path.
  *
  *  #307 / ADR-0035 AC2: owns its own progress indicator (`withPluginsViewProgress` — see there)
- *  rather than leaving each of its three callers to wrap it, and reports its steps through `say`.
- *  Takes no progress reporter as a result. */
-function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
-  const {
-    instanceRoot, modlistSource, controller,
-    outputChannel, revealLog, sessionPluginFiles, showCrashRepairOffers, gameDirResolver,
-  } = deps;
+ *  rather than leaving each of its callers to wrap it, and reports its steps through `say`. */
+function makeEnterEditing(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
   const enter = async (): Promise<void> => {
-      const { signal, abandoned } = armLoadAbort(outputChannel);
-      const treeProgress = makeTreeProgressHandler();
-      revealLog(); // the load can take a while; let the user watch the step log
-      const gd = await gameDirResolver.resolve();
-      if (abandoned()) return;
-      if (!gd) {
-        exitToLoadout(); // don't strand the UI in an empty editing view
-        void vscode.window.showErrorMessage(
-          'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
-        );
-        return;
-      }
-      // Spawn/attach the backend and walk the mod tree concurrently — independent
-      // work; the health gate is applied after they join.
-      say('Starting backend…');
-      outputChannel.info('[extension] entering editing: starting backend and building plugin list');
-      const [, plugins] = await Promise.all([
-        backendManager!.start(),
-        buildExplicitPluginsWithOrigin(modlistSource, instanceRoot, gd.dataFolder, (entries, root) =>
-          buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)),
-        ),
-      ]);
-      // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
-      // would otherwise fail this check and report the stop it asked for as a startup failure.
-      if (abandoned()) return;
-      if (!backendManager!.isHealthy) {
-        exitToLoadout(); // tear down the half-started backend and reset the view
-        void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
-        return;
-      }
-      // load-explicit is one blocking call that indexes every plugin — the slow part. The polled
-      // status takes over from here (treeProgress.onProgress above), naming real counts as they
-      // land; this states the total for the window before the first poll answers.
-      say(`Indexing ${plugins.length} plugins… Conflict information is not yet computed.`);
-      outputChannel.info(`[extension] backend healthy; loading session (${plugins.length} plugins)`);
-      const result = await controller.loadExplicitSession(
-        plugins, gd.dataFolder, instanceRoot, undefined, { onProgress: treeProgress.onProgress, signal });
-      // #307 AC7: a load that was deliberately abandoned — superseded by a newer load, or
-      // aborted because the user closed the session — leaves *silently*. Nothing to surface
-      // (loadExplicitSession only logged it) and, the bug this fixes, nothing to tear down: the
-      // newer load owns the session now, and exitToLoadout() here would stop its backend.
-      if (result.outcome === 'abandoned') {
-        outputChannel.info('[extension] the editing session load was abandoned; leaving the session that replaced it alone');
-        return;
-      }
-      // #295 AC4: the load itself failed — loadExplicitSession already surfaced the error
-      // (ADR-0026 "explicit action failed" tier). The backend's own SessionManager disposes the
-      // previous session unconditionally before attempting the new one, so by this point there is
-      // truly no session left, not a stale one — the same treatment the two failure returns above
-      // give themselves. Reading its plugin list or syncing its filter would either throw against
-      // a sessionless backend or silently render nothing, neither of which is "the tree honestly
-      // says editing is unavailable".
-      if (result.outcome === 'failed') {
-        exitToLoadout();
-        return;
-      }
-      await controller.syncFilterState();
-      await applyLoadedSessionToTree(sessionPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
-      // #381: the loud detect-and-offer, run once per load — after the tree has already settled,
-      // awaited and sequential (one native modal at a time; see crashRepairOffer.ts's own doc
-      // comment). Declining leaves the marker/missing binary exactly as it is; nothing here clears
-      // it, so the offer re-appears at the next session load by construction.
-      if (result.crashRepairOffers.length > 0) {
-        outputChannel.info(`[extension] ${result.crashRepairOffers.length} crash-repair offer(s) to present`);
-        await showCrashRepairOffers(result.crashRepairOffers);
-      }
-      outputChannel.info('[extension] editing session ready');
+    const { abandoned } = armLoadAbort(outputChannel);
+    revealLog(); // the launch can take a while; let the user watch the step log
+    say('Starting backend…');
+    outputChannel.info('[extension] entering editing: starting backend');
+    await backendManager!.start();
+    // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
+    // would otherwise fail this check and report the stop it asked for as a startup failure.
+    if (abandoned()) return;
+    if (!backendManager!.isHealthy) {
+      exitToLoadout(); // tear down the half-started backend and reset the view
+      void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
+      return;
+    }
+    // No game directory means nothing to build a snapshot from, so nothing for the backend to
+    // hold — don't strand the UI in an empty editing view.
+    if ((await reconcile()) === 'no-game-directory') exitToLoadout();
   };
   return () => withPluginsViewProgress(enter);
 }
 
 
 /** #431: undici's default Agent times out a fetch with no response bytes after ~300s
- *  (headersTimeout/bodyTimeout). The backend's blocking endpoints — POST /session/load-explicit
- *  chief among them — legitimately run for minutes on a large load order, and every such call
+ *  (headersTimeout/bodyTimeout). The backend's blocking endpoints — PUT /load-order chief among
+ *  them — legitimately run for minutes on a large load order, and every such call
  *  already carries its own deliberate abort signal where one is wanted (#307 AC7), so nothing
  *  else should time it out. 0 disables both.
  *
@@ -2768,14 +2689,14 @@ function makeEnterEditing(deps: EnterEditingDeps): () => Promise<void> {
  *  `fetch` only recognizes its own — handed a global `Request`, it falls back to coercing it to a
  *  URL string and fails with "Failed to parse URL from [object Request]". Unpacked into a plain
  *  url/method/headers/body call instead. Lives here, not in ApiClient.ts: that module is also
- *  imported by the webview bundle (RecordSessionClient.ts), which has no `undici`/Node runtime.
+ *  imported by the webview bundle (RecordPanelClient.ts), which has no `undici`/Node runtime.
  *
  *  #495: `input.signal` is part of that unpacking too, deliberately — it is the *other* half of
  *  the "own deliberate abort signal" this comment already promises above (#307 AC7's mid-load
  *  close). Dropping it here silently disconnects that abort from the network layer: the caller's
  *  `AbortController.abort()` still flips `signal.aborted`, but nothing downstream ever rejects
- *  the fetch on it, so the abandoned load just runs to completion against a session nobody wants
- *  any more. If a future rewrite unpacks this request shape again, carry `signal` with it. */
+ *  the fetch on it, so the abandoned reconcile just runs to completion for nobody. If a future
+ *  rewrite unpacks this request shape again, carry `signal` with it. */
 function createUnlimitedFetch(): (input: Request) => Promise<Response> {
   const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
   return async (input) => {
@@ -2870,7 +2791,7 @@ function registerDeployCommands(
   const reporter = makeReporter(outputChannel, 'deploy');
 
   const resolveGd = async () => {
-    // #357: the single game-directory resolver, shared with the views/drift tracker/session
+    // #357: the single game-directory resolver, shared with the views/drift tracker/load order
     // launch — memoised and invalidated only when modbench.mods.gameDirectory changes.
     const gd = await gameDirResolver.resolve();
     if (!gd) {
@@ -2964,7 +2885,7 @@ function promptPluginName(): Thenable<string | undefined> {
 const RECORD_PANEL_KEY = '__record_view__';
 
 // Issue #230 (#426: restored): the temp directory every extended-editor tab writes under —
-// session-static (the same value every panel gets), so it lives at module scope rather than in
+// load order-static (the same value every panel gets), so it lives at module scope rather than in
 // any per-panel bundle.
 const extendedFieldEditorTempRoot = path.join(os.tmpdir(), 'modbench-medit-fields');
 
@@ -3060,7 +2981,7 @@ function openRecordPanel(
       ...routerDeps,
       formKeyPicker: { repository: routerDeps.repository, reply },
       conditionFunctionPicker: { repository: routerDeps.repository, reply },
-      // Issue #230: tempRoot/log/reporter are session-static (the same values every panel would
+      // Issue #230: tempRoot/log/reporter are load order-static (the same values every panel would
       // get); only `reply` genuinely varies per panel — bundled here anyway, matching
       // formKeyPicker's own reconstruction on this object.
       extendedFieldEditor: {

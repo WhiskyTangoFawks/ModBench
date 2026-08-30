@@ -31,8 +31,8 @@ public sealed class ExternalChangeWatcher : IDisposable
 
     /// <summary>Starts watching one tracked plugin's binary for out-of-band writes. Re-watching an
     /// already-watched (modFolder, plugin) pair replaces the previous watch — the composition root
-    /// (<c>MEditService.Api</c>) re-registers on every session load, and a stale watcher pointed at a
-    /// plugin no longer in the session must not linger.</summary>
+    /// (<c>MEditService.Api</c>) re-registers on every reconcile, and a stale watcher pointed at a
+    /// plugin no longer in the load order must not linger.</summary>
     public void Watch(string modFolder, string pluginName, string pluginPath)
     {
         var key = Key(modFolder, pluginName);
@@ -82,7 +82,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     /// <summary>
-    /// #587 / ADR-0001: one indexed binary changed or vanished on disk while a session is live.
+    /// #587 / ADR-0001: one indexed binary changed or vanished on disk while a load order is live.
     /// Raised only for the plugins watched through <see cref="WatchIndexed"/> — the ones whose rows
     /// come from the binary — never for a tracked plugin, whose out-of-band writes are a question
     /// for the user (Absorb / Keep) rather than a silent re-index.
@@ -94,7 +94,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// <para><b>The handler answers whether it applied the change</b>, which is why this is a
     /// delegate rather than an event. This class remembers what it last told anyone about a file so
     /// that the several events one write raises report it once; if the handler could not act — the
-    /// session torn down mid-settle, the file still held by the writer — remembering the new bytes
+    /// load order torn down mid-settle, the file still held by the writer — remembering the new bytes
     /// anyway would leave the index holding rows nothing on disk backs, silently, until the next
     /// load. So a false answer puts the remembered hash back and the next settle retries. One
     /// subscriber by construction (the composition root), which is also what makes a return value
@@ -127,8 +127,8 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     /// <summary>Drops every index-mirror watch. The composition root calls this before re-registering
-    /// a freshly loaded session's plugins, so a watch can never outlive the load order that asked for
-    /// it and re-index a plugin this session no longer holds.</summary>
+    /// a freshly loaded load order's plugins, so a watch can never outlive the load order that asked for
+    /// it and re-index a plugin this load order no longer holds.</summary>
     public void UnwatchAllIndexed()
     {
         lock (_gate)
@@ -139,7 +139,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     /// <summary>Stops watching — the composition root calls this for every plugin a reload no longer
-    /// names, so a session change never leaves a watcher pointed at a folder that isn't loaded any
+    /// names, so a load order change never leaves a watcher pointed at a folder that isn't loaded any
     /// more.</summary>
     public void Unwatch(string modFolder, string pluginName)
     {
@@ -170,7 +170,7 @@ public sealed class ExternalChangeWatcher : IDisposable
 
     /// <summary>Feeds a classification computed elsewhere straight into the same unanswered-question
     /// queue the live watcher itself fills from <see cref="Settle"/> — the load-time hash check
-    /// (fired from <c>MEditService.Api</c>'s session-load handlers, which needs no live watch of its
+    /// (fired from <c>MEditService.Api</c>'s reconcile handlers, which needs no live watch of its
     /// own to ask the question once) uses this so both triggers share one queue and one dialog
     /// surface.
     ///
@@ -339,9 +339,9 @@ public enum IndexedBinaryChange
 }
 
 /// <summary>#587 / ADR-0001: one indexed binary's disk event, carrying the compound plugin identity
-/// (<c>origin</c> plus filename) the index is keyed by. Deliberately says nothing about sessions,
+/// (<c>origin</c> plus filename) the index is keyed by. Deliberately says nothing about mirror,
 /// indexes or DuckDB — this assembly knows none of those, and that is enforced rather than agreed:
-/// <c>BridgeKnowsNothingOfSessionsTests</c> fails on any reference from here to the session or
+/// <c>BridgeKnowsNothingOfLoadOrdersTests</c> fails on any reference from here to the load order or
 /// record-index namespaces (by literal text, so do not name them even in a comment). That is exactly
 /// why this carries a bare (name, origin) pair where the rest of the codebase carries a
 /// <c>PluginKey</c> — the type is on the wrong side of the boundary. <c>MEditService.Api</c>

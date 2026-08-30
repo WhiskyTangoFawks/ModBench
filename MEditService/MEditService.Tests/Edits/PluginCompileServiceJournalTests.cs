@@ -17,7 +17,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private PluginCompileService CompileService() =>
-        new(_mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     [Fact]
     public void Compile_ThatSucceeds_LeavesNoJournalMarkerBehind()

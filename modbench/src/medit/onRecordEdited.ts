@@ -6,7 +6,7 @@ import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 
 /** Broadcasts one message to every open record panel (`'modbench'`-viewType) — used for the M/A
  *  badge's own record-edited notice here, and by several other extension.ts call sites for their
- *  own session-wide notices (conflicts computed, filter changed, …). Kept alongside
+ *  own load-order-wide notices (conflicts computed, filter changed, …). Kept alongside
  *  {@link makeOnRecordEdited} purely because that is its own only caller in this file; every other
  *  caller stays in `extension.ts` where the shared `recordPanels` set lives. */
 export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, msg: ExtensionToWebview): void {
@@ -15,7 +15,7 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
 
 /** #428: builds the `onRecordEdited` callback — pulled into its own file (#449 review) so the
  *  wiring a real field edit drives is directly unit-testable without importing the whole of
- *  `extension.ts`, the same reason `compileTarget.ts`/`sessionProgress.ts`/`crashRepairOffer.ts`/
+ *  `extension.ts`, the same reason `compileTarget.ts`/`load orderProgress.ts`/`crashRepairOffer.ts`/
  *  `copyTargetPlugins.ts`/`trackProgress.ts` are each their own file rather than inline there.
  *  Scoped, not `refresh()` (Q1, orchestrator gate ruling): patches the one cached record
  *  `PluginTreeProvider` already holds and refreshes only that record's own decoration, so a
@@ -28,7 +28,7 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
  *
  *  `refreshCompileStale` (#449): injected rather than calling `extension.ts`'s own
  *  module-private `refreshMatchingPlugins` directly — the same shape
- *  `SessionControllerDeps.refreshMatchingPlugins` already uses, and what keeps this file free of
+ *  `LoadOrderControllerDeps.refreshMatchingPlugins` already uses, and what keeps this file free of
  *  any dependency on `extension.ts`'s module-level state, which is what makes it importable in
  *  isolation at all. Called unconditionally, not gated on `markWorkingTreeState`'s own cache-hit:
  *  the edit already landed server-side by the time this fires, so the plugin row's compile-staleness

@@ -89,7 +89,7 @@ public class ConflictClassifierTests
 
     // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin. Bare-plugin
     // dictionary keys (o.Plugin) would collide here — ToDictionary throws on the literal duplicate
-    // key "Shared.esp" — even though nothing loads such a pair through a real session yet (#34).
+    // key "Shared.esp" — even though nothing loads such a pair through a real load order yet (#34).
     [Fact]
     public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
     {
@@ -223,6 +223,28 @@ public class ConflictClassifierTests
 
         Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
         Assert.Empty(result.Diffs);
+    }
+
+    // ADR-0044 / #594 AC3: a losing copy of one filename is registered beside the winning one and
+    // reaches the classifier as a second column with the same name; only the participating
+    // (winning, enabled, listed) copy counts. Keyed by ColumnKey — (plugin|origin) — so the two
+    // copies are distinct entries, and the loser is filtered out before any diff is computed.
+    [Fact]
+    public void Classify_LosingCopyOfTheSameFilename_IsExcluded_NotAConflictWithTheWinner()
+    {
+        var winning = MakeOverrideWithOrigin("Shared.esp", "ModA", 3, true, ("name", "FromModA"));
+        var losing = MakeOverrideWithOrigin("Shared.esp", "ModB", 3, false, ("name", "FromModB"));
+        var participation = new Dictionary<string, bool>
+        {
+            [ColumnKey.Of("Shared.esp", "ModA")] = true,
+            [ColumnKey.Of("Shared.esp", "ModB")] = false,
+        };
+
+        var result = Classify([winning, losing], participation: participation);
+
+        Assert.Equal(ConflictAll.OnlyOne, result.ConflictAll);
+        Assert.Equal(ConflictThis.OnlyOne, result.PluginStates[ColumnKey.Of("Shared.esp", "ModA")]);
+        Assert.DoesNotContain(ColumnKey.Of("Shared.esp", "ModB"), result.PluginStates.Keys);
     }
 
     [Fact]
