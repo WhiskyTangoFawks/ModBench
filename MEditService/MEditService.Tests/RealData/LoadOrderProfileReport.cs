@@ -79,7 +79,7 @@ public sealed class ProfileRun
         }
 
         if (!reconciled)
-            throw new InvalidOperationException("No 'Load order reconciled' timing line matched — the log texts in LoadOrder/LoadOrderMirror/DuckDbRecordIndex changed; update the regexes.");
+            throw new InvalidOperationException("No 'Load order reconciled' timing line matched — the log texts in LoadOrder/LoadOrderMirror/SourceIngest/DuckDbRecordIndex changed; update the regexes.");
         return run;
     }
 
@@ -132,7 +132,7 @@ public static class LoadOrderProfileReport
         Row("  tracked-only: source deserialize", r => r.Sum(c => c.DeserializeMs));
         Row("  tracked-only: reconcile head", r => r.Sum(c => c.ReconcileMs));
         Row("Winner sweep (UpdateWinners)", r => r.WinnersMs);
-        Row("Unattributed (wall − open − validate − binary open − index − winners)", Unattributed);
+        Row("Unattributed (wall − repo open − validate − binary open − index − winners)", Unattributed);
         sb.AppendLine();
         sb.AppendLine(Summary("Cold", cold));
         sb.AppendLine(Summary("Warm", warm));

@@ -62,8 +62,11 @@ public sealed class LoadOrderProfile(ITestOutputHelper output)
 
         var plugins = ResolveExplicitPlugins(instanceRoot, profileDir, dataFolder);
 
+        // The file and any write-ahead log a crashed run left beside it — a cold open that replays a
+        // WAL is not cold.
         var indexPath = IndexFile.For(instanceRoot);
-        if (File.Exists(indexPath)) File.Delete(indexPath);
+        foreach (var stale in new[] { indexPath, indexPath + ".wal" })
+            if (File.Exists(stale)) File.Delete(stale);
 
         var cold = Measure(instanceRoot, dataFolder, plugins, out var loadOrder);
         var warm = Measure(instanceRoot, dataFolder, plugins, out _);
