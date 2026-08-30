@@ -79,6 +79,8 @@ interaction uses the native VS Code surface that already does the job
 
 Prerequisites: [.NET SDK](https://dotnet.microsoft.com/download) 10.x,
 [Node.js](https://nodejs.org/) 20 LTS or later, VS Code, and git on `PATH` (Track needs it).
+The backend test suite also wants `python3` on `PATH` — only to hold an index file from a second
+process in the two-windows tests (#588), which skip without it.
 On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm`.
 
 ```bash

@@ -279,5 +279,14 @@ export function createApiClient(port: number, fetch?: (input: Request) => Promis
 export function errorText(error: unknown): string {
   if (typeof error === 'string') return error;
   if (error === undefined || error === null) return '';
+  // Every backend failure is RFC 7807 ProblemDetails (Results.Problem), whose `detail` is the
+  // sentence written for the user — "this instance's index is open in another Modbench window"
+  // (#588), "Game directory not found: …". A toast that stringifies the whole object buries that
+  // sentence in `{"type":…,"status":…}`; the problem's own text is the message.
+  if (typeof error === 'object') {
+    const problem = error as { detail?: unknown; title?: unknown };
+    if (typeof problem.detail === 'string' && problem.detail.length > 0) return problem.detail;
+    if (typeof problem.title === 'string' && problem.title.length > 0) return problem.title;
+  }
   return JSON.stringify(error);
 }

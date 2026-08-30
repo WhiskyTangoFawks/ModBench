@@ -62,7 +62,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     `IndexHeldElsewhereException`, which `PUT /load-order` answers `423 Locked` and the mirror
     holds nothing — deleting a locked file succeeds on POSIX and would destroy the other window's
     live index. The lock is per *process* (DuckDB.NET shares one database per path in-process), so
-    the test for it holds the file from a second process (`TestSupport/ForeignIndexHolder`).
+    the test for it holds the file from a second process (`TestSupport/ForeignIndexHolder`, `python3`
+    on PATH — a test prerequisite, not a runtime one; the two #588 tests skip without it).
   - **Reconcile is registration** (#586 / ADR-0001). `LoadOrderMirror.Reconcile` indexes
     only what the file has never seen or whose bytes moved (validation already dropped those) and
     `Register`s everything else at its `plugins.txt` position — a `registrations` row, no re-index. A

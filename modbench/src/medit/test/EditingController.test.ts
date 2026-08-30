@@ -648,6 +648,33 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
+  // #588 / ADR-0001 point 6: another window holds this instance's index. The backend answers 423
+  // with a ProblemDetails whose `detail` is the sentence for the user; that sentence — not the
+  // JSON around it — is what the toast says, and the load is a plain failure: no retry, no wait.
+  it('tells the user which cause refused the load when another window holds the instance (423)', async () => {
+    const client = {
+      ...makeClient(),
+      PUT: vi.fn().mockResolvedValue({
+        error: {
+          type: 'https://tools.ietf.org/html/rfc9110#section-15.5.24',
+          title: 'Locked',
+          status: 423,
+          detail: "This instance's index is open in another Modbench window (/instance/modbench/index.duckdb).",
+        },
+        response: { ok: false, status: 423, text: () => Promise.reject(new TypeError('Body is unusable')) },
+      }),
+    };
+    const deps = makeDeps({ client });
+    const ctrl = new EditingController(deps);
+
+    const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
+
+    expect(result).toEqual({ outcome: 'failed' });
+    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('open in another Modbench window'));
+    expect(deps.showError).not.toHaveBeenCalledWith(expect.stringContaining('"status"'));
+    expect(deps.refreshTree).not.toHaveBeenCalled();
+  });
+
   // #295 AC4: the caller (makeEnterEditing) tells a failed load apart from a load that
   // simply had nothing to report by the return value alone — `[]` is ambiguous with
   // "loaded, zero failures" and previously meant both. Backend-confirmed (LoadOrderManager.

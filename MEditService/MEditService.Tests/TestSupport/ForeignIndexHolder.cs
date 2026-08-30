@@ -48,12 +48,15 @@ public sealed class ForeignIndexHolder : IDisposable
         psi.ArgumentList.Add(NativeLibrary());
         psi.ArgumentList.Add(indexPath);
         var process = Process.Start(psi)!;
-        var line = process.StandardOutput.ReadLine();
+        // Bounded: a python that neither answers nor exits (a wedged native load) must fail the test
+        // with a diagnosis, not hang the suite.
+        var answer = Task.Run(process.StandardOutput.ReadLine);
+        var line = answer.Wait(TimeSpan.FromSeconds(30)) ? answer.Result : null;
         if (line != "held")
         {
-            var stderr = process.StandardError.ReadToEnd();
             process.Kill();
-            throw new InvalidOperationException($"The foreign holder could not open {indexPath}: {line ?? "(no output)"} {stderr}");
+            var stderr = process.StandardError.ReadToEnd();
+            throw new InvalidOperationException($"The foreign holder could not open {indexPath}: {line ?? "(no answer within 30 s)"} {stderr}");
         }
         return new ForeignIndexHolder(process);
     }
@@ -65,7 +68,7 @@ public sealed class ForeignIndexHolder : IDisposable
         if (_disposed) return;
         _disposed = true;
         if (!_process.HasExited) _process.Kill();
-        _process.WaitForExit();
+        _process.WaitForExit(10_000);
         _process.Dispose();
     }
 

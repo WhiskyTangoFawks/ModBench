@@ -12,8 +12,8 @@ namespace MEditService.Core.Records;
 /// </summary>
 public sealed class IndexHeldElsewhereException : Exception
 {
-    // RCS1194: the three standard constructors for well-behaved rethrow callers; the index throws
-    // through the path-based one below, which is the only one that produces the actionable message.
+    // RCS1194: the three standard constructors for well-behaved rethrow callers. The index throws
+    // through For, the only path that produces the actionable message and the path it names.
     public IndexHeldElsewhereException()
     {
     }
@@ -26,15 +26,12 @@ public sealed class IndexHeldElsewhereException : Exception
     {
     }
 
-    internal IndexHeldElsewhereException(string indexPath, Exception inner, bool _)
-        : base($"This instance's index is open in another Modbench window ({indexPath}). Close mEdit there first, or open a different instance here.", inner)
-    {
-        IndexPath = indexPath;
-    }
-
-    /// <summary>The held file — <see cref="IndexFile.For"/> of the instance.</summary>
-    public string IndexPath { get; } = "";
+    /// <summary>The held file — <see cref="IndexFile.For"/> of the instance. Null only on the
+    /// standard constructors, which nothing in the index uses.</summary>
+    public string? IndexPath { get; init; }
 
     /// <summary>The refusal for one instance's file, wrapping DuckDB's own lock error.</summary>
-    public static IndexHeldElsewhereException For(string indexPath, Exception duckDbError) => new(indexPath, duckDbError, true);
+    public static IndexHeldElsewhereException For(string indexPath, Exception duckDbError) =>
+        new($"This instance's index is open in another Modbench window ({indexPath}). Close mEdit there first, or open a different instance here.", duckDbError)
+        { IndexPath = indexPath };
 }
