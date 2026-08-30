@@ -52,10 +52,11 @@ not a choice a user makes; participation is three choices they already made in L
   file that is not in the load order. Read-only-for-editing is never an icon; it is conveyed by
   absent actions and the tooltip.
 - Non-participating copies are registered ([ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md))
-  but **not displayed**: a copy losing the Mod override order, or one no `plugins.txt` line
-  names, is absent from the tree and from the compare grid's columns alike, and a plugin more
-  than one enabled mod provides renders exactly like any other row. A non-participating copy
-  **never influences winners or conflicts**. How such copies surface — per-reason show/hide
+  but **not displayed in the Plugins tree**: a copy losing the Mod override order, or one no
+  `plugins.txt` line names, has no row, and a plugin more than one enabled mod provides renders
+  exactly like any other row. (The compare grid still lists a losing copy as a dimmed non-winner
+  column — #446's never-hide-data posture; whether that survives is part of the same open design.)
+  A non-participating copy **never influences winners or conflicts**. How such copies surface — per-reason show/hide
   toggles, dimming, origin labelling — is an open UX design (#576); the earlier always-on Stack
   node and file-override badge were reviewed live, rejected and removed (#595).
 
