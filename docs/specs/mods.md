@@ -185,11 +185,11 @@ requires a deploy.**
   containing `ModOrganizer.ini`" — instead of an error tree (issue #192). A real instance
   with a genuinely corrupt or unreadable `modlist.txt` still reports as an error
   ([ADR-0026](../adr/0026-error-surfacing-policy.md)) — that distinction is structural
-  presence vs. content, not "did a read fail.
+  presence vs. content, not "did a read fail."
 - **The welcome renders only once that check has actually run, not merely on the verdict** —
   gated on `modbench.workspaceMo2CheckDone` (a second, separate context key, set alongside the
   instance verdict on every activation exit path), so a workspace VS Code hasn't checked yet
-  reads as "no welcome" rather than as a false "not an instance" (issue #554)."
+  reads as "no welcome" rather than as a false "not an instance" (issue #554).
 - Modbench edits mod files in place and MO2 deploys them on its next run, so the two
   **coexist at the filesystem level** — no process handoff, no VFS
   ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)).
