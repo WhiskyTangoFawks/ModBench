@@ -46,9 +46,11 @@ index itself outliving the process.
 
    The `plugins` table is the session and nothing else: a row means "this plugin, from this
    origin, is in the current session, at this `load_order_idx`, participating or not" — it carries
-   no fact about the file the rows came from, which is point 4's `indexed_files`. Loading a
-   session registers its plugins; loading, unloading, enabling, disabling and reordering are
-   `plugins`-row changes plus the winner sweep. `records` rows for plugins not registered in the
+   no fact about the file the rows came from, which is point 4's `indexed_files`. Since
+   [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md) (2026-08-30) the table is kept true by
+   one reconcile verb over the whole Plugin load order, every physical copy is registered, and
+   participation is derived from `enabled`/`winning`/listed rather than stored; every loadout
+   gesture is a `plugins`-row change plus the winner sweep. `records` rows for plugins not registered in the
    current session remain in the file and **are invisible to every read** — the read seam and
    every generated `json_extract` view join `plugins`, so the SQL door (user filters,
    `medit.query`) sees exactly what the C# surface sees.
@@ -95,9 +97,8 @@ index itself outliving the process.
    file it holds rows for is hashed (a few seconds for 2.3 GB — never `mtime`, the trap the 2026-05
    cache fell into), a mismatch or a missing file `Unindex`es that plugin so the load re-indexes it
    in place, and a codec or reflector version change invalidates the whole file. Registrations are
-   cleared at the same moment and unconditionally: a freshly opened index is in no session, and the
-   rows the last one left would otherwise make its load order visible before this process has
-   registered a plugin. At runtime,
+   **not** cleared on open (amended by ADR-0044, 2026-08-30): they are the last known load order,
+   and the first reconcile from Mod Management corrects them. At runtime,
    `ExternalChangeWatcher` (#417) is extended from tracked binaries to every indexed binary, the
    game's `Data/` included: a debounced change re-hashes and re-indexes through `ReindexPlugin`.
    This is root CLAUDE.md's never-assume-exclusive-ownership rule applied to the index: MO2,

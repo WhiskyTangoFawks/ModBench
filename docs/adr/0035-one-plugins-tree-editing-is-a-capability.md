@@ -28,20 +28,19 @@ Plugin load order, and a running backend adds record browsing to its rows. There
 
 ### The loading model
 
-**The editing session indexes everything named in `plugins.txt` — enabled and disabled alike.**
-Plugin files that `plugins.txt` does not name (never-listed files, and copies shadowed by a
-higher-priority mod) are indexed lazily, on demand.
+Rewritten 2026-08-30 by [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md). **Every
+physical plugin copy in the instance is registered** — the copies `plugins.txt` names, enabled
+and disabled alike, the copies losing the Mod override order, and files no line names. There is
+no lazy, on-demand path: a copy is in the index because it exists, and whether it competes is a
+separate fact.
 
-The line is drawn by one rule: **anything that participates in winner computation must be loaded
-eagerly and together; anything that does not can arrive whenever it is asked for.**
-`UpdateWinners()` is a whole-set sweep, so a participating plugin arriving late invalidates every
-conflict classification already on screen. A non-participating one changes nothing when it arrives.
-
-**Participation is the checkbox.** A row's `plugins.txt` `*` prefix means it loads in the game and
-competes for winner; nothing else does. `UpdateWinners()` and `ConflictClassifier` carry a
-participation predicate — indexed rows that do not participate can never be a winner. This is the
-one genuinely new invariant this ADR creates, and it is load-bearing: without it `is_winner`
-describes a load order the game does not have. Session membership is not a choice a user makes.
+**Participation is derived: `enabled AND winning AND listed`.** A row's `plugins.txt` `*` prefix
+(`enabled`), whether the Mod override order resolves its name to this copy (`winning`), and
+whether any line names it at all are three facts on the registration row, all supplied by Mod
+Management. `UpdateWinners()` and `ConflictClassifier` carry the participation predicate —
+registered rows that do not participate can never be a winner. This is the load-bearing
+invariant: without it `is_winner` describes a load order the game does not have. Registration is
+not a choice a user makes; participation is three choices they already made in Loadout.
 
 ### The tree
 
@@ -52,13 +51,12 @@ describes a load order the game does not have. Session membership is not a choic
   checkbox where you decide, a lock on an implicit master that is forced on, nothing at all on a
   file that is not in the load order. Read-only-for-editing is never an icon; it is conveyed by
   absent actions and the tooltip.
-- Non-participating copies render dimmed and read-only, behind a single global show/hide toggle.
-  Hidden means **absent** — from the tree and from the compare grid's columns alike — not
-  collapsed. Absent means **unregistered** in the session's `plugins` table
-  ([ADR-0001](0001-persistent-per-game-index-session-is-a-registration.md), 2026-08-29 rewrite):
-  an unregistered plugin's rows stay in the persistent index but answer no read on any path —
-  the C# seam and the generated SQL views alike scope by registration. `Unindex` is eviction,
-  not the meaning of unload.
+- Non-participating copies render dimmed and read-only, hidden by default behind show/hide
+  toggles — one per reason (disabled, losing the Mod override order, unlisted), the same gesture
+  for all three. Hidden means **absent from the tree and from the compare grid's columns alike**,
+  not collapsed; and a non-participating row, hidden or shown, **never influences winners or
+  conflicts** ([ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md)). A shown losing copy
+  carries its origin, since it shares a filename with the winning one.
 
 ### Filters
 
@@ -73,17 +71,16 @@ ordinary record filter invoked against the tree selection, not a mode.
 
 ### Live mutation
 
-Reorder, enable and disable **apply live and unprompted**, with a view-header progress indicator
-as the only feedback. All three are SQL-only: an `UPDATE` of `load_order_idx` or of the
-participation flag, plus a winner re-sweep. Nothing is re-read and the connection is unchanged.
-
-When a mod-level change (install, uninstall, reprioritise) alters which physical file a plugin
-name resolves to, the session **re-reads that plugin automatically** — the same absorption every
-other loadout gesture gets, with the ordinary progressive-load presentation while it happens. VS
-Code's own file model is the precedent: a clean buffer follows the disk silently. A tracked
-plugin's content comes from its source, not the binary (ADR-0041), so its working-tree edits are
-untouched by a re-read; a name that comes to resolve to nothing is the existing missing-plugin
-state.
+Rewritten 2026-08-30 by [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md). Every loadout
+gesture — reorder, enable, disable, install, uninstall, reprioritise, profile switch — reaches
+Editing the same way: Mod Management sends the whole Plugin load order as one idempotent snapshot
+(`PUT /load-order`) and Editing reconciles it against its registration table. All of them are
+SQL-only on a copy the mirror already holds: `UPDATE` of slot or flags, a winner re-sweep. A
+mod-level change that moves which copy wins a name is the `winning` flag moving from one
+registered row to another — nothing is re-read, because both copies were already indexed. Only a
+copy the mirror has never seen is indexed, progressively, with the ordinary presentation. There
+is no drift and no reread verb. VS Code's own file model is the precedent: a clean buffer follows
+the disk silently.
 
 **Loading is progressive and states its own incompleteness.** A plugin's records are browsable
 the moment that plugin is indexed, but conflict information is not correct until the final winner
@@ -125,12 +122,15 @@ ADR-0027's conflation objection is met structurally, not by assertion.
   contexts cleanly, but xEdit navigates plugin → record in one tree and every user arrives fluent
   in that ([ADR-0034](0034-xedit-is-the-ux-reference-for-the-record-editor.md)). Two panes is a
   real divergence with no platform limitation forcing it.
-- **Index every plugin file on disk eagerly** — no session cache (ADR-0001), so the cost is paid
-  in full on every launch, and the population is unbounded.
+- **Index every plugin file on disk eagerly** — rejected here because ADR-0001 then had no
+  persistent index, so the cost was paid on every launch. ADR-0001's 2026-08-29 rewrite removed
+  that cost and ADR-0044 adopted exactly this: every copy is registered, once, ever.
 - **Index only enabled plugins** — makes enabling a plugin an indexing stall rather than a SQL
   update, forfeiting the live mutation that is the point of the merge.
 - **Flag mod-level changes as "drift" and offer a manual re-read** — its rationale only covered
   the retired staged-edits case; "drift" was inventory of that refusal, not a concept a user wants.
+  (The automatic re-read that replaced it is itself retired by ADR-0044: both copies are
+  registered, so a mod-order change moves a flag rather than re-reading a file.)
 - **Never remove a plugin row under a record filter** — sound for the plugin-name filter (applied
   mid-reorder, needing the whole order in view), not for the record filter, whose whole point is to
   cut noise and whose clearing restores everything.
