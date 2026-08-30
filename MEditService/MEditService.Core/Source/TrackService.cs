@@ -228,13 +228,29 @@ public sealed class TrackService(ILogger<TrackService> logger)
             // NoNextFormIDProcessing/RecordCountOption.NoCheck mirror PluginWriter (#506): the
             // source's own stored HEDR.NextObjectID/NumRecords are the bytes to reproduce, not
             // Mutagen's recompute of them.
-            await recompiled.BeginWrite
-                .ToPath(recompiledPath)
-                .WithLoadOrderFromHeaderMasters()
-                .WithNoDataFolder()
-                .NoNextFormIDProcessing()
-                .WithRecordCount(RecordCountOption.NoCheck)
-                .WriteAsync();
+            try
+            {
+                await recompiled.BeginWrite
+                    .ToPath(recompiledPath)
+                    .WithLoadOrderFromHeaderMasters()
+                    .WithNoDataFolder()
+                    .NoNextFormIDProcessing()
+                    .WithRecordCount(RecordCountOption.NoCheck)
+                    .WriteAsync();
+            }
+            catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
+            {
+                // #520: ADR-0038's content-derived master pass (MastersListContentOption.Iterate,
+                // the same default this write and PluginWriter both take) prunes a master this
+                // write still needs when the only reference to it lives somewhere Mutagen's own
+                // EnumerateFormLinks does not walk (a VMAD struct-list script property —
+                // Mutagen-Modding/Mutagen#688, real fixture SpaDia_AMR.esp). Everything but this
+                // one Kind A shape still propagates raw below — never fall back to a silent
+                // NoCheck, and never widen this catch to any other write failure (#516's decision).
+                var diagnosis = PluginDiagnosis.FromWriteException(ex);
+                throw new SourceRoundTripFailedException(
+                    $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}", ex);
+            }
 
             var originalBytes = await File.ReadAllBytesAsync(originalPluginPath, cancel);
             var recompiledBytes = await File.ReadAllBytesAsync(recompiledPath, cancel);

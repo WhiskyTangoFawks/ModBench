@@ -71,11 +71,25 @@ namespace MEditService.Tests.RealData;
 /// #567 turned out to be, once the parse-time drop it alleged was refuted. Filing it under #514 would
 /// have put an "accepts" fixture in a suite whose every other member refuses, and separated it from the
 /// total-prune fixture it is the direct counterpart to.</para>
+///
+/// <para><b>#520 — <c>SpaDia_AMR.esp</c> (Rat Runners Arsenal), the shape none of the above can
+/// accept.</b> Its Quest <c>DiaQ_LLInjector_SpadeyAMR</c> (<c>0000DD</c>) references
+/// <c>DLCNukaWorld.esm</c> only from inside a VMAD <c>ScriptStructListProperty</c>
+/// (<c>DLC04:DLCLegendaryLLManagerScript</c>'s <c>LeveledListData</c>) — the FormLink lives on a
+/// struct member (<c>ListToUpdate</c>/<c>FormToAdd</c>, both <c>ScriptObjectProperty</c>) that
+/// Mutagen's own <c>ScriptStructListProperty.EnumerateFormLinks</c> never walks
+/// (Mutagen-Modding/Mutagen#688; <see cref="ScriptStructListPropertyLinkGapTests"/> pins the
+/// mechanism). Unlike #563/#567, this is not sanctioned pruning: the master really is used, Mutagen
+/// simply cannot see the use, so the content-derived write prunes it anyway and then cannot write the
+/// property's own FormID (<c>UnmappableFormIDException</c>). Refused, not accepted — the shape #516
+/// decided Kind A defects get (<c>PluginDiagnosis.KindATable</c>'s #688 row), never a silent
+/// <c>NoCheck</c> fallback.</para>
 /// </summary>
 public sealed class MasterPruningRoundTripGateTests
 {
     private const string FaceGenFixtureFileName = "FaceGen Output.esp";
     private const string LegendariesFixtureFileName = "LegendariesTheyCanUse.esp";
+    private const string SpaDiaAmrFixtureFileName = "SpaDia_AMR.esp";
 
     /// <summary>What <c>LegendariesTheyCanUse.esp</c>'s own TES4 header declares, in file order.</summary>
     private static readonly string[] DeclaredMasters =
@@ -122,6 +136,24 @@ public sealed class MasterPruningRoundTripGateTests
         await scratch.TrackAsync();
 
         Assert.True(SourceRepository.IsTracked(scratch.ModFolder));
+    }
+
+    /// <summary>#520's own AC: unlike the two tests above, Track refuses this real plugin — the
+    /// master really is referenced (Mutagen just can't see it, #688), so pruning it is not sanctioned
+    /// and the write cannot complete. The diagnosis names the record, the pruned master, and cites
+    /// #688 as the known cause of this shape; no exception escapes to a 500 (a bare
+    /// <see cref="SourceRoundTripFailedException"/>, never <c>UnmappableFormIDException</c> itself).</summary>
+    [Fact]
+    public async Task TrackAsync_OfTheRealSpaDiaAMRFixture_RefusesNamingTheQuestAndThePrunedMaster()
+    {
+        using var scratch = new PrunedMasterScratch(SpaDiaAmrFixtureFileName, "SpaDiaAMRMod");
+
+        var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(() => scratch.TrackAsync());
+
+        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", ex.Message);
+        Assert.Contains("DLCNukaWorld.esm", ex.Message);
+        Assert.Contains("Mutagen #688", ex.Message);
+        Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
     /// <summary>#567 AC1, permanently pinned: the deep parse Track actually uses
