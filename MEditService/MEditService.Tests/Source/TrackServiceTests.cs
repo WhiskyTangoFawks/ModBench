@@ -436,6 +436,102 @@ public sealed class TrackServiceTests
         }
     }
 
+    // #568: ScopeOverlayDOF.esp's TES4 header carries an INTV subrecord — genuinely unusual, and the
+    // ticket's own confirmed hypothesis was that Mutagen.Bethesda.Serialization's generated
+    // Fallout4ModHeader_Serialization codec might not carry opaque header ByteArray subrecords
+    // faithfully through the tracked-source round trip. Refuted by isolated repro (both the direct
+    // whole-mod JSON round trip and this end-to-end Track): they survive today. This is the permanent
+    // regression fixture AC3 asks for — a minimal synthetic header carrying the same opaque-field
+    // shape (INTV/INCC/TypeOffsets/Deleted/Screenshot/TransientTypes), not the real ScopeOverlayDOF.esp
+    // (not present in this repo or environment; AC3 sanctions a synthetic fixture for exactly this
+    // reason). Named rival (applied and observed while writing this test, not committed): setting
+    // recompiled.ModHeader.INTV = null immediately after DeserializeWholeMod inside a forged
+    // deserializer threw a SourceRoundTripFailedException naming "TES4 header field 'INTV'", proving
+    // this test is not vacuous — it genuinely distinguishes the correct codec from a corrupting one.
+    [Fact]
+    public async Task TrackAsync_WithOpaqueHeaderFieldsSet_TracksSuccessfully()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-opaqueheader-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-opaqueheader-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
+            mod.ModHeader.INCC = 42;
+            mod.ModHeader.TypeOffsets = new byte[] { 9, 8, 7 };
+            mod.ModHeader.Deleted = new byte[] { 1, 2, 3 };
+            mod.ModHeader.Screenshot = new byte[] { 4, 5, 6 };
+            mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
+                gameDir,
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
+
+            Assert.True(SourceRepository.IsTracked(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #568: the live gap this ticket closes. ModelIdentity.FindFirst never reaches ModHeader (it is
+    // not an IMajorRecordGetter), so before this ticket a corrupted opaque header field round-tripped
+    // silently — confirmed live while planning this fix: this exact scenario, run against pre-fix
+    // code, did not throw and left SourceRepository.IsTracked true despite the corruption.
+    [Fact]
+    public async Task TrackAsync_WithACorruptedOpaqueHeaderField_RefusesNamingTheField()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-headerroundtrip-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-headerroundtrip-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
+                gameDir,
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            static async Task<IFallout4Mod> DeserializeThenCorruptTheIntv(string folder, CancellationToken ct)
+            {
+                var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+                deserialized.ModHeader.INTV = new byte[] { 99, 0, 0, 0 };
+                return deserialized;
+            }
+
+            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheIntv));
+
+            Assert.Contains("TES4 header field 'INTV'", ex.Message);
+            Assert.False(SourceRepository.IsTracked(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
     // #514 AC2 / #513: a rewrite that only *adds* subrecords must not be refused by the
     // subrecord-inventory check specifically. Mutagen's own Furniture writer
     // (FurnitureBinaryWriteTranslation.WriteBinaryFlagsCustom/WriteBinaryFlags2Custom, verified by

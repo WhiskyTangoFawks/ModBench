@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using Loqui;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -116,6 +117,56 @@ public static class ModelIdentity
         return null;
     }
 
+    /// <summary>
+    /// #568's own allow-list: the <c>Fallout4ModHeader.Mask</c> fields Mutagen's own model treats as
+    /// opaque — never interpreted, never normalized on write, carried through purely as data. A
+    /// content corruption on any of these previously round-tripped silently, because <see cref="FindFirst"/>
+    /// only ever walks <c>original.EnumerateMajorRecords()</c>, and a <c>ModHeader</c> is not an
+    /// <c>IMajorRecordGetter</c> (see <c>MEditService/CLAUDE.md</c>'s own "the header is the one
+    /// surviving per-type table" note) — no per-record mask check has ever reached it.
+    ///
+    /// <para><b>Deliberately an allow-list, not every <c>Mask</c> field — ADR-0042's #568 amendment
+    /// records why each excluded field is excluded, not repeated here.</b> In short: <c>Flags</c>,
+    /// <c>FormID</c>, <c>Version</c>, <c>FormVersion</c>, <c>Version2</c> are well-typed, semantically
+    /// interpreted fields outside this ticket's "opaque byte array" scope; <c>Stats</c> is already
+    /// forced byte-identical by this same write's own <c>NoNextFormIDProcessing</c>/
+    /// <c>RecordCountOption.NoCheck</c> (#506, <see cref="Source.TrackService"/>'s own
+    /// <c>VerifyRoundTrip</c>); <c>MasterReferences</c> and <c>OverriddenForms</c> both have their own
+    /// confirmed, currently-tested legitimate divergence paths (ADR-0038's content-derived master
+    /// pruning — real fixtures in <c>MasterPruningRoundTripGateTests</c> — and
+    /// <c>OverriddenFormsOption</c> respectively). A blanket mask sweep over every field would refuse
+    /// those already-accepted cases; this list only ever fires on a field nothing else already
+    /// explains.</para>
+    /// </summary>
+    internal static readonly HashSet<string> OpaqueHeaderFields =
+        ["TypeOffsets", "Deleted", "Screenshot", "TransientTypes", "INTV", "INCC"];
+
+    /// <summary>
+    /// The header counterpart to <see cref="FindFirst"/>'s per-record mask check: the first
+    /// <see cref="OpaqueHeaderFields"/> member Mutagen's own generated equality mask disagrees on
+    /// between <paramref name="original"/>'s and <paramref name="recompiled"/>'s <c>ModHeader</c>, or
+    /// <see langword="null"/> when every allow-listed field matches (every other mask failure is a
+    /// known legitimate divergence per <see cref="OpaqueHeaderFields"/>'s own doc comment, and is
+    /// deliberately not reported here).
+    ///
+    /// <para><b>FO4-shaped today.</b> Both the parameter type and <see cref="OpaqueHeaderFields"/>'
+    /// own field names are <c>Fallout4ModHeader.Mask</c>'s — root <c>CLAUDE.md</c>'s "generalize across
+    /// Bethesda games" rule is not answered here. <see cref="Source.TrackService.VerifyRoundTrip"/>,
+    /// this method's one caller, is already FO4-narrowed the same way (its own
+    /// <c>Fallout4Mod.CreateFromBinary(..., Fallout4Release.Fallout4)</c> call), so this does not add a
+    /// new lock — but a future round-trip gate generalized to Skyrim/Starfield will need its own
+    /// per-game header type and allow-list here, not a reuse of this one.</para>
+    /// </summary>
+    public static string? FindFirstHeaderFieldDivergence(IFallout4ModHeaderGetter original, IFallout4ModHeaderGetter recompiled)
+    {
+        foreach (var (_, field) in FailingFields(original, recompiled))
+        {
+            if (OpaqueHeaderFields.Contains(field))
+                return field;
+        }
+        return null;
+    }
+
     private static string? FirstNonExcludedFailingField(IMajorRecordGetter original, IMajorRecordGetter recompiled)
     {
         foreach (var (recordType, field) in FailingFields(original, recompiled))
@@ -131,9 +182,18 @@ public static class ModelIdentity
     /// between <paramref name="original"/> and <paramref name="recompiled"/>, unfiltered by the
     /// exclusion list — <see cref="FindFirst"/>'s own building block, exposed so a test can assert
     /// against the raw mask directly rather than only through a whole-mod comparison.
+    ///
+    /// <para>Typed <see cref="ILoquiObjectGetter"/>, not <see cref="IMajorRecordGetter"/> — #568
+    /// widens this from a record-only seam to also serve <see cref="FindFirstHeaderFieldDivergence"/>'s
+    /// <c>IFallout4ModHeaderGetter</c> comparison. <c>ILoquiObjectGetter</c> is the narrowest type both
+    /// interfaces actually share (confirmed by reflecting on both interfaces' own
+    /// <c>GetInterfaces()</c>), so a caller passing something with no Loqui-generated equality mask at
+    /// all still fails to compile — <see cref="FindGetEqualsMaskMethod"/> resolves the real mask method
+    /// off <c>original.GetType()</c>'s own concrete runtime type regardless, so this widen changes
+    /// nothing about what reflection actually finds, only what the compiler lets a caller pass.</para>
     /// </summary>
     internal static IReadOnlyList<(string RecordType, string Field)> FailingFields(
-        IMajorRecordGetter original, IMajorRecordGetter recompiled)
+        ILoquiObjectGetter original, ILoquiObjectGetter recompiled)
     {
         var method = FindGetEqualsMaskMethod(original.GetType());
         if (method == null) return [];

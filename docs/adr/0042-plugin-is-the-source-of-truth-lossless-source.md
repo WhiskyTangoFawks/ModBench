@@ -94,6 +94,37 @@ building the survey harness below, not anticipated at plan time — proof that t
 expected to grow exactly this way as more real plugins are checked, never by guessing a field name
 in the abstract.
 
+**#568 amendment: the gate also checks a fixed allow-list of `ModHeader` (TES4) fields.**
+`ModelIdentity.FindFirst`'s own per-record walk never reaches `ModHeader` — it is not an
+`IMajorRecordGetter`, so `EnumerateMajorRecords()` never yields it. `TrackService.VerifyRoundTrip`
+runs a second, header-only check (`ModelIdentity.FindFirstHeaderFieldDivergence`) against the same
+generated equality mask, narrowed to the fields below rather than every `Fallout4ModHeader.Mask`
+field:
+
+| Allow-listed field | Subrecord |
+|---|---|
+| `TypeOffsets` | OFST |
+| `Deleted` | DELE |
+| `Screenshot` | SCRN |
+| `TransientTypes` | TNAM |
+| `INTV` | INTV |
+| `INCC` | INCC |
+
+| Excluded field | Why excluded |
+|---|---|
+| `Flags` | Write-time-derived from `IsMaster`/`UsingLocalization`/`IsSmallMaster` — a legitimate normalization, not opaque data. |
+| `FormID` | Always `0` on a header record; structurally inert. |
+| `Version`, `FormVersion`, `Version2` | Well-typed, semantically interpreted format fields, not opaque byte data. |
+| `Stats` (`NumRecords`/`NextFormID`) | Already forced byte-identical by this same write's own `NoNextFormIDProcessing`/`RecordCountOption.NoCheck` (#506). |
+| `MasterReferences` | ADR-0038's content-derived master pruning is a confirmed, currently-tested legitimate divergence (`MasterPruningRoundTripGateTests`, real fixtures). |
+| `OverriddenForms` (ONAM) | `OverriddenFormsOption` is its own write option with a legitimate divergence path. |
+
+The six allow-listed fields are exactly the ones Mutagen's own model never interprets — carried
+through as raw data, never normalized or recomputed on write — which is why a content corruption on
+one of them is a real defect rather than an encoding artifact, and why a blanket sweep of every
+`Mask` field would instead false-positive-refuse the two rows above that already have a permanent
+accept fixture.
+
 Everything else that changes bytes without changing content — zlib level/implementation,
 negative zero, subrecord order, GRUP child order, derived sizes and counts, master pruning
 (decision 4 below has its own interaction: the tree carries the original's order, a compile back

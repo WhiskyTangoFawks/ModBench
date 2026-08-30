@@ -152,6 +152,69 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
+    /// <summary>#568: the header counterpart to <see cref="FindFirst"/>'s per-record check. Every
+    /// <see cref="ModelIdentity.OpaqueHeaderFields"/> member set to a distinguishable, matching value
+    /// on both sides — the accept case a real Track that only recompiles (never edits) a plugin's
+    /// header must hit.</summary>
+    [Fact]
+    public void FindFirstHeaderFieldDivergence_WithMatchingOpaqueFields_ReturnsNull()
+    {
+        var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        SetOpaqueHeaderFields(original);
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        SetOpaqueHeaderFields(recompiled);
+
+        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+
+        Assert.Null(field);
+    }
+
+    /// <summary>#568's own live gap, closed: a genuine content corruption on an allow-listed opaque
+    /// field is named. Mirrors the real defect this ticket exists for — INTV surviving with the wrong
+    /// bytes, not dropped outright (a drop is already caught upstream by
+    /// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>).</summary>
+    [Fact]
+    public void FindFirstHeaderFieldDivergence_WhenAnAllowListedFieldDiffers_NamesTheField()
+    {
+        var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        original.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        recompiled.ModHeader.INTV = new byte[] { 99, 0, 0, 0 };
+
+        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+
+        Assert.Equal("INTV", field);
+    }
+
+    /// <summary>The allow-list's own boundary, proven rather than merely asserted: <c>Flags</c> is a
+    /// genuine mask failure here (Localized set on only one side) yet is not reported —
+    /// <see cref="ModelIdentity.OpaqueHeaderFields"/>' own doc comment's claim that <c>Flags</c> is a
+    /// legitimate, write-time-derived divergence path stays enforced by this test, not just stated.</summary>
+    [Fact]
+    public void FindFirstHeaderFieldDivergence_WhenOnlyAnExcludedFieldDiffers_ReturnsNull()
+    {
+        var original = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+        original.ModHeader.Flags = Fallout4ModHeader.HeaderFlag.Localized;
+
+        var recompiled = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+
+        var field = ModelIdentity.FindFirstHeaderFieldDivergence(original.ModHeader, recompiled.ModHeader);
+
+        Assert.Null(field);
+    }
+
+    private static void SetOpaqueHeaderFields(Fallout4Mod mod)
+    {
+        mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
+        mod.ModHeader.INCC = 42;
+        mod.ModHeader.TypeOffsets = new byte[] { 9, 8, 7 };
+        mod.ModHeader.Deleted = new byte[] { 1, 2, 3 };
+        mod.ModHeader.Screenshot = new byte[] { 4, 5, 6 };
+        mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
+    }
+
     private static void AddInteriorCell(Fallout4Mod mod, Cell cell)
     {
         var subBlock = new CellSubBlock { BlockNumber = 0, GroupType = GroupTypeEnum.InteriorCellSubBlock };
