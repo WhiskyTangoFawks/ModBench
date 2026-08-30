@@ -18,8 +18,8 @@ namespace MEditService.Tests.Records;
 // asserts on log level/content, which none of those do.
 public sealed class RecordIndexingLoggingTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private readonly FormKey _npcFormKey;
     private readonly FormKey _cobjFormKey;

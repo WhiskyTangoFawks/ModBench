@@ -8,9 +8,9 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
-public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuilder
+public sealed class TableDdlBuilder(SchemaReflector reflector)
 {
-    private readonly ISchemaReflector _reflector = reflector;
+    private readonly SchemaReflector _reflector = reflector;
 
     // #582 / ADR-0001: the physical data tables live in the `mirror` schema; the public names in
     // `main` are views over them scoped by registration (CreateRegisteredViews). Every relation

@@ -21,8 +21,8 @@ namespace MEditService.Tests.Query;
 // RecordDocumentCodecs logic.
 public sealed class VmadIndexerTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static VmadData? GetVmad(IRecordReads repo, string formKey, string plugin, string origin)
     {

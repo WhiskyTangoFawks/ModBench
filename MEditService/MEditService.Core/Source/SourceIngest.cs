@@ -79,7 +79,7 @@ internal static class SourceIngest
     /// exactly as an untracked plugin's would.</param>
     internal static void Ingest(
         IRecordIndex index, string modFolder, string sourceTree, Registration registration,
-        PluginKey key, string binaryPath, GameRelease gameRelease, ISchemaReflector schemaReflector,
+        PluginKey key, string binaryPath, GameRelease gameRelease, SchemaReflector schemaReflector,
         ILogger logger, CancellationToken cancel = default)
     {
         var timer = Stopwatch.StartNew();
@@ -135,7 +135,7 @@ internal static class SourceIngest
     /// </summary>
     private static void ReconcileHead(
         IRecordIndex index, string modFolder, PluginKey key, GameRelease gameRelease,
-        ISchemaReflector schemaReflector, ILogger logger, IModGetter effectiveMod)
+        SchemaReflector schemaReflector, ILogger logger, IModGetter effectiveMod)
     {
         // This early-out *is* the clean fast path — and note it is a structural guarantee, not a
         // tested one. Reconciling every record instead of just the dirty ones would still produce
@@ -277,7 +277,7 @@ internal static class SourceIngest
     /// already relies on.</para>
     /// </summary>
     private static void ReconcileHeadStructurally(
-        string modFolder, PluginKey key, GameRelease gameRelease, ISchemaReflector schemaReflector,
+        string modFolder, PluginKey key, GameRelease gameRelease, SchemaReflector schemaReflector,
         RecordTextCodec codec, IModGetter effectiveMod, ILogger logger,
         List<(string FormKey, string Body)> baselines,
         List<string> workingTreeOnly,

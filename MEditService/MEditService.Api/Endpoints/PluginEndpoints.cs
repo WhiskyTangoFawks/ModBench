@@ -431,7 +431,7 @@ public static class PluginEndpoints
     // #417: Keep as My Edit. A same-record collision is a typed refusal (ExternalChangeLandResult.
     // Applied == false), not an exception — it travels straight through as a 200, same posture as
     // Compile's own refusal.
-    internal static IResult KeepExternalChange(string plugin, ExternalChangeActionRequest req, ILoadOrderMirror mirror, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
+    internal static IResult KeepExternalChange(string plugin, ExternalChangeActionRequest req, ILoadOrderMirror mirror, ExternalChangeWatcher watcher, SchemaReflector reflector, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);

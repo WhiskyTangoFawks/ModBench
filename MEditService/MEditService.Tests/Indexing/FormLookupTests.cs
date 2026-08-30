@@ -12,8 +12,8 @@ namespace MEditService.Tests.Indexing;
 // ADR-0031: form_lookup population — mirrors FormReferencesTests.cs, the AC's named prior art.
 public class FormLookupTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordIndex OpenRepo()
     {

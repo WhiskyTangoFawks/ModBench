@@ -15,8 +15,8 @@ namespace MEditService.Tests.Query;
 // (same fixtures, same assertions) rather than the deleted repository method directly.
 public sealed class GetVmadTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static VmadData? GetVmad(IRecordReads repo, string formKey, string plugin, string origin)
     {

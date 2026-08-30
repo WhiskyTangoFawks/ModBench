@@ -4,5 +4,5 @@ namespace MEditService.Tests;
 
 public static class SharedSchemaReflector
 {
-    public static ISchemaReflector Instance { get; } = new SchemaReflector();
+    public static SchemaReflector Instance { get; } = new SchemaReflector();
 }

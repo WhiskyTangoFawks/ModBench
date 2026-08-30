@@ -43,7 +43,7 @@ namespace MEditService.Core.Edits;
 /// </summary>
 public sealed class RecordEditService(
     ILoadOrderMirror mirror,
-    ISchemaReflector schemaReflector,
+    SchemaReflector schemaReflector,
     ILogger<RecordEditService> logger)
 {
     private readonly RecordTextCodec _codec = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
@@ -1852,7 +1852,7 @@ public sealed class RecordEditService(
     /// children only exist in a plugin that also carries the container, and duplicating the container
     /// itself under a new identity does not create a group for a copy to sit in. Only <c>cell</c>/
     /// <c>wrld</c> are checked by name here — the other five have no schema table at all
-    /// (<see cref="ISchemaReflector"/> does not surface Landscape/NavigationMesh etc. as record types),
+    /// (<see cref="SchemaReflector"/> does not surface Landscape/NavigationMesh etc. as record types),
     /// so a copy naming one has already refused earlier as <see cref="RecordEditRefusal.RecordNotFound"/>;
     /// listing them again here would be dead code, not a second line of defence.
     /// </summary>

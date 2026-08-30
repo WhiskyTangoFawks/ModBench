@@ -24,8 +24,8 @@ namespace MEditService.Core.Records;
 // helpers because a PluginKey-keyed public method still delegates to them.
 public sealed class DuckDbRecordIndex : IRecordIndex
 {
-    private readonly ISchemaReflector _schemaReflector;
-    private readonly ITableDdlBuilder _ddlBuilder;
+    private readonly SchemaReflector _schemaReflector;
+    private readonly TableDdlBuilder _ddlBuilder;
     private readonly ILogger _logger;
     private IReadOnlyDictionary<string, RecordTableSchema>? _schemas;
     private readonly PlacementWalker _placementWalker = new();
@@ -61,8 +61,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private string? _indexVersion;
 
     public DuckDbRecordIndex(
-        ISchemaReflector schemaReflector,
-        ITableDdlBuilder ddlBuilder,
+        SchemaReflector schemaReflector,
+        TableDdlBuilder ddlBuilder,
         ILogger logger,
         string? databasePath = null)
     {

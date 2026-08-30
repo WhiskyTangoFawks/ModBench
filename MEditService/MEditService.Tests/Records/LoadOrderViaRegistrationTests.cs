@@ -15,8 +15,8 @@ namespace MEditService.Tests.Records;
 // the new order purely from that join, exactly as they would from a re-index at the new order.
 public class LoadOrderViaRegistrationTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordIndex OpenRepo()
     {

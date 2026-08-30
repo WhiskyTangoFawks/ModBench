@@ -392,7 +392,7 @@ The extension owns the editing backend process
   `modlist.txt` references a folder absent on disk; and **update available** (*planned*)
   when the Nexus version exceeds the installed `meta.ini` version.
 - The hover tooltip lists the conflicting files and the winner. File-level conflicts here
-  are distinct from record-level conflicts (the Editing context's `IConflictClassifier`) —
+  are distinct from record-level conflicts (the Editing context's `ConflictClassifier`) —
   each surfaces in its own view.
 
 ### Deploy / purge (Modbench-4, standalone mode)

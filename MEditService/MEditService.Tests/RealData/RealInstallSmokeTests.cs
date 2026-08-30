@@ -31,7 +31,7 @@ public sealed class RealInstallSmokeTests
     // this list — a release whose Mutagen record-type assembly isn't referenced (true for every
     // entry above except Fallout4 in this build) is not offered, not loaded, and not counted
     // towards `tested` below. SchemaReflector.IsSupported logs the skip warning itself.
-    private static readonly ISchemaReflector SchemaReflector = new SchemaReflector();
+    private static readonly SchemaReflector SchemaReflector = new SchemaReflector();
 
     /// <summary>
     /// Marks the smoke test skipped (not passed) unless <c>MEDIT_SMOKE=1</c>, so normal and

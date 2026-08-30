@@ -31,7 +31,7 @@ public static class ExternalChangeEditLander
 {
     public static ExternalChangeLandResult Keep(
         string modFolder, PluginKey plugin, string pluginPath, GameRelease gameRelease, IRecordReads reads,
-        ISchemaReflector reflector, ILogger? logger = null)
+        SchemaReflector reflector, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);

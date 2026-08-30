@@ -12,8 +12,8 @@ namespace MEditService.Tests.Query;
 public class FilterTests(TestPluginFixture fixture)
 {
     private readonly TestPluginFixture _fixture = fixture;
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private DuckDbRecordIndex LoadedRepository()
     {

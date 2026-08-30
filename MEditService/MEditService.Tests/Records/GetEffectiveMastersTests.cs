@@ -23,8 +23,8 @@ namespace MEditService.Tests.Records;
 /// </summary>
 public sealed class GetEffectiveMastersTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
     private static readonly string[] PluginOrder = ["Base.esm", "Ref.esm", "Unused.esm", "Patch.esp"];
 
     private readonly PluginFixtureData _fixture;

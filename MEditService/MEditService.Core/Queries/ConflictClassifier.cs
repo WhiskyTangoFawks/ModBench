@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
 
-public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = null) : IConflictClassifier
+public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = null)
 {
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 

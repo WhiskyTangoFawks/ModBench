@@ -24,8 +24,8 @@ namespace MEditService.Tests.Query;
 // method directly.
 public sealed class ConditionIndexerTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
     private static readonly IConditionCodec? Codec = ConditionCodecRegistry.For(GameRelease.Fallout4.ToCategory());
 
     private static IReadOnlyList<ConditionOwner> GetConditions(IRecordReads repo, string formKey, string plugin, string origin)

@@ -17,17 +17,17 @@ public sealed class LoadOrderMirror(
     IRecordIndexFactory repositoryFactory,
     ILogger<LoadOrderMirror>? logger = null,
     IModImporter? modImporter = null,
-    ISchemaReflector? schemaReflector = null) : ILoadOrderMirror, IDisposable
+    SchemaReflector? schemaReflector = null) : ILoadOrderMirror, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<LoadOrderMirror> _logger = logger ?? NullLogger<LoadOrderMirror>.Instance;
     private readonly IRecordIndexFactory _repositoryFactory = repositoryFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
     // #463: the same reflector ReconcileHeadStructurally's SourceRecordType.Resolve needs for a
-    // container's Head-only deletion — DI already registers ISchemaReflector as its own singleton
+    // container's Head-only deletion — DI already registers SchemaReflector as its own singleton
     // (Program.cs), so this is a direct constructor parameter rather than routed through
     // IRecordIndexFactory, which has no other reason to carry it.
-    private readonly ISchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
+    private readonly SchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
     private LoadOrder? _loadOrder;
     private IRecordIndex? _repository;
     // #274: the reconcile's own progress. Guarded by _lock like _loadOrder/_repository — written by
