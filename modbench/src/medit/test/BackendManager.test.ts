@@ -425,4 +425,34 @@ describe('BackendManager crash-restart / stop', () => {
 
     expect(statusBar.disposed).toBe(true);
   });
+
+  it('dispose() escalates to SIGKILL if the child never exits within the grace period, then confirms exit (#562 AC2 via deactivate())', async () => {
+    vi.useFakeTimers();
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const child = makeChild(); // never emits 'exit' on its own — models a hung, non-yielding backend
+    const spawn = vi.fn(() => { state.healthy = true; return child; });
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000,
+    });
+    await mgr.start();
+
+    const disposed = mgr.dispose();
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+
+    await vi.advanceTimersByTimeAsync(3000); // grace period elapses with no exit
+    expect(child.kill).toHaveBeenCalledTimes(2);
+    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    // Rival: today's dispose() is `this.stop(); this.statusBar.dispose();` — synchronous, with no
+    // grace period or escalation at all, so the status bar would already be disposed here
+    // regardless of a hung child ignoring SIGTERM. It also never sends a second kill().
+    expect(statusBar.disposed).toBe(false);
+
+    child.emit('exit', null); // the OS finally reaps it after SIGKILL
+    await disposed;
+
+    expect(statusBar.disposed).toBe(true);
+  });
 });

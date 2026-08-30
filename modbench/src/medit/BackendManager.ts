@@ -171,16 +171,29 @@ export class BackendManager extends EventEmitter {
   /** Send SIGTERM and wait for the child to actually exit. A backend mid a long, non-yielding
    *  synchronous request won't notice SIGTERM promptly (#562) — if it hasn't exited within
    *  `stopGracePeriodMs`, escalate to SIGKILL, which the OS does not let it ignore, and keep
-   *  waiting for the same real `'exit'` event. Never resolves on a guess. */
+   *  waiting for the same real `'exit'` event. Never resolves on a guess.
+   *
+   *  Residual race (accepted, #562 review): stop() clears `this.child` synchronously before this
+   *  resolves, so a same-instance start() racing in during the wait sees `!this.child` and could
+   *  spawn a second child before this one is confirmed dead. Not the leak AC1 targets — that's
+   *  the reload path, where a *new* BackendManager instance has no reference to the old child at
+   *  all, which deactivate() awaiting dispose() (and so this method) before teardown prevents.
+   *  This narrower case is same-instance and mitigated in practice: emitStatus('stopped') stays
+   *  deferred until this resolves, so the UI's relaunch affordance is disabled for the same
+   *  window. Left as a stated, accepted risk rather than guarded further — not a spec gap. */
   private killAndConfirmExit(child: BackendProcess): Promise<void> {
     return new Promise((resolve) => {
+      // A container, not a `let`, so it exists (as `undefined`) before onExit is even defined —
+      // safe even if 'exit' fired synchronously from kill() (the BackendProcess interface itself
+      // doesn't rule that out, though real Node child processes never do).
+      const escalateTimer: { current?: ReturnType<typeof setTimeout> } = {};
       const onExit = () => {
-        clearTimeout(escalate);
+        clearTimeout(escalateTimer.current);
         resolve();
       };
       child.on('exit', onExit);
       child.kill('SIGTERM');
-      const escalate = setTimeout(() => {
+      escalateTimer.current = setTimeout(() => {
         this.log(`[BackendManager] backend did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
         child.kill('SIGKILL');
       }, this.stopGracePeriodMs);
