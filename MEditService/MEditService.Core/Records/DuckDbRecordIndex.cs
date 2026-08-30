@@ -499,7 +499,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             $"SELECT body FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
 
-        if (committedBody == null)
+        // #573: computed ahead of the guard below (rather than only after it, as before) because the
+        // guard itself must consult Effective too — a record that never reached Head at all (still
+        // working-tree-only, e.g. straight off CreateWorkingTreeRecord) is exactly as real to this
+        // method as one that has, and both a delete (renumber's own "delete old FormKey" half) and an
+        // edit of such a record were being silently dropped here on the mistaken assumption that no
+        // Head answer meant no ref answered at all.
+        var existedBefore = RowExistsAtEffective(key, formKey);
+
+        if (committedBody == null && !existedBefore)
         {
             // Neither ref knows this record. A create is a lifecycle gesture with its own ticket, and
             // there is nothing here to derive its record_type/load_order_idx from, so this is a
@@ -511,7 +519,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return false;
         }
 
-        var existedBefore = RowExistsAtEffective(key, formKey);
         SnapshotCommittedIfFirstDivergence(key, formKey);
 
         if (body == null)

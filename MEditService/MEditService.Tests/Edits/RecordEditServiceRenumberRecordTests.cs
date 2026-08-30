@@ -36,6 +36,35 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Null(index.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
     }
 
+    /// <summary>
+    /// #573: a record that never reached Head — straight off <see cref="RecordEditService.CreateRecord"/>,
+    /// still working-tree-only (<c>Added</c>) — is exactly the shape the original bug report renumbered
+    /// (<c>workingTreeState: "Added"</c> on both old and new FormKeys). <see cref="TrackedModFixture"/>'s
+    /// own <c>Npc</c> is committed/Head-backed, so a regression built on it alone would pass unmodified —
+    /// this reaches the actual gap. Asserted at the same <see cref="IRecordReads"/> seam
+    /// <c>RecordQueryService.GetRecord</c>/<c>GetRecords</c> sit on (point-read and listing), not just
+    /// <see cref="IRecordIndex"/>, so this exercises what the HTTP layer actually answers.
+    /// </summary>
+    [Fact]
+    public void RenumberRecord_OnANeverCommittedAddedRecord_DropsOldFormKeyAtTheQueryLayer()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+        const string oldFormKey = "800000:Fixture.esp";
+        var seeded = service.CreateRecord(mod.Plugin, "npc_", "BrandNew", oldFormKey);
+        Assert.True(seeded.Applied, seeded.Message);
+
+        var result = service.RenumberRecord(mod.Plugin, oldFormKey);
+
+        Assert.True(result.Applied, result.Message);
+        var repository = mod.Sessions.Repository!;
+        Assert.Null(repository.GetDocument(oldFormKey));
+        Assert.NotNull(repository.GetDocument(result.NewFormKey!));
+        var listing = repository.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin, Limit: 50, Offset: 0));
+        Assert.DoesNotContain(listing.Items, r => r.FormKey == oldFormKey);
+        Assert.Contains(listing.Items, r => r.FormKey == result.NewFormKey);
+    }
+
     [Fact]
     public void RenumberRecord_WithARequestedTarget_UsesItExactly()
     {
