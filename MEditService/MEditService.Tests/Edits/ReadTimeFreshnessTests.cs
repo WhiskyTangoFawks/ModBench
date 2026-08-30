@@ -94,6 +94,30 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     }
 
     /// <summary>
+    /// #561 review: a source file rewritten with a leading UTF-8 BOM — content otherwise byte-for-byte
+    /// identical, the way some external editors write UTF-8 by default (root CLAUDE.md's
+    /// never-assume-exclusive-ownership rule) — must not read as a working-tree change. Before this
+    /// ticket the flat case read through <c>File.ReadAllText</c>, which strips a BOM via
+    /// <c>StreamReader</c>'s own byte-order-mark detection; the general resolver's own read has to
+    /// strip it the same way, or a BOM-carrying file mismatches the codec's own BOM-free body on
+    /// <i>every</i> read — a self-heal that writes the BOM'd text in as Effective, which still
+    /// mismatches Head, forever, rather than a one-time convergence.
+    /// </summary>
+    [Fact]
+    public void ASourceFileRewrittenWithAUtf8Bom_DoesNotReadAsPerpetualDirt()
+    {
+        var original = File.ReadAllBytes(_mod.NpcSourceFile);
+        var bomPrefixed = new byte[] { 0xEF, 0xBB, 0xBF }.Concat(original).ToArray();
+        File.WriteAllBytes(_mod.NpcSourceFile, bomPrefixed);
+
+        Reads().GetRecord(_mod.Npc.ToString());
+
+        var entry = _mod.Sessions.Index!.GetOverrideStack(_mod.Npc.ToString())!.Entries.Single();
+        Assert.False(entry.HasWorkingTreeChange);
+        Assert.Equal(entry.Head.Body, entry.Effective.Body);
+    }
+
+    /// <summary>
     /// #453 review finding 1, the path a user actually walks: the hand edit above, then <b>read
     /// again</b>.
     ///

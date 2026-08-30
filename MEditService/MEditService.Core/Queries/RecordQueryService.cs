@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
@@ -25,7 +26,8 @@ public sealed class RecordQueryService(
     // only so the many read-shape tests that construct this service directly keep compiling; the
     // default is the real validator, never a no-op, so production wiring cannot silently lose it.
     private readonly SourceFreshness _freshness =
-        freshness ?? new SourceFreshness(session, NullLogger<SourceFreshness>.Instance);
+        freshness ?? new SourceFreshness(
+            session, NullLogger<SourceFreshness>.Instance, new RecordTextCodec(NullLogger<RecordTextCodec>.Instance));
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
