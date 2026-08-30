@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { isMo2Instance } from './detectMo2Instance';
+import { isMo2Instance, mo2InstanceContext } from './detectMo2Instance';
 
 describe('isMo2Instance', () => {
   let root: string;
@@ -57,5 +57,24 @@ describe('isMo2Instance', () => {
     await mkdir(join(root, 'profiles', 'Default'));
     await writeFile(join(root, 'profiles', 'Default', 'modlist.txt'), '\x00not valid text\xff');
     expect(isMo2Instance(root)).toBe(true);
+  });
+});
+
+
+// #554: the welcome's viewsWelcome `when` clause needs a second key
+// (modbench.workspaceMo2CheckDone) to tell "checked, and it's not an instance" apart from
+// "never checked" — an unset context key reads identically to `false` under a plain `!key`
+// negation, so workspaceIsMo2Instance alone can't carry that distinction. This is the one
+// place either key's value is decided; every activation exit path (extension.ts) calls it
+// instead of setContext directly, so a future path can't set one key without the other.
+describe('mo2InstanceContext', () => {
+  it('always marks the check done, whether the workspace is an instance or not', () => {
+    expect(mo2InstanceContext(true)['modbench.workspaceMo2CheckDone']).toBe(true);
+    expect(mo2InstanceContext(false)['modbench.workspaceMo2CheckDone']).toBe(true);
+  });
+
+  it('carries the instance verdict through workspaceIsMo2Instance unchanged', () => {
+    expect(mo2InstanceContext(true)['modbench.workspaceIsMo2Instance']).toBe(true);
+    expect(mo2InstanceContext(false)['modbench.workspaceIsMo2Instance']).toBe(false);
   });
 });

@@ -22,6 +22,23 @@ describe('package.json viewsWelcome (#192)', () => {
     // workspace open at all. workspaceFolderCount is VS Code's own built-in key.
     expect(welcome!.when).toContain('workspaceFolderCount != 0');
   });
+
+  // #554: unset context keys read falsy under `!key`, so before activation ever runs,
+  // `!modbench.workspaceIsMo2Instance` was indistinguishable from a real "checked, not an
+  // instance" result — the welcome rendered for every workspace, valid or not, until the
+  // extension activated. modbench.workspaceMo2CheckDone is a second key set only once the
+  // check has actually run (extension.ts's mo2InstanceContext, on every exit path), so an
+  // unset check can never satisfy this clause. Exact-match, not .toContain: a loose
+  // substring check can't tell `modbench.workspaceMo2CheckDone` from
+  // `!modbench.workspaceMo2CheckDone` — the exact string can, and a rival that negates
+  // either term must fail here.
+  it('cannot render before the MO2 check has actually run (#554)', () => {
+    const welcome = (pkg.contributes.viewsWelcome as { view: string; when: string }[])
+      .find((w) => w.view === 'modbench.modList');
+    expect(welcome!.when).toBe(
+      'workspaceFolderCount != 0 && modbench.workspaceMo2CheckDone && !modbench.workspaceIsMo2Instance',
+    );
+  });
 });
 
 describe('package.json Referenced By panel migration (#282)', () => {
