@@ -39,7 +39,7 @@ public sealed class SpatialContainerMintBuilderTests
             cell.FormKey.ToString(), worldspace.FormKey.ToString(),
             BlockX: 3, BlockY: -2, SubX: 0, SubY: -1, GridX: 200, GridY: -199, IsInterior: false);
 
-        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(DestinationPlugin, worldspace, cellLocation, cell);
+        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(DestinationPlugin, worldspace, cellLocation, cell, GameRelease.Fallout4);
 
         var scratchDir = Directory.CreateTempSubdirectory("medit-mint-builder-test-").FullName;
         try

@@ -688,8 +688,7 @@ public sealed class RecordEditService(
             var cellRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
             ContainerChildFields.ClearAllChildSlots(cellRecord);
             return MintExteriorCell(
-                sourcePlugin, formKey, cellLocation.Value, cellRecord, document.RecordType,
-                destinationPlugin, destinationModFolder, index, release);
+                sourcePlugin, formKey, cellLocation.Value, cellRecord, destinationPlugin, destinationModFolder, index, release);
         }
         if (isCell && cellLocation?.IsInterior != true)
         {
@@ -782,38 +781,9 @@ public sealed class RecordEditService(
             var sourceCellLocation = index.GetCellLocation(sourcePlugin, cellFormKey);
             if (sourceCellLocation?.IsInterior == false && sourceCellLocation.Value.BlockX != null)
             {
-                var cellSchema = schemaReflector.GetSchemas(release)["cell"];
-                var bareCellRecord = MajorRecordInstantiator.Activator(FormKey.Factory(cellFormKey), release, cellSchema.RecordType);
-                PartialFormFlag.Set(bareCellRecord, true);
-
-                var childRecordForMint = _codec
-                    .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
-                    .GetAwaiter().GetResult();
-                var mintSlotName = placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
-                ContainerChildFields.AddChildToSlot(bareCellRecord, mintSlotName, childRecordForMint);
-
-                var mintResult = MintExteriorCell(
-                    sourcePlugin, cellFormKey, sourceCellLocation.Value, bareCellRecord, "cell",
+                return MintExteriorCellAroundPlacedReference(
+                    sourcePlugin, formKey, document, placement, cellFormKey, sourceCellLocation.Value,
                     destinationPlugin, destinationModFolder, index, release);
-                if (!mintResult.Applied) return mintResult;
-
-                // MintExteriorCell already wrote the worldspace's and cell's own rows (the REFR
-                // embedded in the cell's freshly-minted body); only the REFR's own row remains —
-                // the same "child first" ordering CreateInteriorCellParent's own sibling path uses,
-                // moot here since the cell's row already carries the child inline either way.
-                index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
-                mirror.ReapplyFilter();
-
-                if (logger.IsEnabled(LogLevel.Information))
-                {
-                    logger.LogInformation(
-                        "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
-                        "{DestinationPlugin} ({DestinationOrigin}) — minted exterior cell {CellFormKey} " +
-                        "and its worldspace as Partial Form ancestors",
-                        formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name,
-                        destinationPlugin.Origin, cellFormKey);
-                }
-                return RecordEditResult.Success();
             }
 
             if (sourceCellLocation?.IsInterior != true)
@@ -837,7 +807,7 @@ public sealed class RecordEditService(
         var childRecord = _codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
             .GetAwaiter().GetResult();
-        var slotName = placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
+        var slotName = SlotNameFor(placement);
         ContainerChildFields.AddChildToSlot(cellRecord, slotName, childRecord);
 
         var newCellBody = _codec.SerializeToBytesAsync(cellRecord, release).GetAwaiter().GetResult();
@@ -906,8 +876,7 @@ public sealed class RecordEditService(
     /// </summary>
     private RecordEditResult MintExteriorCell(
         PluginKey sourcePlugin, string cellFormKey, CellLocationRow cellLocation, IMajorRecord cellRecord,
-        string cellRecordType, PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index,
-        GameRelease release)
+        PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
     {
         if (!IsFreeAtBothRefs(index, destinationPlugin, cellFormKey))
         {
@@ -927,21 +896,19 @@ public sealed class RecordEditService(
         {
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey} — minting a " +
-                "second spatial subtree into an existing override needs spatial placement this write path " +
-                "does not support yet, tracked separately.");
+                $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey}, but not cell {cellFormKey} — " +
+                "placing a new cell inside an existing worldspace override is not supported yet (#597); " +
+                "only a destination with neither the worldspace nor the cell can be copied into.");
         }
 
         var sourceWorldspaceDocument = index.GetDocument(worldspaceFormKey, sourcePlugin)
             ?? throw new InvalidOperationException(
                 $"{sourcePlugin.Name} does not hold {worldspaceFormKey} — cell_location resolved this FormKey from its own row.");
 
-        var worldspaceSchema = schemaReflector.GetSchemas(release)["wrld"];
-        var worldspaceAncestor = MajorRecordInstantiator.Activator(FormKey.Factory(worldspaceFormKey), release, worldspaceSchema.RecordType);
-        PartialFormFlag.Set(worldspaceAncestor, true);
+        var worldspaceAncestor = BarePartialFormAncestor(worldspaceFormKey, "wrld", release);
 
         var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
-            destinationPlugin, worldspaceAncestor, cellLocation, cellRecord);
+            destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, release);
         var minted = SpatialContainerMint.MintAsync(syntheticMod, destinationModFolder, destinationPlugin.Name)
             .GetAwaiter().GetResult();
 
@@ -949,9 +916,64 @@ public sealed class RecordEditService(
             destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
             Encoding.UTF8.GetString(minted.WorldspaceBody));
         index.CreateCellLocation(destinationPlugin, cellLocation);
-        index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, cellRecordType, Encoding.UTF8.GetString(minted.CellBody));
+        index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, "cell", Encoding.UTF8.GetString(minted.CellBody));
 
         return RecordEditResult.Success();
+    }
+
+    /// <summary>
+    /// #549 Arc B: <see cref="CopyPlacedReferenceAsOverride"/>'s exterior half — the copied REFR's own
+    /// Cell does not exist in the destination and is a genuine SubCells cell, so the Cell is auto-created
+    /// bare and Partial Form (Q2, exactly as <see cref="CreateInteriorCellParent"/> does one level up)
+    /// with the REFR already in its source slot (<see cref="SlotNameFor"/>), and the pair is minted
+    /// through <see cref="MintExteriorCell"/>. The REFR's own row is written afterwards — the cell's
+    /// minted body already carries it inline either way.
+    /// </summary>
+    private RecordEditResult MintExteriorCellAroundPlacedReference(
+        PluginKey sourcePlugin, string formKey, RecordDocument document, PlacementRow placement, string cellFormKey,
+        CellLocationRow cellLocation, PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index,
+        GameRelease release)
+    {
+        var bareCellRecord = BarePartialFormAncestor(cellFormKey, "cell", release);
+        var childRecord = _codec
+            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
+            .GetAwaiter().GetResult();
+        ContainerChildFields.AddChildToSlot(bareCellRecord, SlotNameFor(placement), childRecord);
+
+        var mintResult = MintExteriorCell(
+            sourcePlugin, cellFormKey, cellLocation, bareCellRecord, destinationPlugin, destinationModFolder, index, release);
+        if (!mintResult.Applied) return mintResult;
+
+        index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
+        mirror.ReapplyFilter();
+
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
+                "{DestinationPlugin} ({DestinationOrigin}) — minted exterior cell {CellFormKey} " +
+                "and its worldspace as Partial Form ancestors",
+                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name,
+                destinationPlugin.Origin, cellFormKey);
+        }
+        return RecordEditResult.Success();
+    }
+
+    /// <summary>The Cell slot a <c>placement</c> row's own group name maps to — the two spellings
+    /// <see cref="ContainerChildFields"/> knows a placed reference by.</summary>
+    private static string SlotNameFor(PlacementRow placement) =>
+        placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
+
+    /// <summary>Q2's auto-created ancestor: bare, default-constructed fields, no EditorID, Partial Form
+    /// set before it is ever serialized — the one recipe <see cref="CreateInteriorCellParent"/>,
+    /// <see cref="MintExteriorCell"/> and <see cref="MintExteriorCellAroundPlacedReference"/> share.
+    /// <paramref name="schemaKey"/> is the schema table name (<c>"cell"</c>, <c>"wrld"</c>).</summary>
+    private IMajorRecord BarePartialFormAncestor(string formKey, string schemaKey, GameRelease release)
+    {
+        var schema = schemaReflector.GetSchemas(release)[schemaKey];
+        var record = MajorRecordInstantiator.Activator(FormKey.Factory(formKey), release, schema.RecordType);
+        PartialFormFlag.Set(record, true);
+        return record;
     }
 
     /// <summary>
@@ -987,9 +1009,7 @@ public sealed class RecordEditService(
             ?? throw new InvalidOperationException(
                 $"{sourcePlugin.Name} does not hold {cellFormKey} — CopyPlacedReferenceAsOverride resolved this FormKey from its own placement row.");
 
-        var cellSchema = schemaReflector.GetSchemas(release)["cell"];
-        var record = MajorRecordInstantiator.Activator(FormKey.Factory(cellFormKey), release, cellSchema.RecordType);
-        PartialFormFlag.Set(record, true);
+        var record = BarePartialFormAncestor(cellFormKey, "cell", release);
 
         var relativePath = InteriorCellDestinationPath(
             destinationModFolder, destinationPlugin.Name, cellFormKey, editorId: null, release);

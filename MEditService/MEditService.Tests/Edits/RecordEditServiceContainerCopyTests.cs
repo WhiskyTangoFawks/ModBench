@@ -200,6 +200,24 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Equal(expectedLocation, index.GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
     }
 
+    // #549 Arc B (AC1) review: "REFR in the same Persistent/Temporary slot as the source" — the
+    // Temporary half, so an implementation that hardcodes the Persistent slot cannot pass.
+    [Fact]
+    public void CopyRecordAsOverride_OnAGenuineExteriorTemporaryPlacedReference_LandsInTheTemporarySlot()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var index = fixture.Mirror.Index!;
+        Assert.True(index.GetDocument(fixture.ExteriorCell.ToString(), fixture.DestinationPlugin)!.IsPartialForm);
+        Assert.NotNull(index.GetDocument(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(index.GetDocument(fixture.ExteriorPersistentRef.ToString(), fixture.DestinationPlugin));
+        Assert.Equal("temporary", index.GetPlacement(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin)?.PlacementGroup);
+    }
+
     // #549 Arc B (AC1): the direct sibling of the placed-reference case above — copying the exterior
     // Cell itself as override. The requested record (the Cell) lands with its own real fields and is
     // NOT Partial Form; only the auto-created WRLD ancestor is. The rival this guards against: an

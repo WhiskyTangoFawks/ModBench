@@ -1,6 +1,7 @@
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Source;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Records;
@@ -42,7 +43,8 @@ internal static class SpatialContainerMint
     /// <paramref name="cellLocation"/> rather than deriving them from anything.
     /// </summary>
     internal static Fallout4Mod BuildSyntheticWorldspaceMod(
-        PluginKey destinationPlugin, IMajorRecord worldspaceAncestor, CellLocationRow cellLocation, IMajorRecord cell)
+        PluginKey destinationPlugin, IMajorRecord worldspaceAncestor, CellLocationRow cellLocation, IMajorRecord cell,
+        GameRelease release)
     {
         if (worldspaceAncestor is not Worldspace worldspace)
         {
@@ -73,7 +75,7 @@ internal static class SpatialContainerMint
 
         worldspace.SubCells.Add(block);
 
-        var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), Fallout4Release.Fallout4);
+        var mod = new Fallout4Mod(ModKey.FromFileName(destinationPlugin.Name), release.ToFallout4Release());
         mod.Worldspaces.Add(worldspace);
         return mod;
     }
@@ -91,14 +93,13 @@ internal static class SpatialContainerMint
     /// root-level header file, which is a bare default the destination's real, already-tracked header
     /// must not be merged against.</summary>
     internal static async Task<SpatialMintResult> MintAsync(
-        Fallout4Mod syntheticMod, string destinationModFolder, string destinationPluginName,
-        CancellationToken cancel = default)
+        Fallout4Mod syntheticMod, string destinationModFolder, string destinationPluginName)
     {
         var scratchDir = Directory.CreateTempSubdirectory("medit-spatial-mint-").FullName;
         try
         {
             await RecordTextCodecGeneratorSeed.SerializeWholeMod(
-                syntheticMod, scratchDir, InlineWorkDropoff.Instance, cancel);
+                syntheticMod, scratchDir, InlineWorkDropoff.Instance, CancellationToken.None);
 
             const string worldspacesFolder = "Worldspaces";
             const string recordDataFileName = "RecordData.json";
@@ -114,7 +115,7 @@ internal static class SpatialContainerMint
                 .Single(f => !string.Equals(f, worldspaceHeaderFile, StringComparison.Ordinal));
 
             var result = new SpatialMintResult(
-                await File.ReadAllBytesAsync(worldspaceHeaderFile, cancel), await File.ReadAllBytesAsync(cellFile, cancel));
+                await File.ReadAllBytesAsync(worldspaceHeaderFile), await File.ReadAllBytesAsync(cellFile));
 
             var destinationWorldspaces = Path.Combine(
                 destinationModFolder, SourceRecordPath.RootFor(destinationPluginName), worldspacesFolder);

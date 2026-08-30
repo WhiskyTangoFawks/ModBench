@@ -63,4 +63,27 @@ public sealed class ExteriorCellCopyCompileTests : IDisposable
         Assert.Contains(compiledCell!.Persistent, r => r.FormKey == _fixture.ExteriorPersistentRef);
         Assert.DoesNotContain(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
     }
+
+    // The Temporary half of "REFR in the same Persistent/Temporary slot as the source", at the wire.
+    [Fact]
+    public void CopyExteriorTemporaryPlacedReference_CompilesToBinary_InTheTemporarySlot()
+    {
+        var copyResult = EditService().CopyRecordAsOverride(
+            _fixture.SourcePlugin, _fixture.ExteriorTemporaryRef.ToString(), _fixture.DestinationPlugin);
+        Assert.True(copyResult.Applied, copyResult.Message);
+
+        var compileResult = CompileService().Compile(_fixture.DestinationPlugin, new CompileSource.WorkingTree());
+        Assert.True(compileResult.Succeeded, compileResult.RefusalReason);
+
+        var pluginPath = Path.Combine(_fixture.DestinationModFolder, ContainerCopyFixture.DestinationPluginName);
+        using var overlay = ModFactory.ImportGetter(
+            new ModPath(ModKey.FromFileName(ContainerCopyFixture.DestinationPluginName), pluginPath), GameRelease.Fallout4);
+        var compiledCell = ((IFallout4ModGetter)overlay).Worldspaces.Records
+            .Single(w => w.FormKey == _fixture.Worldspace)
+            .SubCells.SelectMany(b => b.Items).SelectMany(sb => sb.Items)
+            .Single(c => c.FormKey == _fixture.ExteriorCell);
+
+        Assert.Contains(compiledCell.Temporary, r => r.FormKey == _fixture.ExteriorTemporaryRef);
+        Assert.DoesNotContain(compiledCell.Persistent, r => r.FormKey == _fixture.ExteriorPersistentRef);
+    }
 }
