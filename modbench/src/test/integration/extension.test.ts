@@ -235,8 +235,10 @@ describe('modbench activation', () => {
   // which is exactly how "not an MO2 instance" used to flash for a valid one. There is no
   // public API to read a context key's current value back, and no property on TreeView (or
   // anywhere else) exposing whether its `viewsWelcome` content is currently showing — so this
-  // window can't be observed from extension test code, only from a human watching the real
-  // UI. See the PR description for the manual check.
+  // window can't be observed from extension test code, only from a human watching the real UI.
+  // Manual check (full procedure: issue #554): open a real MO2 instance as the workspace root
+  // and watch the Mods view from the moment the window appears — a *brief flash* of "This
+  // isn't an MO2 instance" counts as a fail, not just it staying up.
 });
 
 // ── Build integrity (#299) ─────────────────────────────────────────────────────
