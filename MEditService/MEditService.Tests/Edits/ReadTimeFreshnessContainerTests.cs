@@ -69,6 +69,34 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     }
 
     /// <summary>
+    /// #561 review (Spec axis, AC1's own wording — "the record editor <b>and compare grid</b>"): the
+    /// flat-record precedent (<c>ReadTimeFreshnessTests.RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheCompareGrid</c>)
+    /// has a dedicated <c>GetCompare</c> assertion alongside its <c>GetRecord</c> one; this is that
+    /// same coverage for a container, reusing the Quest case above rather than asserting only through
+    /// the record editor and assuming the compare grid follows because the plumbing is shared.
+    /// </summary>
+    [Fact]
+    public void RevertingAQuestsSourceFile_PutsTheCommittedValueBackInTheCompareGrid()
+    {
+        var file = _fixture.SourceFileContaining(ContainerModFixture.QuestEditorId);
+
+        var applied = EditService().EditField(_fixture.Plugin, _fixture.Quest.ToString(), "filter", Json("\"EditedFilter\""));
+        Assert.True(applied.Applied, applied.Message);
+        Assert.Equal(
+            "EditedFilter",
+            Reads().GetCompare(_fixture.Quest.ToString())!.Overrides.Single()
+                .Fields.Single(f => f.Metadata.Name == "filter").Value);
+
+        Git("restore", "--", RelativePath(file).Replace('\\', '/'));
+        Assert.Empty(_fixture.GitStatus());
+
+        Assert.NotEqual(
+            "EditedFilter",
+            Reads().GetCompare(_fixture.Quest.ToString())!.Overrides.Single()
+                .Fields.Single(f => f.Metadata.Name == "filter").Value);
+    }
+
+    /// <summary>
     /// The embedded-child case: a placed reference, which has no source file of its own at all — its
     /// text lives inline inside its owning Cell's <c>RecordData.json</c> (one of the five slots
     /// Spriggit serializes this way; #453). Reverting the <i>owner's</i> file — the only file git

@@ -128,7 +128,12 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     itself has moved, so a pass that refreshed only the working-tree side would leave Head serving
     bytes no ref holds. Cost is bounded by dirt, not by load order — git is consulted only for
     records the index already believes are dirty, so an unedited session runs no git processes on
-    the read path.
+    the read path. **Exception (#561):** that hash short-circuit answers nothing for an embedded
+    child (a placed reference, a landscape, a navmesh, a Worldspace's top cell) — it has no file of
+    its own, so its committed blob is its *owner's* whole document, and an owner-blob hash can never
+    equal a hash of just the child's own bytes. Its rebaseline check skips the short-circuit outright
+    and reads the owner's committed text in full (`git cat-file`) every time it runs, where a
+    flat/own-file record's equivalent check is a cheap `git ls-tree` hash compare first.
 - **The ref dimension has two values** (#415). `records` still holds exactly **one row per record
   copy**, and that row *is* `RecordRef.Effective`; the `ref` column says which state those bytes
   are, never which of several rows to pick. That is why every read and every generated

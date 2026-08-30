@@ -3,7 +3,6 @@ using MEditService.Core.Records;
 using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 
 namespace MEditService.Core.Source;
@@ -45,12 +44,15 @@ namespace MEditService.Core.Source;
 /// Control panel, a terminal commit, an agent's script), which no ingest can anticipate. What changed
 /// is that on a freshly loaded session the first read now finds the answer already correct.</para>
 /// </summary>
-public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFreshness> logger)
+public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFreshness> logger, RecordTextCodec codec)
 {
     // #561: the per-record codec RecordEditService already writes through — needed here too, now
     // that an embedded child's own body has to be extracted out of its owner's document rather than
-    // read straight off a file (see RecordBodyFromOwnerBytes).
-    private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
+    // read straight off a file (see RecordBodyFromOwnerBytes). DI-constructed like the rest of this
+    // class (#561 review) — RecordTextCodec is already an AddSingleton in Program.cs, so this is
+    // just threading the primary constructor's own parameter through rather than a second,
+    // hand-rolled instance bypassing it.
+    private readonly RecordTextCodec _codec = codec;
 
     /// <summary>
     /// Re-validates every tracked plugin's copy of <paramref name="formKey"/>. Safe to call for an
@@ -170,6 +172,17 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
     private string? RecordBodyFromOwnerBytes(byte[]? ownerBytes, SourceUnit unit, string formKey, GameRelease release)
     {
         if (ownerBytes == null) return null;
+
+        // #561 review: File.ReadAllText (what the flat case read through before this ticket) strips a
+        // leading UTF-8 BOM via StreamReader's own byte-order-mark detection; reading raw bytes here
+        // instead does not, so a BOM-carrying source file (a plausible external touch — some editors
+        // write one by default) would otherwise mismatch the codec's own BOM-free serialization on
+        // every single read, forever, since the "fix" a self-heal would apply (writing the BOM'd text
+        // into the index as Effective) never actually converges with committed. Stripped once here,
+        // on the raw bytes, so every path below — the flat return and the embedded deserialize — sees
+        // exactly what File.ReadAllText always did.
+        ownerBytes = StripUtf8Bom(ownerBytes);
+
         if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
 
         var owner = _codec.DeserializeFromBytesAsync(ownerBytes, release, unit.OwnerRecordType).GetAwaiter().GetResult();
@@ -178,6 +191,11 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
         var childBytes = _codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult();
         return Encoding.UTF8.GetString(childBytes);
     }
+
+    private static readonly byte[] Utf8Bom = [0xEF, 0xBB, 0xBF];
+
+    private static byte[] StripUtf8Bom(byte[] bytes) =>
+        bytes.AsSpan(0, Math.Min(bytes.Length, Utf8Bom.Length)).SequenceEqual(Utf8Bom) ? bytes[Utf8Bom.Length..] : bytes;
 
     /// <summary>
     /// The second question: has <c>HEAD</c> moved past what the index calls committed. Asked only for
@@ -218,6 +236,12 @@ public sealed class SourceFreshness(ISessionManager sessions, ILogger<SourceFres
         }
 
         if (SourceRepository.ReadCommittedSourceText(modFolder, relativePath) is not { } headOwnerText) return;
+
+        // #561 review: the same BOM defence as RecordBodyFromOwnerBytes, at the string level — a
+        // committed blob carrying a BOM is no less plausible than a working-tree file carrying one,
+        // and this text feeds the same comparison against a BOM-free committedBody. \uFEFF rather
+        // than a literal character in source, which an editor or a diff tool can silently mangle.
+        headOwnerText = headOwnerText.TrimStart('\uFEFF');
 
         // For a record's own file the owner text already *is* this record's committed text. For an
         // embedded child it is the owner's whole document, so the child's own bytes are extracted out
