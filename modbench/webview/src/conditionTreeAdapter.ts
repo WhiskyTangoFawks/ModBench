@@ -241,7 +241,7 @@ export interface ConditionTreeRows {
 // `client.conditionRunOnTargets()` fetch, GET /condition-run-on-targets) — defaulted to `[]` so
 // every existing call site that doesn't yet have it in hand keeps compiling (the Run On cell
 // simply has no options to show until the fetch resolves, the same transient-empty state any
-// other once-per-session catalog fetch has before it lands).
+// other once-per-load order catalog fetch has before it lands).
 export function buildConditionRows(
   conditions: ConditionCompare | null | undefined, runOnTargets: string[] = [],
 ): ConditionTreeRows {

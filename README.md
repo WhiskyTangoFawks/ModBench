@@ -20,9 +20,9 @@ treats a plugin the way an IDE treats a program:
   at Track time, so a plugin that can't be reproduced is refused rather than silently mangled.
 - **Edit** in the compare grid (or from a script, or from an agent) and the change lands as an
   ordinary working-tree edit. VS Code's own Source Control panel is the review surface: diff it,
-  discard it, commit it, branch it, rebase it. There is no bespoke "pending changes" layer.
-- **Save & Compile** writes the binary from the source when you say so. Masters are derived from
-  content; the compiler refuses what it can't emit and reports the rest as Problems.
+  discard it, commit it, branch it, rebase it.
+- **Save & Compile** writes the binary from the source when you say so. The compiler refuses what 
+  it can't emit and reports the rest as Problems.
 - **The plugin stays the source of truth.** It's what the game loads and what MO2, xEdit and
   everything else see. Modbench never assumes exclusive ownership of any file — external changes
   are detected and handled through one dialog (upstream update, or your own edit).
@@ -35,11 +35,11 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 | Surface | Spec | State |
 |---|---|---|
 | **Mods** — install from archive, separators, drag-order, enable, deploy (hardlinks), purge, profiles | [mods.md](docs/specs/mods.md) | Implemented |
-| **Plugins** — the one Plugins tree: `plugins.txt` order and checkboxes, and with a session running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
+| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD and conditions | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
 | **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
 | **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
-| **Loadout header** — profile, session, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |
+| **Loadout header** — profile, load order, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |
 | **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
 | **Downloads** — Nexus `nxm://` handler and queue | [downloads.md](docs/specs/downloads.md) | Specced |
@@ -64,7 +64,7 @@ Two bounded contexts with an enforced language boundary — **Mod Management** s
 and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin
 file at a physical path. [CONTEXT-MAP.md](CONTEXT-MAP.md) is the map;
 [CONTEXT.md](CONTEXT.md) and [modbench/src/modmanager/CONTEXT.md](modbench/src/modmanager/CONTEXT.md)
-are the glossaries. The extension spawns and owns the backend for a session
+are the glossaries. The extension spawns and owns the backend for a load order
 ([ADR-0022](docs/adr/0022-extension-owns-backend-lifecycle.md)); the Loadout side works with no
 backend at all.
 
@@ -79,6 +79,8 @@ interaction uses the native VS Code surface that already does the job
 
 Prerequisites: [.NET SDK](https://dotnet.microsoft.com/download) 10.x,
 [Node.js](https://nodejs.org/) 20 LTS or later, VS Code, and git on `PATH` (Track needs it).
+The backend test suite also wants `python3` on `PATH` — only to hold an index file from a second
+process in the two-windows tests (#588), which skip without it.
 On Ubuntu/Debian: `sudo apt-get install -y dotnet-sdk-10.0 nodejs npm`.
 
 ```bash
@@ -134,10 +136,8 @@ Python HTTP clients of the same API ([ADR-0024](docs/adr/0024-python-scripts-are
 ## References
 
 Modbench stands on [Mutagen](https://github.com/Mutagen-Modding/Mutagen) (plugin parsing and
-writing), [DuckDB](https://duckdb.org/) (the record index), and 25 years of
+writing), [DuckDB](https://duckdb.org/) (the record index), and 20+ years of
 [xEdit](https://github.com/TES5Edit/TES5Edit) UX refinement, and it manages
-[Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer) instances in their own format. The
-repository and the backend are still named `mEdit`/`MEditService` from before the mod-management
-side existed; "mEdit" now means the editor view specifically.
+[Mod Organizer 2](https://github.com/ModOrganizer2/modorganizer) instances in their own format.
 
 Licensed under the GPL — see [LICENSE](LICENSE).

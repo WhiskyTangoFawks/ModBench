@@ -5,6 +5,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Records;
 
+/// <summary>The one <see cref="IRecordIndexFactory"/>: a <see cref="DuckDbRecordIndex"/> per game,
+/// opened over the calling MO2 instance's persistent file when it names one.</summary>
 public sealed class DuckDbRecordIndexFactory(
     ISchemaReflector schemaReflector,
     ITableDdlBuilder ddlBuilder,
@@ -14,9 +16,11 @@ public sealed class DuckDbRecordIndexFactory(
     private readonly ITableDdlBuilder _ddlBuilder = ddlBuilder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    public IRecordIndex Create(GameRelease gameRelease)
+    public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {
-        var repo = new DuckDbRecordIndex(_schemaReflector, _ddlBuilder, _logger);
+        var repo = new DuckDbRecordIndex(
+            _schemaReflector, _ddlBuilder, _logger,
+            instanceRoot is null ? null : IndexFile.For(instanceRoot));
         repo.Initialize(gameRelease);
         return repo;
     }

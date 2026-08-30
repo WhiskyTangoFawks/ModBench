@@ -1,4 +1,4 @@
-using MEditService.Core.Session;
+using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -13,7 +13,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
     // #434: names for a fixture Fallout4.ccc, in the order given — a Creation Club catalog entry,
     // not a plugins.txt line. Kept separate from _plugins' Listed flag: BuildScattered ignores
     // Listed entirely (it has no plugins.txt), so a test controls "also *-listed" by hand-appending
-    // an ExplicitPluginInput, the same way its sibling missing/unparseable-plugin tests already do.
+    // an LoadOrderEntry, the same way its sibling missing/unparseable-plugin tests already do.
     private readonly List<string> _cccCatalog = [];
 
     public PluginFixtureBuilder WithPlugin(string name, Action<Fallout4Mod>? configure = null, bool listed = true, BinaryWriteParameters? writeParams = null, bool enabled = true, string origin = PluginOrigin.DataDirectory)
@@ -59,15 +59,18 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             builtMods.Add(mod);
         }
 
-        var pluginsTxtPath = Path.Combine(dataFolder, "Plugins.txt");
-        var lines = _plugins
+        // #592: there is no plugins.txt load path left to write one for — the ordered snapshot *is*
+        // the load order, exactly as it is on the scattered path. `Listed` is what puts a plugin in
+        // it (a file on disk that no line names is not in the snapshot at all here) and `Enabled` is
+        // the `*` prefix; every fixture copy is the winning one (ADR-0044) unless a test says otherwise.
+        var explicitPlugins = _plugins
             .Where(p => p.Listed)
-            .Select(p => $"{(p.Enabled ? "*" : "")}{p.Name}");
-        File.WriteAllText(pluginsTxtPath, string.Join("\n", lines) + "\n");
+            .Select((p, slot) => new LoadOrderEntry(p.Name, Path.Combine(dataFolder, p.Name), p.Origin, slot, p.Enabled, Winning: true))
+            .ToList();
 
         WriteCreationClubCatalog(root);
 
-        return new PluginFixtureData(dataFolder, pluginsTxtPath, root);
+        return new PluginFixtureData(dataFolder, explicitPlugins, root);
     }
 
     /// <summary>
@@ -87,7 +90,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         // #434: a cataloged CC plugin's file lives in the game directory too — never a mod
         // folder — the same as an implicit master. A test that also wants it to arrive via the
         // explicit list (simulating a plugins.txt `*` line pointing at the Data-folder copy) adds
-        // that ExplicitPluginInput by hand afterwards, same convention this method already uses for
+        // that LoadOrderEntry by hand afterwards, same convention this method already uses for
         // the missing/unparseable-plugin tests.
         var cccNames = _cccCatalog.ToHashSet(StringComparer.OrdinalIgnoreCase);
 
@@ -96,7 +99,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         Directory.CreateDirectory(gameDir);
 
         var builtMods = new List<Fallout4Mod>();
-        var explicitPlugins = new List<ExplicitPluginInput>();
+        var explicitPlugins = new List<LoadOrderEntry>();
         var i = 0;
         foreach (var (name, _, enabled, configure, writeParams, origin) in _plugins)
         {
@@ -113,7 +116,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
                 var folder = Path.Combine(root, $"mod-{i:D2}-{Path.GetFileNameWithoutExtension(name)}");
                 Directory.CreateDirectory(folder);
                 targetPath = Path.Combine(folder, name);
-                explicitPlugins.Add(new ExplicitPluginInput(name, targetPath, origin, enabled));
+                explicitPlugins.Add(new LoadOrderEntry(name, targetPath, origin, explicitPlugins.Count, enabled, Winning: true));
             }
 
             mod.WriteToBinary(targetPath, writeParams);
@@ -135,25 +138,46 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
     }
 }
 
-public sealed record PluginFixtureData(string DataFolder, string PluginsTxtPath, string CleanupRoot) : IDisposable
+/// <summary>
+/// A fixture whose plugins all live in one folder — the game's own <c>Data</c>, which is where
+/// implicit masters, DLC and Creation Club content really do sit. <see cref="Plugins"/> is the
+/// ordered load order to hand <c>LoadExplicit</c>, the one load there is (#592).
+/// </summary>
+public sealed record PluginFixtureData(
+    string DataFolder, IReadOnlyList<LoadOrderEntry> Plugins, string CleanupRoot) : IDisposable
 {
+    /// <summary>The MO2 instance root this fixture stands in for (#592 / ADR-0001) — the temp
+    /// directory the Data folder sits under, never the Data folder itself. Every load over HTTP
+    /// names one (the endpoint rejects a request that can't), so the API suite runs against a real
+    /// on-disk index under this root, torn down with the fixture. An in-process load may omit it,
+    /// asking for an in-memory index instead — which is what most unit fixtures do, since only the
+    /// warm-launch tests care what survives a load.</summary>
+    public string InstanceRoot => CleanupRoot;
+
     public void Dispose() => Directory.Delete(CleanupRoot, recursive: true);
 }
 
 /// <summary>
-/// Shared shape of a plugin-data fixture loadable through the API test host: a data folder +
-/// Plugins.txt built by <see cref="PluginFixtureBuilder"/>, plus a construction hook so generic
-/// consumers (<c>LoadedApiFixture&lt;TPlugin&gt;</c>) don't need a bare <c>new()</c> constraint.
+/// Shared shape of a plugin-data fixture loadable through the API test host: a data folder + the
+/// ordered load order built by <see cref="PluginFixtureBuilder"/>, plus a construction hook so
+/// generic consumers (<c>LoadedApiFixture&lt;TPlugin&gt;</c>) don't need a bare <c>new()</c>
+/// constraint.
 /// </summary>
 public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPluginFixture<TSelf>
 {
     string DataFolder { get; }
-    string PluginsTxtPath { get; }
+    IReadOnlyList<LoadOrderEntry> Plugins { get; }
+    string InstanceRoot { get; }
     static abstract TSelf Create();
 }
 
 public sealed record ScatteredFixtureData(
-    string Root, string GameDirectory, IReadOnlyList<ExplicitPluginInput> Plugins) : IDisposable
+    string Root, string GameDirectory, IReadOnlyList<LoadOrderEntry> Plugins) : IDisposable
 {
+    /// <summary>The MO2 instance root this fixture stands in for (#592 / ADR-0001) — the directory
+    /// the scattered mod folders sit under. Named for what a load asks for, since
+    /// <see cref="Root"/> is also the fixture's own cleanup root.</summary>
+    public string InstanceRoot => Root;
+
     public void Dispose() => Directory.Delete(Root, recursive: true);
 }

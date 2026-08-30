@@ -8,7 +8,7 @@ namespace MEditService.Tests.Source;
 /// <summary>
 /// #514: the promoted, Mutagen-free byte walker (<see cref="PluginBinaryWalk"/>) and its own
 /// tripwire (<see cref="PluginBinaryWalk.DroppedSignatures"/>/<see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>),
-/// tested directly against hand-built bytes — no Mutagen, no session, no Track. The real-fixture,
+/// tested directly against hand-built bytes — no Mutagen, no load order, no Track. The real-fixture,
 /// end-to-end case (<c>LitR - TrueStorms.esp</c> refused by name through <see cref="MEditService.Core.Source.TrackService"/>)
 /// lives in <c>MEditService.Tests.RealData.SubrecordInventoryRoundTripGateTests</c> instead — this
 /// file is the comparator's own unit contract.

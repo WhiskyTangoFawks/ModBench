@@ -1,8 +1,8 @@
 import type { components } from './generated/api';
 import type {
-  ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
+  ApiClient, PluginMetadata, MasterIssue, RecordSummary, LoadOrderStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary, PluginDeltaEntry, PluginDeltaResult,
+  UnansweredExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -20,20 +20,12 @@ type GeneratedMasterIssue = components['schemas']['MasterIssue'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
 type GeneratedConflictRecord = components['schemas']['ConflictRecord'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
-type GeneratedPluginDeltaEntry = components['schemas']['PluginDeltaEntry'];
 function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
   return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
 }
 
-// #544: PluginDeltaPresence is JsonStringEnumConverter'd at its own declaration (mirroring
-// ConflictAll's own attribute), so — unlike toTrackPhase's numeric-enum workaround above — the
-// generator already produces the string-literal union type here; trust the wire string.
-function toPluginDeltaEntry(e: GeneratedPluginDeltaEntry): PluginDeltaEntry {
-  return { formKey: e.formKey ?? '', editorId: e.editorId ?? null, presence: e.presence ?? 'BothDiffer' };
-}
-
 // #414 review F2: the generated TrackPhase type is a numeric union (0|1|2|3) — Swashbuckle's
-// schema generation doesn't pick up the global JsonStringEnumConverter for every enum (SessionState
+// schema generation doesn't pick up the global JsonStringEnumConverter for every enum (LoadOrderState
 // above has the identical, already-accepted mismatch), but the wire bytes are the real string
 // values ("Idle", "Parsing", ...), confirmed against the live endpoint. Cast through `unknown`
 // rather than trust the generated numeric type, same avoidance this file already gives origin/
@@ -66,23 +58,37 @@ function hasMatchingRecords(r: PluginResponse): boolean {
 
 // #449: the generated type is `boolean | undefined`/`string | null | undefined` for the same
 // NRT-unawareness (#297) every other optional-looking field on this wire shape already degrades
-// around — a backend predating this field reports "not pending", never a stale true. Its own
+// around — a backend predating this field reports "not stale", never a spurious true. Its own
 // function, same reason hasMatchingRecords above is one: keeps toPluginMetadata under its
 // complexity budget.
-function compileFreshnessOf(r: PluginResponse): { compilePending: boolean; lastCompiledAt: string | null } {
-  return { compilePending: r.compilePending ?? false, lastCompiledAt: r.lastCompiledAt ?? null };
+function compileFreshnessOf(r: PluginResponse): { compileStale: boolean; lastCompiledAt: string | null } {
+  return { compileStale: r.compileStale ?? false, lastCompiledAt: r.lastCompiledAt ?? null };
+}
+
+// ADR-0044: the three-fact registration and its two derived verdicts. A backend that omits them
+// (the generated wire type is NRT-unaware, #297) reads as an ordinary winning listed copy — the
+// shape every row had before losing copies were registered at all. Its own function for the same
+// reason hasMatchingRecords above is one: keeps toPluginMetadata under its complexity budget.
+function registrationOf(r: PluginResponse): Pick<PluginMetadata, 'enabled' | 'winning' | 'participates' | 'inLoadOrder'> {
+  return {
+    enabled: r.enabled ?? true,
+    winning: r.winning ?? true,
+    participates: r.participates ?? true,
+    inLoadOrder: r.inLoadOrder ?? true,
+  };
 }
 
 function toPluginMetadata(r: PluginResponse): PluginMetadata {
   return {
     name: r.name ?? '',
     path: r.path ?? '',
-    loadOrderIndex: r.loadOrderIndex ?? 0,
+    loadOrderIndex: r.loadOrderIndex ?? null,
     isLight: r.isLight ?? false,
     isMaster: r.isMaster ?? false,
     masters: r.masters ?? [],
     recordCount: r.recordCount ?? 0,
     isImmutable: r.isImmutable ?? false,
+    ...registrationOf(r),
     origin: requireOrigin(r),
     masterIssues: (r.masterIssues ?? []).map(toMasterIssue),
     hasMatchingRecords: hasMatchingRecords(r),
@@ -180,17 +186,17 @@ export interface CellPage {
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
-  // #307 / ADR-0035: the load's own progress, polled alongside the in-flight load POST. Separate
-  // from getPlugins() rather than folded into it: this one answers while the session is still
+  // #307 / ADR-0035: the reconcile's own progress, polled alongside the in-flight PUT. Separate
+  // from getPlugins() rather than folded into it: this one answers while the load order is still
   // incomplete, and it is the only read that can distinguish "not looked yet" from "no conflict".
-  getSessionStatus(): Promise<SessionStatus>;
+  getLoadOrderStatus(): Promise<LoadOrderStatus>;
   // #414 review F2: the Track gesture's own progress, polled alongside the in-flight track POST —
-  // same idiom as getSessionStatus above.
+  // same idiom as getLoadOrderStatus above.
   getTrackStatus(): Promise<TrackStatus>;
   // #417: every plugin currently holding an unanswered external-change question — polled the same
-  // way, no session dependency of its own (the queue lives on the backend's singleton watcher).
-  getExternalChangeStatus(): Promise<PendingExternalChange[]>;
-  // origin (#34 / ADR-0036): which copy of `plugin` to read, when the session holds two files of
+  // way, no load-order dependency of its own (the queue lives on the backend's singleton watcher).
+  getExternalChangeStatus(): Promise<UnansweredExternalChange[]>;
+  // origin (#34 / ADR-0036): which copy of `plugin` to read, when the load order holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
   getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]>;
@@ -204,13 +210,13 @@ export interface PluginRepository {
   // Issue #210: the FormKey picker's own search — free-text `query` matched against EditorID or
   // (as of #210) a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
   // (an unscoped/multi-type field searches across every record type, same as the deleted
-  // webview-side RecordSessionClient.searchRecords this replaces). Capped at 20 results, matching
+  // webview-side RecordPanelClient.searchRecords this replaces). Capped at 20 results, matching
   // the old picker's page size.
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
   // #416 review: which plugin (+ origin) a FormKey's *winning* override belongs to — the record
   // editor's Save & Compile icon resolves its active record's owning plugin through this, rather
   // than falling through to an unfiltered QuickPick that can compile the wrong plugin in a
-  // multi-mod session. undefined for an unknown FormKey (404) — never thrown, since "the actively
+  // multi-mod load order. undefined for an unknown FormKey (404) — never thrown, since "the actively
   // open record just isn't resolvable" is the caller's own fallback path, not a failure to report.
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
   // #494: the Copy as Override destination picker's own exclusion data — every plugin already
@@ -218,24 +224,16 @@ export interface PluginRepository {
   // /records/{formKey}/compare's existing Overrides list; no dedicated endpoint needed. Empty for
   // an unknown FormKey (404), the same "not a fault" posture getRecordOwner's own 404 case uses.
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
-  // #544: the Stack node's "Compare with winner" bulk seam — every FormKey where `plugin`'s copy
-  // at `winnerOrigin` and its copy at `peerOrigin` disagree, and only those. Review correction:
-  // unlike getRecordOverridePlugins' own 404-degrades-to-[] posture above, a vanished peer/winner
-  // (404) here must stay distinguishable from a genuinely empty delta — this is an explicit
-  // user-invoked action (ADR-0026), and "the comparison never ran" reads very differently from
-  // "it ran and found nothing," so the caller needs to tell the two apart rather than see the
-  // same empty array either way.
-  getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaResult>;
   // #427: the Renumber gesture's FormID input box's suggested default — the same both-refs
   // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
   // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
   // other read here.
   peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
   // Issue #211: the condition-function picker's catalog — every function name Mutagen resolves
-  // for the loaded session's game, backing the extension-host QuickPick. Degrades to [] on a
+  // for the held load order's game, backing the extension-host QuickPick. Degrades to [] on a
   // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
   // ensureOk-then-throw convention most reads here use) — a failed catalogue fetch must never
-  // surface as a raw error, same as the deleted webview-side RecordSessionClient
+  // surface as a raw error, same as the deleted webview-side RecordPanelClient
   // .conditionFunctions() it replaces.
   getConditionFunctions(): Promise<string[]>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
@@ -263,17 +261,6 @@ export interface PluginRepository {
   // worldspace-tree reads above. Cells/worldspaces are unaffected: this reads Quest/DialogTopic
   // containment only, never Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
-
-  // #448 / #34: the unlisted-plugin door — loads a file-level peer the load order doesn't name so
-  // its own Stack-node entry can lazy-load its records, read-only, on first expansion. Idempotent
-  // in effect (the backend re-serves an already-loaded copy rather than erroring — SessionManager's
-  // own LoadUnlistedPlugin doc comment), so a caller never has to track "have I already loaded
-  // this" itself.
-  loadUnlistedPlugin(path: string, origin: string): Promise<void>;
-  // #448 / #34: the mirror of loadUnlistedPlugin above — drops a peer's loaded copy, called when
-  // its Stack-node row collapses, so a browsed-then-abandoned peer doesn't linger in the session
-  // (#34 AC: "hidden means absent").
-  unloadUnlistedPlugin(plugin: string, origin: string): Promise<void>;
 }
 
 // #559 / ADR-0026: how long a tree-populating fetch (see `withTimeout` below) is given before it
@@ -297,7 +284,7 @@ export class ApiPluginRepository implements PluginRepository {
     this.log = log ?? (() => {});
   }
 
-  // Don't swallow read failures into []/empty: a 503 "No session loaded", a 500,
+  // Don't swallow read failures into []/empty: a 503 "No load order has been received", a 500,
   // or a network error must reach the tree so it renders an ErrorNode rather than
   // a silent empty list indistinguishable from genuinely empty data (issues #75,
   // #129, ADR-0026). A 200 with an empty/absent body is a legitimate empty result.
@@ -341,16 +328,16 @@ export class ApiPluginRepository implements PluginRepository {
     return (data ?? []).map(toPluginMetadata);
   }
 
-  // #307: the endpoint answers 200 in every state including "no session" (SessionEndpoints.cs),
+  // #307: the endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs),
   // so a non-ok is a genuine fault and gets the same ensureOk treatment as every other read here.
-  // Degrading it to an empty status would be indistinguishable from a load making no progress.
-  async getSessionStatus(): Promise<SessionStatus> {
-    const { data, error, response } = await this.client.GET('/session/status', {});
-    this.ensureOk('GET /session/status', response, error);
+  // Degrading it to an empty status would be indistinguishable from a reconcile making no progress.
+  async getLoadOrderStatus(): Promise<LoadOrderStatus> {
+    const { data, error, response } = await this.client.GET('/load-order/status', {});
+    this.ensureOk('GET /load-order/status', response, error);
     return {
       totalPlugins: data?.totalPlugins ?? 0,
       // The wire carries each entry's origin too; the consumer keys on filename alone (see
-      // SessionStatus in ApiClient.ts), so it is dropped here rather than carried unused.
+      // LoadOrderStatus in ApiClient.ts), so it is dropped here rather than carried unused.
       indexedPlugins: (data?.indexedPlugins ?? []).map((p) => p.name ?? ''),
       conflictsComputed: data?.conflictsComputed ?? false,
       failures: (data?.failures ?? []).map((f) => ({ name: f.name ?? '', reason: f.reason ?? 'Unknown error' })),
@@ -358,7 +345,7 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   // #414 review F2: same "always 200, never degrade a fault into a fake idle" posture as
-  // getSessionStatus above.
+  // getLoadOrderStatus above.
   async getTrackStatus(): Promise<TrackStatus> {
     const { data, error, response } = await this.client.GET('/plugins/track/status', {});
     this.ensureOk('GET /plugins/track/status', response, error);
@@ -370,8 +357,8 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   // #417: same "always 200, never degrade a fault into a fake empty queue" posture as
-  // getSessionStatus/getTrackStatus above.
-  async getExternalChangeStatus(): Promise<PendingExternalChange[]> {
+  // getLoadOrderStatus/getTrackStatus above.
+  async getExternalChangeStatus(): Promise<UnansweredExternalChange[]> {
     const { data, error, response } = await this.client.GET('/plugins/external-changes/status', {});
     this.ensureOk('GET /plugins/external-changes/status', response, error);
     return (data ?? []).map((p) => ({
@@ -451,18 +438,6 @@ export class ApiPluginRepository implements PluginRepository {
     return (data?.overrides ?? []).flatMap((o) => (o.plugin ? [o.plugin] : []));
   }
 
-  // #544: see the interface's own doc comment. 404 is the vanished-origin case
-  // (RecordQueryService.GetPluginDelta returning null) — reported as `{ ok: false, reason:
-  // 'vanished' }`, distinguishable from a genuinely empty `entries` list.
-  async getPluginDelta(plugin: string, winnerOrigin: string, peerOrigin: string): Promise<PluginDeltaResult> {
-    const { data, error, response } = await this.client.GET('/plugins/{plugin}/delta', {
-      params: { path: { plugin }, query: { winnerOrigin, peerOrigin } },
-    });
-    if (response.status === 404) return { ok: false, reason: 'vanished' };
-    this.ensureOk(`getPluginDelta(${plugin}, ${winnerOrigin}, ${peerOrigin})`, response, error);
-    return { ok: true, entries: (data ?? []).map(toPluginDeltaEntry) };
-  }
-
   async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {
     const { data, error, response } = await this.client.GET('/plugins/{plugin}/records/next-form-key', {
       params: { path: { plugin }, query: { origin } },
@@ -487,7 +462,7 @@ export class ApiPluginRepository implements PluginRepository {
 
   async setFilter(sql: string): Promise<string | null> {
     try {
-      const { error, response } = await this.client.POST('/session/filter', { body: { sql } });
+      const { error, response } = await this.client.POST('/load-order/filter', { body: { sql } });
       if (!response.ok) {
         const text = errorText(error);
         this.log(`[PluginRepository] setFilter failed (${response.status}): ${text}`);
@@ -502,7 +477,7 @@ export class ApiPluginRepository implements PluginRepository {
 
   async clearFilter(): Promise<void> {
     try {
-      const { error, response } = await this.client.DELETE('/session/filter', {});
+      const { error, response } = await this.client.DELETE('/load-order/filter', {});
       if (!response.ok) {
         const text = errorText(error);
         this.log(`[PluginRepository] clearFilter failed (${response.status}): ${text}`);
@@ -513,7 +488,7 @@ export class ApiPluginRepository implements PluginRepository {
   }
 
   async getActiveFilter(): Promise<string | null> {
-    const { data, error, response } = await this.client.GET('/session/filter', {});
+    const { data, error, response } = await this.client.GET('/load-order/filter', {});
     this.ensureOk('getActiveFilter', response, error);
     return data?.sql ?? null;
   }
@@ -614,18 +589,6 @@ export class ApiPluginRepository implements PluginRepository {
       this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
       return (data ?? []).map(toContainerChildSummary);
     });
-  }
-
-  async loadUnlistedPlugin(path: string, origin: string): Promise<void> {
-    return this.withTimeout(`loadUnlistedPlugin(${path}, ${origin})`, async (signal) => {
-      const { error, response } = await this.client.POST('/plugins/load', { body: { path, origin }, signal });
-      this.ensureOk(`loadUnlistedPlugin(${path}, ${origin})`, response, error);
-    });
-  }
-
-  async unloadUnlistedPlugin(plugin: string, origin: string): Promise<void> {
-    const { error, response } = await this.client.POST('/plugins/unload', { body: { plugin, origin } });
-    this.ensureOk(`unloadUnlistedPlugin(${plugin}, ${origin})`, response, error);
   }
 
 }

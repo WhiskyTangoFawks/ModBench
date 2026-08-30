@@ -8,12 +8,12 @@ namespace MEditService.Core.Records;
 /// </summary>
 /// <param name="Name">The plugin's bare filename (e.g. <c>Skyrim.esm</c>).</param>
 /// <param name="Origin">
-/// The mod folder that provided the physical file, or a reserved <see cref="Session.PluginOrigin"/>
+/// The mod folder that provided the physical file, or a reserved <see cref="Plugins.PluginOrigin"/>
 /// value. <b>Null-Origin semantics at this seam today:</b> the pinned contract's intent is that a
 /// null <see cref="Origin"/> resolves server-side among load-order members (ADR-0036/#306) — but
 /// <see cref="IRecordIndex"/>/<see cref="IRecordReads"/> do not perform that resolution themselves
 /// (#421 deliberately does not build it; the call site above the seam does, via
-/// <c>Session.PluginOriginResolver</c>, exactly as it did before this reshape). Concretely:
+/// <c>Plugins.PluginOriginResolver</c>, exactly as it did before this reshape). Concretely:
 /// <list type="bullet">
 /// <item>On an <b>identity-bearing</b> member (one that names a single indexed plugin row —
 /// <c>GetDocument(formKey, PluginKey)</c>, <c>Index</c>, <c>Unindex</c>,

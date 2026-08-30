@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -33,7 +33,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public string SourceModFolder { get; }
     public string DestinationModFolder { get; }
     public string GameDirectory { get; }
-    public SessionManager Sessions { get; }
+    public LoadOrderMirror Mirror { get; }
     public PluginKey SourcePlugin { get; } = new(SourcePluginName, SourceOrigin);
     public PluginKey DestinationPlugin { get; } = new(DestinationPluginName, DestinationOrigin);
 
@@ -186,18 +186,18 @@ public sealed class ContainerCopyFixture : IDisposable
         destinationMod.WriteToBinary(destinationPath);
         DestinationNpc = destinationNpc.FormKey;
 
-        Sessions = new SessionManager(
+        Mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)Sessions).LoadExplicit(
+        ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
             [
-                new ExplicitPluginInput(SourcePluginName, sourcePath, SourceOrigin, true),
-                new ExplicitPluginInput(DestinationPluginName, destinationPath, DestinationOrigin, true),
+                new LoadOrderEntry(SourcePluginName, sourcePath, SourceOrigin, Slot: 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(DestinationPluginName, destinationPath, DestinationOrigin, Slot: 1, Enabled: true, Winning: true),
             ],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Sessions.Session!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
+            .TrackAsync(Mirror.LoadOrder!, DestinationOrigin, SourcePreset.Edits).GetAwaiter().GetResult();
     }
 
     public static ContainerCopyFixture Create() => new();
@@ -223,7 +223,7 @@ public sealed class ContainerCopyFixture : IDisposable
 
     public void Dispose()
     {
-        Sessions.Dispose();
+        Mirror.Dispose();
         TryDelete(SourceModFolder);
         TryDelete(DestinationModFolder);
         TryDelete(GameDirectory);

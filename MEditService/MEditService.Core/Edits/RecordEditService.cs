@@ -1,11 +1,11 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -18,7 +18,7 @@ namespace MEditService.Core.Edits;
 /// <summary>
 /// The single write path (ADR-0041 / #415): a field edit on a tracked plugin becomes a working-tree
 /// change to that record's source JSON, and nothing else. There is no second path — no direct binary
-/// write, no staged pending state — which is why an untracked plugin is refused here rather than
+/// write, no staged intermediate state — which is why an untracked plugin is refused here rather than
 /// quietly served by some other mechanism.
 ///
 /// <para><b>The source text is the source, not the index.</b> Each edit reads the record's source
@@ -42,7 +42,7 @@ namespace MEditService.Core.Edits;
 /// Source Control panel.</para>
 /// </summary>
 public sealed class RecordEditService(
-    ISessionManager sessions,
+    ILoadOrderMirror mirror,
     ISchemaReflector schemaReflector,
     ILogger<RecordEditService> logger)
 {
@@ -58,9 +58,9 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
 
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         // The effective document, because that is what the user is looking at and editing from — a
         // second edit to the same record must build on the first, not on the committed baseline.
@@ -72,7 +72,7 @@ public sealed class RecordEditService(
                 $"{plugin.Name} does not hold record {formKey}.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        var release = mirror.LoadOrder!.GameRelease;
 
         // #453 scope 1: which file holds this record. A flat record's own, a container's
         // RecordData.json, or — for an embedded child (a placed ref, a landscape, a navmesh, a
@@ -109,7 +109,7 @@ public sealed class RecordEditService(
                     // problem that is not there.) States only what is observed.
                     $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
-                    "report it; otherwise reload the session so the index re-reads the tree.");
+                    "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
             target = found.Child;
         }
@@ -196,7 +196,7 @@ public sealed class RecordEditService(
         index.ApplyWorkingTreeChanges(plugin, deltas);
 
         // #422: the new value can flip filter membership either way.
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -387,9 +387,9 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
 
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var document = index.GetDocument(formKey, plugin);
         if (document == null)
@@ -399,7 +399,7 @@ public sealed class RecordEditService(
                 $"{plugin.Name} does not hold record {formKey}.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        var release = mirror.LoadOrder!.GameRelease;
 
         if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
             is not { } unit)
@@ -425,7 +425,7 @@ public sealed class RecordEditService(
                     RecordEditRefusal.SourceUnitNotFound,
                     $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
-                    "report it; otherwise reload the session so the index re-reads the tree.");
+                    "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
 
             var newOwnerBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
@@ -492,7 +492,7 @@ public sealed class RecordEditService(
 
         index.ApplyWorkingTreeChanges(plugin, deltas);
         // #422: a deleted row can no longer match an active filter.
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -560,11 +560,11 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
 
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
-        var release = sessions.Session!.GameRelease;
+        var release = mirror.LoadOrder!.GameRelease;
         var schemas = schemaReflector.GetSchemas(release);
         if (recordType == HeaderIndexer.TableName || !schemas.TryGetValue(recordType, out var schema))
         {
@@ -607,7 +607,7 @@ public sealed class RecordEditService(
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
         // #422: a brand-new row can newly match an active filter.
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -637,9 +637,9 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
 
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var document = index.GetDocument(formKey, sourcePlugin);
         if (document == null)
@@ -649,7 +649,7 @@ public sealed class RecordEditService(
                 $"{sourcePlugin.Name} does not hold record {formKey}.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        var release = mirror.LoadOrder!.GameRelease;
 
         // #440 Slices 6/7: a placed reference (a Cell's Persistent/Temporary child) has its own,
         // parent-chain-aware handling — it never reaches RefuseIfCopySourceHasNoContainerOfItsOwn's
@@ -733,7 +733,7 @@ public sealed class RecordEditService(
 
         index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, body);
         // #422: a brand-new row can newly match an active filter.
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -866,9 +866,9 @@ public sealed class RecordEditService(
                 RecordEditRefusal.ContainerCopyIndexUpdateFailedAfterWrite,
                 $"{cellFormKey}'s working-tree file was updated to carry {formKey}, but the index failed to " +
                 $"record it ({ex.Message}). The file itself is a real, reviewable working-tree change — check " +
-                "the Source Control panel, or reload the session to re-index it.");
+                "the Source Control panel, or relaunch mEdit to re-index it.");
         }
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -966,7 +966,7 @@ public sealed class RecordEditService(
     /// auto-created ancestor), so this half is genuine ADR-0034 parity, not an approximation of it.
     ///
     /// <para><b>Partial Form is not xEdit parity, and is not claimed as such — #440 review correction
-    /// (2026-08-28 grilling session, Q2 revisited).</b> The same ancestor-walk trace that confirms the
+    /// (2026-08-28 grilling load order, Q2 revisited).</b> The same ancestor-walk trace that confirms the
     /// bare-fields parity above also shows real xEdit's own <c>IsPartialForm := True</c> line sits
     /// inside that same <c>if aDeepCopy then</c> branch — so xEdit itself leaves an auto-created
     /// ancestor Cell unflagged, not Partial Form. Setting it here is a deliberate mEdit-specific
@@ -1003,7 +1003,7 @@ public sealed class RecordEditService(
 
         var bodyText = Encoding.UTF8.GetString(newBody);
         index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, sourceCellDocument.RecordType, bodyText);
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -1034,9 +1034,9 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
 
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var document = index.GetDocument(formKey, sourcePlugin);
         if (document == null)
@@ -1046,7 +1046,7 @@ public sealed class RecordEditService(
                 $"{sourcePlugin.Name} does not hold record {formKey}.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        var release = mirror.LoadOrder!.GameRelease;
         if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
         if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
@@ -1072,7 +1072,7 @@ public sealed class RecordEditService(
 
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
         // #422: a brand-new row can newly match an active filter.
-        sessions.ReapplyFilter();
+        mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
         {
@@ -1092,7 +1092,7 @@ public sealed class RecordEditService(
     /// untracked one — the only representation that exists for it.</summary>
     private string ReadCopySourceBody(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
-        if (ModFolders.TrackedOf(sessions.Session, sourcePlugin) is { } sourceModFolder)
+        if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is { } sourceModFolder)
         {
             var fullPath = SourceUnitResolver.FlatSourcePath(
                 sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
@@ -1100,7 +1100,7 @@ public sealed class RecordEditService(
 
             // #453's own never-assume-exclusive-ownership diagnostic (ReadRecordFromSource), for the
             // same case here: a tracked source whose file went missing outside Modbench between the
-            // session loading and this copy running — worth knowing about, unlike the untracked
+            // reconcileing and this copy running — worth knowing about, unlike the untracked
             // fallback below, which is the expected, silent case.
             logger.LogWarning(
                 "Source file {SourcePath} is missing; copying from the indexed document instead", fullPath);
@@ -1113,7 +1113,7 @@ public sealed class RecordEditService(
     /// an object to copy, unlike the override path.</summary>
     private IMajorRecord ReadCopySourceRecord(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
     {
-        if (ModFolders.TrackedOf(sessions.Session, sourcePlugin) is { } sourceModFolder)
+        if (ModFolders.TrackedOf(mirror.LoadOrder, sourcePlugin) is { } sourceModFolder)
         {
             var fullPath = SourceUnitResolver.FlatSourcePath(
                 sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
@@ -1174,9 +1174,9 @@ public sealed class RecordEditService(
     {
         if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
 
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
         var document = index.GetDocument(formKey, plugin);
         if (document == null)
@@ -1185,7 +1185,7 @@ public sealed class RecordEditService(
                 RecordEditRefusal.RecordNotFound, $"{plugin.Name} does not hold record {formKey}.");
         }
 
-        var release = sessions.Session!.GameRelease;
+        var release = mirror.LoadOrder!.GameRelease;
 
         // #461: the same record→source-unit resolution EditField/DeleteRecord use, replacing the old
         // blanket container refusal — a container's own directory, an embedded child, or a flat
@@ -1223,7 +1223,7 @@ public sealed class RecordEditService(
         var untrackedReferencers = referencers
             .Select(r => r.Plugin)
             .Distinct()
-            .Where(p => ModFolders.TrackedOf(sessions.Session, p) == null)
+            .Where(p => ModFolders.TrackedOf(mirror.LoadOrder, p) == null)
             .Select(p => p.Name)
             .Distinct()
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
@@ -1241,7 +1241,7 @@ public sealed class RecordEditService(
         {
             foreach (var (referencerFormKey, referencerPlugin) in referencers)
             {
-                var referencerModFolder = ModFolders.TrackedOf(sessions.Session, referencerPlugin)!;
+                var referencerModFolder = ModFolders.TrackedOf(mirror.LoadOrder, referencerPlugin)!;
                 RewriteReferenceField(index, referencerPlugin, referencerModFolder, referencerFormKey, formKey, targetFormKey, release);
                 writtenRepos.Add($"{referencerPlugin.Name} ({referencerPlugin.Origin})");
             }
@@ -1261,7 +1261,7 @@ public sealed class RecordEditService(
             // RewriteReferenceField's/RenumberTheRecordItself's own InvalidOperationException, and
             // that must carry this same written-repos disclosure rather than silently losing it by
             // falling through this catch to the endpoint's *different* InvalidOperationException
-            // handler ("no usable session" — a different question entirely, and a misleading answer
+            // handler ("no usable load order" — a different question entirely, and a misleading answer
             // to this one). Rethrown as IOException, always, regardless of the original exception's
             // type, so this reaches the client as the same 500 every other write-path fault does,
             // carrying this richer message instead of the bare one.
@@ -1278,7 +1278,7 @@ public sealed class RecordEditService(
             // failed. Re-applied once rather than per write — cheaper and no less correct, since
             // SetFilter re-derives the full matching set regardless of how many rows moved since it was
             // last run.
-            sessions.ReapplyFilter();
+            mirror.ReapplyFilter();
         }
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -1492,7 +1492,7 @@ public sealed class RecordEditService(
     private RecordEditResult? ResolveTargetFormKey(
         IRecordIndex index, PluginKey plugin, string? requestedFormKey, out string targetFormKey)
     {
-        var mod = sessions.Session!.GetMod(plugin.Name, plugin.Origin!);
+        var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
 
         if (requestedFormKey != null)
         {
@@ -1568,7 +1568,7 @@ public sealed class RecordEditService(
     /// <summary>
     /// #501: the shared ESL-flagged predicate (<see cref="PluginFlagPredicates.IsLight"/>) both the
     /// typed-target range check and <see cref="NextFreeNativeFormId"/>'s cap need, bridged for the
-    /// nullable <paramref name="mod"/> both callers may hold (a session can resolve a
+    /// nullable <paramref name="mod"/> both callers may hold (a load order can resolve a
     /// <see cref="PluginKey"/> whose <see cref="IModGetter"/> is not loaded) — falls back to the plain
     /// extension check <see cref="PluginFlagPredicates.IsLight"/> itself would run when the header is
     /// unavailable to inspect.
@@ -1585,7 +1585,7 @@ public sealed class RecordEditService(
     /// <see cref="RecordRef.Head"/> (a native the working tree has since deleted, whose ID must still
     /// not be reused ahead of compile). Floored at the game's own recommended starting FormID
     /// (<see cref="IModGetter.GetDefaultInitialNextFormID"/>, mirroring
-    /// <c>SessionManager.SafeNextFormId</c>'s identical floor) when <paramref name="mod"/> is
+    /// <c>LoadOrderMirror.SafeNextFormId</c>'s identical floor) when <paramref name="mod"/> is
     /// available, else the conservative literal floor every Bethesda game shares.
     ///
     /// <para>Null means the plugin's FormKey space is exhausted — every local ID up to
@@ -1596,7 +1596,7 @@ public sealed class RecordEditService(
     /// (<see cref="RecordEditRefusal.FormKeySpaceExhausted"/>), not an exception: a full plugin
     /// refusing a new record is an ordinary, expected outcome (review finding #1), the same doctrine
     /// as every other refusal on this write path, not a fault for the caller's generic exception
-    /// handling to (mis)classify as "no usable session."</para>
+    /// handling to (mis)classify as "no usable load order."</para>
     /// </summary>
     private static string? NextFreeNativeFormId(IRecordIndex index, PluginKey plugin, IModGetter? mod)
     {
@@ -1631,18 +1631,18 @@ public sealed class RecordEditService(
     /// <para>Returns the same typed <see cref="RecordEditResult"/> shape every other entry point on
     /// this write path does (review finding #2: brought to the same standard as
     /// <see cref="CreateRecord"/>/<see cref="RenumberRecord"/>, rather than a bespoke nullable-string
-    /// contract) — <see cref="RecordEditRefusal.RecordNotFound"/> when no session is loaded (matching
-    /// every sibling method's own "No session is loaded." refusal here) and
+    /// contract) — <see cref="RecordEditRefusal.RecordNotFound"/> when no load order is loaded (matching
+    /// every sibling method's own "No load order is loaded." refusal here) and
     /// <see cref="RecordEditRefusal.FormKeySpaceExhausted"/> when the plugin's FormKey space is full;
     /// <see cref="RecordEditResult.NewFormKey"/> carries the suggestion on success.</para>
     /// </summary>
     public RecordEditResult PeekNextFreeFormKey(PluginKey plugin)
     {
-        var index = sessions.Index;
+        var index = mirror.Index;
         if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No session is loaded.");
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
 
-        var mod = sessions.Session!.GetMod(plugin.Name, plugin.Origin!);
+        var mod = mirror.LoadOrder!.GetMod(plugin.Name, plugin.Origin!);
         var formKey = NextFreeNativeFormId(index, plugin, mod);
         return formKey != null
             ? RecordEditResult.Success(formKey)
@@ -1712,7 +1712,7 @@ public sealed class RecordEditService(
     /// </summary>
     private RecordEditResult? RefuseIfBlocked(PluginKey plugin, out string modFolder)
     {
-        if (ModFolders.TrackedOf(sessions.Session, plugin) is not { } folder)
+        if (ModFolders.TrackedOf(mirror.LoadOrder, plugin) is not { } folder)
         {
             modFolder = "";
             return RefuseUntracked(plugin);
@@ -1723,15 +1723,15 @@ public sealed class RecordEditService(
         // gesture on the single write path \u2014 checked before anything else, so neither of the write
         // path's two doors fires: the source file is never touched, and the index call that would
         // tell the DB about it is never reached.
-        return ExternalChangeDeferral.Pending(folder, plugin.Name) is { } pendingQuestion
-            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangePending, pendingQuestion)
+        return ExternalChangeDeferral.Unanswered(folder, plugin.Name) is { } question
+            ? RecordEditResult.Refused(RecordEditRefusal.ExternalChangeUnanswered, question)
             : null;
     }
 
     // AC4: two refusals, because there are two different ways out and a message that named neither
     // would be the "silent dead UI" this ticket exists to avoid.
     private RecordEditResult RefuseUntracked(PluginKey plugin) =>
-        ModFolders.Of(sessions.Session, plugin) is null
+        ModFolders.Of(mirror.LoadOrder, plugin) is null
             ? RecordEditResult.Refused(
                 RecordEditRefusal.PluginHasNoModFolder,
                 $"{plugin.Name} is a base-game plugin with no mod folder, so it cannot be tracked. " +

@@ -25,7 +25,7 @@ export interface RouteRecordPanelMessageDeps {
   // a pure level→method forward, no VS Code types beyond the injected Pick.
   channel: Pick<vscode.LogOutputChannel, 'debug' | 'info' | 'warn'>;
   // Issue #224: ADR-0026 surfacing for COPY_TO_CLIPBOARD's failure path — a rejected
-  // `vscode.env.clipboard.writeText` (headless/remote sessions, missing Linux clipboard tooling,
+  // `vscode.env.clipboard.writeText` (headless/remote windows, missing Linux clipboard tooling,
   // Wayland permissions) is an "explicit action failed" per the severity table (the user pressed
   // Ctrl+C), so it needs an error notification + log, not a silent swallow.
   reporter: Reporter;
@@ -40,7 +40,7 @@ export interface RouteRecordPanelMessageDeps {
   conditionFunctionPicker: ConditionFunctionPickerDeps | undefined;
   // Issue #230 (#426: restored): same per-panel reconstruction as formKeyPicker above (`reply`
   // must go back to the one panel that asked) — but this bundle also carries `tempRoot`/`log`,
-  // which are session-static and simply copied into every per-panel reconstruction rather than
+  // which are load order-static and simply copied into every per-panel reconstruction rather than
   // varying with it (see extendedFieldEditor.ts's own doc comment for why a real temp file is
   // the vehicle).
   extendedFieldEditor: ExtendedFieldEditorDeps | undefined;
@@ -66,7 +66,7 @@ export interface ConditionFunctionPickerDeps {
 // function's complexity down, and partly because the try/catch reads better as its own named
 // step: this message is itself called fire-and-forget (`void routeRecordPanelMessage(...)` at the
 // onDidReceiveMessage call site), so an unhandled rejection here would surface as nothing at all,
-// not even a silent swallow — a real failure mode for a clipboard write (headless/remote sessions,
+// not even a silent swallow — a real failure mode for a clipboard write (headless/remote windows,
 // missing Linux clipboard tooling, Wayland permissions), so it gets the same catch-log-surface
 // treatment every other catch in this codebase uses (modbench/CLAUDE.md: "no silent catch {}").
 async function copyToClipboard(reporter: Reporter, value: string): Promise<void> {

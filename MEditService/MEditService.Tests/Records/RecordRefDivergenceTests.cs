@@ -64,8 +64,8 @@ public sealed class RecordRefDivergenceTests : IDisposable
         var winnerPath = new ModPath(ModKey.FromFileName("Winner.esp"), Path.Combine(_fixture.DataFolder, "Winner.esp"));
         var baseMod = Fallout4Mod.CreateFromBinaryOverlay(basePath, Fallout4Release.Fallout4);
         var winnerMod = Fallout4Mod.CreateFromBinaryOverlay(winnerPath, Fallout4Release.Fallout4);
-        repo.Index(baseMod, 0, participates: true, key: new PluginKey(baseMod.ModKey.FileName.ToString(), "Data"));
-        repo.Index(winnerMod, 1, participates: true, key: new PluginKey(winnerMod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(baseMod, Registration.Participating(0), new PluginKey(baseMod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(winnerMod, Registration.Participating(1), new PluginKey(winnerMod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
     }

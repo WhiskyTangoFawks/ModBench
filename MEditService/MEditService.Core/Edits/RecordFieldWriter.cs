@@ -55,7 +55,7 @@ internal enum FieldApplyOutcome
 
 /// <summary>
 /// Applies one field value to one live Mutagen record — the single dispatch point every write path
-/// goes through, restored for #415 from the write half #410 retired with the pending-change model.
+/// goes through, restored for #415 from the write half #410 retired.
 /// What came back is only the dispatch: every codec it dispatches *to*
 /// (<see cref="ColumnSpec.Apply"/>, <see cref="VmadCodec"/>, <see cref="IConditionCodec"/>,
 /// <see cref="VmadPath"/>, <see cref="ConditionPath"/>) survived #410 untouched, so the field

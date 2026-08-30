@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -38,10 +38,10 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
     }
 
     private RecordEditService Service() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private RecordEditService ConditionService() =>
-        new(_cond.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_cond.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -70,7 +70,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_cond.GitStatus());
-        var body = _cond.Sessions.Index!.GetDocument(_cond.Cobj.ToString(), _cond.Plugin)!.Body!;
+        var body = _cond.Mirror.Index!.GetDocument(_cond.Cobj.ToString(), _cond.Plugin)!.Body!;
         Assert.Contains("GetIsID", body, StringComparison.Ordinal);
     }
 
@@ -85,7 +85,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
 
         public string ModFolder { get; }
         public string GameDirectory { get; }
-        public SessionManager Sessions { get; }
+        public LoadOrderMirror Mirror { get; }
         public PluginKey Plugin { get; } = new(PluginName, Origin);
         public FormKey Cobj { get; }
 
@@ -100,15 +100,15 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
             mod.WriteToBinary(pluginPath);
             Cobj = cobj.FormKey;
 
-            Sessions = new SessionManager(
+            Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)Sessions).LoadExplicit(
+            ((ILoadOrderMirror)Mirror).Reconcile(
                 GameDirectory,
-                [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)],
+                [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Sessions.Session!, Origin, SourcePreset.Edits)
+                .TrackAsync(Mirror.LoadOrder!, Origin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
 
@@ -120,7 +120,7 @@ public sealed class GenericFieldWriteDispatchTests : IDisposable
 
         public void Dispose()
         {
-            Sessions.Dispose();
+            Mirror.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }

@@ -1,0 +1,96 @@
+/** ADR-0044: the one path by which the Plugin load order reaches Editing — "recompute the
+ *  snapshot, PUT it", coalesced. Every trigger (activation, a profile switch, a `modlist.txt` or
+ *  `plugins.txt` write, an install or uninstall, a checkbox toggle, a drag reorder) calls
+ *  `request()`; a burst of them becomes one snapshot, and a request that arrives while a PUT is in
+ *  flight becomes exactly one more PUT after it, never a race of two.
+ *
+ *  Lives at the composition root and imports from neither bounded context (the same rule
+ *  `PluginsTreeComposite` and `nameFilter` keep — `src/test/contextBoundary.test.ts`): what a
+ *  snapshot *is* and how it is *sent* are both injected, so this module knows only that there is
+ *  a thing to recompute and a place to send it. */
+export interface LoadOrderSyncDeps {
+  /** Whether Editing is there to receive a snapshot at all. Mod Management works with no backend
+   *  running (root CLAUDE.md), which is the ordinary case, not a failure — so a request with no
+   *  receiver is dropped silently rather than surfacing as a doomed call. */
+  isReceiving: () => boolean;
+  /** Recompute the snapshot and send it. Its own failures are its own to report; this module only
+   *  needs it to settle. */
+  send: () => Promise<void>;
+  /** How long to wait for a burst to finish before sending. Two watchers can fire for one
+   *  mod-level change, and a drag reorder rewrites plugins.txt once per drop — none of those
+   *  deserve a PUT each. */
+  debounceMs: number;
+  log: (msg: string) => void;
+}
+
+export interface LoadOrderSync {
+  /** Something that feeds the load order changed: send a snapshot soon, coalesced with any other
+   *  request that lands in the same window. */
+  request(): void;
+  /** Send now, waiting for any in-flight send first — the activation path, which wants the
+   *  snapshot's outcome rather than a promise that one will happen. Any request queued behind the
+   *  in-flight send is folded into this one. */
+  flush(): Promise<void>;
+  dispose(): void;
+}
+
+export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let inFlight: Promise<void> | undefined;
+  let pending = false;
+  let disposed = false;
+
+  const run = async (): Promise<void> => {
+    if (!deps.isReceiving()) {
+      deps.log('[loadOrderSync] no receiver for the load order snapshot; dropping the request');
+      return;
+    }
+    try {
+      await deps.send();
+    } catch (e) {
+      // `send` reports its own failures (ADR-0026's explicit-action tier lives there); this is
+      // the backstop so a throw can never wedge every request queued after it.
+      deps.log(`[loadOrderSync] sending the load order snapshot threw: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  };
+
+  // One sender at a time. A request that lands mid-send sets `pending`, and the send loop
+  // re-runs once — with a fresh snapshot, so whatever landed mid-flight is sent whole rather than
+  // as a stale copy the in-flight send already missed.
+  const kick = (): Promise<void> => {
+    if (inFlight) { pending = true; return inFlight; }
+    inFlight = (async () => {
+      do {
+        pending = false;
+        await run();
+      } while (pending && !disposed);
+      inFlight = undefined;
+    })();
+    return inFlight;
+  };
+
+  return {
+    request() {
+      if (disposed) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = undefined; void kick(); }, deps.debounceMs);
+    },
+    async flush() {
+      if (disposed) return;
+      if (timer) { clearTimeout(timer); timer = undefined; }
+      // A pending timer's request is folded into this send: it asked for the same thing.
+      pending = false;
+      if (inFlight) {
+        pending = true;
+        await inFlight;
+        return;
+      }
+      await kick();
+    },
+    dispose() {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      timer = undefined;
+    },
+  };
+}

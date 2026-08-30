@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -20,28 +20,24 @@ namespace MEditService.Tests.Source;
 /// went red the moment ingest started seeding both refs from one whole-tree read, and what
 /// <c>IRecordIndex.MarkWorkingTreeOnly</c> exists to put right.</para>
 ///
-/// <para>Reloads the same mod folder in a brand-new <see cref="SessionManager"/> — the honest way to
-/// prove "survives a restart" rather than asserting anything about the first session's own state.</para>
+/// <para>Reloads the same mod folder in a brand-new <see cref="LoadOrderMirror"/> — the honest way to
+/// prove "survives a restart" rather than asserting anything about the first load order's own state.</para>
 /// </summary>
 public sealed class WorkingTreeCreateSurvivesRestartTests
 {
     [Fact]
-    public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterASessionRestart()
+    public void ARecordCreated_ButNeverCompiled_IsStillReadable_AfterARestart()
     {
         using var mod = TrackedModFixture.Tracked();
-        var created = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var created = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
         Assert.True(created.Applied, created.Message);
 
-        using var reloaded = new SessionManager(
+        using var reloaded = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)reloaded).LoadExplicit(
+        ((ILoadOrderMirror)reloaded).Reconcile(
             mod.GameDirectory,
-            [new ExplicitPluginInput(
-                TrackedModFixture.PluginName,
-                Path.Combine(mod.ModFolder, TrackedModFixture.PluginName),
-                TrackedModFixture.ModFolderOrigin,
-                true)],
+            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         // #459 regression guard: a silently-failed source ingest degrades to the binary (which never
@@ -50,7 +46,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
         // it. This caught a real one: git show HEAD:<path> glob-matches a missing bracketed "[N] "
         // path instead of failing, so a fresh, never-committed record's own Head lookup silently came
         // back "" instead of null (SourceRepository.ReadCommittedSourceText's own doc comment).
-        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
         var reread = reloaded.Index!.GetDocument(created.NewFormKey!, mod.Plugin);
         Assert.NotNull(reread);
         Assert.Equal("SurvivesRestart", reread!.EditorId);
@@ -58,27 +54,23 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
     }
 
     [Fact]
-    public void ARecordCreated_IsWinner_AfterASessionRestart()
+    public void ARecordCreated_IsWinner_AfterARestart()
     {
         using var mod = TrackedModFixture.Tracked();
-        var created = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var created = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .CreateRecord(mod.Plugin, "npc_", "SurvivesRestart");
 
-        using var reloaded = new SessionManager(
+        using var reloaded = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)reloaded).LoadExplicit(
+        ((ILoadOrderMirror)reloaded).Reconcile(
             mod.GameDirectory,
-            [new ExplicitPluginInput(
-                TrackedModFixture.PluginName,
-                Path.Combine(mod.ModFolder, TrackedModFixture.PluginName),
-                TrackedModFixture.ModFolderOrigin,
-                true)],
+            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         // #459 regression guard, same reasoning as the sibling test above.
-        Assert.Empty(((ISessionManager)reloaded).Session!.LoadFailures);
+        Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
-        // whole-session UpdateWinners() at the end of the load loop) leaves it_winner false.
+        // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.
         Assert.True(reloaded.Index!.GetDocument(created.NewFormKey!)!.IsWinner);
     }
 }

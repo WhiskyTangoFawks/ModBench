@@ -6,16 +6,26 @@ export type ApiClient = ReturnType<typeof createApiClient>;
 export interface PluginMetadata {
   name: string;
   path: string;
-  loadOrderIndex: number;
+  // ADR-0044: the name's plugins.txt slot past the backend's forced masters, or null when no line
+  // names this copy.
+  loadOrderIndex: number | null;
   isLight: boolean;
   isMaster: boolean;
   masters: string[];
   recordCount: number;
   isImmutable: boolean;
+  // ADR-0044: the two registration facts beside the slot, as Mod Management stated them, and the
+  // two facts the backend derives from all three — whether this copy competes for winner, and
+  // whether it is the copy plugins.txt names (the winning copy of a listed name). Two held copies
+  // can share a filename; the name-keyed hand-offs in extension.ts read the `inLoadOrder` one.
+  enabled: boolean;
+  winning: boolean;
+  participates: boolean;
+  inLoadOrder: boolean;
   // #275 / ADR-0036: the mod folder (or reserved PluginOrigin value) this plugin was resolved
   // from — on the wire since #269 (PluginResponse.Origin) but dropped here until now.
   origin: string;
-  // #277 / ADR-0037: this plugin's own declared masters that don't resolve in the session —
+  // #277 / ADR-0037: this plugin's own declared masters that don't resolve in the load order —
   // never a transitive fact about a master's own masters. Empty for a plugin with none.
   masterIssues: MasterIssue[];
   // #278 / ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
@@ -27,9 +37,9 @@ export interface PluginMetadata {
   // refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet". False for an
   // untracked plugin or one Track never parked a ref for (PluginResponse.FromMetadata's own
   // degrade-safe answer).
-  compilePending: boolean;
+  compileStale: boolean;
   // #449: the parked ref's own commit timestamp (ISO-8601), for the tooltip that names it. Null
-  // exactly when compilePending's own backing answer had nothing to compare against.
+  // exactly when compileStale's own backing answer had nothing to compare against.
   lastCompiledAt: string | null;
 }
 
@@ -38,20 +48,20 @@ export interface MasterIssue {
   kind: 'DirectlyMissing' | 'Unloadable';
 }
 
-/** #307 / ADR-0035: what the session can say about itself *while it is still loading* —
- *  `GET /session/status`, polled alongside the in-flight load POST.
+/** #307 / ADR-0035: what the load order can say about itself *while a reconcile is still running*
+ *  — `GET /load-order/status`, polled alongside the in-flight `PUT /load-order`.
  *
  *  `indexedPlugins` is deliberately flattened to filenames: it is consumed by
- *  `PluginsTreeComposite.setSession`, which keys on the plugin filename (the boundary object
+ *  `PluginsTreeComposite.setLoadOrder`, which keys on the plugin filename (the boundary object
  *  CONTEXT-MAP.md names). The wire also carries each entry's origin, which nothing on this path
  *  needs yet — mapped away here rather than carried unused.
  *
  *  The wire's `state` is deliberately *not* mapped. It is derived from `conflictsComputed` today
  *  and duplicates it; anything deciding whether to render conflict information must read
- *  `conflictsComputed` (SessionStatus.cs makes this the field's whole reason for existing), and
+ *  `conflictsComputed` (LoadOrderStatus.cs makes this the field's whole reason for existing), and
  *  offering a second, coincidentally-equal field would invite exactly the wrong read. */
-export interface SessionStatus {
-  /** How many plugins this load set out to open — the denominator for progress. Plugins that
+export interface LoadOrderStatus {
+  /** How many plugin copies the snapshot resolved to — the denominator for progress. Copies that
    *  fail to open still count toward it. */
   totalPlugins: number;
   /** Filenames of the plugins whose indexing has completed, in the order they landed. A plugin
@@ -62,13 +72,13 @@ export interface SessionStatus {
    *  same as "no conflicts" — the distinction this whole endpoint exists to make. */
   conflictsComputed: boolean;
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
-   *  the load finishes (ADR-0026). */
+   *  the reconcile finishes (ADR-0026). */
   failures: { name: string; reason: string }[];
 }
 
 /** #414 review F2: what `TrackService` can say about a Track in flight right now —
  *  `GET /plugins/track/status`, polled alongside the in-flight `POST /plugins/track`, the same
- *  idiom `SessionStatus`/`GET /session/status` above already established. `'Idle'` means nothing
+ *  idiom `LoadOrderStatus`/`GET /load-order/status` above already established. `'Idle'` means nothing
  *  is running (the poll's own rest state, and what the endpoint answers before any Track and
  *  again once one finishes). */
 export type TrackPhase = 'Idle' | 'Parsing' | 'Serializing' | 'Committing';
@@ -98,10 +108,10 @@ export interface CompileDiagnostic {
 }
 
 /** #417: one queued external-change question — `GET /plugins/external-changes/status`, polled the
- *  same way `TrackStatus`/`SessionStatus` are. `metaChanged` is the dialog's default-button tell
+ *  same way `TrackStatus`/`LoadOrderStatus` are. `metaChanged` is the dialog's default-button tell
  *  (trailers inform the default, never act — ADR-0041 amendment); `oldVersion`/`newVersion` are the
  *  evidence the pinned UX contract says must be shown when the tell fired, not hidden. */
-export interface PendingExternalChange {
+export interface UnansweredExternalChange {
   plugin: string;
   origin: string;
   metaChanged: boolean;
@@ -110,15 +120,15 @@ export interface PendingExternalChange {
 }
 
 /** #381: the two ways a tracked plugin's binary can turn up stale relative to what Modbench itself
- *  last knows — an interrupted compile (a pending journal marker) or a binary that could not be
+ *  last knows — an interrupted compile (an unfinished journal marker) or a binary that could not be
  *  read at all. Mirrors the backend's CrashRepairReason enum name exactly (no re-wording on the
  *  wire boundary, same posture WorkingTreeState above already established). */
 export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
 
-/** #381: one plugin's crash-repair offer, riding `POST /session/load[-explicit]`'s own response
- *  the same way `failures` already does (ADR-0026) — there is no separate poller or endpoint for
- *  this: the only way either reason can newly arise is a compile this same process drives, or a
- *  process restart, and a session load already observes both. */
+/** #381: one plugin's crash-repair offer, riding `PUT /load-order`'s own response the same way
+ *  `failures` already does (ADR-0026) — there is no separate poller or endpoint for this: the only
+ *  way either reason can newly arise is a compile this same process drives, or a process restart,
+ *  and every reconcile already observes both. */
 export interface CrashRepairOffer {
   plugin: string;
   origin: string;
@@ -203,35 +213,6 @@ export interface ConflictingRecord {
   conflictAll: ConflictAll;
 }
 
-/** #544: which side of a Stack-peer delta comparison a `PluginDeltaEntry` belongs to —
- *  `WinnerOnly`/`PeerOnly` are the two presence icons the Compare-with-winner picker/grid render;
- *  `BothDiffer` is an ordinary content difference, no icon of its own. Mirrors the backend's
- *  `PluginDeltaPresence` enum name exactly, same no-re-wording-at-the-wire-boundary convention
- *  `ConflictAll` above already established. */
-export type PluginDeltaPresence = 'WinnerOnly' | 'PeerOnly' | 'BothDiffer';
-
-/** #544: one FormKey `GetPluginDelta` reports — present in only one of the two copies, or present
- *  in both but resolving differently. A FormKey identical in both copies never appears here at
- *  all — the list itself is the absence signal, not a flag on an included row. */
-export interface PluginDeltaEntry {
-  formKey: string;
-  editorId: string | null;
-  presence: PluginDeltaPresence;
-}
-
-/** #544 review: a vanished peer/winner (404 — one of the two named origins is no longer a loaded
- *  copy of the plugin by the time this reaches the backend, e.g. a Stack peer collapsed between
- *  the context-menu click and the call landing) has to stay distinguishable from a genuinely empty
- *  delta — "the comparison never ran" is not the same fact as "it ran and found nothing," and
- *  `registerCompareWithWinnerCommand` must show the first as an error (ADR-0026: an explicit
- *  user-invoked action's failure gets a notification, never a silently-successful-looking empty
- *  result) rather than a false "no differences" toast. Mirrors `RecordFieldEditOutcome`'s own
- *  typed-outcome shape above rather than a sentinel value threaded through the ordinary success
- *  type. */
-export type PluginDeltaResult =
-  | { ok: true; entries: PluginDeltaEntry[] }
-  | { ok: false; reason: 'vanished' };
-
 // Worldspace / cell / placed-object tree (per-plugin).
 export interface WorldspaceSummary {
   formKey: string;
@@ -298,5 +279,14 @@ export function createApiClient(port: number, fetch?: (input: Request) => Promis
 export function errorText(error: unknown): string {
   if (typeof error === 'string') return error;
   if (error === undefined || error === null) return '';
+  // Every backend failure is RFC 7807 ProblemDetails (Results.Problem), whose `detail` is the
+  // sentence written for the user — "this instance's index is open in another Modbench window"
+  // (#588), "Game directory not found: …". A toast that stringifies the whole object buries that
+  // sentence in `{"type":…,"status":…}`; the problem's own text is the message.
+  if (typeof error === 'object') {
+    const problem = error as { detail?: unknown; title?: unknown };
+    if (typeof problem.detail === 'string' && problem.detail.length > 0) return problem.detail;
+    if (typeof problem.title === 'string' && problem.title.length > 0) return problem.title;
+  }
   return JSON.stringify(error);
 }

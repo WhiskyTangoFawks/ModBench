@@ -1,8 +1,8 @@
 # mEdit Record editor panel — Surface Specification
 
 **Status: Implemented.** Editing is git-native (ADR-0041): a field edit writes the record's
-working-tree source text directly — there is no pending/staged intermediate state, no Pending
-column, and no ChangeGroup. The grid, conflict colouring, and type-appropriate editors below all
+working-tree source text directly — there is no staged intermediate state and no second
+column standing in for one. The grid, conflict colouring, and type-appropriate editors below all
 ship and work on that write path. Review, commit, and revert happen in VS Code's native Source
 Control panel, one repo per tracked mod — see
 [Version control — Track, branch, compile](medit-version-control.md) for that surface; this
@@ -40,7 +40,7 @@ Editing context — operates on **records**, **FormKeys**, and **plugins**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
 here ([CONTEXT-MAP.md](../../CONTEXT-MAP.md), glossary: [CONTEXT.md](../../CONTEXT.md)).
 
-One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared session lifecycle,
+One of the mEdit view's surfaces — see [medit.md](medit.md) for the shared load order lifecycle,
 status bar, command palette, and architecture seams. Siblings:
 [Plugins tree](plugins.md) (what opens this panel),
 [Referenced By tree](medit-referenced-by.md),
@@ -57,7 +57,7 @@ reading: enums and flags are integers, FormKeys are opaque, structs and arrays n
 
 The edit itself is dangerous in a way a text editor's is not. A record is referenced by other
 records, lives in a file that may be read-only, and may be entangled with edits elsewhere in
-the session. An editor that writes on keystroke, or that hides which plugin a value will land
+the load order. An editor that writes on keystroke, or that hides which plugin a value will land
 in, produces broken plugins.
 
 ## Solution
@@ -280,7 +280,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   tooltip states the fact and names both surfaces that decide it (the Mods view, the Plugins view)
   rather than one gesture that would only fix one cause. Never "move it earlier in the load
   order" — that names the wrong axis for a shadowed copy (CONTEXT-MAP.md, CONTEXT.md). Left-click
-  collapses/expands a column (state persisted in session). The grid's scroll region is bound to the
+  collapses/expands a column (state persisted in load order). The grid's scroll region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
   many plugin columns) stays reachable at the bottom of the visible viewport regardless of
   vertical scroll position, instead of only appearing at the bottom of a possibly very tall table
@@ -453,23 +453,23 @@ from "no conflict"** actively misleads rather than merely omits.
 
 - **A record opened while the sweep is outstanding carries an explicit statement** that the
   comparison is incomplete and the colouring rendered from it is not final
-  (`recordPanelIncompleteMessage`, `medit/sessionProgress.ts`) — an in-panel banner, the compare
+  (`recordPanelIncompleteMessage`, `medit/loadOrderProgress.ts`) — an in-panel banner, the compare
   grid's own equivalent of the tree's `TreeView.message` (a `WebviewPanel` has no such native
   surface). It clears itself, no user action, once the sweep lands.
-- **Gate on `SessionStatus.conflictsComputed`, never on "is a load running"** — same rule
+- **Gate on `LoadOrderStatus.conflictsComputed`, never on "is a load running"** — same rule
   `plugins.md`'s own Progressive load section states, for the same reason: the sweep is whole-set,
-  so a live mutation can leave a *Ready* session with stale winners this panel must still caveat.
+  so a live mutation can leave a *Ready* load order with stale winners this panel must still caveat.
 - **A panel already open when the sweep lands refetches its comparison**, not just clears its own
-  banner over stale content — the extension host broadcasts `SESSION_CONFLICTS_COMPUTED` to every
-  open record panel exactly once, from `SessionController.reportLoadedSession`, the one point a
-  `loadExplicitSession` call is known to have completed the sweep. No poller: the tick stream
-  `plugins.md`'s own progress indicator polls (`GET /session/status`) stops at essentially the same
+  banner over stale content — the extension host broadcasts `CONFLICTS_COMPUTED` to every
+  open record panel exactly once, from `EditingController.reportReconciled`, the one point a
+  `putLoadOrder` call is known to have completed the sweep. No poller: the tick stream
+  `plugins.md`'s own progress indicator polls (`GET /load-order/status`) stops at essentially the same
   instant the backend sets `conflictsComputed`, so it cannot reliably observe the transition —
   reusing the load's own completion is the reliable choke point instead.
 - **Forward coupling ([#97](https://github.com/WhiskyTangoFawks/ModBench/issues/97)):** the
   broadcast above fires only on the load-completing false→true transition. `conflictsComputed` is
-  a separate field from session state precisely because live mutation (reorder, enable, disable)
-  will re-sweep a *Ready* session and can leave it stale again — true→false, the opposite
+  a separate field from load order state precisely because live mutation (reorder, enable, disable)
+  will re-sweep a *Ready* load order and can leave it stale again — true→false, the opposite
   direction — and nothing described here observes that. Live mutation owes this panel the same
   notification on the way *out* of settled, or the banner silently stops working the moment that
   ships.
@@ -549,12 +549,12 @@ No new colours: every token above is already sanctioned elsewhere in this codeba
 section's own Axis 1/Axis 2 tables' "no new colors" rule (ADR-0016's 2026-08-11 update).
 
 **Precedence: the M/A working-tree badge always wins when present.** An uncommitted local edit
-(`Modified`/`Added`) is the more actionable, session-local fact, so it takes the row's one
+(`Modified`/`Added`) is the more actionable, load order-local fact, so it takes the row's one
 `FileDecoration` slot; the conflict badge above shows only when the working-tree state lookup has
 nothing to say (`None`) for that row. Orchestrator-approved default at #364's plan gate — not
 dictated by ADR-0016, disclosed as a choice rather than buried.
 
-**Gated on `SessionStatus.conflictsComputed`, per #307's invariant** (`PluginTreeProvider
+**Gated on `LoadOrderStatus.conflictsComputed`, per #307's invariant** (`PluginTreeProvider
 .conflictAllOf`): renders nothing at all — never a neutral/placeholder badge — while conflicts
 are not yet computed, or for a record nothing has fetched a conflict state for yet. An absent
 badge must never be mistaken for "no conflict".
@@ -680,7 +680,7 @@ parameter each pick their own widget from their own current value's shape (a `{t
 reference}` pair; a plain number vs. a GLOB FormKey string, distinguished by JS type rather than a
 sibling Use-Global flag this row has no access to; a `{category, …}` tagged union) rather than a
 second per-plugin metadata branch `DiffRow` would otherwise need. Run On's own target enum is
-likewise a server catalog (#167: `GET /condition-run-on-targets`, `RecordSessionClient
+likewise a server catalog (#167: `GET /condition-run-on-targets`, `RecordPanelClient
 .conditionRunOnTargets()`), fetched once by `RecordPanel` and threaded through
 `buildConditionRows`/`conditionTreeAdapter.ts` into the field's own `enumValues` — not a hardcoded
 frontend list, so a future game's differently-shaped `RunOnType` enum (Skyrim/Starfield both differ
@@ -703,7 +703,7 @@ Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) applies t
 *zero* VMAD-specific code anywhere in `DiffRow`/`RecordPanel`; **struct**/**structList**
 (ArrayOfStruct) use `commitOverride` as described above, with structList's own instances exposed
 as array elements the same way (Remove/Move reuse the generic array machinery unmodified; instance
-**Add** is the one case still pending a follow-up, noted below). A **variable**-kind property is
+**Add** is the one case still awaiting a follow-up, noted below). A **variable**-kind property is
 `readOnly` — it was never editable under the pre-#231 model either.
 
 **Conditions' shape**: one **`type: 'array'`** row per condition-owning field (not a struct
@@ -841,7 +841,7 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    resolution, not a well-formedness proxy, so a dangling reference (one pointing outside the
    index) no longer looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
-   per-session, not persisted across restarts. Array **element values** offer the inline-edit
+   per-load order, not persisted across restarts. Array **element values** offer the inline-edit
    gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
    array's (or struct-array element's) whole value before the write, per the reconstruction
    CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture
@@ -856,7 +856,7 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    element whose discriminator is missing or unrecognized refuses naming the field, rather
    than guessing or crashing (#531; #360 landed the same polymorphism read-side).
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
-   change already overlaid (#413); there is no separate pending/dirty visual treatment on this
+   change already overlaid (#413); there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
    here ([medit-version-control.md](medit-version-control.md)).
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".

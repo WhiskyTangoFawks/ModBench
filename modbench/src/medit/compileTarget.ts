@@ -7,7 +7,7 @@
  *     menu invocation.
  *  2. No tree row, but the record editor has an active record — that record's *winning* plugin
  *     (`getRecordOwner`), so the title-bar icon compiles what's actually open, not whatever a
- *     QuickPick happens to default to. This is the fix for the bug where a multi-mod session's
+ *     QuickPick happens to default to. This is the fix for the bug where a multi-mod load order's
  *     editor icon risked compiling the wrong plugin.
  *  3. Neither (the palette with nothing focused) — the caller's own fallback (a QuickPick over
  *     every loaded plugin, in the extension.ts caller).
@@ -43,7 +43,7 @@ export async function resolveCompileTarget(
   if (activeFormKey !== undefined) {
     // #505: PluginRepository.getRecordOwner deliberately lets a transport failure (no backend to
     // ask — ADR-0026 background/recoverable tier at the repository boundary, same posture
-    // SessionController.resolveOrigin's own #505 fix documents) propagate as-is; a legitimate
+    // LoadOrderController.resolveOrigin's own #505 fix documents) propagate as-is; a legitimate
     // "record no longer exists" already resolves to `undefined` here with no message of its own,
     // falling through to the QuickPick fallback below. Treating a rejection the same way is exact
     // parity with that existing case, not a new outcome: this priority tier's only contract is

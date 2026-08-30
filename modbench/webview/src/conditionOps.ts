@@ -1,5 +1,5 @@
 // Condition-list defaults (#153). The structural add/remove/move ops themselves (ConditionListOp,
-// applyConditionListOp, currentConditionList, overlayPendingEdits/overlayField/overlayParam) were
+// applyConditionListOp, currentConditionList, overlayEdits/overlayField/overlayParam) were
 // this module's own bespoke machinery before #231 — deleted there once the condition list became
 // an ordinary `type: 'array'` row (conditionTreeAdapter.ts), reusing the generic array-op
 // machinery (recordUtils.ts's array mutation helpers) instead of a parallel condition-specific

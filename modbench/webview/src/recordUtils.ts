@@ -11,10 +11,10 @@ export function toStr(v: unknown): string {
 // columnKey() rather than re-derived at every render/lookup site — every consumer (DiffRow,
 // RecordPanel) reads `col.key` instead of `col.override.plugin`/`col.plugin`, which is what makes
 // two same-filename columns stop colliding on collapsedColumns/immutableSet/focusedCell/
-// overrideMap. `plugin`/`origin` stay present on the `pending` variant (mirroring
+// overrideMap. `plugin`/`origin` stay present on the overlay variant (mirroring
 // CompareOverride's own plugin+origin fields) only for display/decomposition, never parsed back
 // out of `key` itself.
-// #410/ADR-0041: one column per override. The pending companion column retired with the model
+// #410/ADR-0041: one column per override. The companion column retired with the model
 // that fed it, so this is no longer a union — kept as a discriminated shape anyway (`kind: 'disk'`)
 // because DiffRow's own render loop still branches on it and #415 brings a second column kind back.
 export type Column = { kind: 'disk'; key: ColumnKey; override: CompareOverride };
@@ -23,10 +23,10 @@ export function buildColumns(overrides: CompareOverride[]): Column[] {
   return overrides.map(o => ({ kind: 'disk' as const, key: columnKey(o.plugin, o.origin), override: o }));
 }
 
-// #304: the *reason* a column is read-only — `immutableSet` alone (RecordSessionClient.ts) says
+// #304: the *reason* a column is read-only — `immutableSet` alone (RecordPanelClient.ts) says
 // only that it is, which is genuinely ambiguous: a vanilla/DLC master is immutable and still named
 // by the load order, while a copy the load order doesn't name (ADR-0036, #34) is immutable
-// *because* it isn't. GameSession.AddUnlistedPlugin always sets IsImmutable:true alongside
+// *because* it isn't. a losing copy's registration derives IsImmutable:true alongside
 // InLoadOrder:false, so the two are never independent on the wire today — but a reader that only
 // checked isImmutable couldn't tell them apart, and PluginHeader needs to: the tooltip names a
 // different cause, and only the second dims (ADR-0035's "non-participating copies render dimmed").
@@ -55,7 +55,7 @@ export function readOnlyReason(
 
 // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
 // filename" — computed from the overrides *this* compare response carries (CompareResult.Overrides
-// via buildColumns' own input), never the session's whole plugin list. Two CompareOverride rows can
+// via buildColumns' own input), never the load order's whole plugin list. Two CompareOverride rows can
 // never share both plugin and origin (the backend's own (form_key, origin, plugin) key), so any
 // filename counted more than once here is necessarily two genuinely distinct loaded copies.
 export function collidingFilenames(overrides: CompareOverride[]): Set<string> {

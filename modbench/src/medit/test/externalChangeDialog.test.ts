@@ -2,9 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   buttonsInDefaultOrder, messageFor, groupByOrigin, runExternalChangeDialogs, ABSORB_BUTTON, KEEP_BUTTON,
 } from '../externalChangeDialog';
-import type { PendingExternalChange } from '../ApiClient';
+import type { UnansweredExternalChange } from '../ApiClient';
 
-function pending(overrides: Partial<PendingExternalChange> = {}): PendingExternalChange {
+function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return {
     plugin: 'Fixture.esp', origin: 'ModA', metaChanged: false, oldVersion: null, newVersion: null,
     ...overrides,
@@ -13,7 +13,7 @@ function pending(overrides: Partial<PendingExternalChange> = {}): PendingExterna
 
 describe('groupByOrigin', () => {
   it('groups plugins sharing one origin into a single repo group', () => {
-    const groups = groupByOrigin([pending({ plugin: 'A.esp', origin: 'ModA' }), pending({ plugin: 'B.esp', origin: 'ModA' })]);
+    const groups = groupByOrigin([unanswered({ plugin: 'A.esp', origin: 'ModA' }), unanswered({ plugin: 'B.esp', origin: 'ModA' })]);
 
     expect(groups).toHaveLength(1);
     expect(groups[0].origin).toBe('ModA');
@@ -22,9 +22,9 @@ describe('groupByOrigin', () => {
 
   it('keeps two different origins as two groups, in first-seen order', () => {
     const groups = groupByOrigin([
-      pending({ plugin: 'A.esp', origin: 'ModA' }),
-      pending({ plugin: 'X.esp', origin: 'ModB' }),
-      pending({ plugin: 'B.esp', origin: 'ModA' }),
+      unanswered({ plugin: 'A.esp', origin: 'ModA' }),
+      unanswered({ plugin: 'X.esp', origin: 'ModB' }),
+      unanswered({ plugin: 'B.esp', origin: 'ModA' }),
     ]);
 
     expect(groups.map((g) => g.origin)).toEqual(['ModA', 'ModB']);
@@ -37,23 +37,23 @@ describe('groupByOrigin', () => {
 // REPO (not per plugin) — a test asserts the exact button arrays for both classifier outcomes.
 describe('buttonsInDefaultOrder', () => {
   it('leads with Absorb Upstream Update when the meta tell fired', () => {
-    const group = groupByOrigin([pending({ metaChanged: true })])[0];
+    const group = groupByOrigin([unanswered({ metaChanged: true })])[0];
     expect(buttonsInDefaultOrder(group)).toEqual([ABSORB_BUTTON, KEEP_BUTTON]);
   });
 
   it('leads with Keep as My Edit when meta is unchanged', () => {
-    const group = groupByOrigin([pending({ metaChanged: false })])[0];
+    const group = groupByOrigin([unanswered({ metaChanged: false })])[0];
     expect(buttonsInDefaultOrder(group)).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
   });
 
   it('leads with Keep as My Edit when there is no meta trailer at all (also metaChanged: false on the wire)', () => {
-    const group = groupByOrigin([pending({ metaChanged: false, oldVersion: null })])[0];
+    const group = groupByOrigin([unanswered({ metaChanged: false, oldVersion: null })])[0];
     expect(buttonsInDefaultOrder(group)).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
   });
 
   it('both buttons are always present, in either order', () => {
     for (const metaChanged of [true, false]) {
-      const group = groupByOrigin([pending({ metaChanged })])[0];
+      const group = groupByOrigin([unanswered({ metaChanged })])[0];
       const buttons = buttonsInDefaultOrder(group);
       expect(buttons).toContain(ABSORB_BUTTON);
       expect(buttons).toContain(KEEP_BUTTON);
@@ -65,16 +65,16 @@ describe('buttonsInDefaultOrder', () => {
   // first-item read.
   it('leads with Absorb when only one of several plugins in the repo shows the meta tell', () => {
     const group = groupByOrigin([
-      pending({ plugin: 'A.esp', metaChanged: false }),
-      pending({ plugin: 'B.esp', metaChanged: true }),
+      unanswered({ plugin: 'A.esp', metaChanged: false }),
+      unanswered({ plugin: 'B.esp', metaChanged: true }),
     ])[0];
     expect(buttonsInDefaultOrder(group)).toEqual([ABSORB_BUTTON, KEEP_BUTTON]);
   });
 
   it('leads with Keep only when every plugin in the repo agrees meta is unchanged', () => {
     const group = groupByOrigin([
-      pending({ plugin: 'A.esp', metaChanged: false }),
-      pending({ plugin: 'B.esp', metaChanged: false }),
+      unanswered({ plugin: 'A.esp', metaChanged: false }),
+      unanswered({ plugin: 'B.esp', metaChanged: false }),
     ])[0];
     expect(buttonsInDefaultOrder(group)).toEqual([KEEP_BUTTON, ABSORB_BUTTON]);
   });
@@ -82,7 +82,7 @@ describe('buttonsInDefaultOrder', () => {
 
 describe('messageFor', () => {
   it('keeps the pinned single-plugin wording when the repo has exactly one changed plugin', () => {
-    const group = groupByOrigin([pending({ plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' })])[0];
+    const group = groupByOrigin([unanswered({ plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' })])[0];
 
     const { message, detail } = messageFor(group);
 
@@ -92,8 +92,8 @@ describe('messageFor', () => {
 
   it('names the repo and lists every changed plugin when the repo has more than one', () => {
     const group = groupByOrigin([
-      pending({ plugin: 'A.esp', origin: 'ModA', metaChanged: false }),
-      pending({ plugin: 'B.esp', origin: 'ModA', metaChanged: false }),
+      unanswered({ plugin: 'A.esp', origin: 'ModA', metaChanged: false }),
+      unanswered({ plugin: 'B.esp', origin: 'ModA', metaChanged: false }),
     ])[0];
 
     const { message, detail } = messageFor(group);
@@ -107,7 +107,7 @@ describe('runExternalChangeDialogs', () => {
   // Review fix 1: two plugins sharing one origin must produce exactly ONE modal, not two — the
   // repo, not the plugin, is the dialog's unit.
   it('shows exactly one modal for two plugins sharing one origin, and answers both the same way', async () => {
-    const items = [pending({ plugin: 'A.esp', origin: 'ModA', metaChanged: true }), pending({ plugin: 'B.esp', origin: 'ModA', metaChanged: true })];
+    const items = [unanswered({ plugin: 'A.esp', origin: 'ModA', metaChanged: true }), unanswered({ plugin: 'B.esp', origin: 'ModA', metaChanged: true })];
     const show = vi.fn().mockResolvedValue(ABSORB_BUTTON);
 
     const outcomes = await runExternalChangeDialogs(items, show);
@@ -119,14 +119,14 @@ describe('runExternalChangeDialogs', () => {
       ABSORB_BUTTON, KEEP_BUTTON,
     );
     expect(outcomes).toEqual([
-      { pending: items[0], answer: 'absorb' },
-      { pending: items[1], answer: 'absorb' },
+      { change: items[0], answer: 'absorb' },
+      { change: items[1], answer: 'absorb' },
     ]);
   });
 
   // The converse: two distinct origins still get their own modal each, queued sequentially.
   it('shows one modal per distinct origin, in default-order buttons, mapping each answer independently', async () => {
-    const items = [pending({ plugin: 'A.esp', origin: 'ModA', metaChanged: true }), pending({ plugin: 'X.esp', origin: 'ModB', metaChanged: false })];
+    const items = [unanswered({ plugin: 'A.esp', origin: 'ModA', metaChanged: true }), unanswered({ plugin: 'X.esp', origin: 'ModB', metaChanged: false })];
     const show = vi.fn()
       .mockResolvedValueOnce(ABSORB_BUTTON)
       .mockResolvedValueOnce(KEEP_BUTTON);
@@ -135,8 +135,8 @@ describe('runExternalChangeDialogs', () => {
 
     expect(show).toHaveBeenCalledTimes(2);
     expect(outcomes).toEqual([
-      { pending: items[0], answer: 'absorb' },
-      { pending: items[1], answer: 'keep' },
+      { change: items[0], answer: 'absorb' },
+      { change: items[1], answer: 'keep' },
     ]);
     expect(show).toHaveBeenNthCalledWith(1,
       'A.esp (in ModA) changed outside Modbench.',
@@ -149,14 +149,14 @@ describe('runExternalChangeDialogs', () => {
   });
 
   it('answers defer on Esc/dismiss (an undefined choice), for every plugin in the repo', async () => {
-    const items = [pending({ plugin: 'A.esp' }), pending({ plugin: 'B.esp' })];
+    const items = [unanswered({ plugin: 'A.esp' }), unanswered({ plugin: 'B.esp' })];
     const show = vi.fn().mockResolvedValue(undefined);
 
     const outcomes = await runExternalChangeDialogs(items, show);
 
     expect(outcomes).toEqual([
-      { pending: items[0], answer: 'defer' },
-      { pending: items[1], answer: 'defer' },
+      { change: items[0], answer: 'defer' },
+      { change: items[1], answer: 'defer' },
     ]);
   });
 
@@ -173,7 +173,7 @@ describe('runExternalChangeDialogs', () => {
         return Promise.resolve(KEEP_BUTTON);
       });
 
-    const items = [pending({ plugin: 'A.esp', origin: 'ModA' }), pending({ plugin: 'X.esp', origin: 'ModB' })];
+    const items = [unanswered({ plugin: 'A.esp', origin: 'ModA' }), unanswered({ plugin: 'X.esp', origin: 'ModB' })];
     const run = runExternalChangeDialogs(items, show);
 
     await Promise.resolve(); // let the first show() call happen
@@ -187,9 +187,9 @@ describe('runExternalChangeDialogs', () => {
 
   it('never queues a mega-dialog: exactly one showWarningMessage call per affected repo, regardless of how many plugins changed inside it', async () => {
     const items = [
-      pending({ plugin: 'A.esp', origin: 'ModA' }),
-      pending({ plugin: 'B.esp', origin: 'ModA' }),
-      pending({ plugin: 'C.esp', origin: 'ModA' }),
+      unanswered({ plugin: 'A.esp', origin: 'ModA' }),
+      unanswered({ plugin: 'B.esp', origin: 'ModA' }),
+      unanswered({ plugin: 'C.esp', origin: 'ModA' }),
     ];
     const show = vi.fn().mockResolvedValue(KEEP_BUTTON);
 

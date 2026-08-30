@@ -165,7 +165,7 @@ function rootLevelEntries(index: FileConflictIndex): ConflictEntry[] {
 }
 
 /** Winning absolute path of every root-level plugin the index knows, keyed by lowercased
- *  basename. Shared by the editing-session builder and the Plugin List's order check.
+ *  basename. Shared by the editing-load order builder and the Plugin List's order check.
  *  Root-level-only is this function's own documented contract: every key it produces is a bare
  *  basename (no `/`, since a root-level relativePath already is one), matching how both real
  *  callers (resolvePluginPaths here, computePluginOrderStatuses in statusChecker.ts) query it —
@@ -178,26 +178,10 @@ export function rootLevelWinners(index: FileConflictIndex): Map<string, string> 
 
 /** Winning mod's folder name for every root-level plugin the index knows, keyed by lowercased
  *  basename — the origin-resolution twin of rootLevelWinners above (#269 / ADR-0036). Same
- *  root-level-only contract; used by explicitSession.ts to record a mod-provided plugin's
+ *  root-level-only contract; used by loadOrderSnapshot.ts to record a mod-provided plugin's
  *  origin. */
 export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
-}
-
-/** Root-level entries (plugin filenames, never a nested file sharing one's basename — same
- *  exclusion rootLevelWinners/rootLevelWinnerMods already apply) that more than one enabled mod
- *  provides — "File conflict" (modmanager/CONTEXT.md). Keyed by lowercased filename like this
- *  module's other root-level accessors. #447: the one new fact the Plugins tree's file-override
- *  decoration needs — everything else (`providers`, `winner`, `winnerMod`) is already on
- *  `ConflictEntry`, so this is a filter over the existing index, not a new computation. An
- *  uncontested plugin (zero or one provider) is absent, never a "false"-carrying entry — absence
- *  itself is the "uncontested" signal, matching this module's existing convention. */
-export function rootLevelFileConflicts(index: FileConflictIndex): Map<string, ConflictEntry> {
-  return new Map(
-    rootLevelEntries(index)
-      .filter((entry) => entry.providers.length > 1)
-      .map((entry) => [foldPath(entry.relativePath), entry]),
-  );
 }
 
 /** Non-regular dirent policy inside `mods/<Mod>/` (#322). `references/modorganizer/`

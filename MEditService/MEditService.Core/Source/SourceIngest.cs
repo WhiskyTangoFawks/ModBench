@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -43,7 +44,7 @@ internal static class SourceIngest
     /// <para>That last case is not defensive padding: a mod folder can hold several plugins and be
     /// tracked for one of them, and a user can have their own <c>.git</c> in a mod folder that Track
     /// never touched. Re-derived on every call, never cached — the folder can be created, replaced or
-    /// shell-deleted between any two session loads (root CLAUDE.md's never-assume-exclusive-ownership
+    /// shell-deleted between any two reconciles (root CLAUDE.md's never-assume-exclusive-ownership
     /// rule; MO2's Replace install does exactly that).</para>
     /// </summary>
     internal static string? TreeFor(string origin, string pluginPath, string pluginName)
@@ -61,26 +62,45 @@ internal static class SourceIngest
     /// and deliberately the same <see cref="IRecordIndex.Index"/> call.
     ///
     /// <para>Blocking on the async door is the same trade <c>DuckDbRecordIndex.AppendDocument</c>
-    /// already makes for the codec: the session-load loop is synchronous and progressive by design
+    /// already makes for the codec: the reconcile loop is synchronous and progressive by design
     /// (#274), and making it async to match a signature that comes from Mutagen's generated
     /// serializers would push a false shape all the way up through <c>IRecordIndex</c>.</para>
     ///
     /// <para>Throws whatever the tree throws — a malformed document, a vanished directory, a locked
-    /// file. The caller decides what a failed source read means for the session; this method does not
+    /// file. The caller decides what a failed source read means for the load order; this method does not
     /// degrade on its own account, because "quietly served you the binary instead" is precisely the
     /// silent lie the caller's own visible failure exists to prevent.</para>
     /// </summary>
+    /// <param name="binaryPath">The plugin's compiled binary — indexed here only as the file this
+    /// key's rows are <i>stamped against</i> (#585), never as their content, which is the whole point
+    /// of this class. A tracked plugin re-ingests from source on every load regardless of that stamp
+    /// (<c>LoadOrderMirror.Reconcile</c> decides that); what the stamp buys is that a binary
+    /// deleted or replaced out of band still takes its stale rows with it at the next validation,
+    /// exactly as an untracked plugin's would.</param>
     internal static void Ingest(
-        IRecordIndex index, string modFolder, string sourceTree, int loadOrderIndex, bool participates,
-        PluginKey key, GameRelease gameRelease, ISchemaReflector schemaReflector, ILogger logger,
-        CancellationToken cancel = default)
+        IRecordIndex index, string modFolder, string sourceTree, Registration registration,
+        PluginKey key, string binaryPath, GameRelease gameRelease, ISchemaReflector schemaReflector,
+        ILogger logger, CancellationToken cancel = default)
     {
+        var timer = Stopwatch.StartNew();
         var mod = RecordTextCodecGeneratorSeed
             .DeserializeWholeMod(sourceTree, InlineWorkDropoff.Instance, cancel)
             .GetAwaiter().GetResult();
+        var deserializeMs = timer.ElapsedMilliseconds;
 
-        index.Index(mod, loadOrderIndex, participates, key);
+        timer.Restart();
+        index.Index(mod, registration, key, binaryPath);
+        var indexMs = timer.ElapsedMilliseconds;
+
+        timer.Restart();
         ReconcileHead(index, modFolder, key, gameRelease, schemaReflector, logger, mod);
+        // #113: per-phase load timing for the tracked-plugin ingest path.
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug(
+                "Ingested {Plugin} from source: deserialize {DeserializeMs} ms, index {IndexMs} ms, reconcile {ReconcileMs} ms",
+                key.Name, deserializeMs, indexMs, timer.ElapsedMilliseconds);
+        }
     }
 
     /// <summary>
@@ -198,8 +218,8 @@ internal static class SourceIngest
             if (headText == null)
             {
                 // In the working tree, at no commit: a record created and not yet committed. #427's
-                // write path never runs `git add`, so this is the ordinary shape of a pending create
-                // (an untracked "??" entry), not a rare one.
+                // write path never runs `git add`, so this is the ordinary shape of a working-tree
+                // create (an untracked "??" entry), not a rare one.
                 workingTreeOnly.Add(record.FormKey.ToString());
                 continue;
             }

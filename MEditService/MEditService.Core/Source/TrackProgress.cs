@@ -19,8 +19,8 @@ public enum TrackPhase
 
 /// <summary>What <see cref="TrackService"/> can say about a Track in flight right now — the read
 /// behind <c>GET /plugins/track/status</c>, polled alongside the still in-flight
-/// <c>POST /plugins/track</c>, the same idiom <c>SessionStatus</c>/<c>GET /session/status</c>
-/// already established for the session load. One shared instance on the singleton service, not
+/// <c>POST /plugins/track</c>, the same idiom <c>LoadOrderStatus</c>/<c>GET /load-order/status</c>
+/// already established for the reconcile. One shared instance on the singleton service, not
 /// per-origin: Track is a single, deliberate user gesture — nothing today runs two at once, and
 /// the AC only asks that a mega-plugin's own long Track narrates itself.
 ///

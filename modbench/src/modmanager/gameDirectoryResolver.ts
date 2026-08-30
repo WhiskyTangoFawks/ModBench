@@ -3,7 +3,7 @@
 // re-resolved fresh. `modbench.mods.gameDirectory` is editable while Modbench runs, so the two
 // could name different folders and a new consumer had no way to tell which one was safe to reach
 // for. This resolver removes the choice: memoised, invalidated only when the setting itself
-// changes, and the one thing every consumer (views, session launch, deploy) calls through.
+// changes, and the one thing every consumer (views, load order launch, deploy) calls through.
 //
 // Pure over injected config/detection/change-notification, like `gameDirectory.ts` itself — no
 // vscode import, unit-testable without a VS Code harness.

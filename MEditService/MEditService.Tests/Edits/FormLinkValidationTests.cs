@@ -21,7 +21,7 @@ public sealed class FormLinkValidationTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService Service() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -73,7 +73,7 @@ public sealed class FormLinkValidationTests : IDisposable
         // What it no longer is, is somewhere a link can point: this is exactly the divergence AC3
         // means by "checks read effective state".
         File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
-        _mod.Sessions.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
+        _mod.Mirror.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
 
         Assert.NotEmpty(_mod.GitShowHead(_mod.RelativeSourcePath(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId)));
 

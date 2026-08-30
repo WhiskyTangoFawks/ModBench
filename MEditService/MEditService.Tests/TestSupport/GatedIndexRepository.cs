@@ -24,7 +24,7 @@ internal sealed class GatedIndexRepositoryFactory(IRecordIndexFactory inner, str
     /// a load can assert on the abandoned one as well as the survivor.</summary>
     public List<GatedIndexRepository> Created { get; } = [];
 
-    public IRecordIndex Create(GameRelease gameRelease)
+    public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)
     {
         // Only the first load is gated: a test that supersedes one load with another wants the
         // second to run unobstructed to completion, and a second park would just be scaffolding to
@@ -62,7 +62,7 @@ internal sealed class GatedIndexRepository(
     public bool WinnersComputed { get; private set; }
     public bool Disposed { get; private set; }
 
-    public override void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key)
+    public override void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null)
     {
         var pluginName = plugin.ModKey.FileName.ToString();
         if (gateBefore != null && pluginName.Equals(gateBefore, StringComparison.OrdinalIgnoreCase))
@@ -77,7 +77,7 @@ internal sealed class GatedIndexRepository(
         if (pluginName.Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"injected index failure for {pluginName}");
 
-        base.Index(plugin, loadOrderIndex, participates, key);
+        base.Index(plugin, registration, key, filePath);
         Indexed.Add(pluginName);
     }
 

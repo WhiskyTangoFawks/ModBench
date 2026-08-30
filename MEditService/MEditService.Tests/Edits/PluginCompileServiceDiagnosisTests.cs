@@ -36,7 +36,7 @@ public sealed class PluginCompileServiceDiagnosisTests : IDisposable
         File.WriteAllText(npcFile, original.Replace(_mod.Race.ToString(), "NOT-A-FORMKEY", StringComparison.Ordinal));
 
         var compileService = new PluginCompileService(
-            _mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            _mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
         var result = compileService.Compile(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.False(result.Succeeded);

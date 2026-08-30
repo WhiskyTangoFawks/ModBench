@@ -1,10 +1,10 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -320,7 +320,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     {
         using var scope = new MutationScope(fixture);
 
-        var npc = scope.Sessions.Index!
+        var npc = scope.Mirror.Index!
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: scope.Plugin, Limit: 1))
             .Items[0];
         // #459: SourceUnitResolver rather than SourceRecordPath.For directly — For now needs an order
@@ -331,7 +331,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
         var before = CompileRoundTripGateFixture.ReadSourceTree(scope.ModFolder);
         Assert.Contains(expectedPath, before.Keys);
 
-        var edit = new RecordEditService(scope.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edit = new RecordEditService(scope.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(scope.Plugin, npc.FormKey, "height_max", JsonDocument.Parse("0.75").RootElement);
         Assert.True(edit.Applied, edit.Message);
 
@@ -376,7 +376,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
 
         using var scope = new MutationScope(fixture);
 
-        var edit = new RecordEditService(scope.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edit = new RecordEditService(scope.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(scope.Plugin, responseToRename.FormKey.ToString(), "editor_id",
                 JsonDocument.Parse($"\"{responseToRename.EditorID}Renamed\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
@@ -401,7 +401,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     /// facts above, so a field edit's write-back to disk can never be seen by anything else. Built by
     /// <c>cp -r</c>'ing <see cref="CompileRoundTripGateFixture.TrackedTemplateFolder"/> (the fixture's
     /// pristine, post-Track, pre-any-Compile snapshot) into a new temp folder, then a fresh
-    /// <see cref="SessionManager"/> <c>LoadExplicit</c>'d against that copy's plugin — the same two
+    /// <see cref="LoadOrderMirror"/> <c>LoadExplicit</c>'d against that copy's plugin — the same two
     /// steps the old per-test constructor did, minus the ~36s <c>TrackService.TrackAsync</c> call the
     /// copy makes unnecessary. <see cref="CompileRoundTripGateFixture.GameDirectory"/> is shared,
     /// read-only across every scope (and the fixture itself) rather than rebuilt per copy: nothing on
@@ -411,7 +411,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     private sealed class MutationScope : IDisposable
     {
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-compile-roundtrip-mutate-").FullName;
-        public SessionManager Sessions { get; }
+        public LoadOrderMirror Mirror { get; }
         public PluginKey Plugin { get; }
 
         public MutationScope(CompileRoundTripGateFixture fixture)
@@ -419,24 +419,20 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
             CompileRoundTripGateFixture.CopyDirectory(fixture.TrackedTemplateFolder, ModFolder);
             Plugin = fixture.Plugin;
 
-            Sessions = new SessionManager(
+            Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)Sessions).LoadExplicit(
+            ((ILoadOrderMirror)Mirror).Reconcile(
                 fixture.GameDirectory,
-                [new ExplicitPluginInput(
-                    CutDownPluginFixture.PluginFileName,
-                    Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName),
-                    Plugin.Origin!,
-                    true)],
+                [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, Path.Combine(ModFolder, CutDownPluginFixture.PluginFileName), Plugin.Origin!, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
         }
 
         public PluginCompileService CompileService() =>
-            new(Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            new(Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
         public void Dispose()
         {
-            Sessions.Dispose();
+            Mirror.Dispose();
             CompileRoundTripGateFixture.TryDelete(ModFolder);
         }
     }

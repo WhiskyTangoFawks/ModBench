@@ -1,9 +1,9 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -16,14 +16,14 @@ namespace MEditService.Tests.Api;
 // per endpoints file directly (bypassing HTTP/Serilog — see #215 plan: Serilog's
 // UseSerilog(writeToProviders: false) makes host-level log capture unreliable) and assert: (a) the
 // Info-level entry is present and carries the raw (pre-decode) request parameter, and (b) for
-// SessionEndpoints.LoadSession specifically, the entry still fires when the request fails
+// LoadOrderEndpoints.PutLoadOrder specifically, the entry still fires when the request fails
 // validation and returns early — proving the line isn't gated behind a success path. The remaining
 // handlers get the identical one-line addition without a dedicated test.
 //
 // #529 retired this pattern from PluginEndpoints specifically: its "Received ..." lines were
 // redundant with the per-request Serilog summary line (UseSerilogRequestLogging) and were deleted
 // rather than kept, taking this file's former PluginEndpoints.CreatePlugin coverage with them. The
-// #215 pattern (and this file's remaining tests) still stand for SessionEndpoints,
+// #215 pattern (and this file's remaining tests) still stand for LoadOrderEndpoints,
 // WorldspaceEndpoints and RecordEndpoints, which #529 was scoped away from.
 public sealed class EndpointReceptionLoggingTests
 {
@@ -38,21 +38,19 @@ public sealed class EndpointReceptionLoggingTests
         return (factory, entries);
     }
 
-    // --- SessionEndpoints.LoadSession ---
+    // --- LoadOrderEndpoints.PutLoadOrder ---
 
     [Fact]
-    public void LoadSession_ValidRequest_LogsReceivedWithDataFolder()
+    public void PutLoadOrder_ValidRequest_LogsReceivedWithGameDirectory()
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var tempDir = Directory.CreateTempSubdirectory("medit-215-").FullName;
         try
         {
-            var pluginsTxt = Path.Combine(tempDir, "Plugins.txt");
-            File.WriteAllText(pluginsTxt, "");
-            var req = new SessionLoadRequest(tempDir, pluginsTxt, "Fallout4");
+            var req = new LoadOrderRequest([], tempDir, tempDir, "Fallout4");
 
-            SessionEndpoints.LoadSession(req, new StubSessionManager(), new ExternalChangeWatcher(), loggerFactory);
+            LoadOrderEndpoints.PutLoadOrder(req, new StubMirror(), new ExternalChangeWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
         }
@@ -63,20 +61,20 @@ public sealed class EndpointReceptionLoggingTests
     }
 
     [Fact]
-    public void LoadSession_DataFolderMissing_StillLogsReceived()
+    public void PutLoadOrder_GameDirectoryMissing_StillLogsReceived()
     {
-        // Acceptance criterion: the reception line fires on every call, including ones that go on
-        // to fail — this request fails validation (400) before SessionManager.Load is ever called.
+        // Acceptance criterion: the reception line fires on every call, including ones that go on to
+        // fail — this request fails validation (400) before LoadOrderMirror.LoadExplicit is called.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
-        var sessionManager = new StubSessionManager();
-        var req = new SessionLoadRequest("Z:\\does-not-exist", "Z:\\does-not-exist\\Plugins.txt", "Fallout4");
+        var mirror = new StubMirror();
+        var req = new LoadOrderRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
-        var result = SessionEndpoints.LoadSession(req, sessionManager, new ExternalChangeWatcher(), loggerFactory);
+        var result = LoadOrderEndpoints.PutLoadOrder(req, mirror, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
-        Assert.False(sessionManager.LoadCalled); // confirms this is the pre-Load validation-failure path
+        Assert.False(mirror.LoadCalled); // confirms this is the pre-load validation-failure path
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Z:\\does-not-exist"));
     }
 
@@ -110,26 +108,23 @@ public sealed class EndpointReceptionLoggingTests
 
     // --- Stubs (hand-written, no mocking framework — matches existing test-suite convention) ---
 
-    private sealed class StubSessionManager : ISessionManager
+    private sealed class StubMirror : ILoadOrderMirror
     {
         public bool LoadCalled { get; private set; }
-        public IGameSession? Session => null;
+        public ILoadOrder? LoadOrder => null;
         public IRecordReads? Repository => null;
         public IRecordIndex? Index => null;
-        // #274: these stubs never load, so they are always in the no-session state.
-        public SessionStatus Status => SessionStatus.None;
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => LoadCalled = true;
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
-            throw new NotSupportedException();
-        public void Unload() => throw new NotSupportedException();
+        // #274: these stubs never load, so they are always in the no-load order state.
+        public LoadOrderStatus Status => LoadOrderStatus.None;
+        public void Reconcile(
+            string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
+            string? instanceRoot = null) => LoadCalled = true;
+        public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name, string path, string origin) =>
-            new(name, name, 0, false, false, [], 0, false, true, origin, [], true);
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
-        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
-        public PluginResponse SetPluginParticipation(string plugin, bool participates) => throw new NotSupportedException();
+            new(name, name, 0, false, false, [], 0, false, true, origin, [], true, true, true);
         public Task ReindexPlugin(string plugin) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new NotSupportedException();
+        public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
+        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string sql) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
         public void ReapplyFilter() => throw new NotSupportedException();
@@ -151,7 +146,6 @@ public sealed class EndpointReceptionLoggingTests
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
-        public IReadOnlyList<PluginDeltaEntry>? GetPluginDelta(string plugin, string winnerOrigin, string peerOrigin) => throw new NotSupportedException();
         public IReadOnlyList<ConflictRecord> GetConflicts() => throw new NotSupportedException();
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];

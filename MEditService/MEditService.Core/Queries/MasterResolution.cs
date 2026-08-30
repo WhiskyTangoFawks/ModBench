@@ -1,12 +1,12 @@
 using System.Text.Json.Serialization;
-using MEditService.Core.Session;
+using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Queries;
 
 // #277 / ADR-0037: a plugin with an unresolvable master is indexed and flagged, never deactivated.
 // Distinguishes a directly-missing master (never attempted at all — absent from both the loaded
 // set and the failed set) from a master that is itself unloadable (attempted, recorded in
-// GameSession.LoadFailures) so a cascade of failures doesn't read as one undifferentiated error.
+// LoadOrder.LoadFailures) so a cascade of failures doesn't read as one undifferentiated error.
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MasterIssueKind
 {
@@ -16,7 +16,7 @@ public enum MasterIssueKind
 
 public sealed record MasterIssue(string MasterName, MasterIssueKind Kind);
 
-// Pure — no session, no Mutagen re-read: `GameSession.Plugins` and `GameSession.LoadFailures`
+// Pure — no load order, no Mutagen re-read: `LoadOrder.Plugins` and `LoadOrder.LoadFailures`
 // already carry everything this needs. Deliberately shallow: only a plugin's OWN declared
 // `Masters` list is consulted, never a master's own masters — a cascade is exactly what
 // ADR-0037 rules out (xEdit's fixpoint loop exists only because deactivation cascades; nothing

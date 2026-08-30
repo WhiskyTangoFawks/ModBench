@@ -16,7 +16,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private PluginCompileService CompileService() =>
-        new(_mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(_mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     [Fact]
     public void Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()

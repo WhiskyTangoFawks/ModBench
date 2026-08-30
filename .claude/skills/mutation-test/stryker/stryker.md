@@ -73,8 +73,8 @@ rate above. Prefer `--since`.
 **Timeouts are a real but secondary tax.** Mutating the async session-lifecycle code deadlocks
 rather than fails: a broken cancellation check or loop-exit produces no answer at all, and from
 outside the process "hung" and "slow" are indistinguishable, so a timeout is the only sound
-detector Stryker has. One full run put 200 mutants in `Timeout` — `SessionManager.cs` (99),
-`RecordQueryService.cs` (61), `GameSession.cs` (39), `SessionStatus.cs` (1) — which at the
+detector Stryker has. One full run put 200 mutants in `Timeout` — `LoadOrderMirror.cs` (99),
+`RecordQueryService.cs` (61), `LoadOrder.cs` (39), `LoadOrderStatus.cs` (1) — which at the
 default 6-way concurrency cost roughly half that run's mutation phase, not the hours it looks
 like.
 
@@ -84,10 +84,10 @@ exists to produce. The only sound acceleration would be per-test timeouts
 (`[Fact(Timeout = n)]`), which turn a hang into a genuine failure; that is a wide change to
 production tests for a tool's benefit, and has not been made.
 
-What *was* done: `RecordQueryService.cs` and `SessionStatus.cs` are excluded in
+What *was* done: `RecordQueryService.cs` and `LoadOrderStatus.cs` are excluded in
 `stryker-config.json`, because they yielded **zero information** — 61 and 1 tested mutants
-respectively, all of them `Timeout`, nothing killed and nothing survived. `GameSession.cs` and
-`SessionManager.cs` are kept: they time out heavily but still produce real findings (25 killed,
+respectively, all of them `Timeout`, nothing killed and nothing survived. `LoadOrder.cs` and
+`LoadOrderMirror.cs` are kept: they time out heavily but still produce real findings (25 killed,
 1 survived, 6 uncovered). `run.sh` preserves these `!` exclusions even when it builds an
 explicit mutate list from the working tree, so having one of those files dirty does not quietly
 put it back in scope — but naming one via `--file` does, since that is an explicit request.

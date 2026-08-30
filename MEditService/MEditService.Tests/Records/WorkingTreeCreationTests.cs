@@ -54,8 +54,7 @@ public sealed class WorkingTreeCreationTests : IDisposable
     {
         var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
         index.Index(
-            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4),
-            loadOrderIndex, participates: true, new PluginKey(name, "Data"));
+            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
     }
 
     // A real codec-produced body, the same shape CreateRecord will write in production — a
@@ -93,8 +92,9 @@ public sealed class WorkingTreeCreationTests : IDisposable
         index.CreateWorkingTreeRecord(BaseKey, formKey, "npc_", NewNpcBody(formKey, "NewNpc"));
 
         // The rival: an implementation that inserts the row but skips (or forgets) the structural
-        // UpdateWinners() resweep leaves is_winner false forever — this is the test that catches it,
-        // watched failing against exactly that omission before being restored.
+        // UpdateWinners() resweep never gives the new FormKey a winners row at all, so it reads as
+        // losing forever — this is the test that catches it, watched failing against exactly that
+        // omission before being restored.
         Assert.True(index.GetDocument(formKey)!.IsWinner);
     }
 

@@ -1,0 +1,89 @@
+using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
+using MEditService.Core.Queries;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
+using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
+
+namespace MEditService.Tests.Plugins;
+
+[Collection(TestPluginFixtureCollection.Name)]
+public class LoadOrderMirrorThreadSafetyTests(TestPluginFixture fixture)
+{
+    private readonly TestPluginFixture _fixture = fixture;
+
+    private static LoadOrderMirror MakeManager()
+    {
+        var reflector = SharedSchemaReflector.Instance;
+        var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
+        return new LoadOrderMirror(factory);
+    }
+
+    private LoadOrderMirror MakeLoadedManager()
+    {
+        var m = MakeManager();
+        m.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        return m;
+    }
+
+    // --- CreatePlugin (deadlock regression) ---
+
+    [Fact]
+    public async Task CreatePlugin_CompletesWithoutDeadlock()
+    {
+        using var data = new PluginFixtureBuilder("cp-deadlock").WithPlugin("Base.esp").Build();
+        using var manager = MakeManager();
+        manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+
+        // If CreatePlugin() calls Load() from inside lock(_lock) with a non-reentrant lock,
+        // the same thread deadlocks. Use a timeout to catch that case.
+        var task = Task.Run(() => manager.CreatePlugin("NewPlugin.esp", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod"));
+        var completed = await Task.WhenAny(task, Task.Delay(5000));
+
+        Assert.Same(task, completed); // timed out = deadlock
+        await task; // surface any exception
+    }
+
+    [Fact]
+    public async Task CreatePlugin_ReturnsMetadataForNewPlugin()
+    {
+        using var data = new PluginFixtureBuilder("cp-metadata").WithPlugin("Base.esp").Build();
+        using var manager = MakeManager();
+        manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
+
+        var task = Task.Run(() => manager.CreatePlugin("Created.esp", Path.Combine(data.DataFolder, "SomeMod"), "SomeMod"));
+        var completed = await Task.WhenAny(task, Task.Delay(5000));
+        Assert.Same(task, completed);
+
+        var result = await task;
+        Assert.Equal("Created.esp", result.Name);
+        Assert.False(result.IsImmutable);
+    }
+
+    // Load order-membership and guard-clause behavior (NoLoadOrder/InvalidExtension/FileAlreadyExists)
+    // are covered by LoadOrderMirrorTests; this class keeps only the concurrency-specific cases.
+
+    // --- Dispose idempotency ---
+
+    [Fact]
+    public void Dispose_CalledTwice_DoesNotThrow()
+    {
+        var manager = MakeLoadedManager();
+        manager.Dispose();
+
+        // Should not throw a LockRecursionException or ObjectDisposedException
+        var ex = Record.Exception(() => manager.Dispose());
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void Dispose_ClearsLoadOrder()
+    {
+        var manager = MakeLoadedManager();
+        manager.Dispose();
+
+        Assert.Null(manager.LoadOrder);
+        Assert.Null(manager.Repository);
+    }
+}

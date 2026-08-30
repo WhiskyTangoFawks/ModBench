@@ -71,7 +71,7 @@ export interface IModlistSource {
   /** plugins.txt load order, read-only (the Plugin List view owns plugin order). */
   readPluginOrder(): Promise<string[]>;
   /** plugins.txt load order, enabled-only (the `*`-prefixed lines) — the plugins
-   *  that actually load, used to build a `load-explicit` editing session. */
+   *  that actually load, used to build the editing backend's load-order snapshot. */
   readEnabledPlugins(): Promise<string[]>;
   /** Set a plugin's enabled state (plugins.txt's `*` marker), byte-faithfully.
    *  Throws if the plugin is absent. */

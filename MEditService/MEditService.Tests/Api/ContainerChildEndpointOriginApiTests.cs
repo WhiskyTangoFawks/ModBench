@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 // #424 / #305 / ADR-0036: the wire-level guard rail for GetContainerChildren, mirroring
-// SpatialRoutesOriginApiTests' real two-copy load path — a session that actually holds two
-// physical files of one filename, so a route that resolved a Quest's children session-wide (or
+// SpatialRoutesOriginApiTests' real two-copy load path — a load order that actually holds two
+// physical files of one filename, so a route that resolved a Quest's children load-order-wide (or
 // through the wrong copy) is visible in the assertion, not just in the row count.
 public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
@@ -44,24 +44,24 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
         return (fx, questFk!);
     }
 
-    // Same real load path as SpatialRoutesOriginApiTests: the load order names exactly one
-    // Shared.esp (ModA), and ModB arrives afterwards, on demand, as the copy the load order does
-    // not name.
-    private async Task LoadWinningCopyThenShadowedCopy(ScatteredFixtureData fx)
+    private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        var shadowed = fx.Plugins.Single(p => p.Origin == "ModB");
-        var loadOrder = fx.Plugins.Where(p => p.Origin != "ModB");
+        // ADR-0044: both copies travel in the one snapshot — ModA as the copy the Mod override
+        // order resolves the name to, ModB as the losing copy at the same slot — and both are
+        // registered; only the winning, enabled, listed one ever participates.
+        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
+        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
+            ? p with { Slot = winner.Slot, Winning = false }
+            : p);
 
-        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
+        var put = await _client.PutAsJsonAsync("/load-order", new
         {
             gameDirectory = fx.GameDirectory,
-            plugins = loadOrder.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = true }),
+            instanceRoot = fx.InstanceRoot,
+            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameRelease = "Fallout4",
         });
-        load.EnsureSuccessStatusCode();
-
-        var onDemand = await _client.PostAsJsonAsync("/plugins/load", new { path = shadowed.Path, origin = shadowed.Origin });
-        onDemand.EnsureSuccessStatusCode();
+        put.EnsureSuccessStatusCode();
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class ContainerChildEndpointOriginApiTests(LoadedApiFixture<TestPl
     {
         var (fx, questFk) = BuildTwoCopies();
         using var _fx = fx;
-        await LoadWinningCopyThenShadowedCopy(fx);
+        await PutBothCopies(fx);
         var encodedFk = Uri.EscapeDataString(questFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/records/{encodedFk}/children?origin=ModB");

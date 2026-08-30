@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 // #217: the per-plugin VMAD/conditions summary lines duplicate the per-plugin progress milestone
-// SessionManager already logs at Info (#216), so they move to Debug here. Individual record
+// LoadOrderMirror already logs at Info (#216), so they move to Debug here. Individual record
 // processing during indexing (append, VMAD, conditions) gets new Trace coverage — the "per-record
 // trace" gap the original #205/#215 audit called out. Indexing *behavior* (rows land correctly,
 // VMAD/conditions round-trip) is already covered by DuckDbRecordIndexTests, VmadIndexerTests
@@ -82,7 +82,7 @@ public sealed class RecordIndexingLoggingTests : IDisposable
             ModKey.FromFileName("LogTrace.esp"),
             Path.Combine(_fixture.DataFolder, "LogTrace.esp"));
         var mod = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(modPath, Fallout4Release.Fallout4);
-        repo.Index(mod, 0, participates: true, key: new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
+        repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));
         return repo;
     }
 

@@ -41,7 +41,7 @@ import { parseRecordResourceUri } from './recordResourceUri';
  * one — a row has exactly one `FileDecoration`, so the two badges have to be reconciled in one
  * place, not painted independently and left to whichever provider VS Code asks last. `lookup`
  * (M/A) always wins when it has an answer: an uncommitted local edit is the more actionable,
- * session-local fact, and the orchestrator's #364 plan-gate ruling made this the explicit default
+ * load order-local fact, and the orchestrator's #364 plan-gate ruling made this the explicit default
  * rather than leaving it to whichever check happened to run first. `conflictAllLookup` is
  * consulted only when `lookup` has nothing to say, and it is expected to already apply #307's own
  * gate (`PluginTreeProvider.conflictAllOf` does — undefined while `conflictsComputed` is false or

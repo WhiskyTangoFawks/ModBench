@@ -1,3 +1,4 @@
+using MEditService.Core.Plugins;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
@@ -7,7 +8,8 @@ namespace MEditService.Tests.Api;
 public sealed class ReferencePluginFixture : IApiPluginFixture<ReferencePluginFixture>
 {
     public string DataFolder => _data.DataFolder;
-    public string PluginsTxtPath => _data.PluginsTxtPath;
+    public IReadOnlyList<LoadOrderEntry> Plugins => _data.Plugins;
+    public string InstanceRoot => _data.InstanceRoot;
     public const string PluginName = "RefPlugin.esp";
 
     /// <summary>Keyword FormKey — used as the reference target in all reference tests.</summary>
@@ -16,7 +18,7 @@ public sealed class ReferencePluginFixture : IApiPluginFixture<ReferencePluginFi
     /// <summary>NPC that has KeywordFormKey in its Keywords list (committed reference).</summary>
     public FormKey NpcWithKeywordFormKey { get; }
 
-    /// <summary>NPC with no keywords (used for pending-addition test).</summary>
+    /// <summary>NPC with no keywords (used for the keyword-addition test).</summary>
     public FormKey NpcWithoutKeywordFormKey { get; }
 
     private readonly PluginFixtureData _data;

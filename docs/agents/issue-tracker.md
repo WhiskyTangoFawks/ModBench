@@ -31,7 +31,12 @@ Traverse with `gh`:
   contains a code span or backtick-quoted identifier (near-universal for a technical issue)?
   Write it to a file first and pass `--body-file` — an inline `--body "...`code`..."` inside a
   double-quoted shell string lets the shell read the backticks as command substitution and
-  silently drops or corrupts everything between them.
+  silently drops or corrupts everything between them. **Always include a triage-state label from
+  `triage-labels.md`'s table** (`--label`, same call or a follow-up `--add-label`) alongside any
+  category label (`bug`, `enhancement`, …) — a category label alone leaves the issue outside every
+  triage/queue view that reads state (`needs-triage` by default for a freshly-found bug/finding
+  with no further judgment already made; `ready-for-human`/`ready-for-agent` if that judgment call
+  is already made at filing time, e.g. a design-session ticket).
 - **Read**: `gh issue view <number> --json number,title,body,labels,comments` — never
   `--comments`, whose GraphQL query still requests the deprecated `projectCards` field and
   exits 1 in this repo.
@@ -39,11 +44,30 @@ Traverse with `gh`:
 - **Comment**: `gh issue comment <number> --body "..."` — same backtick hazard and same
   `--body-file` fix as Create.
 - **Labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
+- **`mutagen` label**: any issue whose root cause is (or is suspected to be) in Mutagen itself —
+  reported upstream, PR'd upstream, or still being investigated — carries this alongside its
+  triage-state and category labels. Lets `gh issue list --label mutagen` answer "what's actually
+  Mutagen's problem, not ours" and cross-check against this maintainer's own open upstream
+  issues/PRs (`gh issue list --repo Mutagen-Modding/Mutagen --author <user>`) before re-investigating
+  something already reported.
+- **`needs-ux` label**: alongside its triage-state, pairs with `ready-for-human` (never
+  `ready-for-agent`) on any issue whose implementation touches new or changed interactive UI
+  (`triage-labels.md`'s UX rules; `/ux-checkpoint` for the protocol). Applied at triage or
+  self-applied mid-implementation, and never removed once applied — same permanent-record role as
+  `mutagen`. `gh issue list --label needs-ux --label ready-for-human` is the queue to work outside
+  orchestration.
 - **Blocking links**: dependency is tracker state, not a label or prose. Link the moment a
   dependency is known — at filing, triage, or queue rejection: `gh issue edit <n> --add-blocked-by <m>`
   (`--remove-blocked-by` to undo); read via `--json blockedBy` (nodes carry `state`). Blocked =
   any `OPEN` node; queue tooling (`/orchestrate`) excludes blocked issues automatically and
-  readmits them when the blocker closes — no label churn, no re-triage.
+  readmits them when the blocker closes — no label churn, no re-triage. If `gh`'s installed
+  version predates the `--add-blocked-by`/`--remove-blocked-by` flags (added after 2.45.0), use
+  the REST endpoint directly instead — version-independent: `gh api repos/<owner>/<repo>/issues/<n>/dependencies/blocked_by --method POST -F issue_id=<numeric id>` (numeric `id`, not the issue number — get it via `gh api repos/<owner>/<repo>/issues/<m> --jq .id`; `-f` sends a string and the endpoint rejects it).
+- **A `needs-review` verification failure blocks the review ticket on the bug it found** — required,
+  not optional, the moment the bug ticket exists: `gh issue edit <review-ticket> --add-blocked-by <bug-ticket>`
+  (or the REST fallback above). This is what lets the next review pass see, without re-deriving it,
+  that the ticket isn't ready to re-verify — a comment saying so is not enough; the tracker relation
+  is the thing a future pass actually checks. See `triage-labels.md`'s `needs-review` row.
 - **Close**: `gh issue close <number> --comment "..."`
 
 `gh` auto-detects repo via `git remote -v`.

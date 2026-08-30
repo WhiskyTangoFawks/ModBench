@@ -5,13 +5,13 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 ## Invariants
 
 - **A tracked plugin's source tree is the source of truth; the binary is for untracked plugins**
-  (#452 / ADR-0041's #444 amendment). Session load ingests a tracked plugin by deserializing
+  (#452 / ADR-0041's #444 amendment). Reconcile ingests a tracked plugin by deserializing
   `source/<plugin>/` whole (#441; `Source/SourceIngest`, a designated whole-mod door) — working tree →
   Effective, git `HEAD` → Head — and never consults the binary for its *content*. Untracked plugins
   keep the binary-overlay ingest unchanged; both paths end in the same `IRecordIndex.Index` over the
   same `IModGetter`, so the read model never sees a dialect. The binary is still opened for a tracked
   plugin's *metadata* (masters, record count) and for the save path — a bounded decision, stated at
-  `SessionManager.IndexOnePlugin`. An unreadable source tree degrades to the binary **and records a
+  `LoadOrderMirror.IndexOnePlugin`. An unreadable source tree degrades to the binary **and records a
   visible `PluginLoadFailure`**; a silent fallback would let a user read pre-Track content believing
   it was their source. DuckDB = indexed read model. Reads only via `IRecordReads`/`IRecordIndex`,
   never Mutagen directly.
@@ -20,13 +20,70 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `PluginOrigin` value, and a bare filename is never an identity. `PluginKey(Name, Origin)` is the
   type on every seam member, wire DTO and cache key — `PluginResponse`/`RecordDetail`/
   `CompareOverride`/`PluginMetadata` all require `Origin`; the frontend's page/spatial caches key by
-  `(origin, plugin)`. `GameSession` keys its opened mods by `(origin, filename)`; unlisted plugins
-  (`POST /plugins/load`/`/unload`) open read-only and non-participating, and
-  `PluginMetadata.InLoadOrder` says so (a disabled `plugins.txt` line is still in the load order and
-  still a legitimate write target). `IRecordIndexer.Unindex` is `Index`'s inverse — ADR-0035's
-  "hidden means absent" is unloading, never filtering.
+  `(origin, plugin)`. `LoadOrder` keys its held mods by `(origin, filename)`; two copies of one
+  filename are ordinarily held at once (ADR-0044: the snapshot is every physical copy), and the
+  losing one is read-only and non-participating — `PluginMetadata.InLoadOrder`/`Participates` are
+  derived from its `Registration(LoadOrderIndex, Enabled, Winning)`, never stored (a disabled
+  `plugins.txt` line is still in the load order and still a legitimate write target; a losing copy
+  is not). **Registration is visibility** (#582 / ADR-0001): a plugin
+  answers a read iff it has a `registrations` row. The physical tables live in the `mirror`
+  schema; every public relation (`records`, `records_head`, the extracted tables, every generated
+  per-type view) is a view over its mirror table through the one registered-predicate
+  (`TableDdlBuilder.CreateRegisteredViews`), so the C# seam and the SQL door cannot scope
+  differently. Writers name `mirror.` explicitly. ADR-0035's "hidden means absent" is
+  **unregistered, never answering** — `IRecordIndex.Unregister` removes the `registrations` row
+  and nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
+  missing at validation), never the meaning of unload.
+  - **The index is a persistent file per MO2 instance, and it validates itself on open**
+    (#585/#592 / ADR-0001). `IndexFile.For` puts it at `<instance>/modbench/index.duckdb`, so every
+    profile in one instance shares it (a profile switch stays cheap) and no two instances can ever
+    share one: `origin` is a mod folder *name*, unique only within an instance, and every mirror
+    table is keyed `(plugin, origin)`. The instance root arrives on the load request and rides
+    `ILoadOrder.InstanceRoot`; an index handed no instance is in-memory, which is what the suite's
+    fixtures use. **`PUT /load-order` → `LoadOrderMirror.Reconcile` is the only way the load order
+    arrives** (ADR-0044) — the plain-Data-folder path is long deleted, and so are the bulk load and
+    the per-gesture patch verbs (`load-explicit`, `reread`, `participation`, `load`/`unload`):
+    Modbench manages an MO2-style instance and nothing else, and a snapshot that can name no mod
+    folders can key no index. A snapshot for a different instance replaces what is held; the same
+    instance reconciles in place — new `(name, origin)` opened and registered (indexed only if
+    never seen), absent unregistered, moved re-registered SQL-only, then one winner sweep; an
+    identical snapshot is a no-op.
+    `registrations` is **the load order and nothing else** — the file facts live in `mirror.files`
+    (`file_path`, `content_hash`, `index_version`), a separate table precisely so that
+    unregistering a plugin does not throw away what makes re-registering it cheap. Registrations are **not** cleared on open (ADR-0044): they are the last known load order,
+    and the first reconcile from Mod Management corrects them. `Initialize` rehashes every
+    indexed file — **content, never `mtime`** — and `Unindex`es any plugin whose file is gone or
+    whose bytes moved; a version mismatch (`IndexVersion`: hand-bumped format const + Mutagen
+    assembly version + reflected-schema digest) or a file DuckDB cannot open rebuilds the whole
+    file. **Bump `IndexVersion.FormatVersion` when you change `TableDdlBuilder`'s fixed tables or
+    the codec's conventions** — `CREATE TABLE IF NOT EXISTS` will otherwise meet an old file's
+    column list in silence. **A file another process holds is never rebuilt over** (#588 / ADR-0001
+    point 6): DuckDB's lock error (`DuckDbRecordIndex.IsAnotherWriter`) becomes
+    `IndexHeldElsewhereException`, which `PUT /load-order` answers `423 Locked` and the mirror
+    holds nothing — deleting a locked file succeeds on POSIX and would destroy the other window's
+    live index. The lock is per *process* (DuckDB.NET shares one database per path in-process), so
+    the test for it holds the file from a second process (`TestSupport/ForeignIndexHolder`, `python3`
+    on PATH — a test prerequisite, not a runtime one; the two #588 tests skip without it).
+  - **Reconcile is registration** (#586 / ADR-0001). `LoadOrderMirror.Reconcile` indexes
+    only what the file has never seen or whose bytes moved (validation already dropped those) and
+    `Register`s everything else at its `plugins.txt` position — a `registrations` row, no re-index. A
+    tracked plugin never takes that path however current its binary: its source tree is its truth
+    (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates the
+    decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones do, so
+    a warm launch's progress advances instead of sitting at zero.
+  - **The mirror keeps running while the load order does** (#587 / ADR-0001).
+    `ExternalChangeWatcher.WatchIndexed` covers every *indexed* binary the game's `Data/` included,
+    beside the classification watches it already kept for tracked ones; a settle re-hashes and raises
+    `IndexedBinaryChanged` only when the bytes actually moved (a touch costs nothing), and a deletion
+    is its own `IndexedBinaryChange.Deleted`. `MEditService.Api`'s `IndexMirror` turns those into
+    `ILoadOrderMirror.ReindexPlugin(PluginKey)` / `UnindexPlugin` — the composition root's job, since
+    the Bridge knows nothing of load orders or DuckDB. **Tracked plugins are deliberately not mirrored**:
+    their rows come from the source tree, so their binary changing stays the user's Absorb/Keep
+    question and re-reading it would overwrite the working tree with the compiled artifact.
+    `ExternalChangeLoadOrderHook.RunAfterReconcile` drops every mirror watch before re-registering, so no
+    watch outlives the load order that asked for it.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
-    `SessionManager.RequirePlugin`, `IGameSession.LoadOrderPlugin`): `plugins.txt` cannot list a
+    `LoadOrderMirror.RequirePlugin`, `ILoadOrder.LoadOrderPlugin`): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"
     means read-only, refused up front through `RecordEditService.RefuseIfBlocked` — never a
     fail-at-save.
@@ -39,10 +96,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 - The per-type views, editor field metadata and record codec are reflection-generated from Mutagen types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
 - **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
-  `load_order_idx`, `is_winner`, `ref`, `content_hash`); the extracted index tables (`form_lookup`,
-  `form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from it at
+  `ref`, `content_hash`); the extracted index tables (`form_lookup`,
+  `form_references`, `placement`, `cell_location`, `registrations`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
+  **Nothing load-order-derived is stored on a data row** (#583/#584 / ADR-0001): a record row carries
+  file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
+  on `registrations`; `is_winner` is a fact about the registered stack a FormKey sits in and lives
+  solely in `winners` (`(ref, form_key) → (plugin, origin)`, rebuilt wholesale by
+  `DuckDbRecordIndex.UpdateWinners`). The registered view over each mirror table (`records`,
+  `records_committed`, `form_lookup`, `header` — see "Registration is visibility" above) joins both
+  back in, so they still read as ordinary columns everywhere outside `Records/` itself. Every writer
+  that moves a row into or out of a ref's stack must resweep — that is why `MarkWorkingTreeOnly` and
+  `SeedCommittedOnly` call `UpdateWinners` even though Effective is untouched.
   - **Typed reads reconstitute; they never read the views.** `GetDocument`/`GetOverrideStack`
     deserialize the document through `RecordTextCodec` and run the same `ColumnSpec.Extract`
     delegates the wide tables were filled with, so values are identical by construction. The
@@ -127,7 +193,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     never announces itself. **Both refs are re-derived**: after an external commit "committed"
     itself has moved, so a pass that refreshed only the working-tree side would leave Head serving
     bytes no ref holds. Cost is bounded by dirt, not by load order — git is consulted only for
-    records the index already believes are dirty, so an unedited session runs no git processes on
+    records the index already believes are dirty, so an unedited load order runs no git processes on
     the read path. **Exception (#561):** that hash short-circuit answers nothing for an embedded
     child (a placed reference, a landscape, a navmesh, a Worldspace's top cell) — it has no file of
     its own, so its committed blob is its *owner's* whole document, and an owner-blob hash can never
@@ -143,10 +209,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `records_committed` difference table; `records_head` unions it with the rows that never diverged,
   giving Head a relation of the same shape, which is why `At(ref)` is a relation name rather than a
   second read implementation.
-  - `is_winner` is **derived inside `records_head`**, never carried through. A record the working
-    tree deleted promotes the next plugin down at Effective, and the promoted row is a clean row
-    physically shared with that view — reading its stored flag reported two winners for one FormKey
-    at Head.
+  - `is_winner` is **swept per ref**, never carried across them. A record the working tree deleted
+    promotes the next plugin down at Effective, and the promoted row is a clean row physically
+    shared with `records_head` — reusing Effective's answer reported two winners for one FormKey at
+    Head. So `winners` is keyed `(ref, form_key)` and `records_head` joins it at Head.
   - `IRecordIndex.ApplyWorkingTreeChanges` moves Effective against a fixed baseline (null body =
     deletion; bytes equal to committed = convergence back to clean, by byte compare, never by a
     `content_hash` mismatch alone). `SetCommittedBaseline` moves the baseline itself. Neither can
@@ -173,19 +239,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   the single `SourceRef.Committed` value `records.ref` carries) — inert until #415 gives them
   independent state. No `Connection` property and no SQL crosses this seam except `SetFilter`
   (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
-- Every write backs up the target plugin first (timestamped `.bak`) — cross-session undo depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
-- Partial-success endpoints return a structured failures collection (named record, e.g. `SessionLoadResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
-- **A session is readable while it is still loading** (#274 / ADR-0035). `SessionManager` publishes the session and repository *before* the indexing loop, and `GameSession.OpenAll()` opens one plugin at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
-  - **Anything derived from the whole plugin set must gate on `ISessionManager.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load session reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `SessionState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready session with stale winners.
-  - **Everything a reader touches on `GameSession` is an immutable snapshot** (copy-on-write under `_mutation`), because readers now walk those lists while the load appends to them. A plain `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin landing.
-  - **Never dispose a session or repository without draining the load first.** `EnterExclusive()` cancels the in-flight load *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Unload`, `Dispose` and every load path go through it.
-  `POST /session/load` and `/session/load-explicit` stay blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /session/status` reports progress alongside the in-flight POST (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
+- Every write backs up the target plugin first (timestamped `.bak`) — undo across relaunches depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
+- Partial-success endpoints return a structured failures collection (named record, e.g. `LoadOrderResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
+- **The load order is readable while it is still being reconciled** (#274 / ADR-0035). `LoadOrderMirror` publishes the load order and repository *before* the indexing loop, and `LoadOrder.Open` opens one arriving copy at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
+  - **Anything derived from the whole plugin set must gate on `ILoadOrderMirror.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load load order reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `LoadOrderState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready load order with stale winners.
+  - **Everything a reader touches on `LoadOrder` is an immutable snapshot** (copy-on-write under `_mutation`), because readers now walk those lists while the load appends to them. A plain `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin landing.
+  - **Never dispose the load order or repository without draining the reconcile first.** `EnterExclusive()` cancels the in-flight reconcile *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Close`, `Dispose` and every reconcile go through it. A superseded reconcile leaves what it landed for its successor — nothing is torn down on cancel (ADR-0044).
+  `PUT /load-order` stays blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /load-order/status` reports progress alongside the in-flight POST (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
 
 ## Folder structure
 
 | Folder | Owns | Examples |
 | ------ | ---- | ------- |
-| `Session/` | Live game environment and lifecycle | `GameSession`, `SessionManager`, `PluginMetadata` |
+| `Plugins/` | The load-order mirror: which plugin copies are held, their registrations, reconcile | `LoadOrder`, `LoadOrderMirror`, `PluginMetadata`, `LoadOrderEntry`, `LoadOrderStatus` |
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
@@ -194,8 +260,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
 `MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
-lifecycle plus the pending-external-change queue, nothing else — it references only
-session/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfSessionsTests`.
+lifecycle plus the unanswered-external-change queue, nothing else — it references only
+load order/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfLoadOrdersTests`.
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
 

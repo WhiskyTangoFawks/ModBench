@@ -1,7 +1,7 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -211,7 +211,7 @@ public sealed class MasterPruningRoundTripGateTests
     }
 
     /// <summary>The fixture through Track's own reader — <c>ModFactory.ImportSetter</c>, the deep parse,
-    /// not the session's lazy overlay.</summary>
+    /// not the load order's lazy overlay.</summary>
     private static IMod DeepParseLegendaries()
     {
         var fixturePath = PathTo(LegendariesFixtureFileName);
@@ -235,7 +235,7 @@ public sealed class MasterPruningRoundTripGateTests
             CancellationToken.None);
     }
 
-    /// <summary>One real fixture copied into a scratch mod folder and loaded as a session — the same
+    /// <summary>One real fixture copied into a scratch mod folder and reconciled into a load order — the same
     /// shape <see cref="SubrecordInventoryRoundTripGateTests"/>'s own <c>TrueStormsScratch</c> builds —
     /// with an empty stub for each of the fixture's declared masters (Track's round-trip write needs
     /// those names present in the header's own master list to satisfy the read, not their content;
@@ -245,7 +245,7 @@ public sealed class MasterPruningRoundTripGateTests
         private readonly string _fixtureFileName;
         private readonly string _origin;
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masterprune-game-").FullName;
-        private readonly SessionManager _sessions;
+        private readonly LoadOrderMirror _mirror;
 
         public string ModFolder { get; } = Directory.CreateTempSubdirectory("medit-masterprune-").FullName;
 
@@ -257,7 +257,7 @@ public sealed class MasterPruningRoundTripGateTests
             var pluginPath = Path.Combine(ModFolder, _fixtureFileName);
             File.Copy(PathTo(_fixtureFileName), pluginPath);
 
-            var inputs = new List<ExplicitPluginInput>();
+            var inputs = new List<LoadOrderEntry>();
             using (var overlay = Fallout4Mod.CreateFromBinaryOverlay(
                 new ModPath(ModKey.FromFileName(_fixtureFileName), pluginPath), Fallout4Release.Fallout4))
             {
@@ -265,22 +265,22 @@ public sealed class MasterPruningRoundTripGateTests
                 {
                     var stubPath = Path.Combine(_gameDirectory, master.Master.FileName);
                     new Fallout4Mod(master.Master, Fallout4Release.Fallout4).WriteToBinary(stubPath);
-                    inputs.Add(new ExplicitPluginInput(master.Master.FileName, stubPath, "Stubs", true));
+                    inputs.Add(new LoadOrderEntry(master.Master.FileName, stubPath, "Stubs", Slot: inputs.Count, Enabled: true, Winning: true));
                 }
             }
-            inputs.Add(new ExplicitPluginInput(_fixtureFileName, pluginPath, _origin, true));
+            inputs.Add(new LoadOrderEntry(_fixtureFileName, pluginPath, _origin, Slot: inputs.Count, Enabled: true, Winning: true));
 
-            _sessions = new SessionManager(
+            _mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)_sessions).LoadExplicit(_gameDirectory, inputs, GameRelease.Fallout4);
+            ((ILoadOrderMirror)_mirror).Reconcile(_gameDirectory, inputs, GameRelease.Fallout4);
         }
 
         public Task TrackAsync() =>
-            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_sessions.Session!, _origin, SourcePreset.Edits);
+            new TrackService(NullLogger<TrackService>.Instance).TrackAsync(_mirror.LoadOrder!, _origin, SourcePreset.Edits);
 
         public void Dispose()
         {
-            _sessions.Dispose();
+            _mirror.Dispose();
             try { Directory.Delete(ModFolder, recursive: true); } catch (IOException) { }
             try { Directory.Delete(_gameDirectory, recursive: true); } catch (IOException) { }
         }

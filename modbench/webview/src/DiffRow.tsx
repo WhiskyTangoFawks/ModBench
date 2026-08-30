@@ -156,7 +156,7 @@ function renderCell(
 // generic implementation every depth now shares) down to this row's own value — `[]` at the root.
 // `overrideMeta` is this row's own metadata, present at every depth except the root (which reads
 // from `fieldMetaMap` instead, keyed by the diff tree's own top-level field name). `rootField` is
-// the wire path staged as one atomic PendingChange for every row in this subtree — constant
+// the wire path staged as one atomic change for every row in this subtree — constant
 // across the whole chain, equal to `diff.fieldName` for an ordinary field, and (from #231 on) a
 // VMAD/Condition row's own synthesized wire path when the two differ from its display label.
 export interface RowContext {
@@ -257,11 +257,11 @@ export function DiffRow({
   const meta = context.overrideMeta ?? fieldMetaMap[diff.fieldName];
   if (!meta) return null;
 
-  // Issue #231: rootField replaces the old kind-based pendingLookupField ternary — every row in
+  // Issue #231: rootField replaces the old kind-based lookup-field ternary — every row in
   // one subtree (root, struct-child, array-element, grandchild, and now any deeper hop) shares the
-  // same wire path/pendingFields key, so RecordPanel hands it down unchanged at every depth rather
-  // than DiffRow re-deriving "top-level or not." #533: renamed from `pendingLookupField` — that
-  // name predates ADR-0041's pending-change removal and no longer describes what this is.
+  // same wire path/overlay-fields key, so RecordPanel hands it down unchanged at every depth rather
+  // than DiffRow re-deriving "top-level or not." #533: renamed from its pre-ADR-0041 name — that
+  // name predates ADR-0041 and no longer describes what this is.
   const rootField = context.rootField;
   // Issue #231: showActions (the checkError icon) was "top-level or struct-child" under the old
   // union — generalizes to "every hop on this row's path is a struct member," which reproduces
@@ -347,8 +347,8 @@ export function DiffRow({
           // function (AC6), computed once here so both the struct/array-summary branch and the
           // leaf branch below hand DiskCell the identical value a scalar/flag/formKey cell would
           // display and a struct/array cell would otherwise only show as "{…}"/"[3]" (AC5). Plain
-          // disk value, no pending merge — a disk column's own display never merges pending (only
-          // the separate Pending column does, out of scope here per #232).
+          // disk value, no overlay merge — a disk column's own display never merges an overlay
+          // (only the separate overlay column did, out of scope here per #232).
           const copyText = modelValue(diff.values[key], meta, diff.resolutions?.[key]);
           // Issue #142/#227 (#426: restored): array ops are offered only on a writable column —
           // the same gate onEditCell/onCommit already use. `arrayLength` is deliberately not

@@ -20,6 +20,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/load-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Reconciles the load order against this snapshot (ADR-0044): every physical plugin copy in the instance — winning and losing, listed and unlisted — each with its plugins.txt slot (null when no line names it), its * prefix and whether the Mod override order resolves the name to it. Copies new to the load order are opened and registered (indexed only if never seen), copies absent from the snapshot are unregistered, moved copies are re-registered SQL-only; then one winner sweep. Vanilla masters are prepended by the backend and need not be listed. Blocks until the sweep has run; poll GET /load-order/status alongside for progress. */
+        put: operations["PutLoadOrder"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/load-order/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetLoadOrderStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/load-order/filter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["GetFilter"];
+        put?: never;
+        post: operations["SetFilter"];
+        delete: operations["ClearFilter"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/plugins": {
         parameters: {
             query?: never;
@@ -52,22 +101,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/plugins/{plugin}/delta": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetPluginDelta"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/plugins/create": {
         parameters: {
             query?: never;
@@ -79,70 +112,6 @@ export interface paths {
         put?: never;
         /** @description Creates a new plugin at the given path/origin (#288 / ADR-0041), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer per ADR-0024) is responsible for that. */
         post: operations["CreatePlugin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/load": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["LoadUnlistedPlugin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/unload": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["UnloadUnlistedPlugin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/reread": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["RereadPlugin"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/plugins/{plugin}/participation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["SetPluginParticipation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -208,7 +177,7 @@ export interface paths {
         put?: never;
         /**
          * Create a new record as a working-tree change (#427).
-         * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled. Not the retired pending-change-era create this same route once served; that mechanism (staged rows, no source text) was removed with ADR-0041/#410.
+         * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled.
          */
         post: operations["CreateRecord"];
         delete?: never;
@@ -488,7 +457,7 @@ export interface paths {
         put?: never;
         /**
          * Renumber a native record's FormKey as a delete+create pair (#427).
-         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it. Not the retired pending-change-era renumber this same route once served; that mechanism (staged rows, no source text, no reference cascade) was removed with ADR-0041/#410.
+         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it.
          */
         post: operations["RenumberRecord"];
         delete?: never;
@@ -548,70 +517,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/session/load": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["LoadSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/session/load-explicit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["LoadExplicitSession"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/session/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetSessionStatus"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/session/filter": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetFilter"];
-        put?: never;
-        post: operations["SetFilter"];
-        delete: operations["ClearFilter"];
         options?: never;
         head?: never;
         patch?: never;
@@ -807,12 +712,6 @@ export interface components {
             path?: string | null;
             origin?: string | null;
         };
-        ExplicitPlugin: {
-            name?: string | null;
-            path?: string | null;
-            origin?: string | null;
-            participates?: boolean | null;
-        };
         ExternalChangeActionRequest: {
             origin?: string | null;
         };
@@ -854,6 +753,12 @@ export interface components {
             value?: unknown;
             checkError?: string | null;
         };
+        FilterRequest: {
+            sql?: string | null;
+        };
+        FilterResponse: {
+            sql?: string | null;
+        };
         FormKeyResolution: {
             state?: components["schemas"]["FormKeyResolutionState"];
             recordType?: string | null;
@@ -865,9 +770,38 @@ export interface components {
             name?: string | null;
             origin?: string | null;
         };
-        LoadPluginRequest: {
+        LoadOrderPlugin: {
+            name?: string | null;
             path?: string | null;
             origin?: string | null;
+            /** Format: int32 */
+            slot?: number | null;
+            enabled?: boolean | null;
+            winning?: boolean | null;
+        };
+        LoadOrderRequest: {
+            plugins?: components["schemas"]["LoadOrderPlugin"][] | null;
+            gameDirectory?: string | null;
+            instanceRoot?: string | null;
+            gameRelease?: string | null;
+        };
+        LoadOrderResponse: {
+            status?: string | null;
+            failures?: components["schemas"]["PluginLoadFailure"][] | null;
+            crashRepairOffers?: components["schemas"]["CrashRepairOffer"][] | null;
+        };
+        /**
+         * Format: int32
+         * @enum {integer}
+         */
+        LoadOrderState: 0 | 1 | 2;
+        LoadOrderStatus: {
+            state?: components["schemas"]["LoadOrderState"];
+            /** Format: int32 */
+            totalPlugins?: number;
+            indexedPlugins?: components["schemas"]["IndexedPlugin"][] | null;
+            conflictsComputed?: boolean;
+            failures?: components["schemas"]["PluginLoadFailure"][] | null;
         };
         MasterIssue: {
             masterName?: string | null;
@@ -899,26 +833,12 @@ export interface components {
             text?: string | null;
             decodedValue?: string | null;
         };
-        PendingExternalChangeResponse: {
-            plugin?: string | null;
-            origin?: string | null;
-            metaChanged?: boolean;
-            oldVersion?: string | null;
-            newVersion?: string | null;
-        };
         PlacedSummary: {
             formKey?: string | null;
             editorId?: string | null;
             baseFormKey?: string | null;
             recordType?: string | null;
         };
-        PluginDeltaEntry: {
-            formKey?: string | null;
-            editorId?: string | null;
-            presence?: components["schemas"]["PluginDeltaPresence"];
-        };
-        /** @enum {string} */
-        PluginDeltaPresence: "WinnerOnly" | "PeerOnly" | "BothDiffer";
         PluginLoadFailure: {
             name?: string | null;
             reason?: string | null;
@@ -933,7 +853,7 @@ export interface components {
             name?: string | null;
             path?: string | null;
             /** Format: int32 */
-            loadOrderIndex?: number;
+            loadOrderIndex?: number | null;
             isLight?: boolean;
             isMaster?: boolean;
             masters?: string[] | null;
@@ -944,9 +864,11 @@ export interface components {
             origin?: string | null;
             masterIssues?: components["schemas"]["MasterIssue"][] | null;
             inLoadOrder?: boolean;
+            enabled?: boolean;
+            winning?: boolean;
             hasMatchingRecords?: boolean;
             isTracked?: boolean;
-            compilePending?: boolean;
+            compileStale?: boolean;
             /** Format: date-time */
             lastCompiledAt?: string | null;
         };
@@ -1066,48 +988,6 @@ export interface components {
             editorId?: string | null;
             origin?: string | null;
         };
-        RereadPluginRequest: {
-            plugin?: string | null;
-            path?: string | null;
-            origin?: string | null;
-        };
-        SessionFilterRequest: {
-            sql?: string | null;
-        };
-        SessionFilterResponse: {
-            sql?: string | null;
-        };
-        SessionLoadExplicitRequest: {
-            plugins?: components["schemas"]["ExplicitPlugin"][] | null;
-            gameDirectory?: string | null;
-            gameRelease?: string | null;
-        };
-        SessionLoadRequest: {
-            dataFolderPath?: string | null;
-            pluginsTxtPath?: string | null;
-            gameRelease?: string | null;
-        };
-        SessionLoadResponse: {
-            status?: string | null;
-            failures?: components["schemas"]["PluginLoadFailure"][] | null;
-            crashRepairOffers?: components["schemas"]["CrashRepairOffer"][] | null;
-        };
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        SessionState: 0 | 1 | 2;
-        SessionStatus: {
-            state?: components["schemas"]["SessionState"];
-            /** Format: int32 */
-            totalPlugins?: number;
-            indexedPlugins?: components["schemas"]["IndexedPlugin"][] | null;
-            conflictsComputed?: boolean;
-            failures?: components["schemas"]["PluginLoadFailure"][] | null;
-        };
-        SetPluginParticipationRequest: {
-            participates?: boolean;
-        };
         /**
          * Format: int32
          * @enum {integer}
@@ -1128,9 +1008,12 @@ export interface components {
         TrackResponse: {
             origin?: string | null;
         };
-        UnloadPluginRequest: {
+        UnansweredExternalChangeResponse: {
             plugin?: string | null;
             origin?: string | null;
+            metaChanged?: boolean;
+            oldVersion?: string | null;
+            newVersion?: string | null;
         };
         VmadCompare: {
             scripts?: components["schemas"]["VmadScriptDiff"][] | null;
@@ -1221,6 +1104,202 @@ export interface operations {
             };
         };
     };
+    PutLoadOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoadOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadOrderResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Locked */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    GetLoadOrderStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoadOrderStatus"];
+                };
+            };
+        };
+    };
+    GetFilter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    SetFilter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FilterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilterResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    ClearFilter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     GetPlugins: {
         parameters: {
             query?: never;
@@ -1261,49 +1340,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginRecordTypeCount"][];
-                };
-            };
-        };
-    };
-    GetPluginDelta: {
-        parameters: {
-            query?: {
-                winnerOrigin?: string;
-                peerOrigin?: string;
-            };
-            header?: never;
-            path: {
-                plugin: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginDeltaEntry"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -1350,219 +1386,6 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    LoadUnlistedPlugin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoadPluginRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    UnloadUnlistedPlugin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UnloadPluginRequest"];
-            };
-        };
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    RereadPlugin: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RereadPluginRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    SetPluginParticipation: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plugin: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SetPluginParticipationRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PluginResponse"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1851,7 +1674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PendingExternalChangeResponse"][];
+                    "application/json": components["schemas"]["UnansweredExternalChangeResponse"][];
                 };
             };
         };
@@ -2716,244 +2539,6 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    LoadSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionLoadRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionLoadResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    LoadExplicitSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionLoadExplicitRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionLoadResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    GetSessionStatus: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionStatus"];
-                };
-            };
-        };
-    };
-    GetFilter: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionFilterResponse"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    SetFilter: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionFilterRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionFilterResponse"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    ClearFilter: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description No Content */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Service Unavailable */
-            503: {
                 headers: {
                     [name: string]: unknown;
                 };

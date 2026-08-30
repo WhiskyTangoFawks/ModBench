@@ -1,8 +1,8 @@
 import type { PluginRepository } from './PluginRepository';
-import type { SessionController } from './SessionController';
+import type { EditingController } from './EditingController';
 import type { ExternalChangeDialogAnswer, ShowExternalChangeDialog } from './externalChangeDialog';
 import { runExternalChangeDialogs } from './externalChangeDialog';
-import type { PendingExternalChange, RebaseResult } from './ApiClient';
+import type { UnansweredExternalChange, RebaseResult } from './ApiClient';
 
 /** #417: Absorb Upstream Update's own follow-up — a separate, non-modal notification, never folded
  *  into the dialog itself (the pinned contract's own words: "then the rebase offer as a separate,
@@ -26,29 +26,29 @@ export type ShowRebaseOffer = (message: string, ...buttons: string[]) => Thenabl
  *  direct `vscode` import here) so the dispatch logic below stays testable without a host.
  *  `origin` rides along explicitly (rather than left for the callback to re-derive) because the
  *  dialog-driven path has no single already-resolved origin the way the standalone rebase command
- *  does — re-deriving it from the pending queue at merge-editor-open time would race the very
- *  ClearPending call that made this rebase happen in the first place. */
+ *  does — re-deriving it from the unanswered queue at merge-editor-open time would race the very
+ *  MarkAnswered call that made this rebase happen in the first place. */
 export type OpenMergeEditor = (origin: string, relativePath: string) => Thenable<unknown> | Promise<unknown>;
 
 export interface ExternalChangeCoordinatorDeps {
   repository: PluginRepository;
-  controller: SessionController;
+  controller: EditingController;
   showDialog: ShowExternalChangeDialog;
   showRebaseOffer: ShowRebaseOffer;
   openMergeEditor: OpenMergeEditor;
   log?: (msg: string) => void;
 }
 
-/** How often the queue is polled for a new question — matches `SESSION_STATUS_POLL_INTERVAL_MS`'s
+/** How often the queue is polled for a new question — matches `STATUS_POLL_INTERVAL_MS`'s
  *  order of magnitude but slower: an external change is rare and never latency-sensitive the way a
- *  running session load is, so there is no reason to poll at the same cadence. */
+ *  running reconcile is, so there is no reason to poll at the same cadence. */
 export const EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000;
 
 /**
- * Starts polling `GET /plugins/external-changes/status`; whenever it reports one or more pending
+ * Starts polling `GET /plugins/external-changes/status`; whenever it reports one or more unanswered
  * questions, runs the one dialog for each (sequentially — {@link runExternalChangeDialogs} itself
  * enforces that) and dispatches every answer. Returns a stop function. Self-rescheduling
- * `setTimeout`, same idiom `SessionController`'s own pollers use, so a slow poll (or a slow dialog
+ * `setTimeout`, same idiom `EditingController`'s own pollers use, so a slow poll (or a slow dialog
  * a user leaves open) can never stack ticks behind itself.
  */
 export function startExternalChangePolling(
@@ -60,12 +60,12 @@ export function startExternalChangePolling(
 
   const tick = async () => {
     try {
-      const pending = await deps.repository.getExternalChangeStatus();
-      if (!stopped && pending.length > 0) await handlePending(deps, pending);
+      const unanswered = await deps.repository.getExternalChangeStatus();
+      if (!stopped && unanswered.length > 0) await handleUnanswered(deps, unanswered);
     } catch (e) {
       // ADR-0026 background/recoverable tier: a poll blip gets a log line and the next tick, same
       // posture as every other poller in this codebase — never a toast for a transient failure to
-      // ask "is anything pending".
+      // ask "is anything unanswered".
       log(`[externalChangeCoordinator] poll failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     if (!stopped) timer = setTimeout(() => { void tick(); }, intervalMs);
@@ -92,8 +92,8 @@ export interface ExternalChangePollerGateDeps {
  * `poll failed: fetch failed` line every tick, ADR-0026 background tier, but a call that can never
  * succeed).
  *
- * Gated on the backend's health signal alone, deliberately never on session load (the triage
- * comment's own binding call on #432): a backend that is up with no session loaded still answers
+ * Gated on the backend's health signal alone, deliberately never on reconcile (the triage
+ * comment's own binding call on #432): a backend that is up with no backend running loaded still answers
  * the endpoint normally, so the poller has no reason to wait for one. Starts on the first healthy
  * transition, never double-starts on a repeated one (e.g. a crash-restart's own second "attached"),
  * stops on any not-healthy transition (deliberate Close mEdit, a lost connection, or a restart
@@ -111,9 +111,9 @@ export function gateExternalChangePolling(deps: ExternalChangePollerGateDeps): v
   });
 }
 
-async function handlePending(deps: ExternalChangeCoordinatorDeps, pending: PendingExternalChange[]): Promise<void> {
-  const outcomes = await runExternalChangeDialogs(pending, deps.showDialog);
-  for (const { pending: item, answer } of outcomes) {
+async function handleUnanswered(deps: ExternalChangeCoordinatorDeps, unanswered: UnansweredExternalChange[]): Promise<void> {
+  const outcomes = await runExternalChangeDialogs(unanswered, deps.showDialog);
+  for (const { change: item, answer } of outcomes) {
     // Sequential, deliberately: two dispatches for the same repo racing (e.g. two plugins in one
     // mod folder both queued) must not overlap a rebase offer against an absorb still in flight.
     await dispatchOne(deps, item, answer);
@@ -121,7 +121,7 @@ async function handlePending(deps: ExternalChangeCoordinatorDeps, pending: Pendi
 }
 
 async function dispatchOne(
-  deps: ExternalChangeCoordinatorDeps, item: PendingExternalChange, answer: ExternalChangeDialogAnswer,
+  deps: ExternalChangeCoordinatorDeps, item: UnansweredExternalChange, answer: ExternalChangeDialogAnswer,
 ): Promise<void> {
   // 'defer' (Esc/dismiss): exit path 3 — nothing is written, nothing is called; the question
   // re-asks at the next poll tick exactly because the backend's own queue still holds it.

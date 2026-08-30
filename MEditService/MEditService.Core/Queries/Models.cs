@@ -1,8 +1,7 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 
 namespace MEditService.Core.Queries;
@@ -11,23 +10,32 @@ namespace MEditService.Core.Queries;
 // PluginOrigin value. Nothing keys on it yet; see PluginMetadata.
 //
 // MasterIssues (#277 / ADR-0037): this plugin's own declared masters that aren't resolvable in the
-// session — never a transitive/cascaded fact about a master's own masters. Empty, never null, for
+// load order — never a transitive/cascaded fact about a master's own masters. Empty, never null, for
 // a plugin whose masters all resolved. See MasterResolution.Classify.
 public record PluginResponse(
     string Name,
     string Path,
-    int LoadOrderIndex,
+    // ADR-0044: the name's plugins.txt slot past the forced masters, or null when no line names
+    // this copy — the plugin-level wire keeps the honest null; record-level LoadOrderIndex values
+    // are column sort keys and put such a copy last.
+    int? LoadOrderIndex,
     bool IsLight,
     bool IsMaster,
     IReadOnlyList<string> Masters,
     int RecordCount,
     bool IsImmutable,
+    // Participates (ADR-0044): derived — Enabled AND Winning AND listed. The only copies that
+    // compete for winner or count in a conflict.
     bool Participates,
     string Origin,
     IReadOnlyList<MasterIssue> MasterIssues,
-    // InLoadOrder (#34 / ADR-0035): false for a plugin loaded on demand that the effective load
-    // order does not name. See PluginMetadata.InLoadOrder for why this is not Participates.
+    // InLoadOrder (#34 / ADR-0035, ADR-0044): derived — the winning copy of a listed name, enabled
+    // or not. False for a losing copy or an unlisted file. See PluginMetadata.InLoadOrder.
     bool InLoadOrder,
+    // Enabled / Winning (ADR-0044): the two registration facts beside the slot, as Mod Management
+    // stated them — what lets a row say *why* it does not participate (disabled, or overridden).
+    bool Enabled,
+    bool Winning,
     // HasMatchingRecords (#278 / ADR-0035 amending ADR-0018): true with no active filter, or when
     // this plugin owns at least one record the active filter matches. A record filter prunes
     // records and record types, never a plugin row — GetPlugins() always returns every plugin —
@@ -46,12 +54,12 @@ public record PluginResponse(
     // Derived on every read, never cached: tracking *is* the presence of that directory, and it can
     // appear or vanish outside Modbench between one response and the next.
     bool IsTracked = false,
-    // CompilePending / LastCompiledAt (#449): whether this plugin's tracked source has moved past
+    // CompileStale / LastCompiledAt (#449): whether this plugin's tracked source has moved past
     // what refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet" — and that
     // ref's own commit timestamp for the tooltip that names it. Both false/null for an untracked
     // plugin or one Track never parked a ref for (Source.ModFolders.CompileFreshnessOf's own
     // degrade-safe answer) — same "derived on every read, never cached" posture as IsTracked above.
-    bool CompilePending = false,
+    bool CompileStale = false,
     DateTimeOffset? LastCompiledAt = null)
 {
     public static PluginResponse FromMetadata(
@@ -62,9 +70,9 @@ public record PluginResponse(
         // clean), not a missing one, and the metadata already carries every fact both rules need.
         var freshness = Source.ModFolders.CompileFreshnessOf(m.Origin, m.Path, m.Name);
         return new(m.Name, m.Path, m.LoadOrderIndex, m.IsLight, m.IsMaster, m.Masters, m.RecordCount, m.IsImmutable, m.Participates, m.Origin,
-            masterIssues ?? [], m.InLoadOrder, hasMatchingRecords,
+            masterIssues ?? [], m.InLoadOrder, m.Enabled, m.Winning, hasMatchingRecords,
             Source.ModFolders.IsEditable(m.Origin, m.Path),
-            freshness.Pending, freshness.LastCompiledAt);
+            freshness.Stale, freshness.LastCompiledAt);
     }
 }
 
@@ -271,43 +279,31 @@ public record PluginRecordTypeCount(string Type, int Count, string DisplayName);
 /// constructed, matching <c>medit-record-editor.md</c>'s "no tint" rule for those two states.</summary>
 public record ConflictRecord(RecordSummary Record, ConflictAll ConflictAll);
 
-/// <summary>#544: which side of a Stack-peer delta comparison a <see cref="PluginDeltaEntry"/>
-/// belongs to — <c>WinnerOnly</c>/<c>PeerOnly</c> are the two presence icons the Compare-with-winner
-/// grid renders; <c>BothDiffer</c> is an ordinary content difference, rendered with the existing
-/// compare-grid coloring, no icon of its own.</summary>
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum PluginDeltaPresence { WinnerOnly, PeerOnly, BothDiffer }
-
-/// <summary>#544: one FormKey <see cref="IRecordQueryService.GetPluginDelta"/> reports — present
-/// in only one of the two copies, or present in both but resolving differently (VMAD/conditions
-/// included, since <c>RecordQueryService</c> classifies through the same <c>ClassifyStack</c>
-/// helper <see cref="RecordQueryService.GetCompare"/> uses). A FormKey identical in both copies is
-/// never constructed as one of these — GetPluginDelta's own "differences only" contract — so the
-/// list itself is the absence signal, not a flag on an included row.</summary>
-public record PluginDeltaEntry(string FormKey, string? EditorId, PluginDeltaPresence Presence);
-
-public record SessionFilterRequest(string Sql);
-public record SessionFilterResponse(string? Sql);
+public record FilterRequest(string Sql);
+public record FilterResponse(string? Sql);
 
 // CrashRepairOffers (#381): every tracked plugin this same load found stale/missing against
 // Modbench's own record — an interrupted compile's journal marker, or a binary that could not be
 // read at all — surfaced the same structured-failures way Failures already is (ADR-0026), never a
 // second endpoint or poller: the only way either condition can newly appear is a compile this
 // process itself drives, or a process restart, both of which this load call already observes.
-public record SessionLoadResponse(
+public record LoadOrderResponse(
     string Status, IReadOnlyList<PluginLoadFailure> Failures, IReadOnlyList<CrashRepairOffer> CrashRepairOffers);
-public record SessionLoadExplicitRequest(
-    IReadOnlyList<ExplicitPlugin> Plugins, string GameDirectory, string GameRelease = "Fallout4");
-// Origin (#269 / ADR-0036): Mod Management resolves this — the mod folder that provided the
-// file, or one of the reserved values (PluginOrigin.DataDirectory / MO2's overwrite). Required —
-// the one production caller (modbench/src/modmanager/explicitSession.ts) already resolves it, so
-// there is nothing left to default (#275).
-// Participates (#270 / ADR-0035): the plugins.txt `*` prefix — whether this plugin loads in the
-// game and so competes for winner. Nullable purely to make an omitted field detectable: a plain
-// bool would bind a missing property to false, quietly making every plugin non-participating, so
-// nothing would win any FormKey and the conflict picture would be empty but well-formed. The
-// endpoint rejects null (400) rather than choosing a value on the caller's behalf.
-public record ExplicitPlugin(string Name, string Path, string Origin, bool? Participates);
+// ADR-0044: Mod Management's snapshot — every physical plugin copy in the instance. InstanceRoot
+// (#592 / ADR-0001) is the MO2 instance these mod folders belong to, what the index file is keyed
+// on; it must be the instance rather than anything wider, because Origin is a mod folder *name*
+// unique only within one. GameDirectory is where the backend resolves the forced masters from.
+public record LoadOrderRequest(
+    IReadOnlyList<LoadOrderPlugin> Plugins, string GameDirectory, string InstanceRoot, string GameRelease = "Fallout4");
+// One copy of the snapshot: Origin (#269 / ADR-0036) is Mod Management's to resolve — the mod
+// folder that provided the file, or a reserved value (PluginOrigin.DataDirectory / MO2's
+// overwrite). Slot is the name's plugins.txt line index, null when no line names it. Enabled (the
+// `*` prefix) and Winning (this copy is what the Mod override order resolves the name to) are
+// nullable purely to make an omitted field detectable: a plain bool would bind a missing property
+// to false, quietly making every copy non-participating, so nothing would win any FormKey and the
+// conflict picture would be empty but well-formed. The endpoint rejects null (400) rather than
+// choosing a value on the caller's behalf.
+public record LoadOrderPlugin(string Name, string Path, string Origin, int? Slot, bool? Enabled, bool? Winning);
 
 // Origin (#296 / ADR-0036): the mod folder that provided the source row's physical file, or a
 // reserved PluginOrigin value — additive alongside Plugin, same shape as RecordDetail.Origin

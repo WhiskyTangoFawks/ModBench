@@ -16,28 +16,31 @@ public class PluginFixtureBuilderTests
         Assert.True(File.Exists(Path.Combine(data.DataFolder, "TestPlugin.esp")));
     }
 
+    // #592: the ordered explicit list is the load order — there is no plugins.txt path left for a
+    // fixture to write one for. `listed` is what puts a plugin in that list; `enabled` is the `*`
+    // prefix it used to be written with, i.e. Participates.
     [Fact]
-    public void Build_WritesPluginsTxt_WithListedPlugin()
+    public void Build_PutsAListedPluginInTheLoadOrder_Participating()
     {
         using var data = new PluginFixtureBuilder()
             .WithPlugin("TestPlugin.esp")
             .Build();
 
-        var content = File.ReadAllText(data.PluginsTxtPath);
-        Assert.Contains("*TestPlugin.esp", content);
+        var plugin = Assert.Single(data.Plugins);
+        Assert.Equal("TestPlugin.esp", plugin.Name);
+        Assert.True(plugin.Enabled);
     }
 
     [Fact]
-    public void Build_UnlistedPlugin_NotInPluginsTxt()
+    public void Build_UnlistedPlugin_IsNotInTheLoadOrder()
     {
         using var data = new PluginFixtureBuilder()
             .WithPlugin("Fallout4.esm", listed: false)
             .WithPlugin("UserMod.esp")
             .Build();
 
-        var content = File.ReadAllText(data.PluginsTxtPath);
-        Assert.DoesNotContain("Fallout4.esm", content);
-        Assert.Contains("*UserMod.esp", content);
+        Assert.DoesNotContain(data.Plugins, p => p.Name == "Fallout4.esm");
+        Assert.Contains(data.Plugins, p => p.Name == "UserMod.esp");
     }
 
     [Fact]
@@ -65,7 +68,7 @@ public class PluginFixtureBuilderTests
     public void Build_WithCreationClubCatalog_WritesCccFile()
     {
         // Written one directory above DataFolder (#434) — where Mutagen's own
-        // CreationClubListings.GetListingsPath expects it relative to the Data path a session is
+        // CreationClubListings.GetListingsPath expects it relative to the Data path a load order is
         // given, not inside DataFolder itself.
         using var data = new PluginFixtureBuilder()
             .WithPlugin("ccTest.esl", listed: false)

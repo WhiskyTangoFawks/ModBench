@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -14,7 +14,7 @@ using Noggog.WorkEngine;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414's orchestration seam end to end: a real loaded session, a real (small) plugin with real
+/// #414's orchestration seam end to end: a real loaded load order, a real (small) plugin with real
 /// records, tracked through <see cref="TrackService"/>. #451 slice A rewrote Track's own write path
 /// to serialize through the whole-mod door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>)
 /// instead of the per-record codec, so these assertions now check the Spriggit layout — group folders,
@@ -26,7 +26,7 @@ namespace MEditService.Tests.Source;
 public sealed class TrackServiceTests
 {
     [Fact]
-    public async Task TrackAsync_RealSession_WritesTheSpriggitTree_AndTracksTheModFolder()
+    public async Task TrackAsync_RealLoadOrder_WritesTheSpriggitTree_AndTracksTheModFolder()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-game-").FullName;
@@ -38,15 +38,15 @@ public sealed class TrackServiceTests
             var npc2 = mod.Npcs.AddNew("SecondNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -123,15 +123,15 @@ public sealed class TrackServiceTests
             File.WriteAllBytes(Path.Combine(modFolder, "meta.ini"), metaBytes);
             var expectedHash = Convert.ToHexString(SHA256.HashData(metaBytes));
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
@@ -159,15 +159,15 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
 
             var gitDir = Path.Combine(modFolder, ".git");
             var body = GitCli.Run(gitDir, modFolder, "log", "-1", "--format=%B", "main");
@@ -183,7 +183,7 @@ public sealed class TrackServiceTests
     // #414 review finding F3: the already-tracked check must fire before the deep-parse/serialize
     // loop, not after — otherwise the 46-second worst case runs to completion (or, as here, blows
     // up on a corrupt file) before the caller ever learns the cheap, typed answer was available up
-    // front. The plugin here loads fine into the session (so TrackAsync's own plugin-resolution
+    // front. The plugin here loads fine into the load order (so TrackAsync's own plugin-resolution
     // step succeeds) but is corrupted on disk afterward — never-assume-exclusive-ownership means
     // this is a legitimate state, not a test artifact — so TrackService's *own* deep parse of it
     // must fail if the loop is ever reached. Pre-tracking the mod folder first means the *correct*
@@ -200,11 +200,11 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             // Track the mod folder once, for real, before corrupting anything — a Spriggit-flat-shaped
@@ -215,14 +215,14 @@ public sealed class TrackServiceTests
                 [new PristineFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
                 new TrackProvenance(null, null, new Dictionary<string, string>()));
 
-            // The session already parsed a good copy; the file on disk is corrupted afterward —
+            // The load order already parsed a good copy; the file on disk is corrupted afterward —
             // exactly the state TrackService's own fresh deep parse must fail against if it is
             // ever reached.
             File.WriteAllBytes(pluginPath, [0x00, 0x01, 0x02, 0x03]);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
             await Assert.ThrowsAsync<SourceAlreadyTrackedException>(
-                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits));
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits));
         }
         finally
         {
@@ -258,13 +258,13 @@ public sealed class TrackServiceTests
             for (var i = 0; i < 400; i++) secondMod.Npcs.AddNew($"Npc{i}");
             secondMod.WriteToBinary(secondPluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
                 [
-                    new ExplicitPluginInput("First.esp", firstPluginPath, "FixtureMod", true),
-                    new ExplicitPluginInput("Second.esp", secondPluginPath, "FixtureMod", true),
+                    new LoadOrderEntry("First.esp", firstPluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true),
+                    new LoadOrderEntry("Second.esp", secondPluginPath, "FixtureMod", Slot: 1, Enabled: true, Winning: true),
                 ],
                 GameRelease.Fallout4);
 
@@ -272,7 +272,7 @@ public sealed class TrackServiceTests
             Assert.Equal(TrackPhase.Idle, service.Progress.Phase);
 
             var observed = new List<TrackProgress>();
-            var trackTask = service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
+            var trackTask = service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
             while (!trackTask.IsCompleted)
                 observed.Add(service.Progress);
             await trackTask;
@@ -294,7 +294,7 @@ public sealed class TrackServiceTests
     // ran would also produce) by substituting a wrapper that still deserializes for real but also
     // counts its own calls, through the internal overload that exists for exactly this.
     [Fact]
-    public async Task TrackAsync_RealSession_RunsTheRoundTripGateForRealBeforeSucceeding()
+    public async Task TrackAsync_RealLoadOrder_RunsTheRoundTripGateForRealBeforeSucceeding()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-gateran-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-gateran-game-").FullName;
@@ -305,11 +305,11 @@ public sealed class TrackServiceTests
             mod.Npcs.AddNew("SomeNpc");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
@@ -321,7 +321,7 @@ public sealed class TrackServiceTests
                 return RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
             }
 
-            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits, CountingDeserialize);
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits, CountingDeserialize);
 
             Assert.Equal(1, deserializeCalls);
             Assert.True(SourceRepository.IsTracked(modFolder));
@@ -356,11 +356,11 @@ public sealed class TrackServiceTests
             var npc = mod.Npcs.AddNew("OriginalName");
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
@@ -373,7 +373,7 @@ public sealed class TrackServiceTests
             }
 
             var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheNpc));
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits, DeserializeThenCorruptTheNpc));
 
             Assert.Contains(npc.FormKey.ToString(), ex.Message);
             Assert.Contains("OriginalName", ex.Message);
@@ -405,11 +405,11 @@ public sealed class TrackServiceTests
             npc.HeightMin = 1.5f;
             mod.WriteToBinary(pluginPath);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
@@ -422,7 +422,7 @@ public sealed class TrackServiceTests
             }
 
             var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits, DeserializeThenMutateTheFloat));
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits, DeserializeThenMutateTheFloat));
 
             Assert.Contains(npc.FormKey.ToString(), ex.Message);
             Assert.Contains("Npc", ex.Message);
@@ -468,16 +468,16 @@ public sealed class TrackServiceTests
             mod.WriteToBinary(pluginPath);
             await File.WriteAllBytesAsync(pluginPath, StripFnamAndMnamFromTheOnlyFurnRecord(await File.ReadAllBytesAsync(pluginPath)));
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
             var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
-                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits));
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits));
 
             Assert.DoesNotContain("is missing", ex.Message);
             Assert.DoesNotContain("FNAM", ex.Message);
@@ -571,15 +571,15 @@ public sealed class TrackServiceTests
             // afterward, which a zero-byte file would fail to parse for an unrelated reason.
             File.WriteAllBytes(Path.Combine(modFolder, "UnrelatedMod - Main.ba2"), []);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
-            await service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits);
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
@@ -627,16 +627,16 @@ public sealed class TrackServiceTests
             // with the download, or was deleted by hand.
             Directory.Delete(Path.Combine(modFolder, "Strings"), recursive: true);
 
-            using var manager = new SessionManager(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ISessionManager sessionManager = manager;
-            sessionManager.LoadExplicit(
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
                 gameDir,
-                [new ExplicitPluginInput("Fixture.esp", pluginPath, "FixtureMod", true)],
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
             var service = new TrackService(NullLogger<TrackService>.Instance);
             var ex = await Assert.ThrowsAsync<MissingLocalizationStringsException>(
-                () => service.TrackAsync(sessionManager.Session!, "FixtureMod", SourcePreset.Edits));
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits));
 
             // Fallout4 names its strings files by ISO language code (GameConstants.Fallout4's own
             // StringsLanguageFormat.Iso), not the full language name.

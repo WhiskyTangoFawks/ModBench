@@ -8,7 +8,7 @@ vi.mock('./vscode', () => ({ vscode: { postMessage: vi.fn() } }));
 import { RecordPanel } from './RecordPanel';
 import type { FieldMetadata } from './types';
 import { columnKey } from './types';
-import type { LoadResult, RecordSessionClient } from './RecordSessionClient';
+import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 
@@ -215,7 +215,7 @@ const nestedStructArrayResult = {
 
 let currentCompare: unknown = null;
 
-function fakeClient(): RecordSessionClient {
+function fakeClient(): RecordPanelClient {
   return {
     load: vi.fn().mockImplementation(() => Promise.resolve({
       ok: true,
@@ -379,7 +379,7 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
     }],
   };
 
-  function fakeEditableClient(): RecordSessionClient {
+  function fakeEditableClient(): RecordPanelClient {
     return {
       load: vi.fn().mockImplementation(() => Promise.resolve({
         ok: true,
@@ -542,7 +542,7 @@ describe('RecordPanel — array ops land at the element\'s real path, at any dep
   };
 
   function renderEditablePanel() {
-    const client: RecordSessionClient = {
+    const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
         ok: true,
         result: nestedEditableArrayResult,
@@ -686,7 +686,7 @@ const scalarResult = {
 // applier silently declined the shape, and the write path reported success — the edit vanished.
 describe('RecordPanel — a value edit inside a complex field commits the whole field (#503)', () => {
   function renderEditablePanel() {
-    const client: RecordSessionClient = {
+    const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
         ok: true,
         result: currentCompare,
@@ -794,7 +794,7 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
 // trigger differs.
 describe('RecordPanel — the extended editor commits the whole field, at any depth (#533)', () => {
   function renderEditablePanel() {
-    const client: RecordSessionClient = {
+    const client: RecordPanelClient = {
       load: vi.fn().mockImplementation(() => Promise.resolve({
         ok: true,
         result: currentCompare,

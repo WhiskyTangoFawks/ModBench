@@ -13,7 +13,7 @@ namespace MEditService.Tests.Records;
 // #271 / ADR-0036: plugin identity is (origin, filename), not filename alone. These tests exercise
 // the DuckDbRecordIndex seam directly with two independently-built Fallout4Mods that share a
 // filename — the shape AC6 calls out explicitly ("even though nothing loads such a pair yet" via
-// GameSession/SessionManager, which still dedupe by filename; #34's concern, not #271's).
+// LoadOrder/LoadOrderMirror, which still dedupe by filename; #34's concern, not #271's).
 public class CompoundPluginIdentityTests
 {
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -46,8 +46,8 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var overrides = repo.GetOverrideStack(npcKey.ToString())!.Entries;
 
@@ -68,8 +68,8 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var record = repo.GetDocument(npcKey.ToString(), new PluginKey("Shared.esp", "ModA"));
 
@@ -88,8 +88,8 @@ public class CompoundPluginIdentityTests
         var (modA, modB, _) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         Assert.Equal(1, repo.GetRecordTypeCounts(new PluginKey("Shared.esp", "ModA"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
@@ -113,8 +113,8 @@ public class CompoundPluginIdentityTests
         var secondKey = modB.Npcs.AddNew("SecondOnlyInModB").FormKey;
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var modAKeys = repo.GetNativeFormKeys(new PluginKey("Shared.esp", "ModA"));
         var modBKeys = repo.GetNativeFormKeys(new PluginKey("Shared.esp", "ModB"));
@@ -137,8 +137,8 @@ public class CompoundPluginIdentityTests
         var (modA, modB, npcKey) = BuildSharedFilenameFixture();
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var modAResult = repo.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("Shared.esp", "ModA"), Limit: 100, Offset: 0));
 
@@ -157,8 +157,8 @@ public class CompoundPluginIdentityTests
         // ModB sits later in its own load order and would incorrectly compute as winner if
         // UpdateWinners' join matched plugins by filename alone — ModA's participation is a
         // different origin's row entirely and must never leak into ModB's winner eligibility.
-        repo.Index(modA, loadOrderIndex: 1, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 5, participates: false, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(1), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Disabled(5), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
         repo.UpdateWinners();
 
         var overrides = repo.GetOverrideStack(npcKey.ToString())!.Entries;
@@ -208,8 +208,8 @@ public class CompoundPluginIdentityTests
         Assert.Equal(npcKeyA, npcKeyB);
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         Assert.Equal(2L, Count(repo, "cell_location", "cell_form_key", cellKeyA.ToString()));
         Assert.Equal(2L, Count(repo, "placement", "form_key", placedKeyA.ToString()));
@@ -233,8 +233,8 @@ public class CompoundPluginIdentityTests
         var raceFormKey = modA.Races.First().FormKey.ToString();
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey(modA.ModKey.FileName.ToString(), "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "ModB"));
 
         var refs = repo.GetReferencedBy(raceFormKey);
 

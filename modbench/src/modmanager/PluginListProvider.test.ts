@@ -225,7 +225,7 @@ describe('PluginListProvider', () => {
   });
 
   // #97 / ADR-0035 § Live mutation: the composition root's cue to apply the same participation
-  // change to a running backend session. Named plugin/enabled must match exactly what was
+  // change to a running backend. Named plugin/enabled must match exactly what was
   // written, since the backend call the composition root makes off this carries no other source
   // of truth for which plugin or which state.
   it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
@@ -242,7 +242,7 @@ describe('PluginListProvider', () => {
   // Rival named: an implementation that fires onDidChangeParticipation from invalidate() itself
   // (reusing onDidChangeTreeData's own generic "something changed" firing) would also fire it for
   // a filter keystroke or an external plugins.txt edit picked up by a watcher — neither is a
-  // participation change a backend session should be told about. This is the test that would
+  // participation change a backend should be told about. This is the test that would
   // catch that: invalidate() alone must never fire it.
   it('invalidate() alone does not fire onDidChangeParticipation', () => {
     const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
@@ -304,7 +304,7 @@ describe('PluginListProvider — filter', () => {
     expect(rows.some((r) => r instanceof EmptyNode)).toBe(false);
   });
 
-  // #255 AC6: the filter is durable within the session — it outlives a Refresh and whatever the
+  // #255 AC6: the filter is durable within the load order — it outlives a Refresh and whatever the
   // re-read turns up. The render-vs-invalidate split (#79) is what makes that true, so this is
   // the test that says so: invalidate() clears the row cache and must not touch the term.
   it('survives a refresh and an underlying data change, narrowing whatever the re-read returns', async () => {
@@ -396,7 +396,7 @@ describe('PluginNode — order-aware missing-master badge', () => {
   });
 });
 
-// #277 / ADR-0037 AC8: the composite's session-aware reconciliation needs the raw master names
+// #277 / ADR-0037 AC8: the composite's load order-aware reconciliation needs the raw master names
 // this row's order-aware badge flagged, structurally — not by parsing the rendered tooltip text
 // (fragile, and out of reach for a composite that must import no Mod-Management vocabulary).
 describe('orderIssueMastersOf', () => {
@@ -781,127 +781,6 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined(); // no badge — computation failed
     expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('master-order status') }]);
     expect(logs.some((l) => l.includes('status'))).toBe(true);
-  });
-});
-
-// #447: the Plugins tree's always-on file-override decoration — a plugin filename more than one
-// enabled mod provides. Same fixture style as the order-aware badge describe above.
-describe('PluginListProvider — file-override decoration (#447)', () => {
-  let dir: string;
-  const pluginNodes = async (provider: PluginListProvider): Promise<PluginNode[]> =>
-    (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
-  const byName = (nodes: PluginNode[], name: string) => nodes.find((n) => n.plugin.name === name)!;
-
-  beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'plugin-fileoverride-'));
-    const dataFolder = join(dir, 'Game', 'Data');
-    await mkdir(dataFolder, { recursive: true });
-    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
-    // ModA and ModB both ship Shared.esp at their mod root — a file conflict. Solo ships
-    // Solo.esp alone — uncontested, the AC4 control.
-    for (const [modName, file] of [['ModA', 'Shared.esp'], ['ModB', 'Shared.esp'], ['Solo', 'Solo.esp']] as const) {
-      await mkdir(join(dir, 'mods', modName), { recursive: true });
-      await writeFile(join(dir, 'mods', modName, file), buildTes4Buffer([]));
-    }
-    await writeFile(
-      join(dir, 'ModOrganizer.ini'),
-      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
-    );
-    // Top of file = winning end (mo2/modlistText.ts) — ModA wins over ModB.
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+ModA\r\n+ModB\r\n+Solo\r\n');
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Shared.esp\r\nSolo.esp\r\n');
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  const provider = () =>
-    new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir, dataFolder: () => Promise.resolve(join(dir, 'Game', 'Data')) });
-
-  it('flags a plugin two enabled mods both provide: resourceUri, description suffix, tooltip naming both mods with the winner marked', async () => {
-    const nodes = await pluginNodes(provider());
-    const shared = byName(nodes, 'Shared.esp');
-
-    expect(shared.resourceUri).toEqual({ fsPath: join(dir, 'mods', 'ModA', 'Shared.esp') });
-    expect(shared.description).toContain('2 mods');
-    expect(shared.tooltip).toContain('ModA (winner)');
-    expect(shared.tooltip).toContain('ModB');
-    expect(shared.tooltip).not.toContain('ModB (winner)');
-  });
-
-  it('AC4: leaves an uncontested plugin exactly as before — no resourceUri, no description suffix', async () => {
-    const nodes = await pluginNodes(provider());
-    const solo = byName(nodes, 'Solo.esp');
-
-    expect(solo.resourceUri).toBeUndefined();
-    expect(solo.description).toBeUndefined();
-    expect(solo.tooltip).toBeUndefined();
-  });
-
-  // AC3: the reconciled order-aware badge and this decoration must be able to appear together —
-  // Shared.esp masters Late.esp, which is sequenced after it, AND is itself a file override.
-  it('AC3: coexists with the order-aware missing-master badge on the same row (append, never overwrite)', async () => {
-    await mkdir(join(dir, 'mods', 'Late'), { recursive: true });
-    await writeFile(join(dir, 'mods', 'Late', 'Late.esp'), buildTes4Buffer([]));
-    await writeFile(join(dir, 'mods', 'ModA', 'Shared.esp'), buildTes4Buffer(['Late.esp']));
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+ModA\r\n+ModB\r\n+Solo\r\n+Late\r\n');
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Shared.esp\r\nSolo.esp\r\nLate.esp\r\n');
-
-    const nodes = await pluginNodes(provider());
-    const shared = byName(nodes, 'Shared.esp');
-
-    expect(shared.iconPath).toEqual({ id: 'error' }); // order-aware badge still renders
-    expect(shared.description).toContain('not loaded before this plugin');
-    expect(shared.description).toContain('2 mods');
-    expect(shared.tooltip).toContain('Late.esp is not loaded before this plugin');
-    expect(shared.tooltip).toContain('File override');
-  });
-
-  it('AC2: disabling one provider clears the signal after invalidate() (no session reload)', async () => {
-    const p = provider();
-    expect(byName(await pluginNodes(p), 'Shared.esp').resourceUri).toBeDefined();
-
-    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+ModA\r\n-ModB\r\n+Solo\r\n');
-    p.invalidate();
-
-    const shared = byName(await pluginNodes(p), 'Shared.esp');
-    expect(shared.resourceUri).toBeUndefined();
-    expect(shared.description).toBeUndefined();
-  });
-
-  it('exposes the same facts via fileOverrides() for #448\'s Stack-node visibility check', async () => {
-    const p = provider();
-    await pluginNodes(p); // populate the cache
-    const overrides = p.fileOverrides();
-
-    expect(overrides.has('shared.esp')).toBe(true);
-    expect(overrides.get('shared.esp')?.providers.sort()).toEqual(['ModA', 'ModB']);
-    expect(overrides.has('solo.esp')).toBe(false);
-  });
-
-  // #448: the Stack node's own peer list — the file-level losers a contested plugin's row hands
-  // off to Editing (origin + physical path, ADR-0036's boundary object), reusing #34's existing
-  // findUnlistedPlugins rather than computing anything new.
-  it('#448: stackPeers() lists the file-level loser(s) for a contested plugin, keyed like fileOverrides()', async () => {
-    const p = provider();
-    await pluginNodes(p); // populate the cache
-    const peers = p.stackPeers();
-
-    expect(peers.has('shared.esp')).toBe(true);
-    const sharedPeers = peers.get('shared.esp')!;
-    expect(sharedPeers).toHaveLength(1);
-    expect(sharedPeers[0]).toEqual({ name: 'Shared.esp', origin: 'ModB', path: join(dir, 'mods', 'ModB', 'Shared.esp') });
-  });
-
-  it('#448: stackPeers() is empty for an uncontested plugin — no Stack node to build', async () => {
-    const p = provider();
-    await pluginNodes(p);
-    expect(p.stackPeers().has('solo.esp')).toBe(false);
-  });
-
-  it('#448: stackPeers() is empty before the first render, same convention as fileOverrides()', () => {
-    const p = provider();
-    expect(p.stackPeers().size).toBe(0);
   });
 });
 

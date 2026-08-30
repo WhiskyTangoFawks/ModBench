@@ -9,7 +9,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
     private readonly HttpClient _client = loaded.Client;
     private readonly ImmutablePluginFixture _fixture = loaded.Plugin;
 
-    // #288: every test gets its own destination folder — the fixture (and its DB/session) is
+    // #288: every test gets its own destination folder — the fixture (and its DB/load order) is
     // reused across the whole class (IClassFixture), so two tests sharing one destination would
     // make the second observe the first's Track side effect.
     private string ModFolder(string name) => Path.Combine(_fixture.DataFolder, name);

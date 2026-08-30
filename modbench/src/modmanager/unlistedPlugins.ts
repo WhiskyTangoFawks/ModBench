@@ -19,7 +19,7 @@ export interface UnlistedPlugin {
   origin: string;
 }
 
-/** The (origin, filename) pairs the editing session already holds — `buildExplicitPluginsWithOrigin`'s
+/** The (origin, filename) pairs the editing backend already holds — `buildExplicitPluginsWithOrigin`'s
  *  own output, narrowed to what identifies a plugin. */
 export interface LoadedPlugin {
   name: string;
@@ -39,7 +39,7 @@ export function findUnlistedPlugins(index: FileConflictIndex, loadOrder: LoadedP
   // in a Windows filename and in an MO2 mod-folder name, so it cannot collide with either half's
   // content — but the order is not, and this is deliberately a private lookup key rather than a
   // ColumnKey: nothing crosses the wire with it, and Mod Management does not speak ColumnKey.
-  // Case-folded on both halves: plugins.txt casing is not authoritative (explicitSession.ts makes
+  // Case-folded on both halves: plugins.txt casing is not authoritative (loadOrderSnapshot.ts makes
   // the same point), and a mod folder read off disk can differ in case from the one recorded as an
   // origin. A case difference must not read as "a second copy".
   const loaded = new Set(loadOrder.map((p) => `${foldPath(p.origin)}|${foldPath(p.name)}`));

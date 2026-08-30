@@ -471,7 +471,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // lives in *this* assembly rather than the game assembly (see FindGeneratedSerializationType).
     // Taking the namespace from the record rather than naming a game is what keeps this mechanism
     // game-generic (root CLAUDE.md): #413 makes this codec the ingest path for every record, so a
-    // hardcoded game here would mean a Skyrim or Starfield session indexing nothing at all. What
+    // hardcoded game here would mean a Skyrim or Starfield load order indexing nothing at all. What
     // stays per-game is only which types the generator was seeded for — see
     // RecordTextCodecGeneratorSeed, which is one file and deliberately concrete.
     private static Type? LookupGeneratedType(Type recordType, string concreteTypeName) =>

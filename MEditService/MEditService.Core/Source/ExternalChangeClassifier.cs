@@ -4,12 +4,12 @@ namespace MEditService.Core.Source;
 
 /// <summary>
 /// #417's classification step, shared verbatim by the live watcher (<c>MEditService.Bridge</c>) and
-/// the load-time hash check (fired from the session-load path) — the reason it lives here rather
+/// the load-time hash check (fired from the reconcile path) — the reason it lives here rather
 /// than in the bridge assembly is exactly that sharing: both callers need the identical decision,
 /// and only one of them (the load-time check, wired from <c>MEditService.Api</c>) can never depend
 /// on the bridge project without a circular reference back through this one.
 ///
-/// <para>Reads only what git and <c>meta.ini</c> already hold — no session, no DB, matching every
+/// <para>Reads only what git and <c>meta.ini</c> already hold — no load order, no DB, matching every
 /// other class in this folder.</para>
 /// </summary>
 public static class ExternalChangeClassifier
@@ -32,7 +32,7 @@ public static class ExternalChangeClassifier
         // surviving binary hash happens to still agree with the parked ref (plausible: the write
         // landed but the batch crashed before the marker was cleared) still routes to repair, not
         // here.
-        if (CompileJournal.PendingRecovery(modFolder) != null)
+        if (CompileJournal.UnfinishedBatch(modFolder) != null)
             return new ExternalChangeClassification.CrashRecovery();
 
         var observedSha256 = Convert.ToHexStringLower(SHA256.HashData(observedBinaryBytes));

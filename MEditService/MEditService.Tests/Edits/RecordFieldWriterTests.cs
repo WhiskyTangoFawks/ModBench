@@ -9,7 +9,7 @@ namespace MEditService.Tests.Edits;
 
 /// <summary>
 /// #401: RecordFieldWriter.TryApply's own dispatch guards, exercised directly via
-/// InternalsVisibleTo rather than through RecordEditService.EditField's full session/tracked-mod
+/// InternalsVisibleTo rather than through RecordEditService.EditField's full load order/tracked-mod
 /// machinery — these are pure dispatch-routing questions with no working-tree side effects to
 /// observe, so the lighter seam is the right one (per /tdd: test at the seam that matches what's
 /// being proven).

@@ -234,95 +234,13 @@ export class ErrorNode extends vscode.TreeItem {
   }
 }
 
-// ── Stack node (#448, split (c) of #397's design record) ───────────────────────
-
-/** #448: one Stack-node peer — a file-level loser's own (origin, physical path) pair. Structurally
- *  matches `PluginsTreeComposite.ts`'s own `StackPeer` (and ultimately the row-owning bounded
- *  context's own `UnlistedPlugin`, #34) without importing either — `contextBoundary.test.ts`
- *  forbids this file importing from that side, and CONTEXT-MAP.md's boundary object (origin +
- *  physical path, ADR-0036) is exactly this shape, so there is nothing for a structural duplicate
- *  to omit. */
-export interface StackPeer {
-  name: string;
-  path: string;
-  origin: string;
-}
-
-/** #448: the pinned-first "investigate the stack" node for a plugin whose filename resolves to
- *  more than one enabled provider's copy — the Worldspaces-node pattern (a synthetic node ahead of
- *  the flat record-type list), for the resolution stack CONTEXT.md's "Resolution stack" entry
- *  names rather than a spatial grouping. The row's own file-override badge (#447) is what signals
- *  this node exists — the expand chevron can't, since plugin rows always expand (ADR-0035). Absent
- *  entirely when the stack is trivial (zero peers) — see `getPluginChildren`, never rendered
- *  empty. */
-export class StackNode extends vscode.TreeItem {
-  readonly kind = 'stack' as const;
-  constructor(
-    public readonly plugin: string,
-    /** The winner's own origin, or undefined when nothing has told this provider yet
-     *  (`setPluginOrigins`) — degrades to no state entries, the same posture an untracked winner
-     *  gets (`fetchStackChildren`), never a crash or a mislabeled entry. */
-    public readonly winnerOrigin: string | undefined,
-    public readonly peers: readonly StackPeer[],
-  ) {
-    super('Stack', vscode.TreeItemCollapsibleState.Collapsed);
-    this.contextValue = 'stack';
-    this.iconPath = new vscode.ThemeIcon('layers');
-  }
-}
-
-/** #448: the winner's own working-tree state — map, not links (the maintainer's "map + links, not
- *  duplicated function" decision keeps every verb on the binary entry below; commit/revert stay in
- *  the native SCM panel). Tracked plugins only (`fetchStackChildren`) — an untracked winner has no
- *  working tree to speak of, per CONTEXT.md's "Editing requires tracking; viewing never does". */
-export class StackSourceStateNode extends vscode.TreeItem {
-  readonly kind = 'stackSourceState' as const;
-  constructor(public readonly plugin: string, public readonly origin: string) {
-    super(`source (working tree) — ${origin}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'stackSourceState';
-    this.iconPath = new vscode.ThemeIcon('source-control');
-  }
-}
-
-/** #448: the winner's own last-compiled state — the map + links entry (maintainer decision): its
- *  own context menu offers "Diff against source" (native diff of the working tree against
- *  `refs/medit/last-compile/<plugin>`) and "Save & Compile" (reuses `modbench.saveAndCompile`
- *  unchanged); commit/revert stay in the native SCM panel, never duplicated here. Tracked plugins
- *  only, same gate as the source entry above. */
-export class StackBinaryStateNode extends vscode.TreeItem {
-  readonly kind = 'stackBinaryState' as const;
-  constructor(public readonly plugin: string, public readonly origin: string) {
-    super(`binary (last compile…) — ${origin}`, vscode.TreeItemCollapsibleState.None);
-    this.contextValue = 'stackBinaryState';
-    this.iconPath = new vscode.ThemeIcon('file-binary');
-  }
-}
-
-/** #448: one file-level peer's own row under the Stack node — `<plugin> — <origin>`, greyed
- *  (lock icon, the same "forced/non-interactive" language `ImplicitMasterNode` already uses) and
- *  read-only regardless of tracking (load-order membership decides write access, CONTEXT.md's
- *  "Resolution stack" entry — never re-derived here). Expanding it lazy-loads the copy through
- *  #34's unlisted-plugin door (`fetchStackPeerChildren`); collapsing it unloads the copy again so
- *  a browsed-then-abandoned peer never lingers in the session. */
-export class StackPeerNode extends vscode.TreeItem {
-  readonly kind = 'stackPeer' as const;
-  constructor(public readonly plugin: string, public readonly peer: StackPeer) {
-    super(`${peer.name} — ${peer.origin}`, vscode.TreeItemCollapsibleState.Collapsed);
-    this.contextValue = 'stackPeer';
-    this.iconPath = new vscode.ThemeIcon('lock');
-    this.description = 'read-only';
-    this.tooltip = `${peer.name} — provided by ${peer.origin}\nFile-level loser: read-only, regardless of tracking.`;
-  }
-}
-
-/** #364: the Conflicts node — root-level (unlike Stack above, which is a per-plugin pinned-first
- *  *child* built inside `getPluginChildren`), so it is never constructed there and never collides
- *  with Stack's own insertion point. `PluginsTreeComposite`'s root `getChildren` consults
+/** #364: the Conflicts node — root-level, never a per-plugin child built inside
+ *  `getPluginChildren`. `PluginsTreeComposite`'s root `getChildren` consults
  *  {@link PluginTreeProvider.conflictsNode} the same optional-accessor way it already consults
- *  `stackPeersOf`/`hasMatchingRecords`, and prepends whatever it returns.
+ *  `hasMatchingRecords`, and prepends whatever it returns.
  *
  *  Omitted entirely — never rendered with empty/placeholder children — while
- *  `SessionStatus.conflictsComputed` is false (`setConflictsComputed`/`conflictsNode`, #307's
+ *  `LoadOrderStatus.conflictsComputed` is false (`setConflictsComputed`/`conflictsNode`, #307's
  *  invariant): an absent node is what "not computed yet" looks like, never a node with nothing
  *  in it, which would be indistinguishable from "computed, and there happen to be no
  *  conflicts". */
@@ -339,7 +257,6 @@ export type PluginTreeNode =
   | RecordTypeNode | RecordNode
   | WorldspacesNode | WorldspaceNode | BlockNode | SubBlockNode | CellNode
   | PlacedGroupNode | PlacedNode | InteriorCellsNode | InteriorLoadMoreNode
-  | StackNode | StackSourceStateNode | StackBinaryStateNode | StackPeerNode
   | ConflictsNode | ErrorNode;
 
 // Record types that get their own dedicated node in the worldspace tree, keyed by raw
@@ -382,33 +299,19 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   // surface left that pages (#398 removed record-type pagination). Cleared on a successful retry;
   // renders as an ErrorNode alongside the still-clickable InteriorLoadMoreNode.
   private readonly interiorLoadMoreFailures = new Map<string, string>();
-  // #281: lowercased filenames of the session's immutable plugins (the same set extension.ts
-  // already hands PluginsTreeComposite.setSession as readOnlyFiles) — record/placed rows under
+  // #281: lowercased filenames of the load order's immutable plugins (the same set extension.ts
+  // already hands PluginsTreeComposite.setLoadOrder as readOnlyFiles) — record/placed rows under
   // one hide Remove via their contextValue, matching the column header's !immutable `when` gate.
   private readonly immutablePlugins = new Set<string>();
-  // #448: file-level peers currently loaded through the unlisted-plugin door, keyed the same way
-  // every other per-copy cache in this file is (originKey(name, origin)) — so a peer is loaded at
-  // most once per expansion streak and `unloadStackPeer` knows whether there is anything to undo.
-  private readonly loadedPeers = new Set<string>();
-  // #448: lowercased filenames of the session's tracked plugins — the Stack node's own state
-  // entries (source/binary) are absent for a plugin outside this set (CONTEXT.md: "Editing
-  // requires tracking; viewing never does" — an untracked winner has no working-tree state to show
-  // at all, not merely nothing interesting to show).
-  private readonly trackedPlugins = new Set<string>();
-  // #448: lowercased plugin name → the origin that plugin actually loaded from this session (the
-  // same fact `driftTracker`'s `setLoaded` already reads off `PluginMetadata.origin`) — what
-  // labels the Stack node's own state entries ("source (working tree) — <origin>"). A plugin
-  // nothing has told this provider about degrades to no state entries, same as untracked.
-  private pluginOrigins = new Map<string, string>();
   // #364: gates both the Conflicts node's own existence (conflictsNode) and the badge lookup
-  // (conflictAllOf) — mirrors `sessionProgress.ts`'s "each surface gates on conflictsComputed
+  // (conflictAllOf) — mirrors `load orderProgress.ts`'s "each surface gates on conflictsComputed
   // itself" posture rather than trusting a single upstream check, so a stale cached value can
   // never leak past the flag going back to false (ADR-0035's live-mutation re-sweep).
   private conflictsComputed = false;
   // #364: (plugin, origin, formKey) -> the record-wide ConflictAll the Conflicts node's own
   // listing last reported for it — populated by getConflictsChildren, read by conflictAllOf.
   // Cleared whenever conflictsComputed goes back to false, so a badge can never keep showing a
-  // value from before the session's winners were last known-good.
+  // value from before the load order's winners were last known-good.
   private readonly conflictAllCache = new Map<string, ConflictAll>();
   private readonly log: (msg: string) => void;
 
@@ -419,23 +322,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   setImmutablePlugins(names: Iterable<string>): void {
     this.immutablePlugins.clear();
     for (const n of names) this.immutablePlugins.add(n.toLowerCase());
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  /** #448: which plugins are tracked (`.git` in the winner's own folder — `isTracked`,
-   *  `trackedRepositories.ts`) — a filesystem fact only the composition root can check, so it
-   *  arrives as a hand-off the same way `setImmutablePlugins` does. */
-  setTrackedPlugins(names: Iterable<string>): void {
-    this.trackedPlugins.clear();
-    for (const n of names) this.trackedPlugins.add(n.toLowerCase());
-    this._onDidChangeTreeData.fire(undefined);
-  }
-
-  /** #448: each loaded plugin's own origin (`PluginMetadata.origin`) — the same fact
-   *  `driftTracker.setLoaded` already reads off `getPlugins()`, handed here too so the Stack
-   *  node's state entries can label themselves without a second lookup. */
-  setPluginOrigins(origins: ReadonlyMap<string, string>): void {
-    this.pluginOrigins = new Map([...origins].map(([name, origin]) => [name.toLowerCase(), origin]));
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -483,10 +369,6 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
     this.refCache.clear();
     this.containerChildCache.clear();
     this.interiorLoadMoreFailures.clear();
-    // #448: a fresh session has loaded nothing through the unlisted-plugin door yet, whatever this
-    // provider remembered from the last one — never carry a stale "already loaded" belief across
-    // a session boundary the backend itself just reset.
-    this.loadedPeers.clear();
     // #364: same wholesale-clear posture as every other cache above — a stale ConflictAll must
     // not survive a refresh any more than a stale record page does. Does not touch
     // conflictsComputed itself; that flag has its own setter and its own lifecycle.
@@ -582,66 +464,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
         new PlacedNode(element.plugin, p, element.origin, this.isImmutable(element.plugin, element.origin)));
     }
     if (element instanceof InteriorCellsNode) return this.fetchInteriorCells(element);
-    // #448: the Stack node's own children are already fully known (its constructor's `peers` plus
-    // this provider's own tracked/origin facts) — no repository call to list them, only to
-    // lazy-load one on a peer's own expansion below.
-    if (element instanceof StackNode) return this.fetchStackChildren(element);
-    if (element instanceof StackPeerNode) return this.fetchStackPeerChildren(element);
     return [];
-  }
-
-  /** #448: in resolution order — the winner's own state entries (tracked plugins only, per
-   *  CONTEXT.md's "Editing requires tracking; viewing never does"; absent for an untracked winner
-   *  or a winner nothing has told this provider's origin for), then every file-level peer. */
-  private fetchStackChildren(node: StackNode): PluginTreeNode[] {
-    const tracked = node.winnerOrigin !== undefined && this.trackedPlugins.has(node.plugin.toLowerCase());
-    const state: PluginTreeNode[] = tracked
-      ? [new StackSourceStateNode(node.plugin, node.winnerOrigin), new StackBinaryStateNode(node.plugin, node.winnerOrigin)]
-      : [];
-    return [...state, ...node.peers.map(p => new StackPeerNode(node.plugin, p))];
-  }
-
-  /** #448 / #34: lazy-loads a file-level peer through the unlisted-plugin door on its own first
-   *  expansion, then recurses into the same `getPluginChildren` every ordinary copy uses — so a
-   *  peer's records/worldspaces/cells are read exactly like any other (origin-bearing) copy's,
-   *  read-only by the same `isImmutable` short-circuit every other origin-bearing row already
-   *  gets (origin !== undefined ⇒ immutable). Loads at most once per session: a second expansion
-   *  (collapse/re-expand without an intervening unload) skips straight to the recursive fetch. */
-  private async fetchStackPeerChildren(node: StackPeerNode): Promise<PluginTreeNode[]> {
-    const key = this.originKey(node.peer.name, node.peer.origin);
-    if (!this.loadedPeers.has(key)) {
-      try {
-        await this.repository.loadUnlistedPlugin(node.peer.path, node.peer.origin);
-        this.loadedPeers.add(key);
-      } catch (e) {
-        const message = this.err(e);
-        this.log(`[PluginTreeProvider] loadUnlistedPlugin(${node.peer.name}, ${node.peer.origin}) failed: ${message}`);
-        return [new ErrorNode(message)];
-      }
-    }
-    return this.getPluginChildren(node.peer.name, node.peer.origin);
-  }
-
-  /** #448 / #34: the collapse-time mirror of `fetchStackPeerChildren`'s lazy load — called from
-   *  extension.ts's `onDidCollapseElement` for a `StackPeerNode`, so a browsed-then-abandoned
-   *  peer never lingers loaded for the rest of the session (#34's own "hidden means absent" AC).
-   *  A no-op for a peer that was never expanded (nothing to unload) — checked first so an
-   *  unopened peer's collapse event (VS Code fires these for every row, not just previously
-   *  expanded ones) never issues a needless backend call. Clears this peer's own cached
-   *  pages/interior-cells/cell-references too, so a later re-expand fetches fresh rather than
-   *  replaying stale data the unload made incorrect. */
-  async unloadStackPeer(node: StackPeerNode): Promise<void> {
-    const key = this.originKey(node.peer.name, node.peer.origin);
-    if (!this.loadedPeers.has(key)) return;
-    this.loadedPeers.delete(key);
-    for (const k of [...this.pageCache.keys()]) if (k.startsWith(`${key}::`)) this.pageCache.delete(k);
-    this.interiorCache.delete(key);
-    for (const k of [...this.refCache.keys()]) if (k.startsWith(`${key}::`)) this.refCache.delete(k);
-    try {
-      await this.repository.unloadUnlistedPlugin(node.peer.name, node.peer.origin);
-    } catch (e) {
-      this.log(`[PluginTreeProvider] unloadUnlistedPlugin(${node.peer.name}, ${node.peer.origin}) failed: ${this.err(e)}`);
-    }
   }
 
   // #398: the only pagination left in this provider — record-type children load in one
@@ -685,24 +508,12 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
    *  `PluginListProvider`, and its whole knowledge of this side is a plugin filename. #273
    *  deleted this provider's own standalone root listing (`fetchPlugins`/`PluginNode`) once the
    *  standalone editing Plugins tree that was its only caller was retired — this is now the one
-   *  way into a plugin's children.
-   *
-   *  `stackPeers` (#448): the Stack-node peer list `PluginsTreeComposite` hands through from the
-   *  row-owning bounded context's `stackPeersOf`, or undefined for a row nothing wired it for.
-   *  Only ever consulted for a plugin's own root browse (`origin === undefined`) — a peer's own
-   *  children (`fetchStackPeerChildren` below) recurse into this same method with its own origin,
-   *  and must never grow a second, nested Stack node from a stray peers argument no caller
-   *  actually passes there. */
-  async getPluginChildren(pluginName: string, origin?: string, stackPeers?: StackPeer[]): Promise<PluginTreeNode[]> {
+   *  way into a plugin's children. */
+  async getPluginChildren(pluginName: string, origin?: string): Promise<PluginTreeNode[]> {
     try {
       const types = await this.repository.getRecordTypes(pluginName, origin);
       const typesPresent = new Set(types.map(t => t.type));
       const nodes: PluginTreeNode[] = [];
-      // #448: pinned first, mirroring the Worldspaces-node pattern below — absent entirely (never
-      // rendered empty) when the stack is trivial, i.e. no file-level peers for this plugin.
-      if (origin === undefined && stackPeers && stackPeers.length > 0) {
-        nodes.push(new StackNode(pluginName, this.pluginOrigins.get(pluginName.toLowerCase()), stackPeers));
-      }
       // #305: the spatial endpoints now take the same optional origin the flat record routes do
       // (RecordTypeNode below), so a copy the load order does not name browses its own worldspaces
       // and cells instead of having them omitted entirely.
@@ -835,7 +646,7 @@ export class PluginTreeProvider implements vscode.TreeDataProvider<PluginTreeNod
   }
 
   /** #364: the Conflicts node's own children. No page cache the way fetchRecords has one — this
-   *  is a session-wide listing, not a per-(plugin, type) one, and refetches on every expansion
+   *  is a load-order-wide listing, not a per-(plugin, type) one, and refetches on every expansion
    *  (already backend-filtered per #278's mechanism, so there's nothing local to re-narrow).
    *  Populates conflictAllCache as it goes, so the badge lookup has something to answer once this
    *  has run at least once. */

@@ -40,10 +40,10 @@ export function VmadObjectEditor({ value, read, onCommit, onOpen, resolution }: 
   const diskFk = m ? m[1].trim() : str;
   const diskAlias = m ? Number(m[2]) : -1;
 
-  const [pendingFk, setPendingFk] = useState(diskFk);
+  const [draftFk, setDraftFk] = useState(diskFk);
   const [alias, setAlias] = useState(diskAlias);
   const [prevValue, setPrevValue] = useState(value);
-  if (prevValue !== value) { setPrevValue(value); setPendingFk(diskFk); setAlias(diskAlias); }
+  if (prevValue !== value) { setPrevValue(value); setDraftFk(diskFk); setAlias(diskAlias); }
 
   // Issue #229: Ctrl+click on the read view is left to `read`'s own content (VmadObjectCell's
   // FormKeyLink, wired to onOpen) — this only ever decides whether a *plain* click opens the
@@ -63,11 +63,11 @@ export function VmadObjectEditor({ value, read, onCommit, onOpen, resolution }: 
       style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
     >
       <FormKeyCell
-        value={pendingFk}
+        value={draftFk}
         meta={OBJECT_META}
         editable
         onOpen={onOpen}
-        onCommit={fk => { setPendingFk(fk); onCommit({ formKey: fk, alias }); }}
+        onCommit={fk => { setDraftFk(fk); onCommit({ formKey: fk, alias }); }}
         resolution={resolution}
       />
       <input
@@ -77,7 +77,7 @@ export function VmadObjectEditor({ value, read, onCommit, onOpen, resolution }: 
         // Issue #229: same no-op guard as the scalar leaves — alias is the one value VMAD still
         // hand-rolls after this refactor, so it gets the identical fix rather than being left as
         // the one leaf that still commits a no-op edit.
-        onBlur={() => { if (alias !== diskAlias) onCommit({ formKey: pendingFk, alias }); }}
+        onBlur={() => { if (alias !== diskAlias) onCommit({ formKey: draftFk, alias }); }}
         aria-label="Alias"
         style={{ width: 50, fontFamily: mono, fontSize: '12px' }}
       />

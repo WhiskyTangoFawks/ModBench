@@ -1,7 +1,7 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -35,8 +35,8 @@ public sealed class SourceIngestParityTests : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-source-parity-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-source-parity-game-").FullName;
-    private readonly SessionManager _fromBinary;
-    private readonly SessionManager _fromSource;
+    private readonly LoadOrderMirror _fromBinary;
+    private readonly LoadOrderMirror _fromSource;
     private readonly PluginKey _plugin = new(CutDownPluginFixture.PluginFileName, Origin);
 
     public SourceIngestParityTests()
@@ -44,28 +44,28 @@ public sealed class SourceIngestParityTests : IDisposable
         var pluginPath = Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName);
         File.Copy(CutDownPluginFixture.PluginPath, pluginPath);
 
-        // Untracked at this point, so this session is the ordinary binary-overlay ingest — the
+        // Untracked at this point, so this load order is the ordinary binary-overlay ingest — the
         // "untracked copy" half of AC3, and the reference every assertion below compares against.
-        _fromBinary = NewSession(pluginPath);
+        _fromBinary = NewLoadOrder(pluginPath);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_fromBinary.Session!, Origin, SourcePreset.Edits)
+            .TrackAsync(_fromBinary.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
 
         // Same folder, same plugin file, same origin — the only difference is that it is now tracked,
-        // so this session ingests from the source tree Track just wrote.
-        _fromSource = NewSession(pluginPath);
+        // so this load order ingests from the source tree Track just wrote.
+        _fromSource = NewLoadOrder(pluginPath);
     }
 
-    private SessionManager NewSession(string pluginPath)
+    private LoadOrderMirror NewLoadOrder(string pluginPath)
     {
-        var sessions = new SessionManager(
+        var mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)sessions).LoadExplicit(
+        ((ILoadOrderMirror)mirror).Reconcile(
             _gameDirectory,
-            [new ExplicitPluginInput(CutDownPluginFixture.PluginFileName, pluginPath, Origin, true)],
+            [new LoadOrderEntry(CutDownPluginFixture.PluginFileName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        return sessions;
+        return mirror;
     }
 
     public void Dispose()
@@ -87,7 +87,7 @@ public sealed class SourceIngestParityTests : IDisposable
     /// this, every parity assertion below would be comparing the binary path against itself and would
     /// pass no matter what ingest-from-source did.</summary>
     [Fact]
-    public void TheTrackedSessionReallyIngestedFromSource_NotViaTheBinaryFallback()
+    public void TheTrackedPluginReallyIngestedFromSource_NotViaTheBinaryFallback()
     {
         Assert.Empty(_fromSource.Status.Failures);
         Assert.NotNull(SourceIngest.TreeFor(Origin, Path.Combine(_modFolder, CutDownPluginFixture.PluginFileName), CutDownPluginFixture.PluginFileName));
@@ -145,11 +145,11 @@ public sealed class SourceIngestParityTests : IDisposable
     /// LIMIT/OFFSET pages are not a stable partition and a loop over them silently skips and repeats
     /// rows. Caught here by two runs of this same test disagreeing about the binary side's own count.</para>
     /// </summary>
-    private List<string> AllFormKeys(SessionManager sessions) =>
-        [.. sessions.Index!.Search(new RecordQuery(Plugin: _plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
+    private List<string> AllFormKeys(LoadOrderMirror mirror) =>
+        [.. mirror.Index!.Search(new RecordQuery(Plugin: _plugin, Limit: int.MaxValue)).Items.Select(i => i.FormKey)];
 
-    private int CountOf(SessionManager sessions, string recordType) =>
-        sessions.Index!.GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
+    private int CountOf(LoadOrderMirror mirror, string recordType) =>
+        mirror.Index!.GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
     /// <summary>
     /// The document itself, byte for byte, for every record — AC3's strongest assertion, and also the

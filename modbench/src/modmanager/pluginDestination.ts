@@ -2,10 +2,10 @@
 // existing mod, or a freshly installed mod folder) into the physical (path, origin) pair Editing's
 // create endpoint needs. Pure path arithmetic over an MO2 instance root — no vscode import, no
 // backend call (Mod Management never calls it, CLAUDE.md) — split out of extension.ts so it is
-// unit-testable without a VS Code harness, same reason explicitSession.ts's own resolvers are.
+// unit-testable without a VS Code harness, same reason loadOrderSnapshot.ts's own resolvers are.
 
 import { join } from 'node:path';
-import { OVERWRITE_ORIGIN } from './explicitSession';
+import { OVERWRITE_ORIGIN } from './loadOrderSnapshot';
 
 export type PluginDestinationChoice =
   | { kind: 'overwrite' }

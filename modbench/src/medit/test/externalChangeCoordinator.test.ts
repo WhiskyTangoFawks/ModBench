@@ -5,9 +5,9 @@ import {
   type ExternalChangeCoordinatorDeps, type ExternalChangePollerGateDeps,
 } from '../externalChangeCoordinator';
 import { ABSORB_BUTTON, KEEP_BUTTON } from '../externalChangeDialog';
-import type { PendingExternalChange } from '../ApiClient';
+import type { UnansweredExternalChange } from '../ApiClient';
 
-function pending(overrides: Partial<PendingExternalChange> = {}): PendingExternalChange {
+function unanswered(overrides: Partial<UnansweredExternalChange> = {}): UnansweredExternalChange {
   return { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: false, oldVersion: null, newVersion: null, ...overrides };
 }
 
@@ -49,7 +49,7 @@ describe('startExternalChangePolling', () => {
 
   it('runs the dialog and dispatches Keep as My Edit', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([pending()]) } as any,
+      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(KEEP_BUTTON),
     });
     const stop = startExternalChangePolling(deps, 100);
@@ -63,7 +63,7 @@ describe('startExternalChangePolling', () => {
 
   it('dispatches Absorb, then offers the rebase — Later does not rebase', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([pending()]) } as any,
+      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
       showRebaseOffer: vi.fn().mockResolvedValue(REBASE_LATER_BUTTON),
     });
@@ -79,7 +79,7 @@ describe('startExternalChangePolling', () => {
 
   it('Rebase Now runs the rebase', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([pending()]) } as any,
+      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
       showRebaseOffer: vi.fn().mockResolvedValue(REBASE_NOW_BUTTON),
     });
@@ -93,7 +93,7 @@ describe('startExternalChangePolling', () => {
 
   it('a deferred (Esc) answer calls neither absorb nor keep', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([pending()]) } as any,
+      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(undefined),
     });
     const stop = startExternalChangePolling(deps, 100);
@@ -107,7 +107,7 @@ describe('startExternalChangePolling', () => {
 
   it('a failed Absorb never offers the rebase', async () => {
     const deps = makeDeps({
-      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([pending()]) } as any,
+      repository: { getExternalChangeStatus: vi.fn().mockResolvedValue([unanswered()]) } as any,
       showDialog: vi.fn().mockResolvedValue(ABSORB_BUTTON),
       controller: {
         keepAsMyEdit: vi.fn(),
@@ -175,7 +175,7 @@ describe('runRebase', () => {
 });
 
 // #432: the poller has no reason to exist before a backend does — these prove the gate reacts to
-// the backend's health signal alone (never a timer, never session state, which this fixture has no
+// the backend's health signal alone (never a timer, never load order state, which this fixture has no
 // concept of at all).
 describe('gateExternalChangePolling', () => {
   function makeGateDeps() {

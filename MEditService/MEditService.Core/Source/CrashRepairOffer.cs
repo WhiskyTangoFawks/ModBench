@@ -9,14 +9,14 @@ namespace MEditService.Core.Source;
 /// </summary>
 public sealed record CrashRepairOffer(string Plugin, string Origin, CrashRepairReason Reason);
 
-/// <summary>The two ways <see cref="ExternalChangeSessionHook"/> can reach a repair offer — both
-/// detected only at session load (#381's spec pin: "a journal marker present at load"), never by the
+/// <summary>The two ways <see cref="ExternalChangeLoadOrderHook"/> can reach a repair offer — both
+/// detected only at reconcile (#381's spec pin: "a journal marker present at load"), never by the
 /// live watcher, because neither condition can newly arise while this same Modbench process keeps
 /// running: the journal only moves during a compile <see cref="Edits.PluginCompileService"/> itself
-/// drives, and a binary that vanished mid-session would already have been read once at load.</summary>
+/// drives, and a binary that vanished while the backend runs would already have been read once at load.</summary>
 public enum CrashRepairReason
 {
-    /// <summary>A <see cref="CompileJournal"/> marker is pending in this plugin's mod folder — the
+    /// <summary>A <see cref="CompileJournal"/> marker is unfinished in this plugin's mod folder — the
     /// mismatch is Modbench's own interrupted compile (crash, or a kill mid-write), never an
     /// external tool's doing.</summary>
     InterruptedCompile,

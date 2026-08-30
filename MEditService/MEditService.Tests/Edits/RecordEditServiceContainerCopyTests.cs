@@ -1,6 +1,6 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Tests.Edits;
@@ -17,26 +17,26 @@ namespace MEditService.Tests.Edits;
 /// </summary>
 public sealed class RecordEditServiceContainerCopyTests
 {
-    private static RecordEditService ServiceFor(ISessionManager sessions) =>
-        new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
+        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void CopyRecordAsOverride_OnAQuest_Succeeds_OwnFieldsLand_NoFolderSplitChildrenCopied()
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Quest.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Sessions.Index!.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin);
+        var doc = fixture.Mirror.Index!.GetDocument(fixture.Quest.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.QuestEditorId, doc!.EditorId);
 
         // Own fields only — the DialogTopic never lands as its own file, and the destination's Quest
         // directory carries no DialogTopics subfolder at all.
-        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.DialogTopic.ToString(), fixture.DestinationPlugin));
         var questDirectory = Path.GetDirectoryName(fixture.DestinationSourceFileContaining(ContainerCopyFixture.QuestEditorId))!;
         Assert.False(Directory.Exists(Path.Combine(questDirectory, "DialogTopics")));
     }
@@ -50,12 +50,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Sessions.Index!.GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var doc = fixture.Mirror.Index!.GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.InteriorCellEditorId, doc!.EditorId);
         Assert.Contains(
@@ -63,8 +63,8 @@ public sealed class RecordEditServiceContainerCopyTests
             File.ReadAllText(fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId)),
             StringComparison.Ordinal);
 
-        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin));
-        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.TemporaryRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TemporaryRef.ToString(), fixture.DestinationPlugin));
 
         var cellFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.InteriorCellEditorId);
         var text = File.ReadAllText(cellFile);
@@ -83,16 +83,16 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.Worldspace.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var doc = fixture.Sessions.Index!.GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
+        var doc = fixture.Mirror.Index!.GetDocument(fixture.Worldspace.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(doc);
         Assert.Equal(ContainerCopyFixture.WorldspaceEditorId, doc!.EditorId);
 
-        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
         var worldFile = fixture.DestinationSourceFileContaining(ContainerCopyFixture.WorldspaceEditorId);
         Assert.DoesNotContain(ContainerCopyFixture.TopCellEditorId, File.ReadAllText(worldFile), StringComparison.Ordinal);
     }
@@ -104,7 +104,7 @@ public sealed class RecordEditServiceContainerCopyTests
     public void CopyRecordAsOverride_OnAPlacedReference_WhenDestinationAlreadyOverridesTheCell_Appends()
     {
         using var fixture = ContainerCopyFixture.Create();
-        var service = ServiceFor(fixture.Sessions);
+        var service = ServiceFor(fixture.Mirror);
         Assert.True(service.CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.InteriorCell.ToString(), fixture.DestinationPlugin).Applied);
 
@@ -112,7 +112,7 @@ public sealed class RecordEditServiceContainerCopyTests
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var childDoc = fixture.Sessions.Index!.GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
+        var childDoc = fixture.Mirror.Index!.GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(childDoc);
         Assert.Equal(ContainerCopyFixture.PersistentRefEditorId, childDoc!.EditorId);
 
@@ -121,7 +121,7 @@ public sealed class RecordEditServiceContainerCopyTests
         // The negative control this copy must not touch: the reference never copied at all.
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
-        var cellDoc = fixture.Sessions.Index!.GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var cellDoc = fixture.Mirror.Index!.GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
         Assert.False(cellDoc!.IsPartialForm);
     }
 
@@ -136,12 +136,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.TopCellRef.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
     }
 
     // #440 review (Spec 2): the direct sibling of the placed-reference test above — copying the
@@ -154,12 +154,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.TopCell.ToString(), fixture.DestinationPlugin);
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ContainerParentMissingInDestination, result.Refusal);
-        Assert.Null(fixture.Sessions.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
+        Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
     }
 
     // #549 Arc B (AC1): the genuine SubCells exterior case — destination has neither the worldspace
@@ -243,12 +243,12 @@ public sealed class RecordEditServiceContainerCopyTests
     {
         using var fixture = ContainerCopyFixture.Create();
 
-        var result = ServiceFor(fixture.Sessions).CopyRecordAsOverride(
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
             fixture.SourcePlugin, fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
 
-        var cellDoc = fixture.Sessions.Index!.GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
+        var cellDoc = fixture.Mirror.Index!.GetDocument(fixture.InteriorCell.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(cellDoc);
         Assert.True(cellDoc!.IsPartialForm);
 
@@ -263,7 +263,7 @@ public sealed class RecordEditServiceContainerCopyTests
             StringComparison.Ordinal);
         Assert.Contains(ContainerCopyFixture.PersistentRefEditorId, File.ReadAllText(cellFile), StringComparison.Ordinal);
 
-        var childDoc = fixture.Sessions.Index!.GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
+        var childDoc = fixture.Mirror.Index!.GetDocument(fixture.PersistentRef.ToString(), fixture.DestinationPlugin);
         Assert.NotNull(childDoc);
     }
 }
