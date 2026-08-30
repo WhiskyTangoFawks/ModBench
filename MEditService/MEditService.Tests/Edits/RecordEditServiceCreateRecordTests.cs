@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
@@ -23,6 +24,33 @@ public sealed class RecordEditServiceCreateRecordTests
 {
     private static RecordEditService ServiceFor(ISessionManager sessions) =>
         new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+
+    private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
+
+    /// <summary>
+    /// #573 (bonus finding alongside the renumber fix): <see cref="RecordEditService.EditField"/>
+    /// funnels through the same <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard renumber's
+    /// stale-index bug lived in — a record that never reached Head (still working-tree-only, straight
+    /// off <see cref="RecordEditService.CreateRecord"/>) was silently dropped by a delta-application
+    /// guard that only ever checked Head, so an edit here would report <c>Applied: true</c> while the
+    /// body underneath never actually changed. Same seam, same fix; this is the one test that would
+    /// have caught it.
+    /// </summary>
+    [Fact]
+    public void EditField_OnANeverCommittedRecord_ActuallyLandsInTheIndex()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+        var created = service.CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        Assert.True(created.Applied, created.Message);
+
+        var result = service.EditField(mod.Plugin, created.NewFormKey!, "editor_id", Json("\"RenamedNpc\""));
+
+        Assert.True(result.Applied, result.Message);
+        var doc = mod.Sessions.Index!.GetDocument(created.NewFormKey!, mod.Plugin)!;
+        Assert.Equal("RenamedNpc", doc.EditorId);
+        Assert.Contains("RenamedNpc", doc.Body, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void CreateRecord_AllocatesAFormKey_WritesAMinimalSourceFile_RecordBecomesReadable()
