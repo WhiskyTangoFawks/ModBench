@@ -104,14 +104,35 @@ public sealed class PluginCompileService(
         // this plugin before the binary write below begins, and is cleared only once the whole batch
         // (here, the one plugin) has landed. Everything above this point is pure computation/refusal
         // with nothing on disk for a crash to leave ambiguous; from here on, a crash mid-flight is
-        // exactly what the marker is for. compileOne is not wrapped in a try/catch: an exception from
-        // the write propagates out of RunBatch (and out of this method) with the marker left exactly
-        // as CompileJournal.WriteMarker last wrote it — the same observable state a real crash leaves,
-        // which is what UnfinishedBatch reads back for #381/#417.
+        // exactly what the marker is for. compileOne is still not wrapped in a try/catch for that
+        // reason — an exception from the write propagates out of RunBatch (and out of this method)
+        // with the marker left exactly as CompileJournal.WriteMarker last wrote it, the same
+        // observable state a real crash leaves, which is what UnfinishedBatch reads back for
+        // #381/#417 — except for #520's one named Kind A shape below, which CompileJournal's own
+        // doc comment already treats as a first-class outcome: compileOne returning false is
+        // "indistinguishable [from a crash] to a reader" by design, so converting that one write
+        // failure into a `false` return (captured as a refusal message in the closure below) uses
+        // the mechanism this class already offers rather than adding a new one. PluginWriter never
+        // touches the real plugin file until Commit() — a mid-write throw here leaves it exactly as
+        // it was, so refusing instead of leaving the crash-shaped marker is safe.
         var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
+        string? writeRefusal = null;
         CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
         {
-            writer.SaveFromModAsync(mod, metadata.Path, loadOrderNames).GetAwaiter().GetResult();
+            try
+            {
+                writer.SaveFromModAsync(mod, metadata.Path, loadOrderNames).GetAwaiter().GetResult();
+            }
+            catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
+            {
+                // #520: same Kind A shape as TrackService.VerifyRoundTrip's own catch — a struct-
+                // list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
+                // (Mutagen-Modding/Mutagen#688), so the content-derived master pass (ADR-0038)
+                // prunes a master this write still needs. Every other write failure still
+                // propagates raw below, unchanged.
+                writeRefusal = $"{plugin.Name} could not be compiled: {PluginDiagnosis.FromWriteException(ex).Describe()}";
+                return false;
+            }
 
             // #416 S7/S8: the ref advances only after the binary write above has landed — never
             // before, never on a refused compile. An AtRef compile parks too (go-ahead note 1):
@@ -122,6 +143,8 @@ public sealed class PluginCompileService(
             SourceRepository.ParkCompileSnapshot(modFolder, plugin.Name, atRef, binarySha256);
             return true;
         });
+        if (writeRefusal != null)
+            return CompileResult.Refused(writeRefusal);
 
         var masters = index.GetEffectiveMasters(plugin);
         if (logger.IsEnabled(LogLevel.Information))
