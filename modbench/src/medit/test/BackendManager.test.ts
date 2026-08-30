@@ -7,14 +7,16 @@ vi.mock('node:http');
 
 import { BackendManager, type StatusBarAdapter } from '../BackendManager';
 
-function makeStatusBar(): StatusBarAdapter & { texts: string[] } {
+function makeStatusBar(): StatusBarAdapter & { texts: string[]; disposed: boolean } {
   const texts: string[] = [];
-  return {
+  const bar = {
     texts,
-    setText(t) { texts.push(t); },
+    disposed: false,
+    setText(t: string) { texts.push(t); },
     show() {},
-    dispose() {},
+    dispose() { bar.disposed = true; },
   };
+  return bar;
 }
 
 function makeHealthyHttpGet() {
@@ -249,7 +251,7 @@ describe('BackendManager output forwarding', () => {
 describe('BackendManager crash-restart / stop', () => {
   let statusBar: ReturnType<typeof makeStatusBar>;
   beforeEach(() => { statusBar = makeStatusBar(); vi.resetAllMocks(); });
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
   it('re-spawns and emits "restarted" when the backend exits unexpectedly', async () => {
     const state = { healthy: false };
@@ -284,7 +286,8 @@ describe('BackendManager crash-restart / stop', () => {
   it('stop() during a pending start() cancels it — a late healthy response does not resurrect the session', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
-    const spawn = vi.fn(() => makeChild()); // spawn does NOT make it healthy → connect keeps polling
+    const children: ReturnType<typeof makeChild>[] = [];
+    const spawn = vi.fn(() => { const c = makeChild(); children.push(c); return c; }); // spawn does NOT make it healthy → connect keeps polling
 
     const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, pollTimeoutMs: 1000, spawn, executablePath: '/x' });
     const statuses: string[] = [];
@@ -292,9 +295,10 @@ describe('BackendManager crash-restart / stop', () => {
 
     const startP = mgr.start();
     await new Promise((r) => setTimeout(r, 15)); // let it spawn + begin polling
-    mgr.stop();
+    const stopP = mgr.stop();
+    children[0].emit('exit', 0);                 // confirm the kill so stop() settles without waiting out the real grace period
     state.healthy = true;                        // backend "comes up" after the user closed
-    await startP;
+    await Promise.all([startP, stopP]);
     await new Promise((r) => setTimeout(r, 20)); // let any stray poll fire
 
     expect(mgr.isHealthy).toBe(false);
@@ -343,7 +347,7 @@ describe('BackendManager crash-restart / stop', () => {
     expect(lines).toEqual(['[08:30:50 INF] back up']);
   });
 
-  it('stop() kills the child and suppresses restart', async () => {
+  it('stop() kills the child, suppresses restart, and does not report "stopped" until exit is confirmed (#562)', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
     const child = makeChild();
@@ -352,11 +356,73 @@ describe('BackendManager crash-restart / stop', () => {
     const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
     await mgr.start();
 
-    mgr.stop();
-    expect(child.kill).toHaveBeenCalled();
+    const statuses: string[] = [];
+    mgr.on('status', (s) => statuses.push(s));
+
+    const stopped = mgr.stop();
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    // Rival: today's code emits 'stopped' synchronously right here, before any exit is observed.
+    expect(statuses).not.toContain('stopped');
 
     child.emit('exit', 0);          // deliberate stop → no respawn
+    await stopped;
+
+    expect(statuses).toEqual(['stopped']);
     expect(spawn).toHaveBeenCalledTimes(1);
     expect(mgr.isHealthy).toBe(false);
+  });
+
+  it('escalates to SIGKILL if the child never exits within the grace period, then confirms exit (#562 AC2)', async () => {
+    vi.useFakeTimers();
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const child = makeChild(); // never emits 'exit' on its own — models a hung, non-yielding backend
+    const spawn = vi.fn(() => { state.healthy = true; return child; });
+
+    const mgr = new BackendManager({
+      port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x', stopGracePeriodMs: 3000,
+    });
+    await mgr.start();
+
+    const statuses: string[] = [];
+    mgr.on('status', (s) => statuses.push(s));
+
+    const stopped = mgr.stop();
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+
+    await vi.advanceTimersByTimeAsync(3000); // grace period elapses with no exit
+    expect(child.kill).toHaveBeenCalledTimes(2);
+    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    // Rival: today's code has no escalation logic and already reported 'stopped' at the top of
+    // stop() regardless of any timeout — here it's still correctly withheld, since exit still
+    // hasn't actually been observed even after SIGKILL is sent.
+    expect(statuses).not.toContain('stopped');
+
+    child.emit('exit', null); // the OS finally reaps it
+    await stopped;
+
+    expect(statuses).toEqual(['stopped']);
+  });
+
+  it('dispose() awaits confirmed child exit before resolving (exercises the deactivate() path, #562 AC2)', async () => {
+    const state = { healthy: false };
+    makeToggleableHttpGet(state);
+    const child = makeChild();
+    const spawn = vi.fn(() => { state.healthy = true; return child; });
+
+    const mgr = new BackendManager({ port: 5172, statusBar, pollIntervalMs: 5, spawn, executablePath: '/x' });
+    await mgr.start();
+
+    const disposed = mgr.dispose();
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM');
+    // Rival: today's dispose() is `this.stop(); this.statusBar.dispose();` — synchronous, so the
+    // status bar would already be disposed here regardless of whether the child has exited.
+    expect(statusBar.disposed).toBe(false);
+
+    child.emit('exit', 0);
+    await disposed;
+
+    expect(statusBar.disposed).toBe(true);
   });
 });

@@ -14,7 +14,8 @@ export interface StatusBarAdapter {
 /** Minimal view of a spawned backend process — injectable so spawn/teardown is
  *  unit-testable without a real child process. */
 export interface BackendProcess {
-  kill(): void;
+  /** #562: optional signal so stop() can send SIGTERM then escalate to SIGKILL. */
+  kill(signal?: NodeJS.Signals): void;
   on(event: 'exit', cb: (code: number | null) => void): void;
   on(event: 'error', cb: (err: Error) => void): void;
   /** Present when spawned with piped stdio (#199); absent on 'ignore'. */
@@ -42,6 +43,11 @@ export interface BackendManagerOptions {
    *  crash-restart picks up any level change. Only ever applied on the spawn
    *  path — an attached backend never sees it. */
   serilogLevelArgs?: () => string[];
+  /** #562: how long stop() waits after SIGTERM before escalating to SIGKILL — a backend mid
+   *  a long, non-yielding synchronous request won't notice SIGTERM promptly, and stop() must
+   *  never report "stopped" while the OS process is still demonstrably alive. Defaults to 5s,
+   *  matching .NET's own Generic Host default graceful-shutdown budget (HostOptions.ShutdownTimeout). */
+  stopGracePeriodMs?: number;
 }
 
 export class BackendManager extends EventEmitter {
@@ -49,6 +55,7 @@ export class BackendManager extends EventEmitter {
   private readonly statusBar: StatusBarAdapter;
   private readonly pollIntervalMs: number;
   private readonly pollTimeoutMs: number;
+  private readonly stopGracePeriodMs: number;
   private readonly log: (msg: string) => void;
   private readonly onOutput: (line: string, source: BackendStream) => void;
   private readonly spawnFn?: SpawnFn;
@@ -73,6 +80,7 @@ export class BackendManager extends EventEmitter {
     this.statusBar = opts.statusBar;
     this.pollIntervalMs = opts.pollIntervalMs ?? 500;
     this.pollTimeoutMs = opts.pollTimeoutMs ?? 30_000;
+    this.stopGracePeriodMs = opts.stopGracePeriodMs ?? 5_000;
     this.log = opts.log ?? (() => {});
     this.onOutput = opts.onOutput ?? (() => {});
     this.spawnFn = opts.spawn;
@@ -135,22 +143,48 @@ export class BackendManager extends EventEmitter {
     }
   }
 
-  /** Deliberate teardown: kill the backend and cancel any in-flight start. */
-  stop(): void {
+  /** Deliberate teardown: kill the backend and cancel any in-flight start. `isHealthy` and the
+   *  `child` handle are cleared immediately (unchanged from before #562) — a backend we've
+   *  already decided to kill shouldn't keep looking usable to anything that might dispatch new
+   *  work to it. Only the *status* report is different: it now waits for the OS process to
+   *  actually be gone before claiming so (#562). */
+  async stop(): Promise<void> {
     this.expectedAlive = false;
     this.generation++; // cancels an in-flight doStart()/connect()
     this.restartAttempts = 0;
     const wasRunning = this.child !== undefined || this._isHealthy;
-    if (this.child) {
-      this.child.kill();
-      this.child = undefined;
-    }
+    const child = this.child;
+    this.child = undefined;
     this._isHealthy = false;
-    // #247: emitted rather than written straight to the status bar, so a deliberate stop is
+    if (child) {
+      await this.killAndConfirmExit(child);
+    }
+    // #247/#562: emitted rather than written straight to the status bar, so a deliberate stop is
     // observable — wireSessionRunningContext (extension.ts, #352) subscribes to 'status' to
     // drive the Plugins view's Launch/Close mEdit toggle and would otherwise keep reading
-    // "running" until something else happened to fire.
+    // "running" until something else happened to fire. Deferred until the child (if any) has
+    // actually exited — see killAndConfirmExit — so this never claims "stopped" while the OS
+    // process is still demonstrably alive (#562).
     if (wasRunning) this.emitStatus('stopped');
+  }
+
+  /** Send SIGTERM and wait for the child to actually exit. A backend mid a long, non-yielding
+   *  synchronous request won't notice SIGTERM promptly (#562) — if it hasn't exited within
+   *  `stopGracePeriodMs`, escalate to SIGKILL, which the OS does not let it ignore, and keep
+   *  waiting for the same real `'exit'` event. Never resolves on a guess. */
+  private killAndConfirmExit(child: BackendProcess): Promise<void> {
+    return new Promise((resolve) => {
+      const onExit = () => {
+        clearTimeout(escalate);
+        resolve();
+      };
+      child.on('exit', onExit);
+      child.kill('SIGTERM');
+      const escalate = setTimeout(() => {
+        this.log(`[BackendManager] backend did not exit within ${this.stopGracePeriodMs}ms of SIGTERM — sending SIGKILL`);
+        child.kill('SIGKILL');
+      }, this.stopGracePeriodMs);
+    });
   }
 
   private handleExit(code: number | null): void {
@@ -199,8 +233,12 @@ export class BackendManager extends EventEmitter {
     });
   }
 
-  dispose(): void {
-    this.stop();
+  /** #562: awaits stop()'s confirmed-exit teardown before disposing the status bar — the
+   *  extension's deactivate() delegates to this directly, so a reload cannot proceed (and
+   *  construct a replacement BackendManager with no reference to this instance's child) until
+   *  the old child is actually gone. */
+  async dispose(): Promise<void> {
+    await this.stop();
     this.statusBar.dispose();
   }
 

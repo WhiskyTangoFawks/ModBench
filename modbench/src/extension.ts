@@ -383,7 +383,11 @@ function exitToLoadout(): void {
   // have to disappear along with everything else this reset already clears, not linger describing
   // a session that's gone.
   recordBrowserProvider?.setConflictsComputed(false);
-  backendManager?.stop();
+  // #562: stop() is async (waits for confirmed exit before reporting "stopped") but its body
+  // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
+  // here still defers emitStatus('stopped') correctly; exitToLoadout() itself doesn't need to
+  // become async just to observe that.
+  void backendManager?.stop();
 }
 
 /** Everything that follows the record filter turning on or off: the context key its Clear
@@ -2976,8 +2980,11 @@ function registerDeploymentModeContext(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate() {
-  backendManager?.dispose();
+// #562: async so VS Code awaits confirmed-dead-child teardown (BackendManager.dispose() → stop())
+// before the extension host finishes tearing down — otherwise a reload's replacement
+// BackendManager instance is structurally unable to ever clean up this instance's spawned child.
+export async function deactivate(): Promise<void> {
+  await backendManager?.dispose();
 }
 
 /** Deploy / Purge / Launch Game commands (standalone mode). Orchestrates the
