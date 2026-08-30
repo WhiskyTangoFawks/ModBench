@@ -112,6 +112,15 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // through to today's empty sub-schema") — so this one correctly declines rather than being
         // silently mis-covered, and needs its own follow-up naming a different discriminator shape
         // (SceneAction's own subclass is presumably signaled some other way — not audited here).
+        // #548 review (Finding 1): Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
+        // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
+        // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
+        // SchemaReflector.AbstractUnionExcludedTypeNames names both explicitly, because they are
+        // permanently outside the reflected schema by documented architectural boundary
+        // (MEditService/CLAUDE.md:232-235), not because the mechanism can't model them. Not this
+        // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field
+        // as a gap to begin with (BaseSkip/IsConditionListField/vmadInterfaceType already keep them
+        // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
         ("ISceneActionGetter", "Type"),            // ASceneActionType — NOT abstract; follow-up needed
 
         // ── Category 3: a real, non-abstract Loqui struct whose only members are themselves an
@@ -165,6 +174,10 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         ("IHolotapeGetter", "Data"),                 // AHolotapeData
         ("ISoundDescriptorGetter", "Data"),          // ASoundDescriptor
         ("IPerkGetter", "Effects"),                  // APerkEffect / APerkEntryPointEffect (two-level chain)
+        // #548 review (Finding 2): the census's own re-run turned these two up as also-covered —
+        // named here rather than left invisible the same way the original 9 would have been.
+        ("IMagicEffectGetter", "Archetype"),         // AMagicEffectArchetype
+        ("IAudioEffectChainGetter", "Effects"),      // AAudioEffect
     ];
 
     private static readonly (string Owner, string Property)[] CoveredNestedAbstractUnions =

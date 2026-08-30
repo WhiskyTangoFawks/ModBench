@@ -1,7 +1,7 @@
 {
   "ReferencedBy": {
     "003648:Fallout4.esm": {
-      "Count": 1392,
+      "Count": 1248,
       "Sample": [
         {
           "EditorId": "DialogueDiamondCity",
@@ -21,7 +21,7 @@
         },
         {
           "EditorId": "DialogueDiamondCity",
-          "FieldPath": "dialog_topics[0].responses[103].conditions[1].data.parameter_one_record",
+          "FieldPath": "dialog_topics[100].quest",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -29,7 +29,7 @@
         },
         {
           "EditorId": "DialogueDiamondCity",
-          "FieldPath": "dialog_topics[0].responses[166].conditions[1].data.parameter_one_record",
+          "FieldPath": "dialog_topics[101].quest",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -37,7 +37,7 @@
         },
         {
           "EditorId": "DialogueDiamondCity",
-          "FieldPath": "dialog_topics[0].responses[20].conditions[0].data.parameter_one_record",
+          "FieldPath": "dialog_topics[102].quest",
           "FormKey": "003648:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -181,19 +181,11 @@
       ]
     },
     "0179F3:Fallout4.esm": {
-      "Count": 607,
+      "Count": 564,
       "Sample": [
         {
           "EditorId": null,
           "FieldPath": "quest",
-          "FormKey": "0179F1:Fallout4.esm",
-          "Origin": "Data",
-          "Plugin": "mEditTestSubset.esm",
-          "RecordType": "dial"
-        },
-        {
-          "EditorId": null,
-          "FieldPath": "responses[41].conditions[2].data.parameter_one_record",
           "FormKey": "0179F1:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
@@ -218,6 +210,14 @@
         {
           "EditorId": "DialogueConcordArea",
           "FieldPath": "dialog_topics[0].quest",
+          "FormKey": "0179F3:Fallout4.esm",
+          "Origin": "Data",
+          "Plugin": "mEditTestSubset.esm",
+          "RecordType": "qust"
+        },
+        {
+          "EditorId": "DialogueConcordArea",
+          "FieldPath": "dialog_topics[100].quest",
           "FormKey": "0179F3:Fallout4.esm",
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",

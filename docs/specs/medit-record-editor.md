@@ -869,11 +869,21 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
    generic base with no reflectively-enumerable subclasses of its own), not a special case of this
    one. `Npc.Level` (a single struct field, xEdit's `ACBS\Level`/`Level Mult`) and `Quest.Aliases`
-   (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two record editor fields this closes; not
-   every `A<Name>` type in the assembly qualifies — one (`ASceneActionType`) shares the naming
-   convention without its generated class actually being `abstract`, so the mechanism correctly
-   declines it (empty sub-schema, same as before) rather than guessing a discriminator scheme onto a
-   type it cannot safely tell apart from an ordinary one.
+   (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two mandatory record editor fields this
+   closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
+   `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,
+   `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target` — visible
+   in the schema now, write round-trip verification tracked separately (#611). Not every `A<Name>`
+   type in the assembly qualifies: one (`ASceneActionType`) shares the naming convention without its
+   generated class actually being `abstract`, so the mechanism correctly declines it (empty
+   sub-schema, same as before) rather than guessing a discriminator scheme onto a type it cannot
+   safely tell apart from an ordinary one (#612 tracks finding its real discriminator shape).
+   `Condition`/`ConditionData` and `AVirtualMachineAdapter` (VMAD) are *also* genuinely `abstract`,
+   structurally identical to `ANpcLevel` — deliberately excluded by name
+   (`SchemaReflector.AbstractUnionExcludedTypeNames`) rather than covered, because they are
+   permanently outside the reflected schema by design (VMAD/condition reconstitution stays in
+   `Queries/RecordDocumentCodecs`, operating on the document body — `MEditService/CLAUDE.md`); this
+   mechanism could technically model them, and must not.
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
    change already overlaid (#413); there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control

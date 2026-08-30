@@ -1377,16 +1377,35 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return leaves;
     }
 
-    // getterInterface qualifies when its own Setter type (GetSetterType) is an abstract class with
-    // at least one discoverable concrete leaf. OMOD's own IAObjectModPropertyGetter<T> is excluded
-    // by BuildSubSchema's own caller order (IsObjectModPropertyBase checked first), not by anything
-    // here — its Setter type (AObjectModProperty<T>) is abstract too, but this method is simply
-    // never reached for it.
+    // #548 review (Finding 1): Condition/ConditionData (CTDA) and AVirtualMachineAdapter (VMAD) are
+    // both `public abstract partial class` — structurally identical to ANpcLevel/AQuestAlias — but
+    // permanently outside the reflected schema by documented architectural boundary
+    // (MEditService/CLAUDE.md:232-235: "VMAD/condition reconstitution survives at the query-service
+    // level, Queries/RecordDocumentCodecs, operating on RecordDocument.Body — rejected from the seam
+    // itself, same as raw SQL"). The existing exclusion mechanisms (IConditionCodec.
+    // IsConditionListField, BuildSchema's own vmadInterfaceType check) gate a *named top-level
+    // property* in ReflectColumns, keyed by (declaring type, property name) — neither is reachable
+    // from here, where BuildSubSchema's own recursive walk has already descended past any such
+    // property into an abstract type with no memory of which field led to it (Condition's own
+    // "Data" member specifically: never itself excluded by IsConditionListField, since that check
+    // only ever names the *list* fields like Perk.Conditions/Quest.DialogConditions, not a nested
+    // struct member two levels beyond one). No existing mechanism reaches this call site, so this
+    // is a new, narrow, named exclusion — checked by the resolved concrete Setter type's own name
+    // against exactly the two documented boundary types, not a heuristic on the "A<Name>" prefix.
+    private static readonly HashSet<string> AbstractUnionExcludedTypeNames =
+        new(StringComparer.Ordinal) { "Condition", "ConditionData", "AVirtualMachineAdapter" };
+
+    // getterInterface qualifies when its own Setter type (GetSetterType) is an abstract class,
+    // outside the excluded boundary above, with at least one discoverable concrete leaf. OMOD's own
+    // IAObjectModPropertyGetter<T> is excluded by BuildSubSchema's own caller order
+    // (IsObjectModPropertyBase checked first), not by anything here — its Setter type
+    // (AObjectModProperty<T>) is abstract too, but this method is simply never reached for it.
     private static bool TryGetAbstractUnionLeaves(
         Type getterInterface, out List<(Type GetterType, string ClassName)> leaves)
     {
         leaves = [];
         if (GetSetterType(getterInterface) is not { IsAbstract: true } setterType) return false;
+        if (AbstractUnionExcludedTypeNames.Contains(setterType.Name)) return false;
         leaves = FindAbstractUnionLeaves(setterType);
         return leaves.Count > 0;
     }
@@ -1439,7 +1458,26 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 result.Add(field);
         }
 
-        result.Add(BuildAbstractUnionDiscriminatorField(leaves));
+        // #548 review (Finding 4): defensive, not live — no Mutagen leaf across any game assembly
+        // declares a member that snake-cases to "concrete_type" today (checked). But this
+        // discriminator is appended unconditionally after every real leaf member into what becomes
+        // a last-write-wins Dictionary<string, object?> downstream (ExtractSubObject) — a future
+        // leaf that did collide would have its own real data silently replaced by the discriminator,
+        // no warning, ADR-0026's failure class. Same "log and omit" rule
+        // BuildAbstractUnionMemberField's own shape-disagreement branch already uses, not a new one.
+        var discriminator = BuildAbstractUnionDiscriminatorField(leaves);
+        if (result.Any(f => f.Name == discriminator.Name))
+        {
+            logger.LogWarning(
+                "Abstract union {Base}'s own {Discriminator} field name collides with a real leaf " +
+                "member; omitting the discriminator rather than silently shadowing that member's data",
+                getterInterface.Name, AbstractUnionTypeDiscriminator);
+        }
+        else
+        {
+            result.Add(discriminator);
+        }
+
         return result;
     }
 
@@ -1514,6 +1552,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // discriminator, a leaf whose own concrete class no longer resolves) is the caller's signal to
     // refuse rather than guess — the same contract ResolveObjectModPropertyConcreteType already
     // gives ApplyListJson, extended to BuildStructColumn's own single-object case too.
+    //
+    // #548 review (Finding 3): this used to re-run FindAbstractUnionLeaves's own full
+    // assembly.GetTypes() scan (12,914 types for Mutagen.Bethesda.Fallout4.dll) on every call —
+    // fine on the read side, where it runs once per abstract type behind GetSchemas' own cache, but
+    // this is the write path, called once per array element (ApplyListJson/ApplyListSubFieldJson)
+    // with no cache of its own. A leaf's own class always shares its abstract base's namespace (the
+    // same fact ResolveObjectModPropertyConcreteType's own `asm.GetType($"{ns}.{interfaceName}")`
+    // already leans on for OMOD), so the discriminator string names an O(1) lookup directly —
+    // IsAssignableFrom still gates it, so a name that resolves to some unrelated same-namespace type
+    // is refused exactly the same as an unrecognized one, never silently accepted.
     private static Type? ResolveAbstractUnionConcreteType(Type abstractSetterType, JsonElement json)
     {
         if (json.ValueKind != JsonValueKind.Object) return null;
@@ -1521,8 +1569,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return null;
 
         var name = dt.GetString();
-        var match = FindAbstractUnionLeaves(abstractSetterType).Find(l => l.ClassName == name);
-        return match.GetterType == null ? null : GetSetterType(match.GetterType);
+        if (string.IsNullOrEmpty(name)) return null;
+
+        var candidate = abstractSetterType.Assembly.GetType($"{abstractSetterType.Namespace}.{name}");
+        return candidate is { IsAbstract: false } && abstractSetterType.IsAssignableFrom(candidate)
+            ? candidate
+            : null;
     }
 
     // Element metadata for use in FieldMetadata.ElementType.

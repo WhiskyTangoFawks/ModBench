@@ -44349,7 +44349,7 @@
     {
       "CheckErrors": {
         "aliases": "[0].specific_location: [01D807:Fallout4.esm] \u003CError: Could not be resolved\u003E; [1].unique_actor: [000007:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].unique_actor: [0179FF:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].unique_actor: [019FD8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].package_data[0]: [01F5BD:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].package_data[1]: [23C9E8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [3].package_data[2]: [01E66D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].unique_actor: [019FDA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].package_data[0]: [115BD7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [4].package_data[1]: [072757:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].unique_actor: [019FD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].combat_override_package_list: [01D417:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[0]: [05DF28:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[1]: [05E5C7:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[2]: [01D414:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[3]: [01F5B8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[4]: [0A878D:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[5]: [022B3C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[6]: [03FE3C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [5].package_data[7]: [022AA4:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].unique_actor: [019FDC:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].package_data[0]: [115BD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].package_data[1]: [071437:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].unique_actor: [019FDB:Fallout4.esm] \u003CError: Could not be resolved\u003E; [7].package_data[0]: [115BD8:Fallout4.esm] \u003CError: Could not be resolved\u003E; [8].unique_actor: [01D15C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].forced_reference: [01E2EA:Fallout4.esm] \u003CError: Could not be resolved\u003E; [9].voice_types: [019FD9:Fallout4.esm] \u003CError: Could not be resolved\u003E; [10].location.ref_type: [07828C:Fallout4.esm] \u003CError: Could not be resolved\u003E; [11].forced_reference: [01D318:Fallout4.esm] \u003CError: Could not be resolved\u003E; [12].external.quest: [0289E4:Fallout4.esm] \u003CError: Could not be resolved\u003E",
-        "stages": "[2].log_entries[0].conditions[0].data.reference: Found a NULL reference, expected: ; [2].log_entries[0].conditions[0].data.parameter_two_record: [00000A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].log_entries[0].conditions[1].data.reference: Found a NULL reference, expected: ; [2].log_entries[0].conditions[1].data.parameter_one_record: [01CC2A:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[0].data.reference: Found a NULL reference, expected: ; [6].log_entries[1].conditions[0].data.parameter_one_record: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[0].data.parameter_two_record: [000014:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[1].data.reference: Found a NULL reference, expected: ; [6].log_entries[1].conditions[1].data.parameter_one_record: [0B1752:Fallout4.esm] \u003CError: Could not be resolved\u003E; [6].log_entries[1].conditions[1].data.parameter_two_record: [00000A:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "stages": "[2].log_entries[0].conditions[0].data.reference: Found a NULL reference, expected: ; [2].log_entries[0].conditions[1].data.reference: Found a NULL reference, expected: ; [6].log_entries[1].conditions[0].data.reference: Found a NULL reference, expected: ; [6].log_entries[1].conditions[1].data.reference: Found a NULL reference, expected: "
       },
       "EditorId": "DialogueConcordArea",
       "Fields": {
@@ -44869,44 +44869,18 @@
                 "conditions": [
                   {
                     "compare_operator": "EqualTo",
-                    "concrete_type": "ConditionFloat",
                     "data": {
-                      "concrete_type": "FunctionConditionData",
-                      "event_function": null,
-                      "event_member": null,
-                      "function": "GetStageDone",
-                      "parameter3": null,
-                      "parameter_one_number": 96755,
-                      "parameter_one_record": "0179F3:Fallout4.esm",
-                      "parameter_one_string": null,
-                      "parameter_two_number": 10,
-                      "parameter_two_record": "00000A:Fallout4.esm",
-                      "parameter_two_string": null,
                       "reference": "Null",
                       "run_on_type": "Subject",
-                      "unknown2": 0,
                       "unknown3": -1
                     },
                     "flags": 0
                   },
                   {
                     "compare_operator": "LessThan",
-                    "concrete_type": "ConditionFloat",
                     "data": {
-                      "concrete_type": "FunctionConditionData",
-                      "event_function": null,
-                      "event_member": null,
-                      "function": "GetStage",
-                      "parameter3": null,
-                      "parameter_one_number": 117802,
-                      "parameter_one_record": "01CC2A:Fallout4.esm",
-                      "parameter_one_string": null,
-                      "parameter_two_number": 0,
-                      "parameter_two_record": "Null",
-                      "parameter_two_string": null,
                       "reference": "Null",
                       "run_on_type": "Subject",
-                      "unknown2": 0,
                       "unknown3": -1
                     },
                     "flags": 0
@@ -44977,44 +44951,18 @@
                 "conditions": [
                   {
                     "compare_operator": "EqualTo",
-                    "concrete_type": "ConditionFloat",
                     "data": {
-                      "concrete_type": "FunctionConditionData",
-                      "event_function": null,
-                      "event_member": null,
-                      "function": "GetStageDone",
-                      "parameter3": null,
-                      "parameter_one_number": 141797,
-                      "parameter_one_record": "0229E5:Fallout4.esm",
-                      "parameter_one_string": null,
-                      "parameter_two_number": 20,
-                      "parameter_two_record": "000014:Fallout4.esm",
-                      "parameter_two_string": null,
                       "reference": "Null",
                       "run_on_type": "Subject",
-                      "unknown2": 0,
                       "unknown3": -1
                     },
                     "flags": 1
                   },
                   {
                     "compare_operator": "EqualTo",
-                    "concrete_type": "ConditionFloat",
                     "data": {
-                      "concrete_type": "FunctionConditionData",
-                      "event_function": null,
-                      "event_member": null,
-                      "function": "GetStageDone",
-                      "parameter3": null,
-                      "parameter_one_number": 726866,
-                      "parameter_one_record": "0B1752:Fallout4.esm",
-                      "parameter_one_string": null,
-                      "parameter_two_number": 10,
-                      "parameter_two_record": "00000A:Fallout4.esm",
-                      "parameter_two_string": null,
                       "reference": "Null",
                       "run_on_type": "Subject",
-                      "unknown2": 0,
                       "unknown3": -1
                     },
                     "flags": 1
@@ -48961,7 +48909,7 @@
     },
     {
       "CheckErrors": {
-        "actions": "[2].start_scenes[0].conditions[0].data.reference: Found a NULL reference, expected: ; [2].start_scenes[0].conditions[0].data.parameter_one_record: [0229E5:Fallout4.esm] \u003CError: Could not be resolved\u003E; [2].start_scenes[0].conditions[0].data.parameter_two_record: [00001E:Fallout4.esm] \u003CError: Could not be resolved\u003E"
+        "actions": "[2].start_scenes[0].conditions[0].data.reference: Found a NULL reference, expected: "
       },
       "EditorId": "NatGreetScene",
       "Fields": {
@@ -49089,22 +49037,9 @@
                 "conditions": [
                   {
                     "compare_operator": "EqualTo",
-                    "concrete_type": "ConditionFloat",
                     "data": {
-                      "concrete_type": "FunctionConditionData",
-                      "event_function": null,
-                      "event_member": null,
-                      "function": "GetStageDone",
-                      "parameter3": null,
-                      "parameter_one_number": 141797,
-                      "parameter_one_record": "0229E5:Fallout4.esm",
-                      "parameter_one_string": null,
-                      "parameter_two_number": 30,
-                      "parameter_two_record": "00001E:Fallout4.esm",
-                      "parameter_two_string": null,
                       "reference": "Null",
                       "run_on_type": "Subject",
-                      "unknown2": 3559,
                       "unknown3": -1
                     },
                     "flags": 0
