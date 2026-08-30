@@ -1,12 +1,15 @@
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Binary.Parameters;
 using Mutagen.Bethesda.Plugins.Records;
+using Noggog.WorkEngine;
 
 namespace MEditService.Tests.RealData;
 
@@ -56,13 +59,32 @@ namespace MEditService.Tests.RealData;
 /// round trip — the difference is introduced by the *write*, exactly as #563 already established. The
 /// <c>/manual-test</c> that filed it ran the same day #563 merged, against a build that predated it.
 /// <see cref="DeepParse_OfTheRealLegendariesFixture_KeepsEveryDeclaredMasterIncludingTheUnreferencedOne"/>
-/// is that isolated repro made permanent, so the distinction survives without re-running the
+/// and <see cref="SourceRoundTrip_OfTheRealLegendariesFixture_KeepsEveryDeclaredMaster"/> are the two
+/// halves of that isolated repro made permanent, so the distinction survives without re-running the
 /// investigation.</para>
+///
+/// <para><b>Deliberate deviation on suite placement.</b> #567's own AC names
+/// <see cref="SubrecordInventoryRoundTripGateTests"/> (#514) as the home for its fixture; it lives here
+/// instead, with #563's, because the two suites assert opposite polarities and this fixture belongs to
+/// the second. #514's suite exists to prove Track <i>refuses</i> a genuine parse-time subrecord drop;
+/// this one exists to prove Track <i>accepts</i> ADR-0038's sanctioned master pruning — which is what
+/// #567 turned out to be, once the parse-time drop it alleged was refuted. Filing it under #514 would
+/// have put an "accepts" fixture in a suite whose every other member refuses, and separated it from the
+/// total-prune fixture it is the direct counterpart to.</para>
 /// </summary>
 public sealed class MasterPruningRoundTripGateTests
 {
     private const string FaceGenFixtureFileName = "FaceGen Output.esp";
     private const string LegendariesFixtureFileName = "LegendariesTheyCanUse.esp";
+
+    /// <summary>What <c>LegendariesTheyCanUse.esp</c>'s own TES4 header declares, in file order.</summary>
+    private static readonly string[] DeclaredMasters =
+        ["Fallout4.esm", "DLCRobot.esm", "DLCCoast.esm", "DLCNukaWorld.esm"];
+
+    /// <summary>The same list minus <c>DLCRobot.esm</c>, the one no record in the file references —
+    /// what ADR-0038's content-derived write leaves behind.</summary>
+    private static readonly string[] MastersSurvivingThePrune =
+        ["Fallout4.esm", "DLCCoast.esm", "DLCNukaWorld.esm"];
 
     private static string PathTo(string fixtureFileName) =>
         Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName);
@@ -113,15 +135,9 @@ public sealed class MasterPruningRoundTripGateTests
     [Fact]
     public void DeepParse_OfTheRealLegendariesFixture_KeepsEveryDeclaredMasterIncludingTheUnreferencedOne()
     {
-        var fixturePath = PathTo(LegendariesFixtureFileName);
-        var deepParsed = ModFactory.ImportSetter(
-            new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath),
-            GameRelease.Fallout4,
-            LocalizedStrings.ForRead(Path.GetDirectoryName(fixturePath)!));
+        var deepParsed = DeepParseLegendaries();
 
-        Assert.Equal(
-            ["Fallout4.esm", "DLCRobot.esm", "DLCCoast.esm", "DLCNukaWorld.esm"],
-            deepParsed.MasterReferences.Select(master => master.Master.FileName.String));
+        Assert.Equal(DeclaredMasters, deepParsed.MasterReferences.Select(master => master.Master.FileName.String));
 
         // ...and the rewrite prunes DLCRobot.esm precisely because nothing in the file names it: no
         // record of its own, and no link out of any other record. The other three are all referenced,
@@ -134,6 +150,89 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.Contains(ModKey.FromFileName("Fallout4.esm"), referenced);
         Assert.Contains(ModKey.FromFileName("DLCCoast.esm"), referenced);
         Assert.Contains(ModKey.FromFileName("DLCNukaWorld.esm"), referenced);
+    }
+
+    /// <summary>#567 AC1's other half, and the counterpart to the test above: the whole-mod
+    /// serialize/deserialize round trip through <c>Mutagen.Bethesda.Serialization</c> — a different
+    /// package from the binary reader, and #567's second candidate for where the master went — keeps all
+    /// four declared masters too. Together the two tests place the <c>MAST</c>/<c>DATA</c> difference
+    /// squarely at the write and nowhere earlier, which is the whole finding. Asserted on the model
+    /// straight out of <c>DeserializeWholeMod</c>, before any binary write touches it, for the same
+    /// reason the parse test asserts before any round trip: should this round trip ever genuinely drop a
+    /// master, nothing else in this file would notice — the two Track tests' gate exempts exactly this
+    /// signature pair, and the write-side test below expects the master gone by then anyway.</summary>
+    [Fact]
+    public async Task SourceRoundTrip_OfTheRealLegendariesFixture_KeepsEveryDeclaredMaster()
+    {
+        var scratchDir = Directory.CreateTempSubdirectory("medit-masterprune-source-").FullName;
+        try
+        {
+            var fromSource = await DeserializeLegendariesThroughSource(scratchDir);
+
+            Assert.Equal(DeclaredMasters, fromSource.MasterReferences.Select(master => master.Master.FileName.String));
+        }
+        finally { Directory.Delete(scratchDir, recursive: true); }
+    }
+
+    /// <summary>#567 AC2's mechanism, asserted rather than merely described: it is the *write* that
+    /// prunes, and it prunes exactly <c>DLCRobot.esm</c> — the one master no record references — leaving
+    /// the other three in their original relative order. The two Track tests above can only report a
+    /// bool; this names what actually happens to the header, so a future change that pruned the wrong
+    /// master, pruned too many, or reordered the survivors would still satisfy them but fail here.
+    /// Reproduces <c>TrackService.VerifyRoundTrip</c>'s own verification write option for option
+    /// (<c>WithLoadOrderFromHeaderMasters</c>/<c>WithNoDataFolder</c>/<c>NoNextFormIDProcessing</c>/
+    /// <c>RecordCountOption.NoCheck</c>) because that scratch write is deleted before Track returns —
+    /// the same "reproduce the original's own bytes" shape <c>BinaryRoundTripGateTests</c> already
+    /// establishes.</summary>
+    [Fact]
+    public async Task SourceRoundTripWrite_OfTheRealLegendariesFixture_PrunesOnlyTheUnreferencedMaster()
+    {
+        var scratchDir = Directory.CreateTempSubdirectory("medit-masterprune-write-").FullName;
+        try
+        {
+            var fromSource = await DeserializeLegendariesThroughSource(scratchDir);
+            var rewrittenPath = Path.Combine(scratchDir, LegendariesFixtureFileName);
+            await fromSource.BeginWrite
+                .ToPath(rewrittenPath)
+                .WithLoadOrderFromHeaderMasters()
+                .WithNoDataFolder()
+                .NoNextFormIDProcessing()
+                .WithRecordCount(RecordCountOption.NoCheck)
+                .WriteAsync();
+
+            var rewritten = Fallout4Mod.CreateFromBinary(
+                new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), rewrittenPath), Fallout4Release.Fallout4);
+
+            Assert.Equal(
+                MastersSurvivingThePrune,
+                rewritten.ModHeader.MasterReferences.Select(master => master.Master.FileName.String));
+        }
+        finally { Directory.Delete(scratchDir, recursive: true); }
+    }
+
+    /// <summary>The fixture through Track's own reader — <c>ModFactory.ImportSetter</c>, the deep parse,
+    /// not the session's lazy overlay.</summary>
+    private static IMod DeepParseLegendaries()
+    {
+        var fixturePath = PathTo(LegendariesFixtureFileName);
+        return ModFactory.ImportSetter(
+            new ModPath(ModKey.FromFileName(LegendariesFixtureFileName), fixturePath),
+            GameRelease.Fallout4,
+            LocalizedStrings.ForRead(Path.GetDirectoryName(fixturePath)!));
+    }
+
+    /// <summary>The fixture all the way through Track's source pipeline and back — deep parse, whole-mod
+    /// serialize to a pristine tree, write that tree to <paramref name="scratchDir"/>, deserialize it —
+    /// stopping short of the binary write, which the two callers differ on.</summary>
+    private static async Task<IFallout4Mod> DeserializeLegendariesThroughSource(string scratchDir)
+    {
+        var pristineFiles = await TrackService.SerializeToPristineFiles(DeepParseLegendaries(), LegendariesFixtureFileName);
+        await PristineFileWriter.WriteAllAsync(pristineFiles, scratchDir, CancellationToken.None);
+
+        return await RecordTextCodecGeneratorSeed.DeserializeWholeMod(
+            Path.Combine(scratchDir, SourceRecordPath.RootFor(LegendariesFixtureFileName)),
+            InlineWorkDropoff.Instance,
+            CancellationToken.None);
     }
 
     /// <summary>One real fixture copied into a scratch mod folder and loaded as a session — the same
