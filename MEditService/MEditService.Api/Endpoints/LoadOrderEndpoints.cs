@@ -1,6 +1,7 @@
 using MEditService.Bridge;
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Mutagen.Bethesda;
 
@@ -28,6 +29,7 @@ public static class LoadOrderEndpoints
                 "Vanilla masters are prepended by the backend and need not be listed. Blocks until " +
                 "the sweep has run; poll GET /load-order/status alongside for progress.")
             .Produces<LoadOrderResponse>()
+            .ProducesProblem(423)
             .ProducesProblem(400)
             .ProducesProblem(409)
             .ProducesProblem(500);
@@ -81,6 +83,16 @@ public static class LoadOrderEndpoints
     {
         logger.LogWarning(ex, "Rejected load order for unsupported game release {Release}", ex.Release);
         return Results.Problem(ex.Message, statusCode: 400);
+    }
+
+    // #588 / ADR-0001 point 6: another Modbench window holds this instance's index. 423 Locked, so
+    // the client can tell it from a failed reconcile (500) and from its own superseded snapshot
+    // (409): nothing is wrong with the snapshot or the index, the instance is simply in use. A
+    // warning, not an error — the user opened two windows on one instance, and the message says so.
+    private static IResult IndexHeldElsewhere(ILogger logger, IndexHeldElsewhereException ex)
+    {
+        logger.LogWarning(ex, "Refused load order: the index at {Path} is held by another window", ex.IndexPath);
+        return Results.Problem(ex.Message, statusCode: 423);
     }
 
     private static IResult? ParseGameRelease(string? raw, out GameRelease release)
@@ -142,6 +154,10 @@ public static class LoadOrderEndpoints
         catch (UnsupportedGameReleaseException ex)
         {
             return UnsupportedGameRelease(logger, ex);
+        }
+        catch (IndexHeldElsewhereException ex)
+        {
+            return IndexHeldElsewhere(logger, ex);
         }
         catch (Exception ex)
         {

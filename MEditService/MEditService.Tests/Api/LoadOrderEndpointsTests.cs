@@ -1,8 +1,12 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
+using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
+using MEditService.Tests.TestSupport;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -51,5 +55,27 @@ public sealed class LoadOrderEndpointsTests : IDisposable
 
         var ok = Assert.IsAssignableFrom<Ok<LoadOrderResponse>>(result);
         Assert.Empty(ok.Value!.CrashRepairOffers);
+    }
+
+    // #588 / ADR-0001 point 6: the second window's PUT is answered 423 Locked, naming the cause, so
+    // the client can tell "another window holds this instance" from a failed reconcile (500) and
+    // from its own superseded snapshot (409). The other window is a real second process.
+    [ForeignIndexHolderFact]
+    public void PutLoadOrder_Answers423NamingTheOtherWindow_WhenAnotherProcessHoldsTheInstance()
+    {
+        using var data = new PluginFixtureBuilder("second-window-put").WithPlugin("A.esp").Build();
+        using var otherWindow = ForeignIndexHolder.Hold(IndexFile.For(data.InstanceRoot));
+        var request = new LoadOrderRequest(
+            data.Plugins.Select(p => new LoadOrderPlugin(p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning)).ToList(),
+            data.DataFolder, data.InstanceRoot, "Fallout4");
+        var reflector = SharedSchemaReflector.Instance;
+        using var thisWindow = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+
+        var result = LoadOrderEndpoints.PutLoadOrder(request, thisWindow, new ExternalChangeWatcher(), NullLoggerFactory.Instance);
+
+        var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
+        Assert.Equal(423, problem.StatusCode);
+        Assert.Contains("another Modbench window", problem.ProblemDetails.Detail, StringComparison.Ordinal);
+        Assert.Equal(LoadOrderState.None, thisWindow.Status.State);
     }
 }
