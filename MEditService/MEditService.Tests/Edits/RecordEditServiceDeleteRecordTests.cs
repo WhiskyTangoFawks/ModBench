@@ -32,6 +32,29 @@ public sealed class RecordEditServiceDeleteRecordTests
         Assert.NotNull(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin));
     }
 
+    /// <summary>
+    /// #573: <see cref="RecordEditService.DeleteRecord"/> shares the exact
+    /// <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard renumber's stale-index bug lived in —
+    /// a record that never reached Head (still working-tree-only, straight off
+    /// <see cref="RecordEditService.CreateRecord"/>) was silently kept at Effective by a guard that
+    /// only ever checked Head for "does any ref know this record". The production fix (checking
+    /// Effective too) covers this sibling for free; this is the regression that would have caught it.
+    /// </summary>
+    [Fact]
+    public void DeleteRecord_OnANeverCommittedRecord_ActuallyRemovesItFromTheIndex()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var service = ServiceFor(mod.Sessions);
+        var created = service.CreateRecord(mod.Plugin, "npc_", "BrandNew");
+        Assert.True(created.Applied, created.Message);
+
+        var result = service.DeleteRecord(mod.Plugin, created.NewFormKey!);
+
+        Assert.True(result.Applied, result.Message);
+        Assert.Null(mod.Sessions.Index!.GetDocument(created.NewFormKey!, mod.Plugin));
+        Assert.Null(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(created.NewFormKey!, mod.Plugin));
+    }
+
     [Fact]
     public void DeleteRecord_LeavesOtherRecordsUntouched()
     {
