@@ -89,6 +89,30 @@ public sealed class PluginCompileServiceMasterPruningTests : IDisposable
         Assert.Contains("Mutagen #688", result.RefusalReason);
     }
 
+    /// <summary>#520 review: a refused Compile used to leave <c>.medit_tmp_&lt;random&gt;/</c>
+    /// sitting beside the plugin forever — <c>PreparedPluginSave.Dispose()</c> is what normally
+    /// deletes it, but <c>PluginWriter.PrepareFromModAsync</c> throws before it ever hands one back,
+    /// so the caller's <c>using</c> has nothing to bind and cleanup never runs. #520 makes this a
+    /// *routine* refusal for a whole class of tracked plugin rather than a rare crash, so every
+    /// retry against this exact fixture would otherwise mint another orphaned directory, forever
+    /// (the plugin can never successfully compile until Mutagen's own bug is fixed). The <c>.bak</c>
+    /// <i>does</i> survive, deliberately (ADR-0008; #520 review concluded the ADR does not say a
+    /// backup taken for a write that never happened is safe to delete, so this leaves it) —
+    /// asserted here too, so a future change that also swept the <c>.bak</c> away is a visible,
+    /// deliberate decision rather than a silent side effect of touching this test.</summary>
+    [Fact]
+    public void Compile_OfTheRealSpaDiaAMRFixtureTrackedBeforeTheFix_LeavesNoOrphanedTempDirectory()
+    {
+        var compileService = new PluginCompileService(
+            _mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+
+        var result = compileService.Compile(_plugin, new CompileSource.WorkingTree());
+
+        Assert.False(result.Succeeded);
+        Assert.Empty(Directory.GetDirectories(_modFolder, ".medit_tmp_*"));
+        Assert.Single(Directory.GetFiles(_modFolder, "*.bak.esp"));
+    }
+
     public void Dispose()
     {
         _mirror.Dispose();

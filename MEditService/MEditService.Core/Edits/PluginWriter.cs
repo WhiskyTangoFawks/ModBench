@@ -70,61 +70,81 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         Directory.CreateDirectory(tmpDir);
 
-        // #506/ADR-0042: HEDR.NextObjectID and HEDR.NumRecords are written verbatim from the mod's
-        // own header, never recomputed. Mutagen's defaults (NextFormIDOption.Iterate,
-        // RecordCountOption.Iterate) re-derive both from the record set — NextObjectID as max
-        // self-authored FormID + 1 (or the game's initial value when there are none) — and real-world
-        // override/patch plugins routinely carry stored values that match neither (nothing in-game
-        // reads either field), so the defaults silently rewrite them on every save. No production
-        // path allocates a new FormKey today (the only AddNew is source deserialization, with the
-        // source's own key); one that does must allocate through Mutagen's GetNextFormKey, which
-        // advances the in-memory header, so the value written here keeps up.
-        var writeBuilder = mod.BeginWrite
-            .ToPath(tmpPath)
-            .WithLoadOrderFromHeaderMasters()
-            .WithNoDataFolder()
-            .NoNextFormIDProcessing()
-            .WithRecordCount(RecordCountOption.NoCheck);
-
-        // #515 AC1/AC3, #537: a Localized mod's own strings must land beside the *real* plugin, not
-        // orphaned in the temp directory this method discards — but not written directly to their
-        // real destination either. Mutagen's own default (PluginUtilityTranslation.SetStringsWriter,
-        // which only fires when nothing here supplies one) derives its write folder from the write
-        // path — the temp path here — which is why a writer must be supplied explicitly at all.
-        // #537 nests that writer's own folder inside the same tmpDir the plugin binary already
-        // writes to, rather than pointing it at pluginPath's real Strings/ folder directly: the real
-        // .esp/.esm gets the same temp-write-then-rename discipline from PreparedPluginSave.Commit,
-        // and the strings files now get it too, moved into place only once every write here has
-        // succeeded.
-        var tmpStringsDir = Path.Combine(tmpDir, "Strings");
-        if (mod.UsingLocalization)
+        // #520 review: everything from here down can throw before this method ever returns a
+        // PreparedPluginSave — most concretely, a plugin whose only reference to a master lives in
+        // a VMAD struct-list script property (Mutagen-Modding/Mutagen#688) throws
+        // UnmappableFormIDException out of WriteAsync below, on every retry, for as long as that
+        // plugin stays broken. PreparedPluginSave.Dispose() is what normally deletes tmpDir, but a
+        // Dispose that never gets constructed never runs — the caller's `using` has nothing to bind
+        // when this method itself throws. Same discipline TrackService.VerifyRoundTrip already uses
+        // for its own scratch directory, adapted for the one difference that matters here: tmpDir
+        // must survive a *successful* return (Commit() still needs tmpPath), so cleanup is
+        // catch-and-rethrow, not an unconditional finally. The .bak stays untouched either way
+        // (ADR-0008) — a write that never happened is a different question from a write that did,
+        // and the ADR does not decide it, so this method doesn't either.
+        try
         {
-            writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
-                mod.GameRelease, mod.ModKey,
-                writeDirectory: tmpStringsDir,
-                encodingProvider: MutagenEncoding.Default));
+            // #506/ADR-0042: HEDR.NextObjectID and HEDR.NumRecords are written verbatim from the mod's
+            // own header, never recomputed. Mutagen's defaults (NextFormIDOption.Iterate,
+            // RecordCountOption.Iterate) re-derive both from the record set — NextObjectID as max
+            // self-authored FormID + 1 (or the game's initial value when there are none) — and real-world
+            // override/patch plugins routinely carry stored values that match neither (nothing in-game
+            // reads either field), so the defaults silently rewrite them on every save. No production
+            // path allocates a new FormKey today (the only AddNew is source deserialization, with the
+            // source's own key); one that does must allocate through Mutagen's GetNextFormKey, which
+            // advances the in-memory header, so the value written here keeps up.
+            var writeBuilder = mod.BeginWrite
+                .ToPath(tmpPath)
+                .WithLoadOrderFromHeaderMasters()
+                .WithNoDataFolder()
+                .NoNextFormIDProcessing()
+                .WithRecordCount(RecordCountOption.NoCheck);
+
+            // #515 AC1/AC3, #537: a Localized mod's own strings must land beside the *real* plugin, not
+            // orphaned in the temp directory this method discards — but not written directly to their
+            // real destination either. Mutagen's own default (PluginUtilityTranslation.SetStringsWriter,
+            // which only fires when nothing here supplies one) derives its write folder from the write
+            // path — the temp path here — which is why a writer must be supplied explicitly at all.
+            // #537 nests that writer's own folder inside the same tmpDir the plugin binary already
+            // writes to, rather than pointing it at pluginPath's real Strings/ folder directly: the real
+            // .esp/.esm gets the same temp-write-then-rename discipline from PreparedPluginSave.Commit,
+            // and the strings files now get it too, moved into place only once every write here has
+            // succeeded.
+            var tmpStringsDir = Path.Combine(tmpDir, "Strings");
+            if (mod.UsingLocalization)
+            {
+                writeBuilder = writeBuilder.WithStringsWriter(new StringsWriter(
+                    mod.GameRelease, mod.ModKey,
+                    writeDirectory: tmpStringsDir,
+                    encodingProvider: MutagenEncoding.Default));
+            }
+
+            // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every write —
+            // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
+            // to Mutagen's default (alphabetical, masters-first): the load order's current load order when
+            // supplied, so the written file's master list matches what a modder opening it in xEdit
+            // afterward expects (ADR-0034 at the file level).
+            if (loadOrder != null)
+                writeBuilder = writeBuilder.WithMastersListOrdering(loadOrder.Select(name => ModKey.FromFileName(name)));
+
+            await writeBuilder.WriteAsync();
+
+            // #537: whatever StringsWriter actually produced (only present when UsingLocalization, and
+            // only once WriteAsync's own StringsWriter.Dispose has run) rides to its real Strings/ folder
+            // through Commit(), never written here directly.
+            var stringsFiles = Directory.Exists(tmpStringsDir)
+                ? Directory.GetFiles(tmpStringsDir)
+                    .Select(f => (TempPath: f, FinalPath: Path.Combine(dir, "Strings", Path.GetFileName(f))))
+                    .ToList()
+                : [];
+
+            return new PreparedPluginSave(tmpPath, pluginPath, backupPath, stringsFiles);
         }
-
-        // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every write —
-        // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
-        // to Mutagen's default (alphabetical, masters-first): the load order's current load order when
-        // supplied, so the written file's master list matches what a modder opening it in xEdit
-        // afterward expects (ADR-0034 at the file level).
-        if (loadOrder != null)
-            writeBuilder = writeBuilder.WithMastersListOrdering(loadOrder.Select(name => ModKey.FromFileName(name)));
-
-        await writeBuilder.WriteAsync();
-
-        // #537: whatever StringsWriter actually produced (only present when UsingLocalization, and
-        // only once WriteAsync's own StringsWriter.Dispose has run) rides to its real Strings/ folder
-        // through Commit(), never written here directly.
-        var stringsFiles = Directory.Exists(tmpStringsDir)
-            ? Directory.GetFiles(tmpStringsDir)
-                .Select(f => (TempPath: f, FinalPath: Path.Combine(dir, "Strings", Path.GetFileName(f))))
-                .ToList()
-            : [];
-
-        return new PreparedPluginSave(tmpPath, pluginPath, backupPath, stringsFiles);
+        catch
+        {
+            Directory.Delete(tmpDir, recursive: true);
+            throw;
+        }
     }
 
     /// <summary>Prepare, commit, prune. Returns the path of the backup it created.</summary>
