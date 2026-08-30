@@ -2,18 +2,22 @@ using MEditService.Core.Source;
 using Mutagen.Bethesda.Fallout4;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Exceptions;
+using Mutagen.Bethesda.Plugins.Masters;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Serialization.Exceptions;
 
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// Unit-level pins for <see cref="PluginDiagnosis"/>'s own two factories, complementing the real,
-/// end-to-end fixtures in <c>RealData/PluginDiagnosisRoundTripGateTests.cs</c> and
-/// <c>Edits/PluginCompileServiceDiagnosisTests.cs</c>. This file's own job is the shapes those real
-/// fixtures can't reach cheaply — chiefly the nested-<see cref="AggregateException"/> chain-walk
-/// (Finding B) — built from a real defect's own captured messages
-/// (<c>SouthOfTheSea.esm</c> REFR <c>431EDC</c>, found live during #519's planning) rather than a
-/// 6.8 MB real <c>.esm</c> this repo has no reason to commit.
+/// Unit-level pins for <see cref="PluginDiagnosis"/>'s own three factories, complementing the real,
+/// end-to-end fixtures in <c>RealData/PluginDiagnosisRoundTripGateTests.cs</c>,
+/// <c>RealData/MasterPruningRoundTripGateTests.cs</c> and
+/// <c>Edits/PluginCompileServiceDiagnosisTests.cs</c>/<c>Edits/PluginCompileServiceMasterPruningTests.cs</c>.
+/// This file's own job is the shapes those real fixtures can't reach cheaply — chiefly the
+/// nested-<see cref="AggregateException"/> chain-walk (Finding B) — built from real defects' own
+/// captured messages (<c>SouthOfTheSea.esm</c> REFR <c>431EDC</c>, found live during #519's
+/// planning; <c>SpaDia_AMR.esp</c> Quest <c>DiaQ_LLInjector_SpadeyAMR</c>, found live during #520's
+/// planning) rather than committing every fixture this repo needs a shape from.
 /// </summary>
 public sealed class PluginDiagnosisTests
 {
@@ -132,5 +136,76 @@ public sealed class PluginDiagnosisTests
         var diagnosis = new PluginDiagnosis(Anchor: null, DefectClass: PluginDiagnosis.UnknownClass, Tail: null, Message: "boom");
 
         Assert.Equal("the plugin — unknown: boom", diagnosis.Describe());
+    }
+
+    /// <summary>#520's own write seam: the exact nested shape observed live against
+    /// <c>SpaDia_AMR.esp</c> (<c>AggregateException(AggregateException(RecordException(UnmappableFormIDException)))</c>,
+    /// from Mutagen's own <c>WriteGroupParallel</c>/<c>WriteQuestsParallel</c>) — the anchor comes from
+    /// the <see cref="RecordException"/> exactly as <see cref="FromParseException"/>'s own walk finds
+    /// it, and the master name comes from the deeper, differently-typed
+    /// <see cref="UnmappableFormIDException"/> nobody else's factory looks for.</summary>
+    [Fact]
+    public void FromWriteException_NamesTheRecordAndThePrunedMasterFromTwoDifferentExceptionTypes()
+    {
+        var questFormKey = FormKey.Factory("0000DD:SpaDia_AMR.esp");
+        var nukaWorldFormKey = FormKey.Factory("03F98D:DLCNukaWorld.esm");
+        var modKey = ModKey.FromFileName("SpaDia_AMR.esp");
+
+        var unmappable = new UnmappableFormIDException(
+            new FormLinkInformation(nukaWorldFormKey, typeof(IFallout4MajorRecordGetter)), new StubMasterPackage());
+        var recordEx = new RecordException(
+            formKey: questFormKey, recordType: typeof(Quest), modKey: modKey, edid: "DiaQ_LLInjector_SpadeyAMR",
+            innerException: unmappable);
+        var aggregate1 = new AggregateException("One or more errors occurred. (Could not map FormKey to a master index)", recordEx);
+        var aggregate2 = new AggregateException("One or more errors occurred. (One or more errors occurred. (Could not map FormKey to a master index))", aggregate1);
+
+        var diagnosis = PluginDiagnosis.FromWriteException(aggregate2);
+
+        Assert.NotNull(diagnosis.Anchor);
+        Assert.Contains("Quest", diagnosis.Anchor);
+        Assert.Contains("0000DD:SpaDia_AMR.esp", diagnosis.Anchor);
+        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", diagnosis.Anchor);
+        Assert.Contains("DLCNukaWorld.esm", diagnosis.Message);
+        Assert.Equal("likely blocked upstream: Mutagen #688 (FormLinks inside a VMAD struct-list " +
+            "script property are the known cause of this shape, not confirmed for every instance)", diagnosis.Tail);
+        Assert.Contains("DiaQ_LLInjector_SpadeyAMR", diagnosis.Describe());
+        Assert.Contains("DLCNukaWorld.esm", diagnosis.Describe());
+        Assert.Contains("Mutagen #688", diagnosis.Describe());
+    }
+
+    /// <summary>The catch-filter test both write call sites (<c>TrackService.VerifyRoundTrip</c>,
+    /// <c>PluginCompileService.Compile</c>) share: an exception tree that never carries
+    /// <see cref="UnmappableFormIDException"/> must not be diverted into this Kind A row — every other
+    /// write failure keeps propagating exactly as it did before #520 (#516's decision, out of scope
+    /// to widen).</summary>
+    [Fact]
+    public void HasUnmappableFormID_WhenNoUnmappableFormIDExceptionIsAnywhereInTheChain_IsFalse()
+    {
+        Assert.False(PluginDiagnosis.HasUnmappableFormID(new InvalidOperationException("boom")));
+    }
+
+    [Fact]
+    public void HasUnmappableFormID_WhenNestedInsideAggregatesAndARecordException_IsTrue()
+    {
+        var unmappable = new UnmappableFormIDException(
+            new FormLinkInformation(FormKey.Factory("03F98D:DLCNukaWorld.esm"), typeof(IFallout4MajorRecordGetter)),
+            new StubMasterPackage());
+        var recordEx = new RecordException(formKey: null, recordType: null, modKey: null, edid: null, innerException: unmappable);
+        var aggregate = new AggregateException(recordEx);
+
+        Assert.True(PluginDiagnosis.HasUnmappableFormID(aggregate));
+    }
+
+    /// <summary>A minimal stub — <see cref="UnmappableFormIDException"/>'s constructor requires an
+    /// <see cref="IReadOnlySeparatedMasterPackage"/>, but nothing under test here ever reads it (only
+    /// <see cref="UnmappableFormIDException.UnmappableFormKey"/> is), so every member throws.</summary>
+    private sealed class StubMasterPackage : IReadOnlySeparatedMasterPackage
+    {
+        public ModKey CurrentMod => throw new NotSupportedException();
+        public IReadOnlyMasterReferenceCollection Raw => throw new NotSupportedException();
+        public bool TryLookupModKey(ModKey modKey, bool reference, out MasterStyle style, out uint index) =>
+            throw new NotSupportedException();
+        public FormKey GetFormKey(FormID formId, bool reference) => throw new NotSupportedException();
+        public FormID GetFormID(FormKey formKey) => throw new NotSupportedException();
     }
 }
