@@ -1102,8 +1102,9 @@ function buildPluginsTreeComposite(
     rows: pluginListProvider,
     // A thin positional adapter, not `recordBrowser` passed directly — the composite's own
     // `getPluginChildren(pluginFile)` contract has no `origin` slot (a root row never has one to
-    // give), while `PluginTreeProvider.getPluginChildren` keeps its `(name, origin?)` shape for
-    // origin-bearing copies and its own test suite.
+    // give), while `PluginTreeProvider.getPluginChildren` keeps its `(name, origin?)` shape: that
+    // is how Editing browses a registered losing copy by origin (#34/#305, ADR-0044) — the data
+    // #595 keeps available while nothing in this view displays it (#576 owns the design).
     children: {
       getPluginChildren: (file) => recordBrowser.getPluginChildren(file),
       getChildren: (child) => recordBrowser.getChildren(child),

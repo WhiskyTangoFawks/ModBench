@@ -544,9 +544,8 @@ response, so there is exactly one notification and one persistent, per-row expla
 
 Split (d) of #397's design record — the state level of the Resolution stack (`CONTEXT.md`): within
 a tracked plugin, source stacks on the compiled binary, and this is the always-on signal that the
-two have diverged. Where the file-override decoration above is a Mod-Management fact about which
-physical file a name resolves to, this is an Editing fact about a tracked plugin's own git state —
-"the game can't see your edits yet."
+two have diverged. This is an Editing fact about a tracked plugin's own git state — "the game
+can't see your edits yet" — not a Mod-Management fact about which physical file a name resolves to.
 
 - **Trigger.** A plugin row is compile-stale exactly when its source (the working tree, or a
   commit landed since — commit stays ungated, ADR-0042's amendment) has moved past what
@@ -569,9 +568,9 @@ physical file a name resolves to, this is an Editing fact about a tracked plugin
   icon of its own when neither of those claimed it either: the description hint is the primary
   signal here, not an icon.
 - **Coexists with every other decoration on this tree.** A plugin can be compile-stale and carry
-  a master issue, a load failure, or be a file override, all at once, and every decoration remains
-  legible — append-only by construction, the same convention the file-override and read-only-note
-  decorations above already establish.
+  a master issue, or a load failure, all at once, and every decoration remains legible —
+  append-only by construction, the same convention the read-only-note decoration above already
+  establishes.
 - **Refresh.** No watcher (freshness philosophy: read/refresh time, never a watcher). Seeded at
   reconcile off the same `GET /plugins` answer every other load-order-derived fact in this
   hand-off already reads, and re-derived — without a reconcile — after a successful

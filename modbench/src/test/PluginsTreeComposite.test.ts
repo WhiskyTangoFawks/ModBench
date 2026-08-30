@@ -683,8 +683,8 @@ describe('PluginsTreeComposite — master-issue decoration (#277 / ADR-0037 AC1/
 // #449: a tracked plugin whose source has moved past refs/medit/last-compile/<plugin> — "the game
 // can't see your edits yet". Load-order-derived, same family as the master-issue/load-failure
 // decorations above (icon/description/tooltip, append-never-replace, never the leading slot) rather
-// than the file-override family's FileDecorationProvider tint — this is a git-tracked-state fact,
-// not a filesystem one, and it must coexist with whatever else already decorated the row.
+// than a FileDecorationProvider tint — this is a git-tracked-state fact, not a filesystem one, and
+// it must coexist with whatever else already decorated the row.
 describe('PluginsTreeComposite — compile-staleness decoration (#449)', () => {
   it('appends a description hint and tooltip to a stale row', async () => {
     const { composite, render } = make([PLUGIN_ROW], undefined, undefined, (file) =>
