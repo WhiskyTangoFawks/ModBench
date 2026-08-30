@@ -23,6 +23,10 @@ public sealed class TrackedModFixture : IDisposable
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
 
+    /// <summary>The MO2 instance this fixture's mod folder lives in (#592 / ADR-0001) — what a
+    /// session load keys its index on, and the fixture's own cleanup root.</summary>
+    public string InstanceRoot { get; }
+
     public string ModFolder { get; }
     public string GameDirectory { get; }
     public SessionManager Sessions { get; }
@@ -46,7 +50,8 @@ public sealed class TrackedModFixture : IDisposable
     {
         ActualPluginName = pluginName;
         Plugin = new PluginKey(pluginName, ModFolderOrigin);
-        ModFolder = Directory.CreateTempSubdirectory("medit-edit-mod-").FullName;
+        InstanceRoot = Directory.CreateTempSubdirectory("medit-edit-instance-").FullName;
+        ModFolder = Directory.CreateDirectory(Path.Combine(InstanceRoot, "mods", ModFolderOrigin)).FullName;
         GameDirectory = Directory.CreateTempSubdirectory("medit-edit-game-").FullName;
 
         var pluginPath = Path.Combine(ModFolder, pluginName);
@@ -177,7 +182,7 @@ public sealed class TrackedModFixture : IDisposable
     public void Dispose()
     {
         Sessions.Dispose();
-        TryDelete(ModFolder);
+        TryDelete(InstanceRoot);
         TryDelete(GameDirectory);
     }
 

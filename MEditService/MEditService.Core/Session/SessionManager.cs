@@ -90,51 +90,36 @@ public sealed class SessionManager(
         }
     }
 
-    public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
+    // #269 / ADR-0036: session loads carry each plugin's origin through to GameSession — and since
+    // #270 / ADR-0035, its participation too. #592 / ADR-0001: and the MO2 instance they came from,
+    // which is what the index file is keyed on.
+    public void LoadExplicit(
+        string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+        string? instanceRoot = null)
     {
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogDebug("Session load starting. DataFolder={DataFolder} PluginsTxt={PluginsTxt} Game={Game}",
-                dataFolderPath, pluginsTxtPath, gameRelease);
+            _logger.LogDebug("Session load starting. GameDir={GameDir} Instance={Instance} Plugins={Count} Game={Game}",
+                gameDirectory, instanceRoot, plugins.Count, gameRelease);
         }
 
         RunLoad(
             gameRelease,
-            logger => new GameSession(dataFolderPath, pluginsTxtPath, gameRelease, logger),
-            "Creating game session (reading plugins list and opening binary overlays)",
+            logger => GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, instanceRoot, logger),
+            "Creating game session from scattered paths",
             "Session load complete", "Session load failed");
     }
 
-    // #269 / ADR-0036: real (MO2-backed) session loads carry each plugin's origin through to
-    // GameSession — and since #270 / ADR-0035, its participation too.
-    public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
-        LoadExplicitCore(gameDirectory, plugins.Count, gameRelease,
-            logger => GameSession.LoadExplicit(gameDirectory, plugins, gameRelease, logger));
-
-    private void LoadExplicitCore(string gameDirectory, int pluginCount, GameRelease gameRelease, Func<ILogger?, GameSession> buildSession)
-    {
-        if (_logger.IsEnabled(LogLevel.Debug))
-        {
-            _logger.LogDebug("Explicit session load starting. GameDir={GameDir} Plugins={Count} Game={Game}",
-                gameDirectory, pluginCount, gameRelease);
-        }
-
-        // No plugins.txt for an explicit session; the game directory is the implicit-master root.
-        RunLoad(
-            gameRelease, buildSession,
-            "Creating explicit game session from scattered paths",
-            "Explicit session load complete", "Explicit session load failed");
-    }
-
     /// <summary>
-    /// The one load path: take the exclusive right, arm a cancellation token, build the session,
-    /// index it progressively, and release — the two public entry points differ only in how the
-    /// session is built and what they call it in the log.
+    /// The load path: take the exclusive right, arm a cancellation token, build the session, index
+    /// it progressively, and release.
     /// <para>
-    /// Unified when #274's mutation review found the teardown-on-failure branch covered on the
-    /// explicit path and uncovered on the other: the same lifecycle written twice is one place for a
-    /// cancellation or disposal bug to hide, and the interesting failure modes (cancel mid-load,
-    /// supersede, drain before dispose) are only ever exercised through one of them.
+    /// A separate method from <see cref="LoadExplicit"/> because the same lifecycle is also what a
+    /// failed build must unwind — #274's mutation review found the teardown-on-failure branch
+    /// covered on one of the two load entry points this codebase then had and uncovered on the
+    /// other, and unifying them was the fix. #592 deleted the second entry point; the seam stays,
+    /// since the interesting failure modes (cancel mid-load, supersede, drain before dispose) are
+    /// all in here rather than in the caller.
     /// </para>
     /// </summary>
     private void RunLoad(
@@ -222,9 +207,10 @@ public sealed class SessionManager(
     {
         _logger.LogDebug("Initializing DuckDB record repository");
         var createTimer = Stopwatch.StartNew();
-        // #585/#586 / ADR-0001: the Data folder is what gives the index a home — one persistent file
-        // per game install, so this load finds whatever the last one left there.
-        var repository = _repositoryFactory.Create(gameRelease, session.DataFolderPath);
+        // #592 / ADR-0001: the MO2 instance is what gives the index a home — one persistent file per
+        // instance, so this load finds whatever the last one left there. Never wider than the
+        // instance: `origin` is a mod folder name, unique only within one.
+        var repository = _repositoryFactory.Create(gameRelease, session.InstanceRoot);
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("DuckDB record repository initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
@@ -589,7 +575,7 @@ public sealed class SessionManager(
             // assembled, and "there is no session yet" would be a misleading way to say so.
             //
             // This check and the mutation below must share one lock acquisition. Split across two,
-            // a Load/LoadExplicit landing in the gap runs BeginLoad() → DisposeCurrentSession(),
+            // a LoadExplicit landing in the gap runs BeginLoad() → DisposeCurrentSession(),
             // nulling _session and disposing _repository — so the mutation would dereference a null
             // session and write to a disposed DuckDB connection, surfacing as a 500 and a touched
             // native resource exactly where this comment promises a clean 409. Unload() is the same

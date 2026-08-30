@@ -151,6 +151,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
     private sealed class FakeGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
     {
         public string DataFolderPath => throw new NotSupportedException();
+        public string? InstanceRoot => throw new NotSupportedException();
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
@@ -170,8 +171,7 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();

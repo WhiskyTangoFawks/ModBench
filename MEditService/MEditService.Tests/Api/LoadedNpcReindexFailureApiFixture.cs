@@ -40,10 +40,11 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
     public async Task InitializeAsync()
     {
         Client = _app.CreateClient();
-        var resp = await Client.PostAsJsonAsync("/session/load", new
+        var resp = await Client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = Plugin.DataFolder,
-            pluginsTxtPath = Plugin.PluginsTxtPath,
+            plugins = Plugin.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = Plugin.DataFolder,
+            instanceRoot = Plugin.InstanceRoot,
             gameRelease = "Fallout4",
         });
         resp.EnsureSuccessStatusCode();
@@ -78,10 +79,10 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new IOException("reindex failed (injected)");
 
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>
-            inner.Load(dataFolderPath, pluginsTxtPath, gameRelease);
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
-            inner.LoadExplicit(gameDirectory, plugins, gameRelease);
+        public void LoadExplicit(
+            string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+            string? instanceRoot = null) =>
+            inner.LoadExplicit(gameDirectory, plugins, gameRelease, instanceRoot);
         public void Unload() => inner.Unload();
         public PluginResponse CreatePlugin(string name, string path, string origin) => inner.CreatePlugin(name, path, origin);
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => inner.LoadUnlistedPlugin(path, origin);

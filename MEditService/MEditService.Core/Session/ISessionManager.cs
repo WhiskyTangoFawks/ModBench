@@ -28,8 +28,6 @@ public interface ISessionManager
     /// </summary>
     SessionStatus Status { get; }
 
-    void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease);
-
     /// <summary>
     /// Builds the single active session from an ordered list of scattered physical plugin paths
     /// (an MO2-style instance's plugins.txt lines, enabled and disabled alike), with the game's
@@ -38,8 +36,22 @@ public interface ISessionManager
     /// origin Mod Management resolved it from — a mod folder name, or a reserved PluginOrigin
     /// value (#269 / ADR-0036) — and whether it participates in winner computation, i.e. its
     /// plugins.txt `*` prefix (#270 / ADR-0035).
+    /// <para>
+    /// The only load there is (#592). Modbench manages an MO2-style instance and nothing else, so
+    /// there is no plain-Data-folder load path to be the alternative — and no honest one either: a
+    /// session built by reading a <c>plugins.txt</c> beside the game's own <c>Data</c> could name no
+    /// mod folders, which is what <see cref="IGameSession.InstanceRoot"/> and every
+    /// <c>(plugin, origin)</c> key are built out of.
+    /// </para>
+    /// <para>
+    /// #592 / ADR-0001: <paramref name="instanceRoot"/> is the MO2 instance root, and it is what the
+    /// index file is keyed on — see <see cref="IGameSession.InstanceRoot"/>. Null asks for an
+    /// in-memory index that dies with the session, which is what the test suite's fixtures want.
+    /// </para>
     /// </summary>
-    void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease);
+    void LoadExplicit(
+        string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+        string? instanceRoot = null);
 
     void Unload();
 

@@ -94,6 +94,7 @@ public sealed class PluginOriginResolverTests
     private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
     {
         public string DataFolderPath => throw new NotSupportedException();
+        public string? InstanceRoot => throw new NotSupportedException();
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins { get; } = plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];

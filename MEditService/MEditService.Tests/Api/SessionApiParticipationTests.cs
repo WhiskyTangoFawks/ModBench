@@ -26,6 +26,7 @@ public sealed class SessionApiParticipationTests(LoadedApiFixture<TestPluginFixt
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates }),
             gameRelease = "Fallout4",
         });
@@ -51,6 +52,7 @@ public sealed class SessionApiParticipationTests(LoadedApiFixture<TestPluginFixt
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             // Deliberately no `participates` — this is the omission the guard exists to catch.
             plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin }),
             gameRelease = "Fallout4",
@@ -74,6 +76,7 @@ public sealed class SessionApiParticipationTests(LoadedApiFixture<TestPluginFixt
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates }),
             gameRelease = "Fallout4",
         });

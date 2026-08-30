@@ -59,8 +59,7 @@ public class ContainerChildQueryServiceTests
         public IRecordReads? Repository => repo;
         public IRecordIndex? Index => null;
         public SessionStatus Status => SessionStatus.None;
-        public void Load(string d, string p, GameRelease g) => throw new NotSupportedException();
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) => throw new NotSupportedException();
+        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
         public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
@@ -79,6 +78,7 @@ public class ContainerChildQueryServiceTests
     private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
     {
         public string DataFolderPath => "";
+        public string? InstanceRoot => null;
         public GameRelease GameRelease => GameRelease.Fallout4;
         public IReadOnlyList<PluginMetadata> Plugins => plugins;
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];

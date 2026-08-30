@@ -16,7 +16,7 @@ namespace MEditService.Tests.Api;
 // per endpoints file directly (bypassing HTTP/Serilog — see #215 plan: Serilog's
 // UseSerilog(writeToProviders: false) makes host-level log capture unreliable) and assert: (a) the
 // Info-level entry is present and carries the raw (pre-decode) request parameter, and (b) for
-// SessionEndpoints.LoadSession specifically, the entry still fires when the request fails
+// SessionEndpoints.LoadExplicitSession specifically, the entry still fires when the request fails
 // validation and returns early — proving the line isn't gated behind a success path. The remaining
 // handlers get the identical one-line addition without a dedicated test.
 //
@@ -38,21 +38,19 @@ public sealed class EndpointReceptionLoggingTests
         return (factory, entries);
     }
 
-    // --- SessionEndpoints.LoadSession ---
+    // --- SessionEndpoints.LoadExplicitSession ---
 
     [Fact]
-    public void LoadSession_ValidRequest_LogsReceivedWithDataFolder()
+    public void LoadSession_ValidRequest_LogsReceivedWithGameDirectory()
     {
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var tempDir = Directory.CreateTempSubdirectory("medit-215-").FullName;
         try
         {
-            var pluginsTxt = Path.Combine(tempDir, "Plugins.txt");
-            File.WriteAllText(pluginsTxt, "");
-            var req = new SessionLoadRequest(tempDir, pluginsTxt, "Fallout4");
+            var req = new SessionLoadExplicitRequest([], tempDir, tempDir, "Fallout4");
 
-            SessionEndpoints.LoadSession(req, new StubSessionManager(), new ExternalChangeWatcher(), loggerFactory);
+            SessionEndpoints.LoadExplicitSession(req, new StubSessionManager(), new ExternalChangeWatcher(), loggerFactory);
 
             Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains(tempDir));
         }
@@ -63,20 +61,20 @@ public sealed class EndpointReceptionLoggingTests
     }
 
     [Fact]
-    public void LoadSession_DataFolderMissing_StillLogsReceived()
+    public void LoadSession_GameDirectoryMissing_StillLogsReceived()
     {
-        // Acceptance criterion: the reception line fires on every call, including ones that go on
-        // to fail — this request fails validation (400) before SessionManager.Load is ever called.
+        // Acceptance criterion: the reception line fires on every call, including ones that go on to
+        // fail — this request fails validation (400) before SessionManager.LoadExplicit is called.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var sessionManager = new StubSessionManager();
-        var req = new SessionLoadRequest("Z:\\does-not-exist", "Z:\\does-not-exist\\Plugins.txt", "Fallout4");
+        var req = new SessionLoadExplicitRequest([], "Z:\\does-not-exist", "Z:\\does-not-exist", "Fallout4");
 
-        var result = SessionEndpoints.LoadSession(req, sessionManager, new ExternalChangeWatcher(), loggerFactory);
+        var result = SessionEndpoints.LoadExplicitSession(req, sessionManager, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult>(result);
         Assert.Equal(400, problem.StatusCode);
-        Assert.False(sessionManager.LoadCalled); // confirms this is the pre-Load validation-failure path
+        Assert.False(sessionManager.LoadCalled); // confirms this is the pre-load validation-failure path
         Assert.Contains(entries, e => e.Level == LogLevel.Information && e.Message.Contains("Z:\\does-not-exist"));
     }
 
@@ -118,9 +116,9 @@ public sealed class EndpointReceptionLoggingTests
         public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-session state.
         public SessionStatus Status => SessionStatus.None;
-        public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) => LoadCalled = true;
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease) =>
-            throw new NotSupportedException();
+        public void LoadExplicit(
+            string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+            string? instanceRoot = null) => LoadCalled = true;
         public void Unload() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name, string path, string origin) =>
             new(name, name, 0, false, false, [], 0, false, true, origin, [], true);

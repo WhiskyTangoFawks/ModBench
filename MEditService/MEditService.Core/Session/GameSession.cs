@@ -36,6 +36,7 @@ public sealed class GameSession : IGameSession
     private PluginLoadFailure[] _loadFailuresSnapshot = [];
 
     public string DataFolderPath { get; }
+    public string? InstanceRoot { get; }
     public GameRelease GameRelease { get; }
 
     /// <summary>How many plugins this session's resolved load order will attempt to open — the
@@ -85,11 +86,6 @@ public sealed class GameSession : IGameSession
 
     private sealed record ResolvedPlugin(string FileName, string FilePath, bool IsImmutable, bool Participates, string Origin);
 
-    public GameSession(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease, ILogger? logger = null)
-        : this(dataFolderPath, gameRelease, ResolveFromDataFolder(dataFolderPath, pluginsTxtPath, gameRelease), logger)
-    {
-    }
-
     /// <summary>
     /// Builds a session from an ordered list of scattered physical plugin paths (an MO2-style
     /// instance's enabled plugins), with the game's implicit masters resolved from
@@ -98,9 +94,12 @@ public sealed class GameSession : IGameSession
     /// explicit plugin also carries the origin Mod Management resolved it from — a mod folder name,
     /// or a PluginOrigin reserved value (#269 / ADR-0036) — and whether it participates in winner
     /// computation, i.e. its plugins.txt `*` prefix (#270 / ADR-0035).
+    /// <para>#592 / ADR-0001: <paramref name="instanceRoot"/> is the MO2 instance these mod folders
+    /// belong to, and the only scope an index can be keyed at — see <see cref="InstanceRoot"/>.</para>
     /// </summary>
     public static GameSession LoadExplicit(
-        string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, ILogger? logger = null)
+        string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease,
+        string? instanceRoot = null, ILogger? logger = null)
     {
         var implicitKeys = ResolveImplicitKeys(gameDirectory, gameRelease);
         var creationClubNames = ResolveCreationClubNames(gameDirectory, gameRelease);
@@ -125,7 +124,7 @@ public sealed class GameSession : IGameSession
                 .Select(p => new ResolvedPlugin(p.Name, p.Path, IsImmutable: false, Participates: p.Participates, Origin: p.Origin)))
             .ToList();
 
-        return new GameSession(gameDirectory, gameRelease, ordered, logger);
+        return new GameSession(gameDirectory, instanceRoot, gameRelease, ordered, logger);
     }
 
     private static HashSet<string> ResolveImplicitKeys(string folder, GameRelease gameRelease) =>
@@ -157,37 +156,14 @@ public sealed class GameSession : IGameSession
             .ToList();
     }
 
-    private static List<ResolvedPlugin> ResolveFromDataFolder(
-        string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease)
-    {
-        var implicitKeys = ResolveImplicitKeys(dataFolderPath, gameRelease);
-        var creationClubNames = ResolveCreationClubNames(dataFolderPath, gameRelease);
-        // #434: see LoadExplicit's identical forcedNames — a plugins.txt line for a CC-cataloged
-        // plugin (the repro's three already-*-listed ESLs) loads once, from the forced block.
-        var forcedNames = new HashSet<string>(implicitKeys, StringComparer.OrdinalIgnoreCase);
-        forcedNames.UnionWith(creationClubNames);
-
-        // #267 / ADR-0035: every non-comment, non-blank plugins.txt entry is indexed — enabled and
-        // disabled alike. The `*` prefix (Enabled) becomes Participates, not a filter on presence.
-        var explicitListings = PluginListings.RawLoadOrderListingsFromPath(pluginsTxtPath, gameRelease)
-            .Where(l => !forcedNames.Contains(l.FileName));
-
-        // Every plugin here is physically inside dataFolderPath — there is no MO2 VFS in this
-        // constructor path, so every plugin's origin is the reserved Data-directory value (#269 / ADR-0036).
-        return
-        [
-            .. implicitKeys.Concat(creationClubNames)
-                        .Select(name => new ResolvedPlugin(name, Path.Combine(dataFolderPath, name), IsImmutable: true, Participates: true, Origin: PluginOrigin.DataDirectory)),
-            .. explicitListings
-                    .Select(l => new ResolvedPlugin(l.FileName, Path.Combine(dataFolderPath, l.FileName), IsImmutable: false, Participates: l.Enabled, Origin: PluginOrigin.DataDirectory)),
-        ];
-    }
-
-    private GameSession(string dataFolderPath, GameRelease gameRelease, IReadOnlyList<ResolvedPlugin> ordered, ILogger? logger)
+    private GameSession(
+        string dataFolderPath, string? instanceRoot, GameRelease gameRelease,
+        IReadOnlyList<ResolvedPlugin> ordered, ILogger? logger)
     {
         _logger = logger ?? NullLogger.Instance;
         _ordered = ordered;
         DataFolderPath = dataFolderPath;
+        InstanceRoot = instanceRoot;
         GameRelease = gameRelease;
 
         if (_logger.IsEnabled(LogLevel.Debug))

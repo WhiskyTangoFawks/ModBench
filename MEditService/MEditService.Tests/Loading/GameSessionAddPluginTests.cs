@@ -11,8 +11,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_IncreasesPluginCount()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
         var countBefore = session.Plugins.Count;
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "NewEmpty.esp");
@@ -26,8 +26,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_NewEmptyPlugin_AppearsInPluginsWithCorrectIndex()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
         var expectedIndex = session.Plugins.Count;
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "NewEmpty.esp");
@@ -43,8 +43,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_NewEmptyPlugin_GetModReturnsIt()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "NewEmpty.esp");
         WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
@@ -57,8 +57,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_IsImmutableAlwaysFalse()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "Immutable.esp");
         WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
@@ -71,8 +71,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_EslExtension_HasIsLightTrue()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "Added.esl");
         WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
@@ -86,8 +86,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_EsmExtension_HasIsMasterTrue()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "Added.esm");
         WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
@@ -105,7 +105,7 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
             .WithPlugin("Base.esp")
             .WithPlugin("With2Npcs.esp", mod => { mod.Npcs.AddNew("Npc1"); mod.Npcs.AddNew("Npc2"); }, listed: false)
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var pluginPath = Path.Combine(data.DataFolder, "With2Npcs.esp");
 
         var metadata = session.AddPlugin(pluginPath);
@@ -116,8 +116,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddPlugin_CalledTwice_SecondPluginHasNextLoadOrderIndex()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var firstPath = Path.Combine(_fixture.DataFolder, "First.esp");
         var secondPath = Path.Combine(_fixture.DataFolder, "Second.esp");
@@ -146,10 +146,10 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
             })
             .Build();
 
-        using var constructorSession = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var constructorSession = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var constructorMetadata = constructorSession.Plugins.Single(p => p.Name == "WithContent.esp");
 
-        using var addPluginSession = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var addPluginSession = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         var pluginPath = Path.Combine(data.DataFolder, "WithContent.esp");
         var addPluginMetadata = addPluginSession.AddPlugin(pluginPath);
 
@@ -166,8 +166,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddCreatedPlugin_UsesCallerSuppliedOrigin()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "CreatedInMod.esp");
         WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
@@ -180,8 +180,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddCreatedPlugin_IsLoadOrderMemberAndParticipates()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var newPluginPath = Path.Combine(_fixture.DataFolder, "CreatedInMod2.esp");
         WriteEmptyPlugin(newPluginPath, GameRelease.Fallout4);
@@ -196,8 +196,8 @@ public sealed class GameSessionAddPluginTests(TestPluginFixture fixture)
     [Fact]
     public void AddCreatedPlugin_CalledTwice_SecondPluginHasNextLoadOrderIndex()
     {
-        using var session = new GameSession(
-            _fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(
+            _fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var firstPath = Path.Combine(_fixture.DataFolder, "CreatedFirst.esp");
         var secondPath = Path.Combine(_fixture.DataFolder, "CreatedSecond.esp");

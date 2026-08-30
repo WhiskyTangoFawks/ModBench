@@ -115,7 +115,7 @@ public sealed class SessionManagerLoadExplicitTests
     private sealed class ThrowingOnIndexRepositoryFactory(IRecordIndexFactory inner, string poisonPlugin)
         : IRecordIndexFactory
     {
-        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
+        public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null) =>
             new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
     }
 

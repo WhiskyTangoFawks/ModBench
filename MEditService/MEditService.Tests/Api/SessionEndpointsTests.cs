@@ -24,7 +24,7 @@ public sealed class SessionEndpointsTests : IDisposable
         [new ExplicitPlugin(TrackedModFixture.PluginName,
             System.IO.Path.Combine(_mod.ModFolder, TrackedModFixture.PluginName),
             TrackedModFixture.ModFolderOrigin, true)],
-        _mod.GameDirectory, "Fallout4");
+        _mod.GameDirectory, _mod.InstanceRoot, "Fallout4");
 
     [Fact]
     public void LoadExplicitSession_ReportsACrashRepairOffer_WhenATrackedPluginHasAnUnfinishedJournalMarker()

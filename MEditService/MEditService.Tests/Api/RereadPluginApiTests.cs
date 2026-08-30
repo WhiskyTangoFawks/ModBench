@@ -32,6 +32,7 @@ public sealed class RereadPluginApiTests(LoadedApiFixture<TestPluginFixture> loa
         var load = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Where(p => p.Origin == origin)
                 .Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = true }),
             gameRelease = "Fallout4",

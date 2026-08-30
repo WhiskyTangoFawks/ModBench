@@ -23,6 +23,7 @@ public sealed class SessionApiOriginTests(LoadedApiFixture<TestPluginFixture> lo
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = "SomeMod", participates = p.Participates }),
             gameRelease = "Fallout4",
         });

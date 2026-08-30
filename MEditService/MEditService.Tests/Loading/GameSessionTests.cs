@@ -9,7 +9,7 @@ namespace MEditService.Tests.Loading;
 public sealed class GameSessionImplicitFixture : IDisposable
 {
     public string DataFolder => _data.DataFolder;
-    public string PluginsTxtPath => _data.PluginsTxtPath;
+    public IReadOnlyList<ExplicitPluginInput> Plugins => _data.Plugins;
     public const string UserPluginName = "UserMod.esp";
 
     private readonly PluginFixtureData _data;
@@ -32,7 +32,7 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
     [Fact]
     public void LoadSession_ImplicitPlugin_LoadedImmutableAndOrdered()
     {
-        using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         var fo4 = session.Plugins.Single(p =>
             string.Equals(p.Name, "Fallout4.esm", StringComparison.OrdinalIgnoreCase));
@@ -53,7 +53,7 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
             .WithPlugin("Fallout4.esm")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var count = session.Plugins.Count(p =>
             string.Equals(p.Name, "Fallout4.esm", StringComparison.OrdinalIgnoreCase));
@@ -64,7 +64,7 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
     public void ImplicitPlugin_MissingFromDataFolder_IsNotLoaded()
     {
         // This fixture's data folder has Fallout4.esm but NOT DLCRobot.esm
-        using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
 
         Assert.DoesNotContain(session.Plugins, p =>
             string.Equals(p.Name, "DLCRobot.esm", StringComparison.OrdinalIgnoreCase));
@@ -80,7 +80,7 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
             .WithCreationClubCatalog("ccDup.esl")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var matches = session.Plugins.Where(p => p.Name == "ccDup.esl").ToList();
         var cc = Assert.Single(matches);
@@ -98,7 +98,7 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
             .WithCreationClubCatalog("ccTest.esl")
             .Build();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var implicitMaster = session.Plugins.Single(p => p.Name == "Fallout4.esm");
         var cc = session.Plugins.Single(p => p.Name == "ccTest.esl");
@@ -114,7 +114,7 @@ public sealed class GameSessionTests(GameSessionImplicitFixture fixture) : IClas
     [Fact]
     public void Constructor_ExposesGameRelease()
     {
-        using var session = new GameSession(_fixture.DataFolder, _fixture.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4).Opened();
         Assert.Equal(GameRelease.Fallout4, session.GameRelease);
     }
 }
@@ -130,7 +130,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-esl")
             .WithPlugin("TestMod.esl")
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "TestMod.esl");
         Assert.True(plugin.IsLight);
@@ -143,7 +143,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-esm")
             .WithPlugin("UserMaster.esm")
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "UserMaster.esm");
         Assert.True(plugin.IsMaster);
@@ -156,7 +156,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-esp")
             .WithPlugin("UserPatch.esp")
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "UserPatch.esp");
         Assert.False(plugin.IsLight);
@@ -173,7 +173,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-esl-flag")
             .WithPlugin("EslFlagged.esp", mod => mod.IsSmallMaster = true)
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "EslFlagged.esp");
         Assert.True(plugin.IsLight);
@@ -186,7 +186,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-esm-flag")
             .WithPlugin("EsmFlagged.esp", mod => mod.IsMaster = true)
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "EsmFlagged.esp");
         Assert.True(plugin.IsMaster);
@@ -206,7 +206,7 @@ public sealed class GameSessionPluginMetadataTests
                 mod.Npcs.AddNew("Npc3");
             })
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         var plugin = session.Plugins.Single(p => p.Name == "WithRecords.esp");
         Assert.Equal(3, plugin.RecordCount);
@@ -220,7 +220,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-case")
             .WithPlugin("CaseMod.esp")
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         Assert.NotNull(session.GetMod("CASEMOD.ESP", PluginOrigin.DataDirectory));
         Assert.NotNull(session.GetMod("casemod.esp", PluginOrigin.DataDirectory));
@@ -233,7 +233,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-getmod-null")
             .WithPlugin("Known.esp")
             .Build();
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
 
         Assert.Null(session.GetMod("Unknown.esp", PluginOrigin.DataDirectory));
     }
@@ -246,9 +246,11 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-missing-listed")
             .WithPlugin("Present.esp")
             .Build();
-        File.AppendAllText(data.PluginsTxtPath, "*NonExistent.esp\n");
+        var order = data.Plugins.Append(new ExplicitPluginInput(
+            "NonExistent.esp", Path.Combine(data.DataFolder, "NonExistent.esp"),
+            PluginOrigin.DataDirectory, Participates: true)).ToList();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, order, GameRelease.Fallout4).Opened();
 
         Assert.Contains(session.Plugins, p => p.Name == "Present.esp");
         Assert.DoesNotContain(session.Plugins, p => p.Name == "NonExistent.esp");
@@ -260,7 +262,7 @@ public sealed class GameSessionPluginMetadataTests
         using var data = new PluginFixtureBuilder("gs-dispose")
             .WithPlugin("DisposeTest.esp")
             .Build();
-        var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4).Opened();
+        var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4).Opened();
         session.Dispose();
 
         var ex = Record.Exception(() => session.Dispose());
@@ -275,7 +277,7 @@ public sealed class GameSessionPluginMetadataTests
             .Build();
         var logger = new CapturingLogger();
 
-        using var session = new GameSession(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4, logger).Opened();
+        using var session = GameSession.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4, logger: logger).Opened();
 
         Assert.True(logger.WasCalled);
     }

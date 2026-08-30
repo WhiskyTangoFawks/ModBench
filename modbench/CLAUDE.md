@@ -30,7 +30,6 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 | ------ | ---- | ---- |
 | `extension.ts` | Wiring: instances, commands, prompts | No business logic; prompts then delegates to `SessionController` |
 | `SessionController` | HTTP orchestration (create plugin, copy record, load session) | No VS Code types in interface — MCP tools call it directly |
-| `SessionWizard` | Multi-step session setup (game path detect → `POST /session/load`) | Returns `boolean`: session now loaded |
 | `BackendManager` | Backend lifecycle: `start()` (attach if healthy, else spawn bundled binary), `stop()`, crash-restart; polls `GET /health` | Spawns/tears down backend ([ADR-0022](../docs/adr/0022-extension-owns-backend-lifecycle.md)); path/exe injected by `extension.ts` |
 | `PluginRepository` | HTTP adapter (`GET /plugins`, `/record-types`, `/records`) | Interface `PluginRepository`; impl `ApiPluginRepository` |
 | `PluginTreeProvider` | Sidebar tree: repo data → tree nodes; page cache | Takes `PluginRepository`, not `ApiClient` — cache keyed `"plugin::recordType"`. `getPluginChildren(name)` is the public way in for rows built elsewhere (#270); one instance backs both plugin trees, so the page cache and `modbench.loadMore` are shared |

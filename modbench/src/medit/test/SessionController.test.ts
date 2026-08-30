@@ -469,7 +469,7 @@ describe('SessionController.loadExplicitSession', () => {
     { name: 'Fallout4.esm', path: '/game/Data/Fallout4.esm', origin: 'Data', participates: true },
   ];
 
-  it('POSTs the ordered plugin list + dataFolder game directory and refreshes', async () => {
+  it('POSTs the ordered plugin list + dataFolder game directory + MO2 instance root and refreshes', async () => {
     const client = {
       ...makeClient(),
       POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
@@ -477,11 +477,15 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession(plugins, '/game/Data');
+    await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(deps.client.POST).toHaveBeenCalledWith(
       '/session/load-explicit',
-      expect.objectContaining({ body: { plugins, gameDirectory: '/game/Data', gameRelease: 'Fallout4' } }),
+      expect.objectContaining({
+        // #592 / ADR-0001: instanceRoot is what the backend keys its persistent index on — omitting
+        // it would let two MO2 instances with same-named mod folders read each other's records.
+        body: { plugins, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' },
+      }),
     );
     expect(deps.refreshTree).toHaveBeenCalledOnce();
     expect(deps.showError).not.toHaveBeenCalled();
@@ -501,7 +505,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession(plugins, '/game/Data');
+    await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(deps.notifyConflictsComputed).toHaveBeenCalledOnce();
   });
@@ -517,7 +521,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession(plugins, '/game/Data');
+    await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('Lunar-UniqueCreatures.esp'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
@@ -536,7 +540,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     // #307: a tagged outcome, not a bare array — three outcomes (loaded / failed / abandoned)
     // need three answers, and a second sentinel would be one every call site has to remember.
@@ -553,7 +557,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     // #307: still distinguishable from a failed load — now by the outcome tag rather than by
     // `[]` versus `undefined`.
@@ -576,7 +580,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(result).toEqual({
       outcome: 'loaded', failures: [],
@@ -592,7 +596,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession([], '/game/Data');
+    await ctrl.loadExplicitSession([], '/game/Data', '/instance');
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
     expect(deps.refreshTree).toHaveBeenCalledOnce();
@@ -609,7 +613,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession(plugins.map(p => ({ ...p, participates: false })), '/game/Data');
+    await ctrl.loadExplicitSession(plugins.map(p => ({ ...p, participates: false })), '/game/Data', '/instance');
 
     expect(deps.showWarning).toHaveBeenCalledWith(expect.stringContaining('no enabled plugins'));
   });
@@ -622,7 +626,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession([{ ...plugins[0], participates: false }, plugins[1]], '/game/Data');
+    await ctrl.loadExplicitSession([{ ...plugins[0], participates: false }, plugins[1]], '/game/Data', '/instance');
 
     expect(deps.showWarning).not.toHaveBeenCalled();
   });
@@ -635,7 +639,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    await ctrl.loadExplicitSession(plugins, '/game/Data');
+    await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('bad dir'));
     expect(deps.refreshTree).not.toHaveBeenCalled();
@@ -654,7 +658,7 @@ describe('SessionController.loadExplicitSession', () => {
     const deps = makeDeps({ client });
     const ctrl = new SessionController(deps);
 
-    const result = await ctrl.loadExplicitSession(plugins, '/game/Data');
+    const result = await ctrl.loadExplicitSession(plugins, '/game/Data', '/instance');
 
     // #307: `undefined` was #295's way of saying this. It is now the `failed` tag — same
     // meaning (the backend disposed the previous session before attempting this one, so there
@@ -703,7 +707,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
     const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
-    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
 
     await vi.advanceTimersByTimeAsync(500);
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({ indexedPlugins: ['Fallout4.esm'] }));
@@ -723,7 +727,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
     const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
-    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
     await vi.advanceTimersByTimeAsync(500);
     finish();
     await load;
@@ -748,7 +752,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
     const ctrl = new SessionController(makeDeps({ client: { ...makeClient(), POST }, repository }));
     const onProgress = vi.fn();
 
-    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
     await vi.advanceTimersByTimeAsync(500);
 
     expect(onProgress).toHaveBeenCalledWith(
@@ -772,7 +776,7 @@ describe('SessionController.loadExplicitSession progress polling', () => {
     const ctrl = new SessionController(deps);
     const onProgress = vi.fn();
 
-    const load = ctrl.loadExplicitSession(plugins, '/game/Data', 'Fallout4', { onProgress });
+    const load = ctrl.loadExplicitSession(plugins, '/game/Data', '/instance', 'Fallout4', { onProgress });
     await vi.advanceTimersByTimeAsync(500);
     expect(onProgress).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(500);
@@ -804,7 +808,7 @@ describe('SessionController.loadExplicitSession abandonment', () => {
     const log = vi.fn();
     const deps = makeDeps({ client, log });
 
-    await new SessionController(deps).loadExplicitSession(plugins, '/game/Data');
+    await new SessionController(deps).loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(deps.showError).not.toHaveBeenCalled();
     expect(log).toHaveBeenCalledWith(expect.stringContaining('superseded'));
@@ -818,7 +822,7 @@ describe('SessionController.loadExplicitSession abandonment', () => {
     const client = { ...makeClient(), POST: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
     const deps = makeDeps({ client });
 
-    const result = await new SessionController(deps).loadExplicitSession(plugins, '/game/Data');
+    const result = await new SessionController(deps).loadExplicitSession(plugins, '/game/Data', '/instance');
 
     expect(result).toEqual({ outcome: 'abandoned' });
     // #308: whatever load superseded this one owns the notification, if any — this one never
@@ -838,7 +842,7 @@ describe('SessionController.loadExplicitSession abandonment', () => {
     const deps = makeDeps({ client });
 
     const result = await new SessionController(deps)
-      .loadExplicitSession(plugins, '/game/Data', 'Fallout4', { signal: controller.signal });
+      .loadExplicitSession(plugins, '/game/Data', '/instance', 'Fallout4', { signal: controller.signal });
 
     expect(result).toEqual({ outcome: 'abandoned' });
     expect(deps.showError).not.toHaveBeenCalled();
@@ -854,7 +858,7 @@ describe('SessionController.loadExplicitSession abandonment', () => {
       POST: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'loaded', failures: [] } }),
     };
 
-    await new SessionController(makeDeps({ client })).loadExplicitSession(plugins, '/game/Data', 'Fallout4', { signal });
+    await new SessionController(makeDeps({ client })).loadExplicitSession(plugins, '/game/Data', '/instance', 'Fallout4', { signal });
 
     expect(client.POST).toHaveBeenCalledWith('/session/load-explicit', expect.objectContaining({ signal }));
   });

@@ -46,7 +46,7 @@ public sealed class GameSessionLocalizedTests
 
             var reflector = SharedSchemaReflector.Instance;
             using var manager = new SessionManager(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-            manager.Load(data.DataFolder, data.PluginsTxtPath, GameRelease.Fallout4);
+            manager.LoadExplicit(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             // GameSession.OpenAll never lets one plugin's open failure escape — it records it as a
             // PluginLoadFailure and skips the plugin instead. Asserted directly, not just implied by

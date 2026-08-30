@@ -17,10 +17,11 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
     [Fact]
     public async Task PostSessionLoad_Returns200AndLoadsPlugin()
     {
-        var response = await _client.PostAsJsonAsync("/session/load", new
+        var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Fallout4",
         });
 
@@ -33,10 +34,11 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
     [Fact]
     public async Task PostSessionLoad_ThenGetRecords_ReturnsIndexedRecords()
     {
-        var load = await _client.PostAsJsonAsync("/session/load", new
+        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
-            dataFolderPath = _fixture.DataFolder,
-            pluginsTxtPath = _fixture.PluginsTxtPath,
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = _fixture.InstanceRoot,
             gameRelease = "Fallout4",
         });
         load.EnsureSuccessStatusCode();
@@ -58,6 +60,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins = fx.Plugins.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = p.Participates }),
             gameRelease = "Fallout4",
         });
@@ -83,6 +86,7 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = fx.GameDirectory,
+            instanceRoot = fx.InstanceRoot,
             plugins,
             gameRelease = "Fallout4",
         });
@@ -103,6 +107,24 @@ public sealed class SessionApiTests(LoadedApiFixture<TestPluginFixture> loaded) 
         var response = await _client.PostAsJsonAsync("/session/load-explicit", new
         {
             gameDirectory = "/no-such-dir",
+            instanceRoot = _fixture.InstanceRoot,
+            plugins = Array.Empty<object>(),
+            gameRelease = "Fallout4",
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // #592 / ADR-0001: the instance root is what the index file is keyed on, so a load that cannot
+    // name a real one has nowhere to keep its rows — a bad request, not a load that degrades to
+    // some other home.
+    [Fact]
+    public async Task PostSessionLoadExplicit_MissingInstanceRoot_Returns400()
+    {
+        var response = await _client.PostAsJsonAsync("/session/load-explicit", new
+        {
+            gameDirectory = _fixture.DataFolder,
+            instanceRoot = "/no-such-instance",
             plugins = Array.Empty<object>(),
             gameRelease = "Fallout4",
         });

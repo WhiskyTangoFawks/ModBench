@@ -62,20 +62,23 @@ public sealed class RealInstallSmokeTests
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
-            // GameSession loads the implicit base masters present in the data folder, so an empty
-            // Plugins.txt is enough to exercise a real vanilla load without guessing load order.
-            var pluginsTxt = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}.txt");
-            await File.WriteAllTextAsync(pluginsTxt, "");
+            // GameSession loads the implicit base masters present in the game directory, so an
+            // empty explicit list is enough to exercise a real vanilla load without guessing load
+            // order. #592: the index needs an instance to live in — a temp one, since a real
+            // install is not an MO2 instance and this test must not write into one.
+            var instanceRoot = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}");
+            Directory.CreateDirectory(instanceRoot);
             try
             {
                 await using var app = new WebApplicationFactory<Program>();
                 var client = app.CreateClient();
                 client.Timeout = TimeSpan.FromMinutes(10);
 
-                var load = await client.PostAsJsonAsync("/session/load", new
+                var load = await client.PostAsJsonAsync("/session/load-explicit", new
                 {
-                    dataFolderPath = dataDir.Path,
-                    pluginsTxtPath = pluginsTxt,
+                    plugins = Array.Empty<object>(),
+                    gameDirectory = dataDir.Path,
+                    instanceRoot,
                     gameRelease = release.ToString(),
                 });
                 Assert.Equal(HttpStatusCode.OK, load.StatusCode);
@@ -87,7 +90,7 @@ public sealed class RealInstallSmokeTests
             }
             finally
             {
-                File.Delete(pluginsTxt);
+                Directory.Delete(instanceRoot, recursive: true);
             }
         }
 

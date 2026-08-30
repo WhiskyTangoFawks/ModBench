@@ -72,7 +72,7 @@ public sealed class MasterIssuesDuringLoadTests
         var reflector = SharedSchemaReflector.Instance;
         using var manager = new SessionManager(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        manager.Load(fx.DataFolder, fx.PluginsTxtPath, GameRelease.Fallout4);
+        manager.LoadExplicit(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(
             manager, reflector, new ConflictClassifier());
 
