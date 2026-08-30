@@ -15,7 +15,7 @@ using Noggog;
 
 namespace MEditService.Core.Schema;
 
-public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = null) : ISchemaReflector
+public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = null)
 {
     // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
     private readonly ILogger _logger = logger ?? NullLogger<SchemaReflector>.Instance;
@@ -63,7 +63,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return GetCache(category, assembly).Schemas;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reports whether <paramref name="release"/>'s backing Mutagen record-type assembly is
+    /// referenced by this build — never throws (#445). Discovery walking multiple installs should
+    /// call this before <see cref="GetSchemas"/> to decide whether a release is offered at all.
+    /// </summary>
     public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
 
     private static string AssemblyNameFor(GameCategory category) => $"Mutagen.Bethesda.{category}";
@@ -2522,11 +2526,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 }
 
 /// <summary>
-/// Thrown by <see cref="ISchemaReflector.GetSchemas"/> when a game release's backing Mutagen
+/// Thrown by <see cref="SchemaReflector.GetSchemas"/> when a game release's backing Mutagen
 /// record-type assembly is not referenced by this build (#445) — e.g. requesting Skyrim before
 /// #423 adds <c>Mutagen.Bethesda.Skyrim</c>. Distinguishes "this release isn't compiled in" from
 /// Mutagen's own <see cref="FileNotFoundException"/>, which is not an actionable message for a
-/// caller. <see cref="ISchemaReflector.IsSupported"/> is the non-throwing check discovery should
+/// caller. <see cref="SchemaReflector.IsSupported"/> is the non-throwing check discovery should
 /// use instead of catching this.
 /// </summary>
 public sealed class UnsupportedGameReleaseException : Exception

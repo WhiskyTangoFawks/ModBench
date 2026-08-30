@@ -58,18 +58,18 @@ try
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
-    builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
-    builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
+    builder.Services.AddSingleton<SchemaReflector>();
+    builder.Services.AddSingleton<TableDdlBuilder>();
     // #592 / ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —
     // the load request names it, so there is nothing for the composition root to state here.
     builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
-    builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
+    builder.Services.AddSingleton<ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
     builder.Services.AddSingleton<ILoadOrderMirror, LoadOrderMirror>();
     builder.Services.AddSingleton<IRecordQueryService, RecordQueryService>();
     builder.Services.AddSingleton<IWorldspaceQueryService, WorldspaceQueryService>();
-    builder.Services.AddSingleton<IContainerChildQueryService, ContainerChildQueryService>();
+    builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
     // #415: the single write path, plus the read-time freshness validation the read model consumes.

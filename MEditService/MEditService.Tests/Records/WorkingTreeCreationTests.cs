@@ -19,8 +19,8 @@ namespace MEditService.Tests.Records;
 /// </summary>
 public sealed class WorkingTreeCreationTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static readonly PluginKey BaseKey = new("Base.esm", "Data");
     private static readonly PluginKey WinnerKey = new("Winner.esp", "Data");

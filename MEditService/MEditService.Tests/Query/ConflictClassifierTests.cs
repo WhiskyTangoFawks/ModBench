@@ -8,7 +8,7 @@ public class ConflictClassifierTests
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoMasters =
         new Dictionary<string, IReadOnlyList<string>>();
 
-    private static readonly IConflictClassifier Classifier = new ConflictClassifier();
+    private static readonly ConflictClassifier Classifier = new ConflictClassifier();
 
     private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null,

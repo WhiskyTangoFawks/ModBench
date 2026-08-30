@@ -21,7 +21,7 @@ namespace MEditService.Tests.Indexing;
 /// </summary>
 public class AbstractUnionSchemaTests
 {
-    private readonly ISchemaReflector _reflector = SharedSchemaReflector.Instance;
+    private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
     // ── Npc.Level (ANpcLevel: NpcLevel / PcLevelMult) ───────────────────────────
 

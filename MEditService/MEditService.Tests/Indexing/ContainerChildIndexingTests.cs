@@ -18,8 +18,8 @@ namespace MEditService.Tests.Indexing;
 /// </summary>
 public sealed class ContainerChildIndexingTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private sealed record Built(
         DuckDbRecordIndex Repo, string QuestFk, string Topic0Fk, string Topic1Fk,

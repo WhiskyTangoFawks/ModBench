@@ -16,7 +16,7 @@ namespace MEditService.Tests.Records;
 // leans on, so a future change to the parallel section cannot silently drift from the codec.
 public class ParallelPrepareParityTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
 
     [Fact]
     public async Task IndexedDocuments_AreByteIdenticalToSequentialCodecOutput()

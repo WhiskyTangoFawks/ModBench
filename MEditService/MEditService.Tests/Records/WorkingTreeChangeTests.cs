@@ -19,8 +19,8 @@ namespace MEditService.Tests.Records;
 /// </summary>
 public sealed class WorkingTreeChangeTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private readonly PluginFixtureData _fixture;
     private readonly FormKey _npcFormKey;

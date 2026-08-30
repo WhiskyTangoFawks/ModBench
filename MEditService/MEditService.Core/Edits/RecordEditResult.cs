@@ -200,7 +200,7 @@ public enum RecordEditRefusal
     /// <summary>
     /// #440 Slice 8: Copy as New Record on a type xEdit itself refuses in both its UI and its engine —
     /// CELL, WRLD (and, per xEdit's own hardcoded blacklist, LAND/NAVM/PGRD/ROAD/NAVI, none of which
-    /// reach this check in mEdit's own schema: <see cref="Schema.ISchemaReflector"/> surfaces no table
+    /// reach this check in mEdit's own schema: <see cref="Schema.SchemaReflector"/> surfaces no table
     /// for them at all, so a copy naming one already refuses earlier as <see cref="RecordNotFound"/>).
     /// Permanent, unlike <see cref="ContainerRecordNotYetSupported"/>'s "not yet" for Quest/DialogTopic/
     /// INFO (#550's own scope to widen) — a fresh FormKey for one of these would leave the record

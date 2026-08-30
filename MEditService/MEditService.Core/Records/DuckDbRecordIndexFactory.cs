@@ -8,12 +8,12 @@ namespace MEditService.Core.Records;
 /// <summary>The one <see cref="IRecordIndexFactory"/>: a <see cref="DuckDbRecordIndex"/> per game,
 /// opened over the calling MO2 instance's persistent file when it names one.</summary>
 public sealed class DuckDbRecordIndexFactory(
-    ISchemaReflector schemaReflector,
-    ITableDdlBuilder ddlBuilder,
+    SchemaReflector schemaReflector,
+    TableDdlBuilder ddlBuilder,
     ILogger<DuckDbRecordIndexFactory>? logger = null) : IRecordIndexFactory
 {
-    private readonly ISchemaReflector _schemaReflector = schemaReflector;
-    private readonly ITableDdlBuilder _ddlBuilder = ddlBuilder;
+    private readonly SchemaReflector _schemaReflector = schemaReflector;
+    private readonly TableDdlBuilder _ddlBuilder = ddlBuilder;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     public IRecordIndex Create(GameRelease gameRelease, string? instanceRoot = null)

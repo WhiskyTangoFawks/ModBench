@@ -17,8 +17,8 @@ namespace MEditService.Tests.Records;
 // ticket names; each read is asserted individually so a regression names the path that leaked.
 public class RegistrationScopingTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static readonly PluginKey AlphaKey = new("Alpha.esp", "ModA");
     private static readonly PluginKey BetaKey = new("Beta.esp", "ModB");

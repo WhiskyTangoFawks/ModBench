@@ -9,7 +9,7 @@ namespace MEditService.Tests.Records;
 
 public class RecordIndexFactoryTests : IDisposable
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"medit-factory-{Guid.NewGuid():N}");
 

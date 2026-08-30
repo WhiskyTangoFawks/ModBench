@@ -11,14 +11,14 @@ namespace MEditService.Core.Queries;
 
 public sealed class RecordQueryService(
     ILoadOrderMirror loadOrder,
-    ISchemaReflector schemaReflector,
-    IConflictClassifier conflictClassifier,
+    SchemaReflector schemaReflector,
+    ConflictClassifier conflictClassifier,
     ILogger<RecordQueryService>? logger = null,
     SourceFreshness? freshness = null) : IRecordQueryService
 {
     private readonly ILoadOrderMirror _mirror = loadOrder;
-    private readonly ISchemaReflector _schemaReflector = schemaReflector;
-    private readonly IConflictClassifier _conflictClassifier = conflictClassifier;
+    private readonly SchemaReflector _schemaReflector = schemaReflector;
+    private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
     // #415 / #413 D3: the two point reads below are the record editor's and compare grid's own

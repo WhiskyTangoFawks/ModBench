@@ -10,7 +10,7 @@ namespace MEditService.Tests.Indexing;
 
 public class SchemaReflectorTests
 {
-    private readonly ISchemaReflector _reflector = SharedSchemaReflector.Instance;
+    private readonly SchemaReflector _reflector = SharedSchemaReflector.Instance;
 
     [Fact]
     public void GetSchemas_ContainsKnownFallout4RecordTypes()

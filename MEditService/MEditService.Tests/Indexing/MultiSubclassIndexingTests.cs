@@ -20,8 +20,8 @@ namespace MEditService.Tests.Indexing;
 // (TableDdlBuilder building the widened column) and the appender (AppendTyped's VARCHAR branch).
 public class MultiSubclassIndexingTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static List<Dictionary<string, object?>> Query(DuckDbRecordIndex repo, string sql)
     {

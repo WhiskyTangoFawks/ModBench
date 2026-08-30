@@ -16,8 +16,8 @@ namespace MEditService.Tests.Records;
 // LoadOrder/LoadOrderMirror, which still dedupe by filename; #34's concern, not #271's).
 public class CompoundPluginIdentityTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordIndex OpenRepo()
     {

@@ -11,8 +11,8 @@ namespace MEditService.Tests.Indexing;
 
 public class IndexAtomicityTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordIndex OpenRepo()
     {

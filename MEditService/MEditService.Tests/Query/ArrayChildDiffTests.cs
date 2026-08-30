@@ -12,7 +12,7 @@ public class ArrayChildDiffTests
 
     private static ClassifyResult Classify(
         IReadOnlyList<RecordDetail> records,
-        IConflictClassifier? classifier = null) =>
+        ConflictClassifier? classifier = null) =>
         (classifier ?? new ConflictClassifier()).Classify(records, NoMasters);
 
     private static FieldMetadata SortedArrayMeta(string name) =>

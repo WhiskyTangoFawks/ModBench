@@ -5,14 +5,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MEditService.Core.Queries;
 
-public interface IContainerChildQueryService
-{
-    // #305 / ADR-0036: origin — a caller that already knows which copy of `plugin` it's browsing
-    // (a tree row built from one) states it explicitly, else it's resolved from the load order.
-    // Mirrors IWorldspaceQueryService's own shape.
-    IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null);
-}
-
 /// <summary>
 /// Per-plugin container-child read (#424) — a Quest's dialog topics/branches/scenes, a Dialog
 /// Topic's responses, as first-class record rows the Plugins tree expands a Quest/DialogTopic row
@@ -38,7 +30,6 @@ public interface IContainerChildQueryService
 /// answers empty rather than guessing at a presentation xEdit doesn't use for them here.</para>
 /// </summary>
 public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogger<ContainerChildQueryService>? logger = null)
-    : IContainerChildQueryService
 {
     private const int UnlimitedRecords = int.MaxValue;
 
@@ -54,6 +45,9 @@ public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogg
         ["Responses"] = (0, "info"),
     };
 
+    // #305 / ADR-0036: origin — a caller that already knows which copy of `plugin` it's browsing
+    // (a tree row built from one) states it explicitly, else it's resolved from the load order.
+    // Mirrors IWorldspaceQueryService's own shape.
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
     {
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);

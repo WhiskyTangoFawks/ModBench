@@ -32,7 +32,7 @@ internal static class IndexVersion
     /// codec's conventions — see this class's own summary for why nothing else can catch those.</summary>
     private const int FormatVersion = 3;
 
-    internal static string For(ISchemaReflector reflector, GameRelease release)
+    internal static string For(SchemaReflector reflector, GameRelease release)
     {
         var mutagen = typeof(IModGetter).Assembly.GetName().Version?.ToString() ?? "unknown";
         return $"{FormatVersion}|{release}|{mutagen}|{SchemaDigest(reflector, release)}";
@@ -40,7 +40,7 @@ internal static class IndexVersion
 
     // Table name, column name and DuckDB type of every reflected column, in a deterministic order —
     // the whole of what the generated views and the extracted columns are built from.
-    private static string SchemaDigest(ISchemaReflector reflector, GameRelease release)
+    private static string SchemaDigest(SchemaReflector reflector, GameRelease release)
     {
         var sb = new StringBuilder();
         foreach (var (table, schema) in reflector.GetSchemas(release).OrderBy(s => s.Key, StringComparer.Ordinal))

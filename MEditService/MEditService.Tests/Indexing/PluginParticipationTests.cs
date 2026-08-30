@@ -13,8 +13,8 @@ namespace MEditService.Tests.Indexing;
 // its load_order_idx.
 public class PluginParticipationTests
 {
-    private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
-    private static readonly ITableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
+    private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
+    private static readonly TableDdlBuilder Ddl = new TableDdlBuilder(Reflector);
 
     private static DuckDbRecordIndex OpenRepo()
     {
