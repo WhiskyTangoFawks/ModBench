@@ -436,6 +436,124 @@ public sealed class TrackServiceTests
         }
     }
 
+    // #568: ScopeOverlayDOF.esp's TES4 header carries an INTV subrecord — genuinely unusual, and the
+    // ticket's own confirmed hypothesis was that Mutagen.Bethesda.Serialization's generated
+    // Fallout4ModHeader_Serialization codec might not carry opaque header ByteArray subrecords
+    // faithfully through the tracked-source round trip. Refuted by isolated repro (both the direct
+    // whole-mod JSON round trip and this end-to-end Track): they survive today. This is the permanent
+    // regression fixture AC3 asks for — a minimal synthetic header carrying the same opaque-field
+    // shape every ModelIdentity.OpaqueHeaderFields member exercises, plus TransientTypes (set, matching,
+    // despite not being allow-listed — see that field's own known-gap tests in ModelIdentityTests) —
+    // not the real ScopeOverlayDOF.esp (not present in this repo or environment; AC3 sanctions a
+    // synthetic fixture for exactly that reason). Named rival (applied and observed while writing this
+    // test, not committed): setting recompiled.ModHeader.INTV = null immediately after
+    // DeserializeWholeMod inside a forged deserializer threw a SourceRoundTripFailedException naming
+    // "TES4 header field 'INTV'", proving this test is not vacuous — it genuinely distinguishes the
+    // correct codec from a corrupting one.
+    [Fact]
+    public async Task TrackAsync_WithOpaqueHeaderFieldsSet_TracksSuccessfully()
+    {
+        var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-opaqueheader-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-opaqueheader-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            mod.ModHeader.INTV = new byte[] { 1, 0, 0, 0 };
+            mod.ModHeader.INCC = 42;
+            mod.ModHeader.TypeOffsets = new byte[] { 9, 8, 7 };
+            mod.ModHeader.Deleted = new byte[] { 1, 2, 3 };
+            mod.ModHeader.Screenshot = new byte[] { 4, 5, 6 };
+            mod.ModHeader.Author = "Some Author";
+            mod.ModHeader.Description = "Some Description";
+            mod.ModHeader.TransientTypes.Add(new TransientType { FormType = 7 });
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
+                gameDir,
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            await service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits);
+
+            Assert.True(SourceRepository.IsTracked(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
+    // #568 review: an allow-list entry with no end-to-end test that corrupts that field alone and
+    // asserts the real refusal message names it is a claim nobody can cash — the exact vacuity that
+    // let a dead TransientTypes entry sit on the list undetected. One case per
+    // ModelIdentity.OpaqueHeaderFields member, run through the real TrackService.TrackAsync pipeline
+    // (not just ModelIdentity.FindFirstHeaderFieldDivergence directly, which ModelIdentityTests' own
+    // theory already covers) so the assertion is against the actual SourceRoundTripFailedException
+    // message a caller would see.
+    public static IEnumerable<object[]> AllowListedHeaderFieldCorruptions()
+    {
+        yield return new object[] { "TypeOffsets", Setter(h => h.TypeOffsets = new byte[] { 1, 2, 3 }), Setter(h => h.TypeOffsets = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "Deleted", Setter(h => h.Deleted = new byte[] { 1, 2, 3 }), Setter(h => h.Deleted = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "Screenshot", Setter(h => h.Screenshot = new byte[] { 1, 2, 3 }), Setter(h => h.Screenshot = new byte[] { 9, 9, 9 }) };
+        yield return new object[] { "INTV", Setter(h => h.INTV = new byte[] { 1, 0, 0, 0 }), Setter(h => h.INTV = new byte[] { 99, 0, 0, 0 }) };
+        yield return new object[] { "INCC", Setter(h => h.INCC = 1), Setter(h => h.INCC = 2) };
+        yield return new object[] { "Author", Setter(h => h.Author = "Original"), Setter(h => h.Author = "Corrupted") };
+        yield return new object[] { "Description", Setter(h => h.Description = "Original"), Setter(h => h.Description = "Corrupted") };
+
+        static Action<Fallout4ModHeader> Setter(Action<Fallout4ModHeader> action) => action;
+    }
+
+    [Theory]
+    [MemberData(nameof(AllowListedHeaderFieldCorruptions))]
+    public async Task TrackAsync_ForEveryAllowListedHeaderField_RefusesNamingItWhenCorruptedAlone(
+        string fieldName, Action<Fallout4ModHeader> setBaseline, Action<Fallout4ModHeader> corrupt)
+    {
+        var modFolder = Directory.CreateTempSubdirectory($"medit-trackservice-header-{fieldName}-").FullName;
+        var gameDir = Directory.CreateTempSubdirectory($"medit-trackservice-header-{fieldName}-game-").FullName;
+        try
+        {
+            var pluginPath = Path.Combine(modFolder, "Fixture.esp");
+            var mod = new Fallout4Mod(ModKey.FromFileName("Fixture.esp"), Fallout4Release.Fallout4);
+            mod.Npcs.AddNew("SomeNpc");
+            setBaseline(mod.ModHeader);
+            mod.WriteToBinary(pluginPath);
+
+            using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
+            ILoadOrderMirror mirror = manager;
+            mirror.Reconcile(
+                gameDir,
+                [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
+                GameRelease.Fallout4);
+
+            var service = new TrackService(NullLogger<TrackService>.Instance);
+
+            async Task<IFallout4Mod> DeserializeThenCorrupt(string folder, CancellationToken ct)
+            {
+                var deserialized = await RecordTextCodecGeneratorSeed.DeserializeWholeMod(folder, InlineWorkDropoff.Instance, ct);
+                corrupt(deserialized.ModHeader);
+                return deserialized;
+            }
+
+            var ex = await Assert.ThrowsAsync<SourceRoundTripFailedException>(
+                () => service.TrackAsync(mirror.LoadOrder!, "FixtureMod", SourcePreset.Edits, DeserializeThenCorrupt));
+
+            Assert.Contains($"TES4 header field '{fieldName}'", ex.Message);
+            Assert.False(SourceRepository.IsTracked(modFolder));
+        }
+        finally
+        {
+            Directory.Delete(modFolder, recursive: true);
+            Directory.Delete(gameDir, recursive: true);
+        }
+    }
+
     // #514 AC2 / #513: a rewrite that only *adds* subrecords must not be refused by the
     // subrecord-inventory check specifically. Mutagen's own Furniture writer
     // (FurnitureBinaryWriteTranslation.WriteBinaryFlagsCustom/WriteBinaryFlags2Custom, verified by
