@@ -11,7 +11,7 @@ namespace MEditService.Tests.Records;
 
 /// <summary>
 /// #584 / ADR-0001: winning is a function of the registered load order, so it lives in a
-/// session-owned derived table — <c>raw.winners</c>, one row per (ref, FormKey) naming the plugin
+/// session-owned derived table — <c>session_winners</c>, one row per (ref, FormKey) naming the plugin
 /// whose copy wins — and never as a column on a data row. These tests read that table directly,
 /// because "where the answer is stored" is the whole point of the ticket: the behavioural half
 /// (a promotion after a delete, a reorder flipping the stack) is already pinned by
@@ -69,7 +69,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
     private static (string Plugin, string Origin)? WinnerOf(DuckDbRecordIndex index, RecordRef recordRef, string formKey)
     {
         using var cmd = index.Connection.CreateCommand();
-        cmd.CommandText = "SELECT plugin, origin FROM raw.winners WHERE record_ref = $1 AND form_key = $2";
+        cmd.CommandText = "SELECT plugin, origin FROM session_winners WHERE record_ref = $1 AND form_key = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = WinnerRef.Of(recordRef) });
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         using var reader = cmd.ExecuteReader();
@@ -96,7 +96,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         // The table is a function, not a set of flags: (record_ref, form_key) is its key, so a
         // reader can LEFT JOIN it without risking a duplicated record row. Two plugins share this
         // FormKey and exactly one row per ref names a winner for it.
-        Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM raw.winners WHERE form_key = '{_npc}'"));
+        Assert.Equal(2, Scalar(index, $"SELECT COUNT(*) FROM session_winners WHERE form_key = '{_npc}'"));
 
         // Every plugin header is swept in the same pass — the header table is the one surviving
         // per-type table and would otherwise never have a winner at all, which reads as "no header
@@ -108,9 +108,9 @@ public sealed class WinnersDerivedTableTests : IDisposable
         }
 
         // Re-running the sweep is idempotent — it rebuilds the table wholesale rather than adding to it.
-        var before = Scalar(index, "SELECT COUNT(*) FROM raw.winners");
+        var before = Scalar(index, "SELECT COUNT(*) FROM session_winners");
         index.UpdateWinners();
-        Assert.Equal(before, Scalar(index, "SELECT COUNT(*) FROM raw.winners"));
+        Assert.Equal(before, Scalar(index, "SELECT COUNT(*) FROM session_winners"));
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class WinnersDerivedTableTests : IDisposable
         // the stack, so the plugin below it holds the field at both refs.
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Head, _npc));
-        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM raw.winners WHERE plugin = '{OverKey.Name}'"));
+        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM session_winners WHERE plugin = '{OverKey.Name}'"));
         Assert.Equal(BaseKey.Name, index.GetDocument(_npc)!.Plugin.Name);
 
         index.SetPluginParticipation(OverKey, participates: true);
@@ -143,9 +143,9 @@ public sealed class WinnersDerivedTableTests : IDisposable
         index.Unregister(OverKey);
         index.UpdateWinners();
 
-        Assert.True(Scalar(index, $"SELECT COUNT(*) FROM raw.records WHERE plugin = '{OverKey.Name}'") > 0,
-            "Premise: unregistering leaves the raw rows in place (#582).");
-        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM raw.winners WHERE plugin = '{OverKey.Name}'"));
+        Assert.True(Scalar(index, $"SELECT COUNT(*) FROM mirror.records WHERE plugin = '{OverKey.Name}'") > 0,
+            "Premise: unregistering leaves the mirror rows in place (#582).");
+        Assert.Equal(0, Scalar(index, $"SELECT COUNT(*) FROM session_winners WHERE plugin = '{OverKey.Name}'"));
         Assert.Equal(Expected(BaseKey), WinnerOf(index, RecordRef.Effective, _npc));
     }
 

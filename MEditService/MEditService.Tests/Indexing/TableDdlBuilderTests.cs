@@ -23,8 +23,8 @@ public class TableDdlBuilderTests
         return conn;
     }
 
-    // `schema` narrows to one schema (e.g. "raw" vs the registered view's "main") when a table name
-    // exists in both — null keeps the old unqualified behaviour of matching table_name alone.
+    // `schema` narrows to one schema (e.g. "mirror" vs the registered view's "main") when a table
+    // name exists in both — null keeps the old unqualified behaviour of matching table_name alone.
     private static List<string> GetColumns(DuckDBConnection conn, string tableName, string? schema = null)
     {
         var schemaFilter = schema == null ? "" : $"AND table_schema = '{schema}' ";
@@ -41,18 +41,18 @@ public class TableDdlBuilderTests
     }
 
     [Fact]
-    public void CreateTables_CreatesPluginsTable()
+    public void CreateTables_CreatesSessionPluginsTable()
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
-        var cols = GetColumns(conn, "plugins");
+        var cols = GetColumns(conn, "session_plugins");
         Assert.Contains("plugin", cols);
         Assert.Contains("origin", cols);
         Assert.Contains("load_order_idx", cols);
         Assert.Contains("participates", cols); // #267 / ADR-0035
         // #585 / ADR-0001: the session, and only the session. Nothing about the file — that is
-        // raw.indexed_files below — and above all no `file_mtime`, the clock-based check the
+        // mirror.files below — and above all no `file_mtime`, the clock-based check the
         // decision exists to rule out.
         Assert.Equal(["plugin", "origin", "load_order_idx", "participates"], cols);
     }
@@ -61,12 +61,12 @@ public class TableDdlBuilderTests
     // the registration so that unregistering a plugin never throws away the hash that makes
     // re-registering it cheap.
     [Fact]
-    public void CreateTables_CreatesIndexedFilesTable()
+    public void CreateTables_CreatesFilesTable()
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
-        var cols = GetColumns(conn, "indexed_files", "raw");
+        var cols = GetColumns(conn, "files", "mirror");
         Assert.Equal(["plugin", "origin", "file_path", "content_hash", "index_version"], cols);
     }
 
@@ -111,33 +111,34 @@ public class TableDdlBuilderTests
         _builder.CreateTables(conn, GameRelease.Fallout4); // should not throw
     }
 
-    // #583 / ADR-0001: load order lives only on `plugins` now. The raw record-shaped tables carry
-    // file-derived facts only; `load_order_idx` reaches a reader exclusively through the registered
-    // view's join to `plugins` (TableDdlBuilder.CreateRegisteredViews), never as a stored column.
+    // #583 / ADR-0001: load order lives only on `session_plugins` now. The mirror record-shaped
+    // tables carry file-derived facts only; `load_order_idx` reaches a reader exclusively through
+    // the registered view's join to `session_plugins` (TableDdlBuilder.CreateRegisteredViews), never
+    // as a stored column.
     [Theory]
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
     [InlineData("header")]
-    public void RawRecordShapedTables_CarryNoLoadOrderColumn(string tableName)
+    public void MirrorRecordShapedTables_CarryNoLoadOrderColumn(string tableName)
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
-        var cols = GetColumns(conn, tableName, schema: "raw");
-        Assert.NotEmpty(cols); // premise: the raw table actually exists
+        var cols = GetColumns(conn, tableName, schema: "mirror");
+        Assert.NotEmpty(cols); // premise: the mirror table actually exists
         Assert.DoesNotContain("load_order_idx", cols);
     }
 
-    // The registered view over each of those raw tables still answers `load_order_idx` — derived by
-    // joining `plugins`, the one place the value is stored — so every existing reader that names the
-    // view keeps working unchanged.
+    // The registered view over each of those mirror tables still answers `load_order_idx` — derived
+    // by joining `session_plugins`, the one place the value is stored — so every existing reader
+    // that names the view keeps working unchanged.
     [Theory]
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
     [InlineData("header")]
-    public void RegisteredViews_StillExposeLoadOrderIndex_DerivedFromPlugins(string tableName)
+    public void RegisteredViews_StillExposeLoadOrderIndex_DerivedFromSessionPlugins(string tableName)
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
@@ -147,20 +148,21 @@ public class TableDdlBuilderTests
     }
 
     // #584 / ADR-0001: the same split for `is_winner`. Winning is a fact about the whole registered
-    // stack a FormKey sits in, not about one row's bytes, so no raw table stores it — it is derived
-    // in the registered view by joining `raw.winners`, the session-owned table the sweep rebuilds.
+    // stack a FormKey sits in, not about one row's bytes, so no mirror table stores it — it is
+    // derived in the registered view by joining `session_winners`, the session-owned table the sweep
+    // rebuilds.
     [Theory]
     [InlineData("records")]
     [InlineData("records_committed")]
     [InlineData("form_lookup")]
     [InlineData("header")]
-    public void RawRecordShapedTables_CarryNoWinnerColumn(string tableName)
+    public void MirrorRecordShapedTables_CarryNoWinnerColumn(string tableName)
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
-        var cols = GetColumns(conn, tableName, schema: "raw");
-        Assert.NotEmpty(cols); // premise: the raw table actually exists
+        var cols = GetColumns(conn, tableName, schema: "mirror");
+        Assert.NotEmpty(cols); // premise: the mirror table actually exists
         Assert.DoesNotContain("is_winner", cols);
     }
 
@@ -183,16 +185,17 @@ public class TableDdlBuilderTests
         Assert.Equal(exposesWinner, cols.Contains("is_winner"));
     }
 
-    // The winners relation itself: (record_ref, form_key) -> (plugin, origin), carrying the ref
-    // because Effective and Head can name different winners for one FormKey
-    // (TableDdlBuilder.CreateHeadView).
+    // The session-winners relation itself: (record_ref, form_key) -> (plugin, origin), carrying the
+    // ref because Effective and Head can name different winners for one FormKey
+    // (TableDdlBuilder.CreateHeadView). Bare in `main` — #593 moved it out of the mirror schema, since
+    // it is session-derived, not a file mirror.
     [Fact]
-    public void CreateTables_CreatesWinnersTable_MappingARefAndFormKeyToOnePlugin()
+    public void CreateTables_CreatesSessionWinnersTable_MappingARefAndFormKeyToOnePlugin()
     {
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
-        var cols = GetColumns(conn, "winners", schema: "raw");
+        var cols = GetColumns(conn, "session_winners", schema: "main");
         Assert.Equal(["record_ref", "form_key", "plugin", "origin"], cols);
     }
 
@@ -201,7 +204,7 @@ public class TableDdlBuilderTests
     {
         using var conn = OpenMemory();
         // #582: through CreateTables rather than the per-table helper — the helper writes into the
-        // `raw` schema, which only CreateTables creates.
+        // `mirror` schema, which only CreateTables creates.
         _builder.CreateTables(conn, GameRelease.Fallout4);
 
         using var cmd = conn.CreateCommand();

@@ -46,7 +46,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     /// <summary>#585: the file-mirror table, named once so the writes, the open-time validation
     /// and the version check cannot drift onto different spellings of it.</summary>
-    private const string IndexedFilesRelation = "raw.indexed_files";
+    private const string FilesRelation = "mirror.files";
 
     public DuckDBConnection Connection { get; private set; }
 
@@ -174,7 +174,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
             versions = [];
             using var cmd = Connection.CreateCommand();
-            cmd.CommandText = $"SELECT DISTINCT index_version FROM {IndexedFilesRelation}";
+            cmd.CommandText = $"SELECT DISTINCT index_version FROM {FilesRelation}";
             using var reader = cmd.ExecuteReader();
             while (reader.Read()) versions.Add(reader.GetString(0));
         }
@@ -201,7 +201,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         using var cmd = Connection.CreateCommand();
         cmd.CommandText =
-            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'raw' AND table_name = 'indexed_files'";
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'mirror' AND table_name = 'files'";
         return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
     }
 
@@ -222,16 +222,16 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// no read can ever answer from rows the disk no longer backs. A hash, never an <c>mtime</c>:
     /// MO2, xEdit, Steam and the user all write these files and a preserved timestamp is free.
     ///
-    /// <para>Registrations are cleared first and unconditionally. A <c>plugins</c> row is a claim
-    /// about the <i>current</i> session, and a freshly opened index is in none — the rows left by
-    /// whichever session last wrote this file would otherwise make its whole load order visible to
+    /// <para>Registrations are cleared first and unconditionally. A <c>session_plugins</c> row is a
+    /// claim about the <i>current</i> session, and a freshly opened index is in none — the rows left
+    /// by whichever session last wrote this file would otherwise make its whole load order visible to
     /// reads before this process's load order has registered a single plugin.</para>
     /// </summary>
     private void ValidateAgainstDisk()
     {
         if (_databasePath == null) return;
 
-        Execute("DELETE FROM plugins");
+        Execute("DELETE FROM session_plugins");
 
         var timer = Stopwatch.StartNew();
         var checkedCount = 0;
@@ -273,7 +273,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         var rows = new List<(PluginKey Key, string FilePath, string ContentHash)>();
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {IndexedFilesRelation}";
+        cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {FilesRelation}";
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
             rows.Add((new PluginKey(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
@@ -304,7 +304,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginKey key) =>
         ScalarString(
-            $"SELECT content_hash FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2",
+            $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin!);
 
     // #585 / ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
@@ -319,7 +319,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (filePath == null || FileContentHash(filePath) is not { } contentHash) return;
 
         ExecuteFor($"""
-            INSERT INTO {IndexedFilesRelation} (plugin, origin, file_path, content_hash, index_version)
+            INSERT INTO {FilesRelation} (plugin, origin, file_path, content_hash, index_version)
             VALUES ($1, $2, $3, $4, $5)
             """, plugin, origin, Path.GetFullPath(filePath), contentHash, _indexVersion!);
     }
@@ -344,7 +344,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // transaction, so deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
 
-        // #267: one `plugins` row per indexed plugin — UpdateWinners() joins against it so a
+        // #267: one `session_plugins` row per indexed plugin — UpdateWinners() joins against it so a
         // non-participating plugin's rows never win regardless of load_order_idx.
         UpsertPluginParticipation(plugin, origin, loadOrderIndex, participates);
         // #585: and the disk claim these rows are about, replaced with them rather than beside them.
@@ -369,7 +369,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // inherit it. Never removes a *correct* snapshot: after a full re-index from one source, a
         // prior divergence describes bytes that no longer relate to what was just ingested.
         DeleteExistingForOrigin("records_committed", plugin, origin);
-        using var documentAppender = Connection.CreateAppender("raw", "records");
+        using var documentAppender = Connection.CreateAppender("mirror", "records");
 
         if (_conditionCodec == null)
         {
@@ -426,7 +426,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteFormReferencesForPlugin(plugin, origin);
         if (refs.Count > 0)
         {
-            using var refAppender = Connection.CreateAppender("raw", "form_references");
+            using var refAppender = Connection.CreateAppender("mirror", "form_references");
             foreach (var r in refs)
                 AppendFormReference(refAppender, r, plugin, origin);
         }
@@ -436,7 +436,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("form_lookup", plugin, origin);
         if (lookupRows.Count > 0)
         {
-            using var lookupAppender = Connection.CreateAppender("raw", "form_lookup");
+            using var lookupAppender = Connection.CreateAppender("mirror", "form_lookup");
             foreach (var (formKey, recordType, editorId) in lookupRows)
             {
                 var row = lookupAppender.CreateRow();
@@ -457,7 +457,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("container_child", plugin, origin);
         if (containerChildRows.Count > 0)
         {
-            using var containerChildAppender = Connection.CreateAppender("raw", "container_child");
+            using var containerChildAppender = Connection.CreateAppender("mirror", "container_child");
             foreach (var row in containerChildRows)
             {
                 var r = containerChildAppender.CreateRow();
@@ -491,8 +491,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // The inverse of Index, table for table — same transaction discipline, and deliberately built
     // from the same per-plugin delete helpers Index itself calls before each append, so a new
     // indexed table cannot be added to one side without the other noticing (they are the same
-    // calls). "plugins" is dropped last: it is the row UpdateWinners joins against, and while it
-    // exists this (origin, plugin) is still a known member of the read model.
+    // calls). "session_plugins" is dropped last: it is the row UpdateWinners joins against, and while
+    // it exists this (origin, plugin) is still a known member of the read model.
     //
     // #421: private — Unindex(PluginKey) above is the public seam member and delegates here.
     private void Unindex(string plugin, string origin)
@@ -770,7 +770,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         DeleteRegistration(plugin, origin);
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "INSERT INTO plugins (plugin, origin, load_order_idx, participates) VALUES ($1, $2, $3, $4)";
+        cmd.CommandText = "INSERT INTO session_plugins (plugin, origin, load_order_idx, participates) VALUES ($1, $2, $3, $4)";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIndex });
@@ -781,9 +781,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     public void SetPluginParticipation(PluginKey key, bool participates) =>
         SetPluginParticipation(key.Name, participates, key.Origin!);
 
-    // #582 / ADR-0001: registration is visibility. The `plugins` row is the whole of a plugin's
-    // membership in the session — every public relation (`records`, the extracted tables, every
-    // generated per-type view) is a view over its `raw.` table joined to this row (see
+    // #582 / ADR-0001: registration is visibility. The `session_plugins` row is the whole of a
+    // plugin's membership in the session — every public relation (`records`, the extracted tables,
+    // every generated per-type view) is a view over its `mirror.` table joined to this row (see
     // TableDdlBuilder.CreateRegisteredViews for the one predicate they all share), so writing or
     // deleting the row is what makes a plugin's rows answer or fall silent. Neither verb touches a
     // data row: Register after Unregister answers again with no re-index, and Unregister leaves
@@ -803,7 +803,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void DeleteRegistration(string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM plugins WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = "DELETE FROM session_plugins WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.ExecuteNonQuery();
@@ -814,7 +814,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void SetPluginParticipation(string plugin, bool participates, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "UPDATE plugins SET participates = $3 WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = "UPDATE session_plugins SET participates = $3 WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.Parameters.Add(new DuckDBParameter { Value = participates });
@@ -825,7 +825,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     ///
     /// <remarks>
     /// #584 / ADR-0001: winning is a function of the registered load order alone, so it lives in
-    /// <c>raw.winners</c> — one row per (ref, FormKey) naming the plugin whose copy wins — and is
+    /// <c>session_winners</c> — one row per (ref, FormKey) naming the plugin whose copy wins — and is
     /// rebuilt wholesale here rather than UPDATEd onto a column of three separate data tables. The
     /// readers never name this table: the registered views and <c>records_head</c> join it to project
     /// <c>is_winner</c>, so the projection is written once (<c>TableDdlBuilder</c>) and the rule once
@@ -834,20 +834,20 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <para>#271 / ADR-0036: partitioned on (plugin, origin) together — two plugins sharing a
     /// filename but differing in origin are distinct participants, each judged on its own
     /// load_order_idx and participation, not folded into one bucket by filename alone. #583 /
-    /// ADR-0001: that load_order_idx is read from the <c>plugins</c> row the participation join
-    /// already needs, never from the record row.</para>
+    /// ADR-0001: that load_order_idx is read from the <c>session_plugins</c> row the participation
+    /// join already needs, never from the record row.</para>
     ///
     /// <para>Wholesale rather than incremental because there is no smaller correct unit: registering
     /// a plugin at a new index can move the winner of every FormKey it holds. #427 measured the
     /// whole-session sweep over a 48,000-record, 60-plugin fixture — larger than the overwhelming
     /// majority of real load orders — and #584 re-measured the same shape at parity with the
     /// three-table UPDATE it replaces (~75ms for both refs against ~37ms per fat table swept), with
-    /// the winner-filtered reads unchanged: the registered view's <c>plugins</c> join already
-    /// dominates them, and joining <c>winners</c> beside it costs nothing measurable.</para>
+    /// the winner-filtered reads unchanged: the registered view's <c>session_plugins</c> join already
+    /// dominates them, and joining <c>session_winners</c> beside it costs nothing measurable.</para>
     /// </remarks>
     public void UpdateWinners()
     {
-        Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
+        Execute($"DELETE FROM {TableDdlBuilder.SessionWinnersRelation}");
 
         // Effective. The header table is swept in the same statement rather than in one of its own:
         // it is the only surviving per-type table (D8, #413) and would otherwise never have a winner
@@ -862,9 +862,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // ResolveFormKey's EditorID reflect the winning override by construction rather than by a
         // second sweep that could drift from this one.
         InsertWinners(RecordRef.Effective, $"""
-            SELECT form_key, plugin, origin FROM raw.records
+            SELECT form_key, plugin, origin FROM mirror.records
             UNION ALL
-            SELECT form_key, plugin, origin FROM raw."{HeaderIndexer.TableName}"
+            SELECT form_key, plugin, origin FROM mirror."{HeaderIndexer.TableName}"
             """);
 
         // Head, over the same membership relation records_head itself is built on. A record the
@@ -880,10 +880,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // deterministic rather than dependent on scan order.
     private void InsertWinners(RecordRef @ref, string rowsSql) =>
         Execute($"""
-            INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
+            INSERT INTO {TableDdlBuilder.SessionWinnersRelation} (record_ref, form_key, plugin, origin)
             SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
             FROM ({rowsSql}) r
-            JOIN plugins p ON p.plugin = r.plugin AND p.origin = r.origin AND p.participates
+            JOIN session_plugins p ON p.plugin = r.plugin AND p.origin = r.origin AND p.participates
             QUALIFY ROW_NUMBER() OVER (
                 PARTITION BY r.form_key
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
@@ -959,7 +959,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // above. Dropping only the document would leave the record resolvable and still sitting
             // in the reference graph, i.e. present in every derived answer and absent from the one
             // that stores it.
-            ExecuteFor("DELETE FROM raw.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             DeleteDerivationsForRecord(key, formKey);
             return existedBefore;
@@ -972,7 +972,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // back, which is why this restores the row from the snapshot rather than assuming one is
             // still there to update.
             RestoreFromSnapshot(key, formKey);
-            ExecuteFor("DELETE FROM raw.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
         }
         else
@@ -1025,7 +1025,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.WorkingTree}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
@@ -1041,10 +1041,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     private void DeleteIndexedFile(string plugin, string origin) =>
-        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+        ExecuteFor($"DELETE FROM {FilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
 
     private bool IsRegisteredPlugin(PluginKey key) =>
-        ScalarString("SELECT plugin FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!) != null;
+        ScalarString("SELECT plugin FROM session_plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!) != null;
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
     public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
@@ -1068,10 +1068,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             // The working tree agrees with the new commit, so the record is clean and there is no
             // snapshot to keep — the ordinary "the user committed their edit in a terminal" case.
-            ExecuteFor("DELETE FROM raw.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             ExecuteFor($"""
-                UPDATE raw.records SET "ref" = '{SourceRef.Committed}'
+                UPDATE mirror.records SET "ref" = '{SourceRef.Committed}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
                 """, formKey, key.Name, key.Origin!);
             return;
@@ -1083,12 +1083,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // column is the same either way.
         SnapshotCommittedIfFirstDivergence(key, formKey);
         ExecuteFor("""
-            UPDATE raw.records_committed
+            UPDATE mirror.records_committed
             SET body = $4, content_hash = $5, editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!, body, GitBlobHash.Of(Encoding.UTF8.GetBytes(body)));
         ExecuteFor($"""
-            UPDATE raw.records SET "ref" = '{SourceRef.WorkingTree}'
+            UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!);
     }
@@ -1105,10 +1105,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // is also reachable for a record that diverged earlier in the same session, and a stale
             // snapshot would keep answering at Head through records_head's own UNION — which is exactly
             // the state this method exists to end.
-            ExecuteFor("DELETE FROM raw.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+            ExecuteFor("DELETE FROM mirror.records_committed WHERE form_key = $1 AND plugin = $2 AND origin = $3",
                 formKey, key.Name, key.Origin!);
             ExecuteFor($"""
-                UPDATE raw.records SET "ref" = '{SourceRef.WorkingTree}'
+                UPDATE mirror.records SET "ref" = '{SourceRef.WorkingTree}'
                 WHERE form_key = $1 AND plugin = $2 AND origin = $3
                 """, formKey, key.Name, key.Origin!);
         }
@@ -1155,7 +1155,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // view: present in its first half, absent from its second.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            INSERT INTO mirror.records_committed (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
             VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.Committed}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
@@ -1173,22 +1173,22 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void SnapshotCommittedIfFirstDivergence(PluginKey key, string formKey)
     {
         ExecuteFor($"""
-            INSERT INTO raw.records_committed ({RecordColumnList})
-            SELECT {RecordColumnList} FROM raw.records r
+            INSERT INTO mirror.records_committed ({RecordColumnList})
+            SELECT {RecordColumnList} FROM mirror.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3 AND r."ref" = '{SourceRef.Committed}'
               AND NOT EXISTS (
-                SELECT 1 FROM raw.records_committed c
+                SELECT 1 FROM mirror.records_committed c
                 WHERE c.form_key = r.form_key AND c.plugin = r.plugin AND c.origin = r.origin)
             """, formKey, key.Name, key.Origin!);
     }
 
     private void RestoreFromSnapshot(PluginKey key, string formKey)
     {
-        ExecuteFor("DELETE FROM raw.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         ExecuteFor($"""
-            INSERT INTO raw.records ({RecordColumnList})
-            SELECT {RecordColumnList} FROM raw.records_committed
+            INSERT INTO mirror.records ({RecordColumnList})
+            SELECT {RecordColumnList} FROM mirror.records_committed
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!);
     }
@@ -1215,7 +1215,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // are facts about the plugin and the stack, not about these bytes.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            UPDATE raw.records
+            UPDATE mirror.records
             SET body = $4, content_hash = $5, "ref" = '{SourceRef.WorkingTree}',
                 editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
@@ -1240,19 +1240,19 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // does not change type), so editor_id is the whole delta, and a delete-then-insert would be
         // two statements doing one statement's work on the hot per-edit path.
         ExecuteFor("""
-            UPDATE raw.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
+            UPDATE mirror.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
             """, formKey, key.Name, key.Origin!, body);
 
         // The row is absent when this record was previously deleted in the working tree and has now
         // come back — the one case where there is nothing to update.
         ExecuteFor($"""
-            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id)
+            INSERT INTO mirror.form_lookup (form_key, plugin, origin, record_type, editor_id)
             SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id
-            FROM raw.records r
+            FROM mirror.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
               AND NOT EXISTS (
-                SELECT 1 FROM raw.form_lookup l
+                SELECT 1 FROM mirror.form_lookup l
                 WHERE l.form_key = r.form_key AND l.plugin = r.plugin AND l.origin = r.origin)
             """, formKey, key.Name, key.Origin!);
 
@@ -1268,7 +1268,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteFormReferencesForRecord(key, formKey);
         if (refs.Count > 0)
         {
-            using var refAppender = Connection.CreateAppender("raw", "form_references");
+            using var refAppender = Connection.CreateAppender("mirror", "form_references");
             foreach (var r in refs)
                 AppendFormReference(refAppender, r, key.Name, key.Origin!);
         }
@@ -1344,29 +1344,29 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
         }
 
-        ExecuteFor("DELETE FROM raw.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         if (containerChildRows.Count > 0)
         {
-            using var appender = Connection.CreateAppender("raw", "container_child");
+            using var appender = Connection.CreateAppender("mirror", "container_child");
             foreach (var row in containerChildRows)
                 AppendContainerChildRow(appender, row, key.Name, key.Origin!);
         }
 
-        ExecuteFor("DELETE FROM raw.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         if (placementRows.Count > 0)
         {
-            using var appender = Connection.CreateAppender("raw", "placement");
+            using var appender = Connection.CreateAppender("mirror", "placement");
             foreach (var row in placementRows)
                 AppendPlacementRow(appender, row, key.Name, key.Origin!);
         }
 
         if (topCellRow is not { } cellRow || topCellRecord == null) return;
 
-        ExecuteFor("DELETE FROM raw.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             cellRow.CellFormKey, key.Name, key.Origin!);
-        using (var appender = Connection.CreateAppender("raw", "cell_location"))
+        using (var appender = Connection.CreateAppender("mirror", "cell_location"))
             AppendCellLocationRow(appender, cellRow, key.Name, key.Origin!);
 
         // The top cell is itself a container (its own Persistent/Temporary/Landscape/
@@ -1422,7 +1422,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private void DeleteDerivationsForRecord(PluginKey key, string formKey)
     {
-        ExecuteFor("DELETE FROM raw.form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.form_lookup WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
         DeleteFormReferencesForRecord(key, formKey);
         DeleteContainmentForRecord(key, formKey);
@@ -1430,7 +1430,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private void DeleteFormReferencesForRecord(PluginKey key, string formKey) =>
         ExecuteFor(
-            "DELETE FROM raw.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
+            "DELETE FROM mirror.form_references WHERE source_form_key = $1 AND source_plugin = $2 AND source_origin = $3",
             formKey, key.Name, key.Origin!);
 
     /// <summary>
@@ -1445,15 +1445,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// </summary>
     private void DeleteContainmentForRecord(PluginKey key, string formKey)
     {
-        ExecuteFor("DELETE FROM raw.placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.placement WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM raw.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.placement WHERE parent_cell = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM raw.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.cell_location WHERE cell_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM raw.container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.container_child WHERE child_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
-        ExecuteFor("DELETE FROM raw.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
+        ExecuteFor("DELETE FROM mirror.container_child WHERE parent_form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
     }
 
@@ -1883,7 +1883,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         using (var cmd = Connection.CreateCommand())
         {
-            cmd.CommandText = "SELECT plugin, MIN(load_order_idx) FROM plugins GROUP BY plugin";
+            cmd.CommandText = "SELECT plugin, MIN(load_order_idx) FROM session_plugins GROUP BY plugin";
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
                 order[reader.GetString(0)] = reader.GetInt32(1);
@@ -2209,7 +2209,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"DELETE FROM raw.\"{tableName}\" WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.ExecuteNonQuery();
@@ -2237,7 +2237,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private void DeleteFormReferencesForPlugin(string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM raw.form_references WHERE source_plugin = $1 AND source_origin = $2";
+        cmd.CommandText = "DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
         cmd.Parameters.Add(new DuckDBParameter { Value = origin });
         cmd.ExecuteNonQuery();
@@ -2273,8 +2273,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
 
-        using var cellAppender = Connection.CreateAppender("raw", "cell_location");
-        using var placeAppender = Connection.CreateAppender("raw", "placement");
+        using var cellAppender = Connection.CreateAppender("mirror", "cell_location");
+        using var placeAppender = Connection.CreateAppender("mirror", "placement");
 
         _placementWalker.Walk(pluginMod,
             cell =>
@@ -2322,7 +2322,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
         DeleteExistingForOrigin("header", plugin, origin);
-        using var appender = Connection.CreateAppender("raw", "header");
+        using var appender = Connection.CreateAppender("mirror", "header");
         HeaderIndexer.Index(pluginMod, plugin, origin, headerSchema, appender);
     }
 
@@ -2717,14 +2717,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         ExecuteFor(
             """
-            DELETE FROM raw.container_child
+            DELETE FROM mirror.container_child
             WHERE parent_form_key = $1 AND slot_name = $2 AND plugin = $3 AND origin = $4
             """,
             parentFormKey, slotName, key.Name, key.Origin!);
 
         if (children.Count == 0) return;
 
-        using var appender = Connection.CreateAppender("raw", "container_child");
+        using var appender = Connection.CreateAppender("mirror", "container_child");
         foreach (var (childFormKey, slotIndex) in children)
         {
             AppendContainerChildRow(
@@ -2738,7 +2738,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     public void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         ExecuteFor(
             """
-            UPDATE raw.container_child SET parent_form_key = $1
+            UPDATE mirror.container_child SET parent_form_key = $1
             WHERE parent_form_key = $2 AND plugin = $3 AND origin = $4
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
@@ -2747,7 +2747,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     public void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey) =>
         ExecuteFor(
             """
-            UPDATE raw.cell_location SET parent_worldspace = $1
+            UPDATE mirror.cell_location SET parent_worldspace = $1
             WHERE parent_worldspace = $2 AND plugin = $3 AND origin = $4
             """,
             newParentFormKey, oldParentFormKey, key.Name, key.Origin!);
