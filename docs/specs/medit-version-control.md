@@ -402,7 +402,11 @@ plugins are never probed at all.
   One exemption (#563): a TES4 record's `MAST`/`DATA` pair dropping is ADR-0038's sanctioned
   master-list pruning, not a loss — Mutagen unconditionally re-derives the header's master list
   from live content on every write, so this exact signature pair is excluded from the check (72%
-  of all real Track refusals in the one available real-world corpus, before this exemption).
+  of all real Track refusals in the one available real-world corpus, before this exemption). The
+  exemption covers a partial prune as much as a total one (#567): a plugin declaring four masters
+  and referencing three loses the unused one from the middle of the list and has every surviving
+  FormID's master index renumbered around the hole — invisible to model identity, which compares
+  by ModKey-based `FormKey`, so it tracks clean.
   Compile has no independent binary to diff against and gets no live version of this gate; the
   guarantee is inherited transitively, since this loss class can only be introduced by
   deserializing an external binary, which happens at Track, never Compile.
