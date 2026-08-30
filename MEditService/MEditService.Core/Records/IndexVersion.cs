@@ -8,7 +8,7 @@ namespace MEditService.Core.Records;
 
 /// <summary>
 /// What shape the rows in a persistent index file were written under (#585 / ADR-0001). Stored on
-/// every <c>raw.indexed_files</c> row; a mismatch at open invalidates the <b>whole</b> file, which
+/// every <c>mirror.files</c> row; a mismatch at open invalidates the <b>whole</b> file, which
 /// is then rebuilt from scratch, because a stale document shape must never be served and there is
 /// no partial answer to a schema change.
 ///
@@ -30,7 +30,7 @@ internal static class IndexVersion
 {
     /// <summary>Bump on any change to <see cref="TableDdlBuilder"/>'s fixed tables or to the record
     /// codec's conventions — see this class's own summary for why nothing else can catch those.</summary>
-    private const int FormatVersion = 1;
+    private const int FormatVersion = 2;
 
     internal static string For(ISchemaReflector reflector, GameRelease release)
     {

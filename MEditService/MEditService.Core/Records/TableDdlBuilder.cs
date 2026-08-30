@@ -12,40 +12,40 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 {
     private readonly ISchemaReflector _reflector = reflector;
 
-    // #582 / ADR-0001: the physical data tables live in the `raw` schema; the public names in
+    // #582 / ADR-0001: the physical data tables live in the `mirror` schema; the public names in
     // `main` are views over them scoped by registration (CreateRegisteredViews). Every relation
     // the read side — C# or the SQL door — names by its bare name is therefore registered-only, and
-    // every writer names `raw.` explicitly: a write against a view fails loudly in DuckDB, which is
-    // what makes "writes go to raw, reads go through registration" a property the database
+    // every writer names `mirror.` explicitly: a write against a view fails loudly in DuckDB, which
+    // is what makes "writes go to mirror, reads go through registration" a property the database
     // enforces rather than a convention a new SQL string could quietly miss.
-    internal const string RawSchema = "raw";
+    internal const string MirrorSchema = "mirror";
 
-    // One registered relation: a raw table carrying a plugin identity, plus which session-derived
-    // columns its view rebuilds. `plugins` itself is the registration and stays a plain table in
-    // `main`, so it does not appear below. Neither does `raw.indexed_files` (#585), which carries a
-    // plugin identity but must answer for plugins *no* session has registered — it is the mirror of
-    // the disk, and scoping it by registration would blind the open-time validation to exactly the
-    // rows it exists to check.
+    // One registered relation: a mirror table carrying a plugin identity, plus which
+    // session-derived columns its view rebuilds. `session_plugins` itself is the registration and
+    // stays a plain table in `main`, so it does not appear below. Neither does `mirror.files`
+    // (#585), which carries a plugin identity but must answer for plugins *no* session has
+    // registered — it is the mirror of the disk, and scoping it by registration would blind the
+    // open-time validation to exactly the rows it exists to check.
     private readonly record struct RegisteredRelation(
         string Table, string PluginColumn, string OriginColumn, bool DerivesLoadOrder, bool DerivesWinner);
 
     // The list CreateRegisteredViews scopes.
     //
-    // #583 / ADR-0001: `load_order_idx` lives only on `plugins` now — none of these raw tables store
-    // it. The four that used to carry it as a stored column (records, records_committed, form_lookup,
-    // the header table) get it back as a derived column in their registered view, joined from
-    // `plugins` rather than read off the row; the rest never had one.
+    // #583 / ADR-0001: `load_order_idx` lives only on `session_plugins` now — none of these mirror
+    // tables store it. The four that used to carry it as a stored column (records, records_committed,
+    // form_lookup, the header table) get it back as a derived column in their registered view, joined
+    // from `session_plugins` rather than read off the row; the rest never had one.
     //
     // #584 / ADR-0001: `is_winner` is the same story one step further out. It was never a fact about
     // a row's bytes either — it is a fact about the whole registered stack a FormKey sits in — so it
-    // is gone from every raw table too, and the three relations whose readers ask for it
-    // (`records`, `form_lookup`, the header table) derive it in their view by joining `raw.winners`.
+    // is gone from every mirror table too, and the three relations whose readers ask for it
+    // (`records`, `form_lookup`, the header table) derive it in their view by joining `session_winners`.
     // `records_committed` is not among them: its stored flag was written FALSE and read by nothing
     // (records_head answers Head), so it simply stops existing rather than becoming a derived column
     // nobody selects.
     //
-    // All three join at Effective, the header included, even though `winners` can now express a ref.
-    // That is deliberate and unchanged from the stored flag: the header table carries no ref
+    // All three join at Effective, the header included, even though `session_winners` can now express
+    // a ref. That is deliberate and unchanged from the stored flag: the header table carries no ref
     // dimension at all — there is no committed/working-tree header text — so a Head-ref header read
     // wants Effective's answer, exactly as Resolve/GetReferencedBy/GetPlacement do (see
     // MEditService/CLAUDE.md, "Reads that answer from the extracted tables ... answer identically at
@@ -63,19 +63,21 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         new(HeaderIndexer.TableName, "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: true),
     ];
 
-    /// <summary>The winners relation (<see cref="CreateWinnersTable"/>), named once so the sweep in
-    /// <c>DuckDbRecordIndex.UpdateWinners</c> and the views that read it cannot drift.</summary>
-    internal const string WinnersRelation = $"{RawSchema}.winners";
+    /// <summary>The session-winners relation (<see cref="CreateSessionWinnersTable"/>), named once so
+    /// the sweep in <c>DuckDbRecordIndex.UpdateWinners</c> and the views that read it cannot drift.
+    /// Bare — no schema prefix — because it is session-derived state, not a file mirror: #593 moves it
+    /// out of the mirror schema into `main`, alongside <c>session_plugins</c>.</summary>
+    internal const string SessionWinnersRelation = "session_winners";
 
     /// <summary>
-    /// <c>is_winner</c> for one relation's rows, at one ref, as a LEFT JOIN against the winners
-    /// table — <see cref="WinnersRelation"/> holds at most one row per (ref, form_key) by
+    /// <c>is_winner</c> for one relation's rows, at one ref, as a LEFT JOIN against the session-winners
+    /// table — <see cref="SessionWinnersRelation"/> holds at most one row per (ref, form_key) by
     /// construction (<c>DuckDbRecordIndex.UpdateWinners</c>), so joining it can never duplicate a row
     /// of <paramref name="alias"/>, and a hash join over the whole table beats a correlated EXISTS on
     /// the full-scan reads (Search, GetDocuments) that dominate this column's use.
     /// </summary>
     private static string WinnerJoin(string alias, RecordRef @ref, string pluginColumn, string originColumn) => $"""
-        LEFT JOIN {WinnersRelation} w
+        LEFT JOIN {SessionWinnersRelation} w
                ON w.record_ref = '{WinnerRef.Of(@ref)}'
               AND w.form_key = {alias}.form_key
               AND w.plugin = {alias}.{pluginColumn}
@@ -84,12 +86,12 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
 
     public void CreateTables(DuckDBConnection connection, GameRelease release)
     {
-        Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {RawSchema}");
+        Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         CreateRecordsTable(connection);
-        CreatePluginsTable(connection);
-        CreateWinnersTable(connection);
+        CreateSessionPluginsTable(connection);
+        CreateSessionWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
-        CreateIndexedFilesTable(connection);
+        CreateFilesTable(connection);
         CreateFormReferencesTable(connection);
         CreateFormLookupTable(connection);
         CreatePlacementTables(connection);
@@ -104,7 +106,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         if (schemas.TryGetValue(HeaderIndexer.TableName, out var headerSchema))
             CreateRecordTable(connection, headerSchema);
 
-        // Views last, in dependency order: the registered views over every raw table, then the
+        // Views last, in dependency order: the registered views over every mirror table, then the
         // Head views over the registered `records`/`records_committed`, then the per-type views over
         // the registered `records` — so registration scopes all three layers through one predicate.
         CreateRegisteredViews(connection);
@@ -113,19 +115,19 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     }
 
     /// <summary>
-    /// The one "registered" predicate (#582 / ADR-0001): a row answers iff a <c>plugins</c> row
-    /// names its (plugin, origin). Each public relation is exactly its raw table joined to that row,
-    /// so the C# reads (which name the bare table) and the SQL door (user filter SQL,
+    /// The one "registered" predicate (#582 / ADR-0001): a row answers iff a <c>session_plugins</c>
+    /// row names its (plugin, origin). Each public relation is exactly its mirror table joined to
+    /// that row, so the C# reads (which name the bare table) and the SQL door (user filter SQL,
     /// <c>medit.query</c>, the generated per-type views over <c>records</c>) cannot scope
     /// differently — there is no second place the scoping is written. The join doubles as
     /// <c>load_order_idx</c>'s one source of truth (#583 / ADR-0001): for the relations that carry
     /// it, the view adds <c>p.load_order_idx</c> rather than reading a stored column, because
-    /// <c>plugins</c> is the only place that value lives — an INNER JOIN already excludes an
+    /// <c>session_plugins</c> is the only place that value lives — an INNER JOIN already excludes an
     /// unregistered plugin's rows, same as the EXISTS this replaces, so filtering and load order
     /// come from the identical join rather than two separate mechanisms.
     ///
-    /// <para>#584 / ADR-0001: <c>is_winner</c> joins in the same way, from <c>raw.winners</c>. Both
-    /// derived columns are appended after <c>t.*</c>, so a raw table's own columns keep their
+    /// <para>#584 / ADR-0001: <c>is_winner</c> joins in the same way, from <c>session_winners</c>. Both
+    /// derived columns are appended after <c>t.*</c>, so a mirror table's own columns keep their
     /// ordinal positions and only the session-derived ones move.</para>
     /// </summary>
     private static void CreateRegisteredViews(DuckDBConnection connection)
@@ -140,8 +142,8 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             Execute(connection, $"""
                 CREATE OR REPLACE VIEW "{relation.Table}" AS
                 SELECT t.*{loadOrderColumn}{winnerColumn}
-                FROM {RawSchema}."{relation.Table}" t
-                JOIN plugins p ON p.plugin = t.{relation.PluginColumn} AND p.origin = t.{relation.OriginColumn}
+                FROM {MirrorSchema}."{relation.Table}" t
+                JOIN session_plugins p ON p.plugin = t.{relation.PluginColumn} AND p.origin = t.{relation.OriginColumn}
                 {winnerJoin}
                 """);
         }
@@ -170,12 +172,12 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // either. A record row carries file-derived facts only — load order is a fact about the plugin's
     // registration and winning is a fact about the registered stack the FormKey sits in, neither
     // about this row — and the registered "records" view (CreateRegisteredViews) joins both back in,
-    // from `plugins` and `raw.winners`, for every reader that names the view rather than this raw
-    // table.
+    // from `session_plugins` and `session_winners`, for every reader that names the view rather than
+    // this mirror table.
     private static void CreateRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.records (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.records (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -191,10 +193,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         // sweep's correlated subquery; (plugin, origin) drives the per-plugin delete every re-index
         // starts with, and the per-plugin listings/counts.
         Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_form_key ON {RawSchema}.records(form_key)
+            CREATE INDEX IF NOT EXISTS idx_records_form_key ON {MirrorSchema}.records(form_key)
             """);
         Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_plugin ON {RawSchema}.records(plugin, origin)
+            CREATE INDEX IF NOT EXISTS idx_records_plugin ON {MirrorSchema}.records(plugin, origin)
             """);
     }
 
@@ -221,7 +223,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     private static void CreateCommittedRecordsTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.records_committed (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.records_committed (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -234,21 +236,21 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
 
         Execute(connection, $"""
-            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON {RawSchema}.records_committed(form_key)
+            CREATE INDEX IF NOT EXISTS idx_records_committed_form_key ON {MirrorSchema}.records_committed(form_key)
             """);
     }
 
     /// <summary>
     /// The name of the Head <i>membership</i> relation — which (form_key, plugin, origin) rows exist
-    /// at <see cref="RecordRef.Head"/>, with no winner column of its own. It lives in the raw schema
-    /// rather than beside <c>records_head</c> in <c>main</c> because it is not part of the published
-    /// SQL door: it exists so that the winner sweep and <c>records_head</c> read one definition of
-    /// "what Head holds" instead of two copies of the same UNION.
+    /// at <see cref="RecordRef.Head"/>, with no winner column of its own. It lives in the mirror
+    /// schema rather than beside <c>records_head</c> in <c>main</c> because it is not part of the
+    /// published SQL door: it exists so that the winner sweep and <c>records_head</c> read one
+    /// definition of "what Head holds" instead of two copies of the same UNION.
     /// </summary>
-    internal const string HeadRowsRelation = $"{RawSchema}.head_rows";
+    internal const string HeadRowsRelation = $"{MirrorSchema}.head_rows";
 
-    // #582: reads the registered `records`/`records_committed` views, not the raw tables, so Head is
-    // scoped by registration through the same predicate as Effective.
+    // #582: reads the registered `records`/`records_committed` views, not the mirror tables, so Head
+    // is scoped by registration through the same predicate as Effective.
     private static void CreateHeadView(DuckDBConnection connection)
     {
         // The Head relation: every diverged record's committed snapshot, plus every record that
@@ -256,9 +258,9 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         // are disjoint by construction — ApplyWorkingTreeChanges writes the snapshot and flips the
         // Effective row's `ref` in the same transaction — so UNION ALL is exact, not an
         // approximation that DISTINCT would have to clean up after.
-        // Both halves name `main.` explicitly: this view lives in `raw`, so an unqualified `records`
-        // would resolve to the raw table sitting right beside it — the one relation that is *not*
-        // scoped by registration and no longer carries load_order_idx at all.
+        // Both halves name `main.` explicitly: this view lives in `mirror`, so an unqualified
+        // `records` would resolve to the mirror table sitting right beside it — the one relation
+        // that is *not* scoped by registration and no longer carries load_order_idx at all.
         Execute(connection, $"""
             CREATE OR REPLACE VIEW {HeadRowsRelation} AS
             SELECT form_key, plugin, origin, record_type, editor_id, load_order_idx, "ref", body, content_hash
@@ -273,9 +275,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         // Effective, which promotes the next plugin down — and the promoted row is a clean row,
         // physically shared with this view. Reusing Effective's winner would leak that promotion into
         // the committed answer and report two winners for one FormKey at Head. So the sweep computes
-        // a winner per ref (#584 / ADR-0001: `raw.winners` is keyed by `record_ref` first), which is
-        // what "IsWinner correct at the requested ref" means — and both refs' winners come out of the
-        // one sweep in DuckDbRecordIndex.UpdateWinners, so they cannot disagree about what winning is.
+        // a winner per ref (#584 / ADR-0001: `session_winners` is keyed by `record_ref` first), which
+        // is what "IsWinner correct at the requested ref" means — and both refs' winners come out of
+        // the one sweep in DuckDbRecordIndex.UpdateWinners, so they cannot disagree about what winning
+        // is.
         Execute(connection, $"""
             CREATE OR REPLACE VIEW records_head AS
             SELECT h.form_key, h.plugin, h.origin, h.record_type, h.editor_id, h.load_order_idx,
@@ -287,11 +290,13 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     }
 
     /// <summary>
-    /// #584 / ADR-0001: the winners relation — <c>(record_ref, form_key) -> (plugin, origin)</c>, one
-    /// row naming the plugin whose copy of that FormKey wins at that ref. Winning is a function of
-    /// the registered load order and nothing else, so it is session-owned state derived over the raw
-    /// rows, never a column on one of them: re-registering a plugin (a reorder, an enable, a disable)
-    /// changes who wins without touching a single record row.
+    /// #584 / ADR-0001: the session-winners relation — <c>(record_ref, form_key) -> (plugin,
+    /// origin)</c>, one row naming the plugin whose copy of that FormKey wins at that ref. Winning is
+    /// a function of the registered load order and nothing else, so it is session-owned state derived
+    /// over the mirror rows, never a column on one of them: re-registering a plugin (a reorder, an
+    /// enable, a disable) changes who wins without touching a single record row. #593 moves this table
+    /// out of the mirror schema entirely — it is session-derived, not a file mirror — into `main`,
+    /// alongside `session_plugins`.
     ///
     /// <para>Rebuilt wholesale by <c>DuckDbRecordIndex.UpdateWinners</c> — the same sweep that used to
     /// UPDATE an <c>is_winner</c> column on three tables — and read only through the registered views
@@ -310,10 +315,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     /// statement already guarantees. No key is declared on any other table here either, for the
     /// related reason that indexing writes through appenders.</para>
     /// </summary>
-    private static void CreateWinnersTable(DuckDBConnection connection)
+    private static void CreateSessionWinnersTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {WinnersRelation} (
+            CREATE TABLE IF NOT EXISTS {SessionWinnersRelation} (
                 record_ref VARCHAR NOT NULL,
                 form_key   VARCHAR NOT NULL,
                 plugin     VARCHAR NOT NULL,
@@ -330,18 +335,18 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // a filename but differing in origin are distinct rows, not a collision.
     //
     // #585 / ADR-0001: this table is *the session*, and nothing else. It holds no fact about the
-    // file a plugin's rows came from — that is `raw.indexed_files` below, which outlives every
-    // session the file has ever held. Six columns went with that split, and none of them lost a
-    // consumer in the process because none of them ever had one: `is_master`, `is_light`,
-    // `is_writable`, `masters` and `record_count` were declared in #267 and never written (session
-    // metadata is answered from GameSession's own PluginMetadata), and `file_mtime` was the
-    // clock-based validity check ADR-0001 exists to rule out — "never `mtime`, the trap the 2026-05
-    // cache fell into". The `index_state` table (`indexed_at`, `load_order_hash`) went the same way,
-    // wholly unwritten; the version key it might plausibly have carried lives per-row on
-    // `indexed_files`, where a mismatch can name the rows it invalidates.
-    private static void CreatePluginsTable(DuckDBConnection connection) =>
+    // file a plugin's rows came from — that is `mirror.files` below, which outlives every session the
+    // file has ever held. Six columns went with that split, and none of them lost a consumer in the
+    // process because none of them ever had one: `is_master`, `is_light`, `is_writable`, `masters` and
+    // `record_count` were declared in #267 and never written (session metadata is answered from
+    // GameSession's own PluginMetadata), and `file_mtime` was the clock-based validity check ADR-0001
+    // exists to rule out — "never `mtime`, the trap the 2026-05 cache fell into". The `index_state`
+    // table (`indexed_at`, `load_order_hash`) went the same way, wholly unwritten; the version key it
+    // might plausibly have carried lives per-row on `files`, where a mismatch can name the rows it
+    // invalidates.
+    private static void CreateSessionPluginsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS plugins (
+            CREATE TABLE IF NOT EXISTS session_plugins (
                 plugin VARCHAR NOT NULL,
                 origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 load_order_idx INTEGER NOT NULL,
@@ -354,19 +359,19 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     /// #585 / ADR-0001: what the index believes is on disk — one row per plugin whose rows the file
     /// holds, naming the physical file they were built from, that file's content hash, and the
     /// <see cref="IndexVersion"/> they were written under. This is the file-mirror half of the
-    /// decision, and it is a separate table from <c>plugins</c> on purpose: <c>plugins</c> is the
-    /// session, so its rows come and go with every load, unload, enable and reorder, while these
-    /// rows change only when a <i>file</i> does. Storing the hash on the registration row instead
-    /// would throw it away at the first unregister — which is exactly a profile switch, the case
-    /// ADR-0001 exists to make cheap.
+    /// decision, and it is a separate table from <c>session_plugins</c> on purpose:
+    /// <c>session_plugins</c> is the session, so its rows come and go with every load, unload, enable
+    /// and reorder, while these rows change only when a <i>file</i> does. Storing the hash on the
+    /// registration row instead would throw it away at the first unregister — which is exactly a
+    /// profile switch, the case ADR-0001 exists to make cheap.
     ///
     /// <para>Written and deleted only by <c>DuckDbRecordIndex.Index</c>/<c>Unindex</c>, in the same
     /// transaction as the record rows they describe, so "the index holds current rows for this
     /// plugin" is one row's existence rather than a claim assembled from several tables.</para>
     /// </summary>
-    internal static void CreateIndexedFilesTable(DuckDBConnection connection) =>
+    internal static void CreateFilesTable(DuckDBConnection connection) =>
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.indexed_files (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.files (
                 plugin        VARCHAR NOT NULL,
                 origin        VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
                 file_path     VARCHAR NOT NULL,
@@ -379,7 +384,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreateFormReferencesTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.form_references (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_references (
                 source_form_key VARCHAR NOT NULL,
                 source_plugin   VARCHAR NOT NULL,
                 source_origin   VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -391,7 +396,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_form_references_target
-                ON {RawSchema}.form_references(target_form_key)
+                ON {MirrorSchema}.form_references(target_form_key)
             """);
     }
 
@@ -401,7 +406,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreateFormLookupTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.form_lookup (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.form_lookup (
                 form_key       VARCHAR NOT NULL,
                 plugin         VARCHAR NOT NULL,
                 origin         VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -411,7 +416,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_form_lookup_form_key
-                ON {RawSchema}.form_lookup(form_key)
+                ON {MirrorSchema}.form_lookup(form_key)
             """);
     }
 
@@ -421,7 +426,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreatePlacementTables(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.placement (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.placement (
                 form_key        VARCHAR NOT NULL,
                 plugin          VARCHAR NOT NULL,
                 origin          VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -434,11 +439,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_placement_cell
-                ON {RawSchema}.placement(parent_cell, plugin)
+                ON {MirrorSchema}.placement(parent_cell, plugin)
             """);
 
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.cell_location (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.cell_location (
                 cell_form_key    VARCHAR NOT NULL,
                 plugin           VARCHAR NOT NULL,
                 origin           VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -454,11 +459,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_cell_location_worldspace
-                ON {RawSchema}.cell_location(parent_worldspace, plugin)
+                ON {MirrorSchema}.cell_location(parent_worldspace, plugin)
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_cell_location_region
-                ON {RawSchema}.cell_location(parent_worldspace, grid_x, grid_y)
+                ON {MirrorSchema}.cell_location(parent_worldspace, grid_x, grid_y)
             """);
     }
 
@@ -469,7 +474,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal static void CreateContainerChildTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {RawSchema}.container_child (
+            CREATE TABLE IF NOT EXISTS {MirrorSchema}.container_child (
                 child_form_key      VARCHAR NOT NULL,
                 plugin               VARCHAR NOT NULL,
                 origin               VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
@@ -481,7 +486,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
         Execute(connection, $"""
             CREATE INDEX IF NOT EXISTS idx_container_child_parent
-                ON {RawSchema}.container_child(parent_form_key, plugin)
+                ON {MirrorSchema}.container_child(parent_form_key, plugin)
             """);
     }
 
@@ -499,7 +504,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         foreach (var col in schema.RecordColumns)
             sb.Append(CultureInfo.InvariantCulture, $", \"{col.Name}\" {col.DuckDbType}");
 
-        Execute(connection, $"CREATE TABLE IF NOT EXISTS {RawSchema}.\"{schema.TableName}\" ({sb})");
+        Execute(connection, $"CREATE TABLE IF NOT EXISTS {MirrorSchema}.\"{schema.TableName}\" ({sb})");
     }
 
     private static void Execute(DuckDBConnection connection, string sql)

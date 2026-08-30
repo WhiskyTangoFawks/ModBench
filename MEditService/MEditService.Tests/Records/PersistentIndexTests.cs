@@ -18,8 +18,8 @@ namespace MEditService.Tests.Records;
 //
 // Two assertions do reach past the seam, through `Connection`, and both are the sanctioned white-box
 // door RegistrationScopingTests already established (MEditService/CLAUDE.md, invariant 8): counting
-// `raw.records` rows, because "the rows are physically present and answer nothing" is not expressible
-// through a seam whose whole job is to hide unregistered rows; and ageing `raw.indexed_files`'
+// `mirror.records` rows, because "the rows are physically present and answer nothing" is not expressible
+// through a seam whose whole job is to hide unregistered rows; and ageing `mirror.files`'
 // version, because there is no other way to write rows under a version this build cannot produce.
 public class PersistentIndexTests : IDisposable
 {
@@ -75,7 +75,7 @@ public class PersistentIndexTests : IDisposable
     private static long RecordRowsFor(DuckDbRecordIndex index, PluginKey key)
     {
         using var cmd = index.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM raw.records WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = "SELECT COUNT(*) FROM mirror.records WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
@@ -188,7 +188,7 @@ public class PersistentIndexTests : IDisposable
             // reflector change would: there is no other way to write rows under a version this build
             // cannot produce.
             using var cmd = first.Connection.CreateCommand();
-            cmd.CommandText = "UPDATE raw.indexed_files SET index_version = 'written-by-another-build'";
+            cmd.CommandText = "UPDATE mirror.files SET index_version = 'written-by-another-build'";
             cmd.ExecuteNonQuery();
         }
 

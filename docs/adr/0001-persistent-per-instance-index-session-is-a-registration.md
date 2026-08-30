@@ -66,34 +66,34 @@ index itself outliving the process.
    - **A session changes** — a plugin is loaded, unloaded, enabled, disabled, reordered — and
      only the *registration* changes. The file did not change, so the rows do not.
 
-   The `plugins` table is the session and nothing else: a row means "this plugin, from this
+   The `session_plugins` table is the session and nothing else: a row means "this plugin, from this
    origin, is in the current session, at this `load_order_idx`, participating or not" — it carries
-   no fact about the file the rows came from, which is point 4's `indexed_files`. Since
+   no fact about the file the rows came from, which is point 4's `mirror.files`. Since
    [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md) (2026-08-30) the table is kept true by
    one reconcile verb over the whole Plugin load order, every physical copy is registered, and
    participation is derived from `enabled`/`winning`/listed rather than stored; every loadout
-   gesture is a `plugins`-row change plus the winner sweep. `records` rows for plugins not registered in the
+   gesture is a `session_plugins`-row change plus the winner sweep. `records` rows for plugins not registered in the
    current session remain in the file and **are invisible to every read** — the read seam and
-   every generated `json_extract` view join `plugins`, so the SQL door (user filters,
+   every generated `json_extract` view join `session_plugins`, so the SQL door (user filters,
    `medit.query`) sees exactly what the C# surface sees.
 
    This amends [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md)'s *"hidden means
    absent is unloading, never filtering"*: **absent now means unregistered.** The invariant's
    intent — a hidden plugin's records must not answer a query, ever, on any path — is unchanged;
-   what changes is that the mechanism is a join on `plugins` rather than the physical absence of
+   what changes is that the mechanism is a join on `session_plugins` rather than the physical absence of
    rows, because physical absence is exactly what makes re-loading cost a full re-index.
    `Unindex` is the file-gone verb — a delete, an uninstall, a file missing at validation —
    never the meaning of unload.
 
 3. **The load order is decoupled from the rows.** A record's identity is `(form_key, origin,
    plugin)` — everything about it is derived from the file it came from, and no session numbering
-   is part of it. `load_order_idx` and participation live **only on the `plugins` row** and are
+   is part of it. `load_order_idx` and participation live **only on the `session_plugins` row** and are
    joined at read; `records.load_order_idx` is dropped. `plugins.txt` is the index the session
    view is built from, and reordering it touches one row per plugin, never a record.
 
    **Nothing session-derived is stored on a data row — `is_winner` included.** A record row is
    the file's fact and only the file's fact. Winners are a function of the registered load order
-   and live in a session-owned derived structure on top of the raw rows: a `winners` table
+   and live in a session-owned derived structure on top of the mirror rows: a `session_winners` table
    (`(ref, form_key) → (plugin, origin)`) rebuilt by the existing sweep whenever registration
    changes, which the read seam and the generated views join. (DuckDB has no incrementally
    maintained materialized views, so "materialized view" here concretely means that derived
@@ -107,12 +107,12 @@ index itself outliving the process.
    so every writer that moves a row into or out of *either* ref's stack must resweep, including
    the ones that leave Effective untouched. If the query side ever needs
    more — per-plugin winner counts, contested-FormKey sets — it is added as further derived
-   structure over the raw data, never as columns on it.
+   structure over the mirror data, never as columns on it.
 
-4. **Validity is by content, never by clock, and it is checked at every door.** An `indexed_files`
+4. **Validity is by content, never by clock, and it is checked at every door.** A `mirror.files`
    row records, per plugin, the file its rows were built from, that file's content hash, and the
-   codec+schema version they were written under. That is a **separate table from `plugins`**, and
-   deliberately so: `plugins` is the session, so its rows come and go with every load, unload,
+   codec+schema version they were written under. That is a **separate table from `session_plugins`**,
+   and deliberately so: `session_plugins` is the session, so its rows come and go with every load, unload,
    enable and reorder, while these change only when a *file* does. Putting the hash on the
    registration row would throw it away at the first unregister — which is exactly a profile
    switch, the case this decision exists to make cheap. The index is opened, then validated: every

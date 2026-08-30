@@ -24,13 +24,13 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   (`POST /plugins/load`/`/unload`) open read-only and non-participating, and
   `PluginMetadata.InLoadOrder` says so (a disabled `plugins.txt` line is still in the load order and
   still a legitimate write target). **Registration is visibility** (#582 / ADR-0001): a plugin
-  answers a read iff it has a `plugins` row. The physical tables live in the `raw` schema; every
-  public relation (`records`, `records_head`, the extracted tables, every generated per-type
-  view) is a view over its raw table through the one registered-predicate
+  answers a read iff it has a `session_plugins` row. The physical tables live in the `mirror`
+  schema; every public relation (`records`, `records_head`, the extracted tables, every generated
+  per-type view) is a view over its mirror table through the one registered-predicate
   (`TableDdlBuilder.CreateRegisteredViews`), so the C# seam and the SQL door cannot scope
-  differently. Writers name `raw.` explicitly. ADR-0035's "hidden means absent" is
-  **unregistered, never answering** — `IRecordIndex.Unregister` removes the `plugins` row and
-  nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
+  differently. Writers name `mirror.` explicitly. ADR-0035's "hidden means absent" is
+  **unregistered, never answering** — `IRecordIndex.Unregister` removes the `session_plugins` row
+  and nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
   missing at validation), never the meaning of unload.
   - **The index is a persistent file per MO2 instance, and it validates itself on open**
     (#585/#592 / ADR-0001). `IndexFile.For` puts it at `<instance>/modbench/index.duckdb`, so every
@@ -41,9 +41,9 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     fixtures use. **`LoadExplicit` is the only session load** — the plain-Data-folder path
     (`SessionManager.Load`, `POST /session/load`, the CLI startup path) is deleted: Modbench manages
     an MO2-style instance and nothing else, and a load that can name no mod folders can key no index.
-    `plugins` is **the session and nothing else** — the file facts live in `raw.indexed_files` (`file_path`, `content_hash`, `index_version`), a separate
-    table precisely so that unregistering a plugin does not throw away what makes re-registering it
-    cheap. Registrations are **not** cleared on open (ADR-0044): they are the last known load order,
+    `session_plugins` is **the session and nothing else** — the file facts live in `mirror.files`
+    (`file_path`, `content_hash`, `index_version`), a separate table precisely so that
+    unregistering a plugin does not throw away what makes re-registering it cheap. Registrations are **not** cleared on open (ADR-0044): they are the last known load order,
     and the first reconcile from Mod Management corrects them. `Initialize` rehashes every
     indexed file — **content, never `mtime`** — and `Unindex`es any plugin whose file is gone or
     whose bytes moved; a version mismatch (`IndexVersion`: hand-bumped format const + Mutagen
@@ -53,7 +53,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     column list in silence.
   - **Session load is registration** (#586 / ADR-0001). `SessionManager.IndexProgressively` indexes
     only what the file has never seen or whose bytes moved (validation already dropped those) and
-    `Register`s everything else at its `plugins.txt` position — a `plugins` row, no re-index. A
+    `Register`s everything else at its `plugins.txt` position — a `session_plugins` row, no re-index. A
     tracked plugin never takes that path however current its binary: its source tree is its truth
     (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates the
     decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones do, so
@@ -84,14 +84,14 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 - **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
   `ref`, `content_hash`); the extracted index tables (`form_lookup`,
-  `form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from it at
+  `form_references`, `placement`, `cell_location`, `session_plugins`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
   **Nothing session-derived is stored on a data row** (#583/#584 / ADR-0001): a record row carries
   file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
-  on `plugins`; `is_winner` is a fact about the registered stack a FormKey sits in and lives solely
-  in `raw.winners` (`(ref, form_key) → (plugin, origin)`, rebuilt wholesale by
-  `DuckDbRecordIndex.UpdateWinners`). The registered view over each raw table (`records`,
+  on `session_plugins`; `is_winner` is a fact about the registered stack a FormKey sits in and lives
+  solely in `session_winners` (`(ref, form_key) → (plugin, origin)`, rebuilt wholesale by
+  `DuckDbRecordIndex.UpdateWinners`). The registered view over each mirror table (`records`,
   `records_committed`, `form_lookup`, `header` — see "Registration is visibility" above) joins both
   back in, so they still read as ordinary columns everywhere outside `Records/` itself. Every writer
   that moves a row into or out of a ref's stack must resweep — that is why `MarkWorkingTreeOnly` and
@@ -194,7 +194,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - `is_winner` is **swept per ref**, never carried across them. A record the working tree deleted
     promotes the next plugin down at Effective, and the promoted row is a clean row physically
     shared with `records_head` — reusing Effective's answer reported two winners for one FormKey at
-    Head. So `raw.winners` is keyed `(ref, form_key)` and `records_head` joins it at Head.
+    Head. So `session_winners` is keyed `(ref, form_key)` and `records_head` joins it at Head.
   - `IRecordIndex.ApplyWorkingTreeChanges` moves Effective against a fixed baseline (null body =
     deletion; bytes equal to committed = convergence back to clean, by byte compare, never by a
     `content_hash` mismatch alone). `SetCommittedBaseline` moves the baseline itself. Neither can

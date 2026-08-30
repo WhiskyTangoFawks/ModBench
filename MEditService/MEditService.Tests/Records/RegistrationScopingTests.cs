@@ -11,7 +11,7 @@ using Noggog;
 namespace MEditService.Tests.Records;
 
 // #582 / ADR-0001: registration is visibility. An unregistered plugin's rows stay in the index
-// (physically, in the `raw` schema) and answer nothing on any path — every IRecordReads member,
+// (physically, in the `mirror` schema) and answer nothing on any path — every IRecordReads member,
 // both refs, and the SQL door (the generated per-type views, `records`, the extracted tables).
 // Re-registering makes the same rows answer again with no re-index. This is the gate test the
 // ticket names; each read is asserted individually so a regression names the path that leaked.
@@ -119,11 +119,11 @@ public class RegistrationScopingTests
         repo.Unregister(BetaKey);
         repo.UpdateWinners();
 
-        // The rows demonstrably remain — the raw schema is the one door that sees them.
-        Assert.Equal(fx.BetaRecordCount, RowsFor(repo, "raw.records", BetaKey));
-        foreach (var table in new[] { "raw.form_lookup", "raw.placement", "raw.cell_location", "raw.container_child", "raw.header" })
+        // The rows demonstrably remain — the mirror schema is the one door that sees them.
+        Assert.Equal(fx.BetaRecordCount, RowsFor(repo, "mirror.records", BetaKey));
+        foreach (var table in new[] { "mirror.form_lookup", "mirror.placement", "mirror.cell_location", "mirror.container_child", "mirror.header" })
             Assert.True(RowsFor(repo, table, BetaKey) > 0, $"{table} should keep Beta's rows");
-        Assert.True(Scalar(repo, "SELECT COUNT(*) FROM raw.form_references WHERE source_plugin = $1 AND source_origin = $2",
+        Assert.True(Scalar(repo, "SELECT COUNT(*) FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2",
             BetaKey.Name, BetaKey.Origin!) > 0);
 
         // Documents.
@@ -227,7 +227,7 @@ public class RegistrationScopingTests
 
         repo.Unindex(BetaKey);
 
-        Assert.Equal(0, RowsFor(repo, "raw.records", BetaKey));
-        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM plugins WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin!));
+        Assert.Equal(0, RowsFor(repo, "mirror.records", BetaKey));
+        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM session_plugins WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin!));
     }
 }

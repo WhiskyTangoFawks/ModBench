@@ -52,11 +52,11 @@ public class IndexAtomicityTests
         // until form_lookup/form_references' own flush later in Index(). form_lookup is
         // unconditionally appended for any indexed record (unlike form_references, which is skipped
         // entirely when refs is empty — as it is for this bare-NPC fixture), so it stays a reliable,
-        // fixture-agnostic failure point. #582: the physical table is raw.form_lookup — the bare
+        // fixture-agnostic failure point. #582: the physical table is mirror.form_lookup — the bare
         // name is the registered view over it.
         using (var drop = repo.Connection.CreateCommand())
         {
-            drop.CommandText = "DROP TABLE raw.form_lookup";
+            drop.CommandText = "DROP TABLE mirror.form_lookup";
             drop.ExecuteNonQuery();
         }
 

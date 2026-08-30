@@ -9,10 +9,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #583 / ADR-0001: load order lives only on `plugins`. Reordering `plugins.txt` — modelled here as
-// two Register calls with swapped load_order_idx values and no re-index — touches one `plugins` row
-// per plugin and no record: override stacks and conflict classification follow the new order purely
-// from that join, exactly as they would from a re-index at the new order.
+// #583 / ADR-0001: load order lives only on `session_plugins`. Reordering `plugins.txt` — modelled
+// here as two Register calls with swapped load_order_idx values and no re-index — touches one
+// `session_plugins` row per plugin and no record: override stacks and conflict classification follow
+// the new order purely from that join, exactly as they would from a re-index at the new order.
 public class LoadOrderViaRegistrationTests
 {
     private static readonly ISchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -25,10 +25,10 @@ public class LoadOrderViaRegistrationTests
         return repo;
     }
 
-    private static long RawRecordCount(DuckDbRecordIndex repo, PluginKey key)
+    private static long MirrorRecordCount(DuckDbRecordIndex repo, PluginKey key)
     {
         using var cmd = repo.Connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM raw.records WHERE plugin = $1 AND origin = $2";
+        cmd.CommandText = "SELECT COUNT(*) FROM mirror.records WHERE plugin = $1 AND origin = $2";
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
@@ -59,12 +59,12 @@ public class LoadOrderViaRegistrationTests
         repo.Index((IModGetter)modB, 1, participates: true, key: bKey);
         repo.UpdateWinners();
 
-        var beforeA = RawRecordCount(repo, aKey);
-        var beforeB = RawRecordCount(repo, bKey);
+        var beforeA = MirrorRecordCount(repo, aKey);
+        var beforeB = MirrorRecordCount(repo, bKey);
         Assert.True(repo.GetOverrideStack(npcKey.ToString())!.Entries
             .Single(e => e.Plugin.Name == bKey.Name).IsWinner, "B, later in load order, should win before reorder.");
 
-        // Reorder via `plugins` only — B now sorts before A — no Index() call.
+        // Reorder via `session_plugins` only — B now sorts before A — no Index() call.
         repo.Register(aKey, loadOrderIndex: 1, participates: true);
         repo.Register(bKey, loadOrderIndex: 0, participates: true);
         repo.UpdateWinners();
@@ -74,7 +74,7 @@ public class LoadOrderViaRegistrationTests
         Assert.False(stack.Single(e => e.Plugin.Name == bKey.Name).IsWinner);
 
         // The reorder never touched a record row.
-        Assert.Equal(beforeA, RawRecordCount(repo, aKey));
-        Assert.Equal(beforeB, RawRecordCount(repo, bKey));
+        Assert.Equal(beforeA, MirrorRecordCount(repo, aKey));
+        Assert.Equal(beforeB, MirrorRecordCount(repo, bKey));
     }
 }
