@@ -8,10 +8,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from './test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from './test/corpusFixture';
 import type { Mod, Separator } from './model';
-
-const MODLIST = 'profiles/Default/modlist.txt';
 
 describe('modlist.txt corpus — every entry mutation touches modlist.txt and nothing else', () => {
   let dir: string;

@@ -11,7 +11,23 @@ import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { expect } from 'vitest';
 
+// Deliberately a NEW sibling fixture, not an in-place extension of the existing
+// fixtures/mo2-instance/ — despite the #41 brief addendum's "extend it rather than
+// starting fresh" wording. mo2-instance/ is read directly (not copied) by ~6
+// existing tests (Mo2ModlistSource.test.ts, modlistText.test.ts, etc.) that hard-
+// assert its exact contents (exact readModlist()/listSeparators()/readPluginOrder()
+// arrays, exact listProfiles()); any addition to it — a new mod, a new profile line —
+// breaks one of those. This fixture starts as a copy of it and layers the corpus'
+// adversarial quirks on top, isolated from every currently-passing test. Approved
+// at plan-gate for #41.
 export const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus');
+
+/** profiles/Default/modlist.txt and plugins.txt — the active-profile paths every
+ *  corpus test starts from (the fixture's active profile is "Default"; only the
+ *  setActiveProfile test switches it). Shared here so the three test files that
+ *  reference them don't each redefine the same literal path. */
+export const DEFAULT_MODLIST = 'profiles/Default/modlist.txt';
+export const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 
 /** Fresh mkdtemp copy of the committed corpus fixture. Caller owns cleanup
  *  (`rm(root, { recursive: true, force: true })` in `afterEach`). */

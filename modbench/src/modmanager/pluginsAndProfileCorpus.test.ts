@@ -6,9 +6,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from './test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_PLUGINS, snapshotTree } from './test/corpusFixture';
 
-const DEFAULT_PLUGINS = 'profiles/Default/plugins.txt';
 const INI = 'ModOrganizer.ini';
 
 describe('plugins.txt + profile corpus', () => {

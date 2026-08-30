@@ -9,10 +9,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Mo2ModlistSource } from './mo2/Mo2ModlistSource';
-import { assertOnlyChanged, cloneCorpusFixture, snapshotTree } from './test/corpusFixture';
+import { assertOnlyChanged, cloneCorpusFixture, DEFAULT_MODLIST as MODLIST, snapshotTree } from './test/corpusFixture';
 import type { Mod } from './model';
-
-const MODLIST = 'profiles/Default/modlist.txt';
 
 describe('mod lifecycle corpus (install / uninstall)', () => {
   let dir: string;

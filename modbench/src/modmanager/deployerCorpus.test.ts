@@ -5,6 +5,15 @@
 // `.git/` and `source/` subtrees (ADR-0041) must never be walked, hardlinked into
 // Data/, or otherwise disturbed by any of this — deployer.test.ts covers the
 // mechanics in isolation; this proves it holds against a real multi-mod instance.
+//
+// Scope note: #41's 2026-08-28 re-scope excludes "deploy" — but that exclusion is
+// specifically the real-instance, environment-gated leg (does a real deploy
+// reproduce what MO2 would produce on a tester's actual instance), which stays
+// with /manual-test. This file is a different thing: synthetic-fixture,
+// composition-level coverage that deploy/purge don't corrupt files they shouldn't
+// touch and round-trip Data/ back byte-identically — exactly what the ADR-0041
+// addendum asks for ("not disturbing (or deploying) that [tracked mod] state").
+// Kept in scope on that basis.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
