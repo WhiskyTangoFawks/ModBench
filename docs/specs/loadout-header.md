@@ -101,7 +101,7 @@ directory, rebuilds the explicit plugin set from the current modlist, and reload
 backend — the same `makeEnterEditing` path Launch mEdit and the crash-restart handler take
 ([#295](https://github.com/WhiskyTangoFawks/ModBench/issues/295)). **No confirm** (ADR-0041/#410):
 #295's confirm existed to warn that a reload would discard staged edits against the copy being
-reloaded; with the pending-change model gone a reload rebuilds read state and destroys no
+reloaded; with no staged-edit model a reload rebuilds read state and destroys no
 uncommitted working-tree change, so it reloads outright. A failed reload tears the session down
 the same way a failed launch does (`exitToLoadout`) rather than leave the Plugins tree decorated
 for a session the backend has already discarded.

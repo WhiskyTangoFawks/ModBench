@@ -108,7 +108,8 @@ public static class SessionEndpoints
             // signal this endpoint has always been (POST /session/load returns only once loading
             // finishes). Its return is #381's crash-repair offers, riding the response the same way
             // LoadFailures already does.
-            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
+            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(
+                sessionManager.Session, sessionManager.Index, externalChangeWatcher, logger);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? [], crashRepairOffers));
         }
         catch (OperationCanceledException ex)
@@ -157,7 +158,8 @@ public static class SessionEndpoints
                 .Select(p => new ExplicitPluginInput(p.Name, p.Path, p.Origin, p.Participates!.Value))
                 .ToList();
             sessionManager.LoadExplicit(req.GameDirectory, explicitPlugins, gameRelease);
-            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(sessionManager.Session, externalChangeWatcher, logger);
+            var crashRepairOffers = ExternalChangeSessionHook.RunAfterLoad(
+                sessionManager.Session, sessionManager.Index, externalChangeWatcher, logger);
             return Results.Ok(new SessionLoadResponse("loaded", sessionManager.Session?.LoadFailures ?? [], crashRepairOffers));
         }
         catch (OperationCanceledException ex)

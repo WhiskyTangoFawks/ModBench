@@ -54,7 +54,7 @@ function makePlugin(i: number): PluginMetadata {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
-    compilePending: false,
+    compileStale: false,
     lastCompiledAt: null,
   };
 }
@@ -1270,7 +1270,7 @@ describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () 
   // that version first and running it, it stayed green with the gate removed — vacuous, exactly
   // the trap the standing instruction warns about). The real scenario the gate exists for is an
   // in-flight getConflicts() call that resolves *after* conflictsComputed has already gone back to
-  // false — ADR-0035's live-mutation re-sweep racing a still-pending Conflicts-node fetch — which
+  // false — ADR-0035's live-mutation re-sweep racing a in-flight Conflicts-node fetch — which
   // populates the cache post-clear with nothing left to clear it again. Only conflictAllOf's own
   // independent check catches that.
   it('returns undefined for a late-arriving cache entry — a getConflicts() call still in flight when conflictsComputed goes back to false', async () => {

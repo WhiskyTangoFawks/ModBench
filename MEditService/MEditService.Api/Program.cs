@@ -61,7 +61,14 @@ try
     builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
     builder.Services.AddSingleton<ISchemaReflector, SchemaReflector>();
     builder.Services.AddSingleton<ITableDdlBuilder, TableDdlBuilder>();
-    builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
+    // #585 / ADR-0001: the index is a persistent file per game Data install, under the same local
+    // app data root the logs already use. Registered by hand rather than by type so the root is
+    // stated here, in the composition root, and not read from the environment by Core.
+    builder.Services.AddSingleton<IRecordIndexFactory>(sp => new DuckDbRecordIndexFactory(
+        sp.GetRequiredService<ISchemaReflector>(),
+        sp.GetRequiredService<ITableDdlBuilder>(),
+        sp.GetService<ILogger<DuckDbRecordIndexFactory>>(),
+        IndexFile.DefaultRoot));
     builder.Services.AddSingleton<IConflictClassifier, ConflictClassifier>();
     builder.Services.AddSingleton<PluginWriter>();
     builder.Services.AddSingleton<IModImporter, DefaultModImporter>();
@@ -76,11 +83,20 @@ try
     builder.Services.AddSingleton<RecordEditService>();
     // #416: the write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // #417: the bridge's own live-watch lifecycle and pending-question queue — one instance for the
+    // #417: the bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
     // whole process, so the load-time check (session-load handlers) and the live watcher share it.
     builder.Services.AddSingleton<ExternalChangeWatcher>();
 
     var app = builder.Build();
+
+    // #587 / ADR-0001: the index keeps mirroring the disk while a session is live. Subscribed once
+    // here rather than per load — the watcher is a process singleton, and re-subscribing on every
+    // load would stack a handler per load; which plugins are watched is re-decided per load instead
+    // (ExternalChangeSessionHook.RunAfterLoad).
+    var indexMirror = new IndexMirror(
+        app.Services.GetRequiredService<ISessionManager>(),
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
+    app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
     // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category

@@ -44,10 +44,13 @@ index itself outliving the process.
    - **A session changes** — a plugin is loaded, unloaded, enabled, disabled, reordered — and
      only the *registration* changes. The file did not change, so the rows do not.
 
-   The `plugins` table is the session: a row means "this plugin, from this
-   origin, is in the current session, at this `load_order_idx`, participating or not". Loading a
-   session registers its plugins; loading, unloading, enabling, disabling and reordering are
-   `plugins`-row changes plus the winner sweep. `records` rows for plugins not registered in the
+   The `plugins` table is the session and nothing else: a row means "this plugin, from this
+   origin, is in the current session, at this `load_order_idx`, participating or not" — it carries
+   no fact about the file the rows came from, which is point 4's `indexed_files`. Since
+   [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md) (2026-08-30) the table is kept true by
+   one reconcile verb over the whole Plugin load order, every physical copy is registered, and
+   participation is derived from `enabled`/`winning`/listed rather than stored; every loadout
+   gesture is a `plugins`-row change plus the winner sweep. `records` rows for plugins not registered in the
    current session remain in the file and **are invisible to every read** — the read seam and
    every generated `json_extract` view join `plugins`, so the SQL door (user filters,
    `medit.query`) sees exactly what the C# surface sees.
@@ -69,19 +72,33 @@ index itself outliving the process.
    **Nothing session-derived is stored on a data row — `is_winner` included.** A record row is
    the file's fact and only the file's fact. Winners are a function of the registered load order
    and live in a session-owned derived structure on top of the raw rows: a `winners` table
-   (`form_key → (plugin, origin)`) rebuilt by the existing sweep whenever registration changes,
-   which the read seam and the generated views join. (DuckDB has no incrementally maintained
-   materialized views, so "materialized view" here concretely means that derived table — the
-   same shape `records_head` already uses internally, deriving winners rather than reading a
-   stored flag, since #415 found what a stored flag gets wrong.) If the query side ever needs
+   (`(ref, form_key) → (plugin, origin)`) rebuilt by the existing sweep whenever registration
+   changes, which the read seam and the generated views join. (DuckDB has no incrementally
+   maintained materialized views, so "materialized view" here concretely means that derived
+   table.) It is keyed by ref, not by FormKey alone, because Effective and Head genuinely
+   disagree: a record the working tree deleted promotes the next plugin down at Effective while
+   Head still holds the original — which is what #415 found a single stored flag getting wrong.
+   `records_head` therefore joins the same table at its own ref rather than deriving a second
+   answer of its own. **The cost of that consolidation is an invalidation obligation, and it is
+   part of the decision, not an implementation detail:** Head's winners were previously a live
+   derivation and so self-correcting, whereas a swept table is only as fresh as its last sweep —
+   so every writer that moves a row into or out of *either* ref's stack must resweep, including
+   the ones that leave Effective untouched. If the query side ever needs
    more — per-plugin winner counts, contested-FormKey sets — it is added as further derived
    structure over the raw data, never as columns on it.
 
-4. **Validity is by content, never by clock, and it is checked at every door.** `plugins` records
-   the content hash of the file each plugin's rows were built from, plus the codec+schema
-   version. At session load every registered plugin's file is hashed (a few seconds for 2.3 GB —
-   never `mtime`, the trap the 2026-05 cache fell into) and any mismatch re-indexes that plugin
-   in place; a codec or reflector version change invalidates the whole file. At runtime,
+4. **Validity is by content, never by clock, and it is checked at every door.** An `indexed_files`
+   row records, per plugin, the file its rows were built from, that file's content hash, and the
+   codec+schema version they were written under. That is a **separate table from `plugins`**, and
+   deliberately so: `plugins` is the session, so its rows come and go with every load, unload,
+   enable and reorder, while these change only when a *file* does. Putting the hash on the
+   registration row would throw it away at the first unregister — which is exactly a profile
+   switch, the case this decision exists to make cheap. The index is opened, then validated: every
+   file it holds rows for is hashed (a few seconds for 2.3 GB — never `mtime`, the trap the 2026-05
+   cache fell into), a mismatch or a missing file `Unindex`es that plugin so the load re-indexes it
+   in place, and a codec or reflector version change invalidates the whole file. Registrations are
+   **not** cleared on open (amended by ADR-0044, 2026-08-30): they are the last known load order,
+   and the first reconcile from Mod Management corrects them. At runtime,
    `ExternalChangeWatcher` (#417) is extended from tracked binaries to every indexed binary, the
    game's `Data/` included: a debounced change re-hashes and re-indexes through `ReindexPlugin`.
    This is root CLAUDE.md's never-assume-exclusive-ownership rule applied to the index: MO2,

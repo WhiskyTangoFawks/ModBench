@@ -7,20 +7,20 @@ namespace MEditService.Tests.Query;
 /// <summary>
 /// #449: <see cref="PluginResponse.FromMetadata"/> wires <see cref="Core.Source.ModFolders.CompileFreshnessOf"/>
 /// onto the wire — the seam a stale/never-updated implementation of that delegation would leave every
-/// plugin reporting <c>CompilePending: false</c> regardless of real git state.
+/// plugin reporting <c>CompileStale: false</c> regardless of real git state.
 /// </summary>
-public sealed class PluginResponseCompilePendingTests
+public sealed class PluginResponseCompileStaleTests
 {
     private const string Plugin = "Test.esp";
     private const string RelPath = "source/Test.esp/npc_/Test.esp/000001.json";
 
-    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-pluginresponse-compilepending-").FullName;
+    private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-pluginresponse-compilestale-").FullName;
 
     private static PluginMetadata MetadataFor(string modFolder, string origin) =>
         new(Plugin, Path.Combine(modFolder, Plugin), 0, false, false, [], 0, false, origin);
 
     [Fact]
-    public void FromMetadata_ForATrackedPluginEditedSinceItsLastCompile_ReportsCompilePendingTrue()
+    public void FromMetadata_ForATrackedPluginEditedSinceItsLastCompile_ReportsCompileStaleTrue()
     {
         var modFolder = NewModFolder();
         try
@@ -32,7 +32,7 @@ public sealed class PluginResponseCompilePendingTests
 
             var response = PluginResponse.FromMetadata(MetadataFor(modFolder, "SomeMod"));
 
-            Assert.True(response.CompilePending);
+            Assert.True(response.CompileStale);
             Assert.NotNull(response.LastCompiledAt);
         }
         finally
@@ -42,7 +42,7 @@ public sealed class PluginResponseCompilePendingTests
     }
 
     [Fact]
-    public void FromMetadata_ForATrackedPluginWithNoChangesSinceItsLastCompile_ReportsCompilePendingFalse()
+    public void FromMetadata_ForATrackedPluginWithNoChangesSinceItsLastCompile_ReportsCompileStaleFalse()
     {
         var modFolder = NewModFolder();
         try
@@ -53,7 +53,7 @@ public sealed class PluginResponseCompilePendingTests
 
             var response = PluginResponse.FromMetadata(MetadataFor(modFolder, "SomeMod"));
 
-            Assert.False(response.CompilePending);
+            Assert.False(response.CompileStale);
             Assert.NotNull(response.LastCompiledAt);
         }
         finally
@@ -63,7 +63,7 @@ public sealed class PluginResponseCompilePendingTests
     }
 
     [Fact]
-    public void FromMetadata_ForAnUntrackedPlugin_NeverReportsCompilePending()
+    public void FromMetadata_ForAnUntrackedPlugin_NeverReportsCompileStale()
     {
         var modFolder = NewModFolder();
         try
@@ -73,7 +73,7 @@ public sealed class PluginResponseCompilePendingTests
 
             var response = PluginResponse.FromMetadata(MetadataFor(modFolder, "SomeMod"));
 
-            Assert.False(response.CompilePending);
+            Assert.False(response.CompileStale);
             Assert.Null(response.LastCompiledAt);
         }
         finally
@@ -83,7 +83,7 @@ public sealed class PluginResponseCompilePendingTests
     }
 
     [Fact]
-    public void FromMetadata_ForAPluginWithNoModFolder_NeverReportsCompilePending()
+    public void FromMetadata_ForAPluginWithNoModFolder_NeverReportsCompileStale()
     {
         // A vanilla/DLC master resolved from the game's Data directory — PluginOrigin.DataDirectory,
         // the same "no mod folder at all" case IsEditable/IsTracked already degrade over.
@@ -92,7 +92,7 @@ public sealed class PluginResponseCompilePendingTests
 
         var response = PluginResponse.FromMetadata(metadata);
 
-        Assert.False(response.CompilePending);
+        Assert.False(response.CompileStale);
         Assert.Null(response.LastCompiledAt);
     }
 }

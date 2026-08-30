@@ -25,7 +25,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
         var result = CompileService().Compile(_mod.Plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);
-        Assert.Null(CompileJournal.PendingRecovery(_mod.ModFolder));
+        Assert.Null(CompileJournal.UnfinishedBatch(_mod.ModFolder));
     }
 
     // Not RunBatch driven by hand: the crash is injected at the real door a production caller
@@ -35,7 +35,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
     // PluginWriter's backup-then-write sequence throws partway through — the same observable state a
     // genuine crash between the journal's marker write and its clear would leave.
     [Fact]
-    public void Compile_CrashedDuringTheWrite_LeavesAMarkerPendingRecoveryReads_NamingWhatDidNotLand()
+    public void Compile_CrashedDuringTheWrite_LeavesAMarkerUnfinishedBatchReads_NamingWhatDidNotLand()
     {
         Chmod(_mod.ModFolder, "500"); // read+execute only — a new file (the backup) can't be created
         try
@@ -47,7 +47,7 @@ public sealed class PluginCompileServiceJournalTests : IDisposable
             Chmod(_mod.ModFolder, "700"); // restored before TrackedModFixture.Dispose() needs to clean up
         }
 
-        var recovery = CompileJournal.PendingRecovery(_mod.ModFolder);
+        var recovery = CompileJournal.UnfinishedBatch(_mod.ModFolder);
         Assert.NotNull(recovery);
         Assert.Equal([TrackedModFixture.PluginName], recovery.Plugins);
         Assert.Empty(recovery.Landed);

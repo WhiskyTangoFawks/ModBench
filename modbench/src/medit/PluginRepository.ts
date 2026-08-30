@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, SessionStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  PendingExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary,
+  UnansweredExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -58,11 +58,11 @@ function hasMatchingRecords(r: PluginResponse): boolean {
 
 // #449: the generated type is `boolean | undefined`/`string | null | undefined` for the same
 // NRT-unawareness (#297) every other optional-looking field on this wire shape already degrades
-// around — a backend predating this field reports "not pending", never a stale true. Its own
+// around — a backend predating this field reports "not stale", never a spurious true. Its own
 // function, same reason hasMatchingRecords above is one: keeps toPluginMetadata under its
 // complexity budget.
-function compileFreshnessOf(r: PluginResponse): { compilePending: boolean; lastCompiledAt: string | null } {
-  return { compilePending: r.compilePending ?? false, lastCompiledAt: r.lastCompiledAt ?? null };
+function compileFreshnessOf(r: PluginResponse): { compileStale: boolean; lastCompiledAt: string | null } {
+  return { compileStale: r.compileStale ?? false, lastCompiledAt: r.lastCompiledAt ?? null };
 }
 
 function toPluginMetadata(r: PluginResponse): PluginMetadata {
@@ -181,7 +181,7 @@ export interface PluginRepository {
   getTrackStatus(): Promise<TrackStatus>;
   // #417: every plugin currently holding an unanswered external-change question — polled the same
   // way, no session dependency of its own (the queue lives on the backend's singleton watcher).
-  getExternalChangeStatus(): Promise<PendingExternalChange[]>;
+  getExternalChangeStatus(): Promise<UnansweredExternalChange[]>;
   // origin (#34 / ADR-0036): which copy of `plugin` to read, when the session holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
@@ -317,7 +317,7 @@ export class ApiPluginRepository implements PluginRepository {
 
   // #417: same "always 200, never degrade a fault into a fake empty queue" posture as
   // getSessionStatus/getTrackStatus above.
-  async getExternalChangeStatus(): Promise<PendingExternalChange[]> {
+  async getExternalChangeStatus(): Promise<UnansweredExternalChange[]> {
     const { data, error, response } = await this.client.GET('/plugins/external-changes/status', {});
     this.ensureOk('GET /plugins/external-changes/status', response, error);
     return (data ?? []).map((p) => ({

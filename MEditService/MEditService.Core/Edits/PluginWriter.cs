@@ -16,7 +16,7 @@ namespace MEditService.Core.Edits;
 ///
 /// #410/ADR-0041 reduced this to exactly that. Its other half — applying a list of
 /// a change list to the imported mod (field, header, create, delete, renumber, VMAD and
-/// condition paths, plus the read-only-field rule) — retired with the pending model it consumed.
+/// condition paths, plus the read-only-field rule) — retired with the write model it consumed.
 /// What remains is the mechanism the text-first write path needs: ADR-0041's Save &amp; Compile
 /// serializes a working tree into a mod and hands it here to become bytes on disk.
 ///

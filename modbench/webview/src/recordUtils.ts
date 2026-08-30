@@ -11,10 +11,10 @@ export function toStr(v: unknown): string {
 // columnKey() rather than re-derived at every render/lookup site — every consumer (DiffRow,
 // RecordPanel) reads `col.key` instead of `col.override.plugin`/`col.plugin`, which is what makes
 // two same-filename columns stop colliding on collapsedColumns/immutableSet/focusedCell/
-// overrideMap. `plugin`/`origin` stay present on the `pending` variant (mirroring
+// overrideMap. `plugin`/`origin` stay present on the overlay variant (mirroring
 // CompareOverride's own plugin+origin fields) only for display/decomposition, never parsed back
 // out of `key` itself.
-// #410/ADR-0041: one column per override. The pending companion column retired with the model
+// #410/ADR-0041: one column per override. The companion column retired with the model
 // that fed it, so this is no longer a union — kept as a discriminated shape anyway (`kind: 'disk'`)
 // because DiffRow's own render loop still branches on it and #415 brings a second column kind back.
 export type Column = { kind: 'disk'; key: ColumnKey; override: CompareOverride };

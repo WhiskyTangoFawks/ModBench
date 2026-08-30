@@ -15,7 +15,7 @@ function makePlugin(i: number): PluginMetadata {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
-    compilePending: false,
+    compileStale: false,
     lastCompiledAt: null,
   };
 }
@@ -416,9 +416,9 @@ describe('ApiPluginRepository.getExternalChangeStatus', () => {
       }),
     } as any;
 
-    const pending = await new ApiPluginRepository(client).getExternalChangeStatus();
+    const unanswered = await new ApiPluginRepository(client).getExternalChangeStatus();
 
-    expect(pending).toEqual([
+    expect(unanswered).toEqual([
       { plugin: 'Fixture.esp', origin: 'ModA', metaChanged: true, oldVersion: '1.0', newVersion: '2.0' },
     ]);
     expect(client.GET).toHaveBeenCalledWith('/plugins/external-changes/status', expect.anything());

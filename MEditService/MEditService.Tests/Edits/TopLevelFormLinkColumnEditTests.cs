@@ -100,23 +100,23 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
     }
 
-    // Pre-fix observed result: ExternalChangePending (already refused) — same RefuseIfBlocked gate,
+    // Pre-fix observed result: ExternalChangeUnanswered (already refused) — same RefuseIfBlocked gate,
     // #417 exit path 3.
     [Fact]
-    public void EditField_TopLevelFormLinkColumn_Refuses_WhileExternalChangeDeferralIsPending()
+    public void EditField_TopLevelFormLinkColumn_Refuses_WhileExternalChangeDeferralIsUnanswered()
     {
-        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         var result = Service().EditField(_mod.Plugin, _mod.OtherNpc.ToString(), "race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
         Assert.Empty(_mod.GitStatus());
     }
 
     // Pre-fix observed result: PluginHasNoModFolder (already refused) — the third RefuseIfBlocked
     // outcome (a vanilla/DLC master with no mod folder to Track at all), same unconditional-of-Apply
-    // gate as the untracked and deferral-pending cases above.
+    // gate as the untracked and unanswered-deferral cases above.
     [Fact]
     public void EditField_TopLevelFormLinkColumn_Refuses_WhenPluginHasNoModFolder()
     {

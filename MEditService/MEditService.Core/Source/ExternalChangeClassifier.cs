@@ -32,7 +32,7 @@ public static class ExternalChangeClassifier
         // surviving binary hash happens to still agree with the parked ref (plausible: the write
         // landed but the batch crashed before the marker was cleared) still routes to repair, not
         // here.
-        if (CompileJournal.PendingRecovery(modFolder) != null)
+        if (CompileJournal.UnfinishedBatch(modFolder) != null)
             return new ExternalChangeClassification.CrashRecovery();
 
         var observedSha256 = Convert.ToHexStringLower(SHA256.HashData(observedBinaryBytes));

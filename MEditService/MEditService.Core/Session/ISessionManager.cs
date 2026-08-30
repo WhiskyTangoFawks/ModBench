@@ -115,6 +115,33 @@ public interface ISessionManager
     Task ReindexPlugin(string plugin);
 
     /// <summary>
+    /// #587 / ADR-0001: re-reads exactly the copy <paramref name="key"/> names and re-indexes it,
+    /// then recomputes winners — the runtime mirror's answer to an indexed binary whose bytes moved
+    /// under a live session (MO2, xEdit, Steam, or the user).
+    ///
+    /// <para>Keyed by <see cref="PluginKey"/> rather than by filename, unlike
+    /// <see cref="ReindexPlugin(string)"/>: that overload resolves among load-order members because
+    /// it answers "which file does a write land on", and this one already knows which physical copy
+    /// changed — including an unlisted one, which the filename overload deliberately cannot reach.</para>
+    /// Throws <see cref="InvalidOperationException"/> if no session is loaded.
+    /// Throws <see cref="KeyNotFoundException"/> if the session holds no such copy.
+    /// </summary>
+    Task ReindexPlugin(PluginKey key);
+
+    /// <summary>
+    /// #587 / ADR-0001: <paramref name="key"/>'s file is gone from disk, so its rows go with it
+    /// (<see cref="IRecordIndex.Unindex"/>, the file-gone verb) and winners are re-swept. The index
+    /// holds exactly what exists.
+    ///
+    /// <para>A no-op with no session, deliberately: this is called from a file-system watcher, where
+    /// racing a teardown is the ordinary case and not a caller mistake. It leaves the plugin in
+    /// <see cref="IGameSession.Plugins"/> — <c>plugins.txt</c> still lists it and Mod Management owns
+    /// that file (CONTEXT-MAP.md); what the ticket asks for, and what this gives, is that the copy
+    /// stops answering reads.</para>
+    /// </summary>
+    void UnindexPlugin(PluginKey key);
+
+    /// <summary>
     /// Re-reads each plugin in <paramref name="plugins"/> from disk and re-indexes them, then
     /// recomputes winners once after all plugins are indexed. Prefer over multiple
     /// <see cref="ReindexPlugin"/> calls when re-indexing more than one plugin at a time.

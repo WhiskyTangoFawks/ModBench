@@ -71,10 +71,16 @@ internal static class SourceIngest
     /// degrade on its own account, because "quietly served you the binary instead" is precisely the
     /// silent lie the caller's own visible failure exists to prevent.</para>
     /// </summary>
+    /// <param name="binaryPath">The plugin's compiled binary — indexed here only as the file this
+    /// key's rows are <i>stamped against</i> (#585), never as their content, which is the whole point
+    /// of this class. A tracked plugin re-ingests from source on every load regardless of that stamp
+    /// (<c>SessionManager.IndexProgressively</c> decides that); what the stamp buys is that a binary
+    /// deleted or replaced out of band still takes its stale rows with it at the next validation,
+    /// exactly as an untracked plugin's would.</param>
     internal static void Ingest(
         IRecordIndex index, string modFolder, string sourceTree, int loadOrderIndex, bool participates,
-        PluginKey key, GameRelease gameRelease, ISchemaReflector schemaReflector, ILogger logger,
-        CancellationToken cancel = default)
+        PluginKey key, string binaryPath, GameRelease gameRelease, ISchemaReflector schemaReflector,
+        ILogger logger, CancellationToken cancel = default)
     {
         var timer = Stopwatch.StartNew();
         var mod = RecordTextCodecGeneratorSeed
@@ -83,7 +89,7 @@ internal static class SourceIngest
         var deserializeMs = timer.ElapsedMilliseconds;
 
         timer.Restart();
-        index.Index(mod, loadOrderIndex, participates, key);
+        index.Index(mod, loadOrderIndex, participates, key, binaryPath);
         var indexMs = timer.ElapsedMilliseconds;
 
         timer.Restart();
@@ -212,8 +218,8 @@ internal static class SourceIngest
             if (headText == null)
             {
                 // In the working tree, at no commit: a record created and not yet committed. #427's
-                // write path never runs `git add`, so this is the ordinary shape of a pending create
-                // (an untracked "??" entry), not a rare one.
+                // write path never runs `git add`, so this is the ordinary shape of a working-tree
+                // create (an untracked "??" entry), not a rare one.
                 workingTreeOnly.Add(record.FormKey.ToString());
                 continue;
             }

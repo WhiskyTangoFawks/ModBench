@@ -192,7 +192,7 @@ export interface paths {
         put?: never;
         /**
          * Create a new record as a working-tree change (#427).
-         * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled. Not the retired pending-change-era create this same route once served; that mechanism (staged rows, no source text) was removed with ADR-0041/#410.
+         * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled.
          */
         post: operations["CreateRecord"];
         delete?: never;
@@ -472,7 +472,7 @@ export interface paths {
         put?: never;
         /**
          * Renumber a native record's FormKey as a delete+create pair (#427).
-         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it. Not the retired pending-change-era renumber this same route once served; that mechanism (staged rows, no source text, no reference cascade) was removed with ADR-0041/#410.
+         * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it.
          */
         post: operations["RenumberRecord"];
         delete?: never;
@@ -883,13 +883,6 @@ export interface components {
             text?: string | null;
             decodedValue?: string | null;
         };
-        PendingExternalChangeResponse: {
-            plugin?: string | null;
-            origin?: string | null;
-            metaChanged?: boolean;
-            oldVersion?: string | null;
-            newVersion?: string | null;
-        };
         PlacedSummary: {
             formKey?: string | null;
             editorId?: string | null;
@@ -923,7 +916,7 @@ export interface components {
             inLoadOrder?: boolean;
             hasMatchingRecords?: boolean;
             isTracked?: boolean;
-            compilePending?: boolean;
+            compileStale?: boolean;
             /** Format: date-time */
             lastCompiledAt?: string | null;
         };
@@ -1104,6 +1097,13 @@ export interface components {
         };
         TrackResponse: {
             origin?: string | null;
+        };
+        UnansweredExternalChangeResponse: {
+            plugin?: string | null;
+            origin?: string | null;
+            metaChanged?: boolean;
+            oldVersion?: string | null;
+            newVersion?: string | null;
         };
         UnloadPluginRequest: {
             plugin?: string | null;
@@ -1785,7 +1785,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PendingExternalChangeResponse"][];
+                    "application/json": components["schemas"]["UnansweredExternalChangeResponse"][];
                 };
             };
         };

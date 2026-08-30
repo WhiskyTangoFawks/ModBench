@@ -137,15 +137,15 @@ public sealed class RecordEditServiceCreateRecordTests
     }
 
     [Fact]
-    public void CreateRecord_Refuses_WhileAnExternalChangeQuestionIsPending()
+    public void CreateRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = TrackedModFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New");
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
     }
 
     [Fact]

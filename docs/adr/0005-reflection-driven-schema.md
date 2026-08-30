@@ -13,9 +13,11 @@ survives, the wide tables do not.
 
 **One `records` table holds every record as a document.** Each row is the record's source JSON
 (the same bytes as its source file — ADR-0042) beside identity columns: `plugin`, `form_key`,
-`record_type`, `editor_id`, `load_order_idx`, `is_winner`, `ref`, `content_hash`. The extracted
-index tables (`form_lookup`, `form_references`, `placement`, `cell_location`, `plugins`,
-`header`) are populated from the documents at ingest. The index is a cache rebuilt on session
+`record_type`, `editor_id`, `ref`, `content_hash`. The extracted index tables (`form_lookup`,
+`form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from the
+documents at ingest. `load_order_idx` and `is_winner` read as columns of `records` but are not
+stored on it — they are session-derived, joined into the registered view from `plugins` and the
+`winners` table respectively (ADR-0001). The index is a cache rebuilt on session
 load — deleting it loses nothing.
 
 **Reflection over Mutagen's record types generates, at startup, three things — never DDL:**

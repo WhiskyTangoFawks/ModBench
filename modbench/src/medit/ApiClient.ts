@@ -27,9 +27,9 @@ export interface PluginMetadata {
   // refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet". False for an
   // untracked plugin or one Track never parked a ref for (PluginResponse.FromMetadata's own
   // degrade-safe answer).
-  compilePending: boolean;
+  compileStale: boolean;
   // #449: the parked ref's own commit timestamp (ISO-8601), for the tooltip that names it. Null
-  // exactly when compilePending's own backing answer had nothing to compare against.
+  // exactly when compileStale's own backing answer had nothing to compare against.
   lastCompiledAt: string | null;
 }
 
@@ -101,7 +101,7 @@ export interface CompileDiagnostic {
  *  same way `TrackStatus`/`SessionStatus` are. `metaChanged` is the dialog's default-button tell
  *  (trailers inform the default, never act — ADR-0041 amendment); `oldVersion`/`newVersion` are the
  *  evidence the pinned UX contract says must be shown when the tell fired, not hidden. */
-export interface PendingExternalChange {
+export interface UnansweredExternalChange {
   plugin: string;
   origin: string;
   metaChanged: boolean;
@@ -110,7 +110,7 @@ export interface PendingExternalChange {
 }
 
 /** #381: the two ways a tracked plugin's binary can turn up stale relative to what Modbench itself
- *  last knows — an interrupted compile (a pending journal marker) or a binary that could not be
+ *  last knows — an interrupted compile (an unfinished journal marker) or a binary that could not be
  *  read at all. Mirrors the backend's CrashRepairReason enum name exactly (no re-wording on the
  *  wire boundary, same posture WorkingTreeState above already established). */
 export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';

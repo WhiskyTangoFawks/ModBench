@@ -18,8 +18,9 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void SetFilter(string? sql) => Inner.SetFilter(sql);
     public virtual void Initialize(GameRelease release) => Inner.Initialize(release);
 
-    public virtual void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
-        Inner.Index(plugin, loadOrderIndex, participates, key);
+    public virtual void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null) =>
+        Inner.Index(plugin, loadOrderIndex, participates, key, filePath);
+    public virtual string? IndexedContentHash(PluginKey key) => Inner.IndexedContentHash(key);
     public virtual void Unindex(PluginKey key) => Inner.Unindex(key);
     public virtual void Register(PluginKey key, int loadOrderIndex, bool participates) =>
         Inner.Register(key, loadOrderIndex, participates);

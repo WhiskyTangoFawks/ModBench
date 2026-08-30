@@ -26,19 +26,19 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
  *  every other fact this cache already tolerates going stale between refreshes (Q2's own
  *  no-watcher posture).
  *
- *  `refreshCompilePending` (#449): injected rather than calling `extension.ts`'s own
+ *  `refreshCompileStale` (#449): injected rather than calling `extension.ts`'s own
  *  module-private `refreshMatchingPlugins` directly — the same shape
  *  `SessionControllerDeps.refreshMatchingPlugins` already uses, and what keeps this file free of
  *  any dependency on `extension.ts`'s module-level state, which is what makes it importable in
  *  isolation at all. Called unconditionally, not gated on `markWorkingTreeState`'s own cache-hit:
- *  the edit already landed server-side by the time this fires, so the plugin row's compile-pending
+ *  the edit already landed server-side by the time this fires, so the plugin row's compile-staleness
  *  decoration needs the same re-derive regardless of whether the record-row cache had this
  *  FormKey. */
 export function makeOnRecordEdited(
   treeProvider: PluginTreeProvider,
   recordDecorationProvider: RecordDecorationProvider,
   recordPanels: Set<vscode.WebviewPanel>,
-  refreshCompilePending: () => void,
+  refreshCompileStale: () => void,
 ): (formKey: string, plugin: string, origin: string) => void {
   return (formKey, plugin, origin) => {
     broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
@@ -50,6 +50,6 @@ export function makeOnRecordEdited(
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey, true));
     }
-    refreshCompilePending();
+    refreshCompileStale();
   };
 }

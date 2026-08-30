@@ -18,3 +18,24 @@ public enum RecordRef
     /// addition, not built here.</summary>
     Head,
 }
+
+/// <summary>
+/// The reserved values for the <c>raw.winners.record_ref</c> column (#584 / ADR-0001) — which ref's
+/// stack a winner row is the answer for.
+///
+/// <para>Spelled out rather than taken from <c>RecordRef.ToString()</c> for the same reason
+/// <see cref="Source.SourceRef"/> exists beside the <c>records."ref"</c> column it fills: these
+/// strings are written into the database and into the SQL the views are built from, so renaming an
+/// enum member must not silently change them. The mapping is exhaustive, so adding a third ref is a
+/// compile-time decision about what it is called on disk rather than a value that appears by
+/// itself.</para>
+/// </summary>
+internal static class WinnerRef
+{
+    internal static string Of(RecordRef @ref) => @ref switch
+    {
+        RecordRef.Effective => "effective",
+        RecordRef.Head => "head",
+        _ => throw new ArgumentOutOfRangeException(nameof(@ref), @ref, "No winners-table value for this ref."),
+    };
+}

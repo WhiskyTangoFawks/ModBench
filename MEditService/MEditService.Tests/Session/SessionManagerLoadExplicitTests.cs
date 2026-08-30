@@ -115,7 +115,7 @@ public sealed class SessionManagerLoadExplicitTests
     private sealed class ThrowingOnIndexRepositoryFactory(IRecordIndexFactory inner, string poisonPlugin)
         : IRecordIndexFactory
     {
-        public IRecordIndex Create(GameRelease gameRelease) =>
+        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
             new ThrowingOnIndexRepository(inner.Create(gameRelease), poisonPlugin);
     }
 
@@ -124,11 +124,11 @@ public sealed class SessionManagerLoadExplicitTests
     private sealed class ThrowingOnIndexRepository(IRecordIndex inner, string poisonPlugin)
         : DelegatingRecordIndex(inner)
     {
-        public override void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key)
+        public override void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null)
         {
             if (plugin.ModKey.FileName.ToString().Equals(poisonPlugin, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"injected index failure for {poisonPlugin}");
-            base.Index(plugin, loadOrderIndex, participates, key);
+            base.Index(plugin, loadOrderIndex, participates, key, filePath);
         }
     }
 }

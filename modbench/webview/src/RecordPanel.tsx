@@ -382,7 +382,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordSessionClient }
         msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE
         || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN
       ) {
-        // #426 Track 4: self-filter on formKey — a changeId-less broadcast (unlike the pending-cell
+        // #426 Track 4: self-filter on formKey — a changeId-less broadcast (unlike the retired cell
         // commands #410 retired, there is no per-change id here), the same convention #227's
         // original array-op broadcasts used. Only reachable while this exact record is open, so a
         // stale/background panel showing a different record ignores it.

@@ -28,8 +28,31 @@ public interface IRecordIndex : IRecordReads, IDisposable
 
     /// <summary>Indexes one physical plugin file's records, header, references, form_lookup and
     /// placement, replacing whatever <paramref name="key"/> previously held (#413/#420: one
-    /// document per major record plus the extracted index tables derived from it).</summary>
-    void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key);
+    /// document per major record plus the extracted index tables derived from it).
+    ///
+    /// <para>#585 / ADR-0001: <paramref name="filePath"/> is the physical file this content came
+    /// from, and giving it is what makes the resulting rows <i>validatable</i> — the index stamps
+    /// that file's content hash alongside them, re-checks it every time the index is opened, and
+    /// drops the rows when the bytes have moved on. Omitting it is not a shortcut but a different,
+    /// honest claim: these rows are backed by no file on disk (an in-memory mod), so nothing can
+    /// vouch for them across a restart and the next load re-indexes. A tracked plugin still passes
+    /// its binary's path even though its rows came from the source tree — the stamp is what lets a
+    /// vanished or replaced binary take its stale rows with it; that its rows are re-ingested from
+    /// source on every load regardless is <c>SessionManager</c>'s rule, not this one's.</para></summary>
+    void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null);
+
+    /// <summary>#585 / ADR-0001: the content hash of the file <paramref name="key"/>'s rows were
+    /// built from, or <see langword="null"/> when the index holds no validated rows for it — never
+    /// indexed, indexed from no file at all, or dropped by the open-time validation because the file
+    /// vanished or its bytes changed. Non-null therefore reads as "the index already holds this
+    /// plugin, and it still matches the disk", which is what lets a session load
+    /// <see cref="Register"/> it instead of indexing it (#586) and the runtime watcher tell a real
+    /// change from a touch (#587).
+    ///
+    /// <para>Independent of registration, deliberately: it is a fact about a file, and it has to
+    /// keep answering for a plugin no session currently holds — a profile switch that comes back is
+    /// exactly the case ADR-0001 exists to make cheap.</para></summary>
+    string? IndexedContentHash(PluginKey key);
 
     /// <summary>Removes every trace of <paramref name="key"/> from the index — rows and
     /// registration alike, the inverse of <see cref="Index"/>. #582 / ADR-0001: this is the
@@ -50,7 +73,10 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// <see cref="UpdateWinners"/> sweep.</summary>
     void Unregister(PluginKey key);
 
-    /// <summary>Recomputes <c>is_winner</c> across every indexed table for the whole session.</summary>
+    /// <summary>Rebuilds the whole session's winners — which plugin's copy of each FormKey holds the
+    /// field, at each ref. #584 / ADR-0001: that answer lives in a session-owned derived table, not in
+    /// a column on any indexed row, so this replaces the table rather than updating rows in place.
+    /// Every read still spells it <c>is_winner</c>, projected by the view.</summary>
     void UpdateWinners();
 
     /// <summary>Flips an already-indexed plugin's participation flag — SQL-only, no re-index.

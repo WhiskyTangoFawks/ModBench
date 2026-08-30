@@ -27,7 +27,7 @@ public sealed class SessionEndpointsTests : IDisposable
         _mod.GameDirectory, "Fallout4");
 
     [Fact]
-    public void LoadExplicitSession_ReportsACrashRepairOffer_WhenATrackedPluginHasAPendingJournalMarker()
+    public void LoadExplicitSession_ReportsACrashRepairOffer_WhenATrackedPluginHasAnUnfinishedJournalMarker()
     {
         Assert.ThrowsAny<Exception>(() =>
             CompileJournal.RunBatch(_mod.ModFolder, [TrackedModFixture.PluginName],
@@ -44,7 +44,7 @@ public sealed class SessionEndpointsTests : IDisposable
     }
 
     [Fact]
-    public void LoadExplicitSession_ReportsNoCrashRepairOffers_WhenNothingIsPending()
+    public void LoadExplicitSession_ReportsNoCrashRepairOffers_WhenNothingIsUnanswered()
     {
         var result = SessionEndpoints.LoadExplicitSession(
             ReloadRequest(), _mod.Sessions, new ExternalChangeWatcher(), NullLoggerFactory.Instance);

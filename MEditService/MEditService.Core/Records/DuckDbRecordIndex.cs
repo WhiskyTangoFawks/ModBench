@@ -44,18 +44,90 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // dependency it has no say in.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    public DuckDBConnection Connection { get; }
+    /// <summary>#585: the file-mirror table, named once so the writes, the open-time validation
+    /// and the version check cannot drift onto different spellings of it.</summary>
+    private const string IndexedFilesRelation = "raw.indexed_files";
+
+    public DuckDBConnection Connection { get; private set; }
+
+    // #585 / ADR-0001: where this index lives, or null for an index with no home on disk — the
+    // in-memory shape every construction site had before this ticket, kept because it is a real
+    // mode (a caller with no game install to key a file by) and because the suite's several hundred
+    // index fixtures have no business writing to the user's local app data.
+    private readonly string? _databasePath;
+
+    // The version the rows in this file were written under (IndexVersion), resolved at Initialize
+    // once the game release is known.
+    private string? _indexVersion;
 
     public DuckDbRecordIndex(
         ISchemaReflector schemaReflector,
         ITableDdlBuilder ddlBuilder,
-        ILogger logger)
+        ILogger logger,
+        string? databasePath = null)
     {
         _schemaReflector = schemaReflector;
         _ddlBuilder = ddlBuilder;
         _logger = logger;
-        Connection = new DuckDBConnection("DataSource=:memory:");
-        Connection.Open();
+        _databasePath = databasePath;
+        Connection = Open();
+    }
+
+    /// <summary>
+    /// Opens the index, rebuilding it from scratch if the file cannot be opened at all — a DuckDB
+    /// storage-format change on upgrade, or a truncated/corrupt file (ADR-0001 point 6). The index
+    /// is derived state and losing it costs one cold load, which is what a load costs today anyway,
+    /// so a rebuild is strictly better than refusing to start.
+    /// </summary>
+    private DuckDBConnection Open()
+    {
+        if (_databasePath == null)
+        {
+            var memory = new DuckDBConnection("DataSource=:memory:");
+            memory.Open();
+            return memory;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)!);
+        try
+        {
+            return OpenFile();
+        }
+        catch (Exception ex) when (!IsAnotherWriter(ex))
+        {
+            // Deliberately every other exception rather than DuckDBException alone: what a file
+            // DuckDB cannot make sense of throws is its own business and has changed between
+            // versions, and the answer here — throw the file away and start again — is the same for
+            // all of them. The index is derived state; losing it costs one cold load.
+            _logger.LogWarning(ex, "Could not open the index at {Path}; rebuilding it from scratch", _databasePath);
+            File.Delete(_databasePath);
+            return OpenFile();
+        }
+    }
+
+    /// <summary>
+    /// Whether this open failed because <b>another process already holds the file</b> — a second
+    /// Modbench window on the same game (ADR-0001 point 6), which is a different failure from a
+    /// corrupt one and must never be answered by rebuilding: deleting a file another process has
+    /// open succeeds on POSIX and destroys that window's live index, which is precisely the "silent
+    /// divergence" the decision rejects. Such an open is rethrown instead; turning it into a
+    /// structured <c>SessionLoadResponse</c> failure naming the other window is #588's job, and
+    /// until it lands the honest outcome is a failed load rather than a destroyed index.
+    ///
+    /// <para>Matched on DuckDB's own message because that is the only thing it offers — the lock
+    /// conflict and a corrupt file arrive as the same exception type. Both platforms' wordings share
+    /// DuckDB's own prefix, and an unrecognised wording degrades to the rebuild branch, so this is a
+    /// guard against the known case rather than a claim to have enumerated every one.</para>
+    /// </summary>
+    internal static bool IsAnotherWriter(Exception ex) =>
+        ex.Message.Contains("lock on file", StringComparison.OrdinalIgnoreCase)
+        || ex.Message.Contains("Conflicting lock", StringComparison.OrdinalIgnoreCase);
+
+    private DuckDBConnection OpenFile()
+    {
+        var connection = new DuckDBConnection($"DataSource={_databasePath}");
+        connection.Open();
+        return connection;
     }
 
     // Retained for the reconstitution path (#413 D1): reading a record back out of its document
@@ -65,16 +137,192 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     public void Initialize(GameRelease release)
     {
+        _indexVersion = IndexVersion.For(_schemaReflector, release);
+        // Before the DDL, not after: `CREATE TABLE IF NOT EXISTS` leaves an existing file's old
+        // column lists exactly as they are, so a file written under a different shape has to be
+        // thrown away *before* this process starts appending to tables it only half recognizes.
+        DiscardFileWrittenUnderAnotherVersion();
+
         _ddlBuilder.CreateTables(Connection, release);
         _schemas = _schemaReflector.GetSchemas(release);
         _conditionCodec = ConditionCodecRegistry.For(release.ToCategory());
         _release = release;
+
+        ValidateAgainstDisk();
+    }
+
+    /// <summary>
+    /// #585 / ADR-0001: a codec or schema version change invalidates the <b>whole</b> file. There is
+    /// no partial answer — the stored documents are the codec's output and the generated views are
+    /// the reflector's, so a file written under another version describes a read model this process
+    /// does not have — and no in-place migration either, which is what "rebuilt from scratch" means:
+    /// the file is deleted and reopened empty, costing exactly one cold load.
+    /// </summary>
+    private void DiscardFileWrittenUnderAnotherVersion()
+    {
+        if (_databasePath == null) return;
+
+        List<string> versions;
+        try
+        {
+            // Asked of the catalog first, so that "this file has never been written to" — the
+            // ordinary first open, where the table simply does not exist yet — is an answer rather
+            // than an exception. That separation is what lets the catch below mean something: past
+            // this point, a file that cannot answer is a file this process cannot reason about, and
+            // the safe reading of an unreadable mirror is that it is stale.
+            if (!IndexedFilesTableExists()) return;
+
+            versions = [];
+            using var cmd = Connection.CreateCommand();
+            cmd.CommandText = $"SELECT DISTINCT index_version FROM {IndexedFilesRelation}";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) versions.Add(reader.GetString(0));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex,
+                "Could not read the index version at {Path}; rebuilding it from scratch", _databasePath);
+            RebuildFile();
+            return;
+        }
+
+        if (versions.Count == 0 || versions.All(v => v == _indexVersion)) return;
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "The index at {Path} was written under a different codec/schema version; rebuilding it from scratch",
+                _databasePath);
+        }
+        RebuildFile();
+    }
+
+    private bool IndexedFilesTableExists()
+    {
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText =
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'raw' AND table_name = 'indexed_files'";
+        return Convert.ToInt64(cmd.ExecuteScalar(), CultureInfo.InvariantCulture) > 0;
+    }
+
+    /// <summary>Throws the file away and opens an empty one in its place. Only reachable once the
+    /// file has already been opened successfully, so it can never race the second-writer case
+    /// <see cref="IsAnotherWriter"/> guards.</summary>
+    private void RebuildFile()
+    {
+        Connection.Dispose();
+        File.Delete(_databasePath!);
+        Connection = OpenFile();
+    }
+
+    /// <summary>
+    /// #585 / ADR-0001: validity is by content, never by clock. Every plugin the file holds rows for
+    /// is checked against the file those rows were built from — gone means <see cref="Unindex"/>,
+    /// different bytes means <see cref="Unindex"/> too, so the next load re-indexes it in place and
+    /// no read can ever answer from rows the disk no longer backs. A hash, never an <c>mtime</c>:
+    /// MO2, xEdit, Steam and the user all write these files and a preserved timestamp is free.
+    ///
+    /// <para>Registrations are cleared first and unconditionally. A <c>plugins</c> row is a claim
+    /// about the <i>current</i> session, and a freshly opened index is in none — the rows left by
+    /// whichever session last wrote this file would otherwise make its whole load order visible to
+    /// reads before this process's load order has registered a single plugin.</para>
+    /// </summary>
+    private void ValidateAgainstDisk()
+    {
+        if (_databasePath == null) return;
+
+        Execute("DELETE FROM plugins");
+
+        var timer = Stopwatch.StartNew();
+        var checkedCount = 0;
+        foreach (var (key, filePath, contentHash) in IndexedFiles())
+        {
+            checkedCount++;
+            if (!File.Exists(filePath))
+            {
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation(
+                        "{Plugin} ({Origin}) is no longer on disk at {Path}; removing its rows",
+                        key.Name, key.Origin, filePath);
+                }
+                Unindex(key);
+                continue;
+            }
+
+            if (FileContentHash(filePath) is not { } observed || observed != contentHash)
+            {
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation(
+                        "{Plugin} ({Origin}) changed on disk since it was indexed; removing its rows so it is re-indexed",
+                        key.Name, key.Origin);
+                }
+                Unindex(key);
+            }
+        }
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Validated {Count} indexed plugin(s) against disk in {ElapsedMs} ms",
+                checkedCount, timer.ElapsedMilliseconds);
+        }
+    }
+
+    private List<(PluginKey Key, string FilePath, string ContentHash)> IndexedFiles()
+    {
+        var rows = new List<(PluginKey Key, string FilePath, string ContentHash)>();
+        using var cmd = Connection.CreateCommand();
+        cmd.CommandText = $"SELECT plugin, origin, file_path, content_hash FROM {IndexedFilesRelation}";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            rows.Add((new PluginKey(reader.GetString(0), reader.GetString(1)), reader.GetString(2), reader.GetString(3)));
+        return rows;
+    }
+
+    /// <summary>The content hash of one plugin file, or <see langword="null"/> when it cannot be
+    /// read at all — a file another process is mid-write on, or one whose permissions changed. Null
+    /// counts as a mismatch at <see cref="ValidateAgainstDisk"/>: an unreadable file is not evidence
+    /// that the rows built from it are still true. Shared with the runtime mirror
+    /// (<see cref="PluginBinaryHash"/>), which has to produce the identical string for the identical
+    /// bytes or a real change would read as a touch.</summary>
+    private string? FileContentHash(string filePath)
+    {
+        var hash = PluginBinaryHash.OfFile(filePath);
+        if (hash == null && _logger.IsEnabled(LogLevel.Warning))
+        {
+            _logger.LogWarning("Could not read {Path} to hash it; treating the index's rows for it as stale", filePath);
+        }
+        return hash;
     }
 
     // --- Indexing (absorbed from RecordIndexer) ---
 
-    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key) =>
-        Index(plugin, loadOrderIndex, participates, key.Origin!);
+    public void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null) =>
+        Index(plugin, loadOrderIndex, participates, key.Origin!, filePath);
+
+    /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
+    public string? IndexedContentHash(PluginKey key) =>
+        ScalarString(
+            $"SELECT content_hash FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2",
+            key.Name, key.Origin!);
+
+    // #585 / ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
+    // were written in. Inside Index()'s own transaction, so a re-index that throws partway leaves
+    // neither the rows nor the claim about them behind. A caller that names no file (an in-memory
+    // mod, which is every fixture in the suite and the New Plugin gesture's freshly written one
+    // before it has a stamp worth taking) writes no row: the index then holds those rows without
+    // claiming any disk file backs them, which is exactly true, and the next load re-indexes.
+    private void StampIndexedFile(string plugin, string origin, string? filePath)
+    {
+        DeleteIndexedFile(plugin, origin);
+        if (filePath == null || FileContentHash(filePath) is not { } contentHash) return;
+
+        ExecuteFor($"""
+            INSERT INTO {IndexedFilesRelation} (plugin, origin, file_path, content_hash, index_version)
+            VALUES ($1, $2, $3, $4, $5)
+            """, plugin, origin, Path.GetFullPath(filePath), contentHash, _indexVersion!);
+    }
 
     // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
     // PluginOrigin value. Required (#275) — threaded into every per-plugin delete/upsert/append
@@ -82,7 +330,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // plugins sharing a filename but differing in origin no longer collide.
     //
     // #421: private — Index(PluginKey) above is the public seam member and delegates here.
-    private void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin)
+    private void Index(IModGetter pluginMod, int loadOrderIndex, bool participates, string origin, string? filePath)
     {
         var schemas = RequireSchemas();
         var plugin = pluginMod.ModKey.FileName.ToString();
@@ -99,6 +347,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // #267: one `plugins` row per indexed plugin — UpdateWinners() joins against it so a
         // non-participating plugin's rows never win regardless of load_order_idx.
         UpsertPluginParticipation(plugin, origin, loadOrderIndex, participates);
+        // #585: and the disk claim these rows are about, replaced with them rather than beside them.
+        StampIndexedFile(plugin, origin, filePath);
 
         // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
         // delete does — a re-index replaces its own rows rather than accumulating a second copy.
@@ -136,7 +386,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // and header rows never enter form_lookup for the same reason.
             if (tableName == "header") continue;
             IndexRecordTable(
-                tableName, schema, pluginMod, plugin, origin, loadOrderIndex, refs, lookupRows,
+                tableName, schema, pluginMod, plugin, origin, refs, lookupRows,
                 containerChildRows, documentAppender, pluginMod.GameRelease, counters);
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
@@ -170,7 +420,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
 
-        IndexHeader(pluginMod, plugin, origin, loadOrderIndex, schemas);
+        IndexHeader(pluginMod, plugin, origin, schemas);
 
         // Clear this plugin's stale refs, then rebuild from the refs gathered across both passes.
         DeleteFormReferencesForPlugin(plugin, origin);
@@ -198,8 +448,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                     row.AppendValue(eid);
                 else
                     row.AppendNullValue();
-                row.AppendValue((int?)loadOrderIndex);
-                row.AppendValue((bool?)false);
                 row.EndRow();
             }
         }
@@ -270,6 +518,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         DeleteExistingForOrigin("placement", plugin, origin);
         DeleteExistingForOrigin("cell_location", plugin, origin);
         DeleteExistingForOrigin("container_child", plugin, origin);
+        // #585: the file claim goes with the rows it describes — Unindex is the file-gone verb, so
+        // leaving it behind would leave the mirror asserting rows the index no longer holds.
+        DeleteIndexedFile(plugin, origin);
         DeleteRegistration(plugin, origin);
 
         tx.Commit();
@@ -369,7 +620,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private static void AppendPrepared(
         DuckDBAppender documentAppender, PreparedRecord prepared, string recordType,
-        string plugin, string origin, int loadOrderIndex)
+        string plugin, string origin)
     {
         var record = prepared.Record;
         var row = documentAppender.CreateRow();
@@ -381,8 +632,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             row.AppendValue(editorId);
         else
             row.AppendNullValue();
-        row.AppendValue((int?)loadOrderIndex);
-        row.AppendValue((bool?)false);
         row.AppendValue(SourceRef.Committed);
         row.AppendValue(Encoding.UTF8.GetString(prepared.Body));
         row.AppendValue(prepared.ContentHash);
@@ -391,7 +640,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     private void IndexRecordTable(
         string tableName, RecordTableSchema schema, IModGetter pluginMod,
-        string plugin, string origin, int loadOrderIndex, List<FormRef> refs,
+        string plugin, string origin, List<FormRef> refs,
         List<(string FormKey, string RecordType, string? EditorId)> lookupRows,
         List<ContainerChildRow> containerChildRows,
         DuckDBAppender documentAppender, GameRelease gameRelease, RefCounters counters)
@@ -457,7 +706,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 var record = p.Record;
                 try
                 {
-                    AppendPrepared(documentAppender, p, tableName, plugin, origin, loadOrderIndex);
+                    AppendPrepared(documentAppender, p, tableName, plugin, origin);
                 }
                 catch (Exception ex)
                 {
@@ -572,66 +821,73 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>See <see cref="IRecordIndex.UpdateWinners"/>.</summary>
+    ///
+    /// <remarks>
+    /// #584 / ADR-0001: winning is a function of the registered load order alone, so it lives in
+    /// <c>raw.winners</c> — one row per (ref, FormKey) naming the plugin whose copy wins — and is
+    /// rebuilt wholesale here rather than UPDATEd onto a column of three separate data tables. The
+    /// readers never name this table: the registered views and <c>records_head</c> join it to project
+    /// <c>is_winner</c>, so the projection is written once (<c>TableDdlBuilder</c>) and the rule once
+    /// (here), instead of once per relation in each place.
+    ///
+    /// <para>#271 / ADR-0036: partitioned on (plugin, origin) together — two plugins sharing a
+    /// filename but differing in origin are distinct participants, each judged on its own
+    /// load_order_idx and participation, not folded into one bucket by filename alone. #583 /
+    /// ADR-0001: that load_order_idx is read from the <c>plugins</c> row the participation join
+    /// already needs, never from the record row.</para>
+    ///
+    /// <para>Wholesale rather than incremental because there is no smaller correct unit: registering
+    /// a plugin at a new index can move the winner of every FormKey it holds. #427 measured the
+    /// whole-session sweep over a 48,000-record, 60-plugin fixture — larger than the overwhelming
+    /// majority of real load orders — and #584 re-measured the same shape at parity with the
+    /// three-table UPDATE it replaces (~75ms for both refs against ~37ms per fat table swept), with
+    /// the winner-filtered reads unchanged: the registered view's <c>plugins</c> join already
+    /// dominates them, and joining <c>winners</c> beside it costs nothing measurable.</para>
+    /// </remarks>
     public void UpdateWinners()
     {
-        // ADR-0041 / #413: one sweep over `records` where this used to run the same UPDATE once per
-        // reflected table. #271 / ADR-0036: joined on (plugin, origin) together — two plugins sharing
-        // a filename but differing in origin are distinct participants, each judged on its own
-        // load_order_idx and participation, not folded into one MAX() bucket by filename alone.
-        Execute("""
-            UPDATE raw.records AS r
-            SET is_winner = (
-                r.load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM raw.records t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = r.form_key
-                )
-                AND EXISTS (
-                    SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                )
-            )
+        Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
+
+        // Effective. The header table is swept in the same statement rather than in one of its own:
+        // it is the only surviving per-type table (D8, #413) and would otherwise never have a winner
+        // at all — which reads as "no header exists" through every winnerOnly lookup, Open Header
+        // included — and its FormKeys cannot collide with a record's, since HeaderIndexer.FormKeyFor
+        // mints them at FormID 000000, the null form, which no major record can occupy.
+        //
+        // form_lookup gets no branch here at all: ADR-0031 keeps exactly one lookup row per Effective
+        // record row (ingest appends them together, RederiveIndexRowsForRecord and
+        // DeleteDerivationsForRecord keep them in step), so `records`' own winners *are*
+        // form_lookup's, and its registered view joins the same rows. That is what makes
+        // ResolveFormKey's EditorID reflect the winning override by construction rather than by a
+        // second sweep that could drift from this one.
+        InsertWinners(RecordRef.Effective, $"""
+            SELECT form_key, plugin, origin FROM raw.records
+            UNION ALL
+            SELECT form_key, plugin, origin FROM raw."{HeaderIndexer.TableName}"
             """);
 
-        // #413: the header keeps its own sweep. It used to be swept incidentally, as one of the
-        // reflected schema tables the loop above walked; it is now the only surviving per-type table
-        // (D8) and would otherwise never have a winner at all — which reads as "no header exists"
-        // through every winnerOnly lookup, Open Header included.
-        Execute($"""
-            UPDATE raw."{HeaderIndexer.TableName}" AS r
-            SET is_winner = (
-                r.load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM raw."{HeaderIndexer.TableName}" t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = r.form_key
-                )
-                AND EXISTS (
-                    SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                )
-            )
-            """);
-
-        // form_lookup isn't a reflected schema table, so it needs its own winner sweep — same
-        // shape as every other table's, so ResolveFormKey's EditorID reflects the winning override
-        // like every other resolved field, not a winner-agnostic special case (ADR-0031).
-        // #272 / ADR-0036: joined on (plugin, origin) together, same as the reflected-table sweep
-        // above — two plugins sharing a filename but differing in origin are distinct participants.
-        Execute("""
-            UPDATE raw.form_lookup AS r
-            SET is_winner = (
-                r.load_order_idx = (
-                    SELECT MAX(t2.load_order_idx) FROM raw.form_lookup t2
-                    JOIN plugins p2 ON p2.plugin = t2.plugin AND p2.origin = t2.origin AND p2.participates
-                    WHERE t2.form_key = r.form_key
-                )
-                AND EXISTS (
-                    SELECT 1 FROM plugins p1
-                    WHERE p1.plugin = r.plugin AND p1.origin = r.origin AND p1.participates
-                )
-            )
-            """);
+        // Head, over the same membership relation records_head itself is built on. A record the
+        // working tree deleted is gone from Effective but still held at Head, so the two stacks can
+        // name different winners for one FormKey — see TableDdlBuilder.CreateHeadView.
+        InsertWinners(RecordRef.Head, $"SELECT form_key, plugin, origin FROM {TableDdlBuilder.HeadRowsRelation}");
     }
+
+    // The winner rule itself, once: among the rows <paramref name="rowsSql"/> yields, the one whose
+    // plugin is registered, participating, and latest in the load order wins its FormKey. QUALIFY
+    // (rather than the MAX() compare this replaces) is what makes the result a function — a tie on
+    // load_order_idx yields one winner, not two — and the (plugin, origin) tiebreak makes which one
+    // deterministic rather than dependent on scan order.
+    private void InsertWinners(RecordRef @ref, string rowsSql) =>
+        Execute($"""
+            INSERT INTO {TableDdlBuilder.WinnersRelation} (record_ref, form_key, plugin, origin)
+            SELECT '{WinnerRef.Of(@ref)}', r.form_key, r.plugin, r.origin
+            FROM ({rowsSql}) r
+            JOIN plugins p ON p.plugin = r.plugin AND p.origin = r.origin AND p.participates
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY r.form_key
+                ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
+            """);
 
     // --- Working-tree changes (#415) ---
 
@@ -639,7 +895,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // SELECT *'d so the snapshot copy below is pinned to a column list instead of to the two tables
     // happening to stay in the same order forever.
     private const string RecordColumnList =
-        "form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, \"ref\", body, content_hash";
+        "form_key, plugin, origin, record_type, editor_id, \"ref\", body, content_hash";
 
     /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. One transaction for the whole
     /// batch, matching <see cref="Index"/>'s own discipline: a throw partway leaves the prior read
@@ -761,21 +1017,22 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // answer nothing for this FormKey without the view itself needing to know about creation at all.
     private void InsertNewWorkingTreeRow(PluginKey key, string formKey, string recordType, string body)
     {
-        var loadOrderIdx = ScalarInt32(
-            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
-            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+        // #583 / ADR-0001: no load_order_idx to carry into the row any more — this check now exists
+        // purely to keep the same refusal for a plugin the registration doesn't know, which
+        // InsertNewWorkingTreeRow's callers (CreateWorkingTreeRecord) still rely on.
+        if (!IsRegisteredPlugin(key))
+            throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.WorkingTree}', $5, $7)
+            INSERT INTO raw.records (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.WorkingTree}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
         cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
         cmd.ExecuteNonQuery();
 
@@ -783,13 +1040,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // back out of `records`, which is why the insert above must land first.
     }
 
-    private int? ScalarInt32(string sql, params string[] values)
-    {
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
-        AddParams(cmd, values);
-        return cmd.ExecuteScalar() is int i ? i : null;
-    }
+    private void DeleteIndexedFile(string plugin, string origin) =>
+        ExecuteFor($"DELETE FROM {IndexedFilesRelation} WHERE plugin = $1 AND origin = $2", plugin, origin);
+
+    private bool IsRegisteredPlugin(PluginKey key) =>
+        ScalarString("SELECT plugin FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!) != null;
 
     /// <summary>See <see cref="IRecordIndex.SetCommittedBaseline"/>.</summary>
     public void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines)
@@ -858,10 +1113,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 """, formKey, key.Name, key.Origin!);
         }
 
-        // No UpdateWinners: nothing was added to or removed from Effective, so that stack is untouched,
-        // and records_head derives its own is_winner per ref rather than reading a stored flag (see
-        // TableDdlBuilder's note on that view) — Head's winner answer is already correct for the
-        // smaller set without a sweep.
+        // Effective is untouched — nothing was added to or removed from it — but Head just lost a row
+        // per FormKey, which can promote the next plugin down at that ref. Head's winners are swept,
+        // not derived per read (#584 / ADR-0001), so the sweep has to run: whole-session, because
+        // UpdateWinners is the one definition of winning in this class and a scoped copy of that SQL
+        // is precisely how the two would come to disagree.
+        UpdateWinners();
         tx.Commit();
     }
 
@@ -876,6 +1133,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var tx = Connection.BeginTransaction();
         foreach (var (formKey, recordType, body) in records)
             SeedOneCommittedOnly(key, formKey, recordType, body);
+
+        // The mirror of MarkWorkingTreeOnly's sweep: Head just gained a row per FormKey, which can
+        // demote whoever was winning it at that ref. Effective is untouched either way.
+        UpdateWinners();
         tx.Commit();
     }
 
@@ -883,26 +1144,25 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 
-        var loadOrderIdx = ScalarInt32(
-            "SELECT load_order_idx FROM plugins WHERE plugin = $1 AND origin = $2", key.Name, key.Origin!)
-            ?? throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
+        // #583 / ADR-0001: same refusal as InsertNewWorkingTreeRow's, now for its own sake rather
+        // than as a side effect of fetching a load_order_idx this row no longer carries.
+        if (!IsRegisteredPlugin(key))
+            throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
         // Straight into records_committed with no `records` counterpart — the exact inverse of
         // InsertNewWorkingTreeRow's "records row with no snapshot", and it falls out of records_head's
         // existing definition (the snapshot table UNION the still-clean rows) with no change to that
-        // view: present in its first half, absent from its second. is_winner is stored FALSE and never
-        // read — the view derives its own, per ref.
+        // view: present in its first half, absent from its second.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), $6, FALSE, '{SourceRef.Committed}', $5, $7)
+            INSERT INTO raw.records_committed (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.Committed}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
         cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = loadOrderIdx });
         cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
         cmd.ExecuteNonQuery();
     }
@@ -951,8 +1211,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // row whose identity column disagrees with its own body is a read model contradicting itself
         // — a renamed record would keep listing and resolving under its old EditorID everywhere
         // form_key isn't the lookup key. record_type is deliberately not re-derived: a record cannot
-        // change type, and load_order_idx / is_winner are facts about the plugin and the stack, not
-        // about these bytes.
+        // change type. Load order and winning are not on this row at all any more (#583/#584) — they
+        // are facts about the plugin and the stack, not about these bytes.
         using var cmd = Connection.CreateCommand();
         cmd.CommandText = $"""
             UPDATE raw.records
@@ -976,10 +1236,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             formKey, key.Name, key.Origin!);
         if (recordType == null || !RequireSchemas().TryGetValue(recordType, out var schema)) return;
 
-        // form_lookup is *updated*, not delete-then-inserted: its is_winner is swept alongside
-        // `records`' own, and re-inserting would silently reset it to false for every ordinary field
-        // edit — which reads as "this FormKey resolves to nothing" through Resolve's winner filter.
-        // record_type cannot change (a record does not change type), so editor_id is the whole delta.
+        // form_lookup is *updated*, not delete-then-inserted: record_type cannot change (a record
+        // does not change type), so editor_id is the whole delta, and a delete-then-insert would be
+        // two statements doing one statement's work on the hot per-edit path.
         ExecuteFor("""
             UPDATE raw.form_lookup SET editor_id = json_extract_string($4, '$.EditorID')
             WHERE form_key = $1 AND plugin = $2 AND origin = $3
@@ -988,8 +1247,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // The row is absent when this record was previously deleted in the working tree and has now
         // come back — the one case where there is nothing to update.
         ExecuteFor($"""
-            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id, load_order_idx, is_winner)
-            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id, r.load_order_idx, FALSE
+            INSERT INTO raw.form_lookup (form_key, plugin, origin, record_type, editor_id)
+            SELECT r.form_key, r.plugin, r.origin, r.record_type, r.editor_id
             FROM raw.records r
             WHERE r.form_key = $1 AND r.plugin = $2 AND r.origin = $3
               AND NOT EXISTS (
@@ -2057,14 +2316,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // (VMAD/conditions/form_lookup were migrated to DeleteExistingForOrigin earlier in this same
     // ticket) and is now scoped to (plugin, origin) here too.
     private void IndexHeader(
-        IModGetter pluginMod, string plugin, string origin, int loadOrderIndex,
+        IModGetter pluginMod, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
     {
         if (!schemas.TryGetValue("header", out var headerSchema)) return;
 
         DeleteExistingForOrigin("header", plugin, origin);
         using var appender = Connection.CreateAppender("raw", "header");
-        HeaderIndexer.Index(pluginMod, plugin, origin, loadOrderIndex, headerSchema, appender);
+        HeaderIndexer.Index(pluginMod, plugin, origin, headerSchema, appender);
     }
 
     // One record's condition refs — the body of the loop above, extracted so #415's per-record
@@ -2157,9 +2416,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // #421: private — GetReferencedBy(string) above is the public seam member and delegates here.
     private List<ReferenceResult> GetReferences(string targetFormKey)
     {
-        // #410/ADR-0041: committed references only. The pending overlay this query used to carry
+        // ADR-0041: committed references only. The read overlay this query used to carry
         // (subtracting references an uncommitted edit had superseded, then unioning that edit's own
-        // references back in) retires with the pending model — a reference is what the indexed
+        // references back in) is retired — a reference is what the indexed
         // plugin actually declares.
         const string sql = """
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin

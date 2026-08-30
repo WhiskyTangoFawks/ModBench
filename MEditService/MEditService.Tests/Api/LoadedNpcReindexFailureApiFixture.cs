@@ -74,6 +74,8 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
         public SessionStatus Status => SessionStatus.None;
 
         public Task ReindexPlugin(string plugin) => throw new IOException("reindex failed (injected)");
+        public Task ReindexPlugin(PluginKey key) => throw new IOException("reindex failed (injected)");
+        public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public Task ReindexPlugins(IReadOnlyList<string> plugins) => throw new IOException("reindex failed (injected)");
 
         public void Load(string dataFolderPath, string pluginsTxtPath, GameRelease gameRelease) =>

@@ -1,8 +1,8 @@
 # mEdit Record editor panel — Surface Specification
 
 **Status: Implemented.** Editing is git-native (ADR-0041): a field edit writes the record's
-working-tree source text directly — there is no pending/staged intermediate state, no Pending
-column, and no ChangeGroup. The grid, conflict colouring, and type-appropriate editors below all
+working-tree source text directly — there is no staged intermediate state and no second
+column standing in for one. The grid, conflict colouring, and type-appropriate editors below all
 ship and work on that write path. Review, commit, and revert happen in VS Code's native Source
 Control panel, one repo per tracked mod — see
 [Version control — Track, branch, compile](medit-version-control.md) for that surface; this
@@ -703,7 +703,7 @@ Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) applies t
 *zero* VMAD-specific code anywhere in `DiffRow`/`RecordPanel`; **struct**/**structList**
 (ArrayOfStruct) use `commitOverride` as described above, with structList's own instances exposed
 as array elements the same way (Remove/Move reuse the generic array machinery unmodified; instance
-**Add** is the one case still pending a follow-up, noted below). A **variable**-kind property is
+**Add** is the one case still awaiting a follow-up, noted below). A **variable**-kind property is
 `readOnly` — it was never editable under the pre-#231 model either.
 
 **Conditions' shape**: one **`type: 'array'`** row per condition-owning field (not a struct
@@ -856,7 +856,7 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    element whose discriminator is missing or unrecognized refuses naming the field, rather
    than guessing or crashing (#531; #360 landed the same polymorphism read-side).
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
-   change already overlaid (#413); there is no separate pending/dirty visual treatment on this
+   change already overlaid (#413); there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
    here ([medit-version-control.md](medit-version-control.md)).
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".

@@ -32,6 +32,38 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   **unregistered, never answering** — `IRecordIndex.Unregister` removes the `plugins` row and
   nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
   missing at validation), never the meaning of unload.
+  - **The index is a persistent file per game Data install, and it validates itself on open**
+    (#585 / ADR-0001). `IndexFile.PathFor` keys it by the Data folder under
+    `%LOCALAPPDATA%/mEdit/index/`, so every MO2 instance and profile on one install shares it and
+    the vanilla masters are indexed once, ever; an index handed no Data folder is in-memory, which
+    is what the suite's fixtures use. `plugins` is **the session and nothing else** — the file
+    facts live in `raw.indexed_files` (`file_path`, `content_hash`, `index_version`), a separate
+    table precisely so that unregistering a plugin does not throw away what makes re-registering it
+    cheap. `Initialize` clears every registration (a fresh process is in no session), rehashes every
+    indexed file — **content, never `mtime`** — and `Unindex`es any plugin whose file is gone or
+    whose bytes moved; a version mismatch (`IndexVersion`: hand-bumped format const + Mutagen
+    assembly version + reflected-schema digest) or a file DuckDB cannot open rebuilds the whole
+    file. **Bump `IndexVersion.FormatVersion` when you change `TableDdlBuilder`'s fixed tables or
+    the codec's conventions** — `CREATE TABLE IF NOT EXISTS` will otherwise meet an old file's
+    column list in silence.
+  - **Session load is registration** (#586 / ADR-0001). `SessionManager.IndexProgressively` indexes
+    only what the file has never seen or whose bytes moved (validation already dropped those) and
+    `Register`s everything else at its `plugins.txt` position — a `plugins` row, no re-index. A
+    tracked plugin never takes that path however current its binary: its source tree is its truth
+    (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates the
+    decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones do, so
+    a warm launch's progress advances instead of sitting at zero.
+  - **The mirror keeps running while the session does** (#587 / ADR-0001).
+    `ExternalChangeWatcher.WatchIndexed` covers every *indexed* binary the game's `Data/` included,
+    beside the classification watches it already kept for tracked ones; a settle re-hashes and raises
+    `IndexedBinaryChanged` only when the bytes actually moved (a touch costs nothing), and a deletion
+    is its own `IndexedBinaryChange.Deleted`. `MEditService.Api`'s `IndexMirror` turns those into
+    `ISessionManager.ReindexPlugin(PluginKey)` / `UnindexPlugin` — the composition root's job, since
+    the Bridge knows nothing of sessions or DuckDB. **Tracked plugins are deliberately not mirrored**:
+    their rows come from the source tree, so their binary changing stays the user's Absorb/Keep
+    question and re-reading it would overwrite the working tree with the compiled artifact.
+    `ExternalChangeSessionHook.RunAfterLoad` drops every mirror watch before re-registering, so no
+    watch outlives the load order that asked for it.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
     `SessionManager.RequirePlugin`, `IGameSession.LoadOrderPlugin`): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"
@@ -46,10 +78,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 - The per-type views, editor field metadata and record codec are reflection-generated from Mutagen types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
 - **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
-  `load_order_idx`, `is_winner`, `ref`, `content_hash`); the extracted index tables (`form_lookup`,
+  `ref`, `content_hash`); the extracted index tables (`form_lookup`,
   `form_references`, `placement`, `cell_location`, `plugins`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
+  **Nothing session-derived is stored on a data row** (#583/#584 / ADR-0001): a record row carries
+  file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
+  on `plugins`; `is_winner` is a fact about the registered stack a FormKey sits in and lives solely
+  in `raw.winners` (`(ref, form_key) → (plugin, origin)`, rebuilt wholesale by
+  `DuckDbRecordIndex.UpdateWinners`). The registered view over each raw table (`records`,
+  `records_committed`, `form_lookup`, `header` — see "Registration is visibility" above) joins both
+  back in, so they still read as ordinary columns everywhere outside `Records/` itself. Every writer
+  that moves a row into or out of a ref's stack must resweep — that is why `MarkWorkingTreeOnly` and
+  `SeedCommittedOnly` call `UpdateWinners` even though Effective is untouched.
   - **Typed reads reconstitute; they never read the views.** `GetDocument`/`GetOverrideStack`
     deserialize the document through `RecordTextCodec` and run the same `ColumnSpec.Extract`
     delegates the wide tables were filled with, so values are identical by construction. The
@@ -145,10 +186,10 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `records_committed` difference table; `records_head` unions it with the rows that never diverged,
   giving Head a relation of the same shape, which is why `At(ref)` is a relation name rather than a
   second read implementation.
-  - `is_winner` is **derived inside `records_head`**, never carried through. A record the working
-    tree deleted promotes the next plugin down at Effective, and the promoted row is a clean row
-    physically shared with that view — reading its stored flag reported two winners for one FormKey
-    at Head.
+  - `is_winner` is **swept per ref**, never carried across them. A record the working tree deleted
+    promotes the next plugin down at Effective, and the promoted row is a clean row physically
+    shared with `records_head` — reusing Effective's answer reported two winners for one FormKey at
+    Head. So `raw.winners` is keyed `(ref, form_key)` and `records_head` joins it at Head.
   - `IRecordIndex.ApplyWorkingTreeChanges` moves Effective against a fixed baseline (null body =
     deletion; bytes equal to committed = convergence back to clean, by byte compare, never by a
     `content_hash` mismatch alone). `SetCommittedBaseline` moves the baseline itself. Neither can
@@ -196,7 +237,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
 `MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
-lifecycle plus the pending-external-change queue, nothing else — it references only
+lifecycle plus the unanswered-external-change queue, nothing else — it references only
 session/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfSessionsTests`.
 
 Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.

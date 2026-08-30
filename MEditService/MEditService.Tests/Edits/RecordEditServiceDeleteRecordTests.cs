@@ -55,15 +55,15 @@ public sealed class RecordEditServiceDeleteRecordTests
     }
 
     [Fact]
-    public void DeleteRecord_Refuses_WhileAnExternalChangeQuestionIsPending()
+    public void DeleteRecord_Refuses_WhileAnExternalChangeQuestionIsUnanswered()
     {
         using var mod = TrackedModFixture.Tracked();
-        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "pending");
+        ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
         var result = ServiceFor(mod.Sessions).DeleteRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
         Assert.True(File.Exists(mod.NpcSourceFile)); // refused before the first door — nothing written
     }
 

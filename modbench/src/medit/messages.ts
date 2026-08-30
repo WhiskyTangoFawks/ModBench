@@ -118,11 +118,11 @@ export const WEBVIEW_TO_EXTENSION = {
 export type LogLevel = 'debug' | 'info' | 'warn';
 
 // #410/ADR-0041: this bridge carried reads only while the record editor was a viewer. Most of what
-// #410 removed stays removed — the pending-cell and column-header command broadcasts, the
-// revert-group confirm, the clipboard read — because those were the *pending-change* surface, not
+// #410 removed stays removed — the retired cell and column-header command broadcasts, the
+// revert-group confirm, the clipboard read — because those were the retired write surface, not
 // editing as such. #415 rebuilds editing on text (EDIT_FIELD); #426 restores the remaining editor
 // gestures on the same write path, starting with the FormKey picker (OPEN_FORM_KEY_PICKER /
-// FORM_KEY_PICKED) — a native-surface request/reply, not a pending-change concept, so it comes
+// FORM_KEY_PICKED) — a native-surface request/reply, not a retired-model concept, so it comes
 // back exactly as it stood before #410.
 export type WebviewToExtension =
   | { type: typeof WEBVIEW_TO_EXTENSION.OPEN_RECORD; formKey: string }

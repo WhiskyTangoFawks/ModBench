@@ -10,7 +10,7 @@ export function conditionParamPath(fieldPath: string, index: number, paramIndex:
 }
 
 // Envelope field key -> ConditionPath SubField name. Shared by ConditionSection's wirePathFor and
-// conditionOps' pending-edit lookup so the two never drift apart.
+// conditionOps' overlay-edit lookup so the two never drift apart.
 export const CONDITION_SUBFIELD_WIRE: Record<string, string> = {
   function: 'Function', runOn: 'RunOn', operator: 'Operator', useGlobal: 'UseGlobal', comparison: 'Comparison',
 };

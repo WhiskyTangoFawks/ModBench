@@ -190,7 +190,7 @@ describe('drift tracker (absorption)', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    // The second refresh's own walk must not have started while the first is still pending.
+    // The second refresh's own walk must not have started while the first is still in flight.
     expect(currentOrigins).toHaveBeenCalledTimes(1);
 
     resolveFirst(new Map());

@@ -3,12 +3,12 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 
 // #410/ADR-0041 retired the request/reply bridge this module used to run — the FormKey QuickPick,
 // the condition-function QuickPick, the revert-group modal, the add-script input box, the
-// clipboard read, and the extended field editor — because every one of them fed the pending-change
+// clipboard read, and the extended field editor — because every one of them fed the retired
 // write path that went with it. #415 added back exactly one poster (editField, fire-and-forget,
 // below) for the one gesture it restored. #426 restores the shared request/reply mechanism itself,
 // for the first native-surface gesture that needs it back: the FormKey picker. Later gesture-
 // inventory slices (the condition-function picker, etc.) extend this same mechanism rather than
-// reinventing it — see the doc comment on `requestReply` and `Pending`.
+// reinventing it — see the doc comment on `requestReply` and `InFlight`.
 
 // Issue #212: every native-prompt bridge that used this shape (the FormKey QuickPick, the
 // condition-function QuickPick, the revert-group modal, the add-script input box) shares one
@@ -17,20 +17,20 @@ import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, ty
 // other one untouched. `read` absorbs the one genuine difference between bridges — each reply's
 // payload lives under a different field (formKey/functionName/confirmed/name) — so this file, and
 // the single listener below, stay blind to what any particular bridge is actually asking for.
-interface Pending {
+interface InFlight {
   replyType: ExtensionToWebview['type'];
   read: (msg: ExtensionToWebview) => unknown;
   resolve: (value: unknown) => void;
 }
 
 let counter = 0;
-const pending = new Map<string, Pending>();
+const inFlight = new Map<string, InFlight>();
 
-// Issue #230: the extended editor's commit callback doesn't fit `Pending` above — a real editor
+// Issue #230: the extended editor's commit callback doesn't fit `InFlight` above — a real editor
 // tab can be saved more than once while it stays open, so EXTENDED_EDITOR_COMMITTED is not a
 // one-shot reply that resolves-then-deletes; the callback stays registered until
 // EXTENDED_EDITOR_CLOSED explicitly says the tab is gone. A second map (rather than stretching
-// `Pending`'s single-resolve shape to cover both lifecycles) keeps requestReply's own contract —
+// `InFlight`'s single-resolve shape to cover both lifecycles) keeps requestReply's own contract —
 // "resolves exactly once" — true for every caller that already depends on it.
 const extendedEditors = new Map<string, (value: string) => void>();
 
@@ -48,9 +48,9 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     extendedEditors.delete(msg.requestId);
     return;
   }
-  const entry = pending.get(msg.requestId);
+  const entry = inFlight.get(msg.requestId);
   if (!entry || msg.type !== entry.replyType) return;
-  pending.delete(msg.requestId);
+  inFlight.delete(msg.requestId);
   entry.resolve(entry.read(msg));
 });
 
@@ -61,7 +61,7 @@ function requestReply<T>(
 ): Promise<T> {
   const requestId = `nb-${++counter}`;
   return new Promise<T>(resolve => {
-    pending.set(requestId, { replyType, read, resolve: resolve as (value: unknown) => void });
+    inFlight.set(requestId, { replyType, read, resolve: resolve as (value: unknown) => void });
     vscode.postMessage(buildRequest(requestId));
   });
 }

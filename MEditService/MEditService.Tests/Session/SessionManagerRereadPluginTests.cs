@@ -99,8 +99,8 @@ public sealed class SessionManagerRereadPluginTests
             Assert.Equal("ModB", origin);
             Assert.Equal("FromModB", editorId);
             // AC7: winners are re-swept, so conflict state describes the new file. Index() writes
-            // every row is_winner=false and only UpdateWinners() can flip it, so this is false
-            // unless the sweep actually ran.
+            // no winners row of its own — only UpdateWinners() does — so this is false unless the
+            // sweep actually ran.
             Assert.True(isWinner);
         }
     }
@@ -169,7 +169,8 @@ public sealed class SessionManagerRereadPluginTests
     /// Nothing on the load path calls Unindex, so the hook cannot fire early.</summary>
     private sealed class UnindexHookFactory(IRecordIndexFactory inner, Action onUnindex) : IRecordIndexFactory
     {
-        public IRecordIndex Create(GameRelease gameRelease) => new HookedRepository(inner.Create(gameRelease), onUnindex);
+        public IRecordIndex Create(GameRelease gameRelease, string? dataFolderPath = null) =>
+            new HookedRepository(inner.Create(gameRelease, dataFolderPath), onUnindex);
 
         private sealed class HookedRepository(IRecordIndex inner, Action onUnindex) : DelegatingRecordIndex(inner)
         {

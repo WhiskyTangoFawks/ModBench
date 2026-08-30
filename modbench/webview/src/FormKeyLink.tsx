@@ -2,7 +2,7 @@ import React, { useState, useSyncExternalStore } from 'react';
 import { mono } from './gridStyles';
 import type { FormKeyResolution } from './types';
 
-// Safe default when a caller has no resolution to offer yet (VMAD/pending wiring land in #158/
+// Safe default when a caller has no resolution to offer yet (VMAD/overlay wiring land in #158/
 // #159) — behaves exactly like a genuinely unresolved reference: raw FormKey label, no affordance.
 const UNRESOLVED: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
@@ -77,7 +77,7 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 //
 // Issue #157/#218: the button's label is "EditorID [FormKey]" when the reference resolves, falling
 // back to the bare FormKey string when it doesn't (or when the caller has no resolution to offer
-// yet — VMAD/pending wiring land in #158/#159). The composite supersedes #157's bare EditorID: a
+// yet — VMAD/overlay wiring land in #158/#159). The composite supersedes #157's bare EditorID: a
 // FormKey is the identity and the EditorID is decoration, so labelling with the decoration alone
 // left the cell unable to hand the user its own value — which under the pre-ADR-0034 cursor contract was
 // the whole of copy. It is also the format the picker's own items have always used

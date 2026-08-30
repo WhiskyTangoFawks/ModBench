@@ -93,8 +93,9 @@ public sealed class WorkingTreeCreationTests : IDisposable
         index.CreateWorkingTreeRecord(BaseKey, formKey, "npc_", NewNpcBody(formKey, "NewNpc"));
 
         // The rival: an implementation that inserts the row but skips (or forgets) the structural
-        // UpdateWinners() resweep leaves is_winner false forever — this is the test that catches it,
-        // watched failing against exactly that omission before being restored.
+        // UpdateWinners() resweep never gives the new FormKey a winners row at all, so it reads as
+        // losing forever — this is the test that catches it, watched failing against exactly that
+        // omission before being restored.
         Assert.True(index.GetDocument(formKey)!.IsWinner);
     }
 

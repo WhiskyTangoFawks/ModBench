@@ -16,7 +16,7 @@ public sealed record CrashRepairOffer(string Plugin, string Origin, CrashRepairR
 /// drives, and a binary that vanished mid-session would already have been read once at load.</summary>
 public enum CrashRepairReason
 {
-    /// <summary>A <see cref="CompileJournal"/> marker is pending in this plugin's mod folder — the
+    /// <summary>A <see cref="CompileJournal"/> marker is unfinished in this plugin's mod folder — the
     /// mismatch is Modbench's own interrupted compile (crash, or a kill mid-write), never an
     /// external tool's doing.</summary>
     InterruptedCompile,

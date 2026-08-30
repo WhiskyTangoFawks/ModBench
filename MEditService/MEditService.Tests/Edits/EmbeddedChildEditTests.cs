@@ -102,8 +102,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.True(EditService().EditField(_fixture.Plugin, _fixture.TemporaryRef.ToString(), "scale", Json("4.5")).Applied);
 
         // The parent is the source unit, so the parent is what went dirty — Effective has moved and
-        // Head still holds what was committed. That is what makes the edit visible as a pending
-        // change on the record the file actually belongs to.
+        // Head still holds what was committed. That is what makes the edit visible as a
+        // working-tree change on the record the file actually belongs to.
         var effective = index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
         var head = index.At(RecordRef.Head).GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin)!.Body;
         Assert.NotEqual(effective, head);

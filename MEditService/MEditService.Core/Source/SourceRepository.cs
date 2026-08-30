@@ -257,7 +257,7 @@ public static class SourceRepository
     /// never-<c>git add</c>ed source file, which plain <c>git diff</c> can't see at all —
     /// <c>RecordEditService</c>'s create path writes straight to disk, no staging.
     ///
-    /// <para>Never pending for an untracked folder or a plugin with no parked ref at all — a plugin
+    /// <para>Never stale for an untracked folder or a plugin with no parked ref at all — a plugin
     /// Track never covered (#288's New-Plugin-into-an-already-tracked-folder gap) degrades safely to
     /// "nothing to compare against" rather than a false positive; the first compile is what parks the
     /// ref and gives this something to answer from then on.</para>
@@ -700,11 +700,11 @@ public static class SourceRepository
 /// <see cref="TrackProvenance"/> (authored/manually-installed mods may have none).</summary>
 public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
 
-/// <summary><see cref="SourceRepository.CompileFreshnessOf"/>'s answer — <see cref="Pending"/> is
+/// <summary><see cref="SourceRepository.CompileFreshnessOf"/>'s answer — <see cref="Stale"/> is
 /// #449's own signal ("source ahead of binary"), <see cref="LastCompiledAt"/> the parked ref's own
 /// commit timestamp for the tooltip that names it. Both null/false together for an untracked folder
 /// or a plugin Track never parked a ref for.</summary>
-public sealed record CompileFreshness(bool Pending, DateTimeOffset? LastCompiledAt);
+public sealed record CompileFreshness(bool Stale, DateTimeOffset? LastCompiledAt);
 
 /// <summary><see cref="SourceRepository.RebaseEditBranch"/>/<see cref="SourceRepository.ContinueRebase"/>'s
 /// outcome. <see cref="ConflictedPaths"/> is the extension's cue to open each path in VS Code's native

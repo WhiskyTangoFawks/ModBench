@@ -54,17 +54,17 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Sessions);
 
-        var ok = Assert.IsAssignableFrom<Ok<List<PendingExternalChangeResponse>>>(result);
-        var pending = Assert.Single(ok.Value!);
-        Assert.Equal(TrackedModFixture.PluginName, pending.Plugin);
-        Assert.Equal(TrackedModFixture.ModFolderOrigin, pending.Origin);
-        Assert.True(pending.MetaChanged);
-        Assert.Equal("1.0", pending.OldVersion);
-        Assert.Equal("2.0", pending.NewVersion);
+        var ok = Assert.IsAssignableFrom<Ok<List<UnansweredExternalChangeResponse>>>(result);
+        var unanswered = Assert.Single(ok.Value!);
+        Assert.Equal(TrackedModFixture.PluginName, unanswered.Plugin);
+        Assert.Equal(TrackedModFixture.ModFolderOrigin, unanswered.Origin);
+        Assert.True(unanswered.MetaChanged);
+        Assert.Equal("1.0", unanswered.OldVersion);
+        Assert.Equal("2.0", unanswered.NewVersion);
     }
 
     [Fact]
-    public void AbsorbExternalChange_AbsorbsAndClearsThePendingQuestion()
+    public void AbsorbExternalChange_AbsorbsAndClearsTheUnansweredQuestion()
     {
         WriteExternalBinaryChange(0.9f);
         var watcher = new ExternalChangeWatcher();
@@ -79,7 +79,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.True(ok.Value!.Succeeded);
-        Assert.Empty(watcher.Pending());
+        Assert.Empty(watcher.Unanswered());
     }
 
     [Fact]

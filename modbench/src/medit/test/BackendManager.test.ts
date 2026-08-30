@@ -281,7 +281,7 @@ describe('BackendManager crash-restart / stop', () => {
     expect(mgr.isHealthy).toBe(true);
   });
 
-  it('stop() during a pending start() cancels it — a late healthy response does not resurrect the session', async () => {
+  it('stop() during an in-flight start() cancels it — a late healthy response does not resurrect the session', async () => {
     const state = { healthy: false };
     makeToggleableHttpGet(state);
     const spawn = vi.fn(() => makeChild()); // spawn does NOT make it healthy → connect keeps polling

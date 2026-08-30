@@ -6,7 +6,7 @@ import { vscode } from './vscode';
 import { pickFormKey, pickConditionFunction, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
-// #426: restores the request/reply bridge mechanism #410 retired along with the pending-change
+// #426: restores the request/reply bridge mechanism #410 retired along with the
 // write path it fed (nativeBridge.ts's own doc comment) — the FormKey picker is the first gesture
 // back on it, so its own suite exercises the shared requestReply plumbing (resolve-on-match,
 // ignore-a-mismatched-requestId, ignore-unrelated-message-types) once, the same way the pre-#410
@@ -132,7 +132,7 @@ describe('pickConditionFunction', () => {
 
 // Issue #230 (#426: restored): unlike pickFormKey above, openExtendedFieldEditor doesn't return a
 // Promise — the editor tab it opens can be saved any number of times before it's closed, so its
-// own map entry isn't deleted on the first EXTENDED_EDITOR_COMMITTED the way `pending`'s entries
+// own map entry isn't deleted on the first EXTENDED_EDITOR_COMMITTED the way `inFlight`'s entries
 // are deleted on their first (and only) reply.
 describe('openExtendedFieldEditor', () => {
   it('posts OPEN_EXTENDED_EDITOR with the field identity and readOnly flag', () => {

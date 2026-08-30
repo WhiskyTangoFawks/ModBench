@@ -127,10 +127,10 @@ describe('parseElementIndex', () => {
 
 
 // Issue #231: the generalized, path-based replacement for the old top-level/array-element/
-// struct-child/grandchild switch DiffRow used to extract a row's own pending value out of the
-// root's raw pending value — one implementation for every depth, including depths the old switch
+// struct-child/grandchild switch DiffRow used to extract a row's own overlay value out of the
+// root's raw overlay value — one implementation for every depth, including depths the old switch
 // could not express (a struct nested more than one level deep, or a member below an array below a
-// member). Supersedes the old extractPendingElementValue (array-element case) and the struct-
+// member). Supersedes the old element-value extractor (array-element case) and the struct-
 // child/grandchild cases the old DiffRow switch hand-rolled directly — deleted along with its own
 // call site, now that this one function covers every depth those three used to split across.
 

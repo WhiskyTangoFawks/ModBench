@@ -289,8 +289,9 @@ public sealed class GameSession : IGameSession
         // the reserved Data-directory value (#269 / ADR-0036).
         // One past the highest index in use, not _mods.Count: RemoveUnlistedPlugin can shrink that
         // list (#34), and a reused index would give two *participating* plugins the same
-        // load_order_idx — UpdateWinners takes MAX(load_order_idx), so both would win a FormKey
-        // they share.
+        // load_order_idx — an ambiguous stack, where which of the two holds a FormKey they share is
+        // settled by UpdateWinners' arbitrary tiebreak rather than by the load order (#584; the
+        // older MAX() sweep made it worse still, marking both as winners).
         var nextIndex = _plugins.Count == 0 ? 0 : _plugins.Max(p => p.LoadOrderIndex) + 1;
         return Open(filePath, PluginOrigin.DataDirectory, nextIndex, isImmutable: false, participates: true);
     }

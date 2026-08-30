@@ -16,7 +16,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
     isImmutable: false,
     masterIssues: [],
     hasMatchingRecords: true,
-    compilePending: false,
+    compileStale: false,
     lastCompiledAt: null,
     ...overrides,
   };

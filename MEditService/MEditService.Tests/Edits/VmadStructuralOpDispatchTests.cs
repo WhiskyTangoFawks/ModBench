@@ -131,7 +131,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
     // removed.
 
     [Fact]
-    public void EditField_AddScriptOp_Refuses_WhileAnExternalChangeQuestionIsPendingForThePlugin()
+    public void EditField_AddScriptOp_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()
     {
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "Fixture.esp changed outside Modbench.");
 
@@ -139,7 +139,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
             _mod.Plugin, _mod.Npc.ToString(), @"VMAD\NewScript", Json("""{"op":"add_script"}"""));
 
         Assert.False(result.Applied);
-        Assert.Equal(RecordEditRefusal.ExternalChangePending, result.Refusal);
+        Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
         Assert.Empty(_mod.GitStatus());
     }
 

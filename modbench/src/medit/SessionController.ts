@@ -490,7 +490,7 @@ export class SessionController {
         return undefined;
       }
       this.deps.refreshTree();
-      // #449: a create is a working-tree change to a tracked plugin's source — the compile-pending
+      // #449: a create is a working-tree change to a tracked plugin's source — the compile-staleness
       // decoration needs the same re-derive refreshTree's sibling facts already get here.
       this.deps.refreshMatchingPlugins();
       return data?.formKey ?? undefined;
@@ -675,7 +675,7 @@ export class SessionController {
       }
       const result = data ? toExternalChangeActionResult(data) : null;
       // #449: absorbing a new baseline moves the source under this plugin the same way a track
-      // does — the compile-pending decoration needs the same re-derive refreshTree's sibling
+      // does — the compile-staleness decoration needs the same re-derive refreshTree's sibling
       // facts already get here.
       if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
       return result;

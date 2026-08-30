@@ -63,7 +63,7 @@ namespace MEditService.Core.Serialization;
 ///    classes.
 ///
 ///    <b>AC2 re-scope (#451, ADR-0041's #444 amendment, point 4): "no caller, ever" is now "only the
-///    designated doors, always with a sequential dropoff."</b> The earlier git-native pending-changes design (ADR-0041 § Alternatives rejected)
+///    designated doors, always with a sequential dropoff."</b> The earlier git-native design (ADR-0041 § Alternatives rejected)
 ///    rejected whole-mod text export as the vendoring mechanism on measured grounds (spike #359, Q2): 21 s / 132,787 files / 106 MB
 ///    for a 20 MB plugin, versus 160 ms for a single record, driven by its lazy per-edit,
 ///    redistribution-on-touch design. That design is superseded — Track (<see cref="Source.TrackService"/>)
