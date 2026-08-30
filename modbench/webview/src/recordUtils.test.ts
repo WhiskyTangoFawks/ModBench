@@ -51,8 +51,8 @@ describe('buildColumns', () => {
 
 // #304: the *reason* a column is read-only, distinct from the fact that it is — `immutableSet`
 // alone can't tell a vanilla master (isImmutable, still inLoadOrder) apart from a copy the load
-// order doesn't name (isImmutable *because* !inLoadOrder — GameSession.AddUnlistedPlugin always
-// pairs the two). PluginHeader needs both to word the tooltip and decide whether to dim.
+// order doesn't name (isImmutable *because* !inLoadOrder — a losing copy's registration derives
+// both, ADR-0044). PluginHeader needs both to word the tooltip and decide whether to dim.
 describe('readOnlyReason', () => {
   it('is null for a mutable column, regardless of inLoadOrder', () => {
     expect(readOnlyReason(false, true)).toBeNull();
@@ -88,7 +88,7 @@ describe('readOnlyReason', () => {
 });
 
 // #304 / ADR-0036: "origin inline only on collision" — computed from the overrides a single
-// compare response already carries (CompareResult.Overrides), never from the session's whole
+// compare response already carries (CompareResult.Overrides), never from the load order's whole
 // plugin list. A filename appearing once is the overwhelming common case and must not collide.
 describe('collidingFilenames', () => {
   it('is empty when every override has a distinct filename', () => {

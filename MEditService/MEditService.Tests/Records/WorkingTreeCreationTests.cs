@@ -54,8 +54,7 @@ public sealed class WorkingTreeCreationTests : IDisposable
     {
         var path = new ModPath(ModKey.FromFileName(name), Path.Combine(_fixture.DataFolder, name));
         index.Index(
-            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4),
-            loadOrderIndex, participates: true, new PluginKey(name, "Data"));
+            Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4), Registration.Participating(loadOrderIndex), new PluginKey(name, "Data"));
     }
 
     // A real codec-produced body, the same shape CreateRecord will write in production — a

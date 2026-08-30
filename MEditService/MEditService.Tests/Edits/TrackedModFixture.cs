@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415: a real mod folder, holding a real plugin, loaded into a real session and tracked through
+/// #415: a real mod folder, holding a real plugin, loaded into a real load order and tracked through
 /// the real <see cref="TrackService"/> — the state every edit-path test starts from, because the
 /// thing under test is what an edit does to a git working tree, and there is no honest way to ask
 /// that of a mock. Same posture as #414's own repo-layer tests (real git, real CLI).
@@ -24,17 +24,17 @@ public sealed class TrackedModFixture : IDisposable
     public const string PluginName = "Fixture.esp";
 
     /// <summary>The MO2 instance this fixture's mod folder lives in (#592 / ADR-0001) — what a
-    /// session load keys its index on, and the fixture's own cleanup root.</summary>
+    /// reconcile keys its index on, and the fixture's own cleanup root.</summary>
     public string InstanceRoot { get; }
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public SessionManager Sessions { get; }
+    public LoadOrderMirror Mirror { get; }
     public PluginKey Plugin { get; }
 
     /// <summary>The plugin filename this instance actually tracked — <see cref="PluginName"/> unless
     /// a caller asked for a different one (#433: real-world-shaped, ref-unsafe names need a real
-    /// tracked session to exercise, which this fixture is the only thing that builds).</summary>
+    /// tracked load order to exercise, which this fixture is the only thing that builds).</summary>
     public string ActualPluginName { get; }
 
     /// <summary>The NPC every editing test edits, and the records that must stay untouched beside
@@ -65,17 +65,17 @@ public sealed class TrackedModFixture : IDisposable
         mod.WriteToBinary(pluginPath);
         (Npc, Race, Keyword, OtherNpc) = (npc.FormKey, race.FormKey, keyword.FormKey, otherNpc.FormKey);
 
-        Sessions = new SessionManager(
+        Mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)Sessions).LoadExplicit(
+        ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
-            [new ExplicitPluginInput(pluginName, pluginPath, ModFolderOrigin, true)],
+            [new LoadOrderEntry(pluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         if (track)
         {
             new TrackService(NullLogger<TrackService>.Instance)
-                .TrackAsync(Sessions.Session!, ModFolderOrigin, SourcePreset.Edits)
+                .TrackAsync(Mirror.LoadOrder!, ModFolderOrigin, SourcePreset.Edits)
                 .GetAwaiter().GetResult();
         }
     }
@@ -181,7 +181,7 @@ public sealed class TrackedModFixture : IDisposable
 
     public void Dispose()
     {
-        Sessions.Dispose();
+        Mirror.Dispose();
         TryDelete(InstanceRoot);
         TryDelete(GameDirectory);
     }

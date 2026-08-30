@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -53,29 +53,24 @@ public class ContainerChildQueryServiceTests
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) => null;
     }
 
-    private sealed class StubSession(IRecordReads repo, IGameSession? session = null) : ISessionManager
+    private sealed class StubMirror(IRecordReads repo, ILoadOrder? loadOrder = null) : ILoadOrderMirror
     {
-        public IGameSession? Session => session;
+        public ILoadOrder? LoadOrder => loadOrder;
         public IRecordReads? Repository => repo;
         public IRecordIndex? Index => null;
-        public SessionStatus Status => SessionStatus.None;
-        public void LoadExplicit(string gameDirectory, IReadOnlyList<ExplicitPluginInput> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
-        public void Unload() => throw new NotSupportedException();
+        public LoadOrderStatus Status => LoadOrderStatus.None;
+        public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
+        public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
-        public PluginResponse LoadUnlistedPlugin(string path, string origin) => throw new NotSupportedException();
-        public void UnloadUnlistedPlugin(string plugin, string origin) => throw new NotSupportedException();
-        public PluginResponse RereadPlugin(string plugin, string newPath, string newOrigin) => throw new NotSupportedException();
-        public PluginResponse SetPluginParticipation(string plugin, bool participates) => throw new NotSupportedException();
         public Task ReindexPlugin(string p) => throw new NotSupportedException();
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
-        public Task ReindexPlugins(IReadOnlyList<string> p) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();
         public void ClearFilter() => throw new NotSupportedException();
         public void ReapplyFilter() => throw new NotSupportedException();
     }
 
-    private sealed class StubGameSession(IReadOnlyList<PluginMetadata> plugins) : IGameSession
+    private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
     {
         public string DataFolderPath => "";
         public string? InstanceRoot => null;
@@ -84,9 +79,6 @@ public class ContainerChildQueryServiceTests
         public IReadOnlyList<PluginLoadFailure> LoadFailures => [];
         public string? FilterSql { get; set; }
         public Mutagen.Bethesda.Plugins.Records.IModGetter? GetMod(string pluginName, string origin) => null;
-        public PluginMetadata AddPlugin(string filePath) => throw new NotSupportedException();
-        public PluginMetadata AddUnlistedPlugin(string filePath, string origin, int loadOrderIndex) => throw new NotSupportedException();
-        public bool RemoveUnlistedPlugin(string pluginName, string origin) => throw new NotSupportedException();
         public void Dispose() { }
     }
 
@@ -115,7 +107,7 @@ public class ContainerChildQueryServiceTests
                 ["dlbr"] = [new RecordSummary("dlbr1:M.esp", "M.esp", 0, true, "BranchA", "Data")],
                 ["scen"] = [new RecordSummary("scen1:M.esp", "M.esp", 0, true, "SceneA", "Data")],
             });
-        var svc = new ContainerChildQueryService(new StubSession(reader));
+        var svc = new ContainerChildQueryService(new StubMirror(reader));
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -142,7 +134,7 @@ public class ContainerChildQueryServiceTests
                     new RecordSummary("info2:M.esp", "M.esp", 0, true, null, "Data"),
                 ],
             });
-        var svc = new ContainerChildQueryService(new StubSession(reader));
+        var svc = new ContainerChildQueryService(new StubMirror(reader));
 
         var result = svc.GetChildren("M.esp", "dial1:M.esp");
 
@@ -156,10 +148,10 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_ExplicitOrigin_OverridesResolvedOrigin()
     {
         var reader = new StubReader([]);
-        var session = new StubGameSession([
-            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA"),
+        var loadOrder = new StubLoadOrder([
+            new PluginMetadata("M.esp", "", 0, false, false, [], 0, false, Origin: "ModA", Enabled: true, Winning: true),
         ]);
-        var svc = new ContainerChildQueryService(new StubSession(reader, session));
+        var svc = new ContainerChildQueryService(new StubMirror(reader, loadOrder));
 
         svc.GetChildren("M.esp", "qust1:M.esp", origin: "ModB");
 
@@ -187,13 +179,13 @@ public class ContainerChildQueryServiceTests
             });
         var entries = new List<LogEntry>();
         using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CollectingLoggerProvider(entries)));
-        var svc = new ContainerChildQueryService(new StubSession(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
+        var svc = new ContainerChildQueryService(new StubMirror(reader), loggerFactory.CreateLogger<ContainerChildQueryService>());
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
         Assert.Equal(["dial1:M.esp"], result.Select(r => r.FormKey).ToArray());
         var warning = Assert.Single(entries, e => e.Level == LogLevel.Warning);
-        // Origin is omitted here (no session), so PluginOriginResolver resolves it to the
+        // Origin is omitted here (no load order), so PluginOriginResolver resolves it to the
         // reserved PluginOrigin.DataDirectory value ("Data") — the same fallback every other
         // caller of that resolver gets.
         Assert.Equal(
@@ -208,7 +200,7 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()
     {
         var reader = new StubReader([]);
-        var svc = new ContainerChildQueryService(new StubSession(reader));
+        var svc = new ContainerChildQueryService(new StubMirror(reader));
 
         var result = svc.GetChildren("M.esp", "qust1:M.esp");
 
@@ -217,9 +209,9 @@ public class ContainerChildQueryServiceTests
     }
 
     [Fact]
-    public void GetChildren_NoSession_ThrowsInvalidOperation()
+    public void GetChildren_NoLoadOrder_ThrowsInvalidOperation()
     {
-        var svc = new ContainerChildQueryService(new StubSession(null!));
+        var svc = new ContainerChildQueryService(new StubMirror(null!));
         Assert.Throws<InvalidOperationException>(() => svc.GetChildren("M.esp", "qust1:M.esp"));
     }
 }

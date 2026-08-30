@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -25,7 +25,7 @@ public sealed class PartialFormCompareTests : IDisposable
     private const float OverrideOwnWaterHeight = 999f;
 
     private readonly PluginFixtureData _fixture;
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _service;
 
     public static readonly FormKey CellKey = new(ModKey.FromFileName("Base.esm"), 0x800);
@@ -76,8 +76,8 @@ public sealed class PartialFormCompareTests : IDisposable
         RefKey = refKey;
 
         var reflector = SharedSchemaReflector.Instance;
-        _manager = new SessionManager(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        _manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
+        _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 

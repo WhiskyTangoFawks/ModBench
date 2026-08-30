@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -23,7 +23,7 @@ public sealed class PartialFormEditRefusalTests : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-partialform-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-partialform-game-").FullName;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
 
     public PluginKey Plugin { get; } = new(PluginName, Origin);
     public FormKey PartialCell { get; }
@@ -51,24 +51,24 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         OrdinaryNpc = npc.FormKey;
         ChildRef = childRef.FormKey;
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
-            _gameDirectory, [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)], GameRelease.Fallout4);
+        ((ILoadOrderMirror)_mirror).Reconcile(
+            _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         try { Directory.Delete(_modFolder, recursive: true); } catch { /* best-effort cleanup */ }
         try { Directory.Delete(_gameDirectory, recursive: true); } catch { /* best-effort cleanup */ }
     }
 
     private RecordEditService Service() =>
-        new(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void EditField_NonHeaderFieldOnPartialFormRecord_IsRefused()

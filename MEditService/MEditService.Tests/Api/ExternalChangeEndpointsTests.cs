@@ -1,6 +1,6 @@
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
-using MEditService.Core.Session;
+using MEditService.Core.Plugins;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using MEditService.Tests.TestSupport;
@@ -52,7 +52,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         watcher.ReportExternalChange(_mod.ModFolder, TrackedModFixture.PluginName,
             new ExternalChangeClassification.ExternalChange(true, "1.0", "2.0"));
 
-        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Sessions);
+        var result = PluginEndpoints.ExternalChangeStatus(watcher, _mod.Mirror);
 
         var ok = Assert.IsAssignableFrom<Ok<List<UnansweredExternalChangeResponse>>>(result);
         var unanswered = Assert.Single(ok.Value!);
@@ -75,7 +75,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
-            _mod.Sessions, watcher, loggerFactory);
+            _mod.Mirror, watcher, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.True(ok.Value!.Succeeded);
@@ -90,7 +90,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.AbsorbExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest("NoSuchOrigin"),
-            _mod.Sessions, new ExternalChangeWatcher(), loggerFactory);
+            _mod.Mirror, new ExternalChangeWatcher(), loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(503, problem.StatusCode);
@@ -100,7 +100,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
     public void KeepExternalChange_RefusalTravelsAsA200_NamingTheCollidingRecord()
     {
         var editService = new MEditService.Core.Edits.RecordEditService(
-            _mod.Sessions, SharedSchemaReflector.Instance, Microsoft.Extensions.Logging.Abstractions.NullLogger<MEditService.Core.Edits.RecordEditService>.Instance);
+            _mod.Mirror, SharedSchemaReflector.Instance, Microsoft.Extensions.Logging.Abstractions.NullLogger<MEditService.Core.Edits.RecordEditService>.Instance);
         editService.EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max",
             System.Text.Json.JsonDocument.Parse("0.5").RootElement);
         WriteExternalBinaryChange(0.9f);
@@ -109,7 +109,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
 
         var result = PluginEndpoints.KeepExternalChange(
             TrackedModFixture.PluginName, new ExternalChangeActionRequest(TrackedModFixture.ModFolderOrigin),
-            _mod.Sessions, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
+            _mod.Mirror, new ExternalChangeWatcher(), SharedSchemaReflector.Instance, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<ExternalChangeActionResponse>>(result);
         Assert.False(ok.Value!.Succeeded);
@@ -122,7 +122,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest("NoSuchOrigin"), _mod.Sessions, loggerFactory);
+        var result = PluginEndpoints.Rebase(new RebaseRequest("NoSuchOrigin"), _mod.Mirror, loggerFactory);
 
         var problem = Assert.IsAssignableFrom<ProblemHttpResult>(result);
         Assert.Equal(404, problem.StatusCode);
@@ -134,7 +134,7 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var (loggerFactory, _) = CapturingLoggerFactory();
         using var _disposeLogger = loggerFactory;
 
-        var result = PluginEndpoints.Rebase(new RebaseRequest(TrackedModFixture.ModFolderOrigin), _mod.Sessions, loggerFactory);
+        var result = PluginEndpoints.Rebase(new RebaseRequest(TrackedModFixture.ModFolderOrigin), _mod.Mirror, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);
         Assert.Equal(nameof(RebaseOutcome.Clean), ok.Value!.Outcome);

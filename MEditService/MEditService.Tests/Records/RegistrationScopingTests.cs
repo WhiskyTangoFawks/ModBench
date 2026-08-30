@@ -80,8 +80,8 @@ public class RegistrationScopingTests
 
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
         repo.Initialize(GameRelease.Fallout4);
-        repo.Index((IModGetter)alpha, 0, participates: true, key: AlphaKey);
-        repo.Index((IModGetter)beta, 1, participates: true, key: BetaKey);
+        repo.Index((IModGetter)alpha, Registration.Participating(0), AlphaKey);
+        repo.Index((IModGetter)beta, Registration.Participating(1), BetaKey);
         repo.UpdateWinners();
 
         return new Fixture(repo, sharedNpcFk, betaNpc, betaRace, betaWrld, betaCell, betaPlaced, betaQuest, betaTopic,
@@ -203,7 +203,7 @@ public class RegistrationScopingTests
         repo.UpdateWinners();
         Assert.Empty(repo.GetDocuments(BetaKey));
 
-        repo.Register(BetaKey, loadOrderIndex: 1, participates: true);
+        repo.Register(BetaKey, Registration.Participating(1));
         repo.UpdateWinners();
 
         Assert.Equal(fx.BetaRecordCount, repo.GetDocuments(BetaKey).Count);
@@ -228,6 +228,6 @@ public class RegistrationScopingTests
         repo.Unindex(BetaKey);
 
         Assert.Equal(0, RowsFor(repo, "mirror.records", BetaKey));
-        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM session_plugins WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin!));
+        Assert.Equal(0, Scalar(repo, "SELECT COUNT(*) FROM registrations WHERE plugin = $1 AND origin = $2", BetaKey.Name, BetaKey.Origin!));
     }
 }

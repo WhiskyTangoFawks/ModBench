@@ -22,18 +22,18 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         Assert.Equal(expectedStatus, doc.GetProperty("status").GetInt32());
     }
 
-    // --- POST /session/load-explicit ---
+    // --- POST /load-order ---
 
     [Theory]
     [InlineData("badGameDir", null, "Fallout4")]
     [InlineData(null, "badInstance", "Fallout4")]
     [InlineData(null, null, "NotAGame")]
-    public async Task SessionLoadExplicit_InvalidInput_ReturnsProblemDetails400(
+    public async Task PutLoadOrder_InvalidInput_ReturnsProblemDetails400(
         string? badGameDir, string? badInstance, string gameRelease)
     {
-        var resp = await _client.PostAsJsonAsync("/session/load-explicit", new
+        var resp = await _client.PutAsJsonAsync("/load-order", new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = badGameDir ?? _fixture.DataFolder,
             instanceRoot = badInstance ?? _fixture.InstanceRoot,
             gameRelease,
@@ -47,20 +47,20 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     // genuinely unreferenced — see SchemaReflectorAvailabilityTests) is a client error, not a
     // server fault: 400 with the typed, actionable message, not a 500 wrapping an assembly-load
     // exception. Game directory/instance root are the fixture's real (FO4) paths, never actually read —
-    // SessionManager.RunLoad's BeginLoad unconditionally tears down whatever session was
+    // LoadOrderMirror.RunLoad's BeginLoad unconditionally tears down whatever load order was
     // previously loaded before the new load's assembly-support probe even runs, so this uses its
-    // own isolated WebApplicationFactory (same pattern as Endpoint_NoSession_ReturnsProblemDetails
+    // own isolated WebApplicationFactory (same pattern as Endpoint_NoLoadOrder_ReturnsProblemDetails
     // below) rather than the shared LoadedApiFixture's client — reusing that client here would
-    // silently dispose the fixture's session out from under every other test in this class.
+    // silently dispose the fixture's load order out from under every other test in this class.
     [Fact]
-    public async Task SessionLoadExplicit_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
+    public async Task PutLoadOrder_UnsupportedGameRelease_ReturnsProblemDetails400WithActionableMessage()
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
 
-        var resp = await client.PostAsJsonAsync("/session/load-explicit", new
+        var resp = await client.PutAsJsonAsync("/load-order", new
         {
-            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Participates }),
+            plugins = _fixture.Plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameDirectory = _fixture.DataFolder,
             instanceRoot = _fixture.InstanceRoot,
             gameRelease = "SkyrimSE",
@@ -104,22 +104,20 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 409);
     }
 
-    // --- No session ---
+    // --- No load order ---
 
     [Theory]
     [InlineData("createPlugin", 503)]
     [InlineData("recordTypes", 503)]
     [InlineData("conditionFunctions", 503)]
     [InlineData("conditionRunOnTargets", 503)]
-    // #310: LoadUnlistedPlugin/UnloadUnlistedPlugin's own "no session" guards — the path/plugin
+    // #310: LoadUnlistedPlugin/UnloadUnlistedPlugin's own "no load order" guards — the path/plugin
     // check on each request body passes (real values below), so the request reaches
-    // SessionManager's `_session is null` branch and the 503 these routes declare via
+    // LoadOrderMirror's `_mirror is null` branch and the 503 these routes declare via
     // .ProducesProblem(503). The load case needs a path that actually exists on disk (File.Exists
-    // runs before the session check), hence the fixture's own already-written plugin file rather
+    // runs before the load order check), hence the fixture's own already-written plugin file rather
     // than a made-up one.
-    [InlineData("loadPlugin", 503)]
-    [InlineData("unloadPlugin", 503)]
-    public async Task Endpoint_NoSession_ReturnsProblemDetails(string op, int expectedStatus)
+    public async Task Endpoint_NoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
         var client = app.CreateClient();
@@ -129,34 +127,14 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         var resp = op switch
         {
             "createPlugin" => await client.PostAsJsonAsync(
-                "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoSessionMod"), origin = "NoSessionMod" }),
+                "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
             "recordTypes" => await client.GetAsync("/record-types"),
             "conditionFunctions" => await client.GetAsync("/condition-functions"),
             "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
-            "loadPlugin" => await client.PostAsJsonAsync("/plugins/load", new { path = realPluginPath, origin = "ModA" }),
-            "unloadPlugin" => await client.PostAsJsonAsync("/plugins/unload", new { plugin = TestPluginFixture.PluginName, origin = "ModA" }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
 
         AssertIsProblemDetails(resp, expectedStatus);
     }
 
-    // --- POST /plugins/load, path not found (#310) ---
-
-    // Distinct from the no-session case above: a session *is* loaded here (the shared `loaded`
-    // fixture), so this exercises LoadUnlistedPlugin's other declared guard —
-    // FileNotFoundException -> 404 — rather than the "no session" one. File.Exists runs before the
-    // session check, so this path is reachable regardless of session state; asserting it here
-    // (session live) is the more realistic caller shape (the visibility toggle re-issuing load for
-    // a copy that has since been deleted from disk).
-    [Fact]
-    public async Task LoadUnlistedPlugin_PathNotFound_ReturnsProblemDetails404()
-    {
-        var missingPath = Path.Combine(_fixture.DataFolder, "DoesNotExist.esp");
-
-        var resp = await _client.PostAsJsonAsync("/plugins/load", new { path = missingPath, origin = "ModA" });
-
-        Assert.Equal(HttpStatusCode.NotFound, resp.StatusCode);
-        AssertIsProblemDetails(resp, 404);
-    }
 }

@@ -10,8 +10,8 @@ namespace MEditService.Tests.Api;
 
 // #305 / ADR-0036: the wire-level guard rail for the four spatial routes
 // (GetWorldspaces/GetWorldspaceBlocks/GetCellReferences/GetInteriorCells), mirroring
-// DuplicateFilenameSessionApiTests' real two-copy load path — a session that actually holds two
-// physical files of one filename, rather than a hand-built pair below GameSession. Before this
+// DuplicateFilenameLoadOrderApiTests' real two-copy load path — a load order that actually holds two
+// physical files of one filename, rather than a hand-built pair below LoadOrder. Before this
 // ticket these routes had zero test coverage of their own at any layer; WorldspaceQueryServiceTests
 // covers the origin-threading logic in isolation, this proves it survives the route binding too.
 //
@@ -27,7 +27,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     // all EditorID-tagged with the origin that built them so a route answering with the wrong
     // copy's data is visible in the assertion, not just in the row count. Both copies construct
     // their content in the same order from a fresh Fallout4Mod against the same ModKey, so they
-    // land on identical FormKeys — same trick DuplicateFilenameSessionApiTests' shared-FormKey NPC
+    // land on identical FormKeys — same trick DuplicateFilenameLoadOrderApiTests' shared-FormKey NPC
     // pair uses — which is what lets one captured FormKey address both copies' /worldspaces/{fk}
     // and /cells/{fk} routes, distinguished only by the `origin` query param under test.
     private static (string WorldspaceFk, string CellFk) ConfigureCopy(Fallout4Mod mod, string tag)
@@ -69,25 +69,24 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         return (fx, worldspaceFk!, cellFk!);
     }
 
-    // Same real load path as DuplicateFilenameSessionApiTests: the load order names exactly one
-    // Shared.esp (ModA), and ModB arrives afterwards, on demand, as the copy the load order does
-    // not name.
-    private async Task LoadWinningCopyThenShadowedCopy(ScatteredFixtureData fx)
+    private async Task PutBothCopies(ScatteredFixtureData fx)
     {
-        var shadowed = fx.Plugins.Single(p => p.Origin == "ModB");
-        var loadOrder = fx.Plugins.Where(p => p.Origin != "ModB");
+        // ADR-0044: both copies travel in the one snapshot — ModA as the copy the Mod override
+        // order resolves the name to, ModB as the losing copy at the same slot — and both are
+        // registered; only the winning, enabled, listed one ever participates.
+        var winner = fx.Plugins.Single(p => p.Origin == "ModA");
+        var plugins = fx.Plugins.Select(p => p.Origin == "ModB"
+            ? p with { Slot = winner.Slot, Winning = false }
+            : p);
 
-        var load = await _client.PostAsJsonAsync("/session/load-explicit", new
+        var put = await _client.PutAsJsonAsync("/load-order", new
         {
             gameDirectory = fx.GameDirectory,
             instanceRoot = fx.InstanceRoot,
-            plugins = loadOrder.Select(p => new { name = p.Name, path = p.Path, origin = p.Origin, participates = true }),
+            plugins = plugins.Select(p => new { p.Name, p.Path, p.Origin, p.Slot, p.Enabled, p.Winning }),
             gameRelease = "Fallout4",
         });
-        load.EnsureSuccessStatusCode();
-
-        var onDemand = await _client.PostAsJsonAsync("/plugins/load", new { path = shadowed.Path, origin = shadowed.Origin });
-        onDemand.EnsureSuccessStatusCode();
+        put.EnsureSuccessStatusCode();
     }
 
     [Fact]
@@ -95,7 +94,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, _, _) = BuildTwoCopies();
         using var _fx = fx;
-        await LoadWinningCopyThenShadowedCopy(fx);
+        await PutBothCopies(fx);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
         Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => w.GetProperty("editorId").GetString()!).ToArray());
@@ -111,7 +110,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, worldspaceFk, _) = BuildTwoCopies();
         using var _fx = fx;
-        await LoadWinningCopyThenShadowedCopy(fx);
+        await PutBothCopies(fx);
         var encodedFk = Uri.EscapeDataString(worldspaceFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/worldspaces/{encodedFk}/blocks?origin=ModB");
@@ -128,7 +127,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, _, cellFk) = BuildTwoCopies();
         using var _fx = fx;
-        await LoadWinningCopyThenShadowedCopy(fx);
+        await PutBothCopies(fx);
         var encodedFk = Uri.EscapeDataString(cellFk);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>($"/plugins/Shared.esp/cells/{encodedFk}/references?origin=ModB");
@@ -143,7 +142,7 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
     {
         var (fx, _, _) = BuildTwoCopies();
         using var _fx = fx;
-        await LoadWinningCopyThenShadowedCopy(fx);
+        await PutBothCopies(fx);
 
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/interior-cells?origin=ModB&limit=50&offset=0");
         Assert.Equal(["InteriorModB"], modB.GetProperty("items").EnumerateArray().Select(c => c.GetProperty("editorId").GetString()!).ToArray());

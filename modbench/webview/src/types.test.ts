@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { columnKey } from './types';
 import type {   CompareOverride, CompareResult, ConditionCompare, ConditionDiff, ConditionGroupDiff, FieldDiff,   FieldMetadata, FieldValue, FormKeyResolution, ParsedCondition, ParsedConditionParam, RecordDetail, VmadCompare,   VmadPropertyDiff, VmadScriptDiff, } from './types';
-import type { PluginInfo } from './RecordSessionClient';
+import type { PluginInfo } from './RecordPanelClient';
 import type { components } from '../../src/medit/generated/api';
 
 type WireSchemas = components['schemas'];
@@ -12,7 +12,7 @@ type WireSchemas = components['schemas'];
 // `describe('columnKey', ...)` block below is a genuine vitest runtime suite.
 
 // #297 (generalizes the #272 regression check this file used to hand-roll per-DTO for
-// `winnerColumn` alone): every hand-written interface in `types.ts`/`RecordSessionClient.ts` that
+// `winnerColumn` alone): every hand-written interface in `types.ts`/`RecordPanelClient.ts` that
 // mirrors a generated wire DTO gets one containment check here — every key the hand type declares
 // must also exist on the generated schema for the same DTO. A backend rename (e.g. #272's
 // WinnerPlugin -> WinnerColumn) drops the renamed key from the generated side, so
@@ -64,7 +64,7 @@ export type CheckConditionCompare =
   AssertNoMissingKeys<KeysContainedIn<ConditionCompare, WireSchemas['ConditionCompare']>>;
 export type CheckCompareResult = AssertNoMissingKeys<KeysContainedIn<CompareResult, WireSchemas['CompareResult']>>;
 
-// PluginInfo (RecordSessionClient.ts): a deliberate structural subset of the backend's
+// PluginInfo (RecordPanelClient.ts): a deliberate structural subset of the backend's
 // PluginResponse (its own doc comment) — every key it does declare must still exist on the wire.
 export type CheckPluginInfo = AssertNoMissingKeys<KeysContainedIn<PluginInfo, WireSchemas['PluginResponse']>>;
 
@@ -110,7 +110,7 @@ describe('columnKey', () => {
   // #272 review: the generated wire schema types `origin` as `string | null` on every DTO that
   // carries it (CompareOverride/PluginResponse in generated/api.ts) even though the
   // backend can't actually produce a null there (see columnKey()'s own doc comment) — a `null`
-  // makes it through RecordSessionClient's unchecked `as` cast into these hand types regardless of
+  // makes it through RecordPanelClient's unchecked `as` cast into these hand types regardless of
   // what they claim, so `columnKey` must tolerate it exactly like the elided Data origin rather
   // than throwing inside `.toLowerCase()`.
   it('treats a literal null origin the same as the Data origin, not a crash', () => {

@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -26,8 +26,8 @@ public sealed class UntrackedReadOnlyTests
 {
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    private static RecordEditService ServiceFor(ISessionManager sessions) =>
-        new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
+        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void EditingAPluginInAnUntrackedModFolder_IsRefused_NamingTheTrackCommand()
@@ -35,7 +35,7 @@ public sealed class UntrackedReadOnlyTests
         using var mod = TrackedModFixture.Untracked();
         Assert.False(SourceRepository.IsTracked(mod.ModFolder)); // the whole of "untracked": no .git
 
-        var result = ServiceFor(mod.Sessions).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
+        var result = ServiceFor(mod.Mirror).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -52,7 +52,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var mod = TrackedModFixture.Untracked();
 
-        ServiceFor(mod.Sessions).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
+        ServiceFor(mod.Mirror).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
 
         // Not merely "no dirt" — there is no repo to have dirt in. Hard read-only means the refusal
         // did not quietly create the source tree on its way out.
@@ -65,7 +65,7 @@ public sealed class UntrackedReadOnlyTests
     {
         using var vanilla = new DataDirectoryFixture();
 
-        var result = ServiceFor(vanilla.Sessions)
+        var result = ServiceFor(vanilla.Mirror)
             .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.False(result.Applied);
@@ -79,9 +79,9 @@ public sealed class UntrackedReadOnlyTests
         using var untracked = TrackedModFixture.Untracked();
         using var vanilla = new DataDirectoryFixture();
 
-        var trackable = ServiceFor(untracked.Sessions)
+        var trackable = ServiceFor(untracked.Mirror)
             .EditField(untracked.Plugin, untracked.Npc.ToString(), "height_max", Json("0.75"));
-        var notTrackable = ServiceFor(vanilla.Sessions)
+        var notTrackable = ServiceFor(vanilla.Mirror)
             .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "height_max", Json("0.75"));
 
         // Collapsing these into one "read-only" refusal would leave half the users following advice
@@ -100,7 +100,7 @@ public sealed class UntrackedReadOnlyTests
         // is one command, once, per mod. Same plugin, same record, same field — only .git differs.
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
+        var result = ServiceFor(mod.Mirror).EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(RecordEditRefusal.None, result.Refusal);
@@ -117,7 +117,7 @@ public sealed class UntrackedReadOnlyTests
         private const string Name = "Vanilla.esm";
 
         public string GameDirectory { get; }
-        public SessionManager Sessions { get; }
+        public LoadOrderMirror Mirror { get; }
         public PluginKey Plugin { get; } = new(Name, PluginOrigin.DataDirectory);
         public FormKey Npc { get; }
 
@@ -129,17 +129,17 @@ public sealed class UntrackedReadOnlyTests
             Npc = mod.Npcs.AddNew("VanillaNpc").FormKey;
             mod.WriteToBinary(pluginPath);
 
-            Sessions = new SessionManager(
+            Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)Sessions).LoadExplicit(
+            ((ILoadOrderMirror)Mirror).Reconcile(
                 GameDirectory,
-                [new ExplicitPluginInput(Name, pluginPath, PluginOrigin.DataDirectory, true)],
+                [new LoadOrderEntry(Name, pluginPath, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
         }
 
         public void Dispose()
         {
-            Sessions.Dispose();
+            Mirror.Dispose();
             try { Directory.Delete(GameDirectory, recursive: true); }
             catch (IOException) { /* scratch directory, best effort */ }
         }

@@ -72,7 +72,7 @@ public enum RecordEditRefusal
     /// up to <c>0xFFFFFF</c> is already in use at one ref or the other. A typed refusal (review
     /// finding #1), not an exception: a full plugin refusing a new record is an ordinary, expected
     /// outcome on this write path, the same doctrine as every other refusal here — never conflated
-    /// with "no usable session" by a caller's generic exception handling.</summary>
+    /// with "no usable load order" by a caller's generic exception handling.</summary>
     FormKeySpaceExhausted,
 
     /// <summary>
@@ -97,7 +97,7 @@ public enum RecordEditRefusal
     /// #453: nothing on disk holds this record, and the index names no container that would. Distinct
     /// from <see cref="RecordNotFound"/>, which is about the index alone: this is the index and the
     /// working tree disagreeing, i.e. the never-assume-exclusive-ownership case — a file another tool
-    /// moved or removed since the session loaded. Refused rather than recreated at a computed path,
+    /// moved or removed since the reconcileed. Refused rather than recreated at a computed path,
     /// because for a container there is no path to compute: its directory nesting lives in the tree,
     /// and inventing one would put the record somewhere the tree does not say it belongs.
     /// </summary>
@@ -124,7 +124,7 @@ public enum RecordEditRefusal
     /// <summary>
     /// #501: a caller-typed target FormKey (create's or renumber's own typed-FormID path) whose local
     /// ID exceeds <c>0xFFF</c> on a plugin that is ESL-flagged (header <c>Small</c> flag, or a plain
-    /// <c>.esl</c> extension — <see cref="MEditService.Core.Session.PluginFlagPredicates.IsLight"/>).
+    /// <c>.esl</c> extension — <see cref="MEditService.Core.Plugins.PluginFlagPredicates.IsLight"/>).
     /// The engine can only address a local FormID up to <c>0xFFF</c> from a light plugin's load-order
     /// slot; above that, the record's FormKey exists in perfectly ordinary space, so
     /// <see cref="FormKeySpaceExhausted"/> would be a lie — this is its own case because the way out is

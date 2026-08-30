@@ -31,7 +31,7 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
     getTreeItem(child: TChild): vscode.TreeItem;
     onDidChangeTreeData: vscode.Event<TChild | undefined | null>;
     /** #364: the root-level Conflicts node, or undefined while it has nothing to show (no
-     *  session, or `SessionStatus.conflictsComputed` still false — `PluginTreeProvider
+     *  load order held, or `LoadOrderStatus.conflictsComputed` still false — `PluginTreeProvider
      *  .conflictsNode`'s own gate, never re-decided here). A `TChild` like every other node the
      *  record side owns, so it is prepended to the root row list, never added to `rowsSeen` — it
      *  routes through this same `children` object for its own `getChildren`/`getTreeItem`, the
@@ -67,14 +67,14 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
   stackPeersOf?(row: TRow): StackPeer[] | undefined;
   /** #449: this plugin's own compile-freshness answer — "source ahead of binary" — keyed the same
    *  way `hasMatchingRecords` is (a plugin filename, not the row), because it changes on its own
-   *  independent trigger (Save & Compile) rather than through `setSession`'s once-per-load bundle,
+   *  independent trigger (Save & Compile) rather than through `setLoadOrder`'s once-per-reconcile bundle,
    *  the same reason `hasMatchingRecords` itself lives here rather than in that bundle. Undefined
    *  (accessor not wired, or the plugin isn't in whatever map backs it) reads as "nothing to show"
    *  — the same safe default `hasMatchingRecords` itself falls back to. */
   compileStaleOf?(pluginFile: string): { stale: boolean; lastCompiledAt: string | null } | undefined;
 }
 
-/** A plugin's own declared master, absent from the session (#277 / ADR-0037). Structurally
+/** A plugin's own declared master, absent from the load order (#277 / ADR-0037). Structurally
  *  matches `medit/ApiClient.ts`'s `MasterIssue` without importing it — the composite imports
  *  from neither bounded context (`src/test/contextBoundary.test.ts`). `DirectlyMissing`: never
  *  attempted at all. `Unloadable`: attempted, but itself failed to open or parse — not a
@@ -141,7 +141,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     const item = this.deps.rows.getTreeItem(element as TRow);
     // The chevron *is* the "editing is available now" signal (ADR-0035), so it is decided here on
     // every render rather than baked into the row when it was built: the row provider neither
-    // knows nor should know that a session exists. Set both ways — closing a session has to take
+    // knows nor should know that Editing exists. Set both ways — closing mEdit has to take
     // the chevrons back off rows the provider is still caching.
     item.collapsibleState = this.expandableFile(element as TRow) === undefined
       ? vscode.TreeItemCollapsibleState.None
@@ -149,7 +149,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     // #276 / ADR-0035, extended by #277 / ADR-0037: read-only-for-editing, the load-failure
     // decoration and the master-issue decoration are all decided here for the same reason the
     // chevron is — this is the one place allowed to know both what the row provider built and
-    // what the session says, so neither side has to learn the other's vocabulary. Tooltip and (for
+    // what the load order says, so neither side has to learn the other's vocabulary. Tooltip and (for
     // the error decorations only) icon/description — never the leading slot (checkbox/lock,
     // #276), which answers exactly one question ("can you change whether this loads?") that none
     // of this is part of, and never contextValue: #356 retired the one decoration (drift) that
@@ -206,7 +206,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
    *  master issues — take decoration authority for a row only when the backend actually has
    *  something to say about it; otherwise `item` is left exactly as `captureOriginalDecoration`
    *  restored it (including a frontend-only order-aware badge, untouched — see AC8 below). Both
-   *  branches read their session maps with `?? []`/an explicit undefined check rather than a bare
+   *  branches read their load-order maps with `?? []`/an explicit undefined check rather than a bare
    *  `.get(...).x` — the wire's `masterIssues` is `MasterIssue[] | undefined | null` even though
    *  the backend always emits an array once #277 ships, and a response from a backend predating
    *  the field must degrade to "no issues", not throw. */
@@ -234,7 +234,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   /** #449: a tracked plugin whose source has moved past `refs/medit/last-compile/<plugin>` —
-   *  "the game can't see your edits yet". Session-derived like the master-issue/load-failure
+   *  "the game can't see your edits yet". Load-order-derived like the master-issue/load-failure
    *  decorations above (append-only, never the leading slot), but never claims `iconPath` — the
    *  description hint is the primary signal, and the icon slot stays reserved for whichever
    *  higher-severity decoration (if any) already claimed it above. */
@@ -251,7 +251,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   /** AC1/AC2/AC4/AC8: one decoration, not two that can disagree. A master name the backend also
-   *  flags is reported once, in the backend's richer session-aware wording; a master the
+   *  flags is reported once, in the backend's richer load-order-aware wording; a master the
    *  frontend's order-only check (issue #67) flagged that the backend does *not* — present,
    *  loaded, merely sequenced too late, a fact Mutagen's own FormKey resolution has no way to see
    *  — is preserved, worded distinctly. Built structurally from `issues` and
@@ -284,30 +284,29 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     return this.rowsSeen.has(element as object);
   }
 
-  /** #97 / ADR-0035 § Live mutation: whether a backend session is currently loaded — the same fact
-   *  `expandableFile` below already gates the chevron on, exposed so the composition root can
-   *  decide whether a load-order mutation (a checkbox toggle) has a running session to apply
-   *  itself to at all, before ever attempting the call. Mod Management works with no backend
-   *  running (root CLAUDE.md), which is the ordinary case, not a failure — so this is checked
-   *  rather than let a doomed request surface as a network-error toast for an entirely normal
-   *  loadout-only session. */
-  hasSession(): boolean {
-    return this.sessionFiles !== undefined;
+  /** #97 / ADR-0044: whether Editing currently holds a load order — the same fact `expandableFile`
+   *  below already gates the chevron on, exposed so the composition root can decide whether a
+   *  loadout change has a receiver for the next snapshot at all, before ever attempting the PUT.
+   *  Mod Management works with no backend running (root CLAUDE.md), which is the ordinary case,
+   *  not a failure — so this is checked rather than let a doomed request surface as a network-error
+   *  toast for an entirely normal loadout-only workspace. */
+  hasLoadOrder(): boolean {
+    return this.heldFiles !== undefined;
   }
 
-  /** The plugin file this row can browse, or undefined when it can't be expanded — no session, no
-   *  plugin file, or a file the session doesn't hold. A row whose filter match is `false` never
+  /** The plugin file this row can browse, or undefined when it can't be expanded — no load order
+   *  held, no plugin file, or a file the load order doesn't hold. A row whose filter match is `false` never
    *  reaches here at all (#396: `getChildren()` omits it before `getTreeItem`/`getChildren(row)`
    *  can be called on it — VS Code's own contract guarantees neither is called with an element
    *  `getChildren` didn't return), so there is nothing left for this method itself to rule out on
-   *  that account. The empty-session case is the honest answer for the same underlying reason a
+   *  that account. The nothing-held case is the honest answer for the same underlying reason a
    *  filtered-out row used to be here: a row that would expand to an empty list reads as "this
    *  plugin has no records" (ADR-0026's silent-wrong-state tier), whether the emptiness comes from
    *  never having been indexed or (now handled one level up) from every record being filtered out. */
   private expandableFile(row: TRow): string | undefined {
-    if (this.sessionFiles === undefined) return undefined;
+    if (this.heldFiles === undefined) return undefined;
     const file = this.deps.pluginFileOf(row);
-    return file === undefined || !this.sessionFiles.has(file.toLowerCase()) ? undefined : file;
+    return file === undefined || !this.heldFiles.has(file.toLowerCase()) ? undefined : file;
   }
 
   /** #396 / ADR-0035's dated §Filters amendment: true for a row whose plugin the active record
@@ -321,36 +320,36 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     return file !== undefined && this.deps.hasMatchingRecords?.(file) === false;
   }
 
-  private sessionFiles?: Set<string>;
+  private heldFiles?: Set<string>;
   private readOnlyFiles?: Set<string>;
   private masterIssues?: Map<string, MasterIssue[]>;
   private loadFailures?: Map<string, string>;
 
-  /** The plugin files the editing session holds, or undefined when there is no session, plus
+  /** The plugin files Editing's load order holds, or undefined when it holds none, plus
    *  (#276 / ADR-0035) the subset that's read-only for editing — Editing's "Immutable plugin"
    *  (`medit/ApiClient.ts` `PluginMetadata.isImmutable`) — and (#277 / ADR-0037) each plugin's own
    *  master issues, keyed by plugin filename (`medit/ApiClient.ts` `PluginMetadata.masterIssues`),
-   *  plus (also #277 / ADR-0037 AC7) the reason for every plugin the session tried and failed to
-   *  load at all (`SessionLoadResponse.failures`, already crossed the wire — no new endpoint).
-   *  One setter, not four: these facts are a single hand-off from the same session and never
-   *  change independently — every call site in `extension.ts` either sets all of them (session
-   *  start) or clears all of them (session close, backend gone), so separately-callable setters
+   *  plus (also #277 / ADR-0037 AC7) the reason for every copy the reconcile tried and failed to
+   *  open at all (`LoadOrderResponse.failures`, already crossed the wire — no new endpoint).
+   *  One setter, not four: these facts are a single hand-off from the same reconcile and never
+   *  change independently — every call site in `extension.ts` either sets all of them (a reconcile
+   *  landed) or clears all of them (mEdit closed, backend gone), so separately-callable setters
    *  would only be a coupling something could call apart by mistake. `readOnlyFiles`,
    *  `masterIssues` and `loadFailures` all default to empty, so existing shorter-argument callers
    *  are unaffected.
    *
-   *  This is the whole of the composite's own state: chevrons appear across the tree when a
-   *  session is set and come off when it is cleared, which ADR-0035 makes the entire "editing is
+   *  This is the whole of the composite's own state: chevrons appear across the tree when a load
+   *  order is set and come off when it is cleared, which ADR-0035 makes the entire "editing is
    *  available now" signal — no banner, no mode. Re-renders what is already built; it never
-   *  re-reads the load order, so filter state, expansion and scroll position survive a session
+   *  re-reads the load order, so filter state, expansion and scroll position survive mEdit
    *  starting or closing. */
-  setSession(
+  setLoadOrder(
     pluginFiles: Set<string> | undefined,
     readOnlyFiles: Set<string> = new Set(),
     masterIssues: Map<string, MasterIssue[]> = new Map(),
     loadFailures: Map<string, string> = new Map(),
   ): void {
-    this.sessionFiles = pluginFiles && new Set([...pluginFiles].map((f) => f.toLowerCase()));
+    this.heldFiles = pluginFiles && new Set([...pluginFiles].map((f) => f.toLowerCase()));
     this.readOnlyFiles = pluginFiles && new Set([...readOnlyFiles].map((f) => f.toLowerCase()));
     this.masterIssues = pluginFiles && new Map([...masterIssues].map(([name, issues]) => [name.toLowerCase(), issues]));
     this.loadFailures = pluginFiles && new Map([...loadFailures].map(([name, reason]) => [name.toLowerCase(), reason]));

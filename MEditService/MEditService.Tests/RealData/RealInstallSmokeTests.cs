@@ -62,7 +62,7 @@ public sealed class RealInstallSmokeTests
             if (!locator.TryGetDataDirectory(release, out var dataDir))
                 continue;
 
-            // GameSession loads the implicit base masters present in the game directory, so an
+            // LoadOrder loads the implicit base masters present in the game directory, so an
             // empty explicit list is enough to exercise a real vanilla load without guessing load
             // order. #592: the index needs an instance to live in — a temp one, since a real
             // install is not an MO2 instance and this test must not write into one.
@@ -74,7 +74,7 @@ public sealed class RealInstallSmokeTests
                 var client = app.CreateClient();
                 client.Timeout = TimeSpan.FromMinutes(10);
 
-                var load = await client.PostAsJsonAsync("/session/load-explicit", new
+                var load = await client.PutAsJsonAsync("/load-order", new
                 {
                     plugins = Array.Empty<object>(),
                     gameDirectory = dataDir.Path,

@@ -4,7 +4,7 @@ namespace MEditService.Core.Source;
 
 /// <summary>
 /// #417 exit path 3: "Until answered, the affected plugin is refused for editing... Deferral is
-/// per-plugin, not per-session." — set the moment detection queues a question (never only on an
+/// per-plugin, not per-load order." — set the moment detection queues a question (never only on an
 /// explicit Esc: Esc's own contribution is that nothing further gets written, but the plugin is
 /// already refused from the instant it was detected, by <c>Bridge.ExternalChangeWatcher.
 /// ReportExternalChange</c>, the one shared choke point both the live watcher and the load-time

@@ -235,7 +235,7 @@ describe('a term that matches nothing says so (#255)', () => {
     expect(view.message).toBeUndefined();
   });
 
-  // The Plugins view has one message surface and two things that can want it: the session
+  // The Plugins view has one message surface and two things that can want it: the load order
   // load's own statement (#307) and this. The load wins while it is running; `refresh` is how
   // the filter gets its statement back once the load stops talking.
   it('restates its message on refresh, after something else has taken the view message surface', async () => {

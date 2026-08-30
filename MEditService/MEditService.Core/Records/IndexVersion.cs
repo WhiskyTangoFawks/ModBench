@@ -30,7 +30,7 @@ internal static class IndexVersion
 {
     /// <summary>Bump on any change to <see cref="TableDdlBuilder"/>'s fixed tables or to the record
     /// codec's conventions — see this class's own summary for why nothing else can catch those.</summary>
-    private const int FormatVersion = 2;
+    private const int FormatVersion = 3;
 
     internal static string For(ISchemaReflector reflector, GameRelease release)
     {

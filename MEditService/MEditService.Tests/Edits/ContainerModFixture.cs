@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -49,7 +49,7 @@ public sealed class ContainerModFixture : IDisposable
 
     public string ModFolder { get; }
     public string GameDirectory { get; }
-    public SessionManager Sessions { get; }
+    public LoadOrderMirror Mirror { get; }
     public PluginKey Plugin { get; } = new(PluginName, ModFolderOrigin);
 
     public const string NpcEditorId = "FixtureNpc";
@@ -174,15 +174,15 @@ public sealed class ContainerModFixture : IDisposable
         Response = response.FormKey;
         (DialogTopic2, DialogTopic3) = (dialogTopic2.FormKey, dialogTopic3.FormKey);
 
-        Sessions = new SessionManager(
+        Mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)Sessions).LoadExplicit(
+        ((ILoadOrderMirror)Mirror).Reconcile(
             GameDirectory,
-            [new ExplicitPluginInput(PluginName, pluginPath, ModFolderOrigin, true)],
+            [new LoadOrderEntry(PluginName, pluginPath, ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(Sessions.Session!, ModFolderOrigin, SourcePreset.Edits)
+            .TrackAsync(Mirror.LoadOrder!, ModFolderOrigin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
@@ -255,7 +255,7 @@ public sealed class ContainerModFixture : IDisposable
 
     public void Dispose()
     {
-        Sessions.Dispose();
+        Mirror.Dispose();
         TryDelete(ModFolder);
         TryDelete(GameDirectory);
     }

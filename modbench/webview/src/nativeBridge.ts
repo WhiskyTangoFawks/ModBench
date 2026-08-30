@@ -42,7 +42,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return;
   }
   if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED) {
-    // Issue #230 (seam): deleted here, not left to accumulate — a session that opens many
+    // Issue #230 (seam): deleted here, not left to accumulate — a load order that opens many
     // fields' extended editors over time would otherwise grow one stale map entry per tab ever
     // opened, each one holding a closure over that tab's onCommit and everything it captured.
     extendedEditors.delete(msg.requestId);

@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #416 S2/S3: masters are derived from content (ADR-0038), and written in the session's *current*
+/// #416 S2/S3: masters are derived from content (ADR-0038), and written in the load order's *current*
 /// load order — never Mutagen's alphabetical default, and never the plugin's own prior header.
 /// </summary>
 public sealed class PluginCompileServiceMastersTests : IDisposable
@@ -23,7 +23,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private const string DeltaName = "Delta.esm";
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-masters-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-masters-game-").FullName;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
     private readonly PluginKey _plugin = new(PluginName, "MastersMod");
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
@@ -66,26 +66,26 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         });
         (_npc, _bravoKeyword, _charlieKeyword) = (npc.FormKey, bravoKeyword.FormKey, charlieKeyword.FormKey);
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
+        ((ILoadOrderMirror)_mirror).Reconcile(
             _gameDirectory,
             [
-                new ExplicitPluginInput(CharlieName, charliePath, "Data", true),
-                new ExplicitPluginInput(BravoName, bravoPath, "Data", true),
-                new ExplicitPluginInput(DeltaName, deltaPath, "Data", true),
-                new ExplicitPluginInput(PluginName, pluginPath, _plugin.Origin!, true),
+                new LoadOrderEntry(CharlieName, charliePath, "Data", Slot: 0, Enabled: true, Winning: true),
+                new LoadOrderEntry(BravoName, bravoPath, "Data", Slot: 1, Enabled: true, Winning: true),
+                new LoadOrderEntry(DeltaName, deltaPath, "Data", Slot: 2, Enabled: true, Winning: true),
+                new LoadOrderEntry(PluginName, pluginPath, _plugin.Origin!, Slot: 3, Enabled: true, Winning: true),
             ],
             GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, _plugin.Origin!, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, _plugin.Origin!, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -98,10 +98,10 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     }
 
     private PluginCompileService CompileService() =>
-        new(_sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+        new(_mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
 
     [Fact]
-    public void Compile_WritesMasters_InCurrentSessionLoadOrder_NotAlphabetical()
+    public void Compile_WritesMasters_InCurrentLoadOrder_NotAlphabetical()
     {
         var result = CompileService().Compile(_plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
@@ -122,7 +122,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     [Fact]
     public void Compile_AfterAnEditIntroducesAReferenceToAPreviouslyUnreferencedPlugin_AddsItAsAMaster()
     {
-        var editResult = new RecordEditService(_sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var editResult = new RecordEditService(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(_plugin, _npc.ToString(), "keywords",
                 System.Text.Json.JsonDocument.Parse(
                     System.Text.Json.JsonSerializer.Serialize(new[]

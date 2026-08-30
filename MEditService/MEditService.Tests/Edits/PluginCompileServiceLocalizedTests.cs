@@ -1,7 +1,7 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -26,7 +26,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-compile-localized-").FullName;
     private readonly string _gameDir = Directory.CreateTempSubdirectory("medit-compile-localized-game-").FullName;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
 
     public PluginCompileServiceLocalizedTests()
     {
@@ -37,19 +37,19 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         mod.UsingLocalization = true;
         mod.WriteToBinary(pluginPath);
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
-            _gameDir, [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)], GameRelease.Fallout4);
+        ((ILoadOrderMirror)_mirror).Reconcile(
+            _gameDir, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         Directory.Delete(_modFolder, recursive: true);
         Directory.Delete(_gameDir, recursive: true);
     }
@@ -85,7 +85,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
         var plugin = new PluginKey(PluginName, Origin);
         var compileService = new PluginCompileService(
-            _sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            _mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
         var result = compileService.Compile(plugin, new CompileSource.WorkingTree());
 
         Assert.True(result.Succeeded, result.RefusalReason);

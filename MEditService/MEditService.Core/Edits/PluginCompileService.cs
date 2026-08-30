@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Mutagen.Bethesda;
@@ -46,16 +46,16 @@ namespace MEditService.Core.Edits;
 /// mattered behaviourally for, that closes the semantic loss #459 was opened to fix.</para>
 /// </summary>
 public sealed class PluginCompileService(
-    ISessionManager sessions,
+    ILoadOrderMirror mirror,
     PluginWriter writer,
     ILogger<PluginCompileService> logger)
 {
     public CompileResult Compile(PluginKey plugin, CompileSource source)
     {
-        var (resolvedSession, resolvedIndex, resolvedModFolder, resolvedMetadata, targetRefusal) = ResolveCompileTarget(plugin);
+        var (resolvedLoadOrder, resolvedIndex, resolvedModFolder, resolvedMetadata, targetRefusal) = ResolveCompileTarget(plugin);
         if (targetRefusal != null)
             return CompileResult.Refused(targetRefusal);
-        var (session, index, modFolder, metadata) = (resolvedSession!, resolvedIndex!, resolvedModFolder!, resolvedMetadata!);
+        var (loadOrder, index, modFolder, metadata) = (resolvedLoadOrder!, resolvedIndex!, resolvedModFolder!, resolvedMetadata!);
 
         // A compile at a named ref reads that ref's tree onto disk first, so both cases below are the
         // same "read this directory" call. Once this returns, `using` disposes the scratch on every
@@ -92,9 +92,9 @@ public sealed class PluginCompileService(
         if (roundTripRefusal != null)
             return CompileResult.Refused(roundTripRefusal);
 
-        var diagnostics = CollectDiagnostics(mod, index, plugin, checkout.ResolverRoot, session.GameRelease);
+        var diagnostics = CollectDiagnostics(mod, index, plugin, checkout.ResolverRoot, loadOrder.GameRelease);
 
-        var loadOrder = session.Plugins
+        var loadOrderNames = loadOrder.Plugins
             .Where(p => p.InLoadOrder)
             .OrderBy(p => p.LoadOrderIndex)
             .Select(p => p.Name)
@@ -111,7 +111,7 @@ public sealed class PluginCompileService(
         var atRef = source is CompileSource.AtRef atRefSource ? atRefSource.Ref : null;
         CompileJournal.RunBatch(modFolder, [plugin.Name], _ =>
         {
-            writer.SaveFromModAsync(mod, metadata.Path, loadOrder).GetAwaiter().GetResult();
+            writer.SaveFromModAsync(mod, metadata.Path, loadOrderNames).GetAwaiter().GetResult();
 
             // #416 S7/S8: the ref advances only after the binary write above has landed — never
             // before, never on a refused compile. An AtRef compile parks too (go-ahead note 1):
@@ -133,31 +133,31 @@ public sealed class PluginCompileService(
     }
 
     /// <summary>
-    /// The three checks that establish there is a source to compile at all: a session, a tracked mod
-    /// folder for <paramref name="plugin"/>, and that plugin's own metadata within the session.
+    /// The three checks that establish there is a source to compile at all: a load order, a tracked mod
+    /// folder for <paramref name="plugin"/>, and that plugin's own metadata within the load order.
     /// Extracted out of <see cref="Compile"/> alongside this ticket's own two refusal checks (S1541)
     /// — this one predates #473, but the same flattening applies to it once <see cref="Compile"/>
     /// had two more branches to make room for.
     /// </summary>
-    private (IGameSession? Session, IRecordIndex? Index, string? ModFolder, PluginMetadata? Metadata, string? RefusalReason)
+    private (ILoadOrder? LoadOrder, IRecordIndex? Index, string? ModFolder, PluginMetadata? Metadata, string? RefusalReason)
         ResolveCompileTarget(PluginKey plugin)
     {
-        var session = sessions.Session;
-        var index = sessions.Index;
-        if (session == null || index == null)
-            return (null, null, null, null, "No session is loaded.");
+        var loadOrder = mirror.LoadOrder;
+        var index = mirror.Index;
+        if (loadOrder == null || index == null)
+            return (null, null, null, null, "No load order has been received.");
 
-        var modFolder = ModFolders.TrackedOf(session, plugin);
+        var modFolder = ModFolders.TrackedOf(loadOrder, plugin);
         if (modFolder == null)
             return (null, null, null, null, $"{plugin.Name} is not tracked, so there is no source to compile.");
 
-        var metadata = session.Plugins.FirstOrDefault(p =>
+        var metadata = loadOrder.Plugins.FirstOrDefault(p =>
             p.Name.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase)
             && p.Origin.Equals(plugin.Origin, StringComparison.OrdinalIgnoreCase));
         if (metadata == null)
-            return (null, null, null, null, $"{plugin.Name} is not part of the loaded session.");
+            return (null, null, null, null, $"{plugin.Name} is not in the load order.");
 
-        return (session, index, modFolder, metadata, null);
+        return (loadOrder, index, modFolder, metadata, null);
     }
 
     /// <summary>

@@ -32,9 +32,9 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     /// <summary>
     /// Imports the plugin at <paramref name="pluginPath"/> and writes it back out to a temp file,
     /// returning the uncommitted result. <paramref name="loadOrder"/> (#337/ADR-0038): plugin
-    /// filenames in the session's current load order, used to order the written master list
+    /// filenames in the load order's current load order, used to order the written master list
     /// explicitly (xEdit-familiar canonical form on disk — ADR-0034 at the file level) rather than
-    /// leaving it to Mutagen's undefined default. Optional, because PluginWriter has no session
+    /// leaving it to Mutagen's undefined default. Optional, because PluginWriter has no load order
     /// concept of its own.
     /// </summary>
     public static Task<PreparedPluginSave> PrepareAsync(
@@ -44,7 +44,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
         // #515: same explicit strings parameters every other deep-parse call site now builds. This
-        // method has no session concept of its own (see its own doc comment) and so no origin to
+        // method has no load order concept of its own (see its own doc comment) and so no origin to
         // distinguish a mod folder from the game Data folder — the single-argument ForRead overload
         // applies, the same as ExternalChangeAbsorber/ExternalChangeEditLander's identical call.
         var mod = ModFactory.ImportSetter(new ModPath(modKey, pluginPath), gameRelease, LocalizedStrings.ForRead(Path.GetDirectoryName(pluginPath)!));
@@ -107,7 +107,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
 
         // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every write —
         // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
-        // to Mutagen's default (alphabetical, masters-first): the session's current load order when
+        // to Mutagen's default (alphabetical, masters-first): the load order's current load order when
         // supplied, so the written file's master list matches what a modder opening it in xEdit
         // afterward expects (ADR-0034 at the file level).
         if (loadOrder != null)

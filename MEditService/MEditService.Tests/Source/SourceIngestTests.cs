@@ -1,9 +1,9 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,29 +15,25 @@ namespace MEditService.Tests.Source;
 /// #452 / ADR-0041's #444 amendment, point 2: "Tracked plugins ingest from source. Working tree →
 /// Effective, git <c>HEAD</c> → Head; the binary is never consulted for a tracked plugin's content."
 ///
-/// <para>Every test here reloads the mod folder in a <b>brand-new</b> <see cref="SessionManager"/> —
-/// the only honest way to ask what session load itself ingests, rather than what some earlier
-/// in-session gesture left behind. And every assertion reads the raw <see cref="IRecordIndex"/>,
+/// <para>Every test here reloads the mod folder in a <b>brand-new</b> <see cref="LoadOrderMirror"/> —
+/// the only honest way to ask what reconcile itself ingests, rather than what some earlier
+/// in-load order gesture left behind. And every assertion reads the raw <see cref="IRecordIndex"/>,
 /// never <c>RecordQueryService</c>: the latter drives <c>SourceFreshness</c>'s read-time self-heal,
 /// which would fold the source file in on the first read and make a binary-seeded ingest look
 /// source-seeded. The point of this suite is that no point-read trigger is needed at all.</para>
 /// </summary>
 public sealed class SourceIngestTests
 {
-    /// <summary>A fresh session over the same mod folder — a backend restart, in effect.</summary>
-    private static SessionManager Reload(TrackedModFixture mod)
+    /// <summary>A fresh load order over the same mod folder — a backend restart, in effect.</summary>
+    private static LoadOrderMirror Reload(TrackedModFixture mod)
     {
-        var sessions = new SessionManager(
+        var mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)sessions).LoadExplicit(
+        ((ILoadOrderMirror)mirror).Reconcile(
             mod.GameDirectory,
-            [new ExplicitPluginInput(
-                TrackedModFixture.PluginName,
-                Path.Combine(mod.ModFolder, TrackedModFixture.PluginName),
-                TrackedModFixture.ModFolderOrigin,
-                true)],
+            [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
-        return sessions;
+        return mirror;
     }
 
     // ---- AC1: the working tree is Effective ----
@@ -48,7 +44,7 @@ public sealed class SourceIngestTests
         using var mod = TrackedModFixture.Tracked();
 
         // A hand edit outside Modbench — the user's own editor, an agent's script, a git checkout.
-        // Nothing tells the backend it happened; the next session load is simply expected to read it.
+        // Nothing tells the backend it happened; the next reconcile is simply expected to read it.
         var text = File.ReadAllText(mod.NpcSourceFile);
         File.WriteAllText(mod.NpcSourceFile, text.Replace(
             TrackedModFixture.NpcEditorId, "ExternallyRenamed", StringComparison.Ordinal));
@@ -172,7 +168,7 @@ public sealed class SourceIngestTests
     // ---- Q4: a source tree that cannot be read degrades to the binary, visibly ----
 
     [Fact]
-    public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheSessionsFailures()
+    public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
     {
         using var mod = TrackedModFixture.Tracked();
 
@@ -248,7 +244,7 @@ public sealed class SourceIngestTests
     // ---- #453 slice 4: a renamed source unit is one dirty record, not two half-records ----
 
     /// <summary>
-    /// An EditorID edit moves the source unit's file, so the next session load sees the same FormKey
+    /// An EditorID edit moves the source unit's file, so the next reconcile sees the same FormKey
     /// twice in the dirty set: the old path, gone from the working tree but present in <c>HEAD</c>, and
     /// the new path, present in the working tree and in no commit. Reconciled naively those are a
     /// delete and a create — which would put one FormKey in <b>both</b> halves of <c>records_head</c>,
@@ -269,7 +265,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var edit = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var edit = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(mod.Plugin, mod.Npc.ToString(), "editor_id",
                 JsonDocument.Parse("\"RenamedAcrossReload\"").RootElement);
         Assert.True(edit.Applied, edit.Message);
@@ -298,7 +294,7 @@ public sealed class SourceIngestTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(mod.Plugin, mod.Npc.ToString(), "editor_id",
                 JsonDocument.Parse("\"RenamedOnce\"").RootElement);
 

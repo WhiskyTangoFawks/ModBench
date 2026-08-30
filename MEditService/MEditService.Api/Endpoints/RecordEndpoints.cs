@@ -233,9 +233,9 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            // 503, matching every sibling's own mapping for it: the session went away underneath the
+            // 503, matching every sibling's own mapping for it: the load order went away underneath the
             // request, which is a "not right now", never a bad request.
-            logger.LogError(ex, "No usable session while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
+            logger.LogError(ex, "No usable loadOrder while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -263,7 +263,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while deleting {FormKey}", decoded);
+            logger.LogError(ex, "No usable loadOrder while deleting {FormKey}", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -307,7 +307,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while renumbering {FormKey}", decoded);
+            logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -344,7 +344,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while copying {FormKey} as an override", decoded);
+            logger.LogError(ex, "No usable loadOrder while copying {FormKey} as an override", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
@@ -391,7 +391,7 @@ public static class RecordEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while copying {FormKey} as a new record", decoded);
+            logger.LogError(ex, "No usable loadOrder while copying {FormKey} as a new record", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }

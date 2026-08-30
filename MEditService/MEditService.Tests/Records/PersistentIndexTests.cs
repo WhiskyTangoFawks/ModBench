@@ -69,7 +69,7 @@ public class PersistentIndexTests : IDisposable
     {
         var key = KeyOf(Path.GetFileName(path));
         using var mod = Fallout4Mod.CreateFromBinaryOverlay(path, Fallout4Release.Fallout4);
-        index.Index(mod, loadOrderIndex, participates: true, key, path);
+        index.Index(mod, Registration.Participating(loadOrderIndex), key, path);
     }
 
     private static long RecordRowsFor(DuckDbRecordIndex index, PluginKey key)
@@ -95,20 +95,27 @@ public class PersistentIndexTests : IDisposable
         Assert.NotNull(second.IndexedContentHash(key));
         Assert.True(RecordRowsFor(second, key) > 0);
 
-        second.Register(key, 0, participates: true);
+        second.Register(key, Registration.Participating(0));
         second.UpdateWinners();
         Assert.NotEmpty(second.GetDocuments(key));
     }
 
-    // A freshly opened index is in no session yet, so whatever the last one registered must not be
+    // A freshly opened index is in no load order yet, so whatever the last one registered must not be
     // visible — the rows are there, and nothing answers until this process registers them itself.
     [Fact]
-    public void ReopeningTheSameFile_RegistersNothing_UntilTheSessionSaysSo()
+    public void ReopeningTheSameFile_KeepsTheLastRegistrations_UntilTheSnapshotCorrectsThem()
     {
+        // ADR-0001 point 4 as amended by ADR-0044: the registrations a file carries are the last
+        // known load order, kept on open so a restart followed by an identical snapshot costs
+        // nothing; the first reconcile is what corrects them (here, an Unregister).
         var alpha = WritePlugin("Alpha.esp", "NpcAlpha");
         using (var first = OpenIndex()) IndexFileAt(first, alpha, 0);
 
         using var second = OpenIndex();
+        Assert.Contains(KeyOf("Alpha.esp"), second.RegisteredPlugins());
+        Assert.NotEmpty(second.GetDocuments(KeyOf("Alpha.esp")));
+
+        second.Unregister(KeyOf("Alpha.esp"));
         Assert.Empty(second.GetDocuments(KeyOf("Alpha.esp")));
     }
 
@@ -168,7 +175,7 @@ public class PersistentIndexTests : IDisposable
         Assert.Equal(0, RecordRowsFor(second, key));
 
         // And registering it anyway cannot conjure the rows back — "removed" is removed, not hidden.
-        second.Register(key, 0, participates: true);
+        second.Register(key, Registration.Participating(0));
         second.UpdateWinners();
         Assert.Empty(second.GetDocuments(key));
     }
@@ -265,7 +272,7 @@ public class PersistentIndexTests : IDisposable
 
         var mod = new Fallout4Mod(ModKey.FromFileName("Alpha.esp"), Fallout4Release.Fallout4);
         mod.Npcs.AddNew("NpcAlpha");
-        index.Index((IModGetter)mod, 0, participates: true, KeyOf("Alpha.esp"));
+        index.Index((IModGetter)mod, Registration.Participating(0), KeyOf("Alpha.esp"));
 
         Assert.NotEmpty(index.GetDocuments(KeyOf("Alpha.esp")));
         Assert.Null(index.IndexedContentHash(KeyOf("Alpha.esp")));

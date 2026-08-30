@@ -18,13 +18,13 @@
 
 **Null FormLink**: A FormLink holding `FormKey.Null`. Valid on fields that permit null; a data error on fields that don't.
 
-**Dangling FormLink**: A FormLink holding a well-formed FormKey that does not resolve to any record in the current session. Always a data error — creation is blocked at edit time; existing occurrences in loaded plugins are flagged, not hidden. _Avoid: missing reference, broken link._
+**Dangling FormLink**: A FormLink holding a well-formed FormKey that does not resolve to any record in the held load order. Always a data error — creation is blocked at edit time; existing occurrences in loaded plugins are flagged, not hidden. _Avoid: missing reference, broken link._
 
 **Type-Mismatched FormLink**: A FormLink that resolves to a record of a type other than the field's declared valid types (e.g. a weapon-typed field pointing to an NPC). Always a data error, handled the same way as a Dangling FormLink. _Avoid: wrong-type reference._
 
-**EditorID (EDID)**: Human-readable string identifier (e.g. `NordRace`). Stable across load orders; not guaranteed unique. _Avoid: name, label._
+**EditorID (EDID)**: Human-readable string identifier (e.g. `NordRace`). Stable across loads of the plugin; not guaranteed unique. _Avoid: name, label._
 
-**Master**: Plugin declared as a dependency in another plugin's header, required because the header's own FormIDs are indexed against this list. Derived entirely from what the plugin's content actually references — never directly added, removed, sorted, or cleaned by the user (ADR-0038). A master reference is validated against the loaded plugins — a reference naming no loaded plugin is classified and flagged (`DirectlyMissing` when the file is absent from the session entirely, `Unloadable` when it is present but itself failed to load) while the declaring plugin stays indexed, browsable, and participating in winner computation; it is never deactivated (ADR-0037). _Avoid: parent plugin, base plugin._
+**Master**: Plugin declared as a dependency in another plugin's header, required because the header's own FormIDs are indexed against this list. Derived entirely from what the plugin's content actually references — never directly added, removed, sorted, or cleaned by the user (ADR-0038). A master reference is validated against the loaded plugins — a reference naming no loaded plugin is classified and flagged (`DirectlyMissing` when the file is absent from the load order entirely, `Unloadable` when it is present but itself failed to load) while the declaring plugin stays indexed, browsable, and participating in winner computation; it is never deactivated (ADR-0037). _Avoid: parent plugin, base plugin._
 
 **Header record**: A plugin's ModHeader (author, masters, flags) modeled as a first-class, single-column record at synthetic FormKey `000000:<plugin>`. Not an override of any other plugin's header — headers do not conflict across plugins. Editing its author or ESL/ESM flags goes through the normal edit path (working-tree text, ADR-0041); its masters do not — they're read-only, computed from content at compile (see Master, Effective masters). _Avoid: TES4 record (internal jargon), plugin metadata._
 
@@ -82,7 +82,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **PartialForm**: Record with `IsPartialForm` header flag. Absent fields are out-of-scope, not null overrides. In compare grid: absent fields omitted (not shown as blank). In conflict detection: treated as `cpIgnore`. _Avoid: sparse record, incomplete override._
 
-### Session & index
+### Load order & index
 
 **Participation**: Whether a registered plugin copy competes for winner and counts in a conflict: `enabled` (its `plugins.txt` `*`) and `winning` (the Mod override order resolves its name to this copy) and listed (some line names it). Derived, never stored; the three facts come from Mod Management. A non-participating copy is registered, browsable on request, and never a winner (ADR-0035, ADR-0044). _Avoid: loaded/unloaded (every copy is registered), active/inactive, shadowed._
 
@@ -106,7 +106,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 **Working-tree change**: An edit not yet committed — ordinary git dirt in the source, shown by the native Source Control panel per tracked mod. This is the only "pending" state that exists; there is no staged intermediate state (ADR-0041). _Avoid: pending change, staged edit, change group._
 
-**Diagnosis**: The named finding attached to a plugin that Track, Save & Compile, or session load could not take as-is: record (type, FormKey, EditorID), subrecord, defect class, observed vs expected, and one of three tails — *repairable (lossless)*, *repairable (drops N bytes)*, or *blocked upstream* (a legitimate plugin Mutagen mishandles, naming the Mutagen issue). Surfaced through the refusal message and the Problems panel; produced from the raw bytes, never from the parsed model. _Avoid: error (too broad), parse error (one class among several), warning._
+**Diagnosis**: The named finding attached to a plugin that Track, Save & Compile, or a reconcile could not take as-is: record (type, FormKey, EditorID), subrecord, defect class, observed vs expected, and one of three tails — *repairable (lossless)*, *repairable (drops N bytes)*, or *blocked upstream* (a legitimate plugin Mutagen mishandles, naming the Mutagen issue). Surfaced through the refusal message and the Problems panel; produced from the raw bytes, never from the parsed model. _Avoid: error (too broad), parse error (one class among several), warning._
 
 **Malformed plugin**: A plugin whose bytes depart from what the Creation Kit writes for that game — subrecords out of order, a fixed-size subrecord short, a fixed-count list short, a counter disagreeing with its entries, a parameter block a function never takes. Provable: the canonical form is demonstrated by every vanilla record of the type. Distinct from a plugin that is *correct but unparseable by Mutagen* (that is a Mutagen defect, blocked upstream) and from record-level data errors (Dangling FormLink etc.), which are semantic, not byte-level. _Avoid: broken plugin, corrupt plugin (corruption is unreadable bytes; a malformed plugin loads fine in xEdit), dirty plugin (xEdit's word for ITM/UDR content)._
 
@@ -126,7 +126,7 @@ _Avoid: the old four-state shorthand — it conflates ConflictAll and ConflictTh
 
 ### Filters & scripts
 
-**Record filter**: DuckDB SELECT stored on the backend session that narrows the record tree. Stored as `.sql` in `modbench.scriptsPath`; applied via Code Lens or `modbench.setFilter`. A degenerate script — selection only, no Python body. _Avoid: search filter, query filter._
+**Record filter**: DuckDB SELECT stored on the backend that narrows the record tree. Stored as `.sql` in `modbench.scriptsPath`; applied via Code Lens or `modbench.setFilter`. A degenerate script — selection only, no Python body. _Avoid: search filter, query filter._
 
 **Filter file**: `.sql` file in `modbench.scriptsPath` returning a `form_key` column. Shares folder/UX surface with scripts but has no Python body. _Avoid: filter script._
 

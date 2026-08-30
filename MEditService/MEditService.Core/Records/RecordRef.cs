@@ -20,7 +20,7 @@ public enum RecordRef
 }
 
 /// <summary>
-/// The reserved values for the <c>session_winners.record_ref</c> column (#584 / ADR-0001) — which
+/// The reserved values for the <c>winners.record_ref</c> column (#584 / ADR-0001) — which
 /// ref's stack a winner row is the answer for.
 ///
 /// <para>Spelled out rather than taken from <c>RecordRef.ToString()</c> for the same reason

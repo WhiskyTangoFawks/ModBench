@@ -76,7 +76,7 @@ describe('package.json "Plugins - …" naming for Referenced By (#273 Slice B)',
   });
 });
 
-describe('package.json Loadout views stay visible through an editing session (#268)', () => {
+describe('package.json Loadout views stay visible through an editing backend (#268)', () => {
   const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
 
@@ -290,11 +290,6 @@ describe('package.json Refresh is one command (#247)', () => {
     expect(entries[0].group).toBe('navigation@1');
   });
 
-  it('leaves Reload Session distinct and in overflow — it costs seconds and can disturb staged work', () => {
-    const entry = titleMenus().find((e) => e.command === 'modbench.reloadSession');
-    expect(entry, 'expected Reload Session on the header').toBeTruthy();
-    expect(entry!.group.startsWith('navigation')).toBe(false);
-  });
 });
 
 describe('package.json title-bar rubric (#247)', () => {
@@ -304,9 +299,10 @@ describe('package.json title-bar rubric (#247)', () => {
     new Set(entries.map((e) => /view == ([\w.]+)/.exec(e.when)?.[1]).filter(Boolean) as string[]);
 
   // Rule 1, scope first: an action that isn't about this tree's own domain doesn't go on this
-  // tree. These four are workspace-scope — they swap the modlist, act on the whole deployment,
-  // or reload the session — and each landed on whichever view happened to exist when it
-  // shipped. Launch mEdit / Close mEdit dropped out of this list under #352: the maintainer's
+  // tree. These three are workspace-scope — they swap the modlist or act on the whole deployment
+  // — and each landed on whichever view happened to exist when it shipped. (Reload Load order went
+  // with the load order concept itself under ADR-0044: the load order is reconciled on every
+  // change, so there is nothing to reload.) Launch mEdit / Close mEdit dropped out of this list under #352: the maintainer's
   // ruling there was that mEdit is *not* workspace-scope, it is an option on the Plugins view's
   // own domain — see 'package.json Launch/Close mEdit on the Plugins view (#352)' below for its
   // placement assertions.
@@ -314,7 +310,6 @@ describe('package.json title-bar rubric (#247)', () => {
     'modbench.modList.switchProfile',
     'modbench.modList.deploy',
     'modbench.modList.purge',
-    'modbench.reloadSession',
   ];
 
   it.each(WORKSPACE_ACTIONS)('%s is absent from every domain tree title bar', (command) => {
@@ -388,8 +383,8 @@ describe('package.json Launch/Close mEdit on the Plugins view (#352)', () => {
   it('is exactly one context-key toggle pair — only ever one of the two visible', () => {
     const launch = entriesFor('modbench.modList.launchMedit')[0];
     const close = entriesFor('modbench.closeMedit')[0];
-    expect(launch.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.sessionRunning');
-    expect(close.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.sessionRunning');
+    expect(launch.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && !modbench.backendRunning');
+    expect(close.when).toBe('view == modbench.pluginListTree && modbench.workspaceIsMo2Instance && modbench.backendRunning');
   });
 
   it('carries the same MO2-instance gating the header withheld it behind', () => {

@@ -18,16 +18,15 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public virtual void SetFilter(string? sql) => Inner.SetFilter(sql);
     public virtual void Initialize(GameRelease release) => Inner.Initialize(release);
 
-    public virtual void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null) =>
-        Inner.Index(plugin, loadOrderIndex, participates, key, filePath);
+    public virtual void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null) =>
+        Inner.Index(plugin, registration, key, filePath);
     public virtual string? IndexedContentHash(PluginKey key) => Inner.IndexedContentHash(key);
     public virtual void Unindex(PluginKey key) => Inner.Unindex(key);
-    public virtual void Register(PluginKey key, int loadOrderIndex, bool participates) =>
-        Inner.Register(key, loadOrderIndex, participates);
+    public virtual void Register(PluginKey key, Registration registration) =>
+        Inner.Register(key, registration);
     public virtual void Unregister(PluginKey key) => Inner.Unregister(key);
     public virtual void UpdateWinners() => Inner.UpdateWinners();
-    public virtual void SetPluginParticipation(PluginKey key, bool participates) =>
-        Inner.SetPluginParticipation(key, participates);
+    public virtual IReadOnlyList<PluginKey> RegisteredPlugins() => Inner.RegisteredPlugins();
     public virtual void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas) =>
         Inner.ApplyWorkingTreeChanges(key, deltas);
     public virtual void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body) =>

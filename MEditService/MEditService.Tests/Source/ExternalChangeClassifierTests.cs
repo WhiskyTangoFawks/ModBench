@@ -25,10 +25,10 @@ public sealed class ExternalChangeClassifierTests
         var mod = TrackedModFixture.Tracked();
         try
         {
-            var editService = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
             editService.EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
 
-            var compileService = new PluginCompileService(mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -98,9 +98,9 @@ public sealed class ExternalChangeClassifierTests
         var mod = TrackedModFixture.Tracked();
         try
         {
-            var editService = new RecordEditService(mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+            var editService = new RecordEditService(mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
             editService.EditField(mod.Plugin, mod.Npc.ToString(), "height_max", Json("0.75"));
-            var compileService = new PluginCompileService(mod.Sessions, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
+            var compileService = new PluginCompileService(mod.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance);
             var result = compileService.Compile(mod.Plugin, new CompileSource.WorkingTree());
             Assert.True(result.Succeeded, result.RefusalReason);
 

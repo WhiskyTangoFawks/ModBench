@@ -1,10 +1,10 @@
 using System.Globalization;
 using System.Text;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using MEditService.Core.Serialization;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -21,15 +21,15 @@ namespace MEditService.Tests.Edits;
 /// </summary>
 public sealed class RecordEditServiceCreateRecordTests
 {
-    private static RecordEditService ServiceFor(ISessionManager sessions) =>
-        new(sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+    private static RecordEditService ServiceFor(ILoadOrderMirror mirror) =>
+        new(mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     [Fact]
     public void CreateRecord_AllocatesAFormKey_WritesAMinimalSourceFile_RecordBecomesReadable()
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
         Assert.NotNull(result.NewFormKey);
@@ -39,7 +39,7 @@ public sealed class RecordEditServiceCreateRecordTests
             Mutagen.Bethesda.Plugins.FormKey.Factory(result.NewFormKey!), "npc_", "BrandNewNpc"));
         Assert.True(File.Exists(sourceFile));
 
-        var doc = mod.Sessions.Index!.GetDocument(result.NewFormKey!, mod.Plugin);
+        var doc = mod.Mirror.Index!.GetDocument(result.NewFormKey!, mod.Plugin);
         Assert.NotNull(doc);
         Assert.Equal("BrandNewNpc", doc!.EditorId);
     }
@@ -57,7 +57,7 @@ public sealed class RecordEditServiceCreateRecordTests
     public void CreateRecord_AfterAnEarlierSiblingWasDeleted_LandsContiguously_NoGapSurvivesToLandPast()
     {
         using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
 
         var deleted = service.DeleteRecord(mod.Plugin, mod.Npc.ToString());
         Assert.True(deleted.Applied, deleted.Message);
@@ -81,16 +81,16 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
-        Assert.Null(mod.Sessions.Index!.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
+        Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.Plugin));
     }
 
     [Fact]
     public void CreateRecord_AllocatesConsecutiveFormIds_AcrossEffectiveAndHeadHoldings()
     {
         using var mod = TrackedModFixture.Tracked();
-        var index = mod.Sessions.Index!;
+        var index = mod.Mirror.Index!;
 
         // Seed a native record that exists ONLY at Head — created directly at the index layer with a
         // deliberately high local ID, "committed" via SetCommittedBaseline (this test's own stand-in
@@ -105,7 +105,7 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Null(index.GetDocument(headOnlyFormKey, mod.Plugin));
         Assert.NotNull(index.At(RecordRef.Head).GetDocument(headOnlyFormKey, mod.Plugin));
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "AllocatedAfter");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "AllocatedAfter");
 
         Assert.True(result.Applied, result.Message);
         Assert.True(LocalId(result.NewFormKey!) > LocalId(headOnlyFormKey),
@@ -129,7 +129,7 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Untracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
@@ -142,7 +142,7 @@ public sealed class RecordEditServiceCreateRecordTests
         using var mod = TrackedModFixture.Tracked();
         ExternalChangeDeferral.Set(mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.ExternalChangeUnanswered, result.Refusal);
@@ -153,7 +153,7 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "not-a-real-type", "New");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "not-a-real-type", "New");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordTypeNotFound, result.Refusal);
@@ -164,7 +164,7 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "header", "New");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "header", "New");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.RecordTypeNotFound, result.Refusal);
@@ -175,7 +175,7 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", "900000:SomeOtherPlugin.esp");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New", "900000:SomeOtherPlugin.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
@@ -186,20 +186,20 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", mod.Npc.ToString());
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New", mod.Npc.ToString());
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
     // Review finding #1: the auto-allocator's own exhaustion (every local ID up to 0xFFFFFF taken)
-    // must be a typed refusal, not an InvalidOperationException an endpoint's generic session-missing
-    // catch would misreport as "no usable session".
+    // must be a typed refusal, not an InvalidOperationException an endpoint's generic load order-missing
+    // catch would misreport as "no usable load order".
     [Fact]
     public void CreateRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
         using var mod = TrackedModFixture.Tracked();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheTop", "FFFFFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -216,7 +216,7 @@ public sealed class RecordEditServiceCreateRecordTests
     public void CreateRecord_OnALightEspPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
         using var mod = TrackedModFixture.TrackedLight();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -230,7 +230,7 @@ public sealed class RecordEditServiceCreateRecordTests
     public void CreateRecord_OnALightEspPlugin_AllocatesUpToTheEslCap()
     {
         using var mod = TrackedModFixture.TrackedLight();
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "OneBelowTheEslCap", "000FFE:Fixture.esp");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -246,7 +246,7 @@ public sealed class RecordEditServiceCreateRecordTests
     public void CreateRecord_OnAPlainEslPlugin_Refuses_WhenTheEslRangeIsExhausted()
     {
         using var mod = TrackedModFixture.TrackedLight("Fixture.esl");
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "AtTheEslCap", "000FFF:Fixture.esl");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -260,7 +260,7 @@ public sealed class RecordEditServiceCreateRecordTests
     public void CreateRecord_OnAPlainEslPlugin_AllocatesUpToTheEslCap()
     {
         using var mod = TrackedModFixture.TrackedLight("Fixture.esl");
-        var service = ServiceFor(mod.Sessions);
+        var service = ServiceFor(mod.Mirror);
         var seeded = service.CreateRecord(mod.Plugin, "npc_", "OneBelowTheEslCap", "000FFE:Fixture.esl");
         Assert.True(seeded.Applied, seeded.Message);
 
@@ -278,7 +278,7 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.TrackedLight();
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", "001000:Fixture.esp");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New", "001000:Fixture.esp");
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
@@ -290,7 +290,7 @@ public sealed class RecordEditServiceCreateRecordTests
         using var mod = TrackedModFixture.Tracked();
         const string requested = "001000:Fixture.esp";
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", requested);
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New", requested);
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(requested, result.NewFormKey);
@@ -302,7 +302,7 @@ public sealed class RecordEditServiceCreateRecordTests
         using var mod = TrackedModFixture.Tracked();
         const string requested = "900000:Fixture.esp";
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "New", requested);
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "New", requested);
 
         Assert.True(result.Applied, result.Message);
         Assert.Equal(requested, result.NewFormKey);
@@ -315,13 +315,13 @@ public sealed class RecordEditServiceCreateRecordTests
     public void CreateRecord_MakesTheNewRecordAppearInAnActiveFilteredListing()
     {
         using var mod = TrackedModFixture.Tracked();
-        mod.Sessions.SetFilter("SELECT form_key FROM npc_");
-        var before = mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+        mod.Mirror.SetFilter("SELECT form_key FROM npc_");
+        var before = mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
 
-        var result = ServiceFor(mod.Sessions).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
+        var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Sessions.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        var after = mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
     }

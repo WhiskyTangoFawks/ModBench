@@ -1,6 +1,6 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -34,7 +34,7 @@ public sealed class BinaryRoundTripGateTests
 {
     /// <summary>
     /// Guards the production save path: <see cref="PluginWriter.SaveAsync"/> called the way
-    /// <c>SessionManager.SavePlugin</c> actually calls it — a real link cache and an explicit
+    /// <c>LoadOrderMirror.SavePlugin</c> actually calls it — a real link cache and an explicit
     /// master-writing order (#337/ADR-0038), not the bare defaults <see cref="PluginWriter"/> falls
     /// back to when both are omitted.
     ///
@@ -80,8 +80,8 @@ public sealed class BinaryRoundTripGateTests
     }
 
     // Link cache + explicit master-writing order, built fresh from pluginPath's current on-disk
-    // state each call — the same shape SessionManager.BuildTypedLinkCache/MastersWritingOrder build
-    // from the live session, just for this test's single-plugin "session". The subset's single
+    // state each call — the same shape LoadOrderMirror.BuildTypedLinkCache/MastersWritingOrder build
+    // from the live load order, just for this test's single-plugin "load order". The subset's single
     // declared master ("Fallout4.esm") needs no on-disk content of its own here: the order list only
     // orders names in the header's master list, it doesn't need those masters loaded to do so.
     private static async Task ProductionSave(string pluginPath, PluginWriter writer)
@@ -108,8 +108,8 @@ public sealed class BinaryRoundTripGateTests
     /// <see cref="PluginWriter"/> actually uses (see the sibling test above) — never consults that
     /// ordering and is immune.
     ///
-    /// This is not a canary on a path our codebase doesn't use: <c>GameSession</c>'s read/indexing
-    /// path opens every session plugin via <c>ModFactory.ImportGetter</c> (logged there as "Opening
+    /// This is not a canary on a path our codebase doesn't use: <c>LoadOrder</c>'s read/indexing
+    /// path opens every load order plugin via <c>ModFactory.ImportGetter</c> (logged there as "Opening
     /// binary overlay"), which resolves to the exact same <c>Fallout4ModBinaryOverlay</c> type this
     /// test exercises. This test only pins that reader's write-back stability, not read-side
     /// correctness — see #369's report for the read-side implication.

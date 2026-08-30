@@ -51,6 +51,7 @@ function makePlugin(i: number): PluginMetadata {
     masters: [],
     recordCount: 100,
     isImmutable: false,
+    enabled: true, winning: true, participates: true, inLoadOrder: true,
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
@@ -77,7 +78,7 @@ function makeRepository(overrides: Partial<{
 }> = {}): PluginRepository {
   return {
     getPlugins: vi.fn().mockResolvedValue(overrides.plugins ?? [makePlugin(0), makePlugin(1)]),
-    getSessionStatus: vi.fn().mockResolvedValue(
+    getLoadOrderStatus: vi.fn().mockResolvedValue(
       { totalPlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [] }),
     // #414 review F2.
     getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }),
@@ -105,9 +106,6 @@ function makeRepository(overrides: Partial<{
     peekNextFreeFormKey: vi.fn(),
     // #494: the tree provider never copies either — same "whole surface, unused here" note.
     getRecordOverridePlugins: vi.fn(),
-    // #448: the unlisted-plugin door a Stack peer's own expansion/collapse drives.
-    loadUnlistedPlugin: vi.fn().mockResolvedValue(undefined),
-    unloadUnlistedPlugin: vi.fn().mockResolvedValue(undefined),
     // #364: the Conflicts node's own listing.
     getConflicts: vi.fn().mockResolvedValue([]),
   };
@@ -1100,38 +1098,24 @@ describe('PluginTreeProvider — Stack node state entries (#448 AC1/AC4)', () =>
   });
 });
 
-// ── #448 AC2: expanding a peer lazy-loads it read-only via the unlisted-plugin door (#34) ──────
+// ── #448 AC2 / ADR-0044: expanding a peer browses the losing copy the load order already holds ──
 
-describe('PluginTreeProvider — Stack peer lazy load & read-only browsing (#448 AC2)', () => {
-  it('loads the peer through the unlisted-plugin door on first expansion, then browses its records', async () => {
+describe('PluginTreeProvider — Stack peer read-only browsing (#448 AC2, ADR-0044)', () => {
+  it('browses the peer\'s own records through the origin-bearing path, with nothing to load first', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
     const peerNode = new StackPeerNode('Shared.esp', PEER_B);
 
     const children = await provider.getChildren(peerNode);
 
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledWith(PEER_B.path, PEER_B.origin);
     expect(children.some(c => c instanceof RecordTypeNode)).toBe(true);
     expect(repo.getRecordTypes).toHaveBeenCalledWith('Shared.esp', 'ModB');
-  });
-
-  it('loads at most once per expansion streak — a second expansion skips straight to the fetch', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    await provider.getChildren(peerNode);
-    await provider.getChildren(peerNode);
-
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(1);
   });
 
   // The read-only guarantee itself already holds structurally — a peer's records recurse through
   // getPluginChildren(name, origin) with origin defined, and isImmutable(plugin, origin) already
   // treats any defined origin as immutable (#281 / ADR-0036) — so this is a regression pin on that
-  // existing short-circuit covering the new caller, not new immutability logic. The rival named in
-  // the plan (temporarily stripping `origin !== undefined` from isImmutable) is verified manually,
-  // not committed — see the task's own report for the observed failure.
+  // existing short-circuit covering the peer path, not new immutability logic.
   it('a peer\'s own record rows are read-only: contextValue recordImmutable', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
     const provider = new PluginTreeProvider(repo);
@@ -1141,53 +1125,6 @@ describe('PluginTreeProvider — Stack peer lazy load & read-only browsing (#448
     const [rec] = await provider.getChildren(typeNode);
 
     expect((rec as RecordNode).contextValue).toBe('recordImmutable');
-  });
-
-  it('a load failure renders an ErrorNode instead of silently showing nothing (ADR-0026)', async () => {
-    const repo = makeRepository();
-    (repo.loadUnlistedPlugin as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    const children = await provider.getChildren(peerNode);
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
-  });
-
-  it('unloadStackPeer unloads through the door and lets a later re-expand load again', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-    await provider.getChildren(peerNode);
-
-    await provider.unloadStackPeer(peerNode);
-
-    expect(repo.unloadUnlistedPlugin).toHaveBeenCalledWith(PEER_B.name, PEER_B.origin);
-    await provider.getChildren(peerNode);
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(2); // loaded, unloaded, re-loaded
-  });
-
-  it('unloadStackPeer is a no-op for a peer that was never expanded', async () => {
-    const repo = makeRepository();
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-
-    await provider.unloadStackPeer(peerNode);
-
-    expect(repo.unloadUnlistedPlugin).not.toHaveBeenCalled();
-  });
-
-  it('refresh() forgets what was loaded, matching a fresh session that has loaded nothing yet', async () => {
-    const repo = makeRepository({ recordTypes: [{ type: 'WEAP', count: 1 }] });
-    const provider = new PluginTreeProvider(repo);
-    const peerNode = new StackPeerNode('Shared.esp', PEER_B);
-    await provider.getChildren(peerNode);
-
-    provider.refresh();
-    await provider.getChildren(peerNode);
-
-    expect(repo.loadUnlistedPlugin).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -1211,7 +1148,7 @@ describe('PluginTreeProvider — Conflicts node existence & gating (#364, #307\'
     expect(provider.conflictsNode()).toBeInstanceOf(ConflictsNode);
   });
 
-  it('conflictsNode() reverts to undefined after setConflictsComputed(false) — a stale session must not keep showing it', () => {
+  it('conflictsNode() reverts to undefined after setConflictsComputed(false) — a stale load order must not keep showing it', () => {
     const provider = new PluginTreeProvider(makeRepository());
     provider.setConflictsComputed(true);
 

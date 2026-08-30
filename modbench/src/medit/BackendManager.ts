@@ -62,7 +62,7 @@ export class BackendManager extends EventEmitter {
   /** In-flight start(), so concurrent callers share it instead of double-spawning. */
   private startPromise?: Promise<void>;
   /** Bumped by stop(); an in-flight start()/connect() from an older generation
-   *  aborts instead of resurrecting a session the user already closed. */
+   *  aborts instead of resurrecting a load order the user already closed. */
   private generation = 0;
   private restartAttempts = 0;
   private static readonly MAX_RESTARTS = 3;
@@ -147,7 +147,7 @@ export class BackendManager extends EventEmitter {
     }
     this._isHealthy = false;
     // #247: emitted rather than written straight to the status bar, so a deliberate stop is
-    // observable — wireSessionRunningContext (extension.ts, #352) subscribes to 'status' to
+    // observable — wireBackendRunningContext (extension.ts, #352) subscribes to 'status' to
     // drive the Plugins view's Launch/Close mEdit toggle and would otherwise keep reading
     // "running" until something else happened to fire.
     if (wasRunning) this.emitStatus('stopped');

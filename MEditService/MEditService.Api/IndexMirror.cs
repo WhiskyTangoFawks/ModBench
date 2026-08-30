@@ -1,6 +1,6 @@
 using MEditService.Bridge;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 
 namespace MEditService.Api;
 
@@ -11,21 +11,21 @@ namespace MEditService.Api;
 /// <c>Unindex</c>, the file-gone verb.
 ///
 /// <para>It lives in the composition root for the same reason
-/// <see cref="ExternalChangeSessionHook"/> does: this is the one place that can see both
-/// <see cref="ISessionManager"/> (Core) and the watcher (Bridge) without either project learning
-/// about the other. The Bridge deliberately knows nothing of sessions or DuckDB
-/// (<c>BridgeKnowsNothingOfSessionsTests</c>), so it reports what happened to a file and stops
+/// <see cref="ExternalChangeLoadOrderHook"/> does: this is the one place that can see both
+/// <see cref="ILoadOrderMirror"/> (Core) and the watcher (Bridge) without either project learning
+/// about the other. The Bridge deliberately knows nothing of mirror or DuckDB
+/// (<c>BridgeKnowsNothingOfLoadOrdersTests</c>), so it reports what happened to a file and stops
 /// there.</para>
 ///
 /// <para><b>Nothing escapes <see cref="Apply"/>, and it says whether it worked.</b> It runs on a
 /// <see cref="System.Timers.Timer"/> callback thread with no caller to catch anything, where an
 /// escaping exception is a process crash rather than a failed request — and every failure mode here
-/// is ordinary rather than exceptional: the session torn down between the settle and this call, a
+/// is ordinary rather than exceptional: the load order closed between the settle and this call, a
 /// plugin no longer held, a file another tool is still writing. Answering <see langword="false"/>
 /// rather than merely logging is what keeps the watcher from concluding the index now matches bytes
 /// it never managed to read (see <see cref="ExternalChangeWatcher.IndexedBinaryChanged"/>).</para>
 /// </summary>
-internal sealed class IndexMirror(ISessionManager sessions, ILogger logger)
+internal sealed class IndexMirror(ILoadOrderMirror mirror, ILogger logger)
 {
     internal bool Apply(IndexedBinaryEvent change)
     {
@@ -40,11 +40,11 @@ internal sealed class IndexMirror(ISessionManager sessions, ILogger logger)
                         logger.LogInformation(
                             "{Plugin} ({Origin}) changed on disk; re-indexing it", change.PluginName, change.Origin);
                     }
-                    sessions.ReindexPlugin(key).GetAwaiter().GetResult();
+                    mirror.ReindexPlugin(key).GetAwaiter().GetResult();
                     break;
 
                 case IndexedBinaryChange.Deleted:
-                    sessions.UnindexPlugin(key);
+                    mirror.UnindexPlugin(key);
                     break;
             }
 
@@ -54,7 +54,7 @@ internal sealed class IndexMirror(ISessionManager sessions, ILogger logger)
         {
             logger.LogWarning(ex,
                 "Could not mirror the on-disk change to {Plugin} ({Origin}) into the index; it will be retried " +
-                "the next time that file settles, and re-checked at the next session load",
+                "the next time that file settles, and re-checked at the next reconcile",
                 change.PluginName, change.Origin);
             return false;
         }

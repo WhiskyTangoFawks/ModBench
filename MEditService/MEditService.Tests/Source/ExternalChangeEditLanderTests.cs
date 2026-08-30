@@ -38,7 +38,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([_mod.Npc.ToString()], result.LandedFormKeys);
@@ -53,7 +53,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         WriteExternalBinaryChange(0.9f);
 
-        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
 
         var gitDir = Path.Combine(_mod.ModFolder, ".git");
         var binarySha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(PluginPath)));
@@ -66,7 +66,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         ExternalChangeDeferral.Set(_mod.ModFolder, TrackedModFixture.PluginName, "unanswered");
         WriteExternalBinaryChange(0.9f);
 
-        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+        ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
 
         Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
@@ -77,14 +77,14 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     [Fact]
     public void Keep_Refuses_WhenTheSameRecordAlreadyHasUncommittedDirtThatDisagreesWithTheIncomingValue()
     {
-        var editService = new RecordEditService(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var editService = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
         var applyResult = editService.EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", JsonDocument.Parse("0.5").RootElement);
         Assert.True(applyResult.Applied, applyResult.Message);
         var myOwnEditText = File.ReadAllText(_mod.NpcSourceFile);
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
 
         Assert.False(result.Applied);
         Assert.Contains(_mod.Npc.ToString(), result.RefusalReason, StringComparison.Ordinal);
@@ -137,7 +137,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         firstMod.WriteToBinary(PluginPath);
 
         var firstLand = ExternalChangeEditLander.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
         Assert.True(firstLand.Applied, firstLand.RefusalReason);
         var otherNpcPathBeforeDelete = SourceUnitResolver.FlatSourcePath(
             _mod.ModFolder, TrackedModFixture.PluginName, "npc_", _mod.OtherNpc.ToString(),
@@ -158,7 +158,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         secondMod.WriteToBinary(PluginPath);
 
         var secondLand = ExternalChangeEditLander.Keep(
-            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+            _mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
         Assert.True(secondLand.Applied, secondLand.RefusalReason);
 
         // The old [2] file is gone — not left behind as a duplicate claiming the same FormKey.
@@ -195,7 +195,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         fallout4Mod.WriteToBinary(pluginPath);
 
         var result = ExternalChangeEditLander.Keep(
-            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, mod.Sessions.Index!, SharedSchemaReflector.Instance);
+            mod.ModFolder, mod.Plugin, pluginPath, GameRelease.Fallout4, mod.Mirror.Index!, SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
         Assert.Equal([mod.Npc.ToString()], result.LandedFormKeys);
@@ -209,12 +209,12 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     {
         // Not a real collision: the user happened to make the exact same edit the external tool made
         // — nothing to lose by landing it.
-        var editService = new RecordEditService(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        var editService = new RecordEditService(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
         editService.EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", JsonDocument.Parse("0.9").RootElement);
 
         WriteExternalBinaryChange(0.9f);
 
-        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Sessions.Index!, SharedSchemaReflector.Instance);
+        var result = ExternalChangeEditLander.Keep(_mod.ModFolder, _mod.Plugin, PluginPath, GameRelease.Fallout4, _mod.Mirror.Index!, SharedSchemaReflector.Instance);
 
         Assert.True(result.Applied, result.RefusalReason);
     }

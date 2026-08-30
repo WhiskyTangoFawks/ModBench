@@ -12,6 +12,7 @@ function makePlugin(i: number): PluginMetadata {
     masters: [],
     recordCount: 10,
     isImmutable: false,
+    enabled: true, winning: true, participates: true, inLoadOrder: true,
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
@@ -59,7 +60,7 @@ describe('ApiPluginRepository.getPlugins', () => {
     expect(client.GET).toHaveBeenCalledWith('/plugins', expect.anything());
   });
 
-  it('returns empty array for a 200 response with no data (empty session)', async () => {
+  it('returns empty array for a 200 response with no data (empty load order)', async () => {
     const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
 
@@ -67,12 +68,12 @@ describe('ApiPluginRepository.getPlugins', () => {
   });
 
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
-    // Querying /plugins before a session is loaded returns 503 "No session loaded";
+    // Querying /plugins before a load order is loaded returns 503 "No load order held";
     // that must not be silently swallowed into [] (issue #75).
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: undefined,
-        error: 'No session loaded.',
+        error: 'No load order held.',
         response: {
           ok: false,
           status: 503,
@@ -235,7 +236,7 @@ describe('ApiPluginRepository.getRecords', () => {
 
 describe('ApiPluginRepository.searchRecords', () => {
   // Issue #210: the FormKey picker moved into the extension host — it needs its own record
-  // search, mirroring the deleted webview-side RecordSessionClient.searchRecords: `type` is only
+  // search, mirroring the deleted webview-side RecordPanelClient.searchRecords: `type` is only
   // sent when the field allows exactly one record type, and results are capped at 20.
   it('calls GET /records with search + limit, and type when validTypes has exactly one entry', async () => {
     const records = [makeRecord(0), makeRecord(1)];
@@ -287,7 +288,7 @@ describe('ApiPluginRepository.searchRecords', () => {
 });
 
 describe('ApiPluginRepository.setFilter', () => {
-  it('calls POST /session/filter and returns null on success', async () => {
+  it('calls POST /load-order/filter and returns null on success', async () => {
     const client = {
       POST: vi.fn().mockResolvedValue({ response: { ok: true } }),
     } as any;
@@ -297,7 +298,7 @@ describe('ApiPluginRepository.setFilter', () => {
 
     expect(error).toBeNull();
     expect(client.POST).toHaveBeenCalledWith(
-      '/session/filter',
+      '/load-order/filter',
       expect.objectContaining({ body: { sql: 'SELECT form_key FROM "npc_"' } }),
     );
   });
@@ -321,7 +322,7 @@ describe('ApiPluginRepository.setFilter', () => {
 });
 
 describe('ApiPluginRepository.clearFilter', () => {
-  it('calls DELETE /session/filter', async () => {
+  it('calls DELETE /load-order/filter', async () => {
     const client = {
       DELETE: vi.fn().mockResolvedValue({ response: { ok: true } }),
     } as any;
@@ -329,12 +330,12 @@ describe('ApiPluginRepository.clearFilter', () => {
 
     await repo.clearFilter();
 
-    expect(client.DELETE).toHaveBeenCalledWith('/session/filter', expect.anything());
+    expect(client.DELETE).toHaveBeenCalledWith('/load-order/filter', expect.anything());
   });
 });
 
 describe('ApiPluginRepository.getActiveFilter', () => {
-  it('calls GET /session/filter and returns sql', async () => {
+  it('calls GET /load-order/filter and returns sql', async () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: { sql: 'SELECT form_key FROM "npc_"' },
@@ -346,7 +347,7 @@ describe('ApiPluginRepository.getActiveFilter', () => {
     const sql = await repo.getActiveFilter();
 
     expect(sql).toBe('SELECT form_key FROM "npc_"');
-    expect(client.GET).toHaveBeenCalledWith('/session/filter', expect.anything());
+    expect(client.GET).toHaveBeenCalledWith('/load-order/filter', expect.anything());
   });
 
   it('returns null when sql is null', async () => {
@@ -364,13 +365,13 @@ describe('ApiPluginRepository.getActiveFilter', () => {
   });
 });
 
-// #307 / ADR-0035: what the session can honestly say about itself *while it is still loading* —
+// #307 / ADR-0035: what the load order can honestly say about itself *while it is still loading* —
 // polled alongside the in-flight load POST. `conflictsComputed` is read separately from `state`
-// on purpose (SessionStatus.cs): the sweep is whole-set, so ADR-0035's live mutations will leave
-// a Ready session with stale winners, and anything deciding whether to render conflict
+// on purpose (LoadOrderStatus.cs): the sweep is whole-set, so ADR-0035's live mutations will leave
+// a Ready load order with stale winners, and anything deciding whether to render conflict
 // information must read that field, never the state.
-describe('ApiPluginRepository.getSessionStatus', () => {
-  it('calls GET /session/status and reports the plugins indexed so far, the sweep state and the failures', async () => {
+describe('ApiPluginRepository.getLoadOrderStatus', () => {
+  it('calls GET /load-order/status and reports the plugins indexed so far, the sweep state and the failures', async () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: {
@@ -384,7 +385,7 @@ describe('ApiPluginRepository.getSessionStatus', () => {
       }),
     } as any;
 
-    const status = await new ApiPluginRepository(client).getSessionStatus();
+    const status = await new ApiPluginRepository(client).getLoadOrderStatus();
 
     expect(status).toEqual({
       totalPlugins: 3,
@@ -392,19 +393,19 @@ describe('ApiPluginRepository.getSessionStatus', () => {
       conflictsComputed: false,
       failures: [{ name: 'Bad.esp', reason: 'RACE parse' }],
     });
-    expect(client.GET).toHaveBeenCalledWith('/session/status', expect.anything());
+    expect(client.GET).toHaveBeenCalledWith('/load-order/status', expect.anything());
   });
 
-  // The endpoint answers 200 in every state including "no session" (SessionEndpoints.cs), so a
+  // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs), so a
   // non-ok here is a genuine fault. It must not degrade to a plausible-looking "nothing indexed,
   // conflicts not computed" — that reads as a load making no progress rather than a broken read,
-  // and the caller (SessionController's poll loop) is the one that decides to tolerate it.
+  // and the caller (LoadOrderController's poll loop) is the one that decides to tolerate it.
   it('throws on a non-OK response rather than degrading to an empty, still-loading-looking status', async () => {
-    await expect(new ApiPluginRepository(nonOkClient()).getSessionStatus()).rejects.toThrow(/500/);
+    await expect(new ApiPluginRepository(nonOkClient()).getLoadOrderStatus()).rejects.toThrow(/500/);
   });
 });
 
-// #417: polled the same way getTrackStatus/getSessionStatus are.
+// #417: polled the same way getTrackStatus/getLoadOrderStatus are.
 describe('ApiPluginRepository.getExternalChangeStatus', () => {
   it('calls GET /plugins/external-changes/status and maps every queued question', async () => {
     const client = {
@@ -431,7 +432,7 @@ describe('ApiPluginRepository.getExternalChangeStatus', () => {
 
 // Issue #211: the condition-function catalogue backing the extension-host QuickPick. Unlike most
 // PluginRepository reads (ensureOk-then-throw), this mirrors the deleted webview-side
-// RecordSessionClient.conditionFunctions()'s degrade-to-[] convention (closer precedent:
+// RecordPanelClient.conditionFunctions()'s degrade-to-[] convention (closer precedent:
 // setFilter/clearFilter's catch-and-log-no-throw above) — a failed fetch must never surface as a
 // raw error, per #211's AC3.
 describe('ApiPluginRepository.getConditionFunctions', () => {

@@ -225,7 +225,7 @@ describe('PluginListProvider', () => {
   });
 
   // #97 / ADR-0035 § Live mutation: the composition root's cue to apply the same participation
-  // change to a running backend session. Named plugin/enabled must match exactly what was
+  // change to a running backend. Named plugin/enabled must match exactly what was
   // written, since the backend call the composition root makes off this carries no other source
   // of truth for which plugin or which state.
   it('setPluginEnabled fires onDidChangeParticipation with the plugin and its new state', async () => {
@@ -242,7 +242,7 @@ describe('PluginListProvider', () => {
   // Rival named: an implementation that fires onDidChangeParticipation from invalidate() itself
   // (reusing onDidChangeTreeData's own generic "something changed" firing) would also fire it for
   // a filter keystroke or an external plugins.txt edit picked up by a watcher — neither is a
-  // participation change a backend session should be told about. This is the test that would
+  // participation change a backend should be told about. This is the test that would
   // catch that: invalidate() alone must never fire it.
   it('invalidate() alone does not fire onDidChangeParticipation', () => {
     const provider = new PluginListProvider({ source: new FakeSource(['A.esp']) });
@@ -304,7 +304,7 @@ describe('PluginListProvider — filter', () => {
     expect(rows.some((r) => r instanceof EmptyNode)).toBe(false);
   });
 
-  // #255 AC6: the filter is durable within the session — it outlives a Refresh and whatever the
+  // #255 AC6: the filter is durable within the load order — it outlives a Refresh and whatever the
   // re-read turns up. The render-vs-invalidate split (#79) is what makes that true, so this is
   // the test that says so: invalidate() clears the row cache and must not touch the term.
   it('survives a refresh and an underlying data change, narrowing whatever the re-read returns', async () => {
@@ -396,7 +396,7 @@ describe('PluginNode — order-aware missing-master badge', () => {
   });
 });
 
-// #277 / ADR-0037 AC8: the composite's session-aware reconciliation needs the raw master names
+// #277 / ADR-0037 AC8: the composite's load order-aware reconciliation needs the raw master names
 // this row's order-aware badge flagged, structurally — not by parsing the rendered tooltip text
 // (fragile, and out of reach for a composite that must import no Mod-Management vocabulary).
 describe('orderIssueMastersOf', () => {
@@ -857,7 +857,7 @@ describe('PluginListProvider — file-override decoration (#447)', () => {
     expect(shared.tooltip).toContain('File override');
   });
 
-  it('AC2: disabling one provider clears the signal after invalidate() (no session reload)', async () => {
+  it('AC2: disabling one provider clears the signal after invalidate() (no reconcile)', async () => {
     const p = provider();
     expect(byName(await pluginNodes(p), 'Shared.esp').resourceUri).toBeDefined();
 

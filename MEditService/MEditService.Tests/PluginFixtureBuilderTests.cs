@@ -28,7 +28,7 @@ public class PluginFixtureBuilderTests
 
         var plugin = Assert.Single(data.Plugins);
         Assert.Equal("TestPlugin.esp", plugin.Name);
-        Assert.True(plugin.Participates);
+        Assert.True(plugin.Enabled);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class PluginFixtureBuilderTests
     public void Build_WithCreationClubCatalog_WritesCccFile()
     {
         // Written one directory above DataFolder (#434) — where Mutagen's own
-        // CreationClubListings.GetListingsPath expects it relative to the Data path a session is
+        // CreationClubListings.GetListingsPath expects it relative to the Data path a load order is
         // given, not inside DataFolder itself.
         using var data = new PluginFixtureBuilder()
             .WithPlugin("ccTest.esl", listed: false)

@@ -47,25 +47,25 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect(imports).toEqual(['vscode']);
   });
 
-  // #279: drift is a comparison between the session's loaded origin and Mod Management's current
-  // one, so the tracker sits at the composition root for the same reason the two above do — and is
-  // held to the same rule. The temptation here is specific and worth naming: `ResolvedOrigin` is
-  // *declared* in `modmanager/explicitSession.ts`, and importing that type rather than restating
-  // it structurally would be a one-word change that quietly makes this module part of Mod
-  // Management.
-  it('the drift tracker imports from neither context', () => {
-    const imports = importsOf(read('pluginDrift.ts'));
+  // ADR-0044: the load-order sync is the one path by which Mod Management's snapshot reaches
+  // Editing, so it sits at the composition root for the same reason the two above do — and is
+  // held to the same rule. The temptation here is specific and worth naming: `LoadOrderPlugin` is
+  // *declared* in `modmanager/loadOrderSnapshot.ts`, and importing that type rather than keeping
+  // the snapshot opaque would be a one-word change that quietly makes this module part of Mod
+  // Management. It imports nothing at all — not even `vscode`.
+  it('the load-order sync imports from neither context', () => {
+    const imports = importsOf(read('loadOrderSync.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
-    expect(imports).toEqual(['vscode']);
+    expect(imports).toEqual([]);
   });
 
-  // Drift joins the two contexts, so it may name an *origin* — an opaque string on both sides
-  // (ADR-0036) — but never what an origin is on Mod Management's side, and never what a plugin
-  // contains on Editing's. "This plugin now comes from a different mod" is the sentence this
-  // file's code must not be able to write. Prose is exempt for the same reason the composite is
-  // exempt from this scan entirely: a joining module has to be able to say in words what it joins.
-  it('the drift tracker\'s code carries neither context\'s vocabulary', () => {
-    const code = read('pluginDrift.ts')
+  // The sync joins the two contexts, so it may speak of a snapshot and a receiver, but never of
+  // what a snapshot is made of on Mod Management's side, and never of what a plugin contains on
+  // Editing's. "Send the mod list" is the sentence this file's code must not be able to write.
+  // Prose is exempt for the same reason the composite is exempt from this scan entirely: a
+  // joining module has to be able to say in words what it joins.
+  it('the load-order sync\'s code carries neither context\'s vocabulary', () => {
+    const code = read('loadOrderSync.ts')
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join('\n');
@@ -78,7 +78,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   // modmanager/ modules reachable from the composition root, exactly what let a medit import slip
   // in unnoticed until a reviewer's manual read caught it (review comment on #288). Held to the
   // same "imports nothing from Editing" bar PluginListProvider's own check uses, not the stricter
-  // "nothing but vscode" bar the composition-root joiners (composite/nameFilter/pluginDrift) get —
+  // "nothing but vscode" bar the composition-root joiners (composite/nameFilter/loadOrderSync) get —
   // these have real modmanager-internal dependencies, just never a medit/ one.
   it('pluginDestination.ts imports nothing from Editing', () => {
     expect(importsOf(read('modmanager/pluginDestination.ts')).filter((s) => s.includes('medit'))).toEqual([]);

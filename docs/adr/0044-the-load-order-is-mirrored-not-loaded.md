@@ -82,9 +82,13 @@ still received as a command rather than as state. There was no moment at which E
 
 ## Consequences
 
-- Cold-index cost is bounded by every plugin file in the instance, not by the load order — paid
-  once per copy, ever, by the mirror. A large instance full of disabled mods that ship plugins pays
-  more on its first open and nothing after.
+- Cold-index cost is bounded by every plugin file the snapshot names, not by the load order —
+  paid once per copy, ever, by the mirror. The snapshot is what Mod Management already walks for
+  its own file-conflict index: every root-level plugin in every **enabled** mod, `overwrite/`, and
+  the game's `Data/` copy of every listed name no mod provides. A disabled mod's plugins are not in
+  it — MO2 does not deploy them, and Mod Management does not walk them — so enabling a mod that
+  ships plugins is the moment its copies first arrive and pay their one index. Widening the walk to
+  disabled mods is a Mod Management change if ever wanted, not a boundary change.
 - Two visible rows can share a filename (a winning copy and a losing copy). The tree already keys
   rows by `(origin, name)`; showing origin on a non-participating row is a display obligation.
 - Editing still cannot verify the load order against the profile files on its own after a

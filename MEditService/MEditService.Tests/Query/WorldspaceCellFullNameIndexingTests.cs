@@ -1,5 +1,5 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -27,7 +27,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     private readonly PluginKey _plugin = new(PluginName, Origin);
     private readonly string _modFolder = Directory.CreateTempSubdirectory("medit-cell-fullname-mod-").FullName;
     private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-cell-fullname-game-").FullName;
-    private readonly SessionManager _sessions;
+    private readonly LoadOrderMirror _mirror;
     private readonly string _worldspaceFormKey;
 
     public WorldspaceCellFullNameIndexingTests()
@@ -56,19 +56,19 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
 
         _worldspaceFormKey = worldspace.FormKey.ToString();
 
-        _sessions = new SessionManager(
+        _mirror = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-        ((ISessionManager)_sessions).LoadExplicit(
-            _gameDirectory, [new ExplicitPluginInput(PluginName, pluginPath, Origin, true)], GameRelease.Fallout4);
+        ((ILoadOrderMirror)_mirror).Reconcile(
+            _gameDirectory, [new LoadOrderEntry(PluginName, pluginPath, Origin, Slot: 0, Enabled: true, Winning: true)], GameRelease.Fallout4);
 
         new TrackService(NullLogger<TrackService>.Instance)
-            .TrackAsync(_sessions.Session!, Origin, SourcePreset.Edits)
+            .TrackAsync(_mirror.LoadOrder!, Origin, SourcePreset.Edits)
             .GetAwaiter().GetResult();
     }
 
     public void Dispose()
     {
-        _sessions.Dispose();
+        _mirror.Dispose();
         TryDelete(_modFolder);
         TryDelete(_gameDirectory);
     }
@@ -83,7 +83,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_ExteriorCellWithFullNameSet_CarriesItThrough()
     {
-        var cells = _sessions.Index!.GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _mirror.Index!.GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var extCell = Assert.Single(cells, c => c.EditorId == "ExtCell");
         Assert.Equal("Sanctuary Hills", extCell.FullName);
@@ -92,7 +92,7 @@ public sealed class WorldspaceCellFullNameIndexingTests : IDisposable
     [Fact]
     public void GetWorldspaceCells_TopCellWithNoFullNameSet_FullNameIsNull()
     {
-        var cells = _sessions.Index!.GetWorldspaceCells(_plugin, _worldspaceFormKey);
+        var cells = _mirror.Index!.GetWorldspaceCells(_plugin, _worldspaceFormKey);
 
         var topCell = Assert.Single(cells, c => c.EditorId == "TopCell");
         Assert.Null(topCell.FullName);

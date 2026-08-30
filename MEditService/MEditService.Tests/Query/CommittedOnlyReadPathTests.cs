@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Tests.Api;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -22,15 +22,15 @@ namespace MEditService.Tests.Query;
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable
 {
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _svc;
 
     public CommittedOnlyReadPathTests(TestPluginFixture fixture)
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory);
-        _manager.LoadExplicit(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(factory);
+        _manager.Reconcile(fixture.DataFolder, fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 
@@ -59,7 +59,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
     [Fact]
     public void GetCompare_OverrideCarriesTheCommittedFieldValue()
     {
-        var formKey = _manager.Session!.Plugins.Count > 0
+        var formKey = _manager.LoadOrder!.Plugins.Count > 0
             ? _svc.GetRecords("npc_", TestPluginFixture.PluginName, "TestNPC01", 1, 0).Items[0].FormKey
             : throw new InvalidOperationException("fixture did not load");
 
@@ -84,7 +84,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
 /// </summary>
 public sealed class CommittedOnlyReferencesTests : IDisposable
 {
-    private readonly SessionManager _manager;
+    private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _svc;
     private readonly ReferencePluginFixture _fixture = new();
 
@@ -92,8 +92,8 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
     {
         var reflector = SharedSchemaReflector.Instance;
         var factory = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
-        _manager = new SessionManager(factory);
-        _manager.LoadExplicit(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
+        _manager = new LoadOrderMirror(factory);
+        _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _svc = new RecordQueryService(_manager, reflector, new ConflictClassifier());
     }
 

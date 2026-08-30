@@ -14,6 +14,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
     masters: [],
     recordCount: 0,
     isImmutable: false,
+    enabled: true, winning: true, participates: true, inLoadOrder: true,
     masterIssues: [],
     hasMatchingRecords: true,
     compileStale: false,

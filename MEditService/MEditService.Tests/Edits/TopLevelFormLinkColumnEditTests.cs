@@ -1,8 +1,8 @@
 using System.Text.Json;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
@@ -39,7 +39,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     public void Dispose() => _mod.Dispose();
 
     private RecordEditService Service() =>
-        new(_mod.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
+        new(_mod.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
@@ -57,7 +57,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         Assert.NotEmpty(_mod.GitStatus());
 
         // Answers at Effective: the read model's own document for OtherNpc now carries the new race.
-        var body = _mod.Sessions.Index!.GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
+        var body = _mod.Mirror.Index!.GetDocument(_mod.OtherNpc.ToString(), _mod.Plugin)!.Body!;
         Assert.Contains(_mod.Race.ToString(), body, StringComparison.Ordinal);
     }
 
@@ -93,7 +93,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         using var untracked = TrackedModFixture.Untracked();
 
-        var result = new RecordEditService(untracked.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var result = new RecordEditService(untracked.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(untracked.Plugin, untracked.OtherNpc.ToString(), "race", Json($"\"{untracked.Race}\""));
 
         Assert.False(result.Applied);
@@ -122,7 +122,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
     {
         using var vanilla = new DataDirectoryFixture();
 
-        var result = new RecordEditService(vanilla.Sessions, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
+        var result = new RecordEditService(vanilla.Mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance)
             .EditField(vanilla.Plugin, vanilla.Npc.ToString(), "race", Json($"\"{_mod.Race}\""));
 
         Assert.False(result.Applied);
@@ -140,7 +140,7 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
         private const string Name = "Vanilla.esm";
 
         public string GameDirectory { get; }
-        public SessionManager Sessions { get; }
+        public LoadOrderMirror Mirror { get; }
         public PluginKey Plugin { get; } = new(Name, PluginOrigin.DataDirectory);
         public FormKey Npc { get; }
 
@@ -152,17 +152,17 @@ public sealed class TopLevelFormLinkColumnEditTests : IDisposable
             Npc = mod.Npcs.AddNew("VanillaNpc").FormKey;
             mod.WriteToBinary(pluginPath);
 
-            Sessions = new SessionManager(
+            Mirror = new LoadOrderMirror(
                 new DuckDbRecordIndexFactory(SharedSchemaReflector.Instance, new TableDdlBuilder(SharedSchemaReflector.Instance)));
-            ((ISessionManager)Sessions).LoadExplicit(
+            ((ILoadOrderMirror)Mirror).Reconcile(
                 GameDirectory,
-                [new ExplicitPluginInput(Name, pluginPath, PluginOrigin.DataDirectory, true)],
+                [new LoadOrderEntry(Name, pluginPath, PluginOrigin.DataDirectory, Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
         }
 
         public void Dispose()
         {
-            Sessions.Dispose();
+            Mirror.Dispose();
             try { Directory.Delete(GameDirectory, recursive: true); }
             catch (IOException) { /* scratch directory, best effort */ }
         }

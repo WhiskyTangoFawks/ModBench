@@ -1,17 +1,17 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
-using MEditService.Core.Session;
 
 namespace MEditService.Tests.Query;
 
-// #277 / ADR-0037: a plugin declaring a master absent from the session is flagged, distinguishing
+// #277 / ADR-0037: a plugin declaring a master absent from the load order is flagged, distinguishing
 // a directly-missing master (never attempted) from one that is itself unloadable (attempted,
-// recorded in GameSession.LoadFailures) — a pure set-difference over data the session already has,
+// recorded in LoadOrder.LoadFailures) — a pure set-difference over data the load order already has,
 // never a Mutagen re-read. No cascade: only a plugin's own Masters list is consulted, never a
 // master's own Masters (AC5).
 public class MasterResolutionTests
 {
     private static PluginMetadata Plugin(string name, params string[] masters) =>
-        new(name, "", 0, IsLight: false, IsMaster: false, masters, RecordCount: 0, IsImmutable: false, Origin: "Data");
+        new(name, "", 0, IsLight: false, IsMaster: false, masters, RecordCount: 0, IsForced: false, Origin: "Data", Enabled: true, Winning: true);
 
     [Fact]
     public void Classify_MasterAbsentFromLoadedAndFailedSets_ReturnsDirectlyMissing()

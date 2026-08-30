@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// The Index (glossary sense): ingest plus every read, over one game/session's worth of indexed
+/// The Index (glossary sense): ingest plus every read, over one game/load order's worth of indexed
 /// plugins. Replaces <c>IRecordRepository</c>/<c>IRecordReader</c>/<c>IRecordIndexer</c> (#421) and
 /// absorbs the read-model pass-throughs <c>IRecordQueryService</c> used to carry purely to forward
 /// here (<c>GetRecordForPlugin</c>/<c>GetRecordType</c>/<c>GetNativeFormKeys</c>/<c>GetPlacement</c>/
@@ -38,50 +38,58 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// vouch for them across a restart and the next load re-indexes. A tracked plugin still passes
     /// its binary's path even though its rows came from the source tree — the stamp is what lets a
     /// vanished or replaced binary take its stale rows with it; that its rows are re-ingested from
-    /// source on every load regardless is <c>SessionManager</c>'s rule, not this one's.</para></summary>
-    void Index(IModGetter plugin, int loadOrderIndex, bool participates, PluginKey key, string? filePath = null);
+    /// source on every reconcile regardless is <c>LoadOrderMirror</c>'s rule, not this one's.</para>
+    /// <para>ADR-0044: <paramref name="registration"/> is the load order's three facts about this
+    /// copy, written to its <c>registrations</c> row exactly as <see cref="Register"/> would.</para></summary>
+    void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null);
 
     /// <summary>#585 / ADR-0001: the content hash of the file <paramref name="key"/>'s rows were
     /// built from, or <see langword="null"/> when the index holds no validated rows for it — never
     /// indexed, indexed from no file at all, or dropped by the open-time validation because the file
     /// vanished or its bytes changed. Non-null therefore reads as "the index already holds this
-    /// plugin, and it still matches the disk", which is what lets a session load
+    /// plugin, and it still matches the disk", which is what lets a reconcile
     /// <see cref="Register"/> it instead of indexing it (#586) and the runtime watcher tell a real
     /// change from a touch (#587).
     ///
     /// <para>Independent of registration, deliberately: it is a fact about a file, and it has to
-    /// keep answering for a plugin no session currently holds — a profile switch that comes back is
-    /// exactly the case ADR-0001 exists to make cheap.</para></summary>
+    /// keep answering for a plugin the load order does not currently hold — a profile switch that
+    /// comes back is exactly the case ADR-0001 exists to make cheap.</para></summary>
     string? IndexedContentHash(PluginKey key);
 
     /// <summary>Removes every trace of <paramref name="key"/> from the index — rows and
     /// registration alike, the inverse of <see cref="Index"/>. #582 / ADR-0001: this is the
     /// <b>file-gone</b> verb — a delete, an uninstall, a file missing at validation — never the
-    /// meaning of unload; a session that merely stops wanting a plugin calls <see cref="Unregister"/>.</summary>
+    /// meaning of a copy leaving the load order, which is <see cref="Unregister"/>.</summary>
     void Unindex(PluginKey key);
 
     /// <summary>#582 / ADR-0001: registration is visibility. Writes <paramref name="key"/>'s
-    /// <c>plugins</c> row — the whole of its membership in the session — so its already-indexed rows
-    /// answer again on every read path and every generated view, with no re-index. Winner state is
-    /// stale until the next <see cref="UpdateWinners"/> sweep. (<see cref="Index"/> registers as part
-    /// of indexing; this is the verb for rows the index already holds.)</summary>
-    void Register(PluginKey key, int loadOrderIndex, bool participates);
+    /// <c>registrations</c> row — the whole of its membership in the load order — so its
+    /// already-indexed rows answer again on every read path and every generated view, with no
+    /// re-index. An upsert: re-registering a held copy with a different <see cref="Registration"/>
+    /// (a reorder, an enable, a change of which copy wins) is how ADR-0044's reconcile moves it,
+    /// SQL-only. Winner state is stale until the next <see cref="UpdateWinners"/> sweep.
+    /// (<see cref="Index"/> registers as part of indexing; this is the verb for rows the index
+    /// already holds.)</summary>
+    void Register(PluginKey key, Registration registration);
 
-    /// <summary>Removes <paramref name="key"/>'s <c>plugins</c> row and nothing else: its rows remain
-    /// in the index and answer nothing on any path — ADR-0035's "hidden means absent" is
+    /// <summary>ADR-0044: every copy the index currently registers, in no particular order. What a
+    /// reconcile diffs the incoming snapshot against — a freshly opened index file still carries
+    /// the registrations the last run left (ADR-0001 point 4, amended), and this is how they are
+    /// found and corrected rather than cleared.</summary>
+    IReadOnlyList<PluginKey> RegisteredPlugins();
+
+    /// <summary>Removes <paramref name="key"/>'s <c>registrations</c> row and nothing else: its rows
+    /// remain in the index and answer nothing on any path — ADR-0035's "hidden means absent" is
     /// <i>unregistered, never answering</i>. Winner state is stale until the next
     /// <see cref="UpdateWinners"/> sweep.</summary>
     void Unregister(PluginKey key);
 
-    /// <summary>Rebuilds the whole session's winners — which plugin's copy of each FormKey holds the
-    /// field, at each ref. #584 / ADR-0001: that answer lives in a session-owned derived table, not in
-    /// a column on any indexed row, so this replaces the table rather than updating rows in place.
-    /// Every read still spells it <c>is_winner</c>, projected by the view.</summary>
+    /// <summary>Rebuilds the whole load order's winners — which plugin's copy of each FormKey holds
+    /// the field, at each ref. #584 / ADR-0001: that answer lives in a load-order-owned derived
+    /// table, not in a column on any indexed row, so this replaces the table rather than updating
+    /// rows in place. Every read still spells it <c>is_winner</c>, projected by the view. Only
+    /// participating registrations (<see cref="Registration.Participates"/>) compete.</summary>
     void UpdateWinners();
-
-    /// <summary>Flips an already-indexed plugin's participation flag — SQL-only, no re-index.
-    /// Winner state is stale until the next <see cref="UpdateWinners"/> sweep.</summary>
-    void SetPluginParticipation(PluginKey key, bool participates);
 
     /// <summary>
     /// #415: folds a plugin's working-tree source changes into the read model, which is what makes
@@ -142,8 +150,8 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// nothing.</para>
     ///
     /// <para><b>#452 removed this method's second caller</b>, and it is worth saying why rather than
-    /// leaving the singular surprising. <c>Source.WorkingTreeCreateRediscovery</c>'s session-load sweep
-    /// used to call this to rediscover a record a prior, uncompiled session had created: ordinary
+    /// leaving the singular surprising. <c>Source.WorkingTreeCreateRediscovery</c>'s reconcile sweep
+    /// used to call this to rediscover a record a prior, uncompiled load order had created: ordinary
     /// <see cref="Index"/> ingest knew only the binary, which has no row for it. Ingest-from-source
     /// reads the working tree, where that record is simply present, so the sweep had nothing left to
     /// discover and was deleted. Reaching the same end state from the other direction — a record the
@@ -189,7 +197,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// of <see cref="MarkWorkingTreeOnly"/>, and the deletion half of the ref dimension. It answers at
     /// <see cref="RecordRef.Head"/> and is absent at <see cref="RecordRef.Effective"/>, so a user can
     /// still see, diff and revert what they deleted rather than having it vanish from both refs at the
-    /// next session load (ADR-0041's git-native working-tree model).
+    /// next reconcile (ADR-0041's git-native working-tree model).
     ///
     /// <para>Needed for the same reason as its mirror: a whole-tree read of the working tree cannot
     /// produce a row for a file that is not in it, and <see cref="ApplyWorkingTreeChanges"/>' deletion

@@ -1,6 +1,6 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,13 +9,13 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Queries;
 
 public sealed class RecordQueryService(
-    ISessionManager session,
+    ILoadOrderMirror loadOrder,
     ISchemaReflector schemaReflector,
     IConflictClassifier conflictClassifier,
     ILogger<RecordQueryService>? logger = null,
     SourceFreshness? freshness = null) : IRecordQueryService
 {
-    private readonly ISessionManager _session = session;
+    private readonly ILoadOrderMirror _mirror = loadOrder;
     private readonly ISchemaReflector _schemaReflector = schemaReflector;
     private readonly IConflictClassifier _conflictClassifier = conflictClassifier;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
@@ -25,22 +25,22 @@ public sealed class RecordQueryService(
     // only so the many read-shape tests that construct this service directly keep compiling; the
     // default is the real validator, never a no-op, so production wiring cannot silently lose it.
     private readonly SourceFreshness _freshness =
-        freshness ?? new SourceFreshness(session, NullLogger<SourceFreshness>.Instance);
+        freshness ?? new SourceFreshness(loadOrder, NullLogger<SourceFreshness>.Instance);
 
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
-        var s = RequireSession();
-        // #277 / ADR-0037: one whole-session classification per call, not per plugin — Classify
+        var s = RequireLoadOrder();
+        // #277 / ADR-0037: one whole-load-order classification per call, not per plugin — Classify
         // is already a single pass over every plugin's Masters list.
         //
         // #274: only once the load is complete. Classify answers "is this master anywhere in the
-        // session", which a partial session cannot answer — a master that is present on disk and
+        // load order", which a partial load order cannot answer — a master that is present on disk and
         // merely not opened yet is indistinguishable from one that is genuinely absent, and the
         // wrong answer is the alarming one. Reported as "no issues" while loading rather than as a
         // separate not-yet-computed value: the caller already knows the load is running (it is in
         // the same status), and inventing a third state here would put that knowledge in two places.
         IReadOnlyDictionary<string, IReadOnlyList<MasterIssue>> masterIssues =
-            _session.Status.State == SessionState.Ready
+            _mirror.Status.State == LoadOrderState.Ready
                 ? MasterResolution.Classify(s.Plugins, s.LoadFailures)
                 : new Dictionary<string, IReadOnlyList<MasterIssue>>();
         PluginResponse ToResponse(PluginMetadata p, bool hasMatchingRecords) =>
@@ -72,7 +72,7 @@ public sealed class RecordQueryService(
         // #34: the caller states which copy when it knows (a tree row does; it was built from one).
         // Otherwise the #296 behaviour stands — resolve server-side from the load order, since a
         // bare filename is all most callers have. Null when plugin itself is null (nothing to resolve).
-        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_session.Session, plugin);
+        origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
 
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
@@ -110,15 +110,15 @@ public sealed class RecordQueryService(
         // where this used to be a scan.
         var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
 
-        var sessionPlugins = RequireSession().Plugins;
+        var heldPlugins = RequireLoadOrder().Plugins;
         // #34 / ADR-0036: keyed by the compound column identity, like everything else here
         // since #272. These two were the last filename-keyed structures in this method, safe
-        // only while a session could hold at most one plugin per filename — with a second copy
+        // only while a load order could hold at most one plugin per filename — with a second copy
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
-        var pluginMasters = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
+        var pluginMasters = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
         // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
-        var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
+        var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
         var (classification, conflictAll, vmad, conditions) =
             ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
         // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
@@ -131,7 +131,7 @@ public sealed class RecordQueryService(
         //     B3, but this looked it up by bare o.Plugin — a miss for any non-Data-origin
         //     column, silently defaulting ConflictThis to OnlyOne. Elision only spares
         //     Data-origin plugins, and #269 records the providing mod folder as origin for
-        //     nearly every plugin in a real session, so this was live for essentially every
+        //     nearly every plugin in a real load order, so this was live for essentially every
         //     conflicted record, not just a hypothetical two-origin case.
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
@@ -158,9 +158,9 @@ public sealed class RecordQueryService(
         if (contested.Count == 0) return [];
 
         var resolveFormKey = FormKeyResolutionCache.Memoize(repository.Resolve);
-        var sessionPlugins = RequireSession().Plugins;
-        var pluginMasters = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
-        var pluginParticipates = sessionPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
+        var heldPlugins = RequireLoadOrder().Plugins;
+        var pluginMasters = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
+        var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
 
         var results = new List<ConflictRecord>();
         foreach (var formKey in contested)
@@ -207,7 +207,7 @@ public sealed class RecordQueryService(
         var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, resolveFormKey, pluginParticipates);
         var conflictAll = classification.ConflictAll;
 
-        var gameRelease = RequireSession().GameRelease;
+        var gameRelease = RequireLoadOrder().GameRelease;
         // VMAD is outside the generic reflection pipeline, so classify it separately and fold
         // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
         var vmadInputs = stack.Entries
@@ -245,7 +245,7 @@ public sealed class RecordQueryService(
         var repository = RequireRepository();
         // #34: stated by the caller when it knows which copy it is browsing (a tree row does),
         // else resolved server-side from the load order as it has been since #296.
-        origin ??= PluginOriginResolver.Resolve(_session.Session, plugin);
+        origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
         var schemas = RequireSchemas();
 
         // #421: one grouped query (GetRecordTypeCounts) replaces the per-type CountRecordsForPlugin
@@ -261,22 +261,22 @@ public sealed class RecordQueryService(
         RequireRepository().GetReferencedBy(targetFormKey);
 
     public IReadOnlyList<string> GetConditionFunctions() =>
-        ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
+        ConditionCodecRegistry.For(RequireLoadOrder().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
 
     public IReadOnlyList<string> GetConditionRunOnTargets() =>
-        ConditionCodecRegistry.For(RequireSession().GameRelease.ToCategory())?.AvailableRunOnTargets().ToList() ?? [];
+        ConditionCodecRegistry.For(RequireLoadOrder().GameRelease.ToCategory())?.AvailableRunOnTargets().ToList() ?? [];
 
     private static RecordDetail ToRecordDetail(RecordDocument document) =>
         new(document.FormKey, document.Plugin.Name, document.LoadOrderIndex, document.IsWinner, document.EditorId,
             document.Fields, Origin: document.Plugin.Origin!, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable);
 
-    private IGameSession RequireSession() =>
-        _session.Session ?? throw new InvalidOperationException("No session loaded.");
+    private ILoadOrder RequireLoadOrder() =>
+        _mirror.LoadOrder ?? throw new InvalidOperationException("No load order has been received.");
 
     private IRecordReads RequireRepository() =>
-        _session.Repository ?? throw new InvalidOperationException("No session loaded.");
+        _mirror.Repository ?? throw new InvalidOperationException("No load order has been received.");
 
     private IReadOnlyDictionary<string, Schema.RecordTableSchema> RequireSchemas() =>
-        _schemaReflector.GetSchemas(RequireSession().GameRelease);
+        _schemaReflector.GetSchemas(RequireLoadOrder().GameRelease);
 }

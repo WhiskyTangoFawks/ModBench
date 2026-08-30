@@ -1,9 +1,9 @@
 export const EXTENSION_TO_WEBVIEW = {
   LOAD_RECORD: 'loadRecord',
-  // #308 / ADR-0035: the session's winner sweep has landed — every open record panel re-reads,
-  // so a panel opened mid-load stops rendering a settled-looking grid over unsettled data.
-  // Session-wide, never record-specific: no self-filter, every panel reacts.
-  SESSION_CONFLICTS_COMPUTED: 'sessionConflictsComputed',
+  // #308 / ADR-0035: the load order's winner sweep has landed — every open record panel re-reads,
+  // so a panel opened mid-reconcile stops rendering a settled-looking grid over unsettled data.
+  // Load-order-wide, never record-specific: no self-filter, every panel reacts.
+  CONFLICTS_COMPUTED: 'conflictsComputed',
   // #415: an edit landed as a working-tree change, so the panel re-reads. The backend is the only
   // thing that knows what the record now says, so the webview never patches its own grid from the
   // value it sent: the write path re-serializes through the codec, and the record's conflict
@@ -28,7 +28,7 @@ export const EXTENSION_TO_WEBVIEW = {
   // through `onCommit`.
   EXTENDED_EDITOR_COMMITTED: 'extendedEditorCommitted',
   // #426: fired once, when the user closes the tab (`onDidCloseTextDocument`) — the signal
-  // nativeBridge needs to delete its `requestId -> onCommit` map entry so a session that opens
+  // nativeBridge needs to delete its `requestId -> onCommit` map entry so a load order that opens
   // many fields' extended editors over time doesn't accumulate one stale entry per tab ever
   // opened. Carries no value: closing commits nothing beyond whatever EXTENDED_EDITOR_COMMITTED
   // messages already arrived before it.
@@ -228,7 +228,7 @@ export interface VmadPropertyContext {
 // override column's identity, carried the same way every other native-menu context here is.
 // Unlike the row-scoped contexts above, resolving the command this feeds (Copy as Override Into…/
 // Copy as New Record Into…) never round-trips back through the webview at all: since ADR-0041 the
-// mutation is an ordinary `SessionController` HTTP call the extension host already owns, the same
+// mutation is an ordinary `LoadOrderController` HTTP call the extension host already owns, the same
 // as the plugins-tree row entry point for the identical two commands — this context exists only
 // to tell the host *which* record/plugin/origin was right-clicked.
 export interface ColumnHeaderContext {
@@ -281,7 +281,7 @@ export interface StringValueContext {
 
 export type ExtensionToWebview =
   | { type: typeof EXTENSION_TO_WEBVIEW.LOAD_RECORD; formKey: string }
-  | { type: typeof EXTENSION_TO_WEBVIEW.SESSION_CONFLICTS_COMPUTED }
+  | { type: typeof EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED }
   | { type: typeof EXTENSION_TO_WEBVIEW.RECORD_EDITED; formKey: string }
   | { type: typeof EXTENSION_TO_WEBVIEW.FORM_KEY_PICKED; requestId: string; formKey: string | null }
   | { type: typeof EXTENSION_TO_WEBVIEW.CONDITION_FUNCTION_PICKED; requestId: string; functionName: string | null }

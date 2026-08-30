@@ -1,8 +1,8 @@
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -13,7 +13,7 @@ namespace MEditService.Tests.Query;
 /// <summary>
 /// #274: master issues are derived from the whole loaded set, so mid-load they are not merely
 /// incomplete — they are wrong. A plugin whose master is real, present on disk and simply not opened
-/// yet classifies as <c>DirectlyMissing</c> against a partial session, which would put a red "missing
+/// yet classifies as <c>DirectlyMissing</c> against a partial load order, which would put a red "missing
 /// master" decoration on a healthy plugin for as long as the load takes.
 ///
 /// The same class of error as an absent conflict badge reading as "no conflict", and ADR-0035 names
@@ -38,11 +38,11 @@ public sealed class MasterIssuesDuringLoadTests
         var reflector = SharedSchemaReflector.Instance;
         var inner = new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector));
         using var gate = new GatedIndexRepositoryFactory(inner, gateBefore: "B.esp");
-        using var manager = new SessionManager(gate);
+        using var manager = new LoadOrderMirror(gate);
         var svc = new RecordQueryService(
             manager, reflector, new ConflictClassifier());
 
-        var load = Task.Run(() => manager.LoadExplicit(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
+        var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
         // Parked with A.esp open and Later.esm not yet reached.
@@ -70,9 +70,9 @@ public sealed class MasterIssuesDuringLoadTests
                 new FormKey(ModKey.FromFileName("Ghost.esm"), 0x800)))
             .Build();
         var reflector = SharedSchemaReflector.Instance;
-        using var manager = new SessionManager(
+        using var manager = new LoadOrderMirror(
             new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
-        manager.LoadExplicit(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
+        manager.Reconcile(fx.DataFolder, fx.Plugins, GameRelease.Fallout4);
         var svc = new RecordQueryService(
             manager, reflector, new ConflictClassifier());
 

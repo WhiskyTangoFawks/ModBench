@@ -36,7 +36,7 @@ namespace MEditService.Core.Records;
 ///
 /// <para><b>#453 changed nothing here, deliberately.</b> A field edit can reach a container's own
 /// document and an embedded child's fields, so a cell's source text really is edited in a live
-/// session — but <c>Edits.RecordEditService</c>'s own containment guard refuses the child-slot columns
+/// load order — but <c>Edits.RecordEditService</c>'s own containment guard refuses the child-slot columns
 /// outright (<c>Cell.{Landscape,NavigationMeshes}</c> and <c>Worldspace.{TopCell,SubCells}</c> all
 /// reflect as ordinary writable columns, and writing one would swap a container's children through a
 /// JSON blob), so no field edit can change a child <i>set</i> at all, and this table has nothing to

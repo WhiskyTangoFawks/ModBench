@@ -1,9 +1,9 @@
 using MEditService.Bridge;
 using MEditService.Core.Edits;
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 
 namespace MEditService.Api.Endpoints;
@@ -21,11 +21,11 @@ public static class PluginEndpoints
 
         MapCatalog(app, "/record-types", "GetRecordTypes", svc => svc.GetRecordTypes());
 
-        // The condition function picker's catalog (#152) — filtered to what the loaded session's
+        // The condition function picker's catalog (#152) — filtered to what the loaded load order's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded list.
         MapCatalog(app, "/condition-functions", "GetConditionFunctions", svc => svc.GetConditionFunctions());
 
-        // The Run On target dropdown's catalog (#167) — filtered to what the loaded session's
+        // The Run On target dropdown's catalog (#167) — filtered to what the loaded load order's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded frontend array.
         MapCatalog(app, "/condition-run-on-targets", "GetConditionRunOnTargets", svc => svc.GetConditionRunOnTargets());
 
@@ -52,44 +52,6 @@ public static class PluginEndpoints
             .ProducesProblem(500)
             .ProducesProblem(503);
 
-        app.MapPost("/plugins/load", LoadUnlistedPlugin)
-            .WithName("LoadUnlistedPlugin")
-            .WithTags(Tag)
-            .Produces<PluginResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(503);
-
-        app.MapPost("/plugins/unload", UnloadUnlistedPlugin)
-            .WithName("UnloadUnlistedPlugin")
-            .WithTags(Tag)
-            .Produces(204)
-            .ProducesProblem(400)
-            .ProducesProblem(409)
-            .ProducesProblem(503);
-
-        app.MapPost("/plugins/reread", RereadPlugin)
-            .WithName("RereadPlugin")
-            .WithTags(Tag)
-            .Produces<PluginResponse>()
-            .ProducesProblem(400)
-            .ProducesProblem(404)
-            .ProducesProblem(409)
-            .ProducesProblem(503);
-
-        // #97 / ADR-0035 § Live mutation: the checkbox gesture — flips a load-order member's
-        // participation flag live, no re-index, one winner re-sweep. `plugin` alone (no origin) is
-        // enough: Mod Management's plugin-list model carries no origin (plugins.txt has none to
-        // read), and RequirePlugin's own load-order-member lookup already resolves by bare name —
-        // there is exactly one load-order member per name.
-        app.MapPost("/plugins/{plugin}/participation", SetPluginParticipation)
-            .WithName("SetPluginParticipation")
-            .WithTags(Tag)
-            .Produces<PluginResponse>()
-            .ProducesProblem(404)
-            .ProducesProblem(409)
-            .ProducesProblem(503);
-
         app.MapPost("/plugins/track", Track)
             .WithName("Track")
             .WithTags(Tag)
@@ -102,8 +64,8 @@ public static class PluginEndpoints
             .ProducesProblem(503);
 
         // #414 review F2: polled alongside the still in-flight POST /plugins/track, same idiom
-        // GET /session/status already established for the session load — always 200 (TrackProgress.
-        // Idle when nothing is running), no session dependency, since progress lives on the
+        // GET /load-order/status already established for the reconcile — always 200 (TrackProgress.
+        // Idle when nothing is running), no load order dependency, since progress lives on the
         // singleton TrackService itself.
         app.MapGet("/plugins/track/status", (TrackService trackService) => Results.Ok(trackService.Progress))
             .WithName("GetTrackStatus")
@@ -142,7 +104,7 @@ public static class PluginEndpoints
         // #427: a read-only peek at what CreateRecord/RenumberRecord would auto-allocate — feeds the
         // Renumber gesture's FormID input box a suggested default (xEdit's own "New FormID
         // generated" flow), never a write, no tracked gate (pure arithmetic over indexed state).
-        // Review finding #2: brought to the same typed-refusal standard as its siblings (no session,
+        // Review finding #2: brought to the same typed-refusal standard as its siblings (no load order,
         // FormKey space exhausted) via the same RecordEditResult/Refusal mapping they use, rather
         // than a bespoke nullable-string contract with no way to distinguish the two.
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
@@ -159,7 +121,7 @@ public static class PluginEndpoints
             .ProducesProblem(422);
 
         // #417: polled the same way GET /plugins/track/status is — always 200, an empty list when
-        // nothing is unanswered, no session dependency of its own (the watcher's queue lives on the
+        // nothing is unanswered, no load order dependency of its own (the watcher's queue lives on the
         // singleton ExternalChangeWatcher, same idiom as TrackService.Progress).
         app.MapGet("/plugins/external-changes/status", ExternalChangeStatus)
             .WithName("GetExternalChangeStatus")
@@ -210,8 +172,8 @@ public static class PluginEndpoints
     }
 
     // Shared shape for the /record-types, /condition-functions and /condition-run-on-targets
-    // catalog endpoints (#244): run the read against the loaded session, and map the
-    // "no session loaded" failure (RequireSession()'s InvalidOperationException) to the same 503
+    // catalog endpoints (#244): run the read against the loaded load order, and map the
+    // "no load order held" failure (RequireLoadOrder()'s InvalidOperationException) to the same 503
     // CreatePlugin's own catch below uses.
     private static void MapCatalog(
         IEndpointRouteBuilder app, string route, string name, Func<IRecordQueryService, IReadOnlyList<string>> getCatalog)
@@ -225,7 +187,7 @@ public static class PluginEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                logger.LogError(ex, "No session for {Name}", name);
+                logger.LogError(ex, "No loadOrder for {Name}", name);
                 return Results.Problem(ex.Message, statusCode: 503);
             }
         })
@@ -233,132 +195,6 @@ public static class PluginEndpoints
             .WithTags("Records")
             .Produces<IReadOnlyList<string>>()
             .ProducesProblem(503);
-    }
-
-    // #34 / ADR-0035: loads a plugin file the effective load order does not name. The caller
-    // (Mod Management, which owns mods/ and the file-conflict merge) supplies the physical path
-    // and the origin it resolved the file from; the session decides everything else, since
-    // read-only-ness and non-participation are properties of not being in the load order, not
-    // choices a caller makes.
-    internal static IResult LoadUnlistedPlugin(LoadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Plugin path and origin are required.", statusCode: 400);
-
-        try
-        {
-            return Results.Ok(sessionManager.LoadUnlistedPlugin(req.Path, req.Origin));
-        }
-        catch (FileNotFoundException ex)
-        {
-            logger.LogError(ex, "Unlisted plugin file not found: {Path}", req.Path);
-            return Results.Problem(ex.Message, statusCode: 404);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No session when loading unlisted plugin {Path}", req.Path);
-            return Results.Problem(ex.Message, statusCode: 503);
-        }
-    }
-
-    internal static IResult UnloadUnlistedPlugin(UnloadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-
-        try
-        {
-            sessionManager.UnloadUnlistedPlugin(req.Plugin, req.Origin);
-            return Results.NoContent();
-        }
-        catch (KeyNotFoundException ex)
-        {
-            // 409, not 404: the common way to reach this is naming a plugin that *is* loaded but is
-            // a load-order member, which is a conflict with what that plugin is, not a missing
-            // resource. Only the toggle's own copies are unloadable.
-            logger.LogWarning(ex, "Refused to unload {Plugin} from {Origin}", req.Plugin, req.Origin);
-            return Results.Problem(ex.Message, statusCode: 409);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No session when unloading {Plugin}", req.Plugin);
-            return Results.Problem(ex.Message, statusCode: 503);
-        }
-    }
-
-    // #279 / ADR-0035 § Live mutation: re-reads one plugin from the copy a mod-level change has
-    // made its name resolve to. Same division of labour as LoadUnlistedPlugin above — Mod
-    // Management owns "which file does this name resolve to" and states the answer, because the
-    // session cannot map a filename to a mod folder and must never learn how.
-    internal static IResult RereadPlugin(RereadPluginRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        if (string.IsNullOrWhiteSpace(req.Plugin) || string.IsNullOrWhiteSpace(req.Path) || string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Plugin name, path and origin are required.", statusCode: 400);
-
-        try
-        {
-            return Results.Ok(sessionManager.RereadPlugin(req.Plugin, req.Path, req.Origin));
-        }
-        catch (SessionBusyException ex)
-        {
-            // 409, consistent with the session-load contract's own superseded-load answer: nothing
-            // went wrong and nothing was touched — the same request is answerable once the load
-            // lands. Caught before InvalidOperationException deliberately; see SessionBusyException
-            // for why it is not a subclass of one.
-            logger.LogWarning(ex, "Refused to re-read {Plugin} while a load is in flight", req.Plugin);
-            return Results.Problem(ex.Message, statusCode: 409);
-        }
-        catch (FileNotFoundException ex)
-        {
-            logger.LogWarning(ex, "Re-read target not found for {Plugin}: {Path}", req.Plugin, req.Path);
-            return Results.Problem(ex.Message, statusCode: 404);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            // 404, unlike /plugins/unload's 409: the only way here is naming a plugin the load
-            // order does not have, which is a missing resource rather than a conflict with what
-            // the named plugin is.
-            logger.LogWarning(ex, "No load-order plugin {Plugin} to re-read", req.Plugin);
-            return Results.Problem(ex.Message, statusCode: 404);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No session when re-reading {Plugin}", req.Plugin);
-            return Results.Problem(ex.Message, statusCode: 503);
-        }
-    }
-
-    // #97 / ADR-0035 § Live mutation: the checkbox gesture's own door. Same status mapping as
-    // RereadPlugin's own catch block — 409 while a load is in flight, 404 for a name the load order
-    // does not have, 503 with no session — since the refusal reasons are the same shape.
-    internal static IResult SetPluginParticipation(
-        string plugin, SetPluginParticipationRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
-    {
-        var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
-        var decoded = Uri.UnescapeDataString(plugin);
-
-        try
-        {
-            return Results.Ok(sessionManager.SetPluginParticipation(decoded, req.Participates));
-        }
-        catch (SessionBusyException ex)
-        {
-            logger.LogWarning(ex, "Refused to set {Plugin} participation while a load is in flight", decoded);
-            return Results.Problem(ex.Message, statusCode: 409);
-        }
-        catch (KeyNotFoundException ex)
-        {
-            logger.LogWarning(ex, "No load-order plugin {Plugin} to set participation on", decoded);
-            return Results.Problem(ex.Message, statusCode: 404);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No session when setting {Plugin} participation", decoded);
-            return Results.Problem(ex.Message, statusCode: 503);
-        }
     }
 
     // #288 / ADR-0041: creates a plugin at a caller-resolved destination (Mod Management's
@@ -373,7 +209,7 @@ public static class PluginEndpoints
     // .WithDescription above); this handler's job ends at "the plugin exists, is indexed, and is
     // editable."
     internal static async Task<IResult> CreatePlugin(
-        CreatePluginRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
+        CreatePluginRequest req, ILoadOrderMirror mirror, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Name))
@@ -383,10 +219,10 @@ public static class PluginEndpoints
 
         try
         {
-            var plugin = sessionManager.CreatePlugin(req.Name, req.Path, req.Origin);
+            var plugin = mirror.CreatePlugin(req.Name, req.Path, req.Origin);
 
             if (!SourceRepository.IsTracked(req.Path))
-                await trackService.TrackAsync(sessionManager.Session!, req.Origin, SourcePreset.Edits);
+                await trackService.TrackAsync(mirror.LoadOrder!, req.Origin, SourcePreset.Edits);
 
             return Results.Ok(plugin);
         }
@@ -411,24 +247,24 @@ public static class PluginEndpoints
         }
         catch (GitUnavailableException ex)
         {
-            // Loud, not silent: the plugin file and session entry from the CreatePlugin call above
+            // Loud, not silent: the plugin file and load order entry from the CreatePlugin call above
             // already landed, but plugins.txt is never appended without a 2xx response (the caller's
             // own gate), so no load order can ever name this half-created plugin. The orphaned
-            // session entry is accepted residue (#288 review), surfaced here rather than swallowed.
+            // load order entry is accepted residue (#288 review), surfaced here rather than swallowed.
             logger.LogError(ex, "git unavailable while creating {Name} in {Origin}", req.Name, req.Origin);
             return Results.Problem(ex.Message, statusCode: 500);
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No session when creating plugin {Name}", req.Name);
+            logger.LogError(ex, "No loadOrder when creating plugin {Name}", req.Name);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
 
     // #414/ADR-0041: the Track gesture. Origin names the mod folder (every loaded plugin sharing
-    // it gets tracked together — a mod can hold more than one plugin); the session resolves which
+    // it gets tracked together — a mod can hold more than one plugin); the load order resolves which
     // physical folder that is, same division of labour as RereadPlugin/LoadUnlistedPlugin above.
-    internal static async Task<IResult> Track(TrackRequest req, ISessionManager sessionManager, TrackService trackService, ILoggerFactory loggerFactory)
+    internal static async Task<IResult> Track(TrackRequest req, ILoadOrderMirror mirror, TrackService trackService, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
@@ -436,15 +272,15 @@ public static class PluginEndpoints
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
             return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
 
-        if (sessionManager.Session is not { } session)
+        if (mirror.LoadOrder is not { } loadOrder)
         {
-            logger.LogError("No session when tracking {Origin}", req.Origin);
-            return Results.Problem("No session loaded.", statusCode: 503);
+            logger.LogError("No loadOrder when tracking {Origin}", req.Origin);
+            return Results.Problem("No load order has been received.", statusCode: 503);
         }
 
         try
         {
-            await trackService.TrackAsync(session, req.Origin, preset);
+            await trackService.TrackAsync(loadOrder, req.Origin, preset);
             return Results.Ok(new TrackResponse(req.Origin));
         }
         catch (KeyNotFoundException ex)
@@ -543,21 +379,21 @@ public static class PluginEndpoints
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogError(ex, "No usable session while creating a record in {Plugin}", decoded);
+            logger.LogError(ex, "No usable loadOrder while creating a record in {Plugin}", decoded);
             return Results.Problem(ex.Message, statusCode: 503);
         }
     }
 
     // #417: the watcher's own queue plus (best-effort) the origin each unanswered plugin currently
-    // resolves to in the loaded session — a session that has since reloaded away from a plugin still
+    // resolves to in the loaded load order — a load order that has since reloaded away from a plugin still
     // reports the question with an empty Origin rather than dropping it, since the question itself
     // is still real and unanswered regardless of what's loaded right now.
-    internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ISessionManager sessionManager)
+    internal static IResult ExternalChangeStatus(ExternalChangeWatcher watcher, ILoadOrderMirror mirror)
     {
-        var session = sessionManager.Session;
+        var loadOrder = mirror.LoadOrder;
         var responses = watcher.Unanswered().Select(p =>
         {
-            var origin = session?.Plugins.FirstOrDefault(pl =>
+            var origin = loadOrder?.Plugins.FirstOrDefault(pl =>
                 pl.Name.Equals(p.PluginName, StringComparison.OrdinalIgnoreCase)
                 && ModFolders.Of(pl.Origin, pl.Path) == p.ModFolder)?.Origin ?? "";
             return new UnansweredExternalChangeResponse(p.PluginName, origin, p.Classification.MetaChanged, p.Classification.OldVersion, p.Classification.NewVersion);
@@ -566,21 +402,21 @@ public static class PluginEndpoints
     }
 
     // #417: Absorb Upstream Update. The plugin name and origin resolve the target the same way
-    // Compile does; GameRelease comes off the loaded session, never guessed.
-    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
+    // Compile does; GameRelease comes off the loaded load order, never guessed.
+    internal static IResult AbsorbExternalChange(string plugin, ExternalChangeActionRequest req, ILoadOrderMirror mirror, ExternalChangeWatcher watcher, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (modFolder, pluginPath, session) = ResolvePluginPath(sessionManager, decoded, req.Origin, logger);
+        var (modFolder, pluginPath, loadOrder) = ResolvePluginPath(mirror, decoded, req.Origin, logger);
         if (modFolder is null)
-            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the loaded session.", statusCode: 503);
+            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the load order.", statusCode: 503);
 
         try
         {
-            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, session!);
+            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, loadOrder!);
             watcher.MarkAnswered(modFolder, decoded);
             watcher.Watch(modFolder, decoded, pluginPath!);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
@@ -595,22 +431,22 @@ public static class PluginEndpoints
     // #417: Keep as My Edit. A same-record collision is a typed refusal (ExternalChangeLandResult.
     // Applied == false), not an exception — it travels straight through as a 200, same posture as
     // Compile's own refusal.
-    internal static IResult KeepExternalChange(string plugin, ExternalChangeActionRequest req, ISessionManager sessionManager, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
+    internal static IResult KeepExternalChange(string plugin, ExternalChangeActionRequest req, ILoadOrderMirror mirror, ExternalChangeWatcher watcher, ISchemaReflector reflector, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (modFolder, pluginPath, session) = ResolvePluginPath(sessionManager, decoded, req.Origin, logger);
+        var (modFolder, pluginPath, loadOrder) = ResolvePluginPath(mirror, decoded, req.Origin, logger);
         if (modFolder is null)
-            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the loaded session.", statusCode: 503);
+            return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the load order.", statusCode: 503);
 
         try
         {
             var result = ExternalChangeEditLander.Keep(
-                modFolder, new PluginKey(decoded, req.Origin), pluginPath!, session!.GameRelease,
-                sessionManager.Index!, reflector, logger);
+                modFolder, new PluginKey(decoded, req.Origin), pluginPath!, loadOrder!.GameRelease,
+                mirror.Index!, reflector, logger);
             if (result.Applied)
             {
                 watcher.MarkAnswered(modFolder, decoded);
@@ -627,26 +463,26 @@ public static class PluginEndpoints
 
     // #417: the offered rebase, origin-scoped — the repo is the unit of baselines and rebase, not
     // any one plugin inside it.
-    internal static IResult Rebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    internal static IResult Rebase(RebaseRequest req, ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        if (ResolveModFolder(sessionManager, req.Origin, logger) is not { } modFolder)
+        if (ResolveModFolder(mirror, req.Origin, logger) is not { } modFolder)
             return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
 
         var result = SourceRepository.RebaseEditBranch(modFolder);
         return Results.Ok(ToRebaseResponse(result));
     }
 
-    internal static IResult ContinueRebase(RebaseRequest req, ISessionManager sessionManager, ILoggerFactory loggerFactory)
+    internal static IResult ContinueRebase(RebaseRequest req, ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        if (ResolveModFolder(sessionManager, req.Origin, logger) is not { } modFolder)
+        if (ResolveModFolder(mirror, req.Origin, logger) is not { } modFolder)
             return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
 
         var result = SourceRepository.ContinueRebase(modFolder);
@@ -661,9 +497,9 @@ public static class PluginEndpoints
     // gestures must still resolve a shadowed copy: a plugin loaded under this origin but shadowed
     // by a higher-priority mod of the same filename is exactly a mod whose external-change
     // question, absorb, keep, or rebase still needs answering.
-    private static string? ResolveModFolder(ISessionManager sessionManager, string origin, ILogger logger)
+    private static string? ResolveModFolder(ILoadOrderMirror mirror, string origin, ILogger logger)
     {
-        var plugin = sessionManager.Session?.Plugins.FirstOrDefault(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
+        var plugin = mirror.LoadOrder?.Plugins.FirstOrDefault(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
         if (plugin == null)
         {
             logger.LogWarning("No loaded plugin has origin {Origin}", origin);
@@ -675,19 +511,19 @@ public static class PluginEndpoints
     // Same reason ResolveModFolder above doesn't reuse PluginOriginResolver.Resolve: this must
     // still find a plugin shadowed out of the load order, since that copy is exactly what
     // absorb/keep target when it's the one whose origin the unanswered question named.
-    private static (string? ModFolder, string? PluginPath, IGameSession? Session) ResolvePluginPath(
-        ISessionManager sessionManager, string pluginName, string origin, ILogger logger)
+    private static (string? ModFolder, string? PluginPath, ILoadOrder? LoadOrder) ResolvePluginPath(
+        ILoadOrderMirror mirror, string pluginName, string origin, ILogger logger)
     {
-        var session = sessionManager.Session;
-        var plugin = session?.Plugins.FirstOrDefault(p =>
+        var loadOrder = mirror.LoadOrder;
+        var plugin = loadOrder?.Plugins.FirstOrDefault(p =>
             p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase) && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
         if (plugin == null)
         {
             logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
             return (null, null, null);
         }
-        var modFolder = ModFolders.TrackedOf(session, new PluginKey(plugin.Name, plugin.Origin));
-        return (modFolder, plugin.Path, session);
+        var modFolder = ModFolders.TrackedOf(loadOrder, new PluginKey(plugin.Name, plugin.Origin));
+        return (modFolder, plugin.Path, loadOrder);
     }
 }
 

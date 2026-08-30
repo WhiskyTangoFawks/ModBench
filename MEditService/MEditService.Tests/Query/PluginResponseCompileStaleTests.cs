@@ -1,5 +1,5 @@
+using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 
 namespace MEditService.Tests.Query;
@@ -17,7 +17,7 @@ public sealed class PluginResponseCompileStaleTests
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-pluginresponse-compilestale-").FullName;
 
     private static PluginMetadata MetadataFor(string modFolder, string origin) =>
-        new(Plugin, Path.Combine(modFolder, Plugin), 0, false, false, [], 0, false, origin);
+        new(Plugin, Path.Combine(modFolder, Plugin), 0, false, false, [], 0, false, origin, Enabled: true, Winning: true);
 
     [Fact]
     public void FromMetadata_ForATrackedPluginEditedSinceItsLastCompile_ReportsCompileStaleTrue()
@@ -87,8 +87,7 @@ public sealed class PluginResponseCompileStaleTests
     {
         // A vanilla/DLC master resolved from the game's Data directory — PluginOrigin.DataDirectory,
         // the same "no mod folder at all" case IsEditable/IsTracked already degrade over.
-        var metadata = new PluginMetadata(
-            "Fallout4.esm", "/data/Fallout4.esm", 0, false, true, [], 0, true, PluginOrigin.DataDirectory);
+        var metadata = new PluginMetadata("Fallout4.esm", "/data/Fallout4.esm", 0, false, true, [], 0, true, PluginOrigin.DataDirectory, Enabled: true, Winning: true);
 
         var response = PluginResponse.FromMetadata(metadata);
 

@@ -52,7 +52,7 @@ export class ErrorNode extends vscode.TreeItem {
   }
 }
 
-/** Shown whenever no record editor is active — before the first record is opened this session,
+/** Shown whenever no record editor is active — before the first record is opened this load order,
  *  or after the last one closes (#282: the view is always visible now, retargeting on the active
  *  record panel instead of being hidden until an explicit "Show Referenced By" invocation). */
 export class NoActiveRecordNode extends vscode.TreeItem {

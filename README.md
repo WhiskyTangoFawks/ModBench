@@ -35,11 +35,11 @@ and [ADR-0042](docs/adr/0042-plugin-is-the-source-of-truth-lossless-source.md).
 | Surface | Spec | State |
 |---|---|---|
 | **Mods** — install from archive, separators, drag-order, enable, deploy (hardlinks), purge, profiles | [mods.md](docs/specs/mods.md) | Implemented |
-| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit session running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
+| **Plugins** — `plugins.txt` order and checkboxes, and with an mEdit load order running, every plugin expands into its record types, records, worldspace/cell tree | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Record editor** — xEdit-style compare grid across the whole load order, conflict coloring (ConflictAll/ConflictThis), in-place editing, copy-as-override / new record, VMAD and conditions | [medit-record-editor.md](docs/specs/medit-record-editor.md) | Implemented |
 | **Version control** — Track, edit branch, Save & Compile, native SCM integration, external-change handling, crash recovery | [medit-version-control.md](docs/specs/medit-version-control.md) | Implemented |
 | **Referenced By** — what points at a record | [medit-referenced-by.md](docs/specs/medit-referenced-by.md) | Implemented |
-| **Loadout header** — profile, session, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |
+| **Loadout header** — profile, load order, deployment readout | [loadout-header.md](docs/specs/loadout-header.md) | Implemented |
 | **Record filter** — plain `.sql` files against the record index, applied with a Code Lens | [plugins.md](docs/specs/plugins.md) | Implemented |
 | **Repair** — byte-level repair of malformed plugins the Creation Kit wouldn't have written | [medit-repair.md](docs/specs/medit-repair.md) | Specced |
 | **Downloads** — Nexus `nxm://` handler and queue | [downloads.md](docs/specs/downloads.md) | Specced |
@@ -64,7 +64,7 @@ Two bounded contexts with an enforced language boundary — **Mod Management** s
 and files; **Editing** speaks plugins, records and FormKeys — meet at exactly one object: a plugin
 file at a physical path. [CONTEXT-MAP.md](CONTEXT-MAP.md) is the map;
 [CONTEXT.md](CONTEXT.md) and [modbench/src/modmanager/CONTEXT.md](modbench/src/modmanager/CONTEXT.md)
-are the glossaries. The extension spawns and owns the backend for a session
+are the glossaries. The extension spawns and owns the backend for a load order
 ([ADR-0022](docs/adr/0022-extension-owns-backend-lifecycle.md)); the Loadout side works with no
 backend at all.
 

@@ -45,7 +45,7 @@ public class GetDocumentsTests
         var key = new PluginKey("Bulk.esp", "ModA");
 
         using var repo = OpenRepo();
-        repo.Index(mod, loadOrderIndex: 0, participates: true, key: key);
+        repo.Index(mod, Registration.Participating(0), key);
         // Resolution answers from form_lookup's winning rows, so without the winner sweep every
         // FormLink in the fixture reads as dangling — the sweep is part of the real load pipeline.
         repo.UpdateWinners();
@@ -85,8 +85,8 @@ public class GetDocumentsTests
         modB.Npcs.AddNew("SecondFromModB");
 
         using var repo = OpenRepo();
-        repo.Index(modA, loadOrderIndex: 0, participates: true, key: new PluginKey("Shared.esp", "ModA"));
-        repo.Index(modB, loadOrderIndex: 1, participates: true, key: new PluginKey("Shared.esp", "ModB"));
+        repo.Index(modA, Registration.Participating(0), new PluginKey("Shared.esp", "ModA"));
+        repo.Index(modB, Registration.Participating(1), new PluginKey("Shared.esp", "ModB"));
 
         var fromA = repo.GetDocuments(new PluginKey("Shared.esp", "ModA"));
         var fromB = repo.GetDocuments(new PluginKey("Shared.esp", "ModB"));

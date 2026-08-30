@@ -125,9 +125,8 @@ requires a deploy.**
 29. As a user with multiple MO2 profiles, I want to switch the active profile from the
     Mods view, have the choice persisted to `ModOrganizer.ini`, and have the tree reload,
     so that I can work on different loadouts.
-30. As a user, I want switching profiles to be a clean session boundary that tears down any
-    running editing session, so that the editor never shows records from the wrong
-    loadout.
+30. As a user, I want switching profiles to hand the new profile's load order to any running
+    editing backend, so that the editor never shows records from the wrong loadout.
 31. As a user, I want every write Modbench makes to `modlist.txt` and `ModOrganizer.ini` to
     change only the bytes that need changing, so that my comments, CRLF line endings,
     unmanaged (`*`) lines, and separators survive verbatim and MO2 still reads the files.
@@ -196,7 +195,7 @@ requires a deploy.**
 Two independent operations against the same physical mod files:
 
 - **Deploy (Build)** exists to let the *game* run. It hardlinks enabled mods' files into
-  the game directory's `Data/`. It never needs an editing session.
+  the game directory's `Data/`. It never needs an editing backend.
 - **Edit** exists to inspect/modify *records*. The backend loads plugins by physical path
   (`load-explicit`) and writes them in place, reading vanilla masters from the game
   directory. It never needs a deployed `Data/`.
@@ -267,20 +266,21 @@ the configured game directory's `Data/`.
   and order survive.
 - **Profiles**: each profile under `profiles/` has its own `modlist.txt`/`plugins.txt`. The
   active profile comes from `ModOrganizer.ini` (`[General] selected_profile`); the user
-  switches via a quick pick and the choice is persisted back. The **session boundary is the
-  active profile's modlist** — switching profiles starts a new session.
+  switches via a quick pick and the choice is persisted back. The **load order is the active
+  profile's** — switching profiles sends the new profile's snapshot to a running backend as the
+  next reconcile (ADR-0044); nothing tears down.
 
 ### Backend lifecycle (editing integration)
 
 The extension owns the editing backend process
 ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)):
 
-- **Spawn** — lazily, on **Launch mEdit** (the first editing session for the active
+- **Spawn** — lazily, on **Launch mEdit** (the first editing backend for the active
   modlist).
-- **Session** — built via the backend's `load-explicit` source: an ordered
+- **Load order** — built via the backend's `load-explicit` source: an ordered
   `{name, physicalPath, origin, participates}` list of every `plugins.txt` line — disabled
   entries included since #270 / ADR-0035, with the `*` prefix carried as `participates` — plus
-  vanilla masters. One backend, one session (ADR-0015).
+  vanilla masters. One backend, one load order (ADR-0015).
 - **Teardown** — explicit **Close mEdit**, switching profile/modlist, or closing the
   workspace. Restarted on crash; re-entering editing re-spawns and re-indexes.
 
@@ -303,7 +303,7 @@ The extension owns the editing backend process
   block order and the mods within each separator — to **winning-at-top** (raw `modlist.txt`
   file order). View order only — it never changes which mod wins a conflict (see
   [modmanager/CONTEXT.md](../../modbench/src/modmanager/CONTEXT.md), "View order"). The toggle
-  is transient (not persisted across sessions), matching the Filter/grouping toggle's
+  is transient (not persisted across windows), matching the Filter/grouping toggle's
   behavior. A pinned **Overwrite** row (see *Overwrite folder* below) sits below everything
   when `overwrite/` is non-empty, outside all separator grouping.
 - **Mod row**: a checkbox (enable/disable, writing the `+`/`-` prefix immediately), the
@@ -342,16 +342,17 @@ The extension owns the editing backend process
     "there is nothing here". Rows that survive filtering by design — an ADR-0026 error row, this
     tree's pinned Overwrite row — are content: the message asks the provider what is *showing*,
     not whether the term matched.
-  - **Lifetime**: durable within the session, across tree refreshes and underlying data changes;
+  - **Lifetime**: durable within the load order, across tree refreshes and underlying data changes;
     not persisted across window reloads. It is a lens, not a setting.
   - **Icon note**: `$(clear-all)` matches VS Code's own "Clear Extensions Search Results".
     [#247](https://github.com/WhiskyTangoFawks/ModBench/issues/247) owns the icon rubric and may
     override it; the choice is recorded here rather than silently inherited.
 - **Profile selector**: reached from the [Loadout header](loadout-header.md)'s Profile row,
   not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
-  any running session, so its scope is the workspace. It opens a quick pick of directories
-  under `profiles/`; selecting one persists `selected_profile` and refreshes the tree (a new
-  session boundary — any editing session tears down).
+  any running editing backend's load order, so its scope is the workspace. It opens a quick pick
+  of directories under `profiles/`; selecting one persists `selected_profile`, refreshes the tree
+  and asks the load-order sync for the next snapshot (ADR-0044) — a running backend reconciles
+  to the new profile rather than tearing down.
 - **Context menus**: a **mod** offers Open in Explorer, Add Separator Below, Move to
   Separator (quick pick of separators + "Ungrouped", moving the mod to the end of the
   section), Uninstall (confirmation; removes `mods/<name>/` and its `modlist.txt` entry),
@@ -535,7 +536,7 @@ Generators write into the real `Data/`, where MO2 would have caught those writes
 `overwrite/` reproduces MO2's end state, but only at purge time rather than live. That
 difference is intentional and documented, not a defect.
 
-**Cross-surface hazard**: running a plugin editor as a task while an mEdit session holds the
+**Cross-surface hazard**: running a plugin editor as a task while an mEdit load order holds the
 same plugins indexed leaves that index stale with no notification. Resolution is deferred, and
 it is an Editing-surface concern (see [medit.md](medit.md)), not a Loadout one.
 

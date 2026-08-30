@@ -7,7 +7,7 @@ status: accepted
 Decided 2026-08-19 and refined through the "5 — Git-native editing" milestone. Together with
 [ADR-0042](0042-plugin-is-the-source-of-truth-lossless-source.md) (what the source *is*) and
 [ADR-0005](0005-reflection-driven-schema.md) (how the index is built from it), this is the
-git-native editing model. Vocabulary: [CONTEXT.md](../../CONTEXT.md) § Session & index.
+git-native editing model. Vocabulary: [CONTEXT.md](../../CONTEXT.md) § Load order & index.
 
 ## Context
 
@@ -75,7 +75,7 @@ initializes the ref to the pristine snapshot. A missing or orphaned ref degrades
 user, never to guessing.
 
 **Source is complete, and tracked plugins load from source.** The source contains everything
-needed to compile the plugin, including the mod header (root `RecordData.json`). Session load
+needed to compile the plugin, including the mod header (root `RecordData.json`). Reconcile
 ingests a tracked plugin by deserializing its source whole — working tree → Effective, git
 `HEAD` → Head — and never consults the binary for its content; untracked plugins keep the
 binary ingest, producing the same document shape, so the read model never sees a dialect.
@@ -92,7 +92,7 @@ likewise diffs two whole-mod deserializations structurally. Proposed and decline
 #454); this paragraph is the standing answer.
 
 **External change flows through one dialog.** A bridge assembly hosted in the backend process
-(watch / deserialize / compile; knows nothing of sessions or the DB) plus the load-time hash
+(watch / deserialize / compile; knows nothing of load orders or the DB) plus the load-time hash
 check observe a tracked binary changing outside Modbench. One dialog asks the only human
 question: upstream update (pristine source committed to `main` as a new baseline, then an
 offered rebase of the edit branch — clean replays proceed, conflicts open in VS Code's native
@@ -101,7 +101,7 @@ posture follows git**: an offered rebase over uncommitted dirt refuses, naming t
 commit/stash/discard are the user's gestures.
 
 **The native git UI is the review surface.** The extension calls `vscode.git`'s
-`openRepository(uri)` for each tracked mod in the session (`extensionDependencies:
+`openRepository(uri)` for each tracked mod in the load order (`extensionDependencies:
 ["vscode.git"]`): one native SCM group per tracked mod, native diffs, native commit. Git on
 PATH is a stated product requirement (VS Code itself prompts to install it).
 
@@ -149,7 +149,7 @@ JSON, extracted index tables, generated `json_extract` views for filter SQL: ADR
   lifecycle reconcilers and stale-gitdir sweeps, change-group closures gating commit, a bespoke
   aggregate SCM provider, and commit = save. Each existed to make git automatic; manual + eager
   tracking deletes them all, and the one-time Track cost is honest UX.
-- **A parallel direct-binary write path for untracked mods** (xEdit-style session memory +
+- **A parallel direct-binary write path for untracked mods** (xEdit-style load order memory +
   direct save) — friction on untracked editing is wanted, and a second write path forever is the
   shoehorn returning.
 - **Standalone bridge process** — a second deployable and Mutagen load with IPC races, for no

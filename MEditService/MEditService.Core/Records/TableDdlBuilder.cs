@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text;
 using DuckDB.NET.Data;
+using MEditService.Core.Plugins;
 using MEditService.Core.Schema;
-using MEditService.Core.Session;
 using MEditService.Core.Source;
 using Mutagen.Bethesda;
 
@@ -21,30 +21,31 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     internal const string MirrorSchema = "mirror";
 
     // One registered relation: a mirror table carrying a plugin identity, plus which
-    // session-derived columns its view rebuilds. `session_plugins` itself is the registration and
+    // load-order-derived columns its view rebuilds. `registrations` itself is the registration and
     // stays a plain table in `main`, so it does not appear below. Neither does `mirror.files`
-    // (#585), which carries a plugin identity but must answer for plugins *no* session has
-    // registered — it is the mirror of the disk, and scoping it by registration would blind the
-    // open-time validation to exactly the rows it exists to check.
+    // (#585), which carries a plugin identity but must answer for plugins the load order does not
+    // currently register — it is the mirror of the disk, and scoping it by registration would
+    // blind the open-time validation to exactly the rows it exists to check.
     private readonly record struct RegisteredRelation(
         string Table, string PluginColumn, string OriginColumn, bool DerivesLoadOrder, bool DerivesWinner);
 
     // The list CreateRegisteredViews scopes.
     //
-    // #583 / ADR-0001: `load_order_idx` lives only on `session_plugins` now — none of these mirror
+    // #583 / ADR-0001: `load_order_idx` lives only on `registrations` now — none of these mirror
     // tables store it. The four that used to carry it as a stored column (records, records_committed,
     // form_lookup, the header table) get it back as a derived column in their registered view, joined
-    // from `session_plugins` rather than read off the row; the rest never had one.
+    // from `registrations` rather than read off the row; the rest never had one. ADR-0044: it is
+    // nullable there — a copy no plugins.txt line names has no slot — and so nullable in the views.
     //
     // #584 / ADR-0001: `is_winner` is the same story one step further out. It was never a fact about
     // a row's bytes either — it is a fact about the whole registered stack a FormKey sits in — so it
     // is gone from every mirror table too, and the three relations whose readers ask for it
-    // (`records`, `form_lookup`, the header table) derive it in their view by joining `session_winners`.
+    // (`records`, `form_lookup`, the header table) derive it in their view by joining `winners`.
     // `records_committed` is not among them: its stored flag was written FALSE and read by nothing
     // (records_head answers Head), so it simply stops existing rather than becoming a derived column
     // nobody selects.
     //
-    // All three join at Effective, the header included, even though `session_winners` can now express
+    // All three join at Effective, the header included, even though `winners` can now express
     // a ref. That is deliberate and unchanged from the stored flag: the header table carries no ref
     // dimension at all — there is no committed/working-tree header text — so a Head-ref header read
     // wants Effective's answer, exactly as Resolve/GetReferencedBy/GetPlacement do (see
@@ -63,21 +64,34 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         new(HeaderIndexer.TableName, "plugin", "origin", DerivesLoadOrder: true, DerivesWinner: true),
     ];
 
-    /// <summary>The session-winners relation (<see cref="CreateSessionWinnersTable"/>), named once so
-    /// the sweep in <c>DuckDbRecordIndex.UpdateWinners</c> and the views that read it cannot drift.
-    /// Bare — no schema prefix — because it is session-derived state, not a file mirror: #593 moves it
-    /// out of the mirror schema into `main`, alongside <c>session_plugins</c>.</summary>
-    internal const string SessionWinnersRelation = "session_winners";
+    /// <summary>The winners relation (<see cref="CreateWinnersTable"/>), named once so the sweep in
+    /// <c>DuckDbRecordIndex.UpdateWinners</c> and the views that read it cannot drift. Bare — no
+    /// schema prefix — because it is load-order-derived state, not a file mirror: #593 moves it out
+    /// of the mirror schema into `main`, alongside <see cref="RegistrationsRelation"/>.</summary>
+    internal const string WinnersRelation = "winners";
+
+    /// <summary>The registration table (<see cref="CreateRegistrationsTable"/>): one row per physical
+    /// plugin copy the load order holds, carrying ADR-0044's three facts (<c>load_order_idx</c>,
+    /// <c>enabled</c>, <c>winning</c>). Registration is visibility (#582): every registered view
+    /// joins it, so a row answers iff this table names its (plugin, origin). Participation is never
+    /// a column here — see <see cref="ParticipatesPredicate"/>.</summary>
+    internal const string RegistrationsRelation = "registrations";
+
+    /// <summary>ADR-0044: participation, derived — the one SQL spelling of
+    /// <see cref="Registration.Participates"/>, for the winner sweep to join on. <paramref name="alias"/>
+    /// names the <see cref="RegistrationsRelation"/> row.</summary>
+    internal static string ParticipatesPredicate(string alias) =>
+        $"{alias}.enabled AND {alias}.winning AND {alias}.load_order_idx IS NOT NULL";
 
     /// <summary>
-    /// <c>is_winner</c> for one relation's rows, at one ref, as a LEFT JOIN against the session-winners
-    /// table — <see cref="SessionWinnersRelation"/> holds at most one row per (ref, form_key) by
+    /// <c>is_winner</c> for one relation's rows, at one ref, as a LEFT JOIN against the winners
+    /// table — <see cref="WinnersRelation"/> holds at most one row per (ref, form_key) by
     /// construction (<c>DuckDbRecordIndex.UpdateWinners</c>), so joining it can never duplicate a row
     /// of <paramref name="alias"/>, and a hash join over the whole table beats a correlated EXISTS on
     /// the full-scan reads (Search, GetDocuments) that dominate this column's use.
     /// </summary>
     private static string WinnerJoin(string alias, RecordRef @ref, string pluginColumn, string originColumn) => $"""
-        LEFT JOIN {SessionWinnersRelation} w
+        LEFT JOIN {WinnersRelation} w
                ON w.record_ref = '{WinnerRef.Of(@ref)}'
               AND w.form_key = {alias}.form_key
               AND w.plugin = {alias}.{pluginColumn}
@@ -88,8 +102,8 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     {
         Execute(connection, $"CREATE SCHEMA IF NOT EXISTS {MirrorSchema}");
         CreateRecordsTable(connection);
-        CreateSessionPluginsTable(connection);
-        CreateSessionWinnersTable(connection);
+        CreateRegistrationsTable(connection);
+        CreateWinnersTable(connection);
         CreateCommittedRecordsTable(connection);
         CreateFilesTable(connection);
         CreateFormReferencesTable(connection);
@@ -115,20 +129,23 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     }
 
     /// <summary>
-    /// The one "registered" predicate (#582 / ADR-0001): a row answers iff a <c>session_plugins</c>
+    /// The one "registered" predicate (#582 / ADR-0001): a row answers iff a <c>registrations</c>
     /// row names its (plugin, origin). Each public relation is exactly its mirror table joined to
     /// that row, so the C# reads (which name the bare table) and the SQL door (user filter SQL,
     /// <c>medit.query</c>, the generated per-type views over <c>records</c>) cannot scope
     /// differently — there is no second place the scoping is written. The join doubles as
     /// <c>load_order_idx</c>'s one source of truth (#583 / ADR-0001): for the relations that carry
     /// it, the view adds <c>p.load_order_idx</c> rather than reading a stored column, because
-    /// <c>session_plugins</c> is the only place that value lives — an INNER JOIN already excludes an
+    /// <c>registrations</c> is the only place that value lives — an INNER JOIN already excludes an
     /// unregistered plugin's rows, same as the EXISTS this replaces, so filtering and load order
-    /// come from the identical join rather than two separate mechanisms.
+    /// come from the identical join rather than two separate mechanisms. Registered, not
+    /// participating: ADR-0044 keeps a non-participating copy (a losing copy, a disabled line)
+    /// visible on request beside the participating rows; only the winner sweep and the conflict
+    /// classifier read the derived participation predicate.
     ///
-    /// <para>#584 / ADR-0001: <c>is_winner</c> joins in the same way, from <c>session_winners</c>. Both
+    /// <para>#584 / ADR-0001: <c>is_winner</c> joins in the same way, from <c>winners</c>. Both
     /// derived columns are appended after <c>t.*</c>, so a mirror table's own columns keep their
-    /// ordinal positions and only the session-derived ones move.</para>
+    /// ordinal positions and only the load-order-derived ones move.</para>
     /// </summary>
     private static void CreateRegisteredViews(DuckDBConnection connection)
     {
@@ -143,7 +160,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
                 CREATE OR REPLACE VIEW "{relation.Table}" AS
                 SELECT t.*{loadOrderColumn}{winnerColumn}
                 FROM {MirrorSchema}."{relation.Table}" t
-                JOIN session_plugins p ON p.plugin = t.{relation.PluginColumn} AND p.origin = t.{relation.OriginColumn}
+                JOIN {RegistrationsRelation} p ON p.plugin = t.{relation.PluginColumn} AND p.origin = t.{relation.OriginColumn}
                 {winnerJoin}
                 """);
         }
@@ -172,7 +189,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     // either. A record row carries file-derived facts only — load order is a fact about the plugin's
     // registration and winning is a fact about the registered stack the FormKey sits in, neither
     // about this row — and the registered "records" view (CreateRegisteredViews) joins both back in,
-    // from `session_plugins` and `session_winners`, for every reader that names the view rather than
+    // from `registrations` and `winners`, for every reader that names the view rather than
     // this mirror table.
     private static void CreateRecordsTable(DuckDBConnection connection)
     {
@@ -275,7 +292,7 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
         // Effective, which promotes the next plugin down — and the promoted row is a clean row,
         // physically shared with this view. Reusing Effective's winner would leak that promotion into
         // the committed answer and report two winners for one FormKey at Head. So the sweep computes
-        // a winner per ref (#584 / ADR-0001: `session_winners` is keyed by `record_ref` first), which
+        // a winner per ref (#584 / ADR-0001: `winners` is keyed by `record_ref` first), which
         // is what "IsWinner correct at the requested ref" means — and both refs' winners come out of
         // the one sweep in DuckDbRecordIndex.UpdateWinners, so they cannot disagree about what winning
         // is.
@@ -290,13 +307,13 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     }
 
     /// <summary>
-    /// #584 / ADR-0001: the session-winners relation — <c>(record_ref, form_key) -> (plugin,
-    /// origin)</c>, one row naming the plugin whose copy of that FormKey wins at that ref. Winning is
-    /// a function of the registered load order and nothing else, so it is session-owned state derived
-    /// over the mirror rows, never a column on one of them: re-registering a plugin (a reorder, an
-    /// enable, a disable) changes who wins without touching a single record row. #593 moves this table
-    /// out of the mirror schema entirely — it is session-derived, not a file mirror — into `main`,
-    /// alongside `session_plugins`.
+    /// #584 / ADR-0001: the winners relation — <c>(record_ref, form_key) -> (plugin, origin)</c>,
+    /// one row naming the plugin whose copy of that FormKey wins at that ref. Winning is a function
+    /// of the registered load order and nothing else, so it is load-order-owned state derived over
+    /// the mirror rows, never a column on one of them: re-registering a plugin (a reorder, an enable,
+    /// a disable, a change of winning copy) changes who wins without touching a single record row.
+    /// #593 moves this table out of the mirror schema entirely — it is load-order-derived, not a
+    /// file mirror — into `main`, alongside `registrations`.
     ///
     /// <para>Rebuilt wholesale by <c>DuckDbRecordIndex.UpdateWinners</c> — the same sweep that used to
     /// UPDATE an <c>is_winner</c> column on three tables — and read only through the registered views
@@ -306,8 +323,8 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     ///
     /// <para>At most one row per (record_ref, form_key), which is what lets the readers LEFT JOIN it
     /// without risking a duplicated row. A tie on <c>load_order_idx</c> — two participating plugins
-    /// registered at the same index, which GameSession.AddPlugin's index allocation exists to prevent
-    /// — therefore resolves to exactly one winner here, where the old MAX() compare marked both. That
+    /// registered at the same index, which LoadOrder.AddCreatedPlugin's slot allocation exists to
+    /// prevent — therefore resolves to exactly one winner here, where the old MAX() compare marked both. That
     /// uniqueness is by construction (the sweep's <c>QUALIFY ROW_NUMBER() = 1</c>) and deliberately
     /// not a declared PRIMARY KEY: the sweep rebuilds this table wholesale on every structural
     /// working-tree change, and maintaining DuckDB's ART index across that rebuild measured 6x the
@@ -315,10 +332,10 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     /// statement already guarantees. No key is declared on any other table here either, for the
     /// related reason that indexing writes through appenders.</para>
     /// </summary>
-    private static void CreateSessionWinnersTable(DuckDBConnection connection)
+    private static void CreateWinnersTable(DuckDBConnection connection)
     {
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS {SessionWinnersRelation} (
+            CREATE TABLE IF NOT EXISTS {WinnersRelation} (
                 record_ref VARCHAR NOT NULL,
                 form_key   VARCHAR NOT NULL,
                 plugin     VARCHAR NOT NULL,
@@ -327,30 +344,30 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
             """);
     }
 
-    // #267 / ADR-0035: `participates` is the plugins.txt `*` prefix — the one row per plugin that
-    // UpdateWinners()'s sweep joins against so a disabled plugin's row can never win.
-    // Populated by DuckDbRecordIndex.Index (one row per indexed plugin), not hand-maintained.
+    // ADR-0044: one row per physical plugin copy the load order holds — the registration table.
+    // `load_order_idx` is the name's plugins.txt slot (null when no line names it), `enabled` is the
+    // line's `*` prefix, `winning` is whether the Mod override order resolves the name to this copy.
+    // Participation is never stored: it is `enabled AND winning AND load_order_idx IS NOT NULL`
+    // (ParticipatesPredicate), which the winner sweep joins on so a losing or disabled copy's rows
+    // can never win. Populated by DuckDbRecordIndex.Index/Register (upsert), not hand-maintained.
     // #271 / ADR-0036: `origin` (the mod folder that provided this physical file, or a reserved
-    // PluginOrigin value) is part of this table's identity alongside `plugin` — two plugins sharing
-    // a filename but differing in origin are distinct rows, not a collision.
+    // PluginOrigin value) is part of this table's identity alongside `plugin` — two copies sharing a
+    // filename but differing in origin are distinct rows, not a collision, and ADR-0044 makes both
+    // of them ordinary: the losing copy is registered exactly like the winning one.
     //
-    // #585 / ADR-0001: this table is *the session*, and nothing else. It holds no fact about the
-    // file a plugin's rows came from — that is `mirror.files` below, which outlives every session the
-    // file has ever held. Six columns went with that split, and none of them lost a consumer in the
-    // process because none of them ever had one: `is_master`, `is_light`, `is_writable`, `masters` and
-    // `record_count` were declared in #267 and never written (session metadata is answered from
-    // GameSession's own PluginMetadata), and `file_mtime` was the clock-based validity check ADR-0001
-    // exists to rule out — "never `mtime`, the trap the 2026-05 cache fell into". The `index_state`
-    // table (`indexed_at`, `load_order_hash`) went the same way, wholly unwritten; the version key it
-    // might plausibly have carried lives per-row on `files`, where a mismatch can name the rows it
-    // invalidates.
-    private static void CreateSessionPluginsTable(DuckDBConnection connection) =>
+    // #585 / ADR-0001: this table is *the load order*, and nothing else. It holds no fact about the
+    // file a plugin's rows came from — that is `mirror.files` below, which outlives every registration
+    // the file has ever held. It is not cleared when the index file is opened (ADR-0001 point 4,
+    // amended by ADR-0044): its rows are the last known load order, and the first reconcile corrects
+    // them.
+    private static void CreateRegistrationsTable(DuckDBConnection connection) =>
         Execute(connection, $"""
-            CREATE TABLE IF NOT EXISTS session_plugins (
+            CREATE TABLE IF NOT EXISTS {RegistrationsRelation} (
                 plugin VARCHAR NOT NULL,
                 origin VARCHAR NOT NULL DEFAULT '{PluginOrigin.DataDirectory}',
-                load_order_idx INTEGER NOT NULL,
-                participates BOOLEAN NOT NULL DEFAULT TRUE,
+                load_order_idx INTEGER,
+                enabled BOOLEAN NOT NULL,
+                winning BOOLEAN NOT NULL,
                 PRIMARY KEY (plugin, origin)
             )
             """);
@@ -359,11 +376,11 @@ public sealed class TableDdlBuilder(ISchemaReflector reflector) : ITableDdlBuild
     /// #585 / ADR-0001: what the index believes is on disk — one row per plugin whose rows the file
     /// holds, naming the physical file they were built from, that file's content hash, and the
     /// <see cref="IndexVersion"/> they were written under. This is the file-mirror half of the
-    /// decision, and it is a separate table from <c>session_plugins</c> on purpose:
-    /// <c>session_plugins</c> is the session, so its rows come and go with every load, unload, enable
-    /// and reorder, while these rows change only when a <i>file</i> does. Storing the hash on the
-    /// registration row instead would throw it away at the first unregister — which is exactly a
-    /// profile switch, the case ADR-0001 exists to make cheap.
+    /// decision, and it is a separate table from <c>registrations</c> on purpose:
+    /// <c>registrations</c> is the load order, so its rows come and go with every reconcile, while
+    /// these rows change only when a <i>file</i> does. Storing the hash on the registration row
+    /// instead would throw it away at the first unregister — which is exactly a profile switch, the
+    /// case ADR-0001 exists to make cheap.
     ///
     /// <para>Written and deleted only by <c>DuckDbRecordIndex.Index</c>/<c>Unindex</c>, in the same
     /// transaction as the record rows they describe, so "the index holds current rows for this
