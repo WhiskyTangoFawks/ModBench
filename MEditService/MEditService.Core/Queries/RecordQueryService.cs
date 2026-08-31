@@ -206,10 +206,10 @@ public sealed class RecordQueryService(
         IReadOnlyDictionary<string, bool> pluginParticipates,
         Func<string, RecordLookupEntry?> resolveFormKey)
     {
-        var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, resolveFormKey, pluginParticipates);
+        var gameRelease = RequireLoadOrder().GameRelease;
+        var classification = _conflictClassifier.Classify(committedOverrides, pluginMasters, gameRelease, resolveFormKey, pluginParticipates);
         var conflictAll = classification.ConflictAll;
 
-        var gameRelease = RequireLoadOrder().GameRelease;
         // VMAD is outside the generic reflection pipeline, so classify it separately and fold
         // its conflict contribution into the record-level ConflictAll (computed on demand, never stored).
         var vmadInputs = stack.Entries
@@ -219,7 +219,7 @@ public sealed class RecordQueryService(
         VmadCompare? vmad = null;
         if (vmadInputs.Any(i => i.Vmad != null))
         {
-            var vmadResult = VmadConflictClassifier.Classify(vmadInputs, resolveFormKey, pluginParticipates);
+            var vmadResult = VmadConflictClassifier.Classify(vmadInputs, gameRelease, resolveFormKey, pluginParticipates);
             vmad = vmadResult.Compare;
             conflictAll = ConflictRules.Escalate(conflictAll, vmadResult.ConflictContribution);
         }
@@ -234,7 +234,7 @@ public sealed class RecordQueryService(
         ConditionCompare? conditions = null;
         if (conditionInputs.Any(i => i.Owners.Count > 0))
         {
-            var conditionResult = ConditionConflictClassifier.Classify(conditionInputs, resolveFormKey, pluginParticipates);
+            var conditionResult = ConditionConflictClassifier.Classify(conditionInputs, gameRelease, resolveFormKey, pluginParticipates);
             conditions = conditionResult.Compare;
             conflictAll = ConflictRules.Escalate(conflictAll, conditionResult.ConflictContribution);
         }

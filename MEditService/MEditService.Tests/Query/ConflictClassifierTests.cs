@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MEditService.Core.Queries;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
 
@@ -13,7 +14,7 @@ public class ConflictClassifierTests
     private static ClassifyResult Classify(IReadOnlyList<RecordDetail> records,
         IReadOnlyDictionary<string, IReadOnlyList<string>>? masters = null,
         IReadOnlyDictionary<string, bool>? participation = null) =>
-        Classifier.Classify(records, masters ?? NoMasters, pluginParticipates: participation);
+        Classifier.Classify(records, masters ?? NoMasters, GameRelease.Fallout4, pluginParticipates: participation);
 
     private static FieldMetadata Meta(string name, string type = "string") =>
         new(name, type, false, [], []);
@@ -974,7 +975,7 @@ public class ConflictClassifierTests
         static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("race", "GoodRace") : null;
 
-        var result = Classifier.Classify([master, override1], NoMasters, Resolve);
+        var result = Classifier.Classify([master, override1], NoMasters, GameRelease.Fallout4, Resolve);
 
         var diff = result.Diffs.First(d => d.FieldName == "race");
         Assert.NotNull(diff.Resolutions);
@@ -995,7 +996,7 @@ public class ConflictClassifierTests
         static MEditService.Core.Records.RecordLookupEntry? Resolve(string fk) =>
             fk == "000AAA:Test.esp" ? new MEditService.Core.Records.RecordLookupEntry("kywd", "GoodKeyword") : null;
 
-        var result = Classifier.Classify([master], NoMasters, Resolve);
+        var result = Classifier.Classify([master], NoMasters, GameRelease.Fallout4, Resolve);
 
         var arrayDiff = result.Diffs.First(d => d.FieldName == "keywords");
         Assert.Null(arrayDiff.Resolutions); // no aggregation onto the parent array field
@@ -1018,7 +1019,7 @@ public class ConflictClassifierTests
         var master = MakeStructOverride("A.esp", 0, true, structMeta, val);
 
         // dangling: every FormKey is unresolved
-        var result = Classifier.Classify([master], NoMasters, _ => null);
+        var result = Classifier.Classify([master], NoMasters, GameRelease.Fallout4, _ => null);
 
         var factionChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "faction");
         var rankChild = result.Diffs.First(d => d.FieldName == "Factions").Children!.First(c => c.FieldName == "rank");

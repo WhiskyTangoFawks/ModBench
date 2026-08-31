@@ -2,6 +2,7 @@ using System.Text.Json;
 using MEditService.Core.Queries;
 using MEditService.Tests.TestSupport;
 using Microsoft.Extensions.Logging;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
 
@@ -13,7 +14,7 @@ public class ArrayChildDiffTests
     private static ClassifyResult Classify(
         IReadOnlyList<RecordDetail> records,
         ConflictClassifier? classifier = null) =>
-        (classifier ?? new ConflictClassifier()).Classify(records, NoMasters);
+        (classifier ?? new ConflictClassifier()).Classify(records, NoMasters, GameRelease.Fallout4);
 
     private static FieldMetadata SortedArrayMeta(string name) =>
         new(name, "array", true, [], [],

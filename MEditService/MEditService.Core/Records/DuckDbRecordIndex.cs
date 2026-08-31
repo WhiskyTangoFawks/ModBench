@@ -576,7 +576,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             while (reader.Read())
             {
                 var doc = isHeader
-                    ? ReadDocumentFromColumns(reader, schema, Resolve)
+                    ? ReadDocumentFromColumns(reader, schema, Resolve, owner._release)
                     : owner.ReadDocumentFromBody(reader, schema, Resolve);
                 // The header carries no `ref` column at all (D8: it has no document), so it is never
                 // dirty here. On a Head-scoped read every row is committed by construction, so this
@@ -1114,7 +1114,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
 
         return isHeader
-            ? ReadDocumentFromColumns(reader, schema, Resolve)
+            ? ReadDocumentFromColumns(reader, schema, Resolve, _release)
             : ReadDocumentFromBody(reader, schema, Resolve);
     }
 
@@ -1142,14 +1142,14 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         return new RecordDocument(
             formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName,
-            body, ExtractFields(schema, record, resolveFormKey), PartialFormFlag.IsSet(record),
+            body, ExtractFields(schema, record, resolveFormKey, _release), PartialFormFlag.IsSet(record),
             PartialFormFlag.IsPartialFormable(record.GetType()));
     }
 
     /// <summary>The header's own reader (D8: no document) — reads straight off the header table's
     /// real per-field columns. <see cref="RecordDocument.Body"/> is null.</summary>
     private static RecordDocument ReadDocumentFromColumns(
-        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey)
+        DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
         var formKey = reader.GetString(0);
         var plugin = reader.GetString(1);
@@ -1172,7 +1172,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             if (value != null && col.IsBitmask)
                 value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
             var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey, release)));
         }
 
         return new RecordDocument(formKey, new PluginKey(plugin, origin), loadOrderIndex, isWinner, editorId, schema.TableName, null, fields);
@@ -1199,7 +1199,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
     /// </summary>
     private static List<FieldValue> ExtractFields(
-        RecordTableSchema schema, IMajorRecord record, Func<string, RecordLookupEntry?> resolveFormKey)
+        RecordTableSchema schema, IMajorRecord record, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
         var fields = new List<FieldValue>();
         foreach (var col in schema.RecordColumns)
@@ -1218,7 +1218,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 value = Convert.ToInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
 
             var meta = col.ToFieldMetadata();
-            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey)));
+            fields.Add(new FieldValue(meta, value, CheckErrorBuilder.Build(meta, value, resolveFormKey, release)));
         }
         return fields;
     }
