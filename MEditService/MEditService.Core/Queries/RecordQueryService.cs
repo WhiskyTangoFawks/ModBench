@@ -61,11 +61,8 @@ public sealed class RecordQueryService(
     // The header isn't a browsable record type (the "expand a plugin -> record types"
     // listing, or an unscoped "all types" search) — it's reached only via "Open Header" on the
     // plugin node. It stays a real schemas.Keys entry so GetRecord/GetCompare (a direct FormKey
-    // lookup) can still resolve it; only these two browse-all-types paths exclude it.
+    // lookup) can still resolve it; only this one browse-all-types path excludes it.
     private const string HeaderTableName = "header";
-
-    public IReadOnlyList<string> GetRecordTypes() =>
-        [.. RequireSchemas().Keys.Where(t => t != HeaderTableName).Order()];
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {

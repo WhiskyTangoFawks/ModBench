@@ -7,7 +7,6 @@ namespace MEditService.Core.Queries;
 public interface IRecordQueryService
 {
     IReadOnlyList<PluginResponse> GetPlugins();
-    IReadOnlyList<string> GetRecordTypes();
     // origin (ADR-0036): which copy of `plugin` to browse, when the load order holds two of one
     // filename. Optional because most callers legitimately have only a filename — omitted, the
     // origin is resolved server-side from the load order, correct wherever a filename names one

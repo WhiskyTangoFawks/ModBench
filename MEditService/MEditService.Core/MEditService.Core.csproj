@@ -13,7 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Autofac" Version="9.1.0" />
     <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.2" />
     <!-- Pinned to 0.53.x: 0.54.0 reintroduces a binary round-trip defect confined to the lazy
          binary-overlay reader (Fallout4ModBinaryOverlay / ModFactory.ImportGetter) — an
