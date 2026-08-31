@@ -46,12 +46,11 @@ describe('createDebouncedFsWatcher', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  // ADR-0041: a mod folder's `.git` is Editing's own working-tree plumbing — the compile journal
-  // marker, refs, objects, the index — none of which is a fact any reconcile trigger cares about
-  // (ADR-0044's snapshot facts are name/origin/slot/enabled/winning; git internals change none of
-  // them). #621: this is what turns one Save & Compile into several separate debounced bursts —
-  // the marker write before compiling, its rewrite per landed plugin, its deletion after, plus
-  // the parked ref, all land here and each used to schedule its own onChange.
+  // A mod's `.git` directory can churn heavily — repeated writes, spread over real time — without
+  // any of the load-order facts this watcher relays (name, origin, slot, enabled, winning —
+  // ADR-0044) ever changing. #621: left unfiltered, that churn turned into several separate
+  // debounced reconcile triggers for what was, from the load order's own perspective, a single
+  // unchanged fact.
   it('ignores an event inside a mod\'s .git directory, while a sibling content event still fires', () => {
     const onChange = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onChange);
@@ -66,12 +65,11 @@ describe('createDebouncedFsWatcher', () => {
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
-  // The one fact this filter must never hide (#621 review): a mod becoming tracked or untracked
-  // by something other than Modbench's own Track command is only ever observable, today, as the
-  // `.git` directory entry itself appearing or disappearing — nothing reads that off this watcher
-  // directly, but `notifyConflictsComputed` re-checks tracked-ness as a side effect of the next
-  // reconcile, so that reconcile still has to fire (root CLAUDE.md: never assume exclusive
-  // ownership of a file on disk).
+  // The one fact this filter must never hide (#621 review): a mod's `.git` directory entry itself
+  // appearing or disappearing is a load-order-relevant change in its own right — this watcher's
+  // callers still need it, whether Modbench caused it or something else did (root CLAUDE.md:
+  // never assume exclusive ownership of a file on disk) — even though everything *inside* an
+  // existing `.git` is filtered above.
   it('does not ignore the .git directory entry itself appearing or disappearing', () => {
     const onCreate = vi.fn();
     createDebouncedFsWatcher('/instance', 'mods/**', onCreate);

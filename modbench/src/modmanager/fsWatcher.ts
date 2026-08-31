@@ -2,14 +2,14 @@ import * as vscode from 'vscode';
 
 const DEBOUNCE_MS = 200;
 
-/** True for a path *inside* a `.git` directory (any depth) — ADR-0041's per-mod working-tree
- *  plumbing (the compile journal marker, refs, objects, the index), none of which is a fact any
- *  of this watcher's consumers cares about (ADR-0044's reconcile trigger reads name/origin/slot/
- *  enabled/winning; git internals change none of them — #621). Deliberately narrower than "`.git`
- *  appears anywhere in the path": the `.git` directory entry itself appearing or disappearing is
- *  not filtered here — untracking/tracking a mod by hand, outside Modbench's own Track command,
- *  is only observable as that one event, and this watcher's callers still need it (root
- *  CLAUDE.md: never assume exclusive ownership of a file on disk). */
+/** True for a path *inside* a mod's `.git` directory (any depth). Writes there can churn heavily
+ *  without changing any of the load-order facts this watcher's consumers read (name, origin,
+ *  slot, enabled, winning — ADR-0044), so none of that churn is a signal worth relaying (#621).
+ *  Deliberately narrower than "`.git` appears anywhere in the path": the `.git` directory entry
+ *  itself appearing or disappearing is not filtered here — a mod's VCS state changing is itself a
+ *  load-order-relevant change, whether Modbench caused it or something else did (root CLAUDE.md:
+ *  never assume exclusive ownership of a file on disk), and this watcher's callers still need
+ *  that one event. */
 function isInsideGitDir(fsPath: string): boolean {
   const segments = fsPath.split(/[\\/]/);
   const gitIndex = segments.lastIndexOf('.git');
