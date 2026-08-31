@@ -418,8 +418,7 @@ function makeNotifyConflictsComputed(
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  const cfg = vscode.workspace.getConfiguration('modbench');
-  const port: number = cfg.get('backendPort') ?? 5172;
+  const port: number = meditConfig().get('backendPort') ?? 5172;
 
   const outputChannel = vscode.window.createOutputChannel('Modbench', { log: true });
   context.subscriptions.push(outputChannel);
@@ -443,7 +442,7 @@ export function activate(context: vscode.ExtensionContext) {
   const recordPanels = new Set<vscode.WebviewPanel>();
   // The Referenced By view's input — which record panel is active and what FormKey it shows.
   const activeRecordTracker = new ActiveRecordTracker<vscode.WebviewPanel>();
-  const { scriptsPath, filterProvider } = setupScripts(cfg);
+  const { scriptsPath, filterProvider } = setupScripts(meditConfig());
 
   setFilterActive = makeSetFilterActive(filterProvider);
 
@@ -870,7 +869,7 @@ function registerModListCoreCommands(deps: ModListCoreDeps): vscode.Disposable[]
         } catch (err) {
           outputChannel.error(`[extension] launchMedit failed: ${err instanceof Error ? err.message : String(err)}`);
           exitToLoadout(); // reset the view and tear down any half-started backend
-          void vscode.window.showErrorMessage('Modbench: Failed to enter editing mode.');
+          void vscode.window.showErrorMessage('Modbench: Failed to launch mEdit.');
         }
       }),
   ];

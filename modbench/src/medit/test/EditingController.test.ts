@@ -672,9 +672,9 @@ describe('EditingController.putLoadOrder', () => {
 
   // The caller (makeEnterEditing) tells a failed load apart from a load that
   // simply had nothing to report by the return value alone — `[]` would be ambiguous with
-  // "loaded, zero failures". Backend-confirmed (LoadOrderManager.
-  // LoadExplicitCore disposes the old load order unconditionally, before the new one can even
-  // fail to build), so a failed PUT really does mean "no load order", not "the old one, stale".
+  // "loaded, zero failures". Backend-confirmed (ADR-0044: LoadOrderMirror.Reconcile's
+  // EnsureScope disposes the old scope first, before the new one can even fail to build), so a
+  // failed PUT really does mean "no load order", not "the old one, stale".
   it('reports a failed load as failed, so it is never mistaken for a load with zero failures', async () => {
     const client = {
       ...makeClient(),
