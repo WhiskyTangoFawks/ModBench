@@ -107,7 +107,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
 
     [Theory]
     [InlineData("createPlugin", 503)]
-    [InlineData("recordTypes", 503)]
     [InlineData("conditionFunctions", 503)]
     [InlineData("conditionRunOnTargets", 503)]
     [InlineData("getFilter", 503)]
@@ -126,7 +125,6 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         {
             "createPlugin" => await client.PostAsJsonAsync(
                 "/plugins/create", new { name = "New.esp", path = Path.Combine(_fixture.DataFolder, "NoLoadOrderMod"), origin = "NoLoadOrderMod" }),
-            "recordTypes" => await client.GetAsync("/record-types"),
             "conditionFunctions" => await client.GetAsync("/condition-functions"),
             "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
             "getFilter" => await client.GetAsync("/load-order/filter"),

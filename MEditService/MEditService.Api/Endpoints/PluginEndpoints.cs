@@ -19,14 +19,16 @@ public static class PluginEndpoints
             .WithTags(Tag)
             .Produces<IReadOnlyList<PluginResponse>>();
 
-        MapCatalog(app, "/record-types", "GetRecordTypes", svc => svc.GetRecordTypes());
-
         // The condition function picker's catalog — filtered to what the loaded load order's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded list.
         MapCatalog(app, "/condition-functions", "GetConditionFunctions", svc => svc.GetConditionFunctions());
 
         // The Run On target dropdown's catalog — filtered to what the loaded load order's
         // game actually resolves (ConditionCodecRegistry), not a hardcoded frontend array.
+        // #632: looks dead to an extension-side/generated-client grep (PluginRepository never calls
+        // it) because its only caller is the webview's own generated-client instance —
+        // webview/src/RecordPanelClient.ts, GET('/condition-run-on-targets') — which sits outside
+        // that surface entirely. Re-check that file before ever flagging this one dead again.
         MapCatalog(app, "/condition-run-on-targets", "GetConditionRunOnTargets", svc => svc.GetConditionRunOnTargets());
 
         app.MapGet("/plugins/{plugin}/record-types", (string plugin, string? origin, IRecordQueryService svc) =>
@@ -169,8 +171,8 @@ public static class PluginEndpoints
         return app;
     }
 
-    // Shared shape for the /record-types, /condition-functions and /condition-run-on-targets
-    // catalog endpoints: run the read against the loaded load order, and map the
+    // Shared shape for the /condition-functions and /condition-run-on-targets catalog
+    // endpoints: run the read against the loaded load order, and map the
     // "no load order held" failure (RequireLoadOrder()'s InvalidOperationException) to the same 503
     // CreatePlugin's own catch below uses.
     private static void MapCatalog(

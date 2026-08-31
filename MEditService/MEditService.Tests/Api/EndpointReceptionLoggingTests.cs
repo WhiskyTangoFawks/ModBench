@@ -140,7 +140,6 @@ public sealed class EndpointReceptionLoggingTests
     private sealed class StubRecordQueryService : IRecordQueryService
     {
         public IReadOnlyList<PluginResponse> GetPlugins() => throw new NotSupportedException();
-        public IReadOnlyList<string> GetRecordTypes() => throw new NotSupportedException();
         public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null) =>
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();

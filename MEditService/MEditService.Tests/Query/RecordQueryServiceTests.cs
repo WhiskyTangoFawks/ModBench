@@ -108,34 +108,6 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Empty(plugins[0].MasterIssues);
     }
 
-    // --- GET /record-types ---
-
-    [Fact]
-    public void GetRecordTypes_ReturnsKnownTypes()
-    {
-        var types = _svc.GetRecordTypes();
-
-        Assert.Contains("npc_", types);
-        Assert.Contains("weap", types);
-        Assert.True(types.Count >= 20);
-    }
-
-    [Fact]
-    public void GetRecordTypes_ReturnsTypesInAscendingOrder()
-    {
-        var types = _svc.GetRecordTypes();
-        Assert.Equal([.. types.Order()], types);
-    }
-
-    [Fact]
-    public void GetRecordTypes_ExcludesHeader()
-    {
-        // The header isn't a browsable record type in the "expand a plugin -> record types"
-        // sense (User Story 7) — it's reached only via "Open Header" on the plugin node itself.
-        var types = _svc.GetRecordTypes();
-        Assert.DoesNotContain("header", types);
-    }
-
     // --- GET /condition-functions ---
 
     [Fact]

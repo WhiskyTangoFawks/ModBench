@@ -1,6 +1,7 @@
 using MEditService.Core.Plugins;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
+using MEditService.Core.Schema;
 using MEditService.Tests.TestSupport;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -25,6 +26,9 @@ public sealed class CompareGoldenTests : IDisposable
     private readonly PluginFixtureData _fixture;
     private readonly LoadOrderMirror _manager;
     private readonly RecordQueryService _service;
+    // #632: kept so WinnerAndListings_MatchGolden can inline the record-type count
+    // RecordQueryService.GetRecordTypes() used to answer, now that method is deleted.
+    private readonly SchemaReflector _reflector;
 
     private static readonly FormKey ConflictedNpc = MakeKey("Base.esm", 0x800);
     private static readonly FormKey UnchangedWeapon = MakeKey("Base.esm", 0x801);
@@ -83,6 +87,7 @@ public sealed class CompareGoldenTests : IDisposable
             .Build();
 
         var reflector = SharedSchemaReflector.Instance;
+        _reflector = reflector;
         _manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
         _manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
         _service = new RecordQueryService(_manager, reflector, new ConflictClassifier());
@@ -155,7 +160,16 @@ public sealed class CompareGoldenTests : IDisposable
                 p.InLoadOrder,
                 p.HasMatchingRecords,
             }).ToList(),
-            RecordTypes = _service.GetRecordTypes().Count,
+            // #632: RecordQueryService.GetRecordTypes() was deleted (zero callers) — inlined
+            // here against the reflector directly. GameRelease.Fallout4 is hardcoded rather than
+            // derived from the reconciled load order the way GetRecordTypes() (via RequireSchemas)
+            // did; that's a basis change, accepted because it's the same constant this fixture
+            // already reconciles with two lines above and root CLAUDE.md's game-generalization
+            // rule permits an FO4-concrete *test fixture*. "header" duplicates
+            // RecordQueryService.HeaderTableName's *value* — that const is `private`, so this
+            // literal can't reference it directly; if the const's value ever changes, update this
+            // literal to match, or this count silently includes one extra type.
+            RecordTypes = _reflector.GetSchemas(GameRelease.Fallout4).Keys.Count(t => t != "header"),
             PerPluginTypes = new[] { "Base.esm", "Mid.esp", "Top.esp" }
                 .ToDictionary(p => p, p => _service.GetPluginRecordTypes(p)),
             WinningRecords = new[] { ConflictedNpc, UnchangedWeapon, SoleNpc, InjectedNpc }
