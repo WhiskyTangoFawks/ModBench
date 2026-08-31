@@ -507,9 +507,6 @@ describe('package.json command titles and categories (#280)', () => {
     // Needs the clicked row's plugin name to resolve which mod folder (origin) to rebase —
     // same posture as Track/compileAtMain, no ambient fallback worth a QuickPick.
     'modbench.pluginListTree.rebase',
-    // Needs the clicked/selected row selection itself — a palette invocation has no
-    // selection to scope the filter to, same posture as Track/rebase/compileAtMain above.
-    'modbench.pluginListTree.filterToSelected',
     // Each needs the clicked row's own identity (recordType node's plugin/recordType, or a
     // record row's own FormKey/plugin) — no ambient fallback worth a QuickPick-over-QuickPick,
     // same posture as the tree-row-gated commands above.
@@ -525,7 +522,7 @@ describe('package.json command titles and categories (#280)', () => {
   ] as const;
 
   it('gates exactly the commands that cannot work without a tree/webview argument out of the palette', () => {
-    expect(PALETTE_GATED).toHaveLength(38);
+    expect(PALETTE_GATED).toHaveLength(37);
     const gatedFalse = new Set(palette.filter((e) => e.when === 'false').map((e) => e.command));
     const missingGate = PALETTE_GATED.filter((c) => !gatedFalse.has(c));
     const unexpectedGate = [...gatedFalse].filter((c) => !(PALETTE_GATED as readonly string[]).includes(c));
@@ -563,9 +560,6 @@ describe('package.json has no trace of the retired drift gesture (#356)', () => 
       ['modbench.saveAndCompile', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.pluginListTree.compileAtMain', 'view == modbench.pluginListTree && viewItem == plugin'],
       ['modbench.pluginListTree.rebase', 'view == modbench.pluginListTree && viewItem == plugin'],
-      // Filter to Selected Plugins: a read-only record-filter scoping, so it applies to an
-      // implicit master too, not just a togglable plugin row.
-      ['modbench.pluginListTree.filterToSelected', 'view == modbench.pluginListTree && (viewItem == plugin || viewItem == pluginImplicit)'],
     ]);
   });
 });

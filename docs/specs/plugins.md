@@ -400,24 +400,6 @@ end.
   all** — a record's nested structure lives in its JSON document (`records.document`,
   reachable with `json_extract` directly for power users). The filter runs once into a
   materialised set when applied, so its cost is per-apply, not per-listing.
-- **Filter to Selected Plugins**:
-  `modbench.pluginListTree.filterToSelected`, adopted from xEdit's `mniNavFilterApplySelected`
-  (`xeMainForm.pas:13976-14027`) — the ordinary record filter above, invoked against the current
-  tree selection, not a mode and not a second filter language. Reachable from a plugin row's
-  context menu (`plugin`/`pluginImplicit`; `pluginActions@6`), it works across a
-  multi-row selection (the tree is already `canSelectMany`) and applies
-  `SELECT form_key FROM records WHERE plugin IN (...)`, scoped to the deduped, safely-quoted set
-  of selected plugin names, against the `records` documents table directly — one query already
-  covers every record type a selected plugin owns, so this needs none of the per-type `UNION ALL`
-  ADR-0018 deferred for cross-type queries. The readout names it statically ("records: Selected
-  Plugins"), the same as any other filter source. **One deliberate divergence from xEdit,
-  ADR-0035:** `mniNavFilterApplySelected` resolves a selected *element* up to its owning file
-  (`ReInitTree`, which also deletes unselected files' nodes — refused here, see above); this
-  command instead drops a non-plugin row from a mixed selection rather than rolling it up,
-  since resolving one would require its selection-extractor (Mod Management) to understand
-  Editing's child-row shapes, exactly the cross-boundary knowledge the bounded-context split
-  forbids. In practice the drop only ever manifests in a mixed selection, since the context menu
-  itself only offers the command on a plugin row to begin with.
 
 ### Worldspace / interior-cell tree
 
