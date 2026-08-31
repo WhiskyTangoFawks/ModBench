@@ -175,10 +175,23 @@ internal sealed class WorkingTreeOverlay
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
+        InsertRecordRow(key, "mirror.records", SourceRef.WorkingTree, formKey, recordType, body);
+
+        // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord below reads this row
+        // back out of `records`, which is why the insert above must land first.
+    }
+
+    // The parameterized INSERT both InsertNewWorkingTreeRow and SeedOneCommittedOnly need — same
+    // eight columns in the same $-binding order, differing only in which table the row lands in and
+    // which SourceRef literal it is stamped with. Extracted so the two cannot drift into appending
+    // different column orders, the same reasoning PluginIngest's own AppendXRow primitives are
+    // extracted for.
+    private void InsertRecordRow(PluginKey key, string table, string refValue, string formKey, string recordType, string body)
+    {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = $"""
-            INSERT INTO mirror.records (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.WorkingTree}', $5, $6)
+            INSERT INTO {table} (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
+            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{refValue}', $5, $6)
             """;
         cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
         cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
@@ -187,9 +200,6 @@ internal sealed class WorkingTreeOverlay
         cmd.Parameters.Add(new DuckDBParameter { Value = body });
         cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
         cmd.ExecuteNonQuery();
-
-        // form_lookup's insert-if-absent branch in RederiveIndexRowsForRecord below reads this row
-        // back out of `records`, which is why the insert above must land first.
     }
 
     private bool IsRegisteredPlugin(PluginKey key) =>
@@ -276,18 +286,7 @@ internal sealed class WorkingTreeOverlay
         // InsertNewWorkingTreeRow's "records row with no snapshot", and it falls out of records_head's
         // existing definition (the snapshot table UNION the still-clean rows) with no change to that
         // view: present in its first half, absent from its second.
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = $"""
-            INSERT INTO mirror.records_committed (form_key, plugin, origin, record_type, editor_id, "ref", body, content_hash)
-            VALUES ($1, $2, $3, $4, json_extract_string($5, '$.EditorID'), '{SourceRef.Committed}', $5, $6)
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Name });
-        cmd.Parameters.Add(new DuckDBParameter { Value = key.Origin! });
-        cmd.Parameters.Add(new DuckDBParameter { Value = recordType });
-        cmd.Parameters.Add(new DuckDBParameter { Value = body });
-        cmd.Parameters.Add(new DuckDBParameter { Value = GitBlobHash.Of(Encoding.UTF8.GetBytes(body)) });
-        cmd.ExecuteNonQuery();
+        InsertRecordRow(key, "mirror.records_committed", SourceRef.Committed, formKey, recordType, body);
     }
 
     // Copies the still-clean Effective row aside the first time a record diverges, and does nothing

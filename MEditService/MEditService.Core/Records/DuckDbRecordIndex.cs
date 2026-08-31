@@ -499,14 +499,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             // FormKey (a shared keyword, a race) recurs across a plugin's records, and every miss is a
             // form_lookup query of its own. Resolution is a pure lookup, so sharing changes nothing
             // about any single document's CheckErrors.
-            var cache = new Dictionary<string, RecordLookupEntry?>();
-            RecordLookupEntry? Resolve(string fk)
-            {
-                if (cache.TryGetValue(fk, out var t)) return t;
-                var resolved = owner.ResolveFormKey(fk);
-                cache[fk] = resolved;
-                return resolved;
-            }
+            var resolve = FormKeyResolutionCache.Memoize(owner.ResolveFormKey);
 
             var documents = new List<RecordDocument>(rows.Count);
             foreach (var row in rows)
@@ -516,7 +509,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
                 documents.Add(owner.DocumentFromBody(
                     row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
-                    row.EditorId, row.Body, schema, Resolve));
+                    row.EditorId, row.Body, schema, resolve));
             }
             return documents;
         }
@@ -548,14 +541,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
             using var reader = cmd.ExecuteReader();
 
-            var cache = new Dictionary<string, RecordLookupEntry?>();
-            RecordLookupEntry? Resolve(string fk)
-            {
-                if (cache.TryGetValue(fk, out var t)) return t;
-                var resolved = owner.ResolveFormKey(fk);
-                cache[fk] = resolved;
-                return resolved;
-            }
+            var resolve = FormKeyResolutionCache.Memoize(owner.ResolveFormKey);
 
             // Read the whole stack out before resolving any Head counterpart — ReadDocument opens
             // its own command on this same connection, and doing that while this reader is still open
@@ -564,8 +550,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             while (reader.Read())
             {
                 var doc = isHeader
-                    ? ReadDocumentFromColumns(reader, schema, Resolve, owner._release)
-                    : owner.ReadDocumentFromBody(reader, schema, Resolve);
+                    ? ReadDocumentFromColumns(reader, schema, resolve, owner._release)
+                    : owner.ReadDocumentFromBody(reader, schema, resolve);
                 // The header carries no `ref` column at all (D8: it has no document), so it is never
                 // dirty here. On a Head-scoped read every row is committed by construction, so this
                 // reads false for all of them without needing to know which relation it is on.
@@ -1084,18 +1070,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         using var reader = cmd.ExecuteReader();
         if (!reader.Read()) return null;
 
-        var cache = new Dictionary<string, RecordLookupEntry?>();
-        RecordLookupEntry? Resolve(string fk)
-        {
-            if (cache.TryGetValue(fk, out var t)) return t;
-            var resolved = ResolveFormKey(fk);
-            cache[fk] = resolved;
-            return resolved;
-        }
+        var resolve = FormKeyResolutionCache.Memoize(ResolveFormKey);
 
         return isHeader
-            ? ReadDocumentFromColumns(reader, schema, Resolve, _release)
-            : ReadDocumentFromBody(reader, schema, Resolve);
+            ? ReadDocumentFromColumns(reader, schema, resolve, _release)
+            : ReadDocumentFromBody(reader, schema, resolve);
     }
 
     /// <summary>Reads a record's document row into a <see cref="RecordDocument"/>, reconstituted

@@ -444,35 +444,8 @@ internal sealed class PluginIngest
         using var placeAppender = _connection.CreateAppender("mirror", "placement");
 
         _placementWalker.Walk(pluginMod,
-            cell =>
-            {
-                var row = cellAppender.CreateRow();
-                row.AppendValue(cell.CellFormKey);
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                DuckDbAppend.Nullable(row, cell.ParentWorldspace);
-                DuckDbAppend.Nullable(row, cell.BlockX);
-                DuckDbAppend.Nullable(row, cell.BlockY);
-                DuckDbAppend.Nullable(row, cell.SubX);
-                DuckDbAppend.Nullable(row, cell.SubY);
-                DuckDbAppend.Nullable(row, cell.GridX);
-                DuckDbAppend.Nullable(row, cell.GridY);
-                DuckDbAppend.Nullable(row, cell.IsInterior);
-                row.EndRow();
-            },
-            placed =>
-            {
-                var row = placeAppender.CreateRow();
-                row.AppendValue(placed.FormKey);
-                row.AppendValue(plugin);
-                row.AppendValue(origin);
-                row.AppendValue(placed.ParentCell);
-                row.AppendValue(placed.PlacementGroup);
-                DuckDbAppend.Nullable(row, placed.PosX);
-                DuckDbAppend.Nullable(row, placed.PosY);
-                DuckDbAppend.Nullable(row, placed.PosZ);
-                row.EndRow();
-            });
+            cell => AppendCellLocationRow(cellAppender, cell, plugin, origin),
+            placed => AppendPlacementRow(placeAppender, placed, plugin, origin));
     }
 
     // Header rows never flow through IndexRecordTable (see IndexPlugin's skip
