@@ -18,7 +18,11 @@ namespace MEditService.Api.Endpoints;
 /// mappers below don't log either: every call site keeps its own
 /// <c>logger.LogError(ex, "...", ...)</c> immediately before calling one of these — the structured
 /// log line differs per site (which file, which FormKey, which plugin) in a way a shared mapper
-/// cannot generalize without losing that context.</para>
+/// cannot generalize without losing that context. <see cref="Execute"/> keeps the same rule: it
+/// contains no <c>Log*</c> call and builds no message text of its own — every delegate it invokes,
+/// including <c>logReceived</c>, is call-site code carrying its own logging (#637: one generic
+/// executor for the six write endpoints' shared skeleton, parameterized on the logging rather than
+/// performing it).</para>
 ///
 /// <para><b>Not every <c>PluginKey</c> construction routes through <see cref="PluginKeyOf"/></b> —
 /// the handlers that build a <see cref="PluginKey"/> entirely from body fields (already-decoded
@@ -83,4 +87,58 @@ internal static class WriteEndpointMapping
     /// 422.
     /// </summary>
     internal static IResult MalformedFormKey(ArgumentException ex) => Results.Problem(ex.Message, statusCode: 400);
+
+    /// <summary>
+    /// The six write endpoints' shared skeleton (#637): decode → guarded reception log → 400
+    /// validation → try the service call → map <c>Applied</c>/<see cref="Refusal"/>, catching the
+    /// same three exception shapes in the same order every site already used. Every parameter is a
+    /// call-site delegate; this method sequences them and touches no request/response field itself.
+    ///
+    /// <para><paramref name="logReceived"/> is <c>null</c> at <c>PluginEndpoints.CreateRecord</c>
+    /// only — not an oversight: every <c>PluginEndpoints</c> handler had its own "Received ..." line
+    /// deliberately removed as redundant with <c>UseSerilogRequestLogging</c>'s per-request summary
+    /// (see <c>EndpointReceptionLoggingTests</c>'s header comment, the one place that decision is
+    /// recorded). <c>RecordEndpoints</c>' five handlers still log on entry, so they each pass a
+    /// non-null delegate.</para>
+    ///
+    /// <para><paramref name="onMalformedFormKey"/> is non-null only at the three sites that accept a
+    /// caller-typed target FormKey reaching Mutagen's <c>FormKey.Factory</c> with no
+    /// <c>TryFactory</c> guard (<c>RenumberRecord</c>'s <c>NewFormKey</c>, <c>CopyRecordAsNewRecord</c>'s
+    /// <c>RequestedFormKey</c>, <c>CreateRecord</c>'s <c>FormKey</c>) — the other three build every
+    /// <see cref="PluginKey"/> from plain strings, which cannot throw <see cref="ArgumentException"/>,
+    /// so leaving it <c>null</c> there reproduces letting that exception type propagate unhandled,
+    /// exactly as those three sites do today.</para>
+    /// </summary>
+    internal static IResult Execute(
+        Action? logReceived,
+        Func<IResult?> validate,
+        Func<RecordEditResult> execute,
+        Func<RecordEditResult, IResult> onApplied,
+        Func<Exception, IResult> onWriteFailure,
+        Func<ArgumentException, IResult>? onMalformedFormKey,
+        Func<InvalidOperationException, IResult> onNoLoadOrder)
+    {
+        logReceived?.Invoke();
+
+        if (validate() is { } validationFailure)
+            return validationFailure;
+
+        try
+        {
+            var result = execute();
+            return result.Applied ? onApplied(result) : Refusal(result);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return onWriteFailure(ex);
+        }
+        catch (ArgumentException ex) when (onMalformedFormKey is not null)
+        {
+            return onMalformedFormKey(ex);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return onNoLoadOrder(ex);
+        }
+    }
 }
