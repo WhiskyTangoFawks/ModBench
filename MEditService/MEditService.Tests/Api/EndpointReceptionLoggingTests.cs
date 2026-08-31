@@ -64,7 +64,7 @@ public sealed class EndpointReceptionLoggingTests
     public void PutLoadOrder_GameDirectoryMissing_StillLogsReceived()
     {
         // Acceptance criterion: the reception line fires on every call, including ones that go on to
-        // fail — this request fails validation (400) before LoadOrderMirror.LoadExplicit is called.
+        // fail — this request fails validation (400) before LoadOrderMirror.Reconcile is called.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var mirror = new StubMirror();

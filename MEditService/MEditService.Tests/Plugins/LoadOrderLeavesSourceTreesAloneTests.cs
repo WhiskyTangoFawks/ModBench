@@ -23,7 +23,7 @@ namespace MEditService.Tests.Plugins;
 public sealed class ReconcileLeavesSourceTreesAloneTests
 {
     [Fact]
-    public void LoadExplicit_SourceTreeWhosePluginIsGone_IsLeftExactlyWhereItIs()
+    public void Reconcile_SourceTreeWhosePluginIsGone_IsLeftExactlyWhereItIs()
     {
         var root = Directory.CreateTempSubdirectory("medit-leave-source-origin-").FullName;
         var originFolder = Path.Combine(root, "ModA");

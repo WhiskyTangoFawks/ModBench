@@ -22,7 +22,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
     }
 
     [Fact]
-    public void LoadExplicit_PopulatesLoadOrderAndIndexesScatteredPlugins()
+    public void Reconcile_PopulatesLoadOrderAndIndexesScatteredPlugins()
     {
         using var fx = new PluginFixtureBuilder("sm-explicit")
             .WithPlugin("Fallout4.esm")
@@ -42,7 +42,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
     }
 
     [Fact]
-    public void LoadExplicit_CrossPluginOverride_WinnerIsHighestOrderPlugin()
+    public void Reconcile_CrossPluginOverride_WinnerIsHighestOrderPlugin()
     {
         FormKey shared = default;
         using var fx = new PluginFixtureBuilder("sm-explicit-winner")
@@ -85,7 +85,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
     // order — mirrors the existing per-plugin isolation around ModFactory.ImportGetter in
     // LoadOrder, extended to the indexing stage.
     [Fact]
-    public void LoadExplicit_OnePluginFailsToIndex_OthersStillLoadAndFailureIsReported()
+    public void Reconcile_OnePluginFailsToIndex_OthersStillLoadAndFailureIsReported()
     {
         using var fx = new PluginFixtureBuilder("sm-explicit-index-failure")
             .WithPlugin("Fallout4.esm")

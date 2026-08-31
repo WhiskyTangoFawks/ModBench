@@ -78,7 +78,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
     /// implicit masters (e.g. Fallout4.esm) land in a single game directory; every other plugin
     /// gets its own folder. Returns the game directory plus the ordered explicit
     /// <c>{Name, Path, Origin, Participates}</c> list (non-implicit plugins, in declared order)
-    /// for <c>LoadExplicit</c>. <c>WithPlugin(enabled: false)</c> — the same flag that writes a
+    /// for <c>Reconcile</c>. <c>WithPlugin(enabled: false)</c> — the same flag that writes a
     /// prefix-less plugins.txt line in <see cref="Build"/> — becomes <c>Participates: false</c>
     /// here, since the explicit list is what carries the `*` prefix on this path (#270).
     /// </summary>
@@ -124,7 +124,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             i++;
         }
 
-        // #434: same one-level-above-Data placement as Build() — gameDir is what LoadExplicit
+        // #434: same one-level-above-Data placement as Build() — gameDir is what Reconcile
         // treats as the Data path, so the catalog belongs in its parent, root.
         WriteCreationClubCatalog(root);
 
@@ -141,7 +141,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 /// <summary>
 /// A fixture whose plugins all live in one folder — the game's own <c>Data</c>, which is where
 /// implicit masters, DLC and Creation Club content really do sit. <see cref="Plugins"/> is the
-/// ordered load order to hand <c>LoadExplicit</c>, the one load there is (#592).
+/// ordered load order to hand <c>Reconcile</c>, the one load there is (#592).
 /// </summary>
 public sealed record PluginFixtureData(
     string DataFolder, IReadOnlyList<LoadOrderEntry> Plugins, string CleanupRoot) : IDisposable

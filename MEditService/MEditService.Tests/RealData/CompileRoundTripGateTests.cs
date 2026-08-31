@@ -401,11 +401,11 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     /// facts above, so a field edit's write-back to disk can never be seen by anything else. Built by
     /// <c>cp -r</c>'ing <see cref="CompileRoundTripGateFixture.TrackedTemplateFolder"/> (the fixture's
     /// pristine, post-Track, pre-any-Compile snapshot) into a new temp folder, then a fresh
-    /// <see cref="LoadOrderMirror"/> <c>LoadExplicit</c>'d against that copy's plugin — the same two
+    /// <see cref="LoadOrderMirror"/> <c>Reconcile</c>'d against that copy's plugin — the same two
     /// steps the old per-test constructor did, minus the ~36s <c>TrackService.TrackAsync</c> call the
     /// copy makes unnecessary. <see cref="CompileRoundTripGateFixture.GameDirectory"/> is shared,
     /// read-only across every scope (and the fixture itself) rather than rebuilt per copy: nothing on
-    /// this path ever writes to it, only <c>LoadExplicit</c> reads master stubs from it, and there are
+    /// this path ever writes to it, only <c>Reconcile</c> reads master stubs from it, and there are
     /// none for this fixture's plugin to read.
     /// </summary>
     private sealed class MutationScope : IDisposable
