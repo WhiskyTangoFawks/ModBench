@@ -341,6 +341,17 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   write, not just that member; a member legitimately absent from a record's own subclass (the
   sparse leaf-union case, e.g. some OMOD property members) stays a silent no-op, since that's
   correct round-tripping, not a defect.
+  **Naming a sub-field that has no write path is itself a refusal** (`RecordEditRefusal.NestedFieldReadOnly`,
+  #642). Nested Loqui struct sub-fields — a struct member one or more levels inside another
+  struct column, or inside an array element — are readable but not yet writable (#643 makes them
+  writable). Targeting one used to report success while discarding the value and rewriting the
+  source file, so the row went dirty and every signal said the edit had landed. It now refuses
+  the whole write before anything is attached, leaving the working tree byte-identical, and the
+  message says the field is not yet editable rather than implying the value was invalid.
+  Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
+  skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
+  read off the raw JSON before the object exists and are deliberately never applied, so naming one
+  is also a silent skip; only a sub-field the schema exposes with no write delegate refuses.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
   ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); ADR-0034
   divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless

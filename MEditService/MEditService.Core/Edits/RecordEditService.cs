@@ -1518,6 +1518,17 @@ public sealed class RecordEditService(
                 RecordEditRefusal.FieldValueShapeMismatch, ComplexFieldShapeMessage(fieldPath, apiType));
         }
 
+        // #642: the payload named a sub-field one level inside this struct/array column that has no
+        // write delegate — never ValueShapeMismatch's "send a value this field accepts", which would
+        // be false: the shape was fine, the named sub-field just has no write door yet.
+        if (outcome == FieldApplyOutcome.NestedFieldReadOnly)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.NestedFieldReadOnly,
+                $"'{fieldPath}' contains a nested field that is not yet editable — nested struct " +
+                "sub-fields cannot be written yet.");
+        }
+
         return RecordEditResult.Refused(RecordEditRefusal.FieldNotFound, $"'{recordType}' has no field '{fieldPath}'.");
     }
 
