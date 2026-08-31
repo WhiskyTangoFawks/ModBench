@@ -209,11 +209,10 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
     return {
       files: new Set(plugins.map((p) => p.name)),
       readOnly: new Set(plugins.filter((p) => p.isImmutable).map((p) => p.name)),
-      // ADR-0037: the wire's `masterIssues` is optional/nullable even though the backend
-      // always emits an array — `PluginRepository.toPluginMetadata()` already normalizes this,
-      // but `?? []` here too rather than trusting that guarantee silently, per the field's own
-      // wire contract (`masterIssues?: MasterIssue[] | null`).
-      masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues ?? []] as const)),
+      // ADR-0037: `masterIssues` is a required, non-nullable array on the wire, so it is read
+      // straight through — the `?? []` that used to sit here was compensating for a schema that
+      // described every field as optional (#627), not for anything the backend can actually do.
+      masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
     };
   };

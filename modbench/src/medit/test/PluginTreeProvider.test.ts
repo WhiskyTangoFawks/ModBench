@@ -53,6 +53,7 @@ function makePlugin(i: number): PluginMetadata {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
+    isTracked: false,
   };
 }
 
@@ -63,6 +64,7 @@ function makeRecord(i: number, workingTreeState: RecordSummary['workingTreeState
     loadOrderIndex: 0,
     isWinner: true,
     editorId: `Record${i}`,
+    origin: 'Data',
     workingTreeState,
   };
 }

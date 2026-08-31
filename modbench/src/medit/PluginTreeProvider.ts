@@ -125,7 +125,11 @@ export class SubBlockNode extends vscode.TreeItem {
 
 // xEdit's StrRight (wbImplementation.pas) right-justifies each grid coordinate to width 3 with
 // leading spaces before wrapping it in the angle brackets — not a plain decimal string.
-function strRight3(n: number | null): string {
+// Takes `undefined` as well as `null` because the wire's cellX/cellY are honestly optional
+// (`int? CellX` — an interior cell has no grid coordinates). Only reached once `cellX != null` has
+// established this is a grid cell; `cellY` is not separately narrowed by that check, so the
+// widening lives here rather than at a call site forced to re-assert what the guard already knows.
+function strRight3(n: number | null | undefined): string {
   return String(n).padStart(3, ' ');
 }
 

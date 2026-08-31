@@ -168,10 +168,10 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
    *  master issues — take decoration authority for a row only when the backend actually has
    *  something to say about it; otherwise `item` is left exactly as `captureOriginalDecoration`
    *  restored it (including a frontend-only order-aware badge, untouched). Both
-   *  branches read their load-order maps with `?? []`/an explicit undefined check rather than a bare
-   *  `.get(...).x` — the wire's `masterIssues` is `MasterIssue[] | undefined | null` even though
-   *  the backend always emits an array, and a response from a backend predating
-   *  the field must degrade to "no issues", not throw. */
+   *  branches read their load-order maps with `?? []`/an explicit undefined check rather than a
+   *  bare `.get(...).x` — that guards the *map lookup* (a row whose plugin the last load order
+   *  never mentioned has no entry), not the wire, whose `masterIssues` is a required non-nullable
+   *  array. */
   private applyBackendDecoration(item: vscode.TreeItem, row: TRow, file: string | undefined): void {
     // A plugin that failed to open or parse never has a MasterMetadata to derive an issue
     // list from (MasterResolution.Classify only iterates the successfully-loaded set), so this

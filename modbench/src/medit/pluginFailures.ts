@@ -3,20 +3,22 @@
 // tier) this must never be silent — warn the user and log every reason. Fed from `PUT /load-order`'s
 // own `LoadOrderResponse.failures`.
 
+import type { components } from './generated/api';
+
 export interface FailureSink {
   log: (msg: string) => void;
   warn: (msg: string) => void;
 }
 
 export function reportSkippedPlugins(
-  failures: ReadonlyArray<{ name?: string | null; reason?: string | null }> | null | undefined,
+  failures: ReadonlyArray<components['schemas']['PluginLoadFailure']>,
   sink: FailureSink,
 ): void {
-  if (!failures || failures.length === 0) return;
+  if (failures.length === 0) return;
   for (const f of failures) {
-    sink.log(`skipped plugin '${f.name ?? '?'}': ${f.reason ?? 'unknown error'}`);
+    sink.log(`skipped plugin '${f.name}': ${f.reason}`);
   }
-  const names = failures.map((f) => f.name ?? '?').join(', ');
+  const names = failures.map((f) => f.name).join(', ');
   sink.warn(
     `mEdit: ${failures.length} plugin(s) were skipped — their records are NOT loaded: ${names}. ` +
       `See the 'mEdit' output for details.`,

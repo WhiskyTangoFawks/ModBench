@@ -33,6 +33,7 @@ function makePlugins(count: number): PluginMetadata[] {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
+    isTracked: false,
   }));
 }
 
@@ -106,7 +107,7 @@ function makeClient({
       }
       return Promise.resolve({ response: { ok: true } });
     }),
-    PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+    PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
   } as any;
 }
 
@@ -469,7 +470,7 @@ describe('EditingController.putLoadOrder', () => {
   it('PUTs the ordered plugin list + dataFolder game directory + MO2 instance root and refreshes', async () => {
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
@@ -496,7 +497,7 @@ describe('EditingController.putLoadOrder', () => {
   it('notifies that conflicts are computed on a successful load', async () => {
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
@@ -511,7 +512,7 @@ describe('EditingController.putLoadOrder', () => {
       ...makeClient(),
       PUT: vi.fn().mockResolvedValue({
         response: { ok: true },
-        data: { status: 'reconciled', failures: [{ name: 'Lunar-UniqueCreatures.esp', reason: 'RACE parse' }] },
+        data: { status: 'reconciled', failures: [{ name: 'Lunar-UniqueCreatures.esp', reason: 'RACE parse' }], crashRepairOffers: [] },
       }),
     };
     const deps = makeDeps({ client });
@@ -530,7 +531,7 @@ describe('EditingController.putLoadOrder', () => {
       ...makeClient(),
       PUT: vi.fn().mockResolvedValue({
         response: { ok: true },
-        data: { status: 'reconciled', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }] },
+        data: { status: 'reconciled', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }], crashRepairOffers: [] },
       }),
     };
     const deps = makeDeps({ client });
@@ -548,7 +549,7 @@ describe('EditingController.putLoadOrder', () => {
   it('resolves with an empty array when nothing failed to load', async () => {
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
@@ -568,7 +569,7 @@ describe('EditingController.putLoadOrder', () => {
       PUT: vi.fn().mockResolvedValue({
         response: { ok: true },
         data: {
-          status: 'reconciled', failures: [],
+          status: 'reconciled', failures: [], crashRepairOffers: [],
           crashRepairOffers: [{ plugin: 'Foo.esp', origin: 'A', reason: 'InterruptedCompile' }],
         },
       }),
@@ -587,7 +588,7 @@ describe('EditingController.putLoadOrder', () => {
   it('warns when the active profile has zero enabled plugins (never silently empty)', async () => {
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
@@ -605,7 +606,7 @@ describe('EditingController.putLoadOrder', () => {
   it('warns when plugins were sent but none of them participate', async () => {
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
@@ -618,7 +619,7 @@ describe('EditingController.putLoadOrder', () => {
   it('does not warn when at least one plugin participates', async () => {
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
     const deps = makeDeps({ client });
     const ctrl = new EditingController(deps);
@@ -717,7 +718,7 @@ describe('EditingController.putLoadOrder progress polling', () => {
   function heldLoad() {
     let finish!: () => void;
     const held = new Promise((resolve) => {
-      finish = () => resolve({ response: { ok: true }, data: { status: 'reconciled', failures: [] } });
+      finish = () => resolve({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } });
     });
     return { PUT: vi.fn().mockReturnValue(held), finish };
   }
@@ -879,7 +880,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
     const signal = new AbortController().signal;
     const client = {
       ...makeClient(),
-      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [] } }),
+      PUT: vi.fn().mockResolvedValue({ response: { ok: true }, data: { status: 'reconciled', failures: [], crashRepairOffers: [] } }),
     };
 
     await new EditingController(makeDeps({ client })).putLoadOrder(plugins, '/game/Data', '/instance', 'Fallout4', { signal });
