@@ -110,9 +110,8 @@ public static class PluginEndpoints
         app.MapGet("/plugins/{plugin}/records/next-form-key", (
             string plugin, string origin, RecordEditService edits) =>
         {
-            var decoded = Uri.UnescapeDataString(plugin);
-            var result = edits.PeekNextFreeFormKey(new PluginKey(decoded, origin));
-            return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : RecordEndpoints.Refusal(result);
+            var result = edits.PeekNextFreeFormKey(WriteEndpointMapping.PluginKeyOf(plugin, origin));
+            return result.Applied ? Results.Ok(new NextFreeFormKeyResponse(result.NewFormKey!)) : WriteEndpointMapping.Refusal(result);
         })
             .WithName("PeekNextFreeFormKey")
             .WithTags(Tag)
@@ -334,13 +333,13 @@ public static class PluginEndpoints
         try
         {
             CompileSource source = req.Ref is { } gitRef ? new CompileSource.AtRef(gitRef) : new CompileSource.WorkingTree();
-            var result = compileService.Compile(new PluginKey(decoded, req.Origin), source);
+            var result = compileService.Compile(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), source);
             return Results.Ok(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not compile {Plugin}", decoded);
-            return Results.Problem($"Could not compile {decoded}: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not compile {decoded}: {ex.Message}");
         }
     }
 
@@ -357,30 +356,30 @@ public static class PluginEndpoints
 
         try
         {
-            var result = edits.CreateRecord(new PluginKey(decoded, req.Origin), req.RecordType, req.EditorId, req.FormKey);
+            var result = edits.CreateRecord(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey);
             return result.Applied
                 ? Results.Ok(new RecordCreateResponse(true, result.NewFormKey!, req.RecordType))
-                : RecordEndpoints.Refusal(result);
+                : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-            return Results.Problem($"Could not write the source file for the new record: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not write the source file for the new record: {ex.Message}");
         }
         // #502: xEdit's own typed-FormID path (req.FormKey) reaches Mutagen's FormKey.Factory
         // (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a malformed value
         // (wrong shape, non-hex, missing ':') throws ArgumentException there. Malformed syntax, not a
         // well-formed-but-refused RecordEditRefusal, so this is CreatePlugin's own catch shape (400),
-        // never RecordEndpoints.Refusal's 422.
+        // never WriteEndpointMapping.Refusal's 422.
         catch (ArgumentException ex)
         {
             logger.LogError(ex, "Malformed FormKey creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-            return Results.Problem(ex.Message, statusCode: 400);
+            return WriteEndpointMapping.MalformedFormKey(ex);
         }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable loadOrder while creating a record in {Plugin}", decoded);
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -410,21 +409,23 @@ public static class PluginEndpoints
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (modFolder, pluginPath, loadOrder) = ResolvePluginPath(mirror, decoded, req.Origin, logger);
+        var (matched, loadOrder) = ResolveAnyPhysicalCopy(mirror, req.Origin, decoded, logger);
+        var modFolder = matched is null ? null : ModFolders.TrackedOf(loadOrder, new PluginKey(matched.Name, matched.Origin));
         if (modFolder is null)
             return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the load order.", statusCode: 503);
+        var pluginPath = matched!.Path;
 
         try
         {
-            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath!, loadOrder!);
+            ExternalChangeAbsorber.Absorb(modFolder, decoded, pluginPath, loadOrder!);
             watcher.MarkAnswered(modFolder, decoded);
-            watcher.Watch(modFolder, decoded, pluginPath!);
+            watcher.Watch(modFolder, decoded, pluginPath);
             return Results.Ok(new ExternalChangeActionResponse(true, null));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not absorb upstream update for {Plugin}", decoded);
-            return Results.Problem($"Could not absorb upstream update for {decoded}: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not absorb upstream update for {decoded}: {ex.Message}");
         }
     }
 
@@ -438,26 +439,28 @@ public static class PluginEndpoints
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        var (modFolder, pluginPath, loadOrder) = ResolvePluginPath(mirror, decoded, req.Origin, logger);
+        var (matched, loadOrder) = ResolveAnyPhysicalCopy(mirror, req.Origin, decoded, logger);
+        var modFolder = matched is null ? null : ModFolders.TrackedOf(loadOrder, new PluginKey(matched.Name, matched.Origin));
         if (modFolder is null)
             return Results.Problem($"{decoded} ({req.Origin}) is not a tracked plugin in the load order.", statusCode: 503);
+        var pluginPath = matched!.Path;
 
         try
         {
             var result = ExternalChangeEditLander.Keep(
-                modFolder, new PluginKey(decoded, req.Origin), pluginPath!, loadOrder!.GameRelease,
+                modFolder, WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), pluginPath, loadOrder!.GameRelease,
                 mirror.Index!, reflector, logger);
             if (result.Applied)
             {
                 watcher.MarkAnswered(modFolder, decoded);
-                watcher.Watch(modFolder, decoded, pluginPath!);
+                watcher.Watch(modFolder, decoded, pluginPath);
             }
             return Results.Ok(new ExternalChangeActionResponse(result.Applied, result.RefusalReason));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not keep external change for {Plugin}", decoded);
-            return Results.Problem($"Could not keep external change for {decoded}: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not keep external change for {decoded}: {ex.Message}");
         }
     }
 
@@ -469,7 +472,8 @@ public static class PluginEndpoints
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        if (ResolveModFolder(mirror, req.Origin, logger) is not { } modFolder)
+        var (matched, _) = ResolveAnyPhysicalCopy(mirror, req.Origin, pluginName: null, logger);
+        if (matched is null || Path.GetDirectoryName(matched.Path) is not { } modFolder)
             return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
 
         var result = SourceRepository.RebaseEditBranch(modFolder);
@@ -482,7 +486,8 @@ public static class PluginEndpoints
         if (string.IsNullOrWhiteSpace(req.Origin))
             return Results.Problem("Origin is required.", statusCode: 400);
 
-        if (ResolveModFolder(mirror, req.Origin, logger) is not { } modFolder)
+        var (matched, _) = ResolveAnyPhysicalCopy(mirror, req.Origin, pluginName: null, logger);
+        if (matched is null || Path.GetDirectoryName(matched.Path) is not { } modFolder)
             return Results.Problem($"No loaded plugin has origin '{req.Origin}'.", statusCode: 404);
 
         var result = SourceRepository.ContinueRebase(modFolder);
@@ -492,38 +497,37 @@ public static class PluginEndpoints
     private static RebaseResponse ToRebaseResponse(RebaseResult result) =>
         new(result.Outcome.ToString(), result.RefusalReason, result.ConflictedPaths);
 
-    // Deliberately not PluginOriginResolver.Resolve — that resolver filters to load-order members
-    // only (by design, so a bare filename stays a safe write target), but #417's origin-scoped
-    // gestures must still resolve a shadowed copy: a plugin loaded under this origin but shadowed
-    // by a higher-priority mod of the same filename is exactly a mod whose external-change
-    // question, absorb, keep, or rebase still needs answering.
-    private static string? ResolveModFolder(ILoadOrderMirror mirror, string origin, ILogger logger)
-    {
-        var plugin = mirror.LoadOrder?.Plugins.FirstOrDefault(p => p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
-        if (plugin == null)
-        {
-            logger.LogWarning("No loaded plugin has origin {Origin}", origin);
-            return null;
-        }
-        return Path.GetDirectoryName(plugin.Path);
-    }
-
-    // Same reason ResolveModFolder above doesn't reuse PluginOriginResolver.Resolve: this must
-    // still find a plugin shadowed out of the load order, since that copy is exactly what
-    // absorb/keep target when it's the one whose origin the unanswered question named.
-    private static (string? ModFolder, string? PluginPath, ILoadOrder? LoadOrder) ResolvePluginPath(
-        ILoadOrderMirror mirror, string pluginName, string origin, ILogger logger)
+    // #604: the one resolver for #417's origin-scoped gestures (Rebase/ContinueRebase,
+    // AbsorbExternalChange, KeepExternalChange) — deliberately not PluginOriginResolver.Resolve/
+    // LoadOrderPlugin, which filters to load-order members only (InLoadOrder), by design, so a bare
+    // filename stays a safe write target elsewhere on this write path. These four gestures must still
+    // resolve a shadowed copy: a plugin loaded under this origin but shadowed by a higher-priority mod
+    // of the same filename is exactly a mod whose external-change question, absorb, keep, or rebase
+    // still needs answering, so the omission of that filter is named here rather than left to two
+    // near-duplicate comments on two near-duplicate methods. pluginName narrows the match within the
+    // origin (Absorb/Keep's own route carries one); null answers "whichever plugin this origin holds"
+    // (Rebase/ContinueRebase's own RebaseRequest carries no plugin name). Each caller derives its own
+    // mod folder from the matched entry afterward — Rebase/ContinueRebase via a bare
+    // Path.GetDirectoryName (SourceRepository.RebaseEditBranch/ContinueRebase apply their own tracked
+    // check), Absorb/Keep via ModFolders.TrackedOf (their own 503 gate) — because those are two
+    // genuinely different questions ("where does this file live" vs "is this a tracked working tree"),
+    // not a second copy of the matching this method already centralizes.
+    private static (PluginMetadata? Plugin, ILoadOrder? LoadOrder) ResolveAnyPhysicalCopy(
+        ILoadOrderMirror mirror, string origin, string? pluginName, ILogger logger)
     {
         var loadOrder = mirror.LoadOrder;
         var plugin = loadOrder?.Plugins.FirstOrDefault(p =>
-            p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase) && p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase));
+            p.Origin.Equals(origin, StringComparison.OrdinalIgnoreCase)
+            && (pluginName is null || p.Name.Equals(pluginName, StringComparison.OrdinalIgnoreCase)));
         if (plugin == null)
         {
-            logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
-            return (null, null, null);
+            if (pluginName is null)
+                logger.LogWarning("No loaded plugin has origin {Origin}", origin);
+            else
+                logger.LogWarning("No loaded plugin named {Plugin} with origin {Origin}", pluginName, origin);
+            return (null, null);
         }
-        var modFolder = ModFolders.TrackedOf(loadOrder, new PluginKey(plugin.Name, plugin.Origin));
-        return (modFolder, plugin.Path, loadOrder);
+        return (plugin, loadOrder);
     }
 }
 
