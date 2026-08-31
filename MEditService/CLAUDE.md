@@ -83,7 +83,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     `ExternalChangeLoadOrderHook.RunAfterReconcile` drops every mirror watch before re-registering, so no
     watch outlives the load order that asked for it.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
-    `LoadOrderMirror.RequirePlugin`, the `LoadOrderPlugin` extension method on `ILoadOrder`
+    the `LoadOrderPlugin` extension method on `ILoadOrder`
     (`PluginOriginResolver.cs`, not an interface member): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"
     means read-only, refused up front through `RecordEditService.RefuseIfBlocked` — never a
@@ -254,8 +254,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   consumer's own null-check-and-throw against the nullable `LoadOrder`/`Reads`/`Index` properties —
   `WorldspaceQueryService`, `ContainerChildQueryService` and `RecordQueryService` all call it (via
   their own thin `RequireReads`/`RequireLoadOrder` forwards) instead of re-writing the check, and so
-  does `LoadOrderMirror` itself internally (`CreatePlugin`, `ReindexPlugin(PluginKey)`, `ApplyFilter`,
-  `RequirePlugin`). Throws `NoLoadOrderException`, an `InvalidOperationException` subtype rather than
+  does `LoadOrderMirror` itself internally (`CreatePlugin`, `ReindexPlugin(PluginKey)`,
+  `ApplyFilter`). Throws `NoLoadOrderException`, an `InvalidOperationException` subtype rather than
   a replacement of it, so it flows through `WriteEndpointMapping.NoLoadOrder` (#604) and every
   existing `catch (InvalidOperationException)` with no signature change.
 
