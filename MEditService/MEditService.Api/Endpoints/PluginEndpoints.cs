@@ -271,16 +271,16 @@ public static class PluginEndpoints
         if (!Enum.TryParse<SourcePreset>(req.Preset, ignoreCase: true, out var preset))
             return Results.Problem($"Unknown source preset '{req.Preset}'.", statusCode: 400);
 
-        if (mirror.LoadOrder is not { } loadOrder)
-        {
-            logger.LogError("No loadOrder when tracking {Origin}", req.Origin);
-            return Results.Problem("No load order has been received.", statusCode: 503);
-        }
-
         try
         {
+            var (loadOrder, _) = mirror.RequireScope();
             await trackService.TrackAsync(loadOrder, req.Origin, preset);
             return Results.Ok(new TrackResponse(req.Origin));
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No loadOrder when tracking {Origin}", req.Origin);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (KeyNotFoundException ex)
         {

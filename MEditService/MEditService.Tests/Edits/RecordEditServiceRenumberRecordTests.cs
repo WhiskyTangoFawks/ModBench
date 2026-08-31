@@ -57,7 +57,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         var result = service.RenumberRecord(mod.Plugin, oldFormKey);
 
         Assert.True(result.Applied, result.Message);
-        var repository = mod.Mirror.Repository!;
+        var repository = mod.Mirror.Reads!;
         Assert.Null(repository.GetDocument(oldFormKey));
         Assert.NotNull(repository.GetDocument(result.NewFormKey!));
         var listing = repository.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.Plugin, Limit: 50, Offset: 0));
@@ -99,12 +99,12 @@ public sealed class RecordEditServiceRenumberRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
         mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'FixtureNpc'");
-        Assert.Equal(1, mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(1, mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         var result = ServiceFor(mod.Mirror).RenumberRecord(mod.Plugin, mod.Npc.ToString());
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var after = mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, after.Total);
         Assert.Equal(result.NewFormKey, after.Items[0].FormKey);
     }
@@ -184,7 +184,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         two.Mirror.SetFilter(
             $"SELECT source_form_key AS form_key FROM form_references " +
             $"WHERE target_form_key = '{requestedTarget}' AND field_path = 'race'");
-        Assert.Equal(0, two.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(0, two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Chmod(two.TargetModFolder, "500"); // read+execute only — the new race source file can't be created
         try
@@ -200,7 +200,7 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         // The referencer's rewrite is durably on disk (write order: referencers first, target last),
         // so the filter — re-materialized even though the overall gesture threw — must show it.
-        var result = two.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = two.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(two.ReferencerNpc.ToString(), result.Items[0].FormKey);
     }

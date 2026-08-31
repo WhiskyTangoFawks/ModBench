@@ -33,7 +33,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
     public void Search_AcrossMultipleRecordTypes_ByFormKey_ResolvesRecord()
     {
         using var manager = MakeLoadedManager();
-        var reader = manager.Repository!;
+        var reader = manager.Reads!;
 
         var byEditorId = reader.Search(new RecordQuery(RecordTypes: ["npc_"], Search: "TestNPC01", Limit: 10, Offset: 0));
         var formKey = byEditorId.Items[0].FormKey;

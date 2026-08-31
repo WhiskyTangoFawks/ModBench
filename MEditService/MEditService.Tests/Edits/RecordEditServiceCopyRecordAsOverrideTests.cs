@@ -143,12 +143,12 @@ public sealed class RecordEditServiceCopyRecordAsOverrideTests
         using var mod = CopyFixture.Create();
         mod.Mirror.SetFilter("SELECT form_key FROM npc_");
         var query = new RecordQuery(RecordTypes: ["npc_"], Plugin: mod.DestinationPlugin, Limit: 50, Offset: 0);
-        var before = mod.Mirror.Repository!.Search(query).Total;
+        var before = mod.Mirror.Reads!.Search(query).Total;
 
         var result = ServiceFor(mod.Mirror).CopyRecordAsOverride(mod.SourcePlugin, mod.SourceNpc.ToString(), mod.DestinationPlugin);
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Mirror.Repository!.Search(query);
+        var after = mod.Mirror.Reads!.Search(query);
         Assert.Equal(before + 1, after.Total);
     }
 }

@@ -69,10 +69,11 @@ public sealed class LoadedNpcReindexFailureApiFixture : IAsyncLifetime, IDisposa
     private sealed class ReindexThrowingMirror(ILoadOrderMirror inner) : ILoadOrderMirror
     {
         public ILoadOrder? LoadOrder => inner.LoadOrder;
-        public IRecordReads? Repository => inner.Repository;
+        public IRecordReads? Reads => inner.Reads;
         public IRecordIndex? Index => inner.Index;
         // #274: these stubs never load, so they are always in the no-load order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
+        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => inner.RequireScope();
 
         public Task ReindexPlugin(string plugin) => throw new IOException("reindex failed (injected)");
         public Task ReindexPlugin(PluginKey key) => throw new IOException("reindex failed (injected)");

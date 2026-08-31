@@ -213,11 +213,11 @@ public sealed class RecordEditServiceTests : IDisposable
     public void EditField_MakesTheRecordNewlyMatchAnActiveFilter_FilteredListingIncludesIt()
     {
         _mod.Mirror.SetFilter("SELECT form_key FROM npc_ WHERE height_max = 0.75");
-        Assert.Equal(0, _mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+        Assert.Equal(0, _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "height_max", Json("0.75"));
 
-        var result = _mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+        var result = _mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
         Assert.Equal(1, result.Total);
         Assert.Equal(_mod.Npc.ToString(), result.Items[0].FormKey);
     }

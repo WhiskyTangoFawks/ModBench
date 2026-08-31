@@ -192,7 +192,7 @@ public static class LoadOrderEndpoints
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No load order when setting filter");
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (ArgumentException ex)
         {
@@ -218,7 +218,7 @@ public static class LoadOrderEndpoints
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No load order when clearing filter");
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
         catch (Exception ex)
         {
@@ -229,9 +229,17 @@ public static class LoadOrderEndpoints
 
     private static IResult GetFilter(ILoadOrderMirror mirror, ILoggerFactory loggerFactory)
     {
-        loggerFactory.CreateLogger(nameof(LoadOrderEndpoints)).LogInformation("Received GetFilter");
-        return mirror.LoadOrder is null
-            ? Results.Problem("No load order has been received.", statusCode: 503)
-            : Results.Ok(new FilterResponse(mirror.LoadOrder.FilterSql));
+        var logger = loggerFactory.CreateLogger(nameof(LoadOrderEndpoints));
+        logger.LogInformation("Received GetFilter");
+        try
+        {
+            var (loadOrder, _) = mirror.RequireScope();
+            return Results.Ok(new FilterResponse(loadOrder.FilterSql));
+        }
+        catch (NoLoadOrderException ex)
+        {
+            logger.LogError(ex, "No load order when getting filter");
+            return WriteEndpointMapping.NoLoadOrder(ex);
+        }
     }
 }

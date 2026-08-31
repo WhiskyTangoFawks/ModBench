@@ -50,7 +50,7 @@ public sealed class LoadOrderMirrorReconcileOriginTests
         ILoadOrderMirror mirror = manager;
         mirror.Reconcile(fx.GameDirectory, withOrigin, GameRelease.Fallout4);
 
-        var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esp"), Limit: 10, Offset: 0));
+        var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esp"), Limit: 10, Offset: 0));
 
         var row = Assert.Single(result.Items);
         Assert.Equal("SomeMod", row.Origin);

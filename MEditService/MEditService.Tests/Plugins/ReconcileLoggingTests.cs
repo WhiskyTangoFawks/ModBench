@@ -49,7 +49,7 @@ public sealed class ReconcileLoggingTests
         string[] pipelineFragments =
         [
             "Reconciling load order",
-            "Initializing DuckDB record repository",
+            "Initializing DuckDB record index",
             "Computing winners",
         ];
         foreach (var fragment in pipelineFragments)

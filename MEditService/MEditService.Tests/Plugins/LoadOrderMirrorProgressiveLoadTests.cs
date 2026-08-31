@@ -48,17 +48,17 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         // fully queryable. Before #274 there was nothing to ask: the load order was published only
         // after the whole load order had been indexed and swept.
         Assert.NotNull(manager.LoadOrder);
-        Assert.NotNull(manager.Repository);
-        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
+        Assert.NotNull(manager.Reads);
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // And B.esp — the one being indexed right now — reads as absent rather than half-there.
-        Assert.Equal(0, manager.Repository!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
 
         gate.Release();
         await load;
 
-        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("B.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -217,7 +217,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => load);
 
         Assert.Null(manager.LoadOrder);
-        Assert.Null(manager.Repository);
+        Assert.Null(manager.Reads);
         Assert.Equal(LoadOrderState.None, manager.Status.State);
         // The load stopped where it was told to rather than running to completion first.
         Assert.DoesNotContain("C.esp", gate.Created.Single().Indexed);
@@ -254,7 +254,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], manager.Status.IndexedPlugins.Select(p => p.Name));
         Assert.True(index.WinnersComputed);
         Assert.Equal(["Fallout4.esm", "A.esp", "B.esp", "C.esp"], index.Indexed);
-        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("C.esp", PluginOrigin.DataDirectory))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("C.esp", PluginOrigin.DataDirectory))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -274,7 +274,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         // indexed and swept. A timeout is the only way to tell "answered" from "eventually answered".
         var read = Task.Run(() =>
         {
-            var repo = manager.Repository;
+            var repo = manager.Reads;
             return repo == null ? (int?)null : repo.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
         });

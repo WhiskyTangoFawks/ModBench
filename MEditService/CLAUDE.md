@@ -241,11 +241,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
 - Every write backs up the target plugin first (timestamped `.bak`) — undo across relaunches depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
 - Partial-success endpoints return a structured failures collection (named record, e.g. `LoadOrderResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
-- **The load order is readable while it is still being reconciled** (#274 / ADR-0035). `LoadOrderMirror` publishes the load order and repository *before* the indexing loop, and `LoadOrder.Open` opens one arriving copy at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
+- **The load order is readable while it is still being reconciled** (#274 / ADR-0035). `LoadOrderMirror` publishes the load order and index *before* the indexing loop, and `LoadOrder.Open` opens one arriving copy at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
   - **Anything derived from the whole plugin set must gate on `ILoadOrderMirror.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load load order reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `LoadOrderState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready load order with stale winners.
   - **Everything a reader touches on `LoadOrder` is an immutable snapshot** (copy-on-write under `_mutation`), because readers now walk those lists while the load appends to them. A plain `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin landing.
-  - **Never dispose the load order or repository without draining the reconcile first.** `EnterExclusive()` cancels the in-flight reconcile *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Close`, `Dispose` and every reconcile go through it. A superseded reconcile leaves what it landed for its successor — nothing is torn down on cancel (ADR-0044).
+  - **Never dispose the load order or index without draining the reconcile first.** `EnterExclusive()` cancels the in-flight reconcile *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Close`, `Dispose` and every reconcile go through it. A superseded reconcile leaves what it landed for its successor — nothing is torn down on cancel (ADR-0044).
   `PUT /load-order` stays blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /load-order/status` reports progress alongside the in-flight POST (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
+- **`ILoadOrderMirror.RequireScope()` is the one "no load order held" gate** (#605), replacing every
+  consumer's own null-check-and-throw against the nullable `LoadOrder`/`Reads`/`Index` properties —
+  `WorldspaceQueryService`, `ContainerChildQueryService` and `RecordQueryService` all call it (via
+  their own thin `RequireReads`/`RequireLoadOrder` forwards) instead of re-writing the check, and so
+  does `LoadOrderMirror` itself internally (`CreatePlugin`, `ReindexPlugin(PluginKey)`, `ApplyFilter`,
+  `RequirePlugin`). Throws `NoLoadOrderException`, an `InvalidOperationException` subtype rather than
+  a replacement of it, so it flows through `WriteEndpointMapping.NoLoadOrder` (#604) and every
+  existing `catch (InvalidOperationException)` with no signature change.
 
 ## Folder structure
 
@@ -263,7 +271,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 lifecycle plus the unanswered-external-change queue, nothing else — it references only
 load order/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfLoadOrdersTests`.
 
-Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the repository; DTOs in `Queries/Models.cs`. Delete dead code.
+Place code by ownership: `ColumnSpec` (`Schema/`) carries both read extractor + write Apply delegate; `PluginWriter` writes to disk, doesn't call back into the index; DTOs in `Queries/Models.cs`. Delete dead code.
 
 ## Endpoint invariant
 

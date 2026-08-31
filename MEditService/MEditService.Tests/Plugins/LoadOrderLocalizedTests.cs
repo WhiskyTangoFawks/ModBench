@@ -56,7 +56,7 @@ public sealed class LoadOrderLocalizedTests
             // Fallout4...").
             Assert.Empty(manager.LoadOrder!.LoadFailures);
 
-            var detail = manager.Repository!.GetDocument(doorFormKey.ToString(), new PluginKey("Fixture.esp", "Data"))!;
+            var detail = manager.Reads!.GetDocument(doorFormKey.ToString(), new PluginKey("Fixture.esp", "Data"))!;
             Assert.Contains(detail.Fields, f => f.Value != null && f.Value.ToString()!.Contains("The Big Door"));
         }
     }
