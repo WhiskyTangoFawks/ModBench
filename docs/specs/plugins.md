@@ -789,8 +789,7 @@ overflow, then native **Collapse All** last.
   rule itself (record types and records pruned, a plugin row never removed by `GetPlugins()`
   itself) is backend-tested (`MEditService.Tests`), not re-proven here, since this suite's mock
   backend drives `GET /plugins` directly rather than through a real `POST /load-order/filter`; Reveal in
-  Explorer dispatches; read failure renders the error tree node. Add new command id(s) to
-  `EXPECTED_COMMANDS` (`modbench/CLAUDE.md`).
+  Explorer dispatches; read failure renders the error tree node.
 
 ## Out of Scope
 

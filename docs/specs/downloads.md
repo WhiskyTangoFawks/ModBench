@@ -396,7 +396,6 @@ workspace's own Explorer, so an in-tree reveal action is redundant.
 - The `when`-clause gating in `package.json` itself isn't exercised by any test
   (declarative, verified manually), same caveat as every other native context menu in
   this codebase.
-- Add any new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
 
 ## Out of Scope
 

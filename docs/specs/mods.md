@@ -632,8 +632,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
   per-platform runner, asserted as a value (`{ command, args }`) without spawning anything.
 - **Reused integration seam** (`npm run test:integration`, real VS Code process): the tree
   renders from an instance; a checkbox toggle and a drag-reorder round-trip to
-  `modlist.txt`; install from archive lands a disabled mod; profile switch reloads. Add any
-  new command id(s) to `EXPECTED_COMMANDS` (per `modbench/CLAUDE.md`).
+  `modlist.txt`; install from archive lands a disabled mod; profile switch reloads.
 
 ## Out of Scope
 
