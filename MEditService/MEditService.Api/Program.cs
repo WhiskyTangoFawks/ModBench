@@ -1,7 +1,5 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
-using Autofac;
-using Autofac.Extensions.DependencyInjection;
 using MEditService.Api;
 using MEditService.Api.Endpoints;
 using MEditService.Bridge;
@@ -37,8 +35,6 @@ try
     });
 
     builder.Host
-        .UseServiceProviderFactory(new AutofacServiceProviderFactory())
-        .ConfigureContainer<ContainerBuilder>(_ => { })
         .UseSerilog((ctx, services, cfg) => cfg
             .ReadFrom.Configuration(ctx.Configuration)
             .ReadFrom.Services(services)
