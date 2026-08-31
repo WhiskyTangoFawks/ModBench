@@ -110,8 +110,55 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // discriminator scheme onto a type it cannot safely tell apart from an ordinary instantiable
         // one (WhiskyTangoFawks triage: "any type the mechanism cannot faithfully model must fall
         // through to today's empty sub-schema") — so this one correctly declines rather than being
-        // silently mis-covered, and needs its own follow-up naming a different discriminator shape
-        // (SceneAction's own subclass is presumably signaled some other way — not audited here).
+        // silently mis-covered. #612 ran that follow-up down to ground:
+        //
+        // The scheme (Scene.xml declares SceneAction.Type as `binary="Custom"`, so Loqui generates
+        // no read/write code for it at all — it is entirely hand-written): SceneAction.cs reads the
+        // ANAM subrecord as a raw UInt16 tag and switches on it directly —
+        // SceneActionBinaryCreateTranslation.FillBinaryTypeCustom (mirrored by
+        // SceneActionBinaryOverlay.TypeCustomParse for the lazy-overlay read path): tag 4 constructs
+        // a SceneActionStartScene, every other tag (0,1,2,3,5,6 — SceneAction.TypeEnum, itself defined
+        // in SceneAction.cs) constructs one shared SceneActionTypicalType with that raw tag stashed in
+        // its own Type property. xEdit (wbDefinitionsFO4.pas:9032-9182, wbSceneActionTypeDecider in
+        // wbDefinitionsCommon.pas:5016) reads the identical ANAM ordinal as its own union tag — the
+        // two sources agree on the *discriminator*. They disagree on *shape*, and that is a modelling
+        // choice, not a defect: xEdit encodes a full 7-way wbRUnion with a distinct field struct per
+        // branch (Dialogue/Package/Timer/Player Dialogue/Start Scene/NPC Response Dialogue/Radio),
+        // while Mutagen reaches the same data by flattening nearly all of those per-branch fields
+        // (Topic, Camera, Emotion, Packages, the dialogue-response FormLinks, ...) unconditionally
+        // onto SceneAction itself, leaving ASceneActionType to carry only the leftover truly
+        // tag-dependent bits (the raw tag, and what the sibling HTID subrecord means — a bool marker
+        // for Start Scene vs. a FormLink for everything else, handled the same custom-binary way by
+        // FillBinaryHTIDParsingCustom/HTIDParsingCustomParse in the same file). So Mutagen's 2-way CLR
+        // split corresponds correctly to xEdit's 7-way union; it is just not isomorphic to it.
+        //
+        // Two independent reasons this is not reflectively wireable, not one — fixing only the first
+        // walks straight into the second:
+        //   1. Structural: Scene.xml's ASceneActionType (`<Object name="ASceneActionType"
+        //      objType="Subrecord" />`) deliberately omits `abstract="true"`, where Npc.xml's
+        //      ANpcLevel (a genuine abstract union) has it (`<Object name="ANpcLevel" abstract="true"
+        //      ...>`). That is Mutagen's own schema-authoring choice, not an oversight, so IsAbstract
+        //      is the *correct* signal for this type — this is not a false negative to engineer
+        //      around; there is no other reflectable marker (no schema attribute, no discriminator
+        //      property on IASceneActionTypeGetter) that says "this base is only ever one of these
+        //      two hand-picked leaves."
+        //   2. Concrete: even a name-keyed special case bypassing IsAbstract would crash. SceneAction
+        //      TypicalType's own Type property (SceneAction.TypeEnum) has no real implementation on
+        //      the binary-overlay read path — SceneActionTypicalType.cs's entire override is
+        //      `SceneActionTypicalTypeBinaryOverlay.Type => throw new NotImplementedException();`,
+        //      and the generated overlay class (SceneActionTypicalType_Generated.cs) implements it no
+        //      other way. DefaultModImporter/LoadOrder/LoadOrderMirror all read plugins through
+        //      ModFactory.ImportGetter, which Mutagen.Bethesda.Core/Plugins/Records/ModFactory.cs
+        //      resolves via CreateFromBinaryOverlay — the exact lazy-overlay path that throws. Wiring
+        //      SceneActionTypicalType.Type in would crash indexing the first time it reached any real
+        //      FO4 plugin's Scene record carrying a non-Start-Scene action (tag 0, 1, 2, 3, 5, or 6) —
+        //      a live defect, not a hypothetical, and one this census test (type-level only) would
+        //      never catch on its own.
+        //
+        // Contingent, not permanent: if Mutagen ever implements that overlay getter for real and
+        // marks ASceneActionType abstract in Scene.xml (bringing it in line with ANpcLevel/
+        // AQuestAlias), both blockers lift together and #548's existing mechanism would cover this
+        // type with no extension needed — "cannot yet", not "cannot". Until then, KnownGaps stays.
         // #548 review (Finding 1): Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
         // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
         // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
@@ -121,7 +168,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field
         // as a gap to begin with (BaseSkip/IsConditionListField/vmadInterfaceType already keep them
         // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
-        ("ISceneActionGetter", "Type"),            // ASceneActionType — NOT abstract; follow-up needed
+        ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; #612
 
         // ── Category 3: a real, non-abstract Loqui struct whose only members are themselves an
         // unrecognized shape — a raw byte blob, not a Noggog vector struct (that was the former
