@@ -61,9 +61,9 @@ export async function registerTrackedRepositories<T>(
  * `registerTrackedRepositories`'s own folder-keyed result by plugin filename, so a field
  * edit (which knows the plugin it edited, never the folder) can look a repository up directly.
  * Pure and unit-testable for the same reason every other function in this file is: `extension.ts`
- * itself carries no business logic, only prompts (`registerTrackedRepositoriesForSession`) and
- * delegates. Keyed by filename the same way `trackedPlugins` (extension.ts's
- * `sessionPluginFilesFrom`) already is — safe for the same reason: a shadowed same-name copy is
+ * itself carries no business logic, only prompts (`registerHeldTrackedRepositories`) and
+ * delegates. Keyed by filename the same way `HeldPluginFiles` (extension.ts's
+ * `heldPluginFilesFrom`) already is — safe for the same reason: a shadowed same-name copy is
  * read-only (ADR-0036), so filename is unique among plugins an edit could ever actually reach. A
  * plugin whose own folder never resolved to a repository (untracked, or `openRepository` declined)
  * is simply absent — never a null-valued entry. */

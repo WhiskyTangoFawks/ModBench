@@ -25,7 +25,6 @@
     "src/medit/**/*.ts",
     "!src/medit/**/*.test.ts",
     "!src/medit/test/**",
-    "!src/medit/generated/**",
-    "!src/medit/Spike359ScmProbe.ts"
+    "!src/medit/generated/**"
   ]
 }

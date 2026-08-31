@@ -55,8 +55,8 @@ const requestLog: string[] = [];
 // one load and a reload of the same load order.
 let mockPluginsOverride: MockPlugin[] | null = null;
 // Makes the next PUT /load-order fail, the way a bad game directory or a
-// backend-side load error would — load order.md's own contract (LoadOrderManager.LoadExplicitCore
-// disposes the previous load order unconditionally first) means the mock must *not* set
+// backend-side load error would — ADR-0044's contract (LoadOrderMirror.Reconcile's EnsureScope
+// disposes the previous scope first, on a scope change) means the mock must *not* set
 // loadOrderHeld on this path, matching the real backend leaving no load order behind either.
 let putLoadOrderShouldFail = false;
 // GET /load-order/status' answer — what the load can honestly say about itself *right now*.
@@ -833,10 +833,11 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 });
 
 // ── Loadout stays visible through an editing backend ───────────────────────────
-// The declarative view-mode gate itself is proven statically in packageJson.test.ts. These
-// prove the two user-observable consequences only a live host can show: durable Plugin
-// load order state survives a Launch mEdit / Close mEdit round trip untouched (AC5), and its
-// write path (enable/disable) stays reachable while the backend is running (AC4).
+// That no view, menu entry or keybinding gates on modbench.viewMode is proven statically in
+// packageJson.test.ts's repo-wide sweep. These prove the two user-observable consequences only
+// a live host can show: durable Plugin load order state survives a Launch mEdit / Close mEdit
+// round trip untouched (AC5), and its write path (enable/disable) stays reachable while the
+// backend is running (AC4).
 
 interface PluginListNodeLike { plugin?: { name?: string; enabled?: boolean } }
 interface PluginListProviderLike {
@@ -1141,9 +1142,11 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-missingmaster-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
     // The mock backend reports both of these with origin 'Data', so the Data folder has to
-    // actually hold them — otherwise drift correctly concludes their names now resolve to nothing
-    // and decorates every row accordingly. Production cannot reach that state (load-explicit
-    // refuses a plugin whose file is missing), so a fixture that could is the thing out of step.
+    // actually hold them — otherwise reconcile correctly concludes their names now resolve to
+    // nothing and decorates every row with a load failure instead. Production reaches that state
+    // too (LoadOrder.cs: a missing file is recorded as a load failure, never refused outright —
+    // ADR-0044), so a fixture that skipped writing the files would just exercise the wrong
+    // decoration, not one production can't reach.
     for (const name of ['TestMod.esp', 'MissingMaster.esp']) {
       fs.writeFileSync(path.join(gameDir, 'Data', name), '');
     }

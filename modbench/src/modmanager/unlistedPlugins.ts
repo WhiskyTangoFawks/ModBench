@@ -5,6 +5,10 @@
 // Scope is deliberately the enabled mods' own folders. Disabled mods are not deployed into the
 // game's view at all, so their plugins are not "a copy the load order doesn't point at" in any
 // sense a user would recognise — and buildFileConflictIndex doesn't walk them either.
+//
+// `findUnlistedPlugins`'s result feeds `loadOrderSnapshot.ts`'s every-copy registration
+// (ADR-0044): a losing or unnamed copy is registered the same as any other, never loaded
+// separately on demand.
 
 import { extname } from 'node:path';
 import { foldPath, type FileConflictIndex } from './fileConflictIndex';

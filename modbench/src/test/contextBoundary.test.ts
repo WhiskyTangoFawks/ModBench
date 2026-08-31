@@ -73,7 +73,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   });
 
   // Three modmanager files the New Plugin gesture touches, none of them the merged tree's
-  // own row/child/composite/filter/drift set above but all of them the same shape — plain
+  // own row/child/composite/filter/sync set above but all of them the same shape — plain
   // modmanager/ modules reachable from the composition root, exactly the shape that once let a
   // medit import slip in unnoticed until a reviewer's manual read caught it. Held to the
   // same "imports nothing from Editing" bar PluginListProvider's own check uses, not the stricter
