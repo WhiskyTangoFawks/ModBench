@@ -6,9 +6,14 @@ status: accepted
 
 ## Context
 
-The compare grid shows field values across all loaded plugin overrides for a record. For scalar
-fields (string, int, FormKey, enum), each field is one row. For complex fields — arrays and
-structs — a design decision is required.
+The compare grid is designed to show field values across all loaded plugin overrides for a record.
+For scalar fields (string, int, FormKey, enum), each field is one row. For complex fields — arrays
+and structs — a design decision is required.
+
+> **Shipped state (#618):** the grid currently renders only the winning override's column. The
+> override-stack view was deferred by a maintainer ruling pending a proper UX design pass. **This
+> ADR is not reversed by that** — the row/tree model it decides is what the grid uses today for the
+> column it does render, and it remains the reference when the full stack returns.
 
 xEdit (the reference tool all mEdit users will be familiar with) uses a single unified tree where
 every element — subrecord, struct sub-field, array element — is a node. The tree has one shape;
