@@ -111,12 +111,17 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("recordTypes", 503)]
     [InlineData("conditionFunctions", 503)]
     [InlineData("conditionRunOnTargets", 503)]
+    [InlineData("getFilter", 503)]
+    [InlineData("track", 503)]
     // #310: LoadUnlistedPlugin/UnloadUnlistedPlugin's own "no load order" guards — the path/plugin
     // check on each request body passes (real values below), so the request reaches
     // LoadOrderMirror's `_mirror is null` branch and the 503 these routes declare via
     // .ProducesProblem(503). The load case needs a path that actually exists on disk (File.Exists
     // runs before the load order check), hence the fixture's own already-written plugin file rather
     // than a made-up one.
+    // #605: getFilter/track are LoadOrderEndpoints.GetFilter's and PluginEndpoints.Track's own
+    // hand-written 503s — characterized here, before RequireScope() replaces them, so the refactor
+    // has an HTTP-level rival to answer to (neither had one before this).
     public async Task Endpoint_NoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();
@@ -131,6 +136,8 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
             "recordTypes" => await client.GetAsync("/record-types"),
             "conditionFunctions" => await client.GetAsync("/condition-functions"),
             "conditionRunOnTargets" => await client.GetAsync("/condition-run-on-targets"),
+            "getFilter" => await client.GetAsync("/load-order/filter"),
+            "track" => await client.PostAsJsonAsync("/plugins/track", new { origin = "NoLoadOrderMod", preset = "Edits" }),
             _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown operation"),
         };
 
