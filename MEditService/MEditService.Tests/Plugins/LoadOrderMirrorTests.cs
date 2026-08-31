@@ -71,7 +71,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             // ADR-0044: nothing is torn down — what landed stays held, honestly reported as not
             // yet settled, for the next snapshot to finish.
             Assert.NotNull(manager.LoadOrder);
-            Assert.NotNull(manager.Repository);
+            Assert.NotNull(manager.Reads);
             Assert.Equal(LoadOrderState.Reconciling, manager.Status.State);
             Assert.False(manager.Status.ConflictsComputed);
         }
@@ -98,7 +98,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         Assert.NotNull(manager.LoadOrder);
-        Assert.NotNull(manager.Repository);
+        Assert.NotNull(manager.Reads);
         Assert.Single(manager.LoadOrder.Plugins);
         Assert.Equal(TestPluginFixture.PluginName, manager.LoadOrder.Plugins[0].Name);
     }
@@ -109,7 +109,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         using var manager = MakeManager();
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var count = manager.Repository!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
+        var count = manager.Reads!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0;
 
         Assert.Equal(TestPluginFixture.RecordCount, count);
@@ -121,7 +121,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         using var manager = MakeManager();
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
-        var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
+        var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 100, Offset: 0));
 
         Assert.Equal(TestPluginFixture.RecordCount, result.Total);
         Assert.All(result.Items, r => Assert.True(r.IsWinner));
@@ -132,11 +132,11 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         using var manager = MakeManager();
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldRepo = manager.Repository;
+        var oldRepo = manager.Reads;
         manager.Close();
 
         Assert.Null(manager.LoadOrder);
-        Assert.Null(manager.Repository);
+        Assert.Null(manager.Reads);
         Assert.ThrowsAny<Exception>(() =>
             oldRepo!.GetRecordTypeCounts(new PluginKey(TestPluginFixture.PluginName, "Data")));
     }
@@ -146,13 +146,13 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         using var manager = MakeManager();
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var firstRepo = manager.Repository;
+        var firstRepo = manager.Reads;
         var firstLoadOrder = manager.LoadOrder;
 
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
 
         // ADR-0044: a snapshot for the same instance reconciles in place — nothing is replaced.
-        Assert.Same(firstRepo, manager.Repository);
+        Assert.Same(firstRepo, manager.Reads);
         Assert.Same(firstLoadOrder, manager.LoadOrder);
     }
 
@@ -185,15 +185,15 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         {
             using var manager = MakeManager();
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
-            var repositoryBefore = manager.Repository;
+            var repositoryBefore = manager.Reads;
             var modFolder = Path.Combine(data.DataFolder, "SomeMod");
 
             var result = manager.CreatePlugin("NewPlugin.esp", modFolder, "SomeMod");
 
-            Assert.Same(repositoryBefore, manager.Repository);
+            Assert.Same(repositoryBefore, manager.Reads);
             Assert.Equal("SomeMod", result.Origin);
             Assert.Contains(manager.LoadOrder!.Plugins, p => p.Name == "NewPlugin.esp" && p.Origin == "SomeMod");
-            Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("Base.esp", "Data"))
+            Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("Base.esp", "Data"))
                 .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         }
     }
@@ -230,7 +230,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     public void SetFilter_NoLoadOrder_ThrowsInvalidOperationException()
     {
         using var manager = MakeManager();
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\""));
+        var ex = Assert.Throws<NoLoadOrderException>(() => manager.SetFilter("SELECT form_key FROM \"NPC_\""));
         Assert.Contains("No load order", ex.Message);
     }
 
@@ -238,7 +238,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     public void ClearFilter_NoLoadOrder_ThrowsInvalidOperationException()
     {
         using var manager = MakeManager();
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.ClearFilter());
+        var ex = Assert.Throws<NoLoadOrderException>(() => manager.ClearFilter());
         Assert.Contains("No load order", ex.Message);
     }
 
@@ -291,7 +291,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'NowMatches'");
-            Assert.Equal(0, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(0, manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
             var onDisk = Fallout4Mod.CreateFromBinary(
@@ -301,7 +301,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
             await manager.ReindexPlugin("Plugin.esp");
 
-            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
             Assert.Equal(npcKey.ToString(), result.Items[0].FormKey);
         }
@@ -320,7 +320,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
             manager.SetFilter("SELECT form_key FROM npc_ WHERE editor_id = 'StillMatches'");
-            Assert.Equal(1, manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
+            Assert.Equal(1, manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0)).Total);
 
             var pluginPath = Path.Combine(data.DataFolder, "Plugin.esp");
             var onDisk = Fallout4Mod.CreateFromBinary(
@@ -330,7 +330,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
             await manager.ReindexPlugin("Plugin.esp");
 
-            var result = manager.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
+            var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
         }
     }
@@ -433,7 +433,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     public void CreatePlugin_NoLoadOrder_ThrowsInvalidOperationException()
     {
         using var manager = MakeManager(); // not loaded
-        var ex = Assert.Throws<InvalidOperationException>(() => manager.CreatePlugin("New.esp", "/tmp/SomeMod", "SomeMod"));
+        var ex = Assert.Throws<NoLoadOrderException>(() => manager.CreatePlugin("New.esp", "/tmp/SomeMod", "SomeMod"));
         Assert.Contains("No load order", ex.Message);
     }
 
@@ -552,7 +552,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         using var manager = MakeManager();
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4, _fixture.InstanceRoot);
-        var oldRepo = manager.Repository;
+        var oldRepo = manager.Reads;
 
         // ADR-0044: only a snapshot for another instance replaces what is held; the same instance
         // reconciles in place (Reconcile_SameInstance_KeepsTheRepositoryAndLoadOrder).
@@ -569,7 +569,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     {
         var manager = MakeManager();
         manager.Reconcile(_fixture.DataFolder, _fixture.Plugins, GameRelease.Fallout4);
-        var oldRepo = manager.Repository;
+        var oldRepo = manager.Reads;
 
         manager.Dispose();
 

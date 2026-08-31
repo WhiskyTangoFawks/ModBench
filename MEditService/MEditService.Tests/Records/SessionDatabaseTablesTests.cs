@@ -44,7 +44,7 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     }
 
     private DuckDBConnection Connection() =>
-        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Repository!).Connection;
+        ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Reads!).Connection;
 
     /// <summary>
     /// #413 / AC1: the reflected per-type wide tables are gone, and each type's name now belongs to

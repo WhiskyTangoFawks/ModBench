@@ -60,12 +60,12 @@ public sealed class LoadOrderMirrorReconcileTests
             .BuildScattered();
 
     private static string SharedNpc(LoadOrderMirror mirror) =>
-        mirror.Repository!
+        mirror.Reads!
             .Search(new RecordQuery(RecordTypes: ["npc_"], Plugin: new PluginKey("A.esm"), Limit: 10, Offset: 0))
             .Items.Single().FormKey;
 
     private static string? WinnerOf(LoadOrderMirror mirror, string formKey) =>
-        mirror.Repository!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
+        mirror.Reads!.GetOverrideStack(formKey)!.Entries.Single(e => e.IsWinner).Plugin.Name;
 
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>
         plugins.Select(p => p.Name == name ? change(p) : p).ToList();
@@ -162,7 +162,7 @@ public sealed class LoadOrderMirrorReconcileTests
         Assert.True(copies["ModB"].IsImmutable);
         Assert.Equal(copies["ModA"].LoadOrderIndex, copies["ModB"].LoadOrderIndex);
 
-        var stack = mirror.Repository!.GetOverrideStack("000800:Shared.esp")!.Entries;
+        var stack = mirror.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
         Assert.Equal(2, stack.Count);
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModA").IsWinner);
         Assert.False(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
@@ -173,7 +173,7 @@ public sealed class LoadOrderMirrorReconcileTests
         // Reprioritising the mods flips which copy wins — SQL-only, like every other move.
         var flipped = snapshot.Select(p => p with { Winning = p.Origin == "ModB" }).ToList();
         mirror.Reconcile(fx.GameDirectory, flipped, GameRelease.Fallout4);
-        stack = mirror.Repository!.GetOverrideStack("000800:Shared.esp")!.Entries;
+        stack = mirror.Reads!.GetOverrideStack("000800:Shared.esp")!.Entries;
         Assert.True(stack.Single(e => e.Plugin.Origin == "ModB").IsWinner);
         Assert.False(mirror.LoadOrder!.Plugins.Single(p => p.Origin == "ModA").InLoadOrder);
     }

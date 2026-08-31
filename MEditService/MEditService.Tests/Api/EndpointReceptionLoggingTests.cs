@@ -112,10 +112,11 @@ public sealed class EndpointReceptionLoggingTests
     {
         public bool LoadCalled { get; private set; }
         public ILoadOrder? LoadOrder => null;
-        public IRecordReads? Repository => null;
+        public IRecordReads? Reads => null;
         public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-load order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
+        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NoLoadOrderException();
         public void Reconcile(
             string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
             string? instanceRoot = null) => LoadCalled = true;

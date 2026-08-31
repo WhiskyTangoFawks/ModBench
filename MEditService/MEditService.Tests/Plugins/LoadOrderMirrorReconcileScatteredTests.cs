@@ -34,10 +34,10 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
         Assert.NotNull(manager.LoadOrder);
-        Assert.NotNull(manager.Repository);
-        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("A.esp", "Data"))
+        Assert.NotNull(manager.Reads);
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("B.esp", "Data"))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("B.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
     }
 
@@ -57,7 +57,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
         using var manager = MakeManager();
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        var winner = manager.Repository!.GetDocument(shared.ToString());
+        var winner = manager.Reads!.GetDocument(shared.ToString());
         Assert.NotNull(winner);
         Assert.True(winner.IsWinner);
         Assert.Equal("Override.esp", winner.Plugin.Name);
@@ -72,11 +72,11 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
 
         using var manager = MakeManager();
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
-        var firstRepo = manager.Repository;
+        var firstRepo = manager.Reads;
 
         manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4);
 
-        Assert.Same(firstRepo, manager.Repository);
+        Assert.Same(firstRepo, manager.Reads);
         Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginKey("A.esp", "Data")));
     }
 
@@ -102,9 +102,9 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
 
         Assert.NotNull(manager.LoadOrder);
         Assert.Contains(manager.LoadOrder!.LoadFailures, f => f.Name == "Bad.esp");
-        Assert.Equal(1, manager.Repository!.GetRecordTypeCounts(new PluginKey("Good.esp", "Data"))
+        Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("Good.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
-        Assert.Equal(0, manager.Repository!.GetRecordTypeCounts(new PluginKey("Bad.esp", "Data"))
+        Assert.Equal(0, manager.Reads!.GetRecordTypeCounts(new PluginKey("Bad.esp", "Data"))
             .FirstOrDefault(c => string.Equals(c.Type, "npc_", StringComparison.OrdinalIgnoreCase))?.Count ?? 0);
         // The failed plugin's own indexing throw must hit the `continue` in IndexProgressively's
         // catch, not fall through into the "recorded once Index() has returned" block below it —

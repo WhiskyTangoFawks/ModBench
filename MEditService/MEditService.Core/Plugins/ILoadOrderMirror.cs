@@ -13,13 +13,13 @@ namespace MEditService.Core.Plugins;
 public interface ILoadOrderMirror
 {
     ILoadOrder? LoadOrder { get; }
-    IRecordReads? Repository { get; }
+    IRecordReads? Reads { get; }
 
     /// <summary>
-    /// The same object <see cref="Repository"/> exposes, under the wider seam — for the one caller
+    /// The same object <see cref="Reads"/> exposes, under the wider seam — for the one caller
     /// that <i>writes</i> to the read model rather than reading it (#415's edit path, folding a
     /// working-tree change in through <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>). A separate
-    /// property rather than a widening of <see cref="Repository"/>, so every read-side consumer keeps
+    /// property rather than a widening of <see cref="Reads"/>, so every read-side consumer keeps
     /// being handed a surface with no ingest or mutation verbs on it at all — which is the whole
     /// point of that narrowing.
     /// </summary>
@@ -32,6 +32,16 @@ public interface ILoadOrderMirror
     /// load order is a state (<see cref="LoadOrderState.None"/>), not an error.
     /// </summary>
     LoadOrderStatus Status { get; }
+
+    /// <summary>
+    /// #605: <see cref="LoadOrder"/> and <see cref="Reads"/>, non-null together — the one "no load
+    /// order held" gate, replacing every consumer's own null-check-and-throw against those two
+    /// nullable properties. Throws <see cref="NoLoadOrderException"/>, never null: <c>LoadOrder</c>
+    /// and the index behind <c>Reads</c>/<c>Index</c> are only ever both set or both null (a
+    /// reconcile publishes them together; <see cref="Close"/> drops them together), so this can
+    /// never observe one without the other.
+    /// </summary>
+    (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope();
 
     /// <summary>
     /// ADR-0044's one verb: reconciles Mod Management's snapshot — every physical plugin copy in the
@@ -67,7 +77,7 @@ public interface ILoadOrderMirror
     /// touches <c>plugins.txt</c> — appending the load-order line is the caller's job (Mod
     /// Management's own writer, or a script/agent's own per ADR-0024), and the snapshot that
     /// follows corrects the slot.
-    /// Throws <see cref="InvalidOperationException"/> if no load order is held.
+    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="ArgumentException"/> if the name has an invalid extension, or the name,
     /// path, or origin is empty.
     /// Throws <see cref="System.IO.IOException"/> if the file already exists.
@@ -77,7 +87,7 @@ public interface ILoadOrderMirror
     /// <summary>
     /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record repository,
     /// then recomputes winners. Call after committing a prepared save to disk.
-    /// Throws <see cref="InvalidOperationException"/> if no load order is held.
+    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="KeyNotFoundException"/> if the load order does not name the plugin.
     /// </summary>
     Task ReindexPlugin(string plugin);
@@ -91,7 +101,7 @@ public interface ILoadOrderMirror
     /// <see cref="ReindexPlugin(string)"/>: that overload resolves among load-order members because
     /// it answers "which file does a write land on", and this one already knows which physical copy
     /// changed — including a losing one, which the filename overload deliberately cannot reach.</para>
-    /// Throws <see cref="InvalidOperationException"/> if no load order is held.
+    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="KeyNotFoundException"/> if no such copy is held.
     /// </summary>
     Task ReindexPlugin(PluginKey key);
@@ -111,14 +121,14 @@ public interface ILoadOrderMirror
 
     /// <summary>
     /// Materializes the filter SQL into the _filter table and records the active SQL on the load order.
-    /// Throws <see cref="InvalidOperationException"/> if no load order is held.
+    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="ArgumentException"/> if the SQL does not return a form_key column.
     /// </summary>
     void SetFilter(string sql);
 
     /// <summary>
     /// Drops the _filter table and clears the active SQL on the load order.
-    /// Throws <see cref="InvalidOperationException"/> if no load order is held.
+    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// </summary>
     void ClearFilter();
 

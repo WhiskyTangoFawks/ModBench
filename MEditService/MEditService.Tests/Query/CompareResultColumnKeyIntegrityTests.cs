@@ -160,14 +160,15 @@ public sealed class CompareResultColumnKeyIntegrityTests
         public void Dispose() { }
     }
 
-    private sealed class FakeMirror(ILoadOrder loadOrder, IRecordReads repository) : ILoadOrderMirror
+    private sealed class FakeMirror(ILoadOrder loadOrder, IRecordReads reads) : ILoadOrderMirror
     {
         public ILoadOrder? LoadOrder => loadOrder;
-        public IRecordReads? Repository => repository;
+        public IRecordReads? Reads => reads;
         // #415: this double exists for read-model shape assertions only — nothing here writes.
         public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-load order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
+        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => (loadOrder, reads);
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string name, string path, string origin) => throw new NotSupportedException();

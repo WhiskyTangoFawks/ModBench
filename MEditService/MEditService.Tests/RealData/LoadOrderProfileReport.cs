@@ -33,7 +33,7 @@ public sealed class PluginCost
 public sealed class ProfileRun
 {
     public long WallMs { get; private set; }
-    public long RepoInitMs { get; private set; }
+    public long IndexInitMs { get; private set; }
     /// <summary>#585: the open-time content-hash validation of every indexed file — the cost a warm
     /// launch pays instead of indexing.</summary>
     public long ValidateMs { get; private set; }
@@ -54,7 +54,7 @@ public sealed class ProfileRun
     private static readonly Regex Indexed = new(@"^Indexed (?<p>.+?) in (?<ms>\d+) ms$");
     private static readonly Regex IndexPhases = new(@"^Index (?<p>.+?): documents (?<d>\d+) ms \(prepare (?<pr>\d+) ms, append (?<ap>\d+) ms\), extracted tables (?<e>\d+) ms, commit (?<c>\d+) ms$");
     private static readonly Regex Ingested = new(@"^Ingested (?<p>.+?) from source: deserialize (?<d>\d+) ms, index \d+ ms, reconcile (?<r>\d+) ms$");
-    private static readonly Regex RepoInit = new(@"^DuckDB record repository initialized in (?<ms>\d+) ms$");
+    private static readonly Regex IndexInit = new(@"^DuckDB record index initialized in (?<ms>\d+) ms$");
     private static readonly Regex Validated = new(@"^Validated (?<n>\d+) indexed plugin\(s\) against disk in (?<ms>\d+) ms$");
     private static readonly Regex Reconciled = new(@"^Load order reconciled in (?<t>\d+) ms: .* \(first plugin usable after (?<f>\S+) ms, winner sweep (?<w>\d+) ms\)$");
 
@@ -73,7 +73,7 @@ public sealed class ProfileRun
             else if ((m = Indexed.Match(e.Message)).Success) Cost(m.Groups["p"].Value).IndexMs = Ms(m, "ms");
             else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = Ms(m, "d"); c.PrepareMs = Ms(m, "pr"); c.AppendMs = Ms(m, "ap"); c.ExtractedMs = Ms(m, "e"); c.CommitMs = Ms(m, "c"); }
             else if ((m = Ingested.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.FromSource = true; c.DeserializeMs = Ms(m, "d"); c.ReconcileMs = Ms(m, "r"); }
-            else if ((m = RepoInit.Match(e.Message)).Success) run.RepoInitMs = Ms(m, "ms");
+            else if ((m = IndexInit.Match(e.Message)).Success) run.IndexInitMs = Ms(m, "ms");
             else if ((m = Validated.Match(e.Message)).Success) { run.ValidatedCount = (int)Ms(m, "n"); run.ValidateMs = Ms(m, "ms"); }
             else if ((m = Reconciled.Match(e.Message)).Success) { reconciled = true; run.ReconciledMs = Ms(m, "t"); run.WinnersMs = Ms(m, "w"); run.FirstUsableMs = m.Groups["f"].Value; }
         }
@@ -119,7 +119,7 @@ public static class LoadOrderProfileReport
             sb.AppendLine(CultureInfo.InvariantCulture, $"| {name} | {c:N0} | {w:N0} | {Share(c, cold.WallMs)} | {Share(w, warm.WallMs)} |");
         }
         Row("Wall clock (Reconcile round trip)", r => r.WallMs);
-        Row("DuckDB repository open (DDL + views)", r => r.RepoInitMs);
+        Row("DuckDB index open (DDL + views)", r => r.IndexInitMs);
         Row("Validate indexed files against disk (hash)", r => r.ValidateMs);
         Row("Binary open — ModFactory.ImportGetter", r => r.Sum(c => c.ImportMs));
         Row("Binary open — BuildPluginMetadata (record count)", r => r.Sum(c => c.MetadataMs));
@@ -168,7 +168,7 @@ public static class LoadOrderProfileReport
     }
 
     private static long Unattributed(ProfileRun r) =>
-        r.WallMs - r.RepoInitMs - r.ValidateMs - r.Sum(c => c.ImportMs) - r.Sum(c => c.MetadataMs) - r.Sum(c => c.IndexMs) - r.WinnersMs;
+        r.WallMs - r.IndexInitMs - r.ValidateMs - r.Sum(c => c.ImportMs) - r.Sum(c => c.MetadataMs) - r.Sum(c => c.IndexMs) - r.WinnersMs;
 
     private static string Share(long ms, long wallMs) =>
         (wallMs > 0 ? 100.0 * ms / wallMs : 0).ToString("F1", CultureInfo.InvariantCulture) + "%";

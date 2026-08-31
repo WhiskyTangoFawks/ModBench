@@ -66,11 +66,19 @@ public class WorldspaceQueryServiceTests
     private sealed class StubMirror(IRecordReads repo, ILoadOrder? loadOrder = null) : ILoadOrderMirror
     {
         public ILoadOrder? LoadOrder => loadOrder;
-        public IRecordReads? Repository => repo;
+        public IRecordReads? Reads => repo;
         // #415: read-side double — the worldspace queries never write to the index.
         public IRecordIndex? Index => null;
         // #274: these stubs never load, so they are always in the no-load order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
+        // This double's own tests only ever exercise the Reads/RequireReads() side — loadOrder
+        // defaults to null in most of them, which would make a real "both null together"
+        // RequireScope() check throw where RequireRepository() never used to. Gating on repo
+        // alone keeps that (repo's presence is what "no load order" means for these tests, same
+        // as the RequireRepository() it replaces), while repo is null (the one test that wants
+        // the throw) still throws regardless of loadOrder.
+        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
+            repo is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
@@ -166,9 +174,9 @@ public class WorldspaceQueryServiceTests
     [Fact]
     public void WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation()
     {
-        // No load order held → Repository is null → a clear InvalidOperationException, not an NRE.
+        // No load order held → Reads is null → a clear NoLoadOrderException, not an NRE.
         var svc = new WorldspaceQueryService(new StubMirror(null!));
-        Assert.Throws<InvalidOperationException>(() => svc.GetInteriorCells("M.esp", 50, 0));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetInteriorCells("M.esp", 50, 0));
     }
 
     [Fact]

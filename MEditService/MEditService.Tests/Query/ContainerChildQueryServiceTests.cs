@@ -56,9 +56,17 @@ public class ContainerChildQueryServiceTests
     private sealed class StubMirror(IRecordReads repo, ILoadOrder? loadOrder = null) : ILoadOrderMirror
     {
         public ILoadOrder? LoadOrder => loadOrder;
-        public IRecordReads? Repository => repo;
+        public IRecordReads? Reads => repo;
         public IRecordIndex? Index => null;
         public LoadOrderStatus Status => LoadOrderStatus.None;
+        // This double's own tests only ever exercise the Reads/RequireReads() side — loadOrder
+        // defaults to null in most of them, which would make a real "both null together"
+        // RequireScope() check throw where RequireRepository() never used to. Gating on repo
+        // alone keeps that (repo's presence is what "no load order" means for these tests, same
+        // as the RequireRepository() it replaces), while repo is null (the one test that wants
+        // the throw) still throws regardless of loadOrder.
+        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() =>
+            repo is { } r ? (loadOrder!, r) : throw new NoLoadOrderException();
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
@@ -212,6 +220,6 @@ public class ContainerChildQueryServiceTests
     public void GetChildren_NoLoadOrder_ThrowsInvalidOperation()
     {
         var svc = new ContainerChildQueryService(new StubMirror(null!));
-        Assert.Throws<InvalidOperationException>(() => svc.GetChildren("M.esp", "qust1:M.esp"));
+        Assert.Throws<NoLoadOrderException>(() => svc.GetChildren("M.esp", "qust1:M.esp"));
     }
 }

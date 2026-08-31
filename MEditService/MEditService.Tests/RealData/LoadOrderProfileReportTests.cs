@@ -15,7 +15,7 @@ public sealed class LoadOrderProfileReportTests
 
     private static readonly LogEntry[] ColdLines =
     [
-        L("DuckDB record repository initialized in 40 ms"),
+        L("DuckDB record index initialized in 40 ms"),
         L("Validated 0 indexed plugin(s) against disk in 1 ms"),
         L("Fallout4.esm opened in 100 ms + 900 ms metadata"),
         L("Indexing Fallout4.esm (1000 records)"),
@@ -31,7 +31,7 @@ public sealed class LoadOrderProfileReportTests
 
     private static readonly LogEntry[] WarmLines =
     [
-        L("DuckDB record repository initialized in 35 ms"),
+        L("DuckDB record index initialized in 35 ms"),
         L("Validated 2 indexed plugin(s) against disk in 800 ms"),
         L("Fallout4.esm opened in 100 ms + 900 ms metadata"),
         L("Registering Fallout4.esm (1000 records), already indexed and unchanged on disk"),
@@ -49,7 +49,7 @@ public sealed class LoadOrderProfileReportTests
         var run = ProfileRun.Parse(ColdLines, wallMs: 2100);
 
         Assert.Equal(2100, run.WallMs);
-        Assert.Equal(40, run.RepoInitMs);
+        Assert.Equal(40, run.IndexInitMs);
         Assert.Equal(1, run.ValidateMs);
         Assert.Equal(0, run.ValidatedCount);
         Assert.Equal(2000, run.ReconciledMs);

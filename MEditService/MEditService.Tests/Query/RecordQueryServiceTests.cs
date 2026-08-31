@@ -897,7 +897,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetPlugins_NoLoadOrder_ThrowsInvalidOperationException()
     {
         var unloaded = MakeUnloadedService();
-        var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetPlugins());
+        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetPlugins());
         Assert.Contains("No load order", ex.Message);
     }
 
@@ -905,7 +905,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     public void GetRecords_NoLoadOrder_ThrowsInvalidOperationException()
     {
         var unloaded = MakeUnloadedService();
-        var ex = Assert.Throws<InvalidOperationException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
+        var ex = Assert.Throws<NoLoadOrderException>(() => unloaded.GetRecords("npc_", null, null, 10, 0));
         Assert.Contains("No load order", ex.Message);
     }
 

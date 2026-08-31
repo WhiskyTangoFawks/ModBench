@@ -14,14 +14,14 @@ namespace MEditService.Core.Plugins;
 
 /// <summary>See <see cref="ILoadOrderMirror"/>.</summary>
 public sealed class LoadOrderMirror(
-    IRecordIndexFactory repositoryFactory,
+    IRecordIndexFactory indexFactory,
     ILogger<LoadOrderMirror>? logger = null,
     IModImporter? modImporter = null,
     SchemaReflector? schemaReflector = null) : ILoadOrderMirror, IDisposable
 {
     private readonly Lock _lock = new();
     private readonly ILogger<LoadOrderMirror> _logger = logger ?? NullLogger<LoadOrderMirror>.Instance;
-    private readonly IRecordIndexFactory _repositoryFactory = repositoryFactory;
+    private readonly IRecordIndexFactory _indexFactory = indexFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
     // #463: the same reflector ReconcileHeadStructurally's SourceRecordType.Resolve needs for a
     // container's Head-only deletion — DI already registers SchemaReflector as its own singleton
@@ -29,8 +29,8 @@ public sealed class LoadOrderMirror(
     // IRecordIndexFactory, which has no other reason to carry it.
     private readonly SchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
     private LoadOrder? _loadOrder;
-    private IRecordIndex? _repository;
-    // #274: the reconcile's own progress. Guarded by _lock like _loadOrder/_repository — written by
+    private IRecordIndex? _index;
+    // #274: the reconcile's own progress. Guarded by _lock like _loadOrder/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
     private bool _conflictsComputed;
@@ -65,13 +65,32 @@ public sealed class LoadOrderMirror(
 
     private void ExitExclusive() => _reconcileGate.Release();
 
-    private const string NoLoadOrderMessage = "No load order has been received.";
-
     private GameRelease _gameRelease;
 
     public ILoadOrder? LoadOrder { get { lock (_lock) return _loadOrder; } }
-    public IRecordReads? Repository { get { lock (_lock) return _repository; } }
-    public IRecordIndex? Index { get { lock (_lock) return _repository; } }
+    public IRecordReads? Reads { get { lock (_lock) return _index; } }
+    public IRecordIndex? Index { get { lock (_lock) return _index; } }
+
+    /// <summary>See <see cref="ILoadOrderMirror.RequireScope"/>.</summary>
+    public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => RequireScopeCore();
+
+    /// <summary>
+    /// #605: the actual gate behind <see cref="RequireScope"/> — every write-side method below
+    /// needs the concrete <see cref="Plugins.LoadOrder"/> and the write-capable <see cref="IRecordIndex"/>
+    /// underneath it, not the narrower (<see cref="ILoadOrder"/>, <see cref="IRecordReads"/>) the
+    /// public method hands out. One lock, one null check, one message: <see cref="CreatePlugin"/>,
+    /// <see cref="ReindexPlugin(PluginKey)"/>, <see cref="ApplyFilter"/> and <see cref="RequirePlugin"/>
+    /// all go through this instead of each re-writing "if (_loadOrder is null) throw" for itself.
+    /// </summary>
+    private (LoadOrder LoadOrder, IRecordIndex Index) RequireScopeCore()
+    {
+        lock (_lock)
+        {
+            if (_loadOrder is not { } loadOrder || _index is not { } index)
+                throw new NoLoadOrderException();
+            return (loadOrder, index);
+        }
+    }
 
     /// <summary>
     /// What the mirror can honestly say about itself right now (#274 / ADR-0035) — the read behind
@@ -106,9 +125,9 @@ public sealed class LoadOrderMirror(
         try
         {
             var token = BeginReconcile();
-            var (loadOrder, repository) = EnsureScope(gameDirectory, gameRelease, instanceRoot);
+            var (loadOrder, index) = EnsureScope(gameDirectory, gameRelease, instanceRoot);
             var resolved = Plugins.LoadOrder.Resolve(gameDirectory, gameRelease, plugins);
-            ReconcileProgressively(loadOrder, repository, resolved, token);
+            ReconcileProgressively(loadOrder, index, resolved, token);
         }
         catch (OperationCanceledException ex)
         {
@@ -165,22 +184,22 @@ public sealed class LoadOrderMirror(
     /// name, unique only within one. Published before any plugin is opened, which is what makes
     /// the reconcile progressive (#274 / ADR-0035).
     /// </summary>
-    private (LoadOrder LoadOrder, IRecordIndex Repository) EnsureScope(
+    private (LoadOrder LoadOrder, IRecordIndex Index) EnsureScope(
         string gameDirectory, GameRelease gameRelease, string? instanceRoot)
     {
         lock (_lock)
         {
-            if (_loadOrder is { } held && _repository is { } repository && SameScope(held, gameDirectory, gameRelease, instanceRoot))
-                return (held, repository);
+            if (_loadOrder is { } held && _index is { } index && SameScope(held, gameDirectory, gameRelease, instanceRoot))
+                return (held, index);
             DisposeCurrent();
         }
 
-        _logger.LogDebug("Initializing DuckDB record repository");
+        _logger.LogDebug("Initializing DuckDB record index");
         var createTimer = Stopwatch.StartNew();
-        var fresh = _repositoryFactory.Create(gameRelease, instanceRoot);
+        var fresh = _indexFactory.Create(gameRelease, instanceRoot);
         if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogDebug("DuckDB record repository initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
+            _logger.LogDebug("DuckDB record index initialized in {ElapsedMs} ms", createTimer.ElapsedMilliseconds);
         }
         var loadOrder = new LoadOrder(gameDirectory, instanceRoot, gameRelease, _logger);
 
@@ -191,7 +210,7 @@ public sealed class LoadOrderMirror(
             _conflictsComputed = false;
             _plannedCount = 0;
             _loadOrder = loadOrder;
-            _repository = fresh;
+            _index = fresh;
             _gameRelease = gameRelease;
         }
         return (loadOrder, fresh);
@@ -222,7 +241,7 @@ public sealed class LoadOrderMirror(
     /// indexed, progressively; then one winner sweep and one filter re-materialization.
     /// </summary>
     private void ReconcileProgressively(
-        LoadOrder loadOrder, IRecordIndex repository, IReadOnlyList<ResolvedPlugin> resolved, CancellationToken token)
+        LoadOrder loadOrder, IRecordIndex index, IReadOnlyList<ResolvedPlugin> resolved, CancellationToken token)
     {
         var wanted = resolved.ToDictionary(r => KeyOf(r.Key), StringComparer.OrdinalIgnoreCase);
         var held = loadOrder.Plugins.ToDictionary(p => KeyOf(p.Key), StringComparer.OrdinalIgnoreCase);
@@ -231,7 +250,7 @@ public sealed class LoadOrderMirror(
         lock (_lock) failed = [.. _failedHashes.Values.Select(v => v.Key)];
         // Registered, held, or held only as a failure row — a copy the snapshot no longer names
         // leaves by every one of those doors, so a stale error row cannot outlive its copy.
-        var leaving = repository.RegisteredPlugins()
+        var leaving = index.RegisteredPlugins()
             .Concat(loadOrder.Plugins.Select(p => p.Key))
             .Concat(failed)
             .Where(k => !wanted.ContainsKey(KeyOf(k)))
@@ -260,7 +279,7 @@ public sealed class LoadOrderMirror(
 
         foreach (var key in leaving)
         {
-            repository.Unregister(key);
+            index.Unregister(key);
             loadOrder.Remove(key);
             lock (_lock)
             {
@@ -276,7 +295,7 @@ public sealed class LoadOrderMirror(
             // the same SQL-only move: no re-read, no re-index, and the DuckDB connection never
             // changes, which is what makes this safe to apply live and unprompted.
             var metadata = loadOrder.Update(held[KeyOf(plugin.Key)], plugin.Registration);
-            repository.Register(metadata.Key, metadata.Registration);
+            index.Register(metadata.Key, metadata.Registration);
         }
 
         // #113: two numbers ADR-0035 makes distinct — time to the first queryable plugin (the tree
@@ -303,7 +322,7 @@ public sealed class LoadOrderMirror(
             }
             lock (_lock) _failedHashes.Remove(KeyOf(plugin.Key));
 
-            RegisterOrIndex(loadOrder, repository, metadata, token);
+            RegisterOrIndex(loadOrder, index, metadata, token);
             firstUsableMs ??= timer.ElapsedMilliseconds;
         }
 
@@ -311,7 +330,7 @@ public sealed class LoadOrderMirror(
         // arrived earlier was browsable but its winner state was not yet decided (ADR-0035).
         _logger.LogDebug("Computing winners");
         var winnersTimer = Stopwatch.StartNew();
-        repository.UpdateWinners();
+        index.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
         // #422: any of the above can change which records match an active filter.
         ReapplyFilter();
@@ -351,11 +370,11 @@ public sealed class LoadOrderMirror(
     /// register/index decision needs the same answer, and asking git twice per plugin is a cost a
     /// 72-plugin load order notices.</para>
     /// </summary>
-    private void RegisterOrIndex(LoadOrder loadOrder, IRecordIndex repository, PluginMetadata plugin, CancellationToken token)
+    private void RegisterOrIndex(LoadOrder loadOrder, IRecordIndex index, PluginMetadata plugin, CancellationToken token)
     {
         var key = plugin.Key;
         var sourceTree = SourceIngest.TreeFor(plugin.Origin, plugin.Path, plugin.Name);
-        if (sourceTree == null && repository.IndexedContentHash(key) != null)
+        if (sourceTree == null && index.IndexedContentHash(key) != null)
         {
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -363,7 +382,7 @@ public sealed class LoadOrderMirror(
                     "Registering {Plugin} ({RecordCount} records), already indexed and unchanged on disk",
                     plugin.Name, plugin.RecordCount);
             }
-            repository.Register(key, plugin.Registration);
+            index.Register(key, plugin.Registration);
             // Counted exactly as an indexed plugin is, and for the same reason: Status promises a
             // plugin listed here is wholly queryable, and a registered one is. This is what makes
             // a warm reconcile visibly advance rather than sit at zero until the sweep (#586 AC4).
@@ -380,7 +399,7 @@ public sealed class LoadOrderMirror(
         {
             // #271 / ADR-0036: threads the origin into the index, so the DuckDB row is identified
             // by (origin, plugin) together, not filename alone.
-            IndexOnePlugin(loadOrder, repository, plugin, loadOrder.GetMod(plugin.Name, plugin.Origin)!, sourceTree, token);
+            IndexOnePlugin(loadOrder, index, plugin, loadOrder.GetMod(plugin.Name, plugin.Origin)!, sourceTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Indexed {Plugin} in {ElapsedMs} ms", plugin.Name, indexTimer.ElapsedMilliseconds);
@@ -436,12 +455,12 @@ public sealed class LoadOrderMirror(
     /// surfaced by <c>GET /load-order/status</c>), not merely a log line.</para>
     /// </summary>
     private void IndexOnePlugin(
-        LoadOrder loadOrder, IRecordIndex repository, PluginMetadata plugin,
+        LoadOrder loadOrder, IRecordIndex index, PluginMetadata plugin,
         IModGetter binary, string? sourceTree, CancellationToken token)
     {
         if (sourceTree == null)
         {
-            repository.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
+            index.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
             return;
         }
 
@@ -452,7 +471,7 @@ public sealed class LoadOrderMirror(
                 _logger.LogInformation("Ingesting {Plugin} from its source tree ({Tree})", plugin.Name, sourceTree);
             }
             SourceIngest.Ingest(
-                repository, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
+                index, ModFolders.Of(plugin.Origin, plugin.Path)!, sourceTree,
                 plugin.Registration, plugin.Key, plugin.Path, loadOrder.GameRelease,
                 _schemaReflector, _logger, token);
             return;
@@ -477,7 +496,7 @@ public sealed class LoadOrderMirror(
                 "compiled binary instead — edits made since the last compile are not reflected.");
         }
 
-        repository.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
+        index.Index(binary, plugin.Registration, plugin.Key, plugin.Path);
     }
 
     /// <summary>
@@ -511,8 +530,7 @@ public sealed class LoadOrderMirror(
 
         lock (_lock)
         {
-            if (_loadOrder is null)
-                throw new InvalidOperationException(NoLoadOrderMessage);
+            var (loadOrder, index) = RequireScopeCore();
 
             // Never-assume-exclusive-ownership: the destination may be a mod folder nothing has
             // written into yet (a brand-new mod, or overwrite/ before its first file) — Mod
@@ -529,9 +547,9 @@ public sealed class LoadOrderMirror(
             var mod = ModFactory.Activator(modKey, _gameRelease);
             mod.WriteToBinary(filePath);
 
-            var metadata = _loadOrder.AddCreatedPlugin(filePath, origin);
-            var openedMod = _loadOrder.GetMod(metadata.Name, metadata.Origin)!;
-            _repository!.Index(openedMod, metadata.Registration, metadata.Key, metadata.Path);
+            var metadata = loadOrder.AddCreatedPlugin(filePath, origin);
+            var openedMod = loadOrder.GetMod(metadata.Name, metadata.Origin)!;
+            index.Index(openedMod, metadata.Registration, metadata.Key, metadata.Path);
             _indexed.Add(new IndexedPlugin(metadata.Name, metadata.Origin));
             return PluginResponse.FromMetadata(metadata);
         }
@@ -541,26 +559,26 @@ public sealed class LoadOrderMirror(
     public Task ReindexPlugin(PluginKey key)
     {
         PluginMetadata metadata;
-        IRecordIndex repository;
+        IRecordIndex index;
         GameRelease gameRelease;
         lock (_lock)
         {
-            if (_loadOrder == null) throw new InvalidOperationException(NoLoadOrderMessage);
-            metadata = _loadOrder.Find(key)
+            var scope = RequireScopeCore();
+            metadata = scope.LoadOrder.Find(key)
                 ?? throw new KeyNotFoundException($"Plugin '{key.Name}' from '{key.Origin}' is not held.");
-            (repository, gameRelease) = (_repository!, _gameRelease);
+            (index, gameRelease) = (scope.Index, _gameRelease);
         }
 
-        return ReindexOne(metadata, repository, gameRelease);
+        return ReindexOne(metadata, index, gameRelease);
     }
 
     public Task ReindexPlugin(string plugin)
     {
-        var (metadata, repository, gameRelease) = RequirePlugin(plugin);
-        return ReindexOne(metadata, repository, gameRelease);
+        var (metadata, index, gameRelease) = RequirePlugin(plugin);
+        return ReindexOne(metadata, index, gameRelease);
     }
 
-    private Task ReindexOne(PluginMetadata metadata, IRecordIndex repository, GameRelease gameRelease)
+    private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease)
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
         var modPath = new ModPath(modKey, metadata.Path);
@@ -570,8 +588,8 @@ public sealed class LoadOrderMirror(
 
         lock (_lock)
         {
-            repository.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
-            repository.UpdateWinners();
+            index.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
+            index.UpdateWinners();
             // #422: re-indexed content can flip filter membership either way.
             ReapplyFilter();
         }
@@ -584,35 +602,34 @@ public sealed class LoadOrderMirror(
     {
         lock (_lock)
         {
-            if (_repository == null) return;
+            if (_index == null) return;
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation(
                     "{Plugin} ({Origin}) is gone from disk; removing it from the index", key.Name, key.Origin);
             }
-            _repository.Unindex(key);
+            _index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as an re-index does.
-            _repository.UpdateWinners();
+            _index.UpdateWinners();
             // #422: rows that no longer exist cannot match a filter that a stale _filter still lists.
             ReapplyFilter();
         }
     }
 
-    private (PluginMetadata Metadata, IRecordIndex Repository, GameRelease GameRelease) RequirePlugin(string plugin)
+    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease) RequirePlugin(string plugin)
     {
         lock (_lock)
         {
-            if (_loadOrder == null)
-                throw new InvalidOperationException(NoLoadOrderMessage);
+            var (loadOrder, index) = RequireScopeCore();
             // #34: load-order members only, for the same reason PluginOriginResolver scopes that
             // way — this resolves the *file a write lands on* (SavePlugin/PreparePluginSave/
             // ReindexPlugin all route through here), and a copy outside the load order is
             // read-only. Without the scope a save could pick a losing copy's path off a bare
             // filename and write to a file the game does not load.
-            var meta = _loadOrder.Plugins.FirstOrDefault(p =>
+            var meta = loadOrder.Plugins.FirstOrDefault(p =>
                 p.InLoadOrder && string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' is not in the load order.");
-            return (meta, _repository!, _gameRelease);
+            return (meta, index, _gameRelease);
         }
     }
 
@@ -623,10 +640,9 @@ public sealed class LoadOrderMirror(
     {
         lock (_lock)
         {
-            if (_loadOrder is null)
-                throw new InvalidOperationException(NoLoadOrderMessage);
-            _repository!.SetFilter(sql);
-            _loadOrder.FilterSql = sql;
+            var (loadOrder, index) = RequireScopeCore();
+            index.SetFilter(sql);
+            loadOrder.FilterSql = sql;
         }
     }
 
@@ -637,10 +653,10 @@ public sealed class LoadOrderMirror(
     {
         lock (_lock)
         {
-            if (_loadOrder?.FilterSql is not { } sql || _repository is null) return;
+            if (_loadOrder?.FilterSql is not { } sql || _index is null) return;
             try
             {
-                _repository.SetFilter(sql);
+                _index.SetFilter(sql);
             }
             catch (System.Data.Common.DbException ex)
             {
@@ -661,7 +677,7 @@ public sealed class LoadOrderMirror(
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything —
         // the teardown half of #274's cancellation. Disposing while the loop still holds the
-        // repository is a native crash, not a catchable one.
+        // index is a native crash, not a catchable one.
         EnterExclusive();
         try { lock (_lock) DisposeCurrent(); }
         finally { ExitExclusive(); }
@@ -688,8 +704,8 @@ public sealed class LoadOrderMirror(
     {
         _loadOrder?.Dispose();
         _loadOrder = null;
-        _repository?.Dispose();
-        _repository = null;
+        _index?.Dispose();
+        _index = null;
         _indexed.Clear();
         _failedHashes.Clear();
         _conflictsComputed = false;

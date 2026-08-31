@@ -51,7 +51,7 @@ public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogg
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)
     {
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
-        var repo = RequireRepository();
+        var repo = RequireReads();
         var pluginKey = new PluginKey(plugin, origin);
 
         var rows = repo.GetContainerChildren(pluginKey, parentFormKey)
@@ -92,6 +92,5 @@ public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogg
         return result;
     }
 
-    private IRecordReads RequireRepository() =>
-        _mirror.Repository ?? throw new InvalidOperationException("No load order has been received.");
+    private IRecordReads RequireReads() => _mirror.RequireScope().Reads;
 }

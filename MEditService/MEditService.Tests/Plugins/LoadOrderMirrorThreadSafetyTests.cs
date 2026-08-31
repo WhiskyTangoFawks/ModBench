@@ -84,6 +84,6 @@ public class LoadOrderMirrorThreadSafetyTests(TestPluginFixture fixture)
         manager.Dispose();
 
         Assert.Null(manager.LoadOrder);
-        Assert.Null(manager.Repository);
+        Assert.Null(manager.Reads);
     }
 }

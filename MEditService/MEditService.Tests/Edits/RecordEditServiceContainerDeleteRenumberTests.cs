@@ -142,9 +142,10 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     private sealed class IndexOverridingMirror(ILoadOrderMirror inner, IRecordIndex overrideIndex) : ILoadOrderMirror
     {
         public ILoadOrder? LoadOrder => inner.LoadOrder;
-        public IRecordReads? Repository => inner.Repository;
+        public IRecordReads? Reads => inner.Reads;
         public IRecordIndex? Index => overrideIndex;
         public LoadOrderStatus Status => inner.Status;
+        public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => inner.RequireScope();
         public void Reconcile(
             string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease,
             string? instanceRoot = null) =>

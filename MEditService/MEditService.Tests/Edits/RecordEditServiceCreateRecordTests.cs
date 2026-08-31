@@ -344,12 +344,12 @@ public sealed class RecordEditServiceCreateRecordTests
     {
         using var mod = TrackedModFixture.Tracked();
         mod.Mirror.SetFilter("SELECT form_key FROM npc_");
-        var before = mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
+        var before = mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0)).Total;
 
         var result = ServiceFor(mod.Mirror).CreateRecord(mod.Plugin, "npc_", "BrandNewNpc");
 
         Assert.True(result.Applied, result.Message);
-        var after = mod.Mirror.Repository!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
+        var after = mod.Mirror.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 50, Offset: 0));
         Assert.Equal(before + 1, after.Total);
         Assert.Contains(after.Items, i => i.FormKey == result.NewFormKey);
     }

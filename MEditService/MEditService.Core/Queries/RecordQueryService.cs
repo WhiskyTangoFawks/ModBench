@@ -54,7 +54,7 @@ public sealed class RecordQueryService(
         // #278 / ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller (the composite's chevron) decides expandability from, not row presence.
-        var matchingPlugins = RequireRepository().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
+        var matchingPlugins = RequireReads().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
         return [.. s.Plugins.Select(p => ToResponse(p, matchingPlugins.Contains(p.Name)))];
     }
 
@@ -69,7 +69,7 @@ public sealed class RecordQueryService(
 
     public PagedResult<RecordSummary> GetRecords(string? type, string? plugin, string? search, int limit, int offset, string? origin = null)
     {
-        var repository = RequireRepository();
+        var reads = RequireReads();
         var schemas = RequireSchemas();
         // #34: the caller states which copy when it knows (a tree row does; it was built from one).
         // Otherwise the #296 behaviour stands — resolve server-side from the load order, since a
@@ -86,25 +86,25 @@ public sealed class RecordQueryService(
         PluginKey? pluginKey = null;
         if (plugin != null) pluginKey = new PluginKey(plugin, origin);
         var query = new RecordQuery(RecordTypes: recordTypes, Plugin: pluginKey, Search: search, Limit: limit, Offset: offset);
-        return repository.Search(query);
+        return reads.Search(query);
     }
 
     public RecordDetail? GetRecord(string formKey)
     {
         _freshness.Validate(formKey);
-        var document = RequireRepository().GetDocument(formKey);
+        var document = RequireReads().GetDocument(formKey);
         return document == null ? null : ToRecordDetail(document);
     }
 
     public CompareResult? GetCompare(string formKey)
     {
         _freshness.Validate(formKey);
-        var repository = RequireRepository();
+        var reads = RequireReads();
         // ADR-0031: one memoizing cache per response — a FormKey repeated across sibling
         // cells/plugins/leaves (generic fields and VMAD alike) is resolved at most once.
-        var resolveFormKey = FormKeyResolutionCache.Memoize(repository.Resolve);
+        var resolveFormKey = FormKeyResolutionCache.Memoize(reads.Resolve);
 
-        var stack = repository.GetOverrideStack(formKey);
+        var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
         // #421: GetOverrideStack already resolved which record type this FormKey belongs to (the
@@ -155,11 +155,11 @@ public sealed class RecordQueryService(
     /// opened.</summary>
     public IReadOnlyList<ConflictRecord> GetConflicts()
     {
-        var repository = RequireRepository();
-        var contested = repository.GetContestedFormKeys();
+        var reads = RequireReads();
+        var contested = reads.GetContestedFormKeys();
         if (contested.Count == 0) return [];
 
-        var resolveFormKey = FormKeyResolutionCache.Memoize(repository.Resolve);
+        var resolveFormKey = FormKeyResolutionCache.Memoize(reads.Resolve);
         var heldPlugins = RequireLoadOrder().Plugins;
         var pluginMasters = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
         var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
@@ -167,7 +167,7 @@ public sealed class RecordQueryService(
         var results = new List<ConflictRecord>();
         foreach (var formKey in contested)
         {
-            var stack = repository.GetOverrideStack(formKey);
+            var stack = reads.GetOverrideStack(formKey);
             // Defensive, not expected in practice: GetContestedFormKeys and this read share no
             // transaction, so a formKey it just reported could in principle be gone by the time
             // this asks for its stack. Skipped, not thrown — the same posture the rest of this
@@ -244,7 +244,7 @@ public sealed class RecordQueryService(
 
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
     {
-        var repository = RequireRepository();
+        var reads = RequireReads();
         // #34: stated by the caller when it knows which copy it is browsing (a tree row does),
         // else resolved server-side from the load order as it has been since #296.
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
@@ -253,14 +253,14 @@ public sealed class RecordQueryService(
         // #421: one grouped query (GetRecordTypeCounts) replaces the per-type CountRecordsForPlugin
         // loop — the header is never in `records` (D8), so it is already absent from the result
         // without an explicit exclusion.
-        return [.. repository.GetRecordTypeCounts(new PluginKey(plugin, origin))
+        return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
             .Where(c => schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))
             .OrderBy(r => r.Type)];
     }
 
     public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) =>
-        RequireRepository().GetReferencedBy(targetFormKey);
+        RequireReads().GetReferencedBy(targetFormKey);
 
     public IReadOnlyList<string> GetConditionFunctions() =>
         ConditionCodecRegistry.For(RequireLoadOrder().GameRelease.ToCategory())?.AvailableFunctions().ToList() ?? [];
@@ -273,11 +273,9 @@ public sealed class RecordQueryService(
             document.Fields, Origin: document.Plugin.Origin!, RecordType: document.RecordType,
             IsPartialForm: document.IsPartialForm, IsPartialFormable: document.IsPartialFormable);
 
-    private ILoadOrder RequireLoadOrder() =>
-        _mirror.LoadOrder ?? throw new InvalidOperationException("No load order has been received.");
+    private ILoadOrder RequireLoadOrder() => _mirror.RequireScope().LoadOrder;
 
-    private IRecordReads RequireRepository() =>
-        _mirror.Repository ?? throw new InvalidOperationException("No load order has been received.");
+    private IRecordReads RequireReads() => _mirror.RequireScope().Reads;
 
     private IReadOnlyDictionary<string, Schema.RecordTableSchema> RequireSchemas() =>
         _schemaReflector.GetSchemas(RequireLoadOrder().GameRelease);
