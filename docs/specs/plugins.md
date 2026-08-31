@@ -623,6 +623,19 @@ overflow, then native **Collapse All** last.
   (the never-assume-exclusive-ownership invariant in `CLAUDE.md`). The composition happens in
   `wirePluginListInvalidation.ts`, which adds the invalidation alongside the existing
   `sync.request()` fan-out rather than replacing it — no watcher was added.
+- **Rows come from disk, not only from `plugins.txt`** (#617). A plugin file an enabled mod
+  provides at its root that has no `plugins.txt` line at all still gets a row, appended after the
+  listed ones. It is an **ordinary row** — same construction as every other, unchecked because
+  nothing lists it, no distinguishing text, icon or dimming — matching how MO2 surfaces a plugin
+  it has discovered but not yet recorded. Modbench does **not** write the plugin into
+  `plugins.txt` to make this happen: enabling a mod only flips a `modlist.txt` prefix, so
+  discovery stays a read of disk and nothing outside Modbench's own edits ever provokes a write.
+  Matching against already-listed names is case-insensitive, so a plugin whose file and
+  `plugins.txt` line differ only in case appears once, spelled as `plugins.txt` spells it. The
+  discovery shares the `FileConflictIndex` walk the badge pass already performs — no second walk,
+  no extra disk I/O per render — and degrades with it: if that walk fails, the tab loses both
+  badges and disk-derived rows together rather than showing half a tree, and says so.
+  Ticking such a row currently fails (there is no line to toggle); see #654.
 
 ### Row context menu
 
