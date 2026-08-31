@@ -183,7 +183,7 @@ interface HeldPluginFiles {
    *  record the *current* record filter matches. Carried in the same hand-off, for the same
    *  reason as `masterIssues` — this call already asked `GET /plugins` the question, and every
    *  reconcile reaches it downstream of `EditingController.syncFilterState()`
-   *  (`makeReconcileLoadOrder`'s own sequence, shared by Launch mEdit, the crash-restart handler
+   *  (`createReconcileSequencer`'s own sequence, shared by Launch mEdit, the crash-restart handler
    *  and every snapshot the sync sends), so this is the one hand-off through which the filter
    *  state the backend actually has — not the one an earlier `setFilter`/`clearFilter` last left
    *  behind — reaches `loadOrderSync`'s match map. That is what keeps the map from outliving the
