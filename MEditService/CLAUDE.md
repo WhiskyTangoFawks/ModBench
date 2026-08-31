@@ -58,7 +58,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     file. **Bump `IndexVersion.FormatVersion` when you change `TableDdlBuilder`'s fixed tables or
     the codec's conventions** — `CREATE TABLE IF NOT EXISTS` will otherwise meet an old file's
     column list in silence. **A file another process holds is never rebuilt over** (#588 / ADR-0001
-    point 6): DuckDB's lock error (`DuckDbRecordIndex.IsAnotherWriter`) becomes
+    point 6): DuckDB's lock error (`IndexStore.IsAnotherWriter`) becomes
     `IndexHeldElsewhereException`, which `PUT /load-order` answers `423 Locked` and the mirror
     holds nothing — deleting a locked file succeeds on POSIX and would destroy the other window's
     live index. The lock is per *process* (DuckDB.NET shares one database per path in-process), so
@@ -265,7 +265,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | ------ | ---- | ------- |
 | `Plugins/` | The load-order mirror: which plugin copies are held, their registrations, reconcile | `LoadOrder`, `LoadOrderMirror`, `PluginMetadata`, `LoadOrderEntry`, `LoadOrderStatus` |
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec` |
-| `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
+| `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex` (orchestrates the internal `IndexStore` / `PluginIngest` / `WorkingTreeOverlay` collaborators; owns registration, the winner sweep, reads, container verbs and every transaction boundary), `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `SourceCheckout` |
 | `Serialization/` | Per-record text source codec (ADR-0041) | `RecordTextCodec`, `RecordTextCodecCustomization` |
