@@ -144,15 +144,15 @@ export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
  *  game directory) or does nothing more either way (the coalesced sync). */
 export type ReconcileOutcome = 'reconciled' | 'no-game-directory' | 'failed' | 'abandoned';
 
-/** A load-order PUT's own result — the outcome and, when reconciled, what to report and hand to
- *  the tree. `failures`/`crashRepairOffers` are held opaque (`unknown[]`/structural failure
- *  entries): this module forwards them to `applyReconciled`/`presentCrashRepairOffers` without
- *  ever needing to know what a plugin or a crash-repair offer *is*. */
-export interface PutLoadOrderResult {
-  outcome: 'reconciled' | 'abandoned' | 'failed';
-  failures: LoadFailure[];
-  crashRepairOffers: unknown[];
-}
+/** A load-order PUT's own result — a tagged union matching `EditingController.LoadOrderOutcome`'s
+ *  own shape exactly (only the `reconciled` branch carries anything to report): `failed` and
+ *  `abandoned` are nothing-more-to-say endings, not a `reconciled` with empty arrays.
+ *  `crashRepairOffers` is generic over `TOffer` for the same reason the whole file is generic —
+ *  see `ReconcileStepDeps`. */
+export type PutLoadOrderResult<TOffer> =
+  | { outcome: 'reconciled'; failures: LoadFailure[]; crashRepairOffers: TOffer[] }
+  | { outcome: 'failed' }
+  | { outcome: 'abandoned' };
 
 export interface LoadFailure {
   name?: string | null;
@@ -164,8 +164,12 @@ export interface LoadFailure {
  *  a game directory or a tree *is*. Each step is injected exactly opaque enough to keep this file
  *  importing nothing (`src/test/contextBoundary.test.ts`): building a snapshot, sending it and
  *  applying its answer are all closures the composition root builds over Mod Management's and
- *  Editing's own types. */
-export interface ReconcileStepDeps {
+ *  Editing's own types.
+ *
+ *  Generic rather than `unknown`-typed, so the composition root's own wiring stays fully typed
+ *  (`LoadOrderPluginInput`, `LoadOrderProgress`, `CrashRepairOffer`) without this file ever
+ *  importing those types — a type parameter carries the shape without carrying the import. */
+export interface ReconcileStepDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown> {
   /** Arms this reconcile's own cancellation scope — `LoadOrderSync.arm()`, threaded in so a
    *  reconcile built through `createLoadOrderSync` and one built standalone (tests) share the
    *  identical contract. */
@@ -180,18 +184,18 @@ export interface ReconcileStepDeps {
   resolveGameDirectory: () => Promise<{ dataFolder: string } | undefined>;
   /** Every physical plugin copy, opaque — the only thing this sequencer does with the result is
    *  read its length (for the log line) and hand it whole to `putLoadOrder`. */
-  buildSnapshot: (dataFolder: string) => Promise<unknown[]>;
+  buildSnapshot: (dataFolder: string) => Promise<TPlugin[]>;
   /** Fresh per reconcile — a progressive reconcile's own ticks (`onProgress`) and the final
    *  `totalPlugins` `applyReconciled` logs against, from the same running state. */
-  makeProgressHandler: () => { onProgress: (status: unknown) => void; lastTotalPlugins: () => number };
+  makeProgressHandler: () => { onProgress: (status: TProgress) => void; lastTotalPlugins: () => number };
   putLoadOrder: (
-    plugins: unknown[], dataFolder: string, signal: AbortSignal, onProgress: (status: unknown) => void,
-  ) => Promise<PutLoadOrderResult>;
+    plugins: TPlugin[], dataFolder: string, signal: AbortSignal, onProgress: (status: TProgress) => void,
+  ) => Promise<PutLoadOrderResult<TOffer>>;
   syncFilterState: () => Promise<void>;
   /** The completed reconcile's whole hand-off to the tree — everything `GET /plugins` answers,
    *  bundled, so there is never a moment a caller could apply one part of it without the rest. */
   applyReconciled: (failures: LoadFailure[], totalPlugins: number) => Promise<void>;
-  presentCrashRepairOffers: (offers: unknown[]) => Promise<void>;
+  presentCrashRepairOffers: (offers: TOffer[]) => Promise<void>;
 }
 
 export interface ReconcileSequencer {
@@ -201,7 +205,9 @@ export interface ReconcileSequencer {
 /** ADR-0044: one reconcile, exactly as `extension.ts`'s own `makeReconcileLoadOrder` sequenced it
  *  — this is that function's body, ported statement-for-statement, now driven by injected steps
  *  instead of calling Mod Management/Editing directly. */
-export function createReconcileSequencer(deps: ReconcileStepDeps): ReconcileSequencer {
+export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown, TOffer = unknown>(
+  deps: ReconcileStepDeps<TPlugin, TProgress, TOffer>,
+): ReconcileSequencer {
   const reconcileOnce = async (): Promise<ReconcileOutcome> => {
     const { signal, abandoned } = deps.arm();
     const treeProgress = deps.makeProgressHandler();
