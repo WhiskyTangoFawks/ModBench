@@ -52,7 +52,7 @@ Fix all failures, rerun.
 |---|---|
 | **Fix now** | correct fix is unambiguous and stays within files this branch already touches (or their immediate surface) → apply, even if the issue never asked for it — a fix smaller than its ticket ships now |
 | **Escalate** | real, but value uncertain or blast radius wide → a second opinion is a question, never a ticket: ask dev (interactive) or the advisor (orchestrated); verdict is fix / reject / defer |
-| **Defer** | genuinely a work item — needs its own design or plan, or touches surface outside this branch → `gh issue create` (`tech debt` + `ready-for-agent`\|`needs-triage`); body = finding + analysis + rec; link it |
+| **Defer** | a work item of settled value — needs its own design or plan, or touches surface outside this branch → `gh issue create` (`tech debt` + `ready-for-agent`\|`needs-triage`); body = finding + analysis + rec, stated as fact; a body needing a "triage question" / "is this worth it" section is Escalate, not Defer — only its defer verdict files |
 | **Reject** | not real → note why |
 
 3. Rerun Step 1 gates if any fix changed logic.
