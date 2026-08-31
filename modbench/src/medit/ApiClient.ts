@@ -199,19 +199,6 @@ export interface ContainerChildSummary {
 // WorkingTreeState above already established.
 export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';
 
-/** One entry in the Conflicts node's own listing — a `RecordSummary` (the same shape an
- *  ordinary record-type browse already hands the tree) paired with the two facts that shape
- *  omits: `origin` (RecordSummary itself never carries it — every other RecordSummary consumer
- *  gets it from its own node's scope instead, but a Conflicts-node entry can be from any plugin
- *  at any origin, so it has to carry its own) and the record-wide `conflictAll` the listing
- *  exists to report. Never OnlyOne/NoConflict — the backend excludes both before this is ever
- *  constructed (medit-record-editor.md's "no tint" rule). */
-export interface ConflictingRecord {
-  record: RecordSummary;
-  origin: string;
-  conflictAll: ConflictAll;
-}
-
 // Worldspace / cell / placed-object tree (per-plugin).
 export interface WorldspaceSummary {
   formKey: string;

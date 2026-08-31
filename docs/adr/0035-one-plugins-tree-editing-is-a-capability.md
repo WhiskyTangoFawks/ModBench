@@ -84,11 +84,8 @@ copy the mirror has never seen is indexed, progressively, with the ordinary pres
 is no drift and no reread verb. VS Code's own file model is the precedent: a clean buffer follows
 the disk silently.
 
-**Loading is progressive and states its own incompleteness.** A plugin's records are browsable
-the moment that plugin is indexed, but conflict information is not correct until the final winner
-sweep. Rows gain chevrons as they land, and the view carries an explicit "conflict information not
-yet computed" message until the sweep completes. An absent conflict badge must never be mistakable
-for "no conflict".
+**Loading is progressive.** A plugin's records are browsable the moment that plugin is indexed,
+not held back until the whole load order settles. Rows gain chevrons as they land.
 
 ### View layout
 

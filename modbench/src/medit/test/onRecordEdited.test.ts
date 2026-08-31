@@ -56,7 +56,7 @@ describe('makeOnRecordEdited — compile-staleness refresh (#449)', () => {
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
-    expect(decorationProvider.refresh).toHaveBeenCalledTimes(2);
+    expect(decorationProvider.refresh).toHaveBeenCalledTimes(1);
   });
 
   it('broadcasts RECORD_EDITED to every open record panel', () => {

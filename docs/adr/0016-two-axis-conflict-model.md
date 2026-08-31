@@ -99,7 +99,7 @@ Investigation revealed that xEdit's `ConflictPriority` system exists because xEd
 ## ConflictAll has two independent scopes
 
 Record-wide status and per-field difference are different questions: "is the record's override
-stack, as a whole, in conflict" (a Plugins-tree badge question) versus "does *this specific field*
+stack, as a whole, in conflict" (a record-wide summary question) versus "does *this specific field*
 differ" (a compare-grid row question). Applying the one record-wide value to every rendered row
 turns a record with one differing field into a grid where every row carries the same color,
 including rows where every plugin agrees.
@@ -108,8 +108,8 @@ including rows where every plugin agrees.
 superseding the other:**
 
 - **Record-wide** — `ClassifyResult.ConflictAll` / `CompareResult.ConflictAll`,
-  computed once per record from its top-level fields' cell states: the Plugins-tree's per-record
-  conflict badge, meaning "the record's override stack as a whole."
+  computed once per record from its top-level fields' cell states — "the record's override stack
+  as a whole."
 - **Per-node, bottom-up** — `FieldDiff.ConflictAll`, computed once per node in the field-diff
   tree (every leaf, every struct member, every array element, at every depth), using the *same*
   reduction rule (`ConflictRules.Reduce`/`Escalate`) the record-wide value already used, just

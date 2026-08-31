@@ -2,7 +2,7 @@ import type { components } from './generated/api';
 import type {
   ApiClient, PluginMetadata, MasterIssue, RecordSummary, LoadOrderStatus, TrackStatus, TrackPhase,
   WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  UnansweredExternalChange, WorkingTreeState, ConflictingRecord, ContainerChildSummary,
+  UnansweredExternalChange, WorkingTreeState, ContainerChildSummary,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -18,7 +18,6 @@ export type RecordFieldEditOutcome =
 type PluginResponse = components['schemas']['PluginResponse'];
 type GeneratedMasterIssue = components['schemas']['MasterIssue'];
 type GeneratedRecordSummary = components['schemas']['RecordSummary'];
-type GeneratedConflictRecord = components['schemas']['ConflictRecord'];
 type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
 function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
   return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
@@ -113,22 +112,6 @@ function toRecordSummary(r: GeneratedRecordSummary): RecordSummary {
   };
 }
 
-// Same "generated enum is a plain union, trust the wire string" posture as
-// toWorkingTreeState — ConflictAll is JsonStringEnumConverter'd the same way, and the generator
-// already produces the string-literal union type here (no numeric-enum mismatch to work around,
-// unlike toTrackPhase's own note elsewhere in this file).
-function toConflictingRecord(c: GeneratedConflictRecord): ConflictingRecord {
-  return {
-    record: toRecordSummary(c.record ?? {}),
-    // ConflictRecord.record.origin (ADR-0036: RecordSummary's own wire shape carries it,
-    // this frontend's typed RecordSummary just never does — every other caller of
-    // toRecordSummary already knows origin from its own node's scope, but a Conflicts-node entry
-    // can be from any plugin at any origin, so it's threaded through separately here instead).
-    origin: c.record?.origin ?? '',
-    conflictAll: c.conflictAll ?? 'NoConflict',
-  };
-}
-
 function toRecordTypeCount(r: PluginRecordTypeCount): { type: string; count: number; displayName: string } {
   const type = r.type ?? '';
   return { type, count: r.count ?? 0, displayName: r.displayName ?? type };
@@ -200,12 +183,6 @@ export interface PluginRepository {
   // resolves that case from the load order, where a filename is unambiguous.
   getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
-  // The Conflicts node's own listing — every contested record whose record-wide ConflictAll
-  // isn't OnlyOne/NoConflict, already filter-narrowed by the backend. Throws on
-  // a genuine fetch failure rather than degrading to [] — an empty Conflicts node has to mean
-  // "nothing conflicts", never "the fetch failed", the same invariant getRecords/
-  // getRecordTypes already honour by throwing instead of hiding a failure as emptiness.
-  getConflicts(): Promise<ConflictingRecord[]>;
   // The FormKey picker's own search — free-text `query` matched against EditorID or
   // a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
   // (an unscoped/multi-type field searches across every record type). Capped at 20 results.
@@ -263,7 +240,6 @@ export interface PluginRepository {
 // is treated as hung rather than merely slow. No existing convention to anchor this to (checked
 // ADR-0026 and docs/specs/plugins.md) — 30s is a generous, ordinary HTTP-client default.
 // Deliberately not trying to distinguish "still working" from "actually stuck": a
-// multi-minute Conflicts fetch is exactly the case this must also catch — a
 // slow-but-eventually-resolving call and a genuinely hung one look the same to the tree,
 // which has no way to tell them apart. Constructor-overridable so a test can inject a tiny
 // value instead of faking timers.
@@ -388,14 +364,6 @@ export class ApiPluginRepository implements PluginRepository {
         items: (data?.items ?? []).map(toRecordSummary),
         total: data?.total ?? 0,
       };
-    });
-  }
-
-  async getConflicts(): Promise<ConflictingRecord[]> {
-    return this.withTimeout('GET /records/conflicts', async (signal) => {
-      const { data, error, response } = await this.client.GET('/records/conflicts', { signal });
-      this.ensureOk('GET /records/conflicts', response, error);
-      return (data ?? []).map(toConflictingRecord);
     });
   }
 
