@@ -387,7 +387,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     ///
     /// <para><b>Which children this still applies to, since #450.</b> Spriggit embeds
     /// <c>Cell.{Persistent,Temporary,Landscape,NavigationMeshes}</c> and <c>Worldspace.TopCell</c>
-    /// (<see cref="SpriggitCellEmbedCustomization"/>), and an embedded child is written inline into
+    /// (<see cref="CellEmbedCustomization"/>), and an embedded child is written inline into
     /// the parent's own stream — it never reaches a stream creator, so this class never sees it.
     /// What is left is the containers Spriggit does <i>not</i> embed:
     /// <c>Quest.{DialogBranches,DialogTopics,Scenes}</c> and <c>DialogTopic.Responses</c>, which stay

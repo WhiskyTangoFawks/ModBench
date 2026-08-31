@@ -224,7 +224,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     /// checks its embedded placed refs' <c>placement.parent_cell</c> afterward (the DialogTopic
     /// regression above, and every AC2 test in this file, exercise the index seam directly instead).
     /// Green on arrival: <c>Cell.Persistent</c>/<c>Temporary</c> are embedded inline in the Cell's own
-    /// document (<c>ContainerChildFields.SpriggitEmbeddedSlots</c>), so
+    /// document (<c>ContainerChildFields.EmbeddedSlots</c>), so
     /// <c>CreateWorkingTreeRecord</c>'s existing #488 re-derivation already rebuilds these rows for the
     /// new FormKey — verified by applying the rival below and watching it fail.
     /// </summary>

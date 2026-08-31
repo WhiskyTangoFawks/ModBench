@@ -135,7 +135,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - **A container's document carries its embedded children** (#450 / ADR-0041's #444 amendment,
     retiring #413 D8's deep-copy-and-strip and the `ContainerStripFields` posture with it). The
     embed scope is kept on our own grounds (ADR-0042 — one document per cell is the tree a human
-    wants), in `SpriggitEmbedCustomizations`:
+    wants), in `CellEmbedCustomization`/`WorldspaceEmbedCustomization`
+    (`Serialization/EmbedCustomizations.cs`):
     `Cell.{Persistent,Temporary,Landscape,NavigationMeshes}` and `Worldspace.TopCell` inline;
     `Quest.{DialogBranches,DialogTopics,Scenes}` and `DialogTopic.Responses` stay folder-split on
     both doors, which is why the codec keeps its child-stream/child-folder suppressions — deleting

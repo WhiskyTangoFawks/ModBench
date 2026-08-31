@@ -36,7 +36,7 @@ namespace MEditService.Core.Source;
 /// <para>Note that this table is deliberately <i>wider</i> than the set Spriggit embeds: it names
 /// every parent-child relationship, while only <c>Cell.{Persistent,Temporary,Landscape,
 /// NavigationMeshes}</c> and <c>Worldspace.TopCell</c> serialize inline (see
-/// <see cref="MEditService.Core.Serialization.SpriggitCellEmbedCustomization"/>). One is about
+/// <see cref="MEditService.Core.Serialization.CellEmbedCustomization"/>). One is about
 /// containment, the other about file layout; they are not the same list and must not be merged.</para>
 ///
 /// <para><see cref="MEditService.Tests.Source.ContainerChildFieldsCompletenessTests"/> runs the rule
@@ -125,7 +125,7 @@ internal static class ContainerChildFields
     /// anywhere. Stopping at one level refused it — and refused it citing an external change that had
     /// not happened.</para>
     ///
-    /// <para><b>Descent is bounded to <see cref="SpriggitEmbeddedSlots"/>, and that bound is
+    /// <para><b>Descent is bounded to <see cref="EmbeddedSlots"/>, and that bound is
     /// correctness rather than thrift.</b> A Quest's dialog topics and scenes are children in this
     /// class's table too, but they are folder-split — each is its own source unit with its own file.
     /// Descending into one and editing it here would write the change into the <i>quest's</i> document
@@ -188,7 +188,7 @@ internal static class ContainerChildFields
     /// anywhere. Stopping at one level refused it — and refused it citing an external change that had
     /// not happened.</para>
     ///
-    /// <para><b>Descent is bounded to <see cref="SpriggitEmbeddedSlots"/>, and that bound is
+    /// <para><b>Descent is bounded to <see cref="EmbeddedSlots"/>, and that bound is
     /// correctness rather than thrift.</b> A Quest's dialog topics and scenes are children in this
     /// class's table too, but they are folder-split — each is its own source unit with its own file.
     /// Descending into one and acting on it here would apply the change into the <i>quest's</i>
@@ -210,7 +210,7 @@ internal static class ContainerChildFields
                 return child is IMajorRecord settable ? new EmbeddedChildSlot(parent, slotName, slotIndex, settable) : null;
             }
 
-            if (!SpriggitEmbeddedSlots.Contains((parentType, slotName))) continue;
+            if (!EmbeddedSlots.Contains((parentType, slotName))) continue;
             if (FindEmbeddedChildSlot(child, formKey) is { } deeper) return deeper;
         }
 
@@ -286,8 +286,8 @@ internal static class ContainerChildFields
     /// <summary>
     /// The child slots that serialize <b>inline into their parent's own document</b> rather than to a
     /// file of their own — exactly the set
-    /// <see cref="MEditService.Core.Serialization.SpriggitCellEmbedCustomization"/> and
-    /// <see cref="MEditService.Core.Serialization.SpriggitWorldspaceEmbedCustomization"/> configure,
+    /// <see cref="MEditService.Core.Serialization.CellEmbedCustomization"/> and
+    /// <see cref="MEditService.Core.Serialization.WorldspaceEmbedCustomization"/> configure,
     /// restated here as data because <c>EmbedRecordsInSameFile</c> is a generation-time call with
     /// nothing readable at runtime.
     ///
@@ -298,7 +298,7 @@ internal static class ContainerChildFields
     /// the two customization classes: they are the source of truth and this is their runtime shadow.
     /// </para>
     /// </summary>
-    private static readonly HashSet<(string ParentType, string Slot)> SpriggitEmbeddedSlots =
+    private static readonly HashSet<(string ParentType, string Slot)> EmbeddedSlots =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"), ("Cell", "Landscape"), ("Cell", "NavigationMeshes"),
         ("Worldspace", "TopCell"),

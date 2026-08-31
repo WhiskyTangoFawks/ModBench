@@ -1300,7 +1300,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     ///
     /// <para>Recurses exactly one level, into a <c>Worldspace.TopCell</c> — the same bound
     /// <c>ContainerChildFields.FindEmbeddedChildSlot</c> already documents
-    /// (<c>SpriggitEmbeddedSlots</c>): nothing else embeds a container inside a container, so a placed
+    /// (<c>EmbeddedSlots</c>): nothing else embeds a container inside a container, so a placed
     /// reference two levels inside a worldspace's document (the shape
     /// <c>EmbeddedChildEditTests.APlacedRefInsideAWorldspacesTopCell_IsEditable_TwoEmbedLevelsDeepInOneFile</c>
     /// exercises) still gets a current <c>placement</c> row.</para>
