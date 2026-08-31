@@ -924,6 +924,23 @@ public class SchemaReflectorTests
         col.Apply(npc, System.Text.Json.JsonDocument.Parse("2.5").RootElement);
 
         Assert.Equal(2.5f, npc.HeightMin, precision: 3);
+
+        // MakeApplier's JSON-null success branch (`if (nullable) rp.SetValue(obj, null); return;`)
+        // is shared live infrastructure reached by every nullable scalar column via
+        // MakeColumnApplier/ProjectColumn — not header-specific, and (per #633's review) otherwise
+        // unexercised anywhere in the suite. height_min above can't exercise it: Npc.HeightMin is a
+        // non-nullable Single, so `nullable` is false for it and a JSON null there is ValueRejected,
+        // not a clear. facial_morph_intensity's backing property (Npc.FacialMorphIntensity) is
+        // `Single?`, which is exactly what GetColumnInfo's nullable test
+        // (Nullable.GetUnderlyingType(type) != null || !type.IsValueType) requires — a genuinely
+        // nullable scalar column, live on a real record type, to exercise the clear branch on.
+        var nullableCol = schemas["npc_"].RecordColumns.First(c => c.Name == "facial_morph_intensity");
+        Assert.NotNull(nullableCol.Apply);
+        npc.FacialMorphIntensity = 1.0f;
+
+        nullableCol.Apply(npc, System.Text.Json.JsonDocument.Parse("null").RootElement);
+
+        Assert.Null(npc.FacialMorphIntensity);
     }
 
     // ── Factions (struct array) extraction ────────────────────────────────────
