@@ -17,6 +17,9 @@ On ship: fold outcome into the surface spec — spec always = current behavior.
 [Milestones](https://github.com/WhiskyTangoFawks/ModBench/milestones) tab = roadmap. Milestone = epic (themed work; assigned issues = slices). Re-purposed: **no release/due-date semantics** — just a goal.
 
 - **One issue → one milestone**, or none. Finer hierarchy (epic→sub-epic): sub-issues/labels, not milestones.
+- **Assigning a milestone is how an issue gets prioritized** — a real step of triage, not bookkeeping.
+  When the right milestone is obvious, apply it at filing or triage time. Bugs and tech debt don't
+  require one — none is a valid state; don't force a fit.
 - **Order = title prefix** (no native priority field). Numbered = prioritized/sequenced (`1 — Mod-management maturity`…); unnumbered = speculative, sorts below all numbered.
 - Epic narrative = **milestone description**. Unscheduled roadmap items = real issues under the epic, not prose.
 
