@@ -492,48 +492,6 @@ reconcile toast (`EditingController.putLoadOrder`, one aggregated warning per lo
 unchanged and is not duplicated by this decoration — the same failures reach both, from the same
 response, so there is exactly one notification and one persistent, per-row explanation of why.
 
-### Compile-staleness decoration
-
-The state level of the Resolution stack (`CONTEXT.md`): within
-a tracked plugin, source stacks on the compiled binary, and this is the always-on signal that the
-two have diverged. This is an Editing fact about a tracked plugin's own git state — "the game
-can't see your edits yet" — not a Mod-Management fact about which physical file a name resolves to.
-
-- **Trigger.** A plugin row is compile-stale exactly when its source (the working tree, or a
-  commit landed since — commit stays ungated, ADR-0041) has moved past what
-  `refs/medit/last-compile/<plugin>` parked (`Save & Compile`, `CONTEXT.md`) — computed backend-side
-  (`ModFolders.CompileFreshnessOf`, `PluginResponse.CompileStale`/`LastCompiledAt` on every
-  `GET /plugins`), cheap and bounded by dirt per the freshness philosophy
-  ([medit-version-control.md](medit-version-control.md)): two git calls scoped to the plugin's own
-  `source/<plugin>/` subtree, never touching record count or load order. Never shown for an
-  untracked plugin, or a tracked plugin Track never parked a ref for (New Plugin into an
-  already-tracked mod folder, before its first compile) — both degrade to "nothing to compare
-  against" rather than a false positive.
-- **Visual encoding — load-order-derived, the same machinery as the missing-master/load-failure
-  decorations above (`PluginsTreeComposite`, icon/description/tooltip, append-never-replace),
-  not the file-override family's `FileDecorationProvider` tint:** this is a git-tracked-state fact
-  requiring a load order, not a filesystem one. A **description hint** (`⟳ Source ahead`) and a
-  **tooltip** ("Source ahead of binary — last compiled `<when>`", or "last compiled unknown" for a
-  ref with no readable timestamp) are appended after (never replacing) whatever the row already
-  carries. Deliberately **never claims the icon slot** — it never steals `iconPath` from a
-  higher-severity decoration already on the row (a load failure or a master issue), and renders no
-  icon of its own when neither of those claimed it either: the description hint is the primary
-  signal here, not an icon.
-- **Coexists with every other decoration on this tree.** A plugin can be compile-stale and carry
-  a master issue, or a load failure, all at once, and every decoration remains legible —
-  append-only by construction, the same convention the read-only-note decoration above already
-  establishes.
-- **Refresh.** No watcher (freshness philosophy: read/refresh time, never a watcher). Seeded at
-  reconcile off the same `GET /plugins` answer every other load-order-derived fact in this
-  hand-off already reads, and re-derived — without a reconcile — after a successful
-  **Save & Compile**, riding the same refresh `EditingController.setFilter`/`clearFilter` already
-  trigger (`refreshMatchingPlugins`, extended for this) rather than a second poller. A refused
-  compile changes nothing about any plugin's git state and triggers no refresh.
-- **Scope.** Plugin rows only, tracked plugins only — an untracked plugin has no state layer to
-  diverge (`CONTEXT.md`: "Editing requires tracking; viewing never does").
-- **Out of scope here.** Any auto-compile behavior — this is only the always-on row-level
-  signal that something there is worth investigating.
-
 ### The load order is mirrored, not loaded ([ADR-0044](../adr/0044-the-load-order-is-mirrored-not-loaded.md))
 
 Every loadout gesture — a reorder, an enable/disable, installing, uninstalling or reprioritising

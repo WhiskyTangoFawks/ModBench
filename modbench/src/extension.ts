@@ -104,17 +104,9 @@ let loadAbort: AbortController | undefined;
 // it's consulted — the same safe default PluginsTreeComposite.hasMatchingRecords itself falls
 // back to when the accessor has nothing to say.
 let matchingPlugins: Map<string, boolean> | undefined;
-// Per-plugin compile freshness, lowercased filename → PluginMetadata's own
-// {compileStale, lastCompiledAt}. Module level for the same reason as matchingPlugins above —
-// it changes on its own independent trigger (Save & Compile lands a new binary; the record filter
-// changes nothing about it) rather than through setLoadOrder's once-per-reconcile bundle, and
-// refreshMatchingPlugins below already re-fetches GET /plugins for the same reason, so this rides
-// that fetch rather than a second one. `undefined` reads as "nothing to show" — PluginsTreeComposite
-// .compileStaleOf's own safe default when the accessor has nothing to say.
-let compileStale: Map<string, { stale: boolean; lastCompiledAt: string | null }> | undefined;
 // Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
 // folder — rebuilt wholesale by registerHeldTrackedRepositories below, same "no stale
-// carryover" posture as matchingPlugins/compileStale above. Kept so a successful field
+// carryover" posture as matchingPlugins above. Kept so a successful field
 // edit can prompt the right repository's own status() and make the native Source Control panel
 // pick up the resulting working-tree change without a manual Refresh click.
 let pluginRepositories: Map<string, MinimalRepository> | undefined;
@@ -209,12 +201,6 @@ interface HeldPluginFiles {
    *  behind — reaches `matchingPlugins`. That is what keeps the map from outliving the state it
    *  describes. */
   matches: Map<string, boolean>;
-  /** Lowercased filename → this plugin's own compile-freshness answer, off the same
-   *  `GET /plugins` call as everything else in this hand-off — seeds the module-level
-   *  `compileStale` at every reconcile, the same way `matches` seeds `matchingPlugins`; the
-   *  independent post-compile refresh (`refreshMatchingPlugins`) updates it
-   *  again without a reconcile. */
-  compileStale: Map<string, { stale: boolean; lastCompiledAt: string | null }>;
 }
 
 function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<HeldPluginFiles> {
@@ -229,8 +215,6 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
       // wire contract (`masterIssues?: MasterIssue[] | null`).
       masterIssues: new Map(plugins.map((p) => [p.name, p.masterIssues ?? []] as const)),
       matches: new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)),
-      compileStale: new Map(plugins.map((p) =>
-        [p.name.toLowerCase(), { stale: p.compileStale, lastCompiledAt: p.lastCompiledAt }] as const)),
     };
   };
 }
@@ -245,26 +229,15 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
  *  failure here degrades to "no data" (matches everywhere) rather than throwing — a chevron guess
  *  is wrong in the same direction `hasMatchingRecords` already treats as safe, and a record
  *  filter's whole *point* is to be applied and inspected, so silently freezing every chevron would
- *  be a far worse failure than briefly over-showing them.
- *
- *  Also re-derives `compileStale` off the same `GET /plugins` call, and is called
- *  after a successful Save & Compile too (`compileAndReport`) — not just after a filter change.
- *  Riding the fetch this function already makes rather than adding a second near-identical one:
- *  both facts change on their own independent trigger, neither through `setLoadOrder`'s once-per-
- *  load bundle, so one shared "re-derive everything GET /plugins alone can answer, and re-render"
- *  function covers both. A read failure degrades `compileStale` to "no data" (nothing decorated)
- *  the same safe direction `matchingPlugins` already takes. */
+ *  be a far worse failure than briefly over-showing them. */
 async function refreshMatchingPlugins(repository: PluginRepository, outputChannel: vscode.LogOutputChannel): Promise<void> {
   try {
     // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
     const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
     matchingPlugins = new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const));
-    compileStale = new Map(plugins.map((p) =>
-      [p.name.toLowerCase(), { stale: p.compileStale, lastCompiledAt: p.lastCompiledAt }] as const));
   } catch (err) {
     outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
     matchingPlugins = undefined;
-    compileStale = undefined;
   }
   pluginsTree?.refreshDecorations();
 }
@@ -488,7 +461,7 @@ export function activate(context: vscode.ExtensionContext) {
     notifyConflictsComputed: makeNotifyConflictsComputed(recordPanels, repository, outputChannel),
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
-  const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics, repository, outputChannel);
+  const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot } = registerLoadoutSurfaces({ context, log, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
 
   wireExternalChangePolling(repository, controller, outputChannel, log);
@@ -1137,11 +1110,6 @@ function buildPluginsTreeComposite(
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
     hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
-    // Refreshed off the same module-level refreshMatchingPlugins function above,
-    // seeded at reconcile and re-derived after a successful Save & Compile.
-    // Undefined reads as "nothing to show" — the composite's own fallback for an accessor with
-    // nothing to say.
-    compileStaleOf: (file) => compileStale?.get(file.toLowerCase()),
   });
 }
 
@@ -1657,13 +1625,12 @@ function startExternalChangeDialogPolling(
  *  comment for why a reconcile is the only moment either offer reason can newly arise. */
 function makeCrashRepairOffersPresenter(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
-  repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
 ): (offers: CrashRepairOffer[]) => Promise<void> {
   return (offers) => presentCrashRepairOffers(
     offers,
     (message, options, ...buttons) => Promise.resolve(vscode.window.showWarningMessage(message, options, ...buttons)),
     (offer, atRef) => compileAndReport(
-      controller, diagnostics, { name: offer.plugin, origin: offer.origin }, atRef, repository, outputChannel,
+      controller, diagnostics, { name: offer.plugin, origin: offer.origin }, atRef,
     ),
   );
 }
@@ -1761,7 +1728,7 @@ function registerSaveAndCompileCommand(
     );
     if (!target) return;
 
-    await compileAndReport(controller, diagnostics, target, undefined, repository, outputChannel);
+    await compileAndReport(controller, diagnostics, target, undefined);
   });
 }
 
@@ -1797,7 +1764,7 @@ function registerCompileAtRefCommand(
     );
     if (confirmed !== 'Compile at main') return;
 
-    await compileAndReport(controller, diagnostics, target, 'main', repository, outputChannel);
+    await compileAndReport(controller, diagnostics, target, 'main');
   });
 }
 
@@ -1811,16 +1778,12 @@ function reportCompileTargetError(outputChannel: vscode.LogOutputChannel, comman
  *  (`CompileResult.succeeded`) the user got. `EditingController.compile` already surfaces a
  *  transport/HTTP failure itself (`null`), so this has nothing to report in that case.
  *
- *  A successful compile re-parks `refs/medit/last-compile/<plugin>` on the backend, which
- *  the Plugins tree's compile-staleness decoration has no other way to learn about — nothing here
- *  watches that ref, per the freshness philosophy (read/refresh time, never a watcher), so this is
- *  the refresh-time trigger. Rides `refreshMatchingPlugins` rather than a
- *  second `GET /plugins` fetch — same call the record-filter toggle already makes. Never run on a
- *  refusal: nothing about any plugin's git state changed. */
+ *  Nothing here re-reads `GET /plugins` after a successful compile — `EditingController.compile`'s
+ *  own doc comment is why: a compiled binary changes nothing that endpoint reports (masters, load
+ *  order, record content), only bytes on disk. */
 async function compileAndReport(
   controller: EditingController, diagnostics: vscode.DiagnosticCollection,
   target: CompileTarget, atRef: string | undefined,
-  repository: PluginRepository, outputChannel: vscode.LogOutputChannel,
 ): Promise<void> {
   const result = await controller.compile(target.name, target.origin, atRef);
   if (!result) return;
@@ -1837,7 +1800,6 @@ async function compileAndReport(
       ? `Modbench: Compiled "${target.name}"${refSuffix} — ${result.diagnostics.length} diagnostic(s), see Problems panel.`
       : `Modbench: Compiled "${target.name}"${refSuffix}.`,
   );
-  void refreshMatchingPlugins(repository, outputChannel);
 }
 
 /** Publishes one compile's diagnostics to the Problems panel, replacing whatever this plugin's
@@ -2344,9 +2306,6 @@ async function applyLoadOrderToTree(
     // renders off a match set stale from whatever reconcile preceded this one — every reconcile
     // re-runs this exact hand-off.
     matchingPlugins = held.matches;
-    // Same reason — a stale compileStale surviving a reconcile would decorate
-    // rows off the previous git state.
-    compileStale = held.compileStale;
     pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
     // The same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note.

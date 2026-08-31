@@ -33,14 +33,6 @@ export interface PluginMetadata {
   // having none. ADR-0035's dated §Filters amendment is what PluginsTreeComposite does
   // with a `false`: omits the row entirely rather than only suppressing its chevron.
   hasMatchingRecords: boolean;
-  // Whether this plugin's tracked source has moved past what
-  // refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet". False for an
-  // untracked plugin or one Track never parked a ref for (PluginResponse.FromMetadata's own
-  // degrade-safe answer).
-  compileStale: boolean;
-  // The parked ref's own commit timestamp (ISO-8601), for the tooltip that names it. Null
-  // exactly when compileStale's own backing answer had nothing to compare against.
-  lastCompiledAt: string | null;
 }
 
 export interface MasterIssue {

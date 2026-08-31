@@ -20,37 +20,36 @@ function fakeDecorationProvider(): RecordDecorationProvider {
 }
 
 // This is the actual production callback a field edit drives — driven here through a real
-// call, not by hand-feeding a decoration's own accessor the way PluginsTreeComposite.test.ts's own
-// compile-staleness tests do. That distinction is the point: those tests prove the decoration renders
-// correctly *given* a compile-staleness answer; this proves an edit is what makes that answer change
-// in the first place.
-describe('makeOnRecordEdited — compile-staleness refresh (#449)', () => {
-  it('calls the injected refreshCompileStale on every edit', () => {
-    const refreshCompileStale = vi.fn();
+// call, not by hand-feeding an accessor directly. `hasMatchingRecords` (ADR-0035 amending
+// ADR-0018) needs a re-derive on every edit since a field edit can change which records match the
+// active filter; this proves an edit is what triggers that re-derive.
+describe('makeOnRecordEdited — record-filter-match refresh', () => {
+  it('calls the injected refreshMatchingPlugins on every edit', () => {
+    const refreshMatchingPlugins = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshCompileStale, vi.fn(),
+      fakeTreeProvider(), fakeDecorationProvider(), new Set(), refreshMatchingPlugins, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
-    expect(refreshCompileStale).toHaveBeenCalledTimes(1);
+    expect(refreshMatchingPlugins).toHaveBeenCalledTimes(1);
   });
 
-  it('calls refreshCompileStale even when the record-row cache has no entry for this FormKey', () => {
+  it('calls refreshMatchingPlugins even when the record-row cache has no entry for this FormKey', () => {
     // markWorkingTreeState returning false means "not cached", not "the edit didn't happen" — the
-    // edit already landed server-side by the time onRecordEdited fires, so the plugin row's
-    // compile-staleness decoration must not be gated on the record-row cache's own hit/miss.
-    const refreshCompileStale = vi.fn();
+    // edit already landed server-side by the time onRecordEdited fires, so hasMatchingRecords's
+    // re-derive must not be gated on the record-row cache's own hit/miss.
+    const refreshMatchingPlugins = vi.fn();
     const onRecordEdited = makeOnRecordEdited(
-      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshCompileStale, vi.fn(),
+      fakeTreeProvider(false), fakeDecorationProvider(), new Set(), refreshMatchingPlugins, vi.fn(),
     );
 
     onRecordEdited('000001:Test.esp', 'Test.esp', 'SomeMod');
 
-    expect(refreshCompileStale).toHaveBeenCalledTimes(1);
+    expect(refreshMatchingPlugins).toHaveBeenCalledTimes(1);
   });
 
-  it('still refreshes the M/A badge decoration (#428), unchanged by the #449 addition', () => {
+  it('still refreshes the M/A badge decoration (#428)', () => {
     const decorationProvider = fakeDecorationProvider();
     const onRecordEdited = makeOnRecordEdited(fakeTreeProvider(true), decorationProvider, new Set(), vi.fn(), vi.fn());
 
@@ -86,7 +85,7 @@ describe('makeOnRecordEdited — Source Control refresh (#557)', () => {
   });
 
   it('calls refreshSourceControl even when the record-row cache has no entry for this FormKey', () => {
-    // Same reasoning as refreshCompileStale above: the edit already landed server-side
+    // Same reasoning as refreshMatchingPlugins above: the edit already landed server-side
     // by the time this fires, so the Source Control refresh must not be gated on the record-row
     // cache's own hit/miss either.
     const refreshSourceControl = vi.fn();

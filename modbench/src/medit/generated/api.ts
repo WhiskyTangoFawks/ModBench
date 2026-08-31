@@ -852,9 +852,6 @@ export interface components {
             winning?: boolean;
             hasMatchingRecords?: boolean;
             isTracked?: boolean;
-            compileStale?: boolean;
-            /** Format: date-time */
-            lastCompiledAt?: string | null;
         };
         ProblemDetails: {
             type?: string | null;

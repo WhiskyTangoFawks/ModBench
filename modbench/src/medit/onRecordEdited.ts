@@ -26,16 +26,16 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
  *  every other fact this cache already tolerates going stale between refreshes (the same
  *  no-watcher posture).
  *
- *  `refreshCompileStale`: injected rather than calling `extension.ts`'s own
+ *  `refreshMatchingPlugins`: injected rather than calling `extension.ts`'s own
  *  module-private `refreshMatchingPlugins` directly — the same shape
  *  `LoadOrderControllerDeps.refreshMatchingPlugins` already uses, and what keeps this file free of
  *  any dependency on `extension.ts`'s module-level state, which is what makes it importable in
  *  isolation at all. Called unconditionally, not gated on `markWorkingTreeState`'s own cache-hit:
- *  the edit already landed server-side by the time this fires, so the plugin row's compile-staleness
- *  decoration needs the same re-derive regardless of whether the record-row cache had this
+ *  the edit already landed server-side by the time this fires, so `hasMatchingRecords` (ADR-0035
+ *  amending ADR-0018) needs the same re-derive regardless of whether the record-row cache had this
  *  FormKey.
  *
- *  `refreshSourceControl`: same injected-callback shape as `refreshCompileStale`, for the
+ *  `refreshSourceControl`: same injected-callback shape as `refreshMatchingPlugins`, for the
  *  same reason — this is what makes VS Code's native Source Control panel pick up the resulting
  *  working-tree change without a manual Refresh click. Also called unconditionally: the edit
  *  landed server-side regardless of whether this record-row cache had a hit, so the SCM refresh
@@ -47,7 +47,7 @@ export function makeOnRecordEdited(
   treeProvider: PluginTreeProvider,
   recordDecorationProvider: RecordDecorationProvider,
   recordPanels: Set<vscode.WebviewPanel>,
-  refreshCompileStale: () => void,
+  refreshMatchingPlugins: () => void,
   refreshSourceControl: (plugin: string) => void,
 ): (formKey: string, plugin: string, origin: string) => void {
   return (formKey, plugin, origin) => {
@@ -55,7 +55,7 @@ export function makeOnRecordEdited(
     if (treeProvider.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
       recordDecorationProvider.refresh(recordResourceUri(plugin, origin, formKey));
     }
-    refreshCompileStale();
+    refreshMatchingPlugins();
     refreshSourceControl(plugin);
   };
 }

@@ -54,15 +54,6 @@ function hasMatchingRecords(r: PluginResponse): boolean {
   return r.hasMatchingRecords ?? true;
 }
 
-// The generated type is `boolean | undefined`/`string | null | undefined` for the same
-// NRT-unawareness every other optional-looking field on this wire shape already degrades
-// around — a backend predating this field reports "not stale", never a spurious true. Its own
-// function, same reason hasMatchingRecords above is one: keeps toPluginMetadata under its
-// complexity budget.
-function compileFreshnessOf(r: PluginResponse): { compileStale: boolean; lastCompiledAt: string | null } {
-  return { compileStale: r.compileStale ?? false, lastCompiledAt: r.lastCompiledAt ?? null };
-}
-
 // ADR-0044: the three-fact registration and its two derived verdicts. A backend that omits them
 // (the generated wire type is NRT-unaware) reads as an ordinary winning listed copy — the
 // shape every row had before losing copies were registered at all. Its own function for the same
@@ -90,7 +81,6 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
     origin: requireOrigin(r),
     masterIssues: (r.masterIssues ?? []).map(toMasterIssue),
     hasMatchingRecords: hasMatchingRecords(r),
-    ...compileFreshnessOf(r),
   };
 }
 
