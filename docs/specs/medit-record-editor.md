@@ -828,8 +828,17 @@ VMAD/Condition rows included since they render through this exact code now:
    (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two mandatory record editor fields this
    closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
    `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,
-   `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target` — visible
-   in the schema now, write round-trip verification tracked separately. Not every `A<Name>`
+   `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`. Seven of
+   those nine — every one reached as a record's own top-level column — have their write side compile-
+   and-reparse verified (#611, `MEditService.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
+   same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. The remaining two,
+   `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`, are reached one level *inside* another
+   struct column (`Static.NavmeshGeometry`/`Faction.VendorLocation`) rather than as a column of their
+   own, and have **no write path at all** through `RecordEditService.EditField` today:
+   `SchemaReflector.BuildStructSubField` — the builder for a Loqui struct nested inside another
+   struct/array column — returns `Apply: null` unconditionally for every nested struct, abstract union
+   or not, so this mechanism's write-side generalization (`BuildStructColumn`/`ApplyListJson`) never
+   reached them. Read-visible, write-inert — a real gap, not yet closed. Not every `A<Name>`
    type in the assembly qualifies: one (`ASceneActionType`) shares the naming convention without its
    generated class actually being `abstract`, so the mechanism correctly declines it (empty
    sub-schema, same as before) rather than guessing a discriminator scheme onto a type it cannot
