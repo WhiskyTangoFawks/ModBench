@@ -85,7 +85,7 @@ public interface ILoadOrderMirror
     PluginResponse CreatePlugin(string name, string path, string origin);
 
     /// <summary>
-    /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record repository,
+    /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record index,
     /// then recomputes winners. Call after committing a prepared save to disk.
     /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="KeyNotFoundException"/> if the load order does not name the plugin.
