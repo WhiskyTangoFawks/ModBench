@@ -493,18 +493,15 @@ public sealed class ExternalChangeEndpointMappingCharacterizationTests : IDispos
             throw new InvalidOperationException($"chmod {mode} {path} failed: {process.StandardError.ReadToEnd()}");
     }
 
-    // #604 finding, reported rather than fixed here (out of this ticket's scope — the coordinator
-    // owns the disposition): AbsorbExternalChange's declared `catch (Exception ex) when (ex is
-    // IOException or UnauthorizedAccessException)` cannot actually be reached by sabotaging the
-    // binary the way EditFieldApiTests does — Mutagen wraps a raw UnauthorizedAccessException from
-    // an unreadable/corrupt binary into its own RecordException before this handler ever sees it
-    // (confirmed empirically: ModFactory.Import's caller, Fallout4Mod.CreateFromBinary, does the
-    // wrapping), and Absorb's own write path (TrackService.SerializeToPristineFiles → a fresh scratch
-    // temp dir; SourceRepository.CommitPristineToMain → git subprocess calls, which fail as
-    // GitUnavailableException, not IOException) never touches modFolder with raw file I/O either. No
-    // characterization test for this path exists here for that reason — sabotaging modFolder produces
-    // an exception type the endpoint's own catch clause does not declare, so it would document a
-    // 500-turns-into-an-unhandled-exception gap, not the graceful mapping under refactor.
+    // No characterization test covers AbsorbExternalChange's own IOException/
+    // UnauthorizedAccessException catch — not because it's unreachable, but because reproducing the
+    // race in-process isn't practical. It IS reachable: ExternalChangeAbsorber.Absorb does an
+    // unwrapped File.ReadAllBytes(pluginPath) for its SHA256 provenance hash *after* the Mutagen
+    // deep-parse — a real TOCTOU window (MO2, xEdit or the user can delete/re-permission the file
+    // between the two reads, root CLAUDE.md's never-assume-exclusive-ownership rule made concrete).
+    // Reproducing it would need the deep-parse to succeed and the second read to then fail, on the
+    // same file, with no window to sabotage it in between. The catch guards a real race and must not
+    // be deleted as dead code.
 
     // Leaves the plugin binary untouched (so the Mutagen deep-parse both Keep and the binary-wrap
     // problem above depend on still succeeds) and instead sabotages the *record* write —
