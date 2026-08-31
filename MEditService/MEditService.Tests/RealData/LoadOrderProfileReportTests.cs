@@ -86,6 +86,42 @@ public sealed class LoadOrderProfileReportTests
         Assert.Contains("update the regexes", ex.Message, StringComparison.Ordinal);
     }
 
+    // #616: Reconciled was the only phase with this protection; every required phase gets it now,
+    // named individually so the message points straight at the drifted line.
+    [Fact]
+    public void Parse_Throws_WhenTheIndexInitLineIsMissing()
+    {
+        var missingIndexInit = ColdLines
+            .Where(l => !l.Message.StartsWith("DuckDB record index initialized", StringComparison.Ordinal))
+            .ToList();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ProfileRun.Parse(missingIndexInit, wallMs: 2100));
+
+        Assert.Contains("IndexInit", ex.Message, StringComparison.Ordinal);
+    }
+
+    // #616: the flip side of the required set. Indexing/Indexed/IndexPhases/Registering/Ingested
+    // must stay optional — an all-registered warm run (#586/ADR-0044's steady state, nothing newly
+    // indexed) never logs any of them, and that is not a rewording, it is what a correct warm
+    // measurement looks like.
+    [Fact]
+    public void Parse_DoesNotThrow_WhenNoPluginIsFreshlyIndexed_AllRegisteredWarmRun()
+    {
+        LogEntry[] allRegisteredWarmLines =
+        [
+            L("DuckDB record index initialized in 12 ms"),
+            L("Validated 1 indexed plugin(s) against disk in 3 ms"),
+            L("Fallout4.esm opened in 100 ms + 900 ms metadata"),
+            L("Registering Fallout4.esm (1000 records), already indexed and unchanged on disk"),
+            L("Load order reconciled in 900 ms: 1 arrived, 0 moved, 0 left, 1 held (first plugin usable after 900 ms, winner sweep 5 ms)"),
+        ];
+
+        var run = ProfileRun.Parse(allRegisteredWarmLines, wallMs: 900);
+
+        Assert.Equal(0, run.IndexedCount);
+        Assert.Equal(1, run.RegisteredCount);
+    }
+
     [Fact]
     public void Render_PutsColdAndWarmSideBySide()
     {
