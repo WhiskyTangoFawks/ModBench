@@ -47,6 +47,7 @@ import {
 } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
+import { wirePluginListInvalidation } from './wirePluginListInvalidation';
 import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
@@ -1123,7 +1124,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
-    ...wireLoadOrderWatchers(loadOrderSync!, instanceRoot),
+    ...wireLoadOrderWatchers(loadOrderSync!, instanceRoot, pluginListProvider),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
         if (node.kind !== 'plugin') continue;
@@ -1895,13 +1896,26 @@ function clearTreeWhenBackendDies(
  *  arrival on its own, so a second, uncoordinated wait in front of it (fsWatcher.ts's own
  *  historical 200ms) only adds latency without adding coalescing, since the sync's single timer
  *  is what every arrival, from whichever watcher, actually resets. Cuts the latency on this path
- *  from ~450ms to ~250ms. */
-function wireLoadOrderWatchers(sync: LoadOrderSync, instanceRoot: string): vscode.Disposable[] {
+ *  from ~450ms to ~250ms.
+ *
+ *  #653: the same three signals also drive the Plugins tab's own row provider — until this,
+ *  nothing did, so an external plugins.txt change (MO2, another tool, a hand edit) left the tab
+ *  stale until a manual Refresh. `wirePluginListInvalidation` adds that second consumer onto
+ *  each signal alongside `sync.request()`, never in place of it (unit-tested on its own,
+ *  `src/test/wirePluginListInvalidation.test.ts`, since this composition root has no seam of
+ *  its own). */
+function wireLoadOrderWatchers(
+  sync: LoadOrderSync, instanceRoot: string, pluginListProvider: PluginListProvider,
+): vscode.Disposable[] {
+  const events = wirePluginListInvalidation(
+    { onModsChange: () => sync.request(), onModlistChange: () => sync.request(), onPluginsChange: () => sync.request() },
+    pluginListProvider,
+  );
   return [
     sync,
-    createModlistWatcher(instanceRoot, () => sync.request(), 0),
-    createModsWatcher(instanceRoot, () => sync.request(), 0),
-    createPluginsTxtWatcher(instanceRoot, () => sync.request(), 0),
+    createModlistWatcher(instanceRoot, events.onModlistChange, 0),
+    createModsWatcher(instanceRoot, events.onModsChange, 0),
+    createPluginsTxtWatcher(instanceRoot, events.onPluginsChange, 0),
   ];
 }
 

@@ -72,6 +72,22 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 
+  // #653: `wirePluginListInvalidation` composes the load-order watcher signals onto a second
+  // consumer (`pluginListProvider.invalidate()`, alongside `sync.request()`) and is deliberately
+  // typed against `{ invalidate: () => void }` rather than the real `PluginListProvider`, so it
+  // never has to import Mod Management's vocabulary to do its job — the same reasoning
+  // loadOrderReconcile.ts documents above, and the same "zero imports" bar, guarded here so a
+  // later edit reaching for the concrete type doesn't erode it unnoticed. Unlike
+  // loadOrderReconcile.ts it is not held to the vocabulary scan below: it is not a joiner of both
+  // contexts, only a Mod-Management-internal wiring helper that happens to sit at the composition
+  // root, and its own field names (`onModsChange`, `onModlistChange`) are necessarily
+  // Mod-Management-flavored.
+  it('the plugin-list invalidation wiring imports from neither context', () => {
+    const imports = importsOf(read('wirePluginListInvalidation.ts'));
+    expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
+    expect(imports).toEqual([]);
+  });
+
   // Three modmanager files the New Plugin gesture touches, none of them the merged tree's
   // own row/child/composite/filter/sync set above but all of them the same shape — plain
   // modmanager/ modules reachable from the composition root, exactly the shape that once let a
