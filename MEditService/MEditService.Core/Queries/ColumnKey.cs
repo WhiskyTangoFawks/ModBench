@@ -18,7 +18,7 @@ namespace MEditService.Core.Queries;
 // always has — the whole test suite doesn't need rekeying for a case nothing exercises yet.
 public static class ColumnKey
 {
-    public const char Delimiter = '|';
+    private const char Delimiter = '|';
 
     public static string Of(string plugin, string origin) =>
         string.Equals(origin, PluginOrigin.DataDirectory, StringComparison.OrdinalIgnoreCase)

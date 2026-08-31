@@ -41,18 +41,6 @@ public sealed class PreparedPluginSave(
         }
     }
 
-    // Undoes a completed Commit(): restores the pre-save file and drops the phantom
-    // user-facing .bak that PrepareAsync already created for this now-abandoned attempt.
-    public void Rollback()
-    {
-        if (_rollbackPath == null) return;
-        File.Move(_rollbackPath, finalPath, overwrite: true);
-        _rollbackPath = null;
-        // File.Delete no-ops on a missing path, so no need to check File.Exists first
-        if (!string.IsNullOrEmpty(backupPath))
-            File.Delete(backupPath);
-    }
-
     public void Dispose()
     {
         try

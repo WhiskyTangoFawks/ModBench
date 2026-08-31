@@ -532,27 +532,12 @@ public static class PluginEndpoints
 }
 
 // #288: Path/Origin are the destination Mod Management's QuickPick resolved (an existing mod, a
-// freshly installed mod folder, or overwrite/) — matching LoadPluginRequest's own shape, since the
-// division of labour is the same: the caller resolves which physical folder, the backend acts on it.
+// freshly installed mod folder, or overwrite/) — the caller resolves which physical folder, the
+// backend acts on it.
 public record CreatePluginRequest(string Name, string Path, string Origin);
 
-public record LoadPluginRequest(string Path, string Origin);
-
-public record UnloadPluginRequest(string Plugin, string Origin);
-
-// #279: Path and Origin are the copy the plugin name resolves to *now*, resolved by Mod
-// Management. Plugin is the filename, which is what the load order names and what does not change.
-public record RereadPluginRequest(string Plugin, string Path, string Origin);
-
-// #97: no Origin — the plugin name rides the route (matching CompileRequest's own shape), and
-// unlike RereadPluginRequest there is no second physical copy to resolve; Mod Management's own
-// plugin-list model carries no origin at all (plugins.txt has none to read), so this is the only
-// participation-toggle shape that matches what the caller actually has.
-public record SetPluginParticipationRequest(bool Participates);
-
-// #414: Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — Plugin/Path
-// aren't needed here, unlike RereadPluginRequest's: Origin alone is enough for TrackService to
-// resolve every plugin sharing that mod folder.
+// #414: Preset is the wire-safe string form of SourcePreset ("Edits"/"Everything") — no Plugin/Path
+// needed: Origin alone is enough for TrackService to resolve every plugin sharing that mod folder.
 public record TrackRequest(string Origin, string Preset);
 
 public record TrackResponse(string Origin);
