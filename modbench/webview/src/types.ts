@@ -89,9 +89,9 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // doc comment) — this key is only ever used as an opaque local lookup key against JSON the backend
 // produced, never sent back to it, so the two sides folding differently has no wire consequence.
 //
-// ADR-0036: `origin` is required — every hand type that feeds this
-// (RecordDetail.origin, PluginInfo.origin) is a required `string` too, so a
-// caller cannot skip specifying it and silently collapse onto the elided Data origin.
+// ADR-0036: `origin` is required — every wire type that feeds this (RecordDetail.origin,
+// PluginResponse.origin) is a required, non-nullable `string` too, so a caller cannot skip
+// specifying it and silently collapse onto the elided Data origin.
 //
 // `origin` still accepts a literal `null` value, even though every one of those hand
 // types claims it never will be. Investigated: it provably can't be, today — the

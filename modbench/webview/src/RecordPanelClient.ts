@@ -1,5 +1,4 @@
 import { createApiClient } from '../../src/medit/ApiClient';
-import type { components } from '../../src/medit/generated/api';
 import type { ColumnKey, CompareResult } from './types';
 import { columnKey } from './types';
 import { vscode } from './vscode';
@@ -12,33 +11,19 @@ function log(level: LogLevel, message: string) {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level, message });
 }
 
-// The record panel's plugin list — a structural subset of the backend's PluginResponse, taken
-// *from* it rather than restated beside it, so the subset cannot drift from the wire it subsets.
-//
-// `origin` (ADR-0036) keys immutableSet by compound column identity. `inLoadOrder` (ADR-0035) is
-// whether the effective load order names this copy — distinct from isImmutable: a vanilla/DLC
-// master is immutable and still in the load order, while a shadowed copy is immutable *because*
-// it is not, and PluginHeader needs both to word its tooltip and decide whether to dim (see
-// recordUtils.ts's readOnlyReason). `isTracked` (ADR-0041) is what lets the panel render a column
-// as visibly read-only with the way out named, instead of only discovering it on a refused attempt.
-export type PluginInfo = Pick<
-  components['schemas']['PluginResponse'],
-  'name' | 'isImmutable' | 'loadOrderIndex' | 'origin' | 'inLoadOrder' | 'isTracked'
->;
-
 // The composite view for a single record. `load` fires compare + changes + plugins
 // in parallel; a compare failure fails the whole load (the panel has nothing to show), while a
 // changes/plugins failure comes back as `null` so the panel leaves that slice of state
 // untouched — only the parts that succeeded are applied.
 // The immutable set is resolved from the plugin list here (behind the client), null when plugins
-// failed, so the panel doesn't re-derive it. The raw plugin list itself (`PluginInfo[]`) is
+// failed, so the panel doesn't re-derive it. The raw plugin list itself (`PluginResponse[]`) is
 // not exposed on this type — target-plugin resolution for
 // the column-header menu happens via a VS Code QuickPick in the extension host, which asks
 // PluginRepository directly rather than through this webview-side client.
 export type LoadResult =
   | {
       ok: true; result: CompareResult; immutableSet: Set<ColumnKey> | null;
-      // ADR-0035: mirrors immutableSet's own construction (same PluginInfo list, same
+      // ADR-0035: mirrors immutableSet's own construction (same plugin list, same
       // columnKey() keying) — null exactly when immutableSet is (the /plugins fetch itself
       // failed), never independently.
       notInLoadOrderSet: Set<ColumnKey> | null;
@@ -94,8 +79,8 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
         client.GET('/load-order/status', {}),
       ]);
       if (!cmp.response.ok) return { ok: false, error: `HTTP ${cmp.response.status}` };
-      // No cast: PluginInfo is a Pick of the generated PluginResponse, so this is an ordinary
-      // widening assignment the compiler checks (#627 — it used to be an unchecked `as`).
+      // No cast — this is the generated PluginResponse[] straight off the client (#627; it used
+      // to be an unchecked `as PluginInfo[]` onto a hand-declared subset).
       const pluginList = plugins.response.ok ? (plugins.data ?? null) : null;
       return {
         ok: true,
@@ -107,7 +92,7 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
         // asserts a documented refinement rather than distrust of the generated types.
         result: cmp.data as CompareResult,
         // ADR-0036: keyed by compound column identity, not bare plugin name — two
-        // PluginInfo entries sharing a filename but differing in origin must stay distinct
+        // plugin entries sharing a filename but differing in origin must stay distinct
         // Set members, or one origin's mutability silently wins for both (RecordPanel.tsx's
         // immutableSet.has(...) checks).
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,

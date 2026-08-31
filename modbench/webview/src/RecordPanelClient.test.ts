@@ -66,7 +66,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
   });
 
-  // ADR-0036: the genuinely red case — two PluginInfo entries sharing a filename but
+  // ADR-0036: the genuinely red case — two plugin entries sharing a filename but
   // differing in origin must produce two distinct Set members, or one origin's mutability
   // silently wins for both columns (RecordPanel.tsx's immutableSet.has(...) checks). A bare
   // `.map(p => p.name)` would collapse both into one entry.
@@ -92,7 +92,7 @@ describe('RecordPanelClient.load', () => {
   });
 
   // ADR-0036: notInLoadOrderSet mirrors immutableSet's own compound-identity construction
-  // (same PluginInfo list, same columnKey()) — a copy the load order doesn't name is immutable
+  // (same plugin list, same columnKey()) — a copy the load order doesn't name is immutable
   // *and* absent from it, and PluginHeader needs the second fact independently of the first (a
   // vanilla master is immutable but still in the load order, and must not read the same way).
   it('computes notInLoadOrderSet from inLoadOrder flags, keyed by compound identity like immutableSet', async () => {

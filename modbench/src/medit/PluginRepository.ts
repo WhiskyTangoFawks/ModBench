@@ -191,7 +191,7 @@ export class ApiPluginRepository implements PluginRepository {
     return data ?? [];
   }
 
-  async getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]> {
+  async getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]> {
     return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
       const { data, error, response } = await this.client.GET('/plugins/{plugin}/record-types', {
         params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
