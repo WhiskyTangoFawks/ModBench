@@ -943,8 +943,7 @@ new value, so a large array or struct edit can't flood the panel.
   tested there (`MEditService/CLAUDE.md`), not re-asserted from the webview; the frontend tests
   consume representative compare responses as fixtures.
 - **Integration seam** (`npm run test:integration`, real VS Code process): navigation opens a
-  record panel, and command registration holds — add any new command id(s) to
-  `EXPECTED_COMMANDS`.
+  record panel, and command registration holds.
 
 ## Out of Scope
 

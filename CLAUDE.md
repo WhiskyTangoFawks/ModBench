@@ -66,10 +66,10 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   From a worktree, read it at the main checkout's absolute path — a relative grep
   there matches nothing and returns success, which reads as "no such convention
   upstream" rather than "you looked in the wrong place".
-- New end-to-end command = 4 touch points, else half-wired: backend endpoint +
+- New end-to-end command = 3 touch points, else half-wired: backend endpoint +
   `/regenerate-api` → frontend (`PluginRepository`/`EditingController`) →
-  `package.json` commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in
-  integration test.
+  `package.json` commands/menus + `extension.ts` registration. (`EXPECTED_COMMANDS` in
+  the integration test is derived from `package.json`, so it needs no separate edit.)
 - **xEdit decides plugin-editing UX; VS Code decides the vehicle.** Before designing
   any record-editing interaction, read how xEdit does it — `docs/research/xedit-ux-audit.md`
   first, then `references/TES5Edit/xEdit/xeMainForm.pas` (`vstView*` handlers),

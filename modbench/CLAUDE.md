@@ -96,7 +96,7 @@ Optionality that exists *so stale fixtures compile* is neither, and does not bel
 
 Real VS Code process via `@vscode/test-cli` against a mock HTTP server (port 15172) — no real backend needed.
 
-Update when: new command (add ID to `EXPECTED_COMMANDS`) or new `extension.ts` behavior. Skip for `EditingController`/`PluginRepository`/`BackendManager`/`PluginTreeProvider` — unit-tested without VS Code.
+Update when: new `extension.ts` behavior (`EXPECTED_COMMANDS` derives from `package.json`, so a new command needs no edit here). Skip for `EditingController`/`PluginRepository`/`BackendManager`/`PluginTreeProvider` — unit-tested without VS Code.
 
 ## Logging
 

@@ -308,108 +308,21 @@ describe('Modbench output channel (#198)', () => {
 // ── Command registration ───────────────────────────────────────────────────────
 
 describe('modbench command registration', () => {
-  const EXPECTED_COMMANDS = [
-    'modbench.openEditor',
-    'modbench.openEditorBeside',
-    'modbench.openCompare',
-    'modbench.openHeader',
-    // The array-op right-click commands (record editor's field grid).
-    'modbench.array.add',
-    'modbench.array.remove',
-    'modbench.array.moveUp',
-    'modbench.array.moveDown',
-    // VMAD's structural-op right-click commands (record editor's field grid).
-    'modbench.vmad.addScript',
-    'modbench.vmad.removeScript',
-    'modbench.vmad.addProperty',
-    'modbench.vmad.removeProperty',
-    'modbench.vmad.setScriptFlags',
-    'modbench.vmad.setPropertyFlags',
-    // ADR-0039: the string cell's own right-click command (record editor's field grid).
-    'modbench.field.openExtended',
-    'modbench.closeMedit',
-    // One Refresh for every Mod-Management source.
-    'modbench.refresh',
-    'modbench.newPlugin',
-    'modbench.setFilter',
-    'modbench.clearFilter',
-    'modbench.setFilterFromDocument',
-    'modbench.showReferencedBy',
-    // The Referenced By view's own copy command — see packageJson.test.ts for its
-    // view/item/context and keybinding contributions (declarative, not exercised here).
-    'modbench.referencedByTree.copy',
-    'modbench.modList.filter',
-    'modbench.modList.clearFilter',
-    'modbench.modList.switchProfile',
-    'modbench.modList.launchMedit',
-    'modbench.modList.view.winningAtTop',
-    'modbench.modList.view.losingAtTop',
-    'modbench.modList.deploy',
-    'modbench.modList.purge',
-    'modbench.launch',
-    'modbench.modList.installFromArchive',
-    'modbench.modList.installFromFolder',
-    'modbench.modList.mod.openInExplorer',
-    'modbench.modList.mod.addSeparatorBelow',
-    'modbench.modList.mod.moveToSeparator',
-    'modbench.modList.mod.uninstall',
-    'modbench.modList.mod.viewOnNexus',
-    'modbench.modList.separator.rename',
-    'modbench.modList.separator.addSeparatorBelow',
-    'modbench.modList.separator.delete',
-    'modbench.modList.overwrite.reveal',
-    // The Downloads row's native `view/item/context` menu commands on the
-    // modbench.downloads TreeView — see package.json's contributes.menus["view/item/context"]
-    // (regex `when` gating, not testable from this harness) and DownloadsProvider's
-    // contextValue wiring (unit-tested). No .open/.reveal:
-    // VS Code auto-generates modbench.downloads.focus for the contributed view, and
-    // the workspace-root Explorer already reveals downloads/.
-    'modbench.downloads.install',
-    'modbench.downloads.visitNexus',
-    'modbench.downloads.openFile',
-    'modbench.downloads.openMeta',
-    'modbench.downloads.delete',
-    'modbench.downloads.hide',
-    'modbench.downloads.unhide',
-    // Downloads narrows by name through the same widget as every other list view.
-    'modbench.downloads.filter',
-    // Every name filter is durable, so every one of them has an explicit clear — the
-    // slot-1 clear variant, gated on that view's own filter-active context key.
-    'modbench.downloads.clearFilter',
-    // The view/title Sort by… overflow command and the Show-hidden title-bar toggle.
-    'modbench.downloads.sortBy',
-    'modbench.downloads.showHidden',
-    'modbench.downloads.hideHidden',
-    'modbench.pluginListTree.filter',
-    'modbench.pluginListTree.clearFilter',
-    'modbench.pluginListTree.revealInExplorer',
-    // ADR-0041: the Track gesture. Gated to `viewItem == plugin` in package.json and hidden
-    // from the palette — it needs the clicked row's plugin name.
-    'modbench.pluginListTree.track',
-    // Save & Compile — reachable from the record editor's editor/title icon, the tree row's
-    // context menu, and the palette (falls back to a QuickPick when invoked with no plugin in hand).
-    'modbench.saveAndCompile',
-    // Compile-at-main behind its own confirmation. Gated to the clicked row and hidden from
-    // the palette, same posture as Track — naming a ref to compile at with no plugin in hand isn't
-    // a gesture the palette can support.
-    'modbench.pluginListTree.compileAtMain',
-    // Modbench: Rebase onto Updated Baseline — the offered rebase's re-runnable form. Gated
-    // to the clicked row and hidden from the palette, same posture as Track/compileAtMain.
-    'modbench.pluginListTree.rebase',
-    // The three lifecycle gestures — Add (recordType row), Remove/Change FormID… (record
-    // row). Gated to the clicked row and hidden from the palette, same posture as Track/rebase —
-    // each needs the clicked row's own identity, with no ambient fallback.
-    'modbench.record.create',
-    'modbench.record.delete',
-    'modbench.record.renumber',
-    // Copy as Override Into…/Copy as New Record Into… — on both the plugins-
-    // tree record row and the record editor's own column header, sharing one implementation path.
-    // Gated and hidden from the palette the same way, for the same reason.
-    'modbench.record.copyAsOverride',
-    'modbench.record.copyAsNewRecord',
-  ];
+  // Derived from package.json rather than hand-copied (#634) — a contributed command that
+  // was never registered (or vice versa) now fails here instead of silently matching a
+  // hand-written list that forgot it too. __dirname is out/test/integration/ once compiled
+  // (tsconfig.integration.json), three levels under the modbench package root — same
+  // resolution the bundle-freshness test above already relies on.
+  const pkg = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf8'),
+  ) as { contributes: { commands: { command: string }[] } };
+  const EXPECTED_COMMANDS = pkg.contributes.commands.map((c) => c.command);
 
   it('registers all expected commands on activation', async () => {
+    // A derived list can go silently empty (renamed/missing contributes.commands) in a way a
+    // hand-typed array never could — that would make the loop below assert nothing and still
+    // pass. Guard the floor explicitly rather than let emptiness read as success.
+    assert.ok(EXPECTED_COMMANDS.length > 0, 'derived command list is empty — the manifest shape changed');
     const all = await vscode.commands.getCommands(/* filterInternal */ true);
     for (const cmd of EXPECTED_COMMANDS) {
       assert.ok(all.includes(cmd), `Command not registered: ${cmd}`);

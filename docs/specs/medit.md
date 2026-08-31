@@ -122,9 +122,9 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
   (internal; also bound to
   tree click), New Plugin…, Track…, Save & Compile, and Run Script… (planned; context = the
   active record if a panel is open, else global).
-- A new end-to-end command is four touch points, or it is half-wired: backend endpoint →
+- A new end-to-end command is three touch points, or it is half-wired: backend endpoint →
   `/regenerate-api` → frontend (`PluginRepository`/`EditingController`) → `package.json`
-  commands/menus + `extension.ts` registration → `EXPECTED_COMMANDS` in the integration test.
+  commands/menus + `extension.ts` registration.
 
 ### Architecture / seams
 
@@ -152,8 +152,7 @@ Per-surface testing decisions live in the surface specs. Shared:
   consume representative responses as fixtures.
 - **Integration seam** (`npm run test:integration`, real VS Code process): the Plugins tree
   builds from a load order, navigation opens a record panel, the record filter prunes the tree, and
-  command registration holds — add any new command id(s) to `EXPECTED_COMMANDS` (per
-  `modbench/CLAUDE.md`).
+  command registration holds.
 
 ## Out of Scope
 
