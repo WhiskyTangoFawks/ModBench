@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #451 slice E: <see cref="SourceRecordPath"/> speaks the Spriggit flat layout —
+/// #451 slice E: <see cref="SourceRecordPath"/> speaks the source tree's flat layout —
 /// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>
 /// (#441: one root <c>source/</c> folder per mod, not a per-plugin <c>&lt;plugin&gt;.source/</c> sibling
 /// tree), group-folder names resolved via <see cref="RecordTypeDispatch"/> rather than hardcoded here,

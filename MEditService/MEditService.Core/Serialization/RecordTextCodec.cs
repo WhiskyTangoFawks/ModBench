@@ -150,7 +150,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // indentation down to bare \n (see the buffering note above).
         //
         // Deliberately *no* trailing newline (#450, reversing #367's own addition): the kernel's
-        // Finalize writes the closing brace and nothing after it, and so do Spriggit trees, so a
+        // Finalize writes the closing brace and nothing after it, and so does the source tree, so a
         // trailing \n here was this codec's own divergence from the document shape it is supposed to
         // share with the whole-mod door — one of exactly two the #444 spike found. Canonical form is
         // now bare \n newlines with nothing after the closing brace, on every platform, and

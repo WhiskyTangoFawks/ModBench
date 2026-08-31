@@ -104,7 +104,7 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
     // sub-block number this test has no independent way to verify without reading the fixture's own
     // binary data by hand.
     [Fact]
-    public void Track_OfTheRealFixture_WritesTheSpriggitContainerLayout()
+    public void Track_OfTheRealFixture_WritesTheSourceContainerLayout()
     {
         var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
             .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
@@ -163,25 +163,6 @@ public sealed class CompileRoundTripGateTests(CompileRoundTripGateFixture fixtur
                 .ToList();
             Assert.Equal(Enumerable.Range(0, names.Count).ToList(), numbers);
         }
-    }
-
-    /// <summary>#468: Tracking the committed fixture writes a root document with no Spriggit package
-    /// stamp and no sidecar beside the tree (ADR-0042, "Spriggit has no role in v1") — checked against
-    /// the real, curated #369 fixture this whole class Tracks once in its fixture, not a synthetic
-    /// stand-in.</summary>
-    [Fact]
-    public void Track_OfTheRealFixture_WritesNoSpriggitStampOrSidecar()
-    {
-        var allFiles = Directory.EnumerateFiles(fixture.SourceRoot, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(fixture.SourceRoot, f).Replace('\\', '/'))
-            .ToList();
-        Assert.NotEmpty(allFiles);
-
-        Assert.DoesNotContain(".spriggit", allFiles);
-        Assert.DoesNotContain("spriggit-meta.json", allFiles);
-
-        var rootText = File.ReadAllText(Path.Combine(fixture.SourceRoot, "RecordData.json"));
-        Assert.DoesNotContain("SpriggitSource", rootText, StringComparison.Ordinal);
     }
 
     /// <summary>

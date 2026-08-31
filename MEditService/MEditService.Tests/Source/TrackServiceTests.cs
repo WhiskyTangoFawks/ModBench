@@ -17,7 +17,7 @@ namespace MEditService.Tests.Source;
 /// #414's orchestration seam end to end: a real loaded load order, a real (small) plugin with real
 /// records, tracked through <see cref="TrackService"/>. #451 slice A rewrote Track's own write path
 /// to serialize through the whole-mod door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>)
-/// instead of the per-record codec, so these assertions now check the Spriggit layout — group folders,
+/// instead of the per-record codec, so these assertions now check the source layout — group folders,
 /// root <c>RecordData.json</c> — rather than the pre-#451 flat
 /// <c>&lt;recordType&gt;/&lt;originModKey&gt;/&lt;hex6&gt;.json</c> shape. Deliberately a small synthetic
 /// fixture, not the mega-plugin — mega-scale timing is a measured, reported number, not a
@@ -26,7 +26,7 @@ namespace MEditService.Tests.Source;
 public sealed class TrackServiceTests
 {
     [Fact]
-    public async Task TrackAsync_RealLoadOrder_WritesTheSpriggitTree_AndTracksTheModFolder()
+    public async Task TrackAsync_RealLoadOrder_WritesTheSourceTree_AndTracksTheModFolder()
     {
         var modFolder = Directory.CreateTempSubdirectory("medit-trackservice-").FullName;
         var gameDir = Directory.CreateTempSubdirectory("medit-trackservice-game-").FullName;

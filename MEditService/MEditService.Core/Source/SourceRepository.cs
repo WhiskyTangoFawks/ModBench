@@ -54,7 +54,7 @@ public static class SourceRepository
             GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
             GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
             GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-            // #451: the Spriggit flat layout's own file names routinely carry a space
+            // #451: the source tree's flat layout has file names that routinely carry a space
             // ("<EditorID> - <hex6>_<ModKeyFileName>.json") — git's default quotePath=true C-quotes any
             // path with a space (or non-ASCII byte) in porcelain output, which the pre-#451 flat
             // <recordType>/<originModKey>/<hex6>.json layout never triggered (hex-only path segments).
