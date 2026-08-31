@@ -144,7 +144,6 @@ public sealed class EndpointReceptionLoggingTests
             throw new NotSupportedException();
         public RecordDetail? GetRecord(string formKey) => throw new NotSupportedException();
         public CompareResult? GetCompare(string formKey) => throw new NotSupportedException();
-        public IReadOnlyList<ConflictRecord> GetConflicts() => throw new NotSupportedException();
         public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null) => throw new NotSupportedException();
         public IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey) => [];
         public IReadOnlyList<string> GetConditionFunctions() => throw new NotSupportedException();

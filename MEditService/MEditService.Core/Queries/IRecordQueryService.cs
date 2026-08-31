@@ -16,11 +16,6 @@ public interface IRecordQueryService
 
     CompareResult? GetCompare(string formKey);
 
-    /// <summary>The Conflicts node's own listing — every contested record whose record-wide
-    /// ConflictAll is not OnlyOne/NoConflict, filter-narrowed the same way GetRecords/
-    /// GetPluginRecordTypes already are.</summary>
-    IReadOnlyList<ConflictRecord> GetConflicts();
-
     IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null);
     IReadOnlyList<ReferenceResult> GetReferences(string targetFormKey);
 
