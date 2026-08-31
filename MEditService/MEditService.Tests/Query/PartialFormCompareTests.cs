@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #491 AC1: a master Cell + a later plugin's Partial Form override of it, carrying one REFR child.
+/// A master Cell + a later plugin's Partial Form override of it, carrying one REFR child.
 /// The override's own fields (even ones that genuinely differ from the master, not merely absent
 /// ones — CONTEXT.md's Partial Form entry: "its own fields are ignored... full stop") must not
 /// register as a conflict; the REFR is a separate record and is unaffected.
@@ -87,7 +87,7 @@ public sealed class PartialFormCompareTests : IDisposable
         _fixture.Dispose();
     }
 
-    // ── Slice 2: IsPartialForm threads through the read model ──────────────────────────────
+    // ── IsPartialForm threads through the read model ────────────────────────────────────────
 
     [Fact]
     public void GetCompare_MasterOverride_IsPartialFormFalse()
@@ -107,7 +107,7 @@ public sealed class PartialFormCompareTests : IDisposable
         Assert.True(partial.IsPartialForm);
     }
 
-    // ── AC1: cell shows no conflict; REFR shows normally ────────────────────────────────────
+    // ── Cell shows no conflict; REFR shows normally ─────────────────────────────────────────
 
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_ShowsNoConflict()
@@ -127,7 +127,7 @@ public sealed class PartialFormCompareTests : IDisposable
         Assert.DoesNotContain("Partial.esp", waterHeight.CellStates.Keys);
     }
 
-    // ── Slice 4: per-field WinnerColumn/WinnerValue fall through past a Partial Form override ──
+    // ── Per-field WinnerColumn/WinnerValue fall through past a Partial Form override ──────────
 
     [Fact]
     public void GetCompare_CellWithPartialFormOverride_WaterHeightWinnerFallsThroughToMaster()
@@ -153,7 +153,7 @@ public sealed class PartialFormCompareTests : IDisposable
         Assert.Equal("Partial.esp", compare.Overrides[0].Plugin);
     }
 
-    // ── Slice 5: golden capture (mirrors CompareGoldenTests' own Project shape) ─────────────
+    // ── Golden capture (mirrors CompareGoldenTests' own Project shape) ──────────────────────
 
     private static object Project(CompareResult r) => new
     {

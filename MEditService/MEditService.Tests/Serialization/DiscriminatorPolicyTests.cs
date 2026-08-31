@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>
-/// #450 S2 (ADR-0041's #444 amendment): the codec adopts the whole-mod path's <b>discriminator
+/// ADR-0041: the codec adopts the whole-mod path's <b>discriminator
 /// policy</b> — a top-level <c>MutagenObjectType</c> is written only when the record's group element
 /// type is abstract, so the path alone cannot say which concrete type the document holds (GLOB splits
 /// into GlobalFloat/GlobalBool/…). Everything else dispatches its concrete
@@ -37,7 +37,7 @@ public sealed class DiscriminatorPolicyTests
 
     /// <summary>
     /// WEAP's group element type is the concrete <c>Weapon</c>, so the path is unambiguous and the
-    /// whole-mod door writes no discriminator. The codec now matches it.
+    /// whole-mod door writes no discriminator. The codec matches it.
     /// </summary>
     [Fact]
     public async Task SerializeToBytesAsync_ForAWeapon_WritesNoTopLevelDiscriminator()
@@ -49,7 +49,7 @@ public sealed class DiscriminatorPolicyTests
             $"A concrete-element type must not self-describe:\n{System.Text.Encoding.UTF8.GetString(bytes)}");
     }
 
-    /// <summary>AC2's second half: the document no longer names its type, so <c>record_type</c> does.</summary>
+    /// <summary>The other half: the document does not name its type, so <c>record_type</c> does.</summary>
     [Fact]
     public async Task DeserializeFromBytesAsync_ForAWeaponDocument_ReconstitutesFromRecordType()
     {

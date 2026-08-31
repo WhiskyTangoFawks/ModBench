@@ -82,7 +82,7 @@ export interface IModlistSource {
    *  regardless of selection contiguity or the order names are given in. Throws
    *  if any name is absent. */
   reorderPlugins(pluginNames: string[], toIndex: number): Promise<void>;
-  /** #288: appends a new, always-enabled entry line for a just-created plugin at the winning end
+  /** Appends a new, always-enabled entry line for a just-created plugin at the winning end
    *  of plugins.txt (bottom). The Editing-side creation itself (writing the plugin file, tracking
    *  its mod folder) is done by the time this is called — this only ever registers a plugin that
    *  already exists on disk into the load order. Throws if the name is already present. */

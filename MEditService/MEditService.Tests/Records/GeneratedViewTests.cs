@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #413 S7 / D2: the generated <c>json_extract</c> views — the SQL door onto the documents table.
+/// The generated <c>json_extract</c> views — the SQL door onto the documents table.
 ///
 /// These are the contract for user filter SQL and <c>medit.query</c> scripts (invariant 8) and for
 /// nothing else: no C# read path touches them. So they are tested the way a user meets them, by
@@ -81,7 +81,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
     }
 
     /// <summary>
-    /// The COALESCE-to-default half of D2, stated where it is observable: a field the serializer
+    /// The COALESCE-to-default rule, stated where it is observable: a field the serializer
     /// omitted because it equals its default must read that default, not NULL. Verified through a
     /// column whose documents genuinely lack the path.
     /// </summary>
@@ -116,7 +116,7 @@ public sealed class GeneratedViewTests(CutDownPluginFixture fixture) : IClassFix
 
     /// <summary>
     /// A [Flags] enum reads as joined member names, which is what keeps `LIKE '%Flag%'` — the way
-    /// record flags are actually filtered — working through the swap.
+    /// record flags are actually filtered — working.
     /// </summary>
     [Fact]
     public void FlagsEnums_ReadAsJoinedNames()

@@ -1,16 +1,16 @@
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #381: a tracked plugin whose binary the load-time check found stale or missing relative to what
+/// A tracked plugin whose binary the load-time check found stale or missing relative to what
 /// Modbench itself last knew, surfaced as a loud "rebuild it" offer — never the external-change
-/// dialog (#417), which asks a question ("upstream update, or your own edit?") that has no honest
+/// dialog, which asks a question ("upstream update, or your own edit?") that has no honest
 /// answer here: there is no alternate "keep as mine" outcome for a binary Modbench's own compile
 /// left half-written, or that no longer exists at all.
 /// </summary>
 public sealed record CrashRepairOffer(string Plugin, string Origin, CrashRepairReason Reason);
 
 /// <summary>The two ways <see cref="ExternalChangeLoadOrderHook"/> can reach a repair offer — both
-/// detected only at reconcile (#381's spec pin: "a journal marker present at load"), never by the
+/// detected only at reconcile, never by the
 /// live watcher, because neither condition can newly arise while this same Modbench process keeps
 /// running: the journal only moves during a compile <see cref="Edits.PluginCompileService"/> itself
 /// drives, and a binary that vanished while the backend runs would already have been read once at load.</summary>

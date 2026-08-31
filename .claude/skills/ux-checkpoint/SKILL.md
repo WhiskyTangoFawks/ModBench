@@ -5,16 +5,16 @@ description: Gate before building any new or changed interactive UI (menu entry,
 
 # UX checkpoint
 
-A well-cited, xEdit-sourced shape still got rejected on sight once the maintainer actually saw
-it running (#363/#574). Citations and specs describe UI; they don't demo it. This is the gate:
+A well-cited, xEdit-sourced shape still gets rejected on sight once the maintainer actually sees
+it running. Citations and specs describe UI; they don't demo it. This is the gate:
 build the UI, show it live, get a real reaction, *then* wire the logic behind it — so a rejected
 shape costs a stub, never a feature.
 
 ## What counts as UI that needs this
 
 Any new or changed interactive element: a menu entry, tree node, dialog, badge, right-click
-action, or a changed appearance/placement of one that already shipped (#575 — a retextured badge
-was exactly as unreviewed as a new one). No exemption for a shape that traces straight to xEdit
+action, or a changed appearance/placement of one that already shipped — a retextured badge
+is exactly as unreviewed as a new one. No exemption for a shape that traces straight to xEdit
 or an ADR — ADR-0034 tells you what to build, not that anyone has watched it run; the checkpoint
 is what closes that gap, not a second design pass.
 

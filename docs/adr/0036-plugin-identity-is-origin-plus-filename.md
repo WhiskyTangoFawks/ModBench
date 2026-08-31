@@ -16,8 +16,7 @@ Three things break that assumption at once:
 
 - **Shadowed copies.** When two mods ship `Foo.esp`, MO2 priority picks one and the other is
   discarded before the load order is built. `FileConflictIndex.filesByMod` already knows about both;
-  loading them together collides on the key. This is the blocker recorded on
-  [#34](https://github.com/WhiskyTangoFawks/ModBench/issues/34).
+  loading them together collides on the key.
 - **Drift.** Once mod content is reflected live
   ([ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md)), installing, uninstalling or
   reprioritising a mod can change *which file* a filename resolves to while the old one is still
@@ -54,8 +53,8 @@ those things and would leak the user's filesystem into every wire message.
   add-master, copy-as-override, every array and VMAD operation, every edit. Two columns that look
   alike are indistinguishable to all of them, so the display change and the key change must land
   together or the grid silently mis-targets.
-- **[#34](https://github.com/WhiskyTangoFawks/ModBench/issues/34) is unblocked**, and its own open
-  question ("plugin identity scheme when the same filename appears N times") is answered here.
+- The open question "plugin identity scheme when the same filename appears N times" is answered
+  here.
 - Shadowed copies are **read-only**, reusing the existing immutable-plugin treatment. An edit to a
   file the game does not load produces no observable change anywhere — no winner moves, no badge
   moves, nothing happens in-game — which is a footgun that only reveals itself later. The escape

@@ -14,10 +14,6 @@ namespace MEditService.Tests.Query;
 /// its plugin declares, a compare's override values are the committed ones, and a reference list is
 /// what the plugin declares and nothing else — no surface reconstructs a second answer on the way
 /// out.
-///
-/// Each test's non-vacuity was established by rival: an overlay branch that appended synthetic
-/// unindexed rows was applied by hand, each test observed failing, and the rival reverted from a
-/// file copy.
 /// </summary>
 [Collection(TestPluginFixtureCollection.Name)]
 public sealed class CommittedOnlyReadPathTests : IDisposable
@@ -69,7 +65,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
         var only = Assert.Single(compare.Overrides);
         Assert.Equal(TestPluginFixture.PluginName, only.Plugin);
         Assert.Equal("TestNPC01", only.EditorId);
-        // A scalar field read straight off the index — the slot a staged value used to be able to
+        // A scalar field read straight off the index — the slot a staged value could otherwise
         // stand in for.
         var deleted = Assert.Single(only.Fields, f => f.Metadata.Name == "is_deleted");
         Assert.Equal("False", deleted.Value?.ToString());
@@ -77,7 +73,7 @@ public sealed class CommittedOnlyReadPathTests : IDisposable
 }
 
 /// <summary>
-/// #410/ADR-0041: the references read is committed-only. Split from the class above because it
+/// ADR-0041: the references read is committed-only. Split from the class above because it
 /// needs a fixture that actually declares a reference — <see cref="ReferencePluginFixture"/>, the
 /// same one the API-level reference tests use — where the class above deliberately loads a plugin
 /// whose records reference nothing.
@@ -109,7 +105,7 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
         // Positive control first, through the identical call path: a reference the indexed plugin
         // really declares must come back. Without it the absence half below would pass just as
         // happily against a broken query, a wrong connection or an empty index — exactly the shape
-        // the staged-reference union used to be able to hide behind.
+        // a staged-reference union could hide behind.
         var referenced = _svc.GetReferences(_fixture.KeywordFormKey.ToString());
 
         var hit = Assert.Single(referenced);
@@ -117,7 +113,7 @@ public sealed class CommittedOnlyReferencesTests : IDisposable
         Assert.Equal(ReferencePluginFixture.PluginName, hit.Plugin);
 
         // And nothing beyond it: the NPC that declares no keyword is not a referencing source —
-        // the row a staged reference used to be able to add here.
+        // the row a staged reference could add here.
         Assert.DoesNotContain(referenced, r => r.FormKey == _fixture.NpcWithoutKeywordFormKey.ToString());
     }
 }

@@ -1,9 +1,7 @@
 namespace MEditService.Core.Records;
 
 // Per-plugin assembled VMAD tree — GetVmad's hydration shape, built by walking the record's own
-// reconstituted document through VmadCodec (#420; before then, hydrated from the now-deleted
-// vmad_scripts/vmad_properties/vmad_property_list_items relational rows instead). Input to
-// cross-plugin alignment, NOT the wire format.
+// reconstituted document through VmadCodec. Input to cross-plugin alignment, NOT the wire format.
 
 // A named child within a script or struct — members align across plugins by Name.
 // Positional record => Deconstruct((Name, Value)) so callers can destructure like a tuple.

@@ -85,13 +85,9 @@ function calledFsPath(mockFn: { mock: { calls: unknown[][] } }): string {
 }
 
 // ── buildRowActionHandlers ──────────────────────────────────────────────────
-// Issue #214: these used to be reached only via buildMessageHandlers + a webview
-// postMessage (the hand-drawn row menu's sole trigger, both since removed with the webview
-// itself — #233). Issue #233 moved the trigger again,
-// to the modbench.downloads TreeView's native commands (registerDownloadsSingleRowCommands /
-// registerDownloadsMultiRowCommands, tested further down) — the handler bodies themselves are
-// unchanged (bar `reveal`'s removal — the workspace root is already in the Explorer), so these
-// suites are the same real fixture-in/behavior-out exercises as before, just invoked directly.
+// The handler bodies behind the modbench.downloads TreeView's native commands
+// (registerDownloadsSingleRowCommands / registerDownloadsMultiRowCommands, tested
+// further down) — exercised directly here, real fixture-in/behavior-out.
 
 describe('buildRowActionHandlers — install', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -273,7 +269,7 @@ describe('buildRowActionHandlers — nav actions (openFile / openMeta)', () => {
   });
 });
 
-// ── registerDownloadsSingleRowCommands / registerDownloadsMultiRowCommands (#233) ───────────
+// ── registerDownloadsSingleRowCommands / registerDownloadsMultiRowCommands ──────────────────
 // The adapter from a native modbench.downloads TreeView `view/item/context` command invocation
 // — VS Code's own `(clickedItem, selectedItems[])` shape — to the buildRowActionHandlers
 // handler(s) for that action. Registration itself (that all 7 ids get wired to
@@ -412,7 +408,7 @@ describe('registerDownloadsMultiRowCommands', () => {
   });
 });
 
-// ── deleteArchives — batch delete confirmation (#233) ───────────────────────
+// ── deleteArchives — batch delete confirmation ──────────────────────────────
 describe('deleteArchives', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -461,7 +457,7 @@ describe('deleteArchives', () => {
   });
 });
 
-// ── registerDownloadsSortCommand (#238) ──────────────────────────────────────
+// ── registerDownloadsSortCommand ─────────────────────────────────────────────
 
 describe('registerDownloadsSortCommand', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -497,7 +493,7 @@ describe('registerDownloadsSortCommand', () => {
   });
 });
 
-// ── registerDownloadsHiddenToggleCommands (#238) ─────────────────────────────
+// ── registerDownloadsHiddenToggleCommands ────────────────────────────────────
 
 describe('registerDownloadsHiddenToggleCommands', () => {
   beforeEach(() => vi.clearAllMocks());

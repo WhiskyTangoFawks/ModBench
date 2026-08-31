@@ -64,9 +64,9 @@ describe('groupModlist', () => {
     expect(tree.installedCount).toBe(3);
   });
 
-  // LitR shape (#107 acceptance criterion): 5 ENB mods precede ENB_separator, 2
+  // LitR shape: 5 ENB mods precede ENB_separator, 2
   // Radfall mods precede Radfall-AIO separator — each separator must claim the
-  // mods that precede it, not the mods that (wrongly, under the old rule) follow it.
+  // mods that precede it, never the mods that follow it.
   it('LitR shape: each separator claims the run of mods immediately preceding it', () => {
     const radfallMod1 = mod('RadfallMod1');
     const radfallMod2 = mod('RadfallMod2');

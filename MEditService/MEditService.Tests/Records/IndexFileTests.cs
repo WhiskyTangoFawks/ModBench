@@ -2,14 +2,14 @@ using MEditService.Core.Records;
 
 namespace MEditService.Tests.Records;
 
-// #592 / ADR-0001: one index file per MO2 instance, inside the instance root. `origin` is a mod
+// ADR-0001: one index file per MO2 instance, inside the instance root. `origin` is a mod
 // folder name (ADR-0036), unique only within an instance, and every mirror table is keyed
 // (plugin, origin) — so the instance is the only scope an index can honestly live at.
 public class IndexFileTests
 {
     private static readonly string Instance = Path.Combine(Path.GetTempPath(), "medit-index-file-tests");
 
-    // AC1 names the location, so the test pins it: inside the instance root, and — since the
+    // The location is pinned: inside the instance root, and — since the
     // instance root is MO2's own working directory but `mods/`, `overwrite/`, `profiles/` and
     // `downloads/` are content it manages — in none of those. A mod reinstall, a profile delete or
     // a download sweep would take an index under any of them with it, and a mod archiver would pick
@@ -31,7 +31,7 @@ public class IndexFileTests
     }
 
     // Two instances on one game have their own same-named mod folders holding different bytes, so
-    // they must never share a mirror — the whole point of #592.
+    // they must never share a mirror.
     [Fact]
     public void For_IsADifferentFile_ForADifferentInstance()
     {

@@ -14,7 +14,7 @@ import { makeDeployerFixture, makeIndex } from './test/deployerFixture';
 
 // Scoped to this file only, passthrough by default: wraps `stat` so a single test below can
 // divert one specific path to a synthetic non-ENOENT error. Same wrapper shape as
-// statusChecker.test.ts's #318 mock — chmod-based permission denial is silently bypassed
+// statusChecker.test.ts's stat mock — chmod-based permission denial is silently bypassed
 // when the test runner is root, which a real fs precondition isn't.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
@@ -91,7 +91,7 @@ describe('buildFileConflictIndex', () => {
 // Proton/Wine resolves paths case-insensitively over ext4's case-sensitive
 // mods/, so two mods providing case-variant paths (Textures/Foo.dds vs
 // textures/foo.dds) must resolve to ONE conflict entry with a deterministic
-// winner (#128). caseFixture: ModA/Textures/Foo.dds vs ModB/textures/foo.dds;
+// winner. caseFixture: ModA/Textures/Foo.dds vs ModB/textures/foo.dds;
 // RootA/Foo.esp vs RootB/foo.ESP (root-level, for rootLevelWinners).
 describe('buildFileConflictIndex — case-insensitive conflicts', () => {
   it('resolves case-variant paths from two mods to a single conflict entry with both providers', async () => {
@@ -129,13 +129,13 @@ describe('buildFileConflictIndex — case-insensitive conflicts', () => {
   });
 });
 
-// Non-regular dirent policy (#322): what MO2 itself does with such entries
+// Non-regular dirent policy: what MO2 itself does with such entries
 // (references/modorganizer/ — grep-only, see fileConflictIndex.ts's walk() doc comment)
 // is the precedent — follow a symlink transparently, surface what fails, guard the cycle
 // Windows' own reparse-hop ceiling would otherwise hide. fs.symlink needs admin rights or
-// Developer Mode on Windows, and mkfifo doesn't exist there at all (#185 plans a Windows CI
-// leg) — skip the whole block there rather than fail for an environment reason that isn't a
-// code defect. Linux coverage, including mutation, is unaffected.
+// Developer Mode on Windows, and mkfifo doesn't exist there at all — skip the whole block
+// there rather than fail for an environment reason that isn't a code defect. Linux
+// coverage, including mutation, is unaffected.
 describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-regular dirent policy', () => {
   let instanceRoot: string;
   let modARoot: string;
@@ -244,13 +244,10 @@ describe.skipIf(process.platform === 'win32')('buildFileConflictIndex — non-re
   });
 });
 
-// #441: the layout root's own exclusion — a plain root "source/" folder (SourceRecordPath's
-// layout) and, separately, any dot-prefixed entry at any depth (closing #438's undetected
-// ".git"). Neither rule needs a sibling-plugin check: a root "source/" folder is excluded
-// unconditionally, which is what closes the #436 orphaning trap by construction. (#610 deleted
-// this file's earlier "source text tree exclusion (#374)" describe block, which guarded the
-// pre-#441 per-plugin "<plugin>.source/" sibling-tree layout — no shipped code can produce that
-// layout anymore, so re-Track is the migration, not this exclusion.)
+// The layout root's own exclusion — a plain root "source/" folder (SourceRecordPath's
+// layout) and, separately, any dot-prefixed entry at any depth (".git" and friends).
+// Neither rule needs a sibling-plugin check: a root "source/" folder is excluded
+// unconditionally, which closes the orphaning trap by construction.
 describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (#441, closes #438)', () => {
   let instanceRoot: string;
   let modARoot: string;
@@ -300,8 +297,8 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (
 
   it('excludes a root-level "source" directory, case-insensitively, with no sibling-plugin check needed', async () => {
     await writeFile(join(modARoot, 'Plugin.esp'), 'PLUGINBYTES');
-    // #436: an orphaned tree for a plugin that doesn't even exist in this mod. The old sibling
-    // guard would have left this deployable; the new rule excludes the whole root folder outright.
+    // An orphaned tree for a plugin that doesn't even exist in this mod — a sibling-plugin
+    // guard would leave this deployable; the unconditional rule excludes the whole root folder.
     await mkdir(join(modARoot, 'source', 'DeletedPlugin.esp', 'npc_'), { recursive: true });
     await writeFile(join(modARoot, 'source', 'DeletedPlugin.esp', 'npc_', '000800.json'), '{}');
     await mkdir(join(modARoot, 'SOURCE'), { recursive: true }); // a second mod could ship any casing
@@ -336,16 +333,16 @@ describe('buildFileConflictIndex — root "source/" and dot-prefixed exclusion (
   });
 });
 
-// #84 regression backstop: prove the override-order direction against a REAL MO2 instance, not
-// just synthetic fixtures — the direction was inverted for a long time (bottom-of-modlist.txt
-// picked as winner) before being corrected; this is what stands between that bug and it silently
+// Regression backstop: prove the override-order direction against a REAL MO2 instance, not
+// just synthetic fixtures — the direction was once inverted (bottom-of-modlist.txt picked as
+// winner); this is what stands between that bug and it silently
 // re-inverting again. Opt-in like modlistText.test.ts's own LitR round-trip: skipped when the
 // instance is absent (CI, Windows, other machines), same MEDIT_LITR_INSTANCE override.
 const litrInstance = process.env.MEDIT_LITR_INSTANCE ?? join(homedir(), 'Games', 'FO4', 'LitR');
 const litrModlistPath = join(litrInstance, 'profiles', 'Life in the Ruins', 'modlist.txt');
 const hasLitr = existsSync(litrModlistPath);
 
-// #84 review: the game directory a badge/deploy check against the real instance needs — read
+// The game directory a badge/deploy check against the real instance needs — read
 // from ModOrganizer.ini in principle, but this opt-in test is already coupled to this specific
 // real instance's on-disk shape (its exact mod names), so hardcoding the sibling "Stock Game
 // Folder" is no more fragile than the mod names above and avoids pulling in gameDirectory.ts's
@@ -371,10 +368,10 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     'meshes/graf/assaultronarmor/assaultronarmorarmlmediumm.nif',
   ];
 
-  // #84 review: the issue asked for "Modbench (badge + deploy)" to match MO2's winner, not just
-  // the index — statusChecker.ts and deployer.ts both consume the index's winner/winnerMod with
-  // no divergent logic of their own, so this proves all three agree on the same real conflict
-  // rather than asserting the index alone and documenting the rest away.
+  // Badge and deploy must match MO2's winner, not just the index — statusChecker.ts and
+  // deployer.ts both consume the index's winner/winnerMod with no divergent logic of their
+  // own, so this proves all three agree on the same real conflict rather than asserting the
+  // index alone and documenting the rest away.
   it('a fix patch positioned above the mod it fixes wins the meshes they both ship — index, badge, and deploy all agree', async () => {
     const entries = parseModlist(readFileSync(litrModlistPath, 'utf8'));
     const fixEntry = entries.find((e) => e.kind === 'mod' && e.name === fixName);
@@ -436,13 +433,13 @@ describe.skipIf(!hasLitr)('buildFileConflictIndex — real LitR instance (opt-in
     }
   });
 
-  // #84 review: vanilla-loses anchor check against the real instance. Checked for a genuine
+  // Vanilla-loses anchor check against the real instance. Checked for a genuine
   // pair — the real vanilla Data/ (litrVanillaData) ships every asset packed inside .ba2
   // archives with NO loose textures/meshes/sounds at all, and no root-level file (plugin, BA2,
   // ini) it ships shares a name with any enabled mod's root-level file either (diffed the full
   // real mod list against it). So there genuinely is no real vanilla-vs-mod loose-file conflict
   // pair in this instance to assert against — stating that explicitly rather than silently
-  // skipping the check, per review. The invariant itself (an existing file at a target path,
+  // skipping the check. The invariant itself (an existing file at a target path,
   // vanilla or otherwise, is always skipped rather than overwritten) is exercised with a
   // synthetic vanilla file in deployer.test.ts's "skips and reports a winner whose Data/ path
   // already exists and is not a prior link" — that is real code, just not data this specific

@@ -15,7 +15,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #427: create-record, the entry point over <see cref="IRecordIndex.CreateWorkingTreeRecord"/>
+/// Create-record, the entry point over <see cref="IRecordIndex.CreateWorkingTreeRecord"/>
 /// (mechanism-tested at the index layer in <c>WorkingTreeCreationTests</c>). This suite is about the
 /// entry point's own contract — FormKey allocation collision-safe across both refs, the source file
 /// it writes, record-type validation, and the two refusals every gesture on this write path inherits.
@@ -28,13 +28,12 @@ public sealed class RecordEditServiceCreateRecordTests
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
     /// <summary>
-    /// #573 (bonus finding alongside the renumber fix): <see cref="RecordEditService.EditField"/>
-    /// funnels through the same <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard renumber's
-    /// stale-index bug lived in — a record that never reached Head (still working-tree-only, straight
-    /// off <see cref="RecordEditService.CreateRecord"/>) was silently dropped by a delta-application
-    /// guard that only ever checked Head, so an edit here would report <c>Applied: true</c> while the
-    /// body underneath never actually changed. Same seam, same fix; this is the one test that would
-    /// have caught it.
+    /// <see cref="RecordEditService.EditField"/>
+    /// funnels through the <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard —
+    /// a record that never reached Head (still working-tree-only, straight
+    /// off <see cref="RecordEditService.CreateRecord"/>) is silently dropped by a delta-application
+    /// guard that only ever checks Head, so an edit here would report <c>Applied: true</c> while the
+    /// body underneath never actually changed. This is the one test that catches that.
     /// </summary>
     [Fact]
     public void EditField_OnANeverCommittedRecord_ActuallyLandsInTheIndex()
@@ -73,10 +72,7 @@ public sealed class RecordEditServiceCreateRecordTests
     }
 
     /// <summary>
-    /// #459 originally, superseded by #489: a delete used to leave a permanent gap (<c>[0],[1]</c> →
-    /// delete <c>[0]</c> → <c>[1]</c> alone), and this test pinned that <see cref="RecordEditService.CreateRecord"/>
-    /// landed past it (<c>[2]</c>) rather than colliding with it at the naive sibling <i>count</i>
-    /// (<c>[1]</c>). #489 retired the gap itself: <see cref="RecordEditService.DeleteRecord"/> now
+    /// Delete-then-create in the same group folder: <see cref="RecordEditService.DeleteRecord"/>
     /// renormalizes its own group folder to contiguous <c>[0..k]</c> as its own last file-system act,
     /// so by the time <c>CreateRecord</c> runs here there is no gap left to land past at all — the
     /// surviving sibling has already renumbered down to <c>[0]</c>, and count and max+1 coincide.
@@ -220,7 +216,7 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(RecordEditRefusal.FormKeyCollision, result.Refusal);
     }
 
-    // Review finding #1: the auto-allocator's own exhaustion (every local ID up to 0xFFFFFF taken)
+    // The auto-allocator's own exhaustion (every local ID up to 0xFFFFFF taken)
     // must be a typed refusal, not an InvalidOperationException an endpoint's generic load order-missing
     // catch would misreport as "no usable load order".
     [Fact]
@@ -237,7 +233,7 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
-    // #501: an ESL-flagged plugin's local FormID range is 0x000-0xFFF (12 bits) — the game engine
+    // An ESL-flagged plugin's local FormID range is 0x000-0xFFF (12 bits) — the game engine
     // cannot address a higher local ID from a light plugin's load-order slot, so the auto-allocator
     // must refuse there rather than continuing on into the full 0xFFFFFF native range.
     [Fact]
@@ -298,7 +294,7 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal("000FFF:Fixture.esl", result.NewFormKey);
     }
 
-    // #501: the typed-FormID path (xEdit's own "type a FormID" gesture) must refuse the same range a
+    // The typed-FormID path (xEdit's own "type a FormID" gesture) must refuse the same range a
     // light plugin's auto-allocator does — the record would exist in perfectly ordinary FormKey space,
     // so this is its own refusal (LightPluginFormIdOutOfRange), not FormKeySpaceExhausted.
     [Fact]
@@ -336,7 +332,7 @@ public sealed class RecordEditServiceCreateRecordTests
         Assert.Equal(requested, result.NewFormKey);
     }
 
-    // #422: _filter is a one-shot snapshot of whatever matched when SetFilter ran — a brand-new row
+    // _filter is a one-shot snapshot of whatever matched when SetFilter ran — a brand-new row
     // was never evaluated against that SQL at all, so it stays hidden from a broad "every NPC" filter
     // until the create path re-materializes it.
     [Fact]

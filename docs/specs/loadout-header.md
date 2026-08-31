@@ -1,9 +1,8 @@
 # Loadout header — Surface Specification
 
-**Status: Implemented** (#247). Launch… is a placed affordance whose wiring is deferred —
-see *Launch…* below. [#352](https://github.com/WhiskyTangoFawks/ModBench/issues/352) moved
-Launch mEdit / Close mEdit off this surface onto the [Plugins view](plugins.md) — see *mEdit
-moved to the Plugins view (#352)* below.
+**Status: Implemented.** Launch… is a placed affordance whose wiring is deferred —
+see *Launch…* below. Launch mEdit / Close mEdit live on the [Plugins view](plugins.md), not
+here — see *mEdit lives on the Plugins view* below.
 
 A cross-context surface. It reads Mod-Management state (profile, deployment), so it belongs to
 neither bounded context and lives at the composition root
@@ -47,7 +46,7 @@ With no workspace open, or a workspace that isn't an MO2 instance, the view regi
 renders **no rows**, and Launch…, Deploy and Purge are withheld from its title bar
 (`modbench.workspaceIsMo2Instance`). The commands every row activates are registered alongside
 the Loadout views, so on those paths they do not exist — rows would be clicks that throw. The
-Mods view's own `viewsWelcome` (#192) is what explains the situation to the user; the header
+Mods view's own `viewsWelcome` is what explains the situation to the user; the header
 stays quiet rather than repeating it.
 
 ### Rows
@@ -68,15 +67,15 @@ stays quiet rather than repeating it.
   there is state out there needing a purge, which is what the row should say. When deployed,
   the row is an inert readout — Purge is destructive and stays in overflow behind a modal.
 
-### mEdit moved to the Plugins view (#352)
+### mEdit lives on the Plugins view
 
-Sliced out of #346 during triage: "launch mEdit should be an option on the plugins view —
-mEdit isn't a universal option, it's an option on the plugins view" (maintainer's ruling).
-This header no longer carries an mEdit row of any kind, running or not, and reads no
-backend/load order state — `LoadoutHeaderProvider` only ever reads Mod-Management state now.
-Launch mEdit / Close mEdit are the same two command ids as before
-(`modbench.modList.launchMedit` / `modbench.closeMedit`), now reachable from the
-[Plugins view](plugins.md)'s own title-bar overflow, gated the same way it was withheld here —
+Maintainer ruling: "launch mEdit should be an option on the plugins view —
+mEdit isn't a universal option, it's an option on the plugins view."
+This header carries no mEdit row of any kind, running or not, and reads no
+backend/load order state — `LoadoutHeaderProvider` only ever reads Mod-Management state.
+Launch mEdit / Close mEdit
+(`modbench.modList.launchMedit` / `modbench.closeMedit`) are reachable from the
+[Plugins view](plugins.md)'s own title-bar overflow, gated by
 `modbench.workspaceIsMo2Instance`. See [plugins.md](plugins.md#toolbar--title-bar) for the
 placement and its context-key toggle.
 
@@ -105,15 +104,14 @@ the MO2 executables registry at invocation time, presents them in a `showQuickPi
 executes the selection. It never resolves a binary itself, and no per-executable command or
 icon is ever contributed.
 
-Until [#188](https://github.com/WhiskyTangoFawks/ModBench/issues/188) contributes those tasks
-there are none, and Launch… says so rather than guessing a path. Wiring it to the registry is
-[#293](https://github.com/WhiskyTangoFawks/ModBench/issues/293).
+The MO2 executables registry does not contribute tasks yet, so there are none, and Launch…
+says so rather than guessing a path. Wiring it to the registry is deferred work.
 
 This supersedes the old standalone **Launch Game**, which conflated three operations —
 deploy, spawn a hardcoded `Fallout4.exe`, purge when that process exited. Deploying and
 launching are separate operations on the same files and are now separate actions; the
 hardcoded executable was a lock to one game that the registry removes by construction; and
-teardown-on-exit is [#294](https://github.com/WhiskyTangoFawks/ModBench/issues/294), since a
+teardown-on-exit is deferred to its own design, since a
 script-extender loader exits immediately and its exit code says nothing about the game.
 
 ## Deltas this surface absorbed
@@ -130,32 +128,21 @@ script-extender loader exits immediately and its exit code says nothing about th
 - **`LoadoutHeaderProvider`** (`modbench/src/LoadoutHeaderProvider.ts`) lives at the
   composition root and imports from neither bounded context. Every piece of state arrives as
   an injected getter — `activeProfile`, `deployment` — which is both the language-boundary
-  constraint (#241 records the same one for the merged plugins provider) and what makes the
+  constraint (the merged plugins provider carries the same one) and what makes the
   whole surface unit-testable without a VS Code harness. It reads no backend/load order state at
-  all since #352 moved the mEdit row off it (see above).
+  all (see *mEdit lives on the Plugins view*).
 - **It owns no state.** Profile comes from `Mo2ModlistSource`, deployment from the deploy
   manifest. The header re-reads; it never caches.
 - **Refresh triggers** are the transitions themselves: a profile switch, a deploy or purge, and
   a change to `modbench.mods.deploymentMode`.
 - **The four-row ceiling is a design constraint, not a limit of the widget.** A fifth candidate
-  row is a signal that the state belongs in a tree or the status bar. #352 leaves it at two.
+  row is a signal that the state belongs in a tree or the status bar. Today there are two.
 
 ## Testing
 
 - `src/test/LoadoutHeaderProvider.test.ts` — every row, as a function of injected state; also
-  guards that no mEdit row exists any more (#352).
+  guards that no mEdit row exists.
 - `src/test/packageJson.test.ts` — the header is first in the container and ungated; the
   placement rubric (slots, icon ceiling, workspace actions absent from domain trees,
   destructive actions out of navigation) holds across every contributed menu.
 - `src/test/integration/extension.test.ts` — `modbench.refresh` and `modbench.launch` register.
-
-## Relationship to #241
-
-The header is what [#268](https://github.com/WhiskyTangoFawks/ModBench/issues/268) needed
-originally: with the loadout and editing views co-visible, starting and stopping the backend
-could not belong to either of the two pre-#270 Plugins trees' title bars, so it lived here
-instead. Post-#270 there is one merged Plugins tree, and #352 revisits that call now that a
-single, unambiguous domain tree exists to host it — see *mEdit moved to the Plugins view
-(#352)* above. The header itself is contributed without a `when` clause, so
-[#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273) retiring `modbench.viewMode`
-does not touch it.

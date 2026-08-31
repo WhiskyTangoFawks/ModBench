@@ -10,12 +10,12 @@ import type { ModlistEntry } from './model';
  *  which have one) doesn't spuriously "conflict" with every other mod on it. */
 const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
 
-/** #441: the layout's own exclusion — `SourceRecordPath.RootFor` in
+/** The layout's own exclusion — `SourceRecordPath.RootFor` in
  *  `MEditService.Core/Source/` always builds `source/<plugin>/...`, one root folder per mod. Mod
  *  Management stays pure TS and learns this by convention (the fixed name), never by calling the
  *  backend. Root-anchored (matched only at the mod root) and case-insensitive (`foldPath`),
- *  needing no sibling-plugin check: the whole folder is excluded unconditionally, which is what
- *  closes the #436 orphaning trap by construction (a plugin renamed or deleted outside Modbench
+ *  needing no sibling-plugin check: the whole folder is excluded unconditionally, which closes
+ *  the orphaning trap by construction (a plugin renamed or deleted outside Modbench
  *  can never leave part of `source/` behind un-excluded, because nothing about the exclusion
  *  depends on which plugins still exist). Root-anchoring specifically (not a bare name match at
  *  any depth) is what keeps a mod's own Papyrus assets safe: those ship nested
@@ -23,8 +23,8 @@ const EXCLUDED_RELATIVE_PATHS = new Set(['meta.ini']);
  *  losing it costs nothing real. */
 const ROOT_SOURCE_FOLDER_NAME = 'source';
 
-/** #441/#438: never deployed or indexed as mod content, at any depth — closes #438 (a tracked
- *  mod's `.git/` was previously walked and deployed like ordinary content, undetected). Applies
+/** Never deployed or indexed as mod content, at any depth — a tracked mod's `.git/` must
+ *  never be walked and deployed like ordinary content. Applies
  *  uniformly to every dirent kind (file, directory, symlink), unlike the source-tree guard above
  *  which is directory-only and root-only: a dot-prefixed *file* nested anywhere (a stray
  *  `.DS_Store`, an editor swap file) is exactly as much "not mod content" as `.git` itself. */
@@ -67,7 +67,7 @@ export function foldPath(relativePath: string): string {
  *  (Textures/Foo.dds vs textures/foo.dds) resolves to one entry no matter which
  *  casing a caller looks up with. No raw Map is exposed: there is no
  *  bracket/`.get` access a caller could perform with an unfolded path and
- *  silently miss — that silent miss was the original bug (#128). */
+ *  silently miss. */
 export class FileConflictLookup {
   private readonly byFoldedPath = new Map<string, ConflictEntry>();
 
@@ -123,14 +123,14 @@ export function rootLevelWinners(index: FileConflictIndex): Map<string, string> 
 }
 
 /** Winning mod's folder name for every root-level plugin the index knows, keyed by lowercased
- *  basename — the origin-resolution twin of rootLevelWinners above (#269 / ADR-0036). Same
+ *  basename — the origin-resolution twin of rootLevelWinners above (ADR-0036). Same
  *  root-level-only contract; used by loadOrderSnapshot.ts to record a mod-provided plugin's
  *  origin. */
 export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, string> {
   return new Map(rootLevelEntries(index).map((entry) => [foldPath(entry.relativePath), entry.winnerMod]));
 }
 
-/** Non-regular dirent policy inside `mods/<Mod>/` (#322). `references/modorganizer/`
+/** Non-regular dirent policy inside `mods/<Mod>/`. `references/modorganizer/`
  *  (grep-only, checked first) sets the precedent: its own walker
  *  (`DirectoryWalker::forEachEntry`, `src/envfs.cpp`, consumed by
  *  `DirectoryEntry::addFiles` in `src/shared/directoryentry.cpp`) classifies purely on
@@ -151,7 +151,7 @@ export function rootLevelWinnerMods(index: FileConflictIndex): Map<string, strin
  *     correctly. This is what makes a user's shared-asset-folder symlink inside a mod work.
  *   - A broken symlink (ENOENT) is skipped — logged, never thrown. Any other stat failure
  *     (e.g. permission denied) propagates instead of silently degrading to a skip, matching
- *     statusChecker.ts's `modFolderExists` / #318 convention.
+ *     statusChecker.ts's `modFolderExists` convention.
  *   - Every directory entered — real or reached via a followed symlink — is realpath-
  *     tracked against its own ancestors; a revisit is a cycle (`mods/ModA/link -> ModA`,
  *     or a multi-hop loop), skipped and logged rather than recursed forever.
@@ -165,7 +165,7 @@ async function walk(
   const dirents = await readdir(dir, { withFileTypes: true });
   const results: { relativePath: string; absolutePath: string }[] = [];
   for (const dirent of dirents) {
-    // #441/#438: dot-prefixed at any depth, any dirent kind — checked first, ahead of every other
+    // Dot-prefixed at any depth, any dirent kind — checked first, ahead of every other
     // rule, since it needs none of their context (root-relative or not, file or directory).
     if (isDotPrefixed(dirent.name)) continue;
     const absolutePath = join(dir, dirent.name);
@@ -185,7 +185,7 @@ async function walk(
 
 /** The symlink branch of `walk`'s policy, split out to keep both functions' own
  *  complexity low: resolve what the link points to and dispatch exactly like `walk` would
- *  for a real entry of that type, or skip+log for broken/non-regular targets (#322). */
+ *  for a real entry of that type, or skip+log for broken/non-regular targets. */
 async function walkSymlink(
   absolutePath: string,
   root: string,
@@ -197,8 +197,8 @@ async function walkSymlink(
     target = await stat(absolutePath); // follows the link
   } catch (err) {
     // ENOENT (broken link) only — any other stat failure (e.g. EACCES) propagates rather
-    // than silently degrading to a skip, matching statusChecker.ts's modFolderExists /
-    // #318 convention: a permission error must reject, not read as "nothing here".
+    // than silently degrading to a skip, matching statusChecker.ts's modFolderExists
+    // convention: a permission error must reject, not read as "nothing here".
     if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     log(`[fileConflictIndex] broken symlink, skipping: "${absolutePath}" (${err instanceof Error ? err.message : String(err)})`);
     return [];
@@ -217,7 +217,7 @@ async function walkSymlink(
 }
 
 /** Recurse into a directory — real or reached via a followed symlink — guarding against a
- *  symlink cycle by realpath-tracking every directory against its own ancestors (#322). One
+ *  symlink cycle by realpath-tracking every directory against its own ancestors. One
  *  extra stat-family call per directory, negligible against a walk measured at ~0.14s over
  *  14,865 files (docs/specs/mods.md) — uniform for every directory rather than only
  *  symlinked ones, so there is one code path to verify instead of two conditionally-correct
@@ -240,7 +240,7 @@ async function descend(
  *  the mod tree, never resolved. `sourcePath` is what the entry's `absolutePath` field
  *  becomes (and, via `buildFileConflictIndex`, the `winner` the deployer `fs.link()`s);
  *  it defaults to `walkedPath` and is only ever overridden for a symlinked file, to the
- *  realpath-resolved target (#322) — `fs.link`'s final path component does not dereference
+ *  realpath-resolved target — `fs.link`'s final path component does not dereference
  *  a symlink on Linux, so linking the symlink's own path would hardlink the link itself
  *  (landing as a second, possibly-broken symlink in Data/, not a copy of the real file). */
 function pushEntry(

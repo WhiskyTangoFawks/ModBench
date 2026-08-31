@@ -13,9 +13,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B9: <see cref="SourceRepository.RebaseEditBranch"/>/<see cref="SourceRepository.ContinueRebase"/>
-/// — refuse-over-dirt, a clean replay, and a conflict resolved by hand whose result still compiles
-/// (AC2/AC3).
+/// <see cref="SourceRepository.RebaseEditBranch"/>/<see cref="SourceRepository.ContinueRebase"/>
+/// — refuse-over-dirt, a clean replay, and a conflict resolved by hand whose result still compiles.
 /// </summary>
 public sealed class SourceRepositoryRebaseTests : IDisposable
 {
@@ -109,17 +108,17 @@ public sealed class SourceRepositoryRebaseTests : IDisposable
     }
 
     /// <summary>
-    /// The whole #417 flow through to the next reconcile: absorb an upstream update, take the
-    /// rebase it offers, then reload — and the plugin still ingests <b>from its source tree</b>.
+    /// The whole external-change flow through to the next reconcile: absorb an upstream update, take
+    /// the rebase it offers, then reload — and the plugin still ingests <b>from its source tree</b>.
     ///
-    /// <para><b>This is the test whose absence hid a shipping bug</b> (#454). Nothing in the suite
+    /// <para><b>This is the test whose absence hid a shipping bug.</b> Nothing in the suite
     /// reloaded a load order after an Absorb, and Absorb's own tests could not have caught it: Absorb
     /// commits to <c>main</c> without a checkout, so the edit branch's working tree — the one both
     /// ingest and compile read — is still Track's own complete tree until a rebase replays onto the new
     /// baseline. Only then does the incomplete baseline become the working tree, and only then does the
     /// missing root <c>RecordData.json</c> bite. It bit compile first, in
     /// <see cref="RebaseEditBranch_Conflicts_OnOverlappingRecordEdits_AndTheResolvedResultCompiles"/>,
-    /// but ingest-from-source calls the same whole-mod door on the same directory (#452), so a load order
+    /// but ingest-from-source calls the same whole-mod door on the same directory, so a load order
     /// load would have thrown identically the moment a user took the offered rebase.</para>
     ///
     /// <para>The conflict-free upstream update on purpose: this is about the tree being <i>complete</i>

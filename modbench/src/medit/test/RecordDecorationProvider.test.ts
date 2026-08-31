@@ -70,7 +70,7 @@ describe('RecordDecorationProvider (#428)', () => {
   });
 });
 
-// #364: the record conflict badge — ADR-0016's Axis 1 (record-wide ConflictAll) only. Every test
+// The record conflict badge — ADR-0016's Axis 1 (record-wide ConflictAll) only. Every test
 // in this block uses a Conflicts-node-flavored URI (the 4th recordResourceUri argument) — the
 // "conflict badge scoping" block below is what proves an *ordinary* URI never gets one, even when
 // the exact same lookup would answer with a real value.
@@ -111,7 +111,7 @@ describe('RecordDecorationProvider — conflict badge (#364)', () => {
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
-  // #307's own invariant, given a concrete rival to fail against: a lookup answering undefined
+  // Given a concrete rival to fail against: a lookup answering undefined
   // (PluginTreeProvider.conflictAllOf's own gate on conflictsComputed, or simply "nothing has
   // fetched this record's conflict state yet") must render nothing — never a badge that could be
   // mistaken for "no conflict". The rival — "render a neutral badge when unknown" — is exactly the
@@ -127,7 +127,7 @@ describe('RecordDecorationProvider — conflict badge (#364)', () => {
     expect(provider.provideFileDecoration(uri)).toBeUndefined();
   });
 
-  // Rival named — the orchestrator-approved default this test pins: a wrong implementation that
+  // Rival named — the default this test pins: a wrong implementation that
   // checks conflictAllLookup first (or that composes both into one decoration) would show the
   // conflict badge, the Conflict color, or some combination here instead of the plain M badge.
   it('prefers the M/A working-tree badge over a conflict badge when both are present', () => {
@@ -147,10 +147,9 @@ describe('RecordDecorationProvider — conflict badge (#364)', () => {
   });
 });
 
-// #364 review finding: the badge must render only on the Conflicts node's own rows — the AC's
-// explicit scope decision, contradicted by the original implementation (a bare identity-keyed
-// lookup badges every URI sharing that identity, including an ordinary RecordTypeNode -> RecordNode
-// row for the same record elsewhere in the tree). No test caught this the first time; these do.
+// The badge must render only on the Conflicts node's own rows — a bare identity-keyed
+// lookup would badge every URI sharing that identity, including an ordinary
+// RecordTypeNode -> RecordNode row for the same record elsewhere in the tree.
 describe('RecordDecorationProvider — conflict badge scoping (#364 review)', () => {
   it('never calls the conflict lookup at all for an ordinary (non-Conflicts-node) URI', () => {
     const conflictLookup = vi.fn().mockReturnValue('Conflict');

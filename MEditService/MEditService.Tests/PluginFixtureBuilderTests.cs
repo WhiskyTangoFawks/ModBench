@@ -16,9 +16,9 @@ public class PluginFixtureBuilderTests
         Assert.True(File.Exists(Path.Combine(data.DataFolder, "TestPlugin.esp")));
     }
 
-    // #592: the ordered explicit list is the load order — there is no plugins.txt path left for a
+    // The ordered explicit list is the load order — there is no plugins.txt path left for a
     // fixture to write one for. `listed` is what puts a plugin in that list; `enabled` is the `*`
-    // prefix it used to be written with, i.e. Participates.
+    // prefix, i.e. Participates.
     [Fact]
     public void Build_PutsAListedPluginInTheLoadOrder_Participating()
     {
@@ -67,7 +67,7 @@ public class PluginFixtureBuilderTests
     [Fact]
     public void Build_WithCreationClubCatalog_WritesCccFile()
     {
-        // Written one directory above DataFolder (#434) — where Mutagen's own
+        // Written one directory above DataFolder — where Mutagen's own
         // CreationClubListings.GetListingsPath expects it relative to the Data path a load order is
         // given, not inside DataFolder itself.
         using var data = new PluginFixtureBuilder()

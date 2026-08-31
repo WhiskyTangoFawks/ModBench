@@ -4,8 +4,6 @@ status: accepted
 
 # Two-axis conflict model (ConflictAll + ConflictThis)
 
-Decided 2026-06-02; extended 2026-08-11.
-
 ## Context
 
 An early four-state conflict model (No Override, Override, Change Lost, Conflict) was derived from xEdit's visible UI states.
@@ -76,9 +74,7 @@ A record with the `IsPartialForm` header flag intentionally omits fields it does
 **Implemented:**
 
 - Full two-axis classification using Mutagen field values for comparison. `ConflictThis` and `ConflictAll` values match xEdit semantics for the common cases (identical-to-master, override, conflict wins/loses).
-- Injected record detection: if an override plugin's master list does not include the FormKey's origin plugin, the record is flagged `ConflictCritical`. This is a game-agnostic structural check that does not require a priority table.
-
-  **Correction (2026-07-09):** this note originally described the check as unconditional. Re-tracing `xeMainForm.pas` (`ConflictLevelForNodeDatas`) showed xEdit only escalates an injected record to `caConflictCritical` when the base classification is already `caOverride`/`caConflict` (a real non-empty value difference exists); a content-identical injected record stays `caNoConflict`. `ConflictClassifier` was fixed to match — see the issue that reconciled this with `CONTEXT.md`'s "injected record in conflict" wording.
+- Injected record detection: if an override plugin's master list does not include the FormKey's origin plugin, the record escalates to `ConflictCritical` — but only when the base classification is already `Override`/`Conflict`, i.e. a real non-empty value difference exists; a content-identical injected record stays `NoConflict`. This matches xEdit (`xeMainForm.pas`, `ConflictLevelForNodeDatas`) and is a game-agnostic structural check that does not require a priority table.
 - Sorted array order-independent comparison: driven by `FieldMetadata.ElementType.IsSortable` (set by `SchemaReflector` for FormLink arrays), not a lookup table. Two sorted arrays with the same elements in different order do not register as a conflict.
 
 **Not implemented — `ConflictPriority` table:**
@@ -95,29 +91,26 @@ Investigation revealed that xEdit's `ConflictPriority` system exists because xEd
 
 ## Implementation notes
 
-- `ConflictClassifier` in `MEditService.Core/Queries/` is the right home. It takes the ordered list of override records — resolved via the read seam (`IRecordReads`; `IRecordRepository` was renamed away by #421) — and returns `(ConflictAll, IReadOnlyList<(plugin, ConflictThis)>)`.
+- `ConflictClassifier` in `MEditService.Core/Queries/` is the right home. It takes the ordered list of override records — resolved via the read seam (`IRecordReads`) — and returns `(ConflictAll, IReadOnlyList<(plugin, ConflictThis)>)`.
 - Comparison should use Mutagen's typed field values where available. Raw bytes are acceptable as a fallback but will miss cases where two representations are semantically equal (FormID slot remapping being the most common).
 - The `IsPartialForm` flag on `IFormRecord` must be checked before building override column data; absent fields in a partial form are omitted from the column entirely, not shown as blank.
 - `ConflictAll` and `ConflictThis` are cached per FormKey and invalidated on index update (same lifecycle as DuckDB rows today).
 
-## Update (2026-08-11): ConflictAll now has two independent scopes (#114)
+## ConflictAll has two independent scopes
 
-The "Decision" section above defines `ConflictAll` as classifying "each row (record) as a whole."
-Issue #114 found that the compare grid was applying that one record-wide value unconditionally to
-*every* rendered row — every leaf field, every struct member, every array element, at every
-nesting depth — so a record with one differing field turned every row of its grid the same color,
-including rows where every plugin agreed. That conflated two genuinely different questions: "is
-the record's override stack, as a whole, in conflict" (a Plugins-tree badge question) and "does
-*this specific field* differ" (a compare-grid row question).
+Record-wide status and per-field difference are different questions: "is the record's override
+stack, as a whole, in conflict" (a Plugins-tree badge question) versus "does *this specific field*
+differ" (a compare-grid row question). Applying the one record-wide value to every rendered row
+turns a record with one differing field into a grid where every row carries the same color,
+including rows where every plugin agrees.
 
-**This extends the model rather than reversing it: `ConflictAll` is now computed at two
-independent scopes, both legitimate, neither superseding the other:**
+**`ConflictAll` is therefore computed at two independent scopes, both legitimate, neither
+superseding the other:**
 
-- **Record-wide** (unchanged) — `ClassifyResult.ConflictAll` / `CompareResult.ConflictAll`,
-  computed once per record from its top-level fields' cell states. Still exactly what it always
-  was: the Plugins-tree's per-record conflict badge, meaning "the record's override stack as a
-  whole."
-- **Per-node, bottom-up** (new) — `FieldDiff.ConflictAll`, computed once per node in the field-diff
+- **Record-wide** — `ClassifyResult.ConflictAll` / `CompareResult.ConflictAll`,
+  computed once per record from its top-level fields' cell states: the Plugins-tree's per-record
+  conflict badge, meaning "the record's override stack as a whole."
+- **Per-node, bottom-up** — `FieldDiff.ConflictAll`, computed once per node in the field-diff
   tree (every leaf, every struct member, every array element, at every depth), using the *same*
   reduction rule (`ConflictRules.Reduce`/`Escalate`) the record-wide value already used, just
   scoped to that one node's own subtree instead of the whole record. A leaf's value comes from its
@@ -125,7 +118,7 @@ independent scopes, both legitimate, neither superseding the other:**
   found anywhere in its subtree, recursively — computed by folding its own reduced cell states
   with each already-built child's own (already-aggregated) value, which is mathematically the same
   as reducing the union of every cell state in the subtree in one pass. This is the value the
-  compare grid's row background now reads (`docs/specs/medit-record-editor.md`'s "Conflict color
+  compare grid's row background reads (`docs/specs/medit-record-editor.md`'s "Conflict color
   coding" section).
 
 **Collapsed/expanded rule** (compare grid only, not the Plugins tree): a struct/array row shows its
@@ -137,17 +130,16 @@ and misattribute it to fields that didn't actually change.
 **No tint on `NoConflict`/`OnlyOne` is a deliberate mEdit divergence, not an oversight.** xEdit's
 own default palette tints even its no-conflict row state; mEdit's compare grid deliberately leaves
 `NoConflict`/`OnlyOne` unpainted at both scopes so a background color is reserved for "something
-here needs attention" — the signal #114 reports was being muddied by the record-wide smear.
+here needs attention" — the signal a record-wide smear would muddy.
 
 VMAD and Condition rows (synthesized by `vmadTreeAdapter.ts`/`conditionTreeAdapter.ts` into the
-same `FieldDiff` shape, #231) compute their own per-node `ConflictAll` the same way, in TypeScript
+same `FieldDiff` shape) compute their own per-node `ConflictAll` the same way, in TypeScript
 (`recordUtils.ts`'s `reduceConflictAll`/`aggregateConflictAll`, mirroring `ConflictRules.Reduce`/
 `Escalate` by hand) — their own backend DTOs (`VmadPropertyDiff`, `ConditionDiff`) carry no such
 field, since they're folded into the unified tree entirely on the frontend.
 
-No new colors: both scopes reuse the existing `ConflictAll`→row-background mapping unchanged
-(`docs/specs/medit-record-editor.md`); only the granularity at which it's computed and applied
-changed.
+Both scopes reuse one `ConflictAll`→row-background mapping
+(`docs/specs/medit-record-editor.md`); only the granularity of computation differs.
 
 ## Alternatives rejected
 

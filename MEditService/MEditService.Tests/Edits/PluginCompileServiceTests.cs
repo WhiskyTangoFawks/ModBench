@@ -10,13 +10,13 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #416 S1: Save &amp; Compile's core promise — editing a plain (non-container) record's field and
+/// Save &amp; Compile's core promise — editing a plain (non-container) record's field and
 /// compiling writes a binary that re-parses with the edit landed, and every untouched record
 /// unchanged. <see cref="TrackedModFixture"/>'s three records (Npc/Race/Keyword/OtherNpc) are all
 /// top-level, non-container types, so this exercises the flat half of the tree only — containers
 /// (cells, worldspaces, quests, dialogue) are <see cref="PluginCompileServiceContainerTests"/>' job on
 /// a small readable fixture, and <c>RealData/CompileRoundTripGateTests</c>' at scale against the real
-/// #369 fixture.
+/// fixture.
 /// </summary>
 public sealed class PluginCompileServiceTests : IDisposable
 {
@@ -66,7 +66,7 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(overlay.Keywords, k => k.FormKey == _mod.Keyword);
     }
 
-    // #416 S5: semantic breakage compiles *successfully*, with diagnostics — never a refusal.
+    // Semantic breakage compiles *successfully*, with diagnostics — never a refusal.
     // TrackedModFixture's Race carries genuinely unset FormLink fields (severable/explodable
     // explosion+debris, never edited or configured by this fixture), which CheckErrorBuilder already
     // flags for the editor (DuckDbRecordIndex.GetDocument) — compile surfaces the same diagnostics
@@ -80,7 +80,7 @@ public sealed class PluginCompileServiceTests : IDisposable
         Assert.Contains(result.Diagnostics, d => d.FormKey == _mod.Race.ToString());
     }
 
-    // #416 S6: every write backs up the target plugin first (ADR-0008) — compile is a new write
+    // Every write backs up the target plugin first (ADR-0008) — compile is a new write
     // path, not a new exemption from it.
     [Fact]
     public void Compile_LeavesATimestampedBackupBesideTheBinary()

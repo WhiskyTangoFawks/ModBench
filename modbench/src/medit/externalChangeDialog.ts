@@ -1,6 +1,6 @@
 import type { UnansweredExternalChange } from './ApiClient';
 
-/** #417 pinned UX contract: the two buttons, native cancel (Esc) always a third, unnamed option. */
+/** Pinned UX contract: the two buttons, native cancel (Esc) always a third, unnamed option. */
 export const ABSORB_BUTTON = 'Absorb Upstream Update';
 export const KEEP_BUTTON = 'Keep as My Edit';
 
@@ -83,7 +83,7 @@ export interface ExternalChangeDialogOutcome {
 }
 
 /**
- * #417's one dialog: one native modal **per affected mod repo**, shown **sequentially** — never a
+ * The one dialog: one native modal **per affected mod repo**, shown **sequentially** — never a
  * mega-dialog, never two modals racing each other (the pinned contract's own words), and never one
  * modal per plugin either — a mod folder can hold more than one plugin, and they answer the same
  * question together. Each {@link ExternalChangeRepoGroup} gets its own `showWarningMessage` call,

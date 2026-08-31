@@ -12,12 +12,12 @@ using Noggog.WorkEngine;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #452 / ADR-0041's #444 amendment, point 2: a tracked plugin's read model is seeded from its
+/// ADR-0041 amendment, point 2: a tracked plugin's read model is seeded from its
 /// <b>source</b>, never from the compiled artifact. The working tree answers
 /// <see cref="RecordRef.Effective"/>; git <c>HEAD</c> answers <see cref="RecordRef.Head"/>.
 ///
 /// <para><b>This is a designated door</b> for the generated whole-mod mixin, alongside
-/// <see cref="TrackService"/> (<see cref="RecordTextCodecGeneratorSeed"/>'s AC2 whitelist —
+/// <see cref="TrackService"/> (<see cref="RecordTextCodecGeneratorSeed"/>'s whitelist —
 /// <c>RecordTextCodecGeneratorSeedTests</c> enforces which files may reach it).</para>
 ///
 /// <para><b>Why this needs no extraction code of its own, and why that is the point.</b> The whole
@@ -62,8 +62,8 @@ internal static class SourceIngest
     /// and deliberately the same <see cref="IRecordIndex.Index"/> call.
     ///
     /// <para>Blocking on the async door is the same trade <c>DuckDbRecordIndex.AppendDocument</c>
-    /// already makes for the codec: the reconcile loop is synchronous and progressive by design
-    /// (#274), and making it async to match a signature that comes from Mutagen's generated
+    /// already makes for the codec: the reconcile loop is synchronous and progressive by
+    /// design, and making it async to match a signature that comes from Mutagen's generated
     /// serializers would push a false shape all the way up through <c>IRecordIndex</c>.</para>
     ///
     /// <para>Throws whatever the tree throws — a malformed document, a vanished directory, a locked
@@ -72,7 +72,7 @@ internal static class SourceIngest
     /// silent lie the caller's own visible failure exists to prevent.</para>
     /// </summary>
     /// <param name="binaryPath">The plugin's compiled binary — indexed here only as the file this
-    /// key's rows are <i>stamped against</i> (#585), never as their content, which is the whole point
+    /// key's rows are <i>stamped against</i>, never as their content, which is the whole point
     /// of this class. A tracked plugin re-ingests from source on every load regardless of that stamp
     /// (<c>LoadOrderMirror.Reconcile</c> decides that); what the stamp buys is that a binary
     /// deleted or replaced out of band still takes its stale rows with it at the next validation,
@@ -94,7 +94,7 @@ internal static class SourceIngest
 
         timer.Restart();
         ReconcileHead(index, modFolder, key, gameRelease, schemaReflector, logger, mod);
-        // #113: per-phase load timing for the tracked-plugin ingest path.
+        // Per-phase load timing for the tracked-plugin ingest path.
         if (logger.IsEnabled(LogLevel.Debug))
         {
             logger.LogDebug(
@@ -122,12 +122,11 @@ internal static class SourceIngest
     /// that is bounded by dirt, never by load order, the same bound <see cref="SourceFreshness"/>
     /// already holds itself to.</para>
     ///
-    /// <para><b>#463: a container path falls through to a structural diff instead of being dropped.</b>
+    /// <para><b>A container path falls through to a structural diff instead of being dropped.</b>
     /// <see cref="SourceRecordPath.TryParse"/> only understands the flat, single-file shape — it fails
     /// closed on a container's own directory (<c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>,
     /// <c>Quests/&lt;n&gt;/DialogTopics/&lt;n&gt;/RecordData.json</c>) by design (ADR-0041's 2026-08-23
-    /// amendment: no container-path grammar, ever — declined twice already, #453 and #454, for the same
-    /// reason each time). When at least one dirty path under this plugin's own tree fails that parse,
+    /// amendment: no container-path grammar, ever). When at least one dirty path under this plugin's own tree fails that parse,
     /// <see cref="ReconcileHeadStructurally"/> runs once for the whole call: it deserializes <c>HEAD</c>
     /// the same whole-mod way <paramref name="effectiveMod"/> already was, and diffs the two mod objects
     /// by FormKey — the same amendment's answer, needing no path identity at all. Gated on dirt exactly
@@ -141,7 +140,7 @@ internal static class SourceIngest
         // tested one. Reconciling every record instead of just the dirty ones would still produce
         // correct answers (SetCommittedBaseline is a no-op for a record whose bytes already match), so
         // no behavioural test can tell bounded from unbounded here; the only difference is how many git
-        // blobs get read. Verified during #452 by applying exactly that rival and watching the suite
+        // blobs get read. Verified by applying exactly that rival and watching the suite
         // stay green. Keep the bound because it is the difference between "one git status" and "a blob
         // read per record in the load order", not because something will go red if it is lost.
         var dirty = SourceRepository.WorkingTreeStatus(modFolder);
@@ -156,7 +155,7 @@ internal static class SourceIngest
         // Recognizes "is this dirty path under my own plugin's tree at all" — the same prefix the
         // successful-parse branch below already checks via identity.PluginFileName, just needed one
         // parse earlier here. Not a container-path grammar: it says nothing about record type or
-        // position, only which plugin's own subtree the path sits under (#463; ADR-0041 amendment).
+        // position, only which plugin's own subtree the path sits under (ADR-0041 amendment).
         var ownTreePrefix = $"{SourceRecordPath.RootFor(key.Name)}{Path.DirectorySeparatorChar}";
 
         foreach (var gitPath in dirty)
@@ -217,7 +216,7 @@ internal static class SourceIngest
 
             if (headText == null)
             {
-                // In the working tree, at no commit: a record created and not yet committed. #427's
+                // In the working tree, at no commit: a record created and not yet committed. The
                 // write path never runs `git add`, so this is the ordinary shape of a working-tree
                 // create (an untracked "??" entry), not a rare one.
                 workingTreeOnly.Add(record.FormKey.ToString());
@@ -249,7 +248,7 @@ internal static class SourceIngest
     }
 
     /// <summary>
-    /// #463's structural half: deserializes <c>HEAD</c>'s own tree the same whole-mod way
+    /// The structural half: deserializes <c>HEAD</c>'s own tree the same whole-mod way
     /// <paramref name="effectiveMod"/> already was, then diffs the two mod objects by FormKey —
     /// added/changed/removed, the three set operations the flat loop above expresses per-path. Needs no
     /// path identity at all (ADR-0041's 2026-08-23 amendment), which is what lets it answer for a
@@ -377,7 +376,7 @@ internal static class SourceIngest
     }
 
     /// <summary>
-    /// Folds a <b>renamed</b> source unit's two halves back into the one record it is (#453 slice 4).
+    /// Folds a <b>renamed</b> source unit's two halves back into the one record it is.
     ///
     /// <para>An EditorID edit moves the source unit's file, because the file name carries the EditorID
     /// (<c>RecordEditService.RenameSourceUnit</c>). The dirty set then holds the same FormKey twice:
@@ -385,8 +384,8 @@ internal static class SourceIngest
     /// classified as a deletion; and the new path, present in the working tree and in no commit, which
     /// it classified as a create. Left that way the record would be handed to
     /// <see cref="IRecordIndex.MarkWorkingTreeOnly"/> and <see cref="IRecordIndex.SeedCommittedOnly"/>
-    /// at once — one FormKey in <i>both</i> halves of <c>records_head</c>, which is exactly the
-    /// disjointness #452's review commit landed to protect, and which would leave the record answering
+    /// at once — one FormKey in <i>both</i> halves of <c>records_head</c>, breaking their required
+    /// disjointness and leaving the record answering
     /// twice at Head.</para>
     ///
     /// <para>What it actually is is an ordinary dirty record: the working tree holds the new bytes, and
@@ -397,7 +396,7 @@ internal static class SourceIngest
     /// EditorID, so a rename shows up as this exact create+delete pair; <see cref="SourceRecordPath.TryParse"/> fails
     /// closed on container paths, so a renamed container's two file-system halves never reach this
     /// method at all. That is not the same as "a renamed container's Head goes unreconciled", though —
-    /// #463's structural pass (<see cref="ReconcileHeadStructurally"/>) diffs by FormKey, not by path, so
+    /// the structural pass (<see cref="ReconcileHeadStructurally"/>) diffs by FormKey, not by path, so
     /// a container rename lands there as an ordinary edit (old bytes at Head, new bytes at Effective,
     /// same FormKey throughout) without ever needing this pairing step.</para>
     /// </summary>

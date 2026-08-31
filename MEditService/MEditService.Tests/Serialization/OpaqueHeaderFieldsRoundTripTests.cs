@@ -6,39 +6,33 @@ using Noggog.WorkEngine;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>
-/// #568's own permanent regression fixture (AC3): a synthetic TES4 header carrying every field
+/// A permanent regression fixture: a synthetic TES4 header carrying every field
 /// <see cref="MEditService.Core.Source.ModelIdentity.OpaqueHeaderFields"/> allow-lists — the same
-/// opaque-byte-array shape <c>ScopeOverlayDOF.esp</c>'s real INTV subrecord exercises, not present in
-/// this repo or environment (confirmed absent while investigating this ticket; AC3 explicitly sanctions
-/// a synthetic fixture for exactly that reason). Isolated at the codec seam
+/// opaque-byte-array shape <c>ScopeOverlayDOF.esp</c>'s real INTV subrecord exercises in the wild
+/// (that plugin is not present in this repo or environment, hence the synthetic
+/// fixture). Isolated at the codec seam
 /// (<see cref="RecordTextCodecGeneratorSeed.SerializeWholeMod"/>/<c>DeserializeWholeMod</c>), one level
 /// below <c>TrackServiceTests.TrackAsync_WithOpaqueHeaderFieldsSet_TracksSuccessfully</c>'s end-to-end
 /// companion — a defect here would show up as a codec-only failure with no Track machinery in the way.
 ///
-/// <para><b>#568 review Finding 1: <c>Author</c>/<c>Description</c> checked here empirically, not
-/// assumed.</b> Both were run through this exact round trip with distinguishable values before joining
-/// <c>OpaqueHeaderFields</c> — this test is that check, made permanent, not a retrofit.
+/// <para><b><c>Author</c>/<c>Description</c> checked here empirically, not assumed.</b>
 /// <c>Mutagen.Bethesda.Core</c>'s <c>ModHeaderWriteLogic</c> (the shared write path every header write
-/// goes through — confirmed by reading it) never touches either field, so a divergence on either is a
+/// goes through) never touches either field, so a divergence on either is a
 /// real defect by the same logic as the other five allow-listed fields.</para>
 ///
 /// <para><b><c>TransientTypes</c> is set here too, matching on both sides, despite not being
-/// allow-listed</b> (#568 review Finding 2 — see <c>ModelIdentity.OpaqueHeaderFields</c>' own doc
+/// allow-listed</b> (see <c>ModelIdentity.OpaqueHeaderFields</c>' own doc
 /// comment and <c>ModelIdentityTests</c>' <c>..._KnownGap_ReturnsNull</c> pair for why a
 /// <c>TransientTypes</c> corruption is not detected by this gate at all): kept here to prove the codec
 /// itself preserves it correctly even though the round-trip *gate* cannot currently see a corruption of
 /// it — a codec question, not a gate-coverage one.</para>
 ///
-/// <para><b>Named rival, applied and observed while writing this test (not committed):</b> a codec
-/// defect that silently drops one opaque field is exactly what the ticket's own root-cause hypothesis
-/// named (<c>Mutagen.Bethesda.Serialization</c>'s generated <c>Fallout4ModHeader_Serialization</c> not
-/// carrying a <c>ByteArray</c> subrecord faithfully). Forced by setting
+/// <para><b>The guard is not vacuous:</b> forcing a dropped opaque field (setting
 /// <c>recompiled.ModHeader.INTV = null</c> immediately after <c>DeserializeWholeMod</c> returns — the
 /// same forging technique <c>TrackServiceTests</c>' own
-/// <c>DeserializeThenCorruptTheNpc</c>/<c>DeserializeThenMutateTheFloat</c> use to prove a codec
-/// regression is caught, not just a difference from the object the test itself built. Observed failure:
-/// <c>System.InvalidOperationException: Nullable object must have a value.</c> at the
-/// <c>.Value.ToArray()</c> comparison below — the guard is not vacuous.</para>
+/// <c>DeserializeThenCorruptTheNpc</c>/<c>DeserializeThenMutateTheFloat</c> use) fails at the
+/// <c>.Value.ToArray()</c> comparison below with
+/// <c>System.InvalidOperationException: Nullable object must have a value.</c></para>
 /// </summary>
 public sealed class OpaqueHeaderFieldsRoundTripTests
 {

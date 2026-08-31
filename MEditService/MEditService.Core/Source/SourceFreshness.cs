@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// Read-time freshness validation (#413 D3, deferred to #415): before the record editor or compare
+/// Read-time freshness validation: before the record editor or compare
 /// grid answers for a FormKey, the source text those answers claim to reflect is re-checked, and
 /// anything that moved out of band is folded in.
 ///
@@ -34,22 +34,18 @@ namespace MEditService.Core.Source;
 /// <para>A <c>content_hash</c> mismatch is never treated as proof of a user edit — it routes to a
 /// byte compare, which decides (<see cref="GitBlobHash"/>'s one-directional contract).</para>
 ///
-/// <para><b>Narrowed by #452 to while the backend runs external moves — in meaning, not in code.</b> This class
-/// used to carry a second, unstated job: correcting a read model seeded from the <i>binary</i>, where
-/// the very first read of a record whose source file had changed before the load order even started was
-/// doing catch-up work. Ingest-from-source removes that job at the root — <see cref="SourceIngest"/>
-/// seeds both refs from the tree, so at load time there is nothing here to correct. Nothing was
-/// deleted to achieve it, and nothing should be: every method below is still exactly the right
-/// re-check for a file that moves <i>after</i> the load order is up (a <c>git restore</c> from the Source
-/// Control panel, a terminal commit, an agent's script), which no ingest can anticipate. What changed
-/// is that on a freshly loaded load order the first read now finds the answer already correct.</para>
+/// <para><b>Covers only moves made while the backend runs.</b> Ingest-from-source
+/// (<see cref="SourceIngest"/>) seeds both refs from the tree, so at load time there is nothing here
+/// to correct; every method below is the re-check for a file that moves <i>after</i> the load order
+/// is up (a <c>git restore</c> from the Source Control panel, a terminal commit, an agent's script),
+/// which no ingest can anticipate.</para>
 /// </summary>
 public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFreshness> logger, RecordTextCodec codec)
 {
-    // #561: the per-record codec RecordEditService already writes through — needed here too, now
-    // that an embedded child's own body has to be extracted out of its owner's document rather than
+    // The per-record codec RecordEditService already writes through — needed here because an
+    // embedded child's own body has to be extracted out of its owner's document rather than
     // read straight off a file (see RecordBodyFromOwnerBytes). DI-constructed like the rest of this
-    // class (#561 review) — RecordTextCodec is already an AddSingleton in Program.cs, so this is
+    // class — RecordTextCodec is already an AddSingleton in Program.cs, so this is
     // just threading the primary constructor's own parameter through rather than a second,
     // hand-rolled instance bypassing it.
     private readonly RecordTextCodec _codec = codec;
@@ -80,17 +76,10 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
                 // A read must degrade to "serve what we have", never fail, when the source cannot be
                 // consulted — the folder vanished mid-read, the file is locked by another tool, git
                 // is mid-rebase, or the tree is corrupt (AmbiguousSourceUnitException: more than one
-                // file on disk claims this FormKey). #561: a Cell/Worldspace/Quest or an embedded
-                // child (a placed reference, a landscape, a navmesh, a Worldspace's top cell) used to
-                // land here too — ValidateOne resolved through the flat-only
-                // SourceUnitResolver.FlatSourcePath, which throws NotSupportedException for exactly
-                // those shapes, so every read of one went unvalidated and a git revert of its source
-                // file never reached the record editor. Fixed at the root below (ValidateOne now
-                // resolves through the general SourceUnitResolver.Resolve, the same one
-                // RecordEditService already writes through), so this catch has no routine reason to
-                // fire for a container or embedded record any more; it stays for the genuinely
-                // exceptional cases above. Logged rather than swallowed (modbench/CLAUDE.md: no
-                // silent catch).
+                // file on disk claims this FormKey). ValidateOne resolves through the general
+                // SourceUnitResolver.Resolve, so a container or embedded record has no routine
+                // reason to land here; this catch stays for the genuinely exceptional cases above.
+                // Logged rather than swallowed (modbench/CLAUDE.md: no silent catch).
                 logger.LogWarning(ex,
                     "Could not validate source freshness for {FormKey} in {Plugin}; serving the indexed state",
                     formKey, entry.Plugin.Name);
@@ -105,14 +94,14 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
 
         var release = loadOrder.GameRelease;
 
-        // #561: through the general SourceUnitResolver.Resolve rather than the flat-only
+        // Through the general SourceUnitResolver.Resolve rather than the flat-only
         // FlatSourcePath — the same resolver RecordEditService already writes through. This is what
         // covers a Quest/Cell/Worldspace (a directory-per-record container, own file, no flat path to
         // compute) and an embedded child (a placed reference, a landscape, a navmesh, a Worldspace's
-        // top cell — no file of its own at all): FlatSourcePath used to throw NotSupportedException
-        // for both, which the caller's catch turned into "serving the indexed state" — i.e. no
-        // freshness check ever ran for either shape. Resolve also carries FlatSourcePath's own
-        // EditorID-drift tolerance (#453 review finding 1) for the flat case, unchanged.
+        // top cell — no file of its own at all): FlatSourcePath throws NotSupportedException
+        // for both, which the caller's catch would turn into "serving the indexed state" — i.e. no
+        // freshness check at all for either shape. Resolve also carries FlatSourcePath's own
+        // EditorID-drift tolerance for the flat case.
         var unit = SourceUnitResolver.Resolve(
             index, entry.Plugin, modFolder, formKey, recordType, entry.Effective.EditorId, release);
 
@@ -133,7 +122,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
             // than merely not being where its indexed EditorID said it would be. ApplyWorkingTreeChanges
             // decides for itself whether that is a change or a convergence back to committed.
             index.ApplyWorkingTreeChanges(entry.Plugin, [(formKey, fileText)]);
-            // #422: a read-time self-heal is still a mutation — the row it just folded in can newly
+            // A read-time self-heal is still a mutation — the row it just folded in can newly
             // (or no longer) match an active filter, same as an explicit edit would.
             mirror.ReapplyFilter();
             if (logger.IsEnabled(LogLevel.Debug))
@@ -151,7 +140,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
     }
 
     /// <summary>
-    /// #561: a record's own canonical text, from the bytes of the file <see cref="SourceUnitResolver.Resolve"/>
+    /// A record's own canonical text, from the bytes of the file <see cref="SourceUnitResolver.Resolve"/>
     /// found. For a flat record or a directory-per-record container (<paramref name="unit"/>'s own
     /// file already holds nothing but this record's own fields) that is simply the file's bytes. For
     /// an embedded child — a placed reference, a landscape, a navmesh, a Worldspace's top cell, the
@@ -173,14 +162,14 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
     {
         if (ownerBytes == null) return null;
 
-        // #561 review: File.ReadAllText (what the flat case read through before this ticket) strips a
+        // File.ReadAllText strips a
         // leading UTF-8 BOM via StreamReader's own byte-order-mark detection; reading raw bytes here
         // instead does not, so a BOM-carrying source file (a plausible external touch — some editors
         // write one by default) would otherwise mismatch the codec's own BOM-free serialization on
         // every single read, forever, since the "fix" a self-heal would apply (writing the BOM'd text
         // into the index as Effective) never actually converges with committed. Stripped once here,
         // on the raw bytes, so every path below — the flat return and the embedded deserialize — sees
-        // exactly what File.ReadAllText always did.
+        // exactly what File.ReadAllText would have.
         ownerBytes = StripUtf8Bom(ownerBytes);
 
         if (!unit.IsEmbedded) return Encoding.UTF8.GetString(ownerBytes);
@@ -203,7 +192,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
     /// file's bytes, which the compare above has just confirmed, so there is nothing to find and no
     /// git process is started.
     ///
-    /// <para>#561: <paramref name="unit"/> replaces a bare relative path so this can tell a record's
+    /// <para><paramref name="unit"/> rather than a bare relative path, so this can tell a record's
     /// own file from an embedded child's owner file — <see cref="SourceUnit.RelativePath"/> names the
     /// git-tracked file either way, but for an embedded child that file's committed blob is the
     /// <i>owner's</i> whole document, not this record's own committed bytes, and needs the same
@@ -237,7 +226,7 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
 
         if (SourceRepository.ReadCommittedSourceText(modFolder, relativePath) is not { } headOwnerText) return;
 
-        // #561 review: the same BOM defence as RecordBodyFromOwnerBytes, at the string level — a
+        // The same BOM defence as RecordBodyFromOwnerBytes, at the string level — a
         // committed blob carrying a BOM is no less plausible than a working-tree file carrying one,
         // and this text feeds the same comparison against a BOM-free committedBody. \uFEFF rather
         // than a literal character in source, which an editor or a diff tool can silently mangle.

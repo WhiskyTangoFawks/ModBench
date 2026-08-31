@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-/** The one Plugins tree (#270 / [ADR-0035](../../docs/adr/0035-one-plugins-tree-editing-is-a-capability.md)):
+/** The one Plugins tree ([ADR-0035](../../docs/adr/0035-one-plugins-tree-editing-is-a-capability.md)):
  *  Mod Management owns the rows — identity, load order, checkbox, decorations — and the record
  *  repository owns their children. This joins the two and does nothing else.
  *
@@ -28,7 +28,7 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
     getChildren(child: TChild): Promise<TChild[]> | TChild[];
     getTreeItem(child: TChild): vscode.TreeItem;
     onDidChangeTreeData: vscode.Event<TChild | undefined | null>;
-    /** #364: the root-level Conflicts node, or undefined while it has nothing to show (no
+    /** The root-level Conflicts node, or undefined while it has nothing to show (no
      *  load order held, or `LoadOrderStatus.conflictsComputed` still false — `PluginTreeProvider
      *  .conflictsNode`'s own gate, never re-decided here). A `TChild` like every other node the
      *  record side owns, so it is prepended to the root row list, never added to `rowsSeen` — it
@@ -41,12 +41,12 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
   /** The filename a row stands for, or undefined for a row that stands for no plugin file at all
    *  (an error or empty-state row). The composite's only knowledge of either side's node shapes. */
   pluginFileOf(row: TRow): string | undefined;
-  /** #277 / ADR-0037 AC8: the master names this row's own order-aware badge flagged (issue #67,
-   *  `PluginListProvider.orderIssueMastersOf`), or undefined/empty for a row that carries none.
-   *  Optional — omitted in tests that don't exercise AC8's reconciliation — so a row with a
+  /** ADR-0037: the master names this row's own order-aware badge flagged
+   *  (`PluginListProvider.orderIssueMastersOf`), or undefined/empty for a row that carries none.
+   *  Optional — omitted in tests that don't exercise the reconciliation — so a row with a
    *  backend master issue and no wired accessor just gets the backend's own wording, unreconciled. */
   orderIssueMastersOf?(row: TRow): string[] | undefined;
-  /** #278 / ADR-0035 amending ADR-0018, reversed in part by #396 / ADR-0035's dated §Filters
+  /** ADR-0035 amending ADR-0018, per its dated §Filters
    *  amendment: whether this plugin owns at least one record the active record filter matches.
    *  `false` is only ever produced while a filter is active — `RecordQueryService.GetPlugins()`
    *  reports `true` for every plugin whenever no filter is active — so this accessor alone is
@@ -55,7 +55,7 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  accessor's own return (as opposed to the accessor being unwired) means the same as `true` —
    *  no filter machinery to ask means nothing has been ruled out. */
   hasMatchingRecords?(pluginFile: string): boolean | undefined;
-  /** #449: this plugin's own compile-freshness answer — "source ahead of binary" — keyed the same
+  /** This plugin's own compile-freshness answer — "source ahead of binary" — keyed the same
    *  way `hasMatchingRecords` is (a plugin filename, not the row), because it changes on its own
    *  independent trigger (Save & Compile) rather than through `setLoadOrder`'s once-per-reconcile bundle,
    *  the same reason `hasMatchingRecords` itself lives here rather than in that bundle. Undefined
@@ -64,7 +64,7 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
   compileStaleOf?(pluginFile: string): { stale: boolean; lastCompiledAt: string | null } | undefined;
 }
 
-/** A plugin's own declared master, absent from the load order (#277 / ADR-0037). Structurally
+/** A plugin's own declared master, absent from the load order (ADR-0037). Structurally
  *  matches `medit/ApiClient.ts`'s `MasterIssue` without importing it — the composite imports
  *  from neither bounded context (`src/test/contextBoundary.test.ts`). `DirectlyMissing`: never
  *  attempted at all. `Unloadable`: attempted, but itself failed to open or parse — not a
@@ -100,14 +100,14 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   async getChildren(element?: TRow | TChild): Promise<(TRow | TChild)[]> {
     if (element === undefined) {
       const rows = await this.deps.rows.getChildren();
-      // #396 / ADR-0035's dated §Filters amendment: a row whose plugin the active filter matches
+      // ADR-0035's dated §Filters amendment: a row whose plugin the active filter matches
       // nothing of is omitted here, not merely left unexpandable — see isHiddenByFilter. rowsSeen
       // only ever needs to remember rows actually handed out; a hidden row is never asked about by
       // getTreeItem (VS Code's own contract: it only calls getTreeItem with an element a
       // getChildren returned), so leaving it out of rowsSeen too is not a separate decision.
       const visible = rows.filter((row) => !this.isHiddenByFilter(row));
       for (const row of visible) this.rowsSeen.add(row as object);
-      // #364: prepended, never added to rowsSeen — it is a TChild the record side owns (see the
+      // Prepended, never added to rowsSeen — it is a TChild the record side owns (see the
       // deps doc comment), not a TRow, so isRow(element) must keep answering false for it the same
       // way it already does for every other record-side node.
       const conflicts = this.deps.children.conflictsNode?.();
@@ -129,14 +129,13 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     item.collapsibleState = this.expandableFile(element as TRow) === undefined
       ? vscode.TreeItemCollapsibleState.None
       : vscode.TreeItemCollapsibleState.Collapsed;
-    // #276 / ADR-0035, extended by #277 / ADR-0037: read-only-for-editing, the load-failure
+    // ADR-0035, extended by ADR-0037: read-only-for-editing, the load-failure
     // decoration and the master-issue decoration are all decided here for the same reason the
     // chevron is — this is the one place allowed to know both what the row provider built and
     // what the load order says, so neither side has to learn the other's vocabulary. Tooltip and (for
-    // the error decorations only) icon/description — never the leading slot (checkbox/lock,
-    // #276), which answers exactly one question ("can you change whether this loads?") that none
-    // of this is part of, and never contextValue: #356 retired the one decoration (drift) that
-    // ever needed to gate a per-row command through it.
+    // the error decorations only) icon/description — never the leading slot (checkbox/lock),
+    // which answers exactly one question ("can you change whether this loads?") that none
+    // of this is part of, and never contextValue: no decoration here gates a per-row command.
     const base = this.captureOriginalDecoration(element as object, item);
     item.tooltip = base.tooltip;
     item.description = base.description;
@@ -156,8 +155,8 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
    *  Both real row providers return the row *as* its own TreeItem (`getTreeItem(el) { return el;
    *  }`), so naively appending a note would accumulate it permanently the first time a plugin is
    *  decorated, with no way back to the row provider's own tooltip/icon/description (e.g.
-   *  `PluginNode`'s own missing-master badge) once the condition clears. #276 hit exactly this
-   *  bug for tooltip alone; the error decorations below touch icon and description too, so all
+   *  `PluginNode`'s own missing-master badge) once the condition clears. The error decorations
+   *  below touch icon and description too, so all
    *  three are captured and restored together. Weak for the same reason as `rowsSeen`. */
   private captureOriginalDecoration(key: object, item: vscode.TreeItem): {
     tooltip: string | vscode.MarkdownString | undefined;
@@ -174,7 +173,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     return this.originalDecoration.get(key)!;
   }
 
-  /** #276 / ADR-0035 AC4/AC5: appends a note to whatever tooltip `item` already carries — never
+  /** ADR-0035: appends a note to whatever tooltip `item` already carries — never
    *  replaces it, so a row's own badge (e.g. `PluginNode`'s missing-master one) survives. */
   private applyReadOnlyNote(item: vscode.TreeItem, file: string | undefined): void {
     const readOnly = file !== undefined && (this.readOnlyFiles?.has(file) ?? false);
@@ -185,16 +184,16 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
   }
 
-  /** #277 / ADR-0037: the backend-derived error decorations — AC7's load failure and AC1/AC2/AC4's
+  /** ADR-0037: the backend-derived error decorations — the load failure and the
    *  master issues — take decoration authority for a row only when the backend actually has
    *  something to say about it; otherwise `item` is left exactly as `captureOriginalDecoration`
-   *  restored it (including a frontend-only order-aware badge, untouched — see AC8 below). Both
+   *  restored it (including a frontend-only order-aware badge, untouched). Both
    *  branches read their load-order maps with `?? []`/an explicit undefined check rather than a bare
    *  `.get(...).x` — the wire's `masterIssues` is `MasterIssue[] | undefined | null` even though
-   *  the backend always emits an array once #277 ships, and a response from a backend predating
+   *  the backend always emits an array, and a response from a backend predating
    *  the field must degrade to "no issues", not throw. */
   private applyBackendDecoration(item: vscode.TreeItem, row: TRow, file: string | undefined): void {
-    // AC7: a plugin that failed to open or parse never has a MasterMetadata to derive an issue
+    // A plugin that failed to open or parse never has a MasterMetadata to derive an issue
     // list from (MasterResolution.Classify only iterates the successfully-loaded set), so this
     // and the master-issue decoration below are mutually exclusive per plugin — checked first as
     // the more fundamental fact: nothing about a plugin's own masters could even be evaluated.
@@ -209,14 +208,14 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       if (issues.length > 0) this.applyMasterIssueDecoration(item, row, issues);
     }
 
-    // #449: unconditional, unlike the two branches above — it never steals the icon slot from a
-    // higher-severity decoration (orchestrator ruling), so it has nothing to be mutually exclusive
+    // Unconditional, unlike the two branches above — it never steals the icon slot from a
+    // higher-severity decoration, so it has nothing to be mutually exclusive
     // with. It only ever appends to whatever description/tooltip text this row already carries,
     // including text either branch above just set.
     this.applyCompileStaleDecoration(item, file);
   }
 
-  /** #449: a tracked plugin whose source has moved past `refs/medit/last-compile/<plugin>` —
+  /** A tracked plugin whose source has moved past `refs/medit/last-compile/<plugin>` —
    *  "the game can't see your edits yet". Load-order-derived like the master-issue/load-failure
    *  decorations above (append-only, never the leading slot), but never claims `iconPath` — the
    *  description hint is the primary signal, and the icon slot stays reserved for whichever
@@ -233,9 +232,9 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     item.description = item.description ? `${item.description} · ${hint}` : hint;
   }
 
-  /** AC1/AC2/AC4/AC8: one decoration, not two that can disagree. A master name the backend also
+  /** One decoration, not two that can disagree. A master name the backend also
    *  flags is reported once, in the backend's richer load-order-aware wording; a master the
-   *  frontend's order-only check (issue #67) flagged that the backend does *not* — present,
+   *  frontend's order-only check flagged that the backend does *not* — present,
    *  loaded, merely sequenced too late, a fact Mutagen's own FormKey resolution has no way to see
    *  — is preserved, worded distinctly. Built structurally from `issues` and
    *  `orderIssueMastersOf`, never by editing the row's own pre-rendered text, so there is nothing
@@ -267,7 +266,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
     return this.rowsSeen.has(element as object);
   }
 
-  /** #97 / ADR-0044: whether Editing currently holds a load order — the same fact `expandableFile`
+  /** ADR-0044: whether Editing currently holds a load order — the same fact `expandableFile`
    *  below already gates the chevron on, exposed so the composition root can decide whether a
    *  loadout change has a receiver for the next snapshot at all, before ever attempting the PUT.
    *  Mod Management works with no backend running (root CLAUDE.md), which is the ordinary case,
@@ -279,20 +278,20 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
 
   /** The plugin file this row can browse, or undefined when it can't be expanded — no load order
    *  held, no plugin file, or a file the load order doesn't hold. A row whose filter match is `false` never
-   *  reaches here at all (#396: `getChildren()` omits it before `getTreeItem`/`getChildren(row)`
+   *  reaches here at all (`getChildren()` omits it before `getTreeItem`/`getChildren(row)`
    *  can be called on it — VS Code's own contract guarantees neither is called with an element
    *  `getChildren` didn't return), so there is nothing left for this method itself to rule out on
-   *  that account. The nothing-held case is the honest answer for the same underlying reason a
-   *  filtered-out row used to be here: a row that would expand to an empty list reads as "this
+   *  that account. The nothing-held case answers undefined because
+   *  a row that would expand to an empty list reads as "this
    *  plugin has no records" (ADR-0026's silent-wrong-state tier), whether the emptiness comes from
-   *  never having been indexed or (now handled one level up) from every record being filtered out. */
+   *  never having been indexed or (handled one level up) from every record being filtered out. */
   private expandableFile(row: TRow): string | undefined {
     if (this.heldFiles === undefined) return undefined;
     const file = this.deps.pluginFileOf(row);
     return file === undefined || !this.heldFiles.has(file.toLowerCase()) ? undefined : file;
   }
 
-  /** #396 / ADR-0035's dated §Filters amendment: true for a row whose plugin the active record
+  /** ADR-0035's dated §Filters amendment: true for a row whose plugin the active record
    *  filter matches zero records of. `hasMatchingRecords` only ever answers `false` while a filter
    *  is active (`RecordQueryService.GetPlugins()` reports `true` for every plugin otherwise), so
    *  reading it here — with no separate "is a filter active" signal threaded in — is sufficient. A
@@ -309,10 +308,10 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   private loadFailures?: Map<string, string>;
 
   /** The plugin files Editing's load order holds, or undefined when it holds none, plus
-   *  (#276 / ADR-0035) the subset that's read-only for editing — Editing's "Immutable plugin"
-   *  (`medit/ApiClient.ts` `PluginMetadata.isImmutable`) — and (#277 / ADR-0037) each plugin's own
+   *  (ADR-0035) the subset that's read-only for editing — Editing's "Immutable plugin"
+   *  (`medit/ApiClient.ts` `PluginMetadata.isImmutable`) — and (ADR-0037) each plugin's own
    *  master issues, keyed by plugin filename (`medit/ApiClient.ts` `PluginMetadata.masterIssues`),
-   *  plus (also #277 / ADR-0037 AC7) the reason for every copy the reconcile tried and failed to
+   *  plus (also ADR-0037) the reason for every copy the reconcile tried and failed to
    *  open at all (`LoadOrderResponse.failures`, already crossed the wire — no new endpoint).
    *  One setter, not four: these facts are a single hand-off from the same reconcile and never
    *  change independently — every call site in `extension.ts` either sets all of them (a reconcile
@@ -340,7 +339,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
   }
 
   /** Re-render what is already built, because something this composite *layers on* changed — e.g.
-   *  #278's record-filter match set. Deliberately not the row provider's `invalidate()`, which
+   *  the record-filter match set. Deliberately not the row provider's `invalidate()`, which
    *  means "re-read plugins.txt from disk": callers of this reach for it precisely because nothing
    *  about the load order itself changed, and re-reading would hand out a fresh set of row
    *  objects, discarding the per-row decoration state keyed to the old ones (`originalDecoration`)

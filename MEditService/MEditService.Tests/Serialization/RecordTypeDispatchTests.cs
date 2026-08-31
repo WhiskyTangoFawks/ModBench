@@ -9,15 +9,15 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>
-/// #370 Slice A1: <see cref="RecordTextCodec"/>'s runtime record-type dispatch, proven at the
+/// <see cref="RecordTextCodec"/>'s runtime record-type dispatch, proven at the
 /// codec's own public seam rather than only through the one or two types an API-level fixture
-/// happens to exercise (#367's Weapon-only mechanism generalizes to any of the ~586 generated
+/// happens to exercise (the mechanism generalizes to any of the ~586 generated
 /// types via reflection on the generated class name — see RecordTextCodec's own doc comment).
 ///
-/// Two positive types on purpose, not one: Npc (a plain record — the type #370's primary API
+/// Two positive types on purpose, not one: Npc (a plain record — the type the primary API
 /// fixtures actually exercise) and Cell (a container-shaped type, built here with no
 /// children populated so it stays one file regardless of shallow-vendoring policy — that policy is
-/// Slice F's concern, not dispatch's). Proving dispatch against two differently-shaped generated
+/// <c>ContainerSingleFileTests</c>' concern, not dispatch's). Proving dispatch against two differently-shaped generated
 /// classes is what distinguishes "resolves for the one type someone tried" from "resolves by a
 /// naming convention that actually holds".
 /// </summary>
@@ -90,8 +90,8 @@ public class RecordTypeDispatchTests
 
             Assert.NotEmpty(leaves);
             Assert.Empty(divergent);
-            // A childless Cell already emits one file with no shallow-copy intervention — Slice F
-            // proves the strip is what keeps this true once children are populated.
+            // A childless Cell already emits one file with no shallow-copy intervention —
+            // ContainerSingleFileTests proves the layout holds once children are populated.
             Assert.Equal([filePath], Directory.GetFiles(dir.FullName, "*", SearchOption.AllDirectories));
         }
         finally
@@ -100,17 +100,17 @@ public class RecordTypeDispatchTests
         }
     }
 
-    // The negative case Q asked for named explicitly: an unresolvable type must fail loud and
+    // The negative case, named explicitly: an unresolvable type must fail loud and
     // actionable, not with a bare NullReferenceException from a failed reflection lookup or the
     // generated dispatch's own anonymous NotImplementedException.
     //
-    // This used to be asserted by handing DeserializeAsync a Type with no generated serializer. That
-    // route is gone: a caller states record_type, not a CLR Type, and a record_type this game's
+    // A caller states record_type, not a CLR Type, and a record_type this game's
     // schema does not know is treated as "expect the document to name itself" rather than as a
-    // dispatch target. The equivalent failure is therefore a *document* naming a type the dispatch
-    // has no case for — corrupt text, a hand-edited source file, or text written by a future schema.
+    // dispatch target. The unresolvable-type failure is therefore a *document* naming a type the
+    // dispatch has no case for — corrupt text, a hand-edited source file, or text written by a
+    // future schema.
     //
-    // The subject is a GlobalFloat rather than #370's original Npc because since #450 only the
+    // The subject is a GlobalFloat rather than an Npc because only the
     // path-ambiguous types self-describe at all: an Npc document has no discriminator left to
     // corrupt, and GLOB — the type the discriminator exists for — does.
     [Fact]
@@ -147,8 +147,8 @@ public class RecordTypeDispatchTests
 
     // The exception's own doc comment states it renders two distinct cases actionably: a missing
     // generated class entirely (covered above, via IMajorRecordGetter) and a generated class that
-    // exists but lacks the expected static method — a generator shape change, the live failure mode
-    // #385 exists because of (Mutagen changed behavior between point releases, and this codec sits
+    // exists but lacks the expected static method — a generator shape change, a live failure mode
+    // (Mutagen has changed behavior between point releases, and this codec sits
     // directly on that generator's output shape). The second case has no real-world fixture to drive
     // it through RecordTextCodec itself (it would require a generated type that is missing exactly
     // one method, which nothing in this assembly's schema naturally is), so this constructs the

@@ -6,7 +6,7 @@ namespace MEditService.Tests.Source;
 
 /// <summary>
 /// <c>ContainerChildFields.FindEmbeddedChild</c> at the unit level — how far the search into a
-/// container's object graph goes, and where it stops (#453 review finding 2).
+/// container's object graph goes, and where it stops.
 ///
 /// <para><b>Why this exists as well as the integration tests.</b> <c>EmbeddedChildEditTests</c> drives
 /// the same code through <c>RecordEditService</c>, which is the right level for "the edit lands in the

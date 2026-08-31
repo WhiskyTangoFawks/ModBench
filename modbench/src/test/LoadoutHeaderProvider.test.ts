@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// #247: the Loadout header is the home for workspace-scope actions — profile, deployment —
+// The Loadout header is the home for workspace-scope actions — profile, deployment —
 // none of which belong to any one tree's domain. It spans both bounded contexts, so it may
 // not import either context's internals: every piece of state arrives as an injected getter.
 // That constraint is what makes it unit-testable here without a VS Code harness
@@ -45,15 +45,15 @@ describe('LoadoutHeaderProvider', () => {
   // first view and must never be a hole. But on those paths the commands its rows activate
   // are never registered, so a row would be a click that throws "command not found". There
   // is nothing to read and nothing to run, so it renders nothing; the Mods view's existing
-  // #192 welcome content is what tells the user why.
+  // welcome content is what tells the user why.
   it('renders no rows when there is no loadout to read', async () => {
     const rows = await makeProvider({ hasLoadout: () => false }).getChildren();
 
     expect(rows).toEqual([]);
   });
 
-  // #352: Launch mEdit / Close mEdit moved to the Plugins view — the header carries no mEdit
-  // row at all any more.
+  // Launch mEdit / Close mEdit belong to the Plugins view — the header carries no mEdit
+  // row at all.
   it('never renders an mEdit row', async () => {
     const rows = await makeProvider().getChildren();
 

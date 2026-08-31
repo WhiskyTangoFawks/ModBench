@@ -10,21 +10,19 @@ const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: '
 const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
 const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-// Issue #157 / ADR-0031: the link labels itself from the resolution signal instead of always
+// ADR-0031: the link labels itself from the resolution signal instead of always
 // echoing the raw FormKey — a resolved reference reads as the record it points to.
 //
-// Issue #218: #157's label choice (the EditorID *instead of* the FormKey) is superseded. It
-// dropped the identity and kept the decoration, so the format a reference is chosen in (the
-// picker's own items, "EditorID [FormKey]") and the format it is read back in disagreed — and
-// under the pre-ADR-0034 cursor contract, where copying a value is selecting the text a cell displays,
-// a cell that does not display its own identity cannot hand it to the user at all.
+// The label is the composite "EditorID [FormKey]", never the EditorID alone: the format a
+// reference is chosen in (the picker's own items) and the format it is read back in must agree,
+// and a cell that does not display its own identity cannot hand it to the user.
 describe('FormKeyLink — label', () => {
   it('renders the composite EditorID [FormKey] as its label when resolved (valid type)', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]')).toBeInTheDocument();
   });
 
-  // Issue #218: the composite is long and the grid has one column per plugin, so width is managed
+  // The composite is long and the grid has one column per plugin, so width is managed
   // by truncation rather than by shortening the label — a truncated element still copies its full
   // text, so the visual cost is paid without a correctness cost. gridStyles' baseCell already sets
   // maxWidth/ellipsis on the <td>, but that clips at the boundary of an atomic inline box and never
@@ -54,7 +52,7 @@ describe('FormKeyLink — label', () => {
   });
 });
 
-// Issue #157: the affordance now keys off the tri-state signal directly — resolved-wrong-type
+// The affordance keys off the tri-state signal directly — resolved-wrong-type
 // gets it too (xEdit allows the jump), only Unresolved withholds it.
 describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
   afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
@@ -77,12 +75,12 @@ describe('FormKeyLink — Ctrl-hover affordance from resolution', () => {
     expect(link.style.cursor).toBe('pointer');
   });
 
-  // Issue #218 / ADR-0034: same defect #204 fixed in ScalarCell, in the leaf it missed — the link
-  // must not assert a resting cursor, because DiskCell sets `grab` on the parent <td> and the cell
-  // is a drag source the whole time. An inline `cursor: 'default'` here painted an arrow over that,
-  // so the one gesture always available on the cell was the one it never advertised. jsdom can't
-  // prove which cursor paints (no cascade), so this only proves the mask itself is gone; the `hot`
-  // override above is unaffected and still asserted.
+  // ADR-0034: the link must not assert a resting cursor, because DiskCell sets `grab` on the
+  // parent <td> and the cell is a drag source the whole time — an inline `cursor: 'default'`
+  // here would paint an arrow over that, so the one gesture always available on the cell would
+  // be the one it never advertised. jsdom can't prove which cursor paints (no cascade), so this
+  // only proves the mask itself is gone; the `hot` override above is unaffected and still
+  // asserted.
   it('does not mask the parent drag cursor with its own cursor style at rest', () => {
     render(<FormKeyLink value="000019:Fallout4.esm" resolution={validType} onOpen={vi.fn()} />);
     expect(screen.getByText('DogmeatRace [000019:Fallout4.esm]').style.cursor).toBe('');

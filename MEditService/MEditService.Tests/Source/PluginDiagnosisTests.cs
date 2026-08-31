@@ -14,15 +14,15 @@ namespace MEditService.Tests.Source;
 /// <c>RealData/MasterPruningRoundTripGateTests.cs</c> and
 /// <c>Edits/PluginCompileServiceDiagnosisTests.cs</c>/<c>Edits/PluginCompileServiceMasterPruningTests.cs</c>.
 /// This file's own job is the shapes those real fixtures can't reach cheaply — chiefly the
-/// nested-<see cref="AggregateException"/> chain-walk (Finding B) — built from real defects' own
-/// captured messages (<c>SouthOfTheSea.esm</c> REFR <c>431EDC</c>, found live during #519's
-/// planning; <c>SpaDia_AMR.esp</c> Quest <c>DiaQ_LLInjector_SpadeyAMR</c>, found live during #520's
-/// planning) rather than committing every fixture this repo needs a shape from.
+/// nested-<see cref="AggregateException"/> chain-walk — built from real defects' own
+/// captured messages (<c>SouthOfTheSea.esm</c> REFR <c>431EDC</c>; <c>SpaDia_AMR.esp</c> Quest
+/// <c>DiaQ_LLInjector_SpadeyAMR</c>; both found live) rather than committing every fixture this
+/// repo needs a shape from.
 /// </summary>
 public sealed class PluginDiagnosisTests
 {
     /// <summary>
-    /// Finding B, proven at the unit level: Mutagen enriches identity onto the exception nearest
+    /// Proven at the unit level: Mutagen enriches identity onto the exception nearest
     /// where a record was actually being parsed and rethrows outward through however many
     /// <see cref="AggregateException"/>s its own parallel record-block parsing used — live against
     /// <c>SouthOfTheSea.esm</c>'s real REFR <c>XWPG</c>/<c>XWPN</c> defect, the exception
@@ -56,7 +56,7 @@ public sealed class PluginDiagnosisTests
     }
 
     /// <summary>
-    /// The multi-exception half of Finding B: Mutagen's own parallel record-block parsing
+    /// The multi-exception half: Mutagen's own parallel record-block parsing
     /// (<c>ListBinaryTranslation.ParseParallel</c>, a real <c>Parallel.ForEach</c>) can produce an
     /// <see cref="AggregateException"/> holding more than one failure when concurrent iterations fail
     /// simultaneously — realistic for any plugin with more than one corrupt record.
@@ -86,7 +86,7 @@ public sealed class PluginDiagnosisTests
         Assert.Contains("SecondBranchRef", diagnosis.Anchor);
     }
 
-    /// <summary>AC1's other half at the unit level: nothing in the chain is a <see cref="RecordException"/>
+    /// <summary>Nothing in the chain is a <see cref="RecordException"/>
     /// at all, so the diagnosis anchors on nothing — never a guessed identity.</summary>
     [Fact]
     public void FromParseException_WhenNoRecordExceptionIsAnywhereInTheChain_AnchorsOnNothing()
@@ -98,7 +98,7 @@ public sealed class PluginDiagnosisTests
         Assert.Equal(PluginDiagnosis.UnknownClass, diagnosis.DefectClass);
     }
 
-    /// <summary>AC2: the one Kind A entry with a real, reproducible fixture — <c>Clipboards to the
+    /// <summary>The one Kind A entry with a real, reproducible fixture — <c>Clipboards to the
     /// BOS.esp</c>'s exact message, reproduced verbatim (not paraphrased) since the table matches on
     /// substring.</summary>
     [Fact]
@@ -138,7 +138,7 @@ public sealed class PluginDiagnosisTests
         Assert.Equal("the plugin — unknown: boom", diagnosis.Describe());
     }
 
-    /// <summary>#520's own write seam: the exact nested shape observed live against
+    /// <summary>The write seam: the exact nested shape observed live against
     /// <c>SpaDia_AMR.esp</c> (<c>AggregateException(AggregateException(RecordException(UnmappableFormIDException)))</c>,
     /// from Mutagen's own <c>WriteGroupParallel</c>/<c>WriteQuestsParallel</c>) — the anchor comes from
     /// the <see cref="RecordException"/> exactly as <see cref="FromParseException"/>'s own walk finds
@@ -176,8 +176,7 @@ public sealed class PluginDiagnosisTests
     /// <summary>The catch-filter test both write call sites (<c>TrackService.VerifyRoundTrip</c>,
     /// <c>PluginCompileService.Compile</c>) share: an exception tree that never carries
     /// <see cref="UnmappableFormIDException"/> must not be diverted into this Kind A row — every other
-    /// write failure keeps propagating exactly as it did before #520 (#516's decision, out of scope
-    /// to widen).</summary>
+    /// write failure keeps propagating unchanged (a deliberate decision, out of scope to widen).</summary>
     [Fact]
     public void HasUnmappableFormID_WhenNoUnmappableFormIDExceptionIsAnywhereInTheChain_IsFalse()
     {

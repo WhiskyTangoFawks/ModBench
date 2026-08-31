@@ -31,7 +31,7 @@ public sealed record FormKeyResolution(FormKeyResolutionState State, string? Rec
     // validTypes empty = any resolved type is acceptable (mirrors CheckErrorBuilder.CheckScalar's
     // `validTypes.Count > 0 &&` guard).
     //
-    // #613: a lookup miss is not automatically a broken link. `entry` comes from `form_lookup`,
+    // A lookup miss is not automatically a broken link. `entry` comes from `form_lookup`,
     // which only ever carries records that physically exist in some loaded plugin's data — it can
     // never carry an engine-hardcoded FormID (e.g. Player 00000007), because no plugin's data
     // defines one. xEdit reads this range the same way: FileFormIDtoLoadOrderFormID and
@@ -57,8 +57,8 @@ public sealed record FormKeyResolution(FormKeyResolutionState State, string? Rec
     }
 
     // TryFactory, not Factory: a malformed or non-FormKey string (an editor's raw, not-yet-validated
-    // input, e.g. #613's own ScalarFieldApplierRefusalTests case) must still fall through to
-    // Unresolved as it always did — a parse failure is never itself the hardcoded case.
+    // input — see ScalarFieldApplierRefusalTests) must still fall through to
+    // Unresolved — a parse failure is never itself the hardcoded case.
     private static bool IsHardcoded(string formKey, GameRelease release) =>
         FormKey.TryFactory(formKey, out var parsed)
             && parsed.ID < GameConstants.Get(release).DefaultHighRangeFormID

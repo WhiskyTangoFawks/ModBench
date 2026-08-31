@@ -3,8 +3,8 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B2: <see cref="SourceRepository.ParkedCompileBinarySha256"/> — the read half of #416's
-/// <see cref="SourceRepository.ParkCompileSnapshot"/> trailer, and the exact value the self-echo
+/// <see cref="SourceRepository.ParkedCompileBinarySha256"/> — the read half of
+/// <see cref="SourceRepository.ParkCompileSnapshot"/>'s trailer, and the exact value the self-echo
 /// classifier compares an observed binary's hash against.
 /// </summary>
 public sealed class SourceRepositoryParkedCompileBinarySha256Tests

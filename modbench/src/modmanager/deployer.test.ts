@@ -36,8 +36,8 @@ describe('deploy', () => {
     expect(manifest.preExisting).toEqual([]);
   });
 
-  // fs.symlink needs admin rights or Developer Mode on Windows (#185 plans a Windows CI
-  // leg) — skip there rather than fail for an environment reason, not a code one.
+  // fs.symlink needs admin rights or Developer Mode on Windows — skip there
+  // rather than fail for an environment reason, not a code one.
   it.skipIf(process.platform === 'win32')(
     'deploys a symlinked file as a real hardlink to its target, not a duplicated symlink (#322)',
     async () => {
@@ -53,7 +53,7 @@ describe('deploy', () => {
       const deployedPath = join(fx.gameDirectory.dataFolder, 'linked.dds');
       // A real hardlink to the resolved target, not a duplicated symlink — fs.link's final
       // path component doesn't dereference on Linux, so linking the symlink's own path
-      // would otherwise land a second, possibly-broken symlink in Data/ (#322).
+      // would otherwise land a second, possibly-broken symlink in Data/.
       expect((await lstat(deployedPath)).isSymbolicLink()).toBe(false);
       const [srcStat, tgtStat] = await Promise.all([stat(target), stat(deployedPath)]);
       expect(tgtStat.ino).toBe(srcStat.ino);
@@ -61,8 +61,8 @@ describe('deploy', () => {
     },
   );
 
-  // #441/#438 (AC): a tracked mod's ".git" and its current-layout root "source/" folder never
-  // reach a deploy plan — end to end through the real walk, not just the index-level assertion
+  // A tracked mod's ".git" and its root "source/" folder never reach a deploy
+  // plan — end to end through the real walk, not just the index-level assertion
   // fileConflictIndex.test.ts already covers, so "never appears in a deploy plan" is checked at
   // the deployer's own seam too.
   it('deploys neither .git nor the root source/ folder, even though both exist in the mod', async () => {
@@ -82,14 +82,8 @@ describe('deploy', () => {
     expect(manifest.links).toEqual(['MyMod.esp']);
   });
 
-  // #374 (AC2): "manifest hashing yields identical results... before and after a mod acquires a
-  // repo" — there is no manifest hashing anywhere in Mod Management today (#388 owns hashing
-  // pristine binaries for provenance, a different job), so this reads the criterion as *manifest
-  // identity* across the tracked/untracked boundary and proves that directly: same plugin bytes,
-  // same manifest, whether or not the source tree exists alongside it. #610 ported the fixture
-  // from the pre-#441 per-plugin "<plugin>.source/" sibling tree to the current root "source/"
-  // layout — the property under test (manifest identity across the tracked/untracked boundary)
-  // is a live invariant of the current layout too, only the old fixture was legacy.
+  // Manifest identity across the tracked/untracked boundary: same plugin bytes,
+  // same manifest, whether or not a source text tree exists alongside the plugin.
   it('produces an identical manifest before and after the same mod acquires a repo, and never rewrites the plugin bytes', async () => {
     fx = await makeDeployerFixture();
     const pluginPath = await fx.writeModFile('ModA', 'MyMod.esp', 'PLUGINBYTES');
@@ -435,7 +429,7 @@ describe('deploy', () => {
   // textures/foo.dds) are the SAME file to the game, but DIFFERENT physical
   // paths on ext4. The winner map only ever has one entry per folded path
   // (fileConflictIndex's job), so the deployer must link exactly the winner's
-  // own casing and never both (#128).
+  // own casing and never both.
   it('links exactly one file for a case-variant winner, at the winner\'s own casing', async () => {
     fx = await makeDeployerFixture();
     const source = await fx.writeModFile('ModA', 'Textures/Foo.dds', 'A');

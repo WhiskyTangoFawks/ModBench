@@ -12,9 +12,9 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #493: native renumber of a container's own FormKey (here, a Worldspace) leaves other records'
-/// stale pointers into it. #488 closed the "renumbered record's own children" direction
-/// (<see cref="ContainmentRederivationTests"/>); this is the mirror gap it explicitly declined —
+/// Native renumber of a container's own FormKey (here, a Worldspace) leaves other records'
+/// stale pointers into it. <see cref="ContainmentRederivationTests"/> covers the
+/// "renumbered record's own children" direction; this is the mirror gap —
 /// <c>cell_location.parent_worldspace</c> for a Worldspace's <i>exterior</i> cells, which
 /// <c>ContainerChildFields.EnumerateChildren</c> can never reach (<c>Worldspace.SubCells</c> holds
 /// <c>WorldspaceBlock</c>, not <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>, so
@@ -86,7 +86,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
     private RecordEditService EditService() =>
         new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    // ---- Slice 1: the confirmed gap ----
+    // ---- the confirmed gap ----
 
     [Fact]
     public void RenumberingAWorldspace_RepointsItsExteriorCellsCellLocationRow_ToTheNewFormKey_SameLoadOrder()
@@ -107,7 +107,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
             c => c.FormKey == _extCellFormKey);
     }
 
-    // ---- Slice 2: guard against a duplicate TopCell row ----
+    // ---- guard against a duplicate TopCell row ----
     //
     // A plausible wrong implementation calls RepointCellLocationParent *before*
     // CreateWorkingTreeRecord instead of after (alongside RepointContainerChildParent) — applied and
@@ -131,7 +131,7 @@ public sealed class WorldspaceRenumberContainmentTests : IDisposable
         Assert.Equal(newFormKey, index.GetCellLocation(_plugin, _topCellFormKey)!.Value.ParentWorldspace);
     }
 
-    // ---- Slice 3: parity against a fresh reconcile ingest ----
+    // ---- parity against a fresh reconcile ingest ----
 
     [Fact]
     public void AfterRenumberingAWorldspace_AFreshReopen_AgreesWithTheLiveCellLocationRows()

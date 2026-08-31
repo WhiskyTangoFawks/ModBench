@@ -1,6 +1,6 @@
 // Pure grouping of the flat ModlistEntry[] read-model into the shape the Mod List
 // tree renders: each separator wraps the mods that PRECEDE it in file order, back
-// to the previous separator (see #107 — modlist.txt is winning-first while MO2's
+// to the previous separator (modlist.txt is winning-first while MO2's
 // authoring view is losing-at-top, so a separator is written after the mods it
 // heads). Mods after the last separator are ungrouped root items. vscode-free so
 // it stays unit-testable.

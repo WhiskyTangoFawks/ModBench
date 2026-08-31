@@ -13,7 +13,7 @@ using Xunit.Abstractions;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #113 / #589: the reconcile profiling harness. Loads a real MO2 instance's active profile exactly
+/// The reconcile profiling harness. Loads a real MO2 instance's active profile exactly
 /// the way the extension does (<c>modbench/src/modmanager/snapshot.ts</c>: plugins.txt order,
 /// every line enabled or not, each name resolved overwrite → first enabled mod in modlist.txt order
 /// → game Data folder) through <see cref="ILoadOrderMirror.Reconcile"/> <b>twice</b> — cold, then

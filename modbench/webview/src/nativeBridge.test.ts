@@ -6,13 +6,10 @@ import { vscode } from './vscode';
 import { pickFormKey, pickConditionFunction, openExtendedFieldEditor } from './nativeBridge';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION } from './messages';
 
-// #426: restores the request/reply bridge mechanism #410 retired along with the
-// write path it fed (nativeBridge.ts's own doc comment) — the FormKey picker is the first gesture
-// back on it, so its own suite exercises the shared requestReply plumbing (resolve-on-match,
-// ignore-a-mismatched-requestId, ignore-unrelated-message-types) once, the same way the pre-#410
-// suite used pickFormKey as its exemplar for four near-identical bridges. Later tickets restoring
-// further native-prompt bridges (the condition-function picker, etc.) extend this file rather than
-// re-proving the shared mechanism.
+// pickFormKey's suite exercises the shared requestReply plumbing (resolve-on-match,
+// ignore-a-mismatched-requestId, ignore-unrelated-message-types) once, as the exemplar for the
+// near-identical bridges. Further native-prompt bridges (the condition-function picker, etc.)
+// extend this file rather than re-proving the shared mechanism.
 
 function postedRequestId(): string {
   const call = (vscode.postMessage as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0];
@@ -130,7 +127,7 @@ describe('pickConditionFunction', () => {
   });
 });
 
-// Issue #230 (#426: restored): unlike pickFormKey above, openExtendedFieldEditor doesn't return a
+// Unlike pickFormKey above, openExtendedFieldEditor doesn't return a
 // Promise — the editor tab it opens can be saved any number of times before it's closed, so its
 // own map entry isn't deleted on the first EXTENDED_EDITOR_COMMITTED the way `inFlight`'s entries
 // are deleted on their first (and only) reply.
@@ -151,7 +148,7 @@ describe('openExtendedFieldEditor', () => {
     }));
   });
 
-  // #272 / ADR-0036: origin is forwarded even though the temp-file path doesn't use it yet.
+  // ADR-0036: origin is forwarded even though the temp-file path doesn't use it yet.
   it('posts OPEN_EXTENDED_EDITOR with origin', () => {
     openExtendedFieldEditor(
       { value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Shared.esp', origin: 'ModB', readOnly: false },

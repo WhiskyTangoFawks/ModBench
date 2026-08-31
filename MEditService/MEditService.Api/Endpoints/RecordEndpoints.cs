@@ -30,7 +30,7 @@ public static class RecordEndpoints
         .WithTags("Records")
         .Produces<PagedResult<RecordSummary>>();
 
-        // #364: the Conflicts node's own listing — a literal segment, so ASP.NET Core's routing
+        // The Conflicts node's own listing — a literal segment, so ASP.NET Core's routing
         // matches it ahead of the parameterized `/records/{formKey}` below regardless of
         // registration order, but it's placed here anyway to read in the same order it resolves.
         app.MapGet("/records/conflicts", (IRecordQueryService svc) =>
@@ -83,7 +83,7 @@ public static class RecordEndpoints
         .Produces<IReadOnlyList<ReferenceResult>>()
         .ProducesProblem(500);
 
-        // #415 / ADR-0041: the single write path's one door. Scripts and agents (ADR-0024's ordinary
+        // ADR-0041: the single write path's one door. Scripts and agents (ADR-0024's ordinary
         // HTTP clients) reach the same RecordEditService the UI does — there is no second write path,
         // which is exactly why the untracked refusal is expressible here at all.
         app.MapPost("/records/{formKey}/field", (
@@ -101,16 +101,16 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #427: delete-record — the source file goes away and #415's null-Body mechanism takes it
-        // from there. Same door, same refusals, same doctrine as EditField above.
+        // Delete-record — the source file goes away and the null-Body working-tree mechanism takes
+        // it from there. Same door, same refusals, same doctrine as EditField above.
         app.MapPost("/records/{formKey}/delete", (
             string formKey, RecordDeleteRequest request, RecordEditService edits) =>
             DeleteRecord(formKey, request, edits, logger))
         .WithName("DeleteRecord")
-        .WithSummary("Delete a record as a working-tree change (#415/#427).")
+        .WithSummary("Delete a record as a working-tree change.")
         .WithDescription(
-            "Deletes the record's source file — a git-native, null-Body working-tree change (#415's " +
-            "mechanism): gone at Effective, still served at Head until the deletion is committed and " +
+            "Deletes the record's source file — a git-native, null-Body working-tree change: " +
+            "gone at Effective, still served at Head until the deletion is committed and " +
             "compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes " +
             "dangling and surfaces as an ordinary compile diagnostic (ADR-0041), the same as any other " +
             "dangling link.")
@@ -123,12 +123,12 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #427: renumber — a delete+create pair plus the cross-plugin reference cascade (Q5).
+        // Renumber — a delete+create pair plus the cross-plugin reference cascade.
         app.MapPost("/records/{formKey}/renumber", (
             string formKey, RecordRenumberRequest request, RecordEditService edits) =>
             RenumberRecord(formKey, request, edits, logger))
         .WithName("RenumberRecord")
-        .WithSummary("Renumber a native record's FormKey as a delete+create pair (#427).")
+        .WithSummary("Renumber a native record's FormKey as a delete+create pair.")
         .WithDescription(
             "Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs " +
             "collision-safe, or an explicit target) as a working-tree delete of the old source file " +
@@ -140,18 +140,18 @@ public static class RecordEndpoints
         .ProducesProblem(404)
         .ProducesProblem(409)
         .ProducesProblem(422)
-        // A partial-cascade failure (Q5(b)) surfaces here too — same shape as every other write
+        // A partial-cascade failure surfaces here too — same shape as every other write
         // path's I/O failure, just with a richer message naming which repos already have dirt.
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #436 (ADR-0041 restoration): Copy as Override Into… — the source record's own bytes,
+        // ADR-0041: Copy as Override Into… — the source record's own bytes,
         // landing under the same FormKey in the destination's working tree.
         app.MapPost("/records/{formKey}/copy-as-override", (
             string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits) =>
             CopyRecordAsOverride(formKey, request, edits, logger))
         .WithName("CopyRecordAsOverride")
-        .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin (#436).")
+        .WithSummary("Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.")
         .WithDescription(
             "Serializes the source record's own text, verbatim, into the destination plugin's working " +
             "tree under the identical FormKey — no Mutagen deserialization, since a record's stored " +
@@ -167,14 +167,14 @@ public static class RecordEndpoints
         .ProducesProblem(500)
         .ProducesProblem(503);
 
-        // #436 (ADR-0041 restoration): Copy as New Record Into… — a deep copy under a fresh FormKey,
+        // ADR-0041: Copy as New Record Into… — a deep copy under a fresh FormKey,
         // via Mutagen's own record-level Duplicate. Same collision posture as CreateRecord, reused
         // rather than re-implemented.
         app.MapPost("/records/{formKey}/copy-as-new-record", (
             string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits) =>
             CopyRecordAsNewRecord(formKey, request, edits, logger))
         .WithName("CopyRecordAsNewRecord")
-        .WithSummary("Copy as New Record Into… — a deep copy of the source record under a fresh FormKey (#436).")
+        .WithSummary("Copy as New Record Into… — a deep copy of the source record under a fresh FormKey.")
         .WithDescription(
             "Deep-copies the source record (Mutagen's own record-level Duplicate — no mod object is " +
             "constructed) under a fresh FormKey in the destination plugin's working tree. FormKey is the " +
@@ -290,12 +290,12 @@ public static class RecordEndpoints
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Q5(b): a partial-cascade failure lands here too, with the richer message
+            // A partial-cascade failure lands here too, with the richer message
             // RecordEditService.RenumberRecord already built naming which repos have dirt.
             logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
             return WriteEndpointMapping.WriteFailure(ex.Message);
         }
-        // #502: request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
+        // request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
         // FormKey.Factory (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a
         // malformed value throws ArgumentException there. Malformed syntax, not a well-formed-but-
         // refused RecordEditRefusal, so this matches PluginEndpoints.CreatePlugin's own catch shape
@@ -379,7 +379,7 @@ public static class RecordEndpoints
             logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
             return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
         }
-        // #502: request.RequestedFormKey is xEdit's own typed-FormID path, sharing
+        // request.RequestedFormKey is xEdit's own typed-FormID path, sharing
         // RecordEditService.CreateRecord/RenumberRecord's own ResolveTargetFormKey/
         // RefuseIfNotNativeTarget resolution — reaches Mutagen's FormKey.Factory with no TryFactory
         // guard, so a malformed value throws ArgumentException there too. Same 400 shape as the other

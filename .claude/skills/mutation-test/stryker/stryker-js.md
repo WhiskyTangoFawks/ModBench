@@ -46,16 +46,14 @@ Mutation runs against `src/modmanager/` and `src/medit/`:
 - **`src/modmanager/mo2/*.ts` and friends are the payload** — pure transforms by invariant
   (`modbench/CLAUDE.md`: byte-faithful surgical edits, never model→re-serialization). Parsers,
   an index, a conflict resolver: real branching, real boundaries. The bug history is the
-  argument — #17 "modlist BOM drops first mod" and #47 "modlist write BOM" are exactly the
-  boundary class that survives a green suite and dies to a mutant.
-- **`src/medit/` is in scope since #374**, having been excluded until then. The original
-  reason was architectural, not technical: mEdit is a thin extension-side view whose logic
-  lives in `MEditService/` and is mutated there. That invariant still holds for anything
-  crossing to the backend — but `medit/` has since grown genuine extension-side logic
-  (decoration state, save classification, row URIs, message routing), 21 of its 25 modules
-  carry unit tests, and #368 shipped ~800 lines of it with no mutation axis able to see
-  them. Coverage here is also how drift from the thin-view rule gets noticed: a `medit/`
-  module rich enough to produce interesting mutants is a module worth asking about.
+  argument — BOM-handling bugs (a modlist BOM silently dropping the first mod) are exactly
+  the boundary class that survives a green suite and dies to a mutant.
+- **`src/medit/` is in scope.** mEdit is a thin extension-side view whose backend-crossing
+  logic lives in `MEditService/` and is mutated there — but `medit/` carries genuine
+  extension-side logic of its own (decoration state, save classification, row URIs, message
+  routing), and most of its modules have unit tests only mutation can audit. Coverage here
+  is also how drift from the thin-view rule gets noticed: a `medit/` module rich enough to
+  produce interesting mutants is a module worth asking about.
 - **`*Provider.ts` / `*Panel.ts` are excluded under `modmanager/` only** — VS Code tree and
   webview plumbing with no unit tests. Their `medit/` counterparts stay in scope because
   they *do* have tests, mocking `vscode` per file with `vi.mock('vscode')`.
@@ -77,7 +75,7 @@ this is cheap enough to run per-ticket:
 | One file (`fileConflictIndex.ts`) | 71 | ~1m30s |
 | All of `src/modmanager/` (30 files) | 1799 | **3m40s** |
 
-⚠️ **Measured before `src/medit/` entered scope (#374).** `--all` now mutates roughly
+⚠️ **Measured before `src/medit/` entered scope.** `--all` now mutates roughly
 twice the corpus and has not been re-timed; the per-file and per-diff figures are
 unaffected. Re-measure on the next `--all` run and replace this note with the number.
 

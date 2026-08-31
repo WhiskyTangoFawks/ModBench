@@ -26,7 +26,7 @@ function scalarProp(partial: Partial<VmadPropertyDiff> = {}): VmadPropertyDiff {
   };
 }
 
-// Issue #119/#231: every script lives one level below the always-present "Scripts (VMAD)"
+// Every script lives one level below the always-present "Scripts (VMAD)"
 // wrapper row (the stable home for "Add Script" even when a VMAD-capable record currently has no
 // scripts at all) — this helper does that one hop so the rest of this file reads as "the script"
 // and "the script's own metadata", matching how RecordPanel's recursive builder actually reaches
@@ -176,7 +176,7 @@ describe('buildVmadRows — array of scalars (ArrayOfInt)', () => {
   });
 });
 
-// Issue #168: when plugins disagree on how many elements a VMAD array has, the backend still
+// When plugins disagree on how many elements a VMAD array has, the backend still
 // reports every plugin at every union-aligned position (null past that plugin's own real length —
 // VmadConflictClassifier.IndexedChildren, always trailing, never a genuine mid-list gap). The
 // per-plugin array reconstructed here must reflect *that plugin's own real length*, not the
@@ -270,7 +270,7 @@ describe('buildVmadRows — structList property (ArrayOfStruct)', () => {
   });
 });
 
-// Issue #114: every synthesized FieldDiff node this adapter builds must populate its own
+// Every synthesized FieldDiff node this adapter builds must populate its own
 // bottom-up conflictAll — the compare grid's per-row renderer reads it directly, with no fallback
 // computation of its own, so a node the adapter forgot would silently paint no background.
 describe('buildVmadRows — per-node conflictAll (issue #114)', () => {

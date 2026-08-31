@@ -79,9 +79,7 @@ function makeRepository(overrides: Partial<{
     getPlugins: vi.fn().mockResolvedValue(overrides.plugins ?? [makePlugin(0), makePlugin(1)]),
     getLoadOrderStatus: vi.fn().mockResolvedValue(
       { totalPlugins: 0, indexedPlugins: [], conflictsComputed: true, failures: [] }),
-    // #414 review F2.
     getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }),
-    // #417.
     getExternalChangeStatus: vi.fn().mockResolvedValue([]),
     getRecordTypes: vi.fn().mockResolvedValue(overrides.recordTypes ?? [{ type: 'WEAP', count: 5, displayName: 'Weapon' }]),
     getRecords: vi.fn().mockResolvedValue(overrides.records ?? { items: [makeRecord(0)], total: 1 }),
@@ -93,33 +91,29 @@ function makeRepository(overrides: Partial<{
     getWorldspaces: vi.fn().mockResolvedValue([]),
     getWorldspaceBlocks: vi.fn().mockResolvedValue({ blocks: [], topCells: [] }),
     getCellReferences: vi.fn().mockResolvedValue({ persistent: [], temporary: [] }),
-    // #424: a Quest/DialogTopic row's own children — empty by default, overridden per-test below.
+    // A Quest/DialogTopic row's own children — empty by default, overridden per-test below.
     getContainerChildren: vi.fn().mockResolvedValue([]),
-    // #415: the tree provider never edits — present only because the double implements the
+    // The tree provider never edits — present only because the double implements the
     // whole PluginRepository surface.
     editRecordField: vi.fn(),
     getInteriorCells: vi.fn().mockResolvedValue({ items: [], total: 0 }),
-    // #416 review: the tree provider never compiles either — same "whole surface, unused here" note.
+    // The tree provider never compiles either — same "whole surface, unused here" note.
     getRecordOwner: vi.fn(),
-    // #427: the tree provider never renumbers either — same "whole surface, unused here" note.
+    // The tree provider never renumbers either — same "whole surface, unused here" note.
     peekNextFreeFormKey: vi.fn(),
-    // #494: the tree provider never copies either — same "whole surface, unused here" note.
+    // The tree provider never copies either — same "whole surface, unused here" note.
     getRecordOverridePlugins: vi.fn(),
-    // #364: the Conflicts node's own listing.
+    // The Conflicts node's own listing.
     getConflicts: vi.fn().mockResolvedValue([]),
   };
 }
 
-// #273: PluginTreeProvider's own standalone root listing (fetchPlugins/PluginNode/the
-// getChildren(undefined) path) is deleted — it was reachable only through the standalone
-// editing Plugins tree (modbench.pluginTree) this ticket retired. getPluginChildren(name) is now
-// the one way into a plugin's children (also true in production: PluginsTreeComposite always
-// calls this directly, never getChildren(undefined) — see the comment on getChildren itself).
+// getPluginChildren(name) is the one way into a plugin's children — there is no root listing
+// (also true in production: PluginsTreeComposite always calls it directly, never
+// getChildren(undefined) — see the comment on getChildren itself).
 
-// #273 Slice D: PluginTreeProvider.setFilter (issue #70's plugin-name filter) is deleted — it
-// duplicated modbench.pluginListTree.filter over the same rows (both narrowed plugin rows by
-// filename substring) once the merged tree made this provider's own root TreeView unreachable.
-// The merged tree's own name filter is covered in PluginListProvider.test.ts.
+// The merged tree's name filter is covered in PluginListProvider.test.ts — this provider has
+// none of its own.
 
 // ── getPluginChildren (record types) ────────────────────────────────────────────
 
@@ -163,13 +157,12 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
   });
 
-  // #398: record-type children no longer paginate — xEdit's own record-type group nodes load
+  // Record-type children do not paginate — xEdit's own record-type group nodes load
   // unconditionally in full (`vstNavInitChildren`, xeMainForm.pas: `ChildCount :=
   // Container.ElementCount`), and measurement found no meaningful cost even at the realistic
   // worst case (Fallout4.esm's own INFO records in a full FO4 load order, ~78k rows, ~500ms
-  // backend query + extension-host materialization combined; docs/specs/plugins.md). This test
-  // is issue #398 AC3's own check: a genuinely large count still comes back as one batch with no
-  // manual step, not just "the LoadMoreNode class is gone".
+  // backend query + extension-host materialization combined; docs/specs/plugins.md). A genuinely
+  // large count still comes back as one batch with no manual step.
   it('returns every record in one call at a large, realistic-worst-case count — no manual step', async () => {
     const count = 78_089; // Fallout4.esm's own measured INFO count in a full FO4 load order
     const records = Array.from({ length: count }, (_, i) => makeRecord(i));
@@ -181,7 +174,7 @@ describe('PluginTreeProvider.getChildren(RecordTypeNode)', () => {
 
     expect(children).toHaveLength(count);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
-    // One call, offset 0, and a limit nowhere near the deleted 50-row PAGE_SIZE — the whole type
+    // One call, offset 0, and a limit far beyond any page size — the whole type
     // requested up front, not paged.
     expect(repo.getRecords).toHaveBeenCalledTimes(1);
     expect(repo.getRecords).toHaveBeenCalledWith('Plugin0.esp', 'WEAP', 0, expect.any(Number), undefined);
@@ -250,10 +243,9 @@ describe('PluginTreeProvider.loadMoreInterior', () => {
   });
 });
 
-// #273: PluginNode (this provider's own standalone plugin-row node) is deleted along with its
-// tests — see the comment above getPluginChildren for why. The equivalent coverage for the
-// merged tree's actual plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
-// see plugins.md) lives in PluginListProvider.test.ts.
+// The merged tree's plugin rows (contextValue "plugin"/"pluginImplicit", lock icon absent —
+// see plugins.md) are covered in PluginListProvider.test.ts; this provider has no plugin-row
+// node of its own.
 
 // ── WorldspacesNode ───────────────────────────────────────────────────────────
 
@@ -287,7 +279,7 @@ describe('RecordTypeNode', () => {
   });
 
   it('uses the xEdit display name as label, keeping recordType as the raw signature', () => {
-    // Issue #110: the tree must show "Weapon", not "weap" — but recordType (used for
+    // The tree must show "Weapon", not "weap" — but recordType (used for
     // caching, commands, contextValue) stays the raw signature.
     const node = new RecordTypeNode('MyPlugin.esp', 'weap', 42, 'Weapon');
     expect(node.label).toBe('Weapon');
@@ -305,10 +297,8 @@ describe('RecordTypeNode', () => {
   });
 });
 
-// #398: LoadMoreNode (record-type pagination) is deleted along with its tests — record-type
-// children load in one getChildren call now (see the large-count test above). InteriorLoadMoreNode
-// is unaffected (interior-cell listing is out of scope for #398 and still paginates; see its own
-// tests further down).
+// Record-type children load in one getChildren call (see the large-count test above); only
+// interior-cell listing paginates (InteriorLoadMoreNode; see its own tests further down).
 
 // ── RecordNode ────────────────────────────────────────────────────────────────
 
@@ -337,7 +327,7 @@ describe('RecordNode', () => {
     expect(node.contextValue).toBe('record');
   });
 
-  // #428: resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
+  // resourceUri is what RecordDecorationProvider keys its badge lookup on — carries the same
   // (plugin, origin, formKey) identity ADR-0036 already requires everywhere a record row is
   // addressed, via the synthetic medit-record: scheme (recordResourceUri.ts).
   it('carries a medit-record: resourceUri identifying (plugin, origin, formKey)', () => {
@@ -348,10 +338,9 @@ describe('RecordNode', () => {
   });
 });
 
-// ── #428 Q1: a field edit flips a cached row's badge without a refetch ────────
-// The orchestrator's own gate ruling: "one test that an EDIT_FIELD on a clean record flips its
-// row to Modified without a full refresh (spy on the fetch path — a rival that calls
-// refreshTree() wholesale would fail the no-refetch assertion)."
+// ── a field edit flips a cached row's badge without a refetch ─────────────────
+// An EDIT_FIELD on a clean record flips its row to Modified without a full refresh (spy on the
+// fetch path — a rival that calls refreshTree() wholesale fails the no-refetch assertion).
 
 describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', () => {
   it('flips a cached clean record to Modified without calling getRecords again', async () => {
@@ -385,11 +374,11 @@ describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', 
     expect(provider.markWorkingTreeState('Fallout4.esm', 'ModA', '000001:Fallout4.esm', 'Modified')).toBe(false);
   });
 
-  // #428 review finding 1: a create never seeds records_committed no matter how many field edits
+  // A create never seeds records_committed no matter how many field edits
   // follow it (the backend's own discrimination would still answer Added on the next real fetch),
   // so a field edit on an Added row must never downgrade it to Modified — that would actively
-  // misrepresent a committed counterpart existing, not just go briefly stale. The rival: the
-  // original unconditional overwrite (`items[idx] = { ...items[idx], workingTreeState: state }`
+  // misrepresent a committed counterpart existing, not just go briefly stale. The rival: an
+  // unconditional overwrite (`items[idx] = { ...items[idx], workingTreeState: state }`
   // with no current-state check) fails this.
   it('preserves Added across a field edit — create, then edit, still badges A', async () => {
     const record = makeRecord(0, 'Added');
@@ -405,7 +394,7 @@ describe('#428 markWorkingTreeState / workingTreeStateOf (scoped, no refetch)', 
   });
 });
 
-// ── #281: record rows carry their copy identity ──────────────────────────────
+// ── record rows carry their copy identity ─────────────────────────────────────
 // A record-scoped command acts on the clicked row's own copy of the record — so the row has to
 // say which copy it is ((plugin, origin), ADR-0036), and rows whose plugin can't be edited hide
 // Remove via an immutable contextValue, matching the column header's !immutable `when` gate.
@@ -555,7 +544,7 @@ describe('PluginTreeProvider worldspace tree', () => {
     expect(cells[0].label).toBe('< 12,  -5>');
   });
 
-  // #497: xEdit's TwbMainRecord.GetDisplayName checks GetFullName unconditionally, before any
+  // xEdit's TwbMainRecord.GetDisplayName checks GetFullName unconditionally, before any
   // signature-specific branch — including the CELL branch's persistent-cell / grid-coordinate
   // logic. A FULL name wins over both.
   it('#497: an exterior cell with a FULL name shows it, not the grid coordinates', () => {
@@ -575,7 +564,7 @@ describe('PluginTreeProvider worldspace tree', () => {
   });
 
   // Guard test: a plausible wrong implementation checks isPersistentWorldspaceCell before
-  // fullName (the literal reading of #497's own AC #3) — but xEdit's actual GetDisplayName checks
+  // fullName — but xEdit's actual GetDisplayName checks
   // GetFullName first, unconditionally, and only reaches the GroupType=1 (persistent) check when
   // FULL is empty. Confirmed by reading wbImplementation.pas directly: `Result := GetFullName; if
   // Result = '' then if ... (GetSignature = 'CELL') then begin if ... GroupType = 1 ... Result :=
@@ -646,11 +635,7 @@ describe('PluginTreeProvider worldspace tree', () => {
 // ── Fetch failures render an error node instead of an empty list (ADR-0026) ──
 
 describe('PluginTreeProvider fetch failures', () => {
-  // #273: fetchPlugins (this provider's own root listing) is deleted along with the standalone
-  // tree that was its only caller — its error-path test (getPlugins rejects) goes with it.
-  // getPluginChildren's own error path is covered just below.
-
-  // #270: the merged Plugins tree's rows are Mod Management's, not this provider's, so it needs a
+  // The merged Plugins tree's rows are Mod Management's, not this provider's, so it needs a
   // way in that starts from a plugin filename rather than from a PluginNode this provider built.
   it('getPluginChildren: builds a plugin\'s children from its filename alone', async () => {
     const repo = makeRepository({
@@ -665,13 +650,13 @@ describe('PluginTreeProvider fetch failures', () => {
 
     const children = await provider.getPluginChildren('Plugin0.esp');
 
-    // #34: origin rides along as undefined for an ordinary load-order row — the backend resolves
+    // Origin rides along as undefined for an ordinary load-order row — the backend resolves
     // it from the load order, where one filename names one plugin.
     expect(repo.getRecordTypes).toHaveBeenCalledWith('Plugin0.esp', undefined);
     expect(children.map(c => c.label)).toEqual(['Worldspaces', 'cell - Interior', 'WEAP']);
   });
 
-  // #270 AC4: a record reached by expanding a load-order row opens the editor the same way one
+  // A record reached by expanding a load-order row opens the editor the same way one
   // reached through this tree does — it is the same node, carrying its own command, so the
   // merged tree inherits the behaviour rather than re-implementing it.
   it('getPluginChildren: records below it carry the open-editor command', async () => {
@@ -693,10 +678,6 @@ describe('PluginTreeProvider fetch failures', () => {
     expect(children).toHaveLength(1);
     expect(children[0]).toBeInstanceOf(ErrorNode);
   });
-
-  // #273: this test duplicated 'getPluginChildren: renders an error node when getRecordTypes
-  // fails' above through the now-deleted getChildren(undefined) entry point — same error path,
-  // same assertion, reached the only way production reaches it now.
 
   it('fetchRecords: renders an error node when getRecords fails', async () => {
     const repo = { ...makeRepository(), getRecords: vi.fn().mockRejectedValue(new Error('boom')) };
@@ -754,7 +735,7 @@ describe('PluginTreeProvider fetch failures', () => {
   });
 });
 
-// ── headerFormKeyFor (Issue #1 slice A1) ───────────────────────────────────────
+// ── headerFormKeyFor ───────────────────────────────────────────────────────────
 
 describe('headerFormKeyFor', () => {
   it('builds the synthetic header FormKey for a plugin name', () => {
@@ -766,7 +747,7 @@ describe('headerFormKeyFor', () => {
   });
 });
 
-// ── spatial node chain carries origin (#305 / ADR-0036) ────────────────────────
+// ── spatial node chain carries origin (ADR-0036) ───────────────────────────────
 // The chain WorldspacesNode → WorldspaceNode → BlockNode → SubBlockNode → CellNode →
 // PlacedGroupNode → PlacedNode, plus InteriorCellsNode → CellNode, must carry the origin a
 // specific copy's row was built with all the way down — otherwise a node two hops from the root
@@ -837,8 +818,8 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
     expect(cellNode.origin).toBe('ModB');
   });
 
-  // #305: refCache/interiorCache must be keyed by (origin, plugin), the same reason pageCache
-  // already is (#34) — a cache keyed on plugin alone serves one copy's cell references / interior
+  // refCache/interiorCache must be keyed by (origin, plugin), the same reason pageCache
+  // already is — a cache keyed on plugin alone serves one copy's cell references / interior
   // page under the other copy's node, invisible in any test that only loads one copy.
   it('refCache: caches each copy\'s cell references separately, so one copy\'s page is never served for the other', async () => {
     const repo = makeRepository();
@@ -881,7 +862,7 @@ describe('PluginTreeProvider spatial origin threading (#305)', () => {
   });
 });
 
-// ── browsing a specific copy of a filename (#34 / ADR-0036) ────────────────────
+// ── browsing a specific copy of a filename (ADR-0036) ──────────────────────────
 
 describe('PluginTreeProvider.getPluginChildren (origin)', () => {
   it('asks the repository for the copy the row stands for', async () => {
@@ -929,8 +910,8 @@ describe('PluginTreeProvider.getPluginChildren (origin)', () => {
 });
 
 describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy)', () => {
-  // #305: the spatial routes now take an explicit origin, so a copy the load order does not name
-  // is no longer omitted from spatial browsing (the ADR-0026 stopgap this replaces) — it gets its
+  // The spatial routes take an explicit origin, so a copy the load order does not name
+  // is not omitted from spatial browsing — it gets its
   // own Worldspaces/Interior-cells nodes, carrying that copy's origin down the chain.
   it('still builds the spatial group nodes for a copy the load order does not name, carrying that copy\'s origin', async () => {
     const repo = makeRepository({ recordTypes: [{ type: 'wrld', count: 1 }, { type: 'cell', count: 2 }, { type: 'WEAP', count: 1 }] });
@@ -957,7 +938,7 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy
   });
 });
 
-// ── #364: the Conflicts node (root-level) ─────────────────────────────────────
+// ── the Conflicts node (root-level) ───────────────────────────────────────────
 
 describe('PluginTreeProvider — Conflicts node existence & gating (#364, #307\'s invariant)', () => {
   it('conflictsNode() is undefined before conflictsComputed is ever set', () => {
@@ -1026,15 +1007,14 @@ describe('PluginTreeProvider.getChildren(ConflictsNode) (#364)', () => {
 });
 
 describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () => {
-  // Rival named — the literal #307 failure mode given a concrete implementation to fail against:
+  // Rival named:
   // "keep serving the cached value regardless of conflictsComputed" would return 'Conflict' here
   // instead of undefined, indistinguishable from a badge that never gates on the flag at all.
   //
   // This has to be a genuine race, not just setConflictsComputed(false) followed by a read —
   // setConflictsComputed(false) already clears conflictAllCache itself, so a test that only calls
-  // it and then reads would pass even with conflictAllOf's own gate deleted (confirmed: writing
-  // that version first and running it, it stayed green with the gate removed — vacuous, exactly
-  // the trap the standing instruction warns about). The real scenario the gate exists for is an
+  // it and then reads passes even with conflictAllOf's own gate deleted (vacuous).
+  // The real scenario the gate exists for is an
   // in-flight getConflicts() call that resolves *after* conflictsComputed has already gone back to
   // false — ADR-0035's live-mutation re-sweep racing a in-flight Conflicts-node fetch — which
   // populates the cache post-clear with nothing left to clear it again. Only conflictAllOf's own
@@ -1074,7 +1054,7 @@ describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () 
   });
 });
 
-// ── #424: Quest/DialogTopic child records ──────────────────────────────────────
+// ── Quest/DialogTopic child records ────────────────────────────────────────────
 
 function makeContainerChild(
   formKey: string, recordType: string, editorId: string | null = null,
@@ -1086,8 +1066,8 @@ function makeContainerChild(
 }
 
 describe('RecordNode collapsibility for container types (#424)', () => {
-  // Rival named: today's actual RecordNode always constructs CollapsibleState.None regardless of
-  // record type — this pins the change against exactly that rival.
+  // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
+  // record type — this pins the behaviour against exactly that rival.
   it('is Collapsed when built as a "qust" row', () => {
     const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust');
     expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
@@ -1121,7 +1101,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     expect(children).toHaveLength(2);
     expect(children.every(c => c instanceof RecordNode)).toBe(true);
     expect((children[0] as RecordNode).record.editorId).toBe('TopicA');
-    // Standard record-row affordances (#281 unification) — same command every ordinary
+    // Standard record-row affordances — same command every ordinary
     // RecordNode gets, so a container child opens in the record editor exactly like any other row.
     expect((children[0] as RecordNode).command).toMatchObject({ command: 'modbench.openEditor' });
   });
@@ -1172,9 +1152,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     expect(repo.getContainerChildren).toHaveBeenCalledTimes(1);
   });
 
-  // #305 precedent: two same-filename plugin copies expanding the same Quest FormKey must hit
-  // their own repository call / cache entry — a cache key that omits origin is the exact
-  // regression class #305 already fixed for the rest of this spatial chain. Rival: a cache key
+  // Two same-filename plugin copies expanding the same Quest FormKey must hit
+  // their own repository call / cache entry — a cache key that omits origin is the same
+  // regression class the rest of this spatial chain already guards against. Rival: a cache key
   // built from formKey alone (no origin component) would return ModA's cached children for ModB's
   // expansion instead of issuing its own call.
   it('origin-keyed caching: two copies of one plugin browse their own children independently', async () => {

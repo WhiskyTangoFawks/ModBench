@@ -2,13 +2,13 @@ import * as vscode from 'vscode';
 
 /** Tracks which open record panel is active and what FormKey each one currently shows, and
  *  reports the *active* one's FormKey whenever either changes — the input the "Referenced By"
- *  view retargets on (#282), in place of the old `modbench.showReferencedBy` command argument.
+ *  view retargets on.
  *
  *  Deliberately generic over the panel's identity (`TPanel`, an opaque token) rather than typed
  *  to `vscode.WebviewPanel` — this class never reads `.active`/`.onDidChangeViewState` itself,
  *  extension.ts's wiring does, and passes the already-resolved panel + its `active` transition
  *  in. That keeps this class testable with plain object identities, no VS Code harness, and
- *  keeps it agnostic to #284 giving "a record panel" a richer shape later — anything usable as a
+ *  keeps it agnostic to "a record panel" gaining a richer shape later — anything usable as a
  *  Map key works.
  *
  *  Only the *active* panel's FormKey is ever reported — a background panel retargeting itself

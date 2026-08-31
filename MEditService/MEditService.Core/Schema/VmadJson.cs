@@ -5,7 +5,7 @@ namespace MEditService.Core.Schema;
 
 // Shared (de)serializer for a VMAD Struct/ArrayOfStruct property's serialized member tree
 // (VmadParsedProperty.StructJson). Both the production side (VmadCodec.ParseStruct/
-// ParseStructList, run at read time by GetVmad and at ingest time by CollectVmadRefs — #420) and
+// ParseStructList, run at read time by GetVmad and at ingest time by CollectVmadRefs) and
 // the consumption side (GetVmad's own MapStructMembers/MapStructList) go through these, so the
 // shape stays aligned.
 public static class VmadJson

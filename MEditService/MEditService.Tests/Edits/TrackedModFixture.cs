@@ -10,10 +10,10 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415: a real mod folder, holding a real plugin, loaded into a real load order and tracked through
+/// A real mod folder, holding a real plugin, loaded into a real load order and tracked through
 /// the real <see cref="TrackService"/> — the state every edit-path test starts from, because the
 /// thing under test is what an edit does to a git working tree, and there is no honest way to ask
-/// that of a mock. Same posture as #414's own repo-layer tests (real git, real CLI).
+/// that of a mock. Same posture as the repo-layer tests (real git, real CLI).
 ///
 /// Deliberately tiny: three records is enough for "the edited one changed and the others did not",
 /// which is all any test here needs from the fixture's size.
@@ -23,7 +23,7 @@ public sealed class TrackedModFixture : IDisposable
     public const string ModFolderOrigin = "FixtureMod";
     public const string PluginName = "Fixture.esp";
 
-    /// <summary>The MO2 instance this fixture's mod folder lives in (#592 / ADR-0001) — what a
+    /// <summary>The MO2 instance this fixture's mod folder lives in (ADR-0001) — what a
     /// reconcile keys its index on, and the fixture's own cleanup root.</summary>
     public string InstanceRoot { get; }
 
@@ -33,7 +33,7 @@ public sealed class TrackedModFixture : IDisposable
     public PluginKey Plugin { get; }
 
     /// <summary>The plugin filename this instance actually tracked — <see cref="PluginName"/> unless
-    /// a caller asked for a different one (#433: real-world-shaped, ref-unsafe names need a real
+    /// a caller asked for a different one (real-world-shaped, ref-unsafe names need a real
     /// tracked load order to exercise, which this fixture is the only thing that builds).</summary>
     public string ActualPluginName { get; }
 
@@ -82,7 +82,7 @@ public sealed class TrackedModFixture : IDisposable
 
     public static TrackedModFixture Tracked() => new(track: true, PluginName);
 
-    /// <summary>#501: the same fixture, header-flagged as an ESL/light plugin
+    /// <summary>The same fixture, header-flagged as an ESL/light plugin
     /// (<c>Fallout4Mod.IsSmallMaster = true</c>) before it is written — the real-tooling shape, not a
     /// stub, since the flag is set on the header bytes themselves, not synthesized after the fact.
     /// <paramref name="pluginName"/> defaults to the fixed <see cref="PluginName"/> (an ESL-flagged
@@ -97,7 +97,7 @@ public sealed class TrackedModFixture : IDisposable
     /// directory (ADR-0041), so this is the whole of "untracked".</summary>
     public static TrackedModFixture Untracked() => new(track: false, PluginName);
 
-    /// <summary>#433: same fixture, but tracking a caller-chosen (typically ref-unsafe, real-world-
+    /// <summary>Same fixture, but tracking a caller-chosen (typically ref-unsafe, real-world-
     /// shaped) plugin filename instead of the fixed <see cref="PluginName"/> — everything else about
     /// the fixture (record shape, EditorIDs) is identical.</summary>
     public static TrackedModFixture TrackedAs(string pluginName) => new(track: true, pluginName);
@@ -107,7 +107,7 @@ public sealed class TrackedModFixture : IDisposable
     public const string KeywordEditorId = "FixtureKeyword";
     public const string OtherNpcEditorId = "UntouchedNpc";
 
-    // #451: editorId is a required parameter, not looked up internally — Spriggit's flat file name
+    // editorId is a required parameter, not looked up internally — Spriggit's flat file name
     // embeds it, and a caller asking for a record's path (an edit-created one included, whose
     // EditorID this fixture never saw) is exactly the case a fixture-internal FormKey->EditorID table
     // could not answer. Every call site names the EditorID it already knows it created or expects.
@@ -119,12 +119,12 @@ public sealed class TrackedModFixture : IDisposable
     /// <summary>Porcelain status, scoped to the mod folder — what the native Source Control panel
     /// renders, asked the way a user would ask it.
     ///
-    /// <para>#451: unquoted. Plain (non-<c>-z</c>) porcelain v1 always wraps a path containing a space
+    /// <para>Unquoted. Plain (non-<c>-z</c>) porcelain v1 always wraps a path containing a space
     /// in <c>"..."</c> — unconditionally, not gated by <c>core.quotePath</c> (that setting governs only
     /// bytes above 0x80; verified empirically against git 2.43 implementing this, not assumed from the
     /// docs). The source tree's flat layout has file names that routinely carry a space
-    /// (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>), which the pre-#451 flat
-    /// layout's hex-only segments never did, so every caller here that compares against a plain
+    /// (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>), so every caller here
+    /// that compares against a plain
     /// expected string needs the same unquoted text <see cref="SourceRecordPath.For"/> itself
     /// produces — <see cref="SourceRepository.WorkingTreeStatus"/>'s own <c>-z</c> read sidesteps this
     /// question entirely; this helper, using plain porcelain for human-readable test assertions, does
@@ -169,12 +169,12 @@ public sealed class TrackedModFixture : IDisposable
     public string GitShowHead(string relativePath) =>
         GitCli.Run(Path.Combine(ModFolder, ".git"), ModFolder, "show", $"HEAD:{relativePath.Replace('\\', '/')}");
 
-    /// <summary>#459: no longer a bare <see cref="SourceRecordPath.For"/> call — <c>For</c> now needs
+    /// <summary>Not a bare <see cref="SourceRecordPath.For"/> call — <c>For</c> needs
     /// the record's order index, which this fixture's callers do not track and should not have to.
     /// Resolved through <see cref="SourceUnitResolver"/> instead (the same FormKey-suffix-tolerant
     /// lookup production code uses), which answers with the record's real current path — numbered
-    /// prefix included — regardless of its position. No longer static for the same reason: resolution
-    /// needs this fixture's own <see cref="ModFolder"/> to look at.</summary>
+    /// prefix included — regardless of its position. An instance member for the same reason:
+    /// resolution needs this fixture's own <see cref="ModFolder"/> to look at.</summary>
     public string RelativeSourcePath(FormKey formKey, string recordType, string? editorId) =>
         Path.GetRelativePath(ModFolder, SourceUnitResolver.FlatSourcePath(
             ModFolder, ActualPluginName, recordType, formKey.ToString(), editorId, GameRelease.Fallout4));

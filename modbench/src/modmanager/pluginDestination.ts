@@ -1,4 +1,4 @@
-// #288: turns a New Plugin destination choice (the composition root's QuickPick — overwrite/, an
+// Turns a New Plugin destination choice (the composition root's QuickPick — overwrite/, an
 // existing mod, or a freshly installed mod folder) into the physical (path, origin) pair Editing's
 // create endpoint needs. Pure path arithmetic over an MO2 instance root — no vscode import, no
 // backend call (Mod Management never calls it, CLAUDE.md) — split out of extension.ts so it is

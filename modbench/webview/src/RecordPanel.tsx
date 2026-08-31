@@ -25,7 +25,7 @@ const mEditWindow = window as Window & typeof globalThis & {
 
 const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConflictBg(c, 0.35);
 
-// Issue #231: a synthesized row can write independently of its own parent rather than
+// A synthesized row can write independently of its own parent rather than
 // extending it — a VMAD property under its script container, or a Condition field under its
 // condition element, each write their own field path rather than folding into the
 // whole subtree their parent writes (a complex field is always written as one atomic unit,
@@ -33,8 +33,8 @@ const getHeaderBg = (c: ConflictThis | undefined): string | undefined => getConf
 // signal: when a child carries one, it starts a fresh subtree right there (its own path resets to
 // `[]`, rootField becomes its own wirePath, rootDiff becomes itself) instead of inheriting the
 // parent's. An ordinary reflected field's children never carry `wirePath` (only the VMAD/
-// Condition tree adapters set it), so this is a no-op for every pre-#231 case — never true, never
-// taken, and the recursion behaves exactly as it did in slice 0. Module-scope (not a RecordPanel-
+// Condition tree adapters set it), so this is a no-op for every ordinary case.
+// Module-scope (not a RecordPanel-
 // local closure like buildRows/buildArrayElementRows below) since it closes over nothing.
 function subtreeFor(
   child: FieldDiff, seg: PathSegment, path: PathSegment[], rootField: string, rootDiff: FieldDiff,
@@ -48,7 +48,7 @@ function subtreeFor(
 export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>) {
   const [formKey, setFormKey] = useState<string>(mEditWindow.mEditFormKey ?? '');
   const [result, setResult] = useState<CompareResult | null>(null);
-  // Issue #167: the Run On target dropdown's catalog (GET /condition-run-on-targets) — a
+  // The Run On target dropdown's catalog (GET /condition-run-on-targets) — a
   // load-order-wide list, not per-record, so it's fetched once on mount rather than on every
   // refresh()/load(fk). Starts empty (the Run On cell simply has nothing to show until this
   // resolves) rather than falling back to any hardcoded list. No `.catch` needed here:
@@ -58,15 +58,15 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [runOnTargets, setRunOnTargets] = useState<string[]>([]);
   useEffect(() => { void client.conditionRunOnTargets().then(setRunOnTargets); }, [client]);
   const [immutableSet, setImmutableSet] = useState<Set<ColumnKey>>(new Set());
-  // #304 / ADR-0035: mirrors immutableSet's own state shape — a copy the load order doesn't name
+  // ADR-0035: mirrors immutableSet's own state shape — a copy the load order doesn't name
   // (distinct from "is immutable"; see recordUtils.ts's readOnlyReason) drives PluginHeader's
   // dimming/tooltip wording independently of the plain immutable fact.
   const [notInLoadOrderSet, setNotInLoadOrderSet] = useState<Set<ColumnKey>>(new Set());
-  // #415 / ADR-0041: the columns whose plugin's mod is tracked. Starts empty and stays empty until
+  // ADR-0041: the columns whose plugin's mod is tracked. Starts empty and stays empty until
   // a load says otherwise — fail-closed, so a panel that has not heard from /plugins offers no
   // editing rather than offering edits that cannot land.
   const [trackedSet, setTrackedSet] = useState<Set<ColumnKey>>(new Set());
-  // #308 / ADR-0035: whether the winner sweep has run — GET /load-order/status's own field, read by
+  // ADR-0035: whether the winner sweep has run — GET /load-order/status's own field, read by
   // client.load() alongside compare/changes/plugins. Initial `true` only matters until the first
   // load lands (the `!result` early-return below renders "Loading…" until then, so this can never
   // read as a false "settled" to the user); every value after that comes straight off the load's
@@ -75,38 +75,34 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   const [conflictsComputed, setConflictsComputed] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedStructs, setExpandedStructs] = useState<Set<string>>(new Set());
-  // Issue #222 / ADR-0034: the single source of truth for "which value cell is focused," shared
+  // ADR-0034: the single source of truth for "which value cell is focused," shared
   // by every DiffRow instance so at most one cell across the field grid is ever focused at once —
   // DiffRow itself only knows about its own row. `rowKey` matches the string this component
   // already computes for each DiffRow's own `key=` below. Deliberately reset on LOAD_RECORD (a
   // different record has no "same cell" to keep focused — mirrors the result/allChanges resets
   // there) but left untouched by refresh() (same-record reload from staging or a background
-  // refresh, where the focused cell should survive — AC3).
+  // refresh, where the focused cell should survive).
   const [focusedCell, setFocusedCell] = useState<FocusedCell | null>(null);
   function handleFocusCell(rowKey: string, plugin: ColumnKey) {
     setFocusedCell({ rowKey, plugin });
   }
-  // Issue #3: collapsed plugin columns, keyed by column identity (#272: ColumnKey, not the bare
+  // Collapsed plugin columns, keyed by column identity (ColumnKey, not the bare
   // plugin name — two same-filename columns must collapse independently). Deliberately NOT reset
   // by the LOAD_RECORD handler below — collapse state is meant to persist across record-to-record
   // navigation within the same panel load order.
   const [collapsedColumns, setCollapsedColumns] = useState<Set<ColumnKey>>(new Set());
-  // #426 Track 5: Add Property's own dialog state — which script/column VMAD_OPEN_ADD_PROPERTY
+  // Add Property's own dialog state — which script/column VMAD_OPEN_ADD_PROPERTY
   // named, or null when no dialog is open. AddPropertyDialog itself (VmadPropertyOps.tsx) collects
   // name/type/value; this only remembers *where* to commit them once it confirms.
   const [addPropertyDialog, setAddPropertyDialog] = useState<{ scriptName: string; plugin: ColumnKey } | null>(null);
-  // Issue #3: transient drag payload — doesn't need to trigger a re-render, so a ref rather
-  // than state. Cleared on drop (successful or rejected). Issue #206: carries sourcePlugin too —
-  // without it, handleCellDrop has no way to tell a drop back onto the same cell it came from
-  // apart from a real cross-column copy. #272: sourcePlugin is a ColumnKey.
 
-  // #415/ADR-0041: the one definition of "this column can be written", computed once for the whole
+  // ADR-0041: the one definition of "this column can be written", computed once for the whole
   // grid. Four conditions, all of them already known here: the plugin is not immutable (a vanilla
   // or DLC master), the load order actually names this copy (editing a shadowed one changes nothing
   // anywhere), the plugin's mod is tracked (editing requires tracking; viewing never does), and
-  // (#491) the column's own override is not a Partial Form record — its fields are read-only on
+  // the column's own override is not a Partial Form record — its fields are read-only on
   // the single write path (RecordEditRefusal.PartialFormFieldReadOnly) with no exemption here.
-  // #539's own header write (is_partial_form) is exempt from that refusal, but is dispatched
+  // The header write (is_partial_form) is exempt from that refusal, but is dispatched
   // straight from PluginHeader's own checkbox rather than through this body-field gate — clearing
   // the flag is what lifts this gate for every other field, so it cannot itself be gated by it.
   //
@@ -123,7 +119,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return writable;
   }, [result, immutableSet, notInLoadOrderSet, trackedSet]);
 
-  // #415: one field edit leaves for the single write path. Nothing is applied optimistically — the
+  // One field edit leaves for the single write path. Nothing is applied optimistically — the
   // grid keeps showing the committed value until the host reports the edit landed and the panel
   // re-reads (RECORD_EDITED). An optimistic patch would show a value the write path had not
   // actually accepted, which for a refused edit is a lie the user never gets corrected.
@@ -144,11 +140,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       setResult(loaded.result);
       if (loaded.immutableSet) setImmutableSet(loaded.immutableSet);
       if (loaded.notInLoadOrderSet) setNotInLoadOrderSet(loaded.notInLoadOrderSet);
-      // #415: `??`, not a truthiness guard like the two above — those degrade to "unrestricted" on
+      // `??`, not a truthiness guard like the two above — those degrade to "unrestricted" on
       // a failed fetch, which is safe for them; this one has to degrade to "nothing is editable",
       // so a null must actively clear the set rather than leave a previous record's answer standing.
       setTrackedSet(loaded.trackedSet ?? new Set());
-      // #308: no `?? true` fallback. Against a real client, `conflictsComputed` is required on
+      // No `?? true` fallback. Against a real client, `conflictsComputed` is required on
       // LoadResult (RecordPanelClient.ts), so a genuine response omitting it fails to compile.
       // That guarantee does *not* reach this webview's own test fixtures — RecordPanel.test.tsx's
       // fakeClient builds its LoadResult as `as unknown as LoadResult`, which bypasses structural
@@ -190,18 +186,16 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     });
   }
 
-  // Issue #86/#119: the header record (synthetic FormKey "000000:<plugin>") carries neither VMAD
-  // nor Conditions — same gate the deleted VmadSection/ConditionSection call sites used
-  // (`!isHeaderRecord`), computed here (ahead of every hook that needs it, including
+  // The header record (synthetic FormKey "000000:<plugin>") carries neither VMAD
+  // nor Conditions — computed here (ahead of every hook that needs it, including
   // fieldMetaMap's masters-readOnly stamp below) since hooks can't follow the early-return guards
   // that precede where the rest of the render logic would naturally compute this.
   const isHeaderRecord = formKey.startsWith('000000:');
 
-  // Issue #231: VMAD and Conditions map into the same node shape (FieldDiff + FieldMetadata) the
+  // VMAD and Conditions map into the same node shape (FieldDiff + FieldMetadata) the
   // ordinary reflected fields already use — vmadTreeAdapter.ts/conditionTreeAdapter.ts are pure
   // functions with no rendering of their own, so their rows flow through the exact same
-  // buildRows/DiffRow path below as any other field, and there is no VmadSection/ConditionSection
-  // left to render separately.
+  // buildRows/DiffRow path below as any other field, with no separate section renderer.
   const vmadTree = useMemo(
     () => (isHeaderRecord || !result?.hasVmad) ? { diffs: [], metaMap: {} } : buildVmadRows(result.vmad),
     [result, isHeaderRecord],
@@ -211,9 +205,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result, isHeaderRecord, runOnTargets],
   );
 
-  // #142/#227 (#426 Track 4: restored): the four array-arity/order ops (Add/Remove/Move Up/Move
+  // The four array-arity/order ops (Add/Remove/Move Up/Move
   // Down) — one generic handler for every unsorted array in the tree (an ordinary reflected
-  // field, or a VMAD array-of-scalars property reusing this exact same machinery, #231), rather
+  // field, or a VMAD array-of-scalars property reusing this exact same machinery), rather
   // than a per-field special case. `rootField` locates the subtree's own root FieldDiff (whichever
   // of diffs/vmadTree.diffs/conditionTree.diffs it came from); `path` addresses the array within
   // that root's own per-column value (getAtPath/setAtPath, the same generic accessors every field
@@ -240,12 +234,11 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     handleEditCell(plugin, rootField, setAtPath(rootValue, arrayPath, nextArray));
   }, [result, vmadTree, conditionTree, handleEditCell]);
 
-  // #503: one *value* edit, committed the way the arity ops above already commit an arity change —
+  // One *value* edit, committed the way the arity ops above already commit an arity change —
   // the whole complex field, reconstructed. CONTEXT.md: a complex field is "always edited as one
-  // atomic value — a field-level write to the source document, never per-element". Before this, a
-  // leaf inside an array/struct sent its own bare value under the *root's* field path; the backend's
-  // list/struct applier declined that shape, said nothing (#503's other half, a refusal now), and
-  // the write path reported success over a document it had never touched.
+  // atomic value — a field-level write to the source document, never per-element". A
+  // leaf inside an array/struct must never send its own bare value under the *root's* field path —
+  // the backend's list/struct applier declines that shape.
   //
   // `rootDiff` is passed in rather than looked up the way handleArrayOp looks it up: buildRows
   // already holds this row's own subtree root, and that by-name search over top-level diffs cannot
@@ -253,7 +246,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   //
   // `path.length === 0` is not an optimization — it is the whole VMAD/Condition story. A subtree
   // root (an ordinary top-level field, a VMAD property, a Condition field) *is* the value it writes,
-  // so its commit stays the bare value, byte-identical to what it sent before this change.
+  // so its commit stays the bare value.
   const handleCellCommit = useCallback((
     plugin: ColumnKey, path: PathSegment[], rootField: string, rootDiff: FieldDiff, value: unknown,
   ) => {
@@ -262,27 +255,26 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       path.length === 0 ? value : setAtPath(rootDiff.values[plugin], path, value));
   }, [handleEditCell]);
 
-  // #426, retriggered by #258 / ADR-0039: a string cell's value, opened in a real editor tab.
-  // Reached only from the cell's right-click menu now (FIELD_OPEN_EXTENDED_EDITOR's own listener
-  // branch below) — no left-click gesture reaches it any more.
+  // ADR-0039: a string cell's value, opened in a real editor tab.
+  // Reached only from the cell's right-click menu (FIELD_OPEN_EXTENDED_EDITOR's own listener
+  // branch below) — no left-click gesture may reach it.
   //
-  // #533: commits through the identical whole-field reconstruction handleCellCommit already gives
-  // every inline edit (#503), rather than the bare `handleEditCell(plugin, fieldPath, v)` this used
-  // before — `path`/`rootField` now travel the whole way from the row's own right-click context
+  // Commits through the identical whole-field reconstruction handleCellCommit already gives
+  // every inline edit — `path`/`rootField` travel the whole way from the row's own right-click
+  // context
   // (stringValueContext, recordUtils.ts) through FIELD_OPEN_EXTENDED_EDITOR, so a string leaf
   // nested inside a struct/array reconstructs the whole subtree exactly the way an inline edit on
-  // the same cell already does, instead of sending the saved text alone under the subtree's root
-  // path (the defect this closes). `rootDiff` is resolved by name across the flattened top-level
+  // the same cell does, instead of sending the saved text alone under the subtree's root
+  // path. `rootDiff` is resolved by name across the flattened top-level
   // diffs — the same lookup handleArrayOp above already uses, and the same known gap: a VMAD
   // property's own FieldDiff is a child of its script row, never a top-level entry, so a VMAD
-  // string property's extended-editor save can't find its root here and silently no-ops — not a
-  // regression, since no trigger reached this shape at all before this ticket.
+  // string property's extended-editor save can't find its root here and silently no-ops.
   const handleOpenExtended = useCallback((
     plugin: ColumnKey, fieldPath: string, path: PathSegment[], rootField: string, value: string, readOnly: boolean,
   ) => {
     const override = (result?.overrides ?? []).find(o => columnKey(o.plugin, o.origin) === plugin);
     if (!override) return;
-    // Issue #218's own composite label — the same "EditorID [FormKey]" string the FormKey picker
+    // The composite label — the same "EditorID [FormKey]" string the FormKey picker
     // seeds with and the header displays, so the tab's directory names the record the same way
     // every other identity-bearing surface here already does.
     const displayId = (result?.overrides.find(o => o.isWinner) ?? result?.overrides[0])?.editorId;
@@ -303,7 +295,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       }
     }
     Object.assign(map, vmadTree.metaMap, conditionTree.metaMap);
-    // #335/ADR-0038: the header record's masters field displays but is never directly editable —
+    // ADR-0038: the header record's masters field displays but is never directly editable —
     // stamped readOnly here (the same per-row override DiffRow already honors for the Condition
     // AND/OR gate and VMAD's synthesized Flags row) rather than gated a second way, so every
     // consumer of this map — the array-parent "Add" affordance and each element's own Remove/Move
@@ -320,7 +312,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, vmadTree, conditionTree, isHeaderRecord]);
 
-  // #426 Track 4: the message listener below is mount-once ([] deps), but handleArrayOp's and
+  // The message listener below is mount-once ([] deps), but handleArrayOp's and
   // fieldMetaMap's own identities change on every edit/reload (they close over `result`) — a ref
   // keeps the broadcast handler calling the *current* versions rather than the ones captured at
   // mount, the same shape refreshRef already uses for the same reason. Declared here (after both
@@ -332,24 +324,23 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   useLayoutEffect(() => { handleArrayOpRef.current = handleArrayOp; }, [handleArrayOp]);
   const fieldMetaMapRef = useRef(fieldMetaMap);
   useLayoutEffect(() => { fieldMetaMapRef.current = fieldMetaMap; }, [fieldMetaMap]);
-  // #426 Track 5: VMAD_STRUCTURAL_OP's own commit reaches through handleEditCell directly (the
+  // VMAD_STRUCTURAL_OP's own commit reaches through handleEditCell directly (the
   // op-envelope value is already in EDIT_FIELD's own wire shape — RecordFieldWriter.ApplyVmadField
   // dispatches on it) — same ref-for-a-mount-once-listener shape as handleArrayOpRef above, for the
   // same reason (handleEditCell closes over `result`/`formKey`, both of which change).
   const handleEditCellRef = useRef(handleEditCell);
   useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
-  // #258 / ADR-0039: FIELD_OPEN_EXTENDED_EDITOR's own commit reaches through handleOpenExtended —
+  // ADR-0039: FIELD_OPEN_EXTENDED_EDITOR's own commit reaches through handleOpenExtended —
   // same ref-for-a-mount-once-listener shape as handleEditCellRef/handleArrayOpRef above, for the
   // same reason (handleOpenExtended closes over `result`/`vmadTree`/`conditionTree`/`formKey`/
-  // `handleCellCommit`, all of which change). Previously this bridge call was reached directly
-  // from DiffRow's onDoubleClick prop; now it's reached only from this broadcast, the right-click
+  // `handleCellCommit`, all of which change). Reached only from this broadcast, the right-click
   // menu's own trigger.
   const handleOpenExtendedRef = useRef(handleOpenExtended);
   useLayoutEffect(() => { handleOpenExtendedRef.current = handleOpenExtended; }, [handleOpenExtended]);
 
   // Listen for loadRecord messages from the extension (panel reuse), the load order's own
-  // conflicts-computed signal, and the array-op right-click commands (#426 Track 4) — the one
-  // remaining broadcast-and-self-filter shape (the extension host has no live reference into this
+  // conflicts-computed signal, and the array-op right-click commands — the
+  // broadcast-and-self-filter shape (the extension host has no live reference into this
   // panel's own React state, which alone holds the record's current values).
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -368,12 +359,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
         void refreshRef.current(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.RECORD_EDITED) {
-        // #415: the edit landed as a working-tree change. Re-read rather than patch: the write
+        // The edit landed as a working-tree change. Re-read rather than patch: the write
         // path re-serialized the record through the codec, and this record's conflict picture
         // across every other column may have moved with it.
         if (msg.formKey === prevFormKeyRef.current) void refreshRef.current(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
-        // #308 / ADR-0035 AC4: a panel already open when the sweep lands must reflect the settled
+        // ADR-0035: a panel already open when the sweep lands must reflect the settled
         // data, not just clear its own banner over stale content — refresh() re-runs client.load()
         // in full, so the grid and the banner update together in one state change. Load-order-wide,
         // not record-specific, so no self-filter — every open panel reacts.
@@ -382,28 +373,27 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE
         || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP || msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_DOWN
       ) {
-        // #426 Track 4: self-filter on formKey — a changeId-less broadcast (unlike the retired cell
-        // commands #410 retired, there is no per-change id here), the same convention #227's
-        // original array-op broadcasts used. Only reachable while this exact record is open, so a
+        // Self-filter on formKey — a changeId-less broadcast (there is no per-change id here).
+        // Only reachable while this exact record is open, so a
         // stale/background panel showing a different record ignores it.
         if (msg.formKey !== prevFormKeyRef.current) return;
         const plugin = columnKey(msg.plugin, msg.origin);
         const op = msg.type === EXTENSION_TO_WEBVIEW.ARRAY_ADD ? 'add'
           : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_REMOVE ? 'remove'
           : msg.type === EXTENSION_TO_WEBVIEW.ARRAY_MOVE_UP ? 'moveUp' : 'moveDown';
-        // #535: `msg.path` is the carried path (the array itself for 'add', the element for every
-        // other op) — no more re-synthesizing a one-hop path from a bare scalar index, which only
-        // ever addressed a top-level array correctly. `metaAtPath` resolves the *array's own*
+        // `msg.path` is the carried path (the array itself for 'add', the element for every
+        // other op) — never re-synthesized from a bare scalar index, which would only
+        // address a top-level array correctly. `metaAtPath` resolves the *array's own*
         // element type from the subtree root's meta, walking the same hops the value itself sits
-        // behind — reading `fieldMetaMapRef.current[msg.rootField]?.elementType` directly (the
-        // pre-#535 shape) only found the right element type when the array was itself the subtree
-        // root; for a nested array it named the wrong node's (or no) elementType, and Add appended
-        // a malformed element.
+        // behind — reading `fieldMetaMapRef.current[msg.rootField]?.elementType` directly
+        // would only find the right element type when the array is itself the subtree
+        // root; for a nested array it would name the wrong node's (or no) elementType, and Add
+        // would append a malformed element.
         const arrayPath = op === 'add' ? msg.path : msg.path.slice(0, -1);
         const arrayMeta = metaAtPath(fieldMetaMapRef.current[msg.rootField], arrayPath);
         handleArrayOpRef.current(plugin, msg.path, msg.rootField, op, arrayMeta?.elementType);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
-        // #426 Track 5: same self-filter-and-commit shape as the array-op branch above, except the
+        // Same self-filter-and-commit shape as the array-op branch above, except the
         // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
         // no webview-side computation of a next value, unlike an array op.
         if (msg.formKey !== prevFormKeyRef.current) return;
@@ -412,9 +402,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         if (msg.formKey !== prevFormKeyRef.current) return;
         setAddPropertyDialog({ scriptName: msg.scriptName, plugin: columnKey(msg.plugin, msg.origin) });
       } else if (msg.type === EXTENSION_TO_WEBVIEW.FIELD_OPEN_EXTENDED_EDITOR) {
-        // #258 / ADR-0039: the string-cell right-click command's own broadcast — self-filter on
-        // formKey, same convention as every other right-click op above, then hand off to the exact
-        // bridge call a double click used to reach directly.
+        // ADR-0039: the string-cell right-click command's own broadcast — self-filter on
+        // formKey, same convention as every other right-click op above, then hand off to the
+        // bridge call.
         if (msg.formKey !== prevFormKeyRef.current) return;
         handleOpenExtendedRef.current(
           columnKey(msg.plugin, msg.origin), msg.fieldName, msg.path, msg.rootField, msg.value, msg.readOnly,
@@ -425,11 +415,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return () => window.removeEventListener('message', handler);
   }, []);
 
-  // #272 / ADR-0036: keyed by ColumnKey, not the bare plugin filename — pre-#272, two overrides
-  // sharing a filename but differing in origin collided here, and the second silently discarded
-  // the first (this is the concrete data-loss bug named in the plan). Every consumer of this map
-  // (Copy as New Record's field source, Add Master's current-masters read, array/VMAD op
-  // resolution, DiffRow's own render loop) reads it by ColumnKey now. Declared as
+  // ADR-0036: keyed by ColumnKey, not the bare plugin filename — two overrides
+  // sharing a filename but differing in origin would otherwise collide here, the second silently
+  // discarding the first. Every consumer of this map reads it by ColumnKey. Declared as
   // Record<string, ...> rather than Record<ColumnKey, ...> — a mapped type over a non-literal
   // string collapses to a plain index signature either way (ColumnKey's brand is erased on a
   // dictionary regardless, see types.ts' own doc comment), so this loses no real protection and
@@ -446,7 +434,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     [result],
   );
 
-  // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
+  // ADR-0036: "origin appears inline in the header only when two loaded copies share a
   // filename" — computed from this response's own overrides (never the load order's whole plugin
   // list), same source columns already comes from.
   const collidingPluginNames = useMemo(
@@ -474,22 +462,20 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   if (error) return <div style={{ ...containerStyle, color: 'var(--vscode-errorForeground, #f44)' }}>Error: {error}</div>;
   if (!result) return <div style={containerStyle}>Loading…</div>;
 
-  // Issue #114: `result.conflictAll` (record-wide) is no longer threaded into the compare grid's
-  // row background — that's now each row's own `diff.conflictAll` (DiffRow), computed bottom-up
-  // per node. The record-wide value remains the Plugins-tree's own record badge, sourced there
-  // independently — this component has no use for it any more.
+  // `result.conflictAll` (record-wide) is not threaded into the compare grid's
+  // row background — that's each row's own `diff.conflictAll` (DiffRow), computed bottom-up
+  // per node. The record-wide value is the Plugins-tree's own record badge, sourced there
+  // independently — this component has no use for it.
   const { overrides, diffs } = result;
 
   const winner = overrides.find(o => o.isWinner);
   const displayId = (winner ?? overrides[0])?.editorId;
   const title = displayId ? `${displayId} [${formKey}]` : formKey;
 
-  // Issue #231: replaces the old hand-built top-level/array-element/struct-child/grandchild
-  // special-casing (three near-duplicate `<DiffRow>` blocks, capped at exactly those three
-  // levels) with one recursive builder — the same recursion VMAD's own struct data has always
-  // needed (Schema/VmadCodec.cs: "the (de)serializer descends to arbitrary depth") and which
-  // folding VMAD into this one tree requires generalizing to, rather than bolting a second,
-  // VMAD-only deep path alongside this one. `path`/`rootField` are RowContext's own fields
+  // One recursive builder for every nesting depth — the recursion VMAD's own struct data
+  // needs (Schema/VmadCodec.cs: "the (de)serializer descends to arbitrary depth"),
+  // rather than a second,
+  // VMAD-only deep path bolted alongside. `path`/`rootField` are RowContext's own fields
   // (DiffRow.tsx) — every row in one subtree stages through the same rootField, and getAtPath/
   // setAtPath (recordUtils.ts) are the one generic read/write every depth shares.
   //
@@ -505,7 +491,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
   ): React.ReactNode[] {
     const hasChildren = (diff.children?.length ?? 0) > 0;
     const isExpanded = expandedStructs.has(rowKey);
-    // #426 Track 4: this row is itself a mutable, unsorted array's own row (Add applies).
+    // This row is itself a mutable, unsorted array's own row (Add applies).
     const isUnsortedArrayParent = meta?.type === 'array' && !!meta.elementType && !meta.elementType.isSortable;
 
     const rows: React.ReactNode[] = [
@@ -568,9 +554,9 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
       <div style={{ flex: '0 0 auto', marginBottom: 10, fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
         {title}
       </div>
-      {/* #308 / ADR-0035: the record editor's own "an absent conflict badge must never be
+      {/* ADR-0035: the record editor's own "an absent conflict badge must never be
           mistakable for 'no conflict'" statement — this surface renders conflict colouring
-          today (unlike the Plugins tree, #307), so an unmarked cell here doesn't just omit a
+          today (unlike the Plugins tree), so an unmarked cell here doesn't just omit a
           badge, it actively paints a verdict nothing has checked yet. Same in-panel-notice shape
           as the actionError banner below it (there is no WebviewPanel.message the way TreeView
           has one), clears itself with no user action once refresh() next lands a settled
@@ -580,7 +566,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           {recordPanelIncompleteMessage(conflictsComputed)}
         </div>
       )}
-      {/* Issue #175: flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport
+      {/* flex:1 + minHeight:0 lets this wrapper shrink to the remaining viewport
           space instead of growing with the table's full height (the flex-item default of
           min-height:auto would otherwise defeat this). overflow:auto then gives it its own
           native scrollbars pinned to its own (viewport-bound) edges, so the horizontal scrollbar
@@ -593,19 +579,19 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
               <th style={{ ...headerCell, textAlign: 'left', minWidth: '160px' }}>Field</th>
               {columns.map(col => {
                 {
-                  // #272 / ADR-0036: collapsedColumns/immutableSet are keyed by col.key
+                  // ADR-0036: collapsedColumns/immutableSet are keyed by col.key
                   // (ColumnKey), not the bare plugin filename — two same-filename columns must
                   // collapse/read-only independently. columnHeaderContext still gets the real
                   // plugin+origin pair (col.override.plugin/.origin), never the compound key.
                   const isCollapsed = collapsedColumns.has(col.key);
                   const isImmutable = immutableSet.has(col.key);
-                  // #304 / ADR-0035: the column's own load-order membership — distinct from
+                  // ADR-0035: the column's own load-order membership — distinct from
                   // isImmutable (see recordUtils.ts's readOnlyReason) — drives both the header's
                   // reason wording and the dimming that carries down through every cell in this
                   // column (DiffRow, below), matching the tree row's own treatment (ADR-0035:
                   // "non-participating copies render dimmed").
                   const inLoadOrder = !notInLoadOrderSet.has(col.key);
-                  // #491: a Partial Form column dims the same way a not-in-load-order one does —
+                  // A Partial Form column dims the same way a not-in-load-order one does —
                   // xEdit's own answer ("shown as such, not as a full competing override") applied
                   // to mEdit's never-hide-data posture. Read straight off col.override.isPartialForm
                   // rather than a separately-threaded Set, since the fact already rides on this
@@ -628,14 +614,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
                         showOriginInline={collidingPluginNames.has(col.override.plugin)}
                         collapsed={isCollapsed}
                         onToggleCollapse={() => toggleColumnCollapse(col.key)}
-                        // #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as
+                        // Copy as Override Into…/Copy as New Record Into…,
                         // this column's native right-click menu — unconditional on isImmutable/
                         // isTracked/inLoadOrder, since copying *from* any of those is the ordinary
                         // case, not one to gate out.
                         vscodeContext={combineVscodeContexts(
                           headerCellContext(col.override.formKey, col.override.plugin, col.override.origin),
                         )}
-                        // #539: the one sanctioned header-flag write, through the same handleEditCell
+                        // The one sanctioned header-flag write, through the same handleEditCell
                         // every other field edit on this panel already goes through — is_partial_form
                         // is exempt from RecordEditService's own Partial Form read-only guard
                         // (RecordEditService.cs), so this reaches the backend regardless of the
@@ -649,7 +635,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
             </tr>
           </thead>
           <tbody>
-            {/* Issue #231: VMAD/Condition rows are woven into the same flatMap as every ordinary
+            {/* VMAD/Condition rows are woven into the same flatMap as every ordinary
                 field — one row list, one recursive builder, no separate section/renderer. */}
             {[...diffs, ...vmadTree.diffs, ...conditionTree.diffs].flatMap(
               diff => buildRows(diff, fieldMetaMap[diff.fieldName], [], diff.wirePath ?? diff.fieldName, diff, diff.fieldName),
@@ -657,7 +643,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
           </tbody>
         </table>
       </div>
-      {/* #426 Track 5 / #229: Add Property's own webview modal — the one deliberate exception to
+      {/* Add Property's own webview modal — the one deliberate exception to
           right-click-menu commands resolving everything themselves (three fields at once: name,
           type, and a type-appropriate value). `addPropertyDialog` names which script/column
           VMAD_OPEN_ADD_PROPERTY opened it for; confirming builds the same op-envelope fieldPath/

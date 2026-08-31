@@ -49,7 +49,7 @@ describe('buildColumns', () => {
 
 });
 
-// #304: the *reason* a column is read-only, distinct from the fact that it is — `immutableSet`
+// The *reason* a column is read-only, distinct from the fact that it is — `immutableSet`
 // alone can't tell a vanilla master (isImmutable, still inLoadOrder) apart from a copy the load
 // order doesn't name (isImmutable *because* !inLoadOrder — a losing copy's registration derives
 // both, ADR-0044). PluginHeader needs both to word the tooltip and decide whether to dim.
@@ -67,7 +67,7 @@ describe('readOnlyReason', () => {
     expect(readOnlyReason(true, false)).toBe('notInLoadOrder');
   });
 
-  // #415 / ADR-0041: "editing requires tracking; viewing never does". A mutable, loaded plugin in
+  // ADR-0041: "editing requires tracking; viewing never does". A mutable, loaded plugin in
   // an untracked mod folder is read-only for a reason that is one command away from gone, which is
   // why it needs its own value rather than folding into the two above — each names a different way
   // out, and offering the wrong one is worse than offering none.
@@ -87,7 +87,7 @@ describe('readOnlyReason', () => {
   });
 });
 
-// #304 / ADR-0036: "origin inline only on collision" — computed from the overrides a single
+// ADR-0036: "origin inline only on collision" — computed from the overrides a single
 // compare response already carries (CompareResult.Overrides), never from the load order's whole
 // plugin list. A filename appearing once is the overwhelming common case and must not collide.
 describe('collidingFilenames', () => {
@@ -126,17 +126,7 @@ describe('parseElementIndex', () => {
 });
 
 
-// Issue #231: the generalized, path-based replacement for the old top-level/array-element/
-// struct-child/grandchild switch DiffRow used to extract a row's own overlay value out of the
-// root's raw overlay value — one implementation for every depth, including depths the old switch
-// could not express (a struct nested more than one level deep, or a member below an array below a
-// member). Supersedes the old element-value extractor (array-element case) and the struct-
-// child/grandchild cases the old DiffRow switch hand-rolled directly — deleted along with its own
-// call site, now that this one function covers every depth those three used to split across.
-
-
-// Issue #231: the generic path-based node accessors that replace RecordPanel/DiffRow's old
-// hand-built top-level/array-element/struct-child/grandchild special cases — one recursive
+// The generic path-based node accessors — one recursive
 // implementation for a row's value at any depth within the field/wire-path it restages as one
 // atomic unit, rather than one hand-coded case per nesting level.
 describe('getAtPath', () => {
@@ -159,8 +149,7 @@ describe('getAtPath', () => {
     expect(getAtPath(['KwdA', 'KwdB'], path)).toBe('KwdB');
   });
 
-  // Struct-in-array-in-struct: a depth the old RowContext union (top-level/array-element/
-  // struct-child/grandchild) could never express at all.
+  // Struct-in-array-in-struct: a depth a fixed-level union could never express.
   it('reads through a member → index → member chain (depth previously unrepresentable)', () => {
     const path: PathSegment[] = [
       { kind: 'member', name: 'Outer' },
@@ -176,7 +165,7 @@ describe('getAtPath', () => {
   });
 });
 
-// Issue #114: mirrors MEditService.Core/Queries/ConflictRules.cs's Reduce, used by
+// Mirrors MEditService.Core/Queries/ConflictRules.cs's Reduce, used by
 // vmadTreeAdapter.ts/conditionTreeAdapter.ts to compute their own synthesized FieldDiff nodes'
 // bottom-up conflictAll.
 describe('reduceConflictAll', () => {
@@ -211,7 +200,7 @@ describe('aggregateConflictAll', () => {
     expect(aggregateConflictAll({}, [])).toBe('NoConflict');
   });
 
-  // The literal #114 requirement at the adapter seam: a struct/array node with no conflict of its
+  // The requirement at the adapter seam: a struct/array node with no conflict of its
   // own still escalates to the worse of its children — collapsing it must not hide that something
   // inside differs.
   it('escalates from a conflicting child even when the node has no own-cell-state conflict', () => {
@@ -227,8 +216,7 @@ describe('aggregateConflictAll', () => {
   });
 });
 
-// #426 Track 4 (resurrected from before #410, git history b1992bf~1): the pure array-arity/order
-// mutations behind Move Up/Move Down/Remove/Add.
+// The pure array-arity/order mutations behind Move Up/Move Down/Remove/Add.
 describe('hasElementAt', () => {
   it('is true within bounds, false at or past length, false for a negative index', () => {
     expect(hasElementAt(3, 0)).toBe(true);
@@ -252,7 +240,7 @@ describe('moveArrayElement', () => {
     expect(moveArrayElement(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
   });
 
-  // Issue #168: `index` itself, not just the swap target, must be bounds-checked — a row's index
+  // `index` itself, not just the swap target, must be bounds-checked — a row's index
   // comes from the union-aligned tree across every plugin's column and can equal or exceed *this
   // specific plugin's* own array length even though the swap target alone looks in range.
   it('returns the array unchanged when index itself is out of bounds, even if the swap target is in range', () => {
@@ -287,13 +275,10 @@ describe('appendArrayElement', () => {
   });
 });
 
-// #535: `path` (the row's own restage coordinates, PathSegment[]) replaces the old bare scalar
-// `index` — a top-level array's element is still a one-hop path (`[{kind:'index',index:N}]`), but
+// `path` is the row's own restage coordinates (PathSegment[]), never a bare scalar
+// index — a top-level array's element is a one-hop path (`[{kind:'index',index:N}]`), but
 // an array nested inside a struct/array needs every hop from the subtree root, which a scalar
-// index could never carry. `rootField` replaces `fieldName` (its own pre-#535 doc comment already
-// said `fieldName` *was* `context.rootField` — no distinct role like StringValueContext's
-// `fieldName`/`rootField` pair has, so this renames rather than adding a second, always-identical
-// field). `canMoveUp`/`canMoveDown` are still derived from an index, now the *last* path segment's.
+// index could never carry. `canMoveUp`/`canMoveDown` derive from the *last* path segment's index.
 describe('arrayElementContext', () => {
   it('produces the data-vscode-context object for a middle element (can move either way)', () => {
     const path: PathSegment[] = [{ kind: 'index', index: 1 }];
@@ -329,7 +314,7 @@ describe('arrayElementContext', () => {
     ).canMoveUp).toBe(false);
   });
 
-  // #535: the defect this closes — a top-level array's element path is one hop, but a nested
+  // A top-level array's element path is one hop, but a nested
   // array's is longer; canMoveUp/canMoveDown must key off the *last* hop, not path.length, and the
   // full chain must survive onto the payload rather than collapsing to the trailing index alone.
   it('a nested element carries every hop of its own path, and canMoveUp/canMoveDown read the last one', () => {
@@ -355,9 +340,9 @@ describe('arrayParentContext', () => {
     });
   });
 
-  // #535: a nested array's own "Add" context must address the array itself (the row's own path),
-  // not the subtree root — the pre-#535 shape (`fieldName` alone) meant "the root field is the
-  // array," which is only true for a top-level array.
+  // A nested array's own "Add" context must address the array itself (the row's own path),
+  // not the subtree root — "the root field is the
+  // array" is only true for a top-level array.
   it('carries the row\'s own path for a nested array-parent cell', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];
     const ctx = arrayParentContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Container', path);
@@ -366,10 +351,9 @@ describe('arrayParentContext', () => {
   });
 });
 
-// Issue #231 (review): a row can be more than one structural-op target at once (a VMAD
+// A row can be more than one structural-op target at once (a VMAD
 // array-of-scalars property is both an array parent/element and a VMAD property) — combining
-// contexts rather than picking one is what makes both menus reachable from the same cell. Only
-// arrayParent is exercised here today; VMAD's own context builders return with Track 5.
+// contexts rather than picking one is what makes both menus reachable from the same cell.
 describe('combineVscodeContexts', () => {
   it('returns undefined when every context is absent', () => {
     expect(combineVscodeContexts(undefined, undefined)).toBeUndefined();
@@ -439,7 +423,7 @@ describe('vmadScriptsContext / vmadScriptContext / vmadPropertyContext', () => {
   });
 });
 
-// #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as the column header's own
+// Copy as Override Into…/Copy as New Record Into…, the column header's own
 // native context — unconditional on the column's own read-only-ness, since copying *from* an
 // immutable/vanilla column is the headline use case, unlike every row-scoped context above.
 describe('headerCellContext', () => {
@@ -459,8 +443,8 @@ describe('headerCellContext', () => {
   });
 });
 
-// #258 / ADR-0039: the string-cell right-click menu's own identity — the extended editor's only
-// remaining trigger now that no left-click gesture reaches it.
+// ADR-0039: the string-cell right-click menu's own identity — the extended editor's only
+// trigger, since no left-click gesture reaches it.
 describe('stringValueContext', () => {
   it('carries the cell\'s own identity, current value and readOnly flag', () => {
     expect(stringValueContext('000001:Fallout4.esm', 'MyMod.esp', 'ModA', 'Name', 'Dogmeat', false, [], 'Name')).toEqual({
@@ -481,7 +465,7 @@ describe('stringValueContext', () => {
     expect(stringValueContext('000001:Fallout4.esm', 'Fallout4.esm', 'Data', 'Name', 'Dogmeat', true, [], 'Name').readOnly).toBe(true);
   });
 
-  // #533: a string leaf nested inside a struct/array carries its own path within the field and the
+  // A string leaf nested inside a struct/array carries its own path within the field and the
   // subtree root's own wire path — the two coordinates RecordPanel's whole-field reconstruction
   // needs, distinct from `fieldName` (the extended editor tab's own display path).
   it('carries the row\'s own path and the subtree root\'s wire path for a nested string leaf', () => {
@@ -544,12 +528,12 @@ describe('setAtPath', () => {
   });
 });
 
-// #535: getAtPath/setAtPath's metadata-side counterpart — the array-op broadcast handler
+// getAtPath/setAtPath's metadata-side counterpart — the array-op broadcast handler
 // (RecordPanel.tsx) has only the wire's rootField/path, never a render-time `context.overrideMeta`
 // the way DiffRow's own buildRows does, so it needs the same descent over FieldMetadata that
 // buildRows already does by hand (member → `.fields`, index/sortKey → `.elementType`) to find a
-// *nested* array's own element type — reading `fieldMetaMap[rootField].elementType` directly (the
-// pre-#535 shape) only works when the array itself is the subtree root.
+// *nested* array's own element type — reading `fieldMetaMap[rootField].elementType` directly
+// only works when the array itself is the subtree root.
 describe('metaAtPath', () => {
   const idMeta: FieldMetadata = { name: 'Id', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
   const weightMeta: FieldMetadata = { name: 'Weight', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -579,7 +563,7 @@ describe('metaAtPath', () => {
     expect(metaAtPath(entriesMeta, [{ kind: 'sortKey', key: 'anything' }])).toBe(entryMeta);
   });
 
-  // The shape this ticket exists for: a nested array's own element type, reached through a
+  // The load-bearing shape: a nested array's own element type, reached through a
   // member → member chain from the subtree root.
   it('finds a nested array\'s own element type through a member chain', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }];

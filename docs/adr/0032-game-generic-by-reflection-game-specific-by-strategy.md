@@ -82,8 +82,8 @@ later addition keyed on `TypeName` — likely itself per-game — that reshapes 
   no change to storage, classifier, DTO, or frontend.
 - A game with no condition codec fails **loudly** (missing strategy), never silently mis-parses —
   the opposite of a reflective codec's failure mode.
-- This ADR reinterprets issue #151's acceptance criterion "no hardcoded reference to Fallout4
-  outside test fixtures": the *resolution logic, model, storage, and rendering* are game-generic;
+- The generality criterion "no hardcoded reference to Fallout4 outside test fixtures" is read
+  as: the *resolution logic, model, storage, and rendering* are game-generic;
   the Mutagen-edge parse is per-game by necessity and isolated behind the strategy. That satisfies
   the criterion's intent (adding a game is additive, not a rewrite) better than a brittle reflective
   codec would.
@@ -91,5 +91,3 @@ later addition keyed on `TypeName` — likely itself per-game — that reshapes 
   do **not** force the strategy onto VMAD (its shape is uniform — that would be scaffolding for a
   need that does not exist), and do **not** try to reflect conditions into one generic codec (their
   shape is not uniform — that would be a hidden per-game switch).
-</content>
-</invoke>

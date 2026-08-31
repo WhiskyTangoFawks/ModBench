@@ -3,13 +3,13 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041: Track generates <c>.gitignore</c> from the chosen preset. Edits (default for
+/// ADR-0041: Track generates <c>.gitignore</c> from the chosen preset. Edits (default for
 /// downloaded mods) ignores everything except the source; Everything additionally tracks assets.
-/// Plugin binaries are ignored in both presets (AC: "plugin binaries ignored in both") — they are
+/// Plugin binaries are ignored in both presets — they are
 /// compiled artifacts, never written by this module. <c>meta.ini</c> is excluded in both, too
 /// (ADR-0041 amendment: "never track a file that changes for non-content reasons") — asserted
 /// against the committed tree itself, not just the generated text, with a sibling source file as
-/// the positive control through the identical query path (coordinator ruling #5/#7 on #414).
+/// the positive control through the identical query path.
 /// </summary>
 public sealed class SourceRepositoryTrackGitignoreTests
 {
@@ -79,9 +79,9 @@ public sealed class SourceRepositoryTrackGitignoreTests
         }
     }
 
-    // #441: the Edits pattern is root-anchored to the exact literal "source", not "*source*" — an
-    // ordinary top-level folder that merely happens to end with "source" must stay ignored, or the
-    // same over-match hazard the old per-plugin suffix guard had (#324) would just move here.
+    // The Edits pattern is root-anchored to the exact literal "source", not "*source*" — an
+    // ordinary top-level folder that merely happens to end with "source" must stay ignored (the
+    // over-match hazard a suffix pattern would reintroduce).
     [Fact]
     public void Track_EditsPreset_DoesNotUnignoreATopLevelFolderThatMerelyEndsWithSource()
     {
@@ -103,7 +103,7 @@ public sealed class SourceRepositoryTrackGitignoreTests
         }
     }
 
-    // AC (#441): "the Edits preset repo tracks exactly .gitignore + source/**". Every test above
+    // The Edits preset repo tracks exactly .gitignore + source/**. Every test above
     // only probes a couple of paths with Contains/DoesNotContain — that style would pass even if
     // one unexpected extra file leaked into the commit alongside a correctly-included/-excluded
     // probe pair. This asserts the whole committed set, exactly, for a fixture that mixes every

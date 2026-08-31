@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * ADR-0041 / #415: the webview writes through exactly one message, EDIT_FIELD, posted from exactly
+ * ADR-0041: the webview writes through exactly one message, EDIT_FIELD, posted from exactly
  * one module. Not through RecordPanelClient, which stays read-only — an edit travels
  * webview → extension host → backend so that a refusal can become a native notification, a surface
  * only the host has.

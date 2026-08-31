@@ -16,8 +16,8 @@ namespace MEditService.Tests.Query;
 // flag-string mapping, reindex idempotency, and form-reference registration for a
 // top-level Object property.
 //
-// #421: GetVmad is rejected from IRecordReads/IRecordIndex outright, same as GetVmadTests — see
-// its own note. The local GetVmad helper below re-points this suite's calls at the relocated
+// GetVmad is rejected from IRecordReads/IRecordIndex outright, same as GetVmadTests — see
+// its own note. The local GetVmad helper below points this suite's calls at the
 // RecordDocumentCodecs logic.
 public sealed class VmadIndexerTests : IDisposable
 {
@@ -134,9 +134,9 @@ public sealed class VmadIndexerTests : IDisposable
             scripts.First(s => s.Name == "InheritedScript").Flags);
     }
 
-    // #420: vmad_scripts is gone — VMAD lives in the record's own document (`records.body`) now, so
-    // reindex non-duplication is a `records` row count instead of a vmad_scripts row count. Same
-    // intent as before (reindexing this VMAD-bearing record doesn't leave a stale second copy).
+    // VMAD lives in the record's own document (`records.body`) — no side table — so
+    // reindex non-duplication is a `records` row count: reindexing this VMAD-bearing record
+    // must not leave a stale second copy.
     [Fact]
     public void Reindex_DoesNotDuplicateRows()
     {

@@ -5,7 +5,7 @@ using MEditService.Core.Records;
 namespace MEditService.Api;
 
 /// <summary>
-/// #587 / ADR-0001: the runtime half of "the index mirrors file state". Subscribes once, for the
+/// ADR-0001: the runtime half of "the index mirrors file state". Subscribes once, for the
 /// life of the process, to <see cref="ExternalChangeWatcher.IndexedBinaryChanged"/> and turns each
 /// disk event into the index verb it means — changed bytes into a re-index, a vanished file into
 /// <c>Unindex</c>, the file-gone verb.

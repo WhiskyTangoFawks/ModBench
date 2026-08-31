@@ -12,8 +12,8 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #491 AC2 (first half — the header-write half is #539): editing a non-header field of a Partial
-/// Form record is refused, typed, before anything is written.
+/// Editing a non-header field of a Partial Form record is refused, typed, before anything is
+/// written (the header-write half is <see cref="PartialFormHeaderWriteTests"/>).
 /// </summary>
 public sealed class PartialFormEditRefusalTests : IDisposable
 {
@@ -89,10 +89,10 @@ public sealed class PartialFormEditRefusalTests : IDisposable
         Assert.Equal(before, File.ReadAllText(SourcePath()));
     }
 
-    // #491 review: xEdit's own CanAssignInternal (wbImplementation.pas:9905-9914) explicitly allows
-    // EDID assignment on a Partial Form record — ADR-0034 makes that binding, not a divergence
-    // #539 owning the header write path could excuse. EditorID is an ordinary, already-writable
-    // field (RecordFieldWriter.EditorIdFieldPath), so this needed no header write path first.
+    // xEdit's own CanAssignInternal (wbImplementation.pas:9905-9914) explicitly allows
+    // EDID assignment on a Partial Form record — ADR-0034 makes that binding. EditorID is an
+    // ordinary, already-writable field (RecordFieldWriter.EditorIdFieldPath), so it needs no
+    // header write path.
     [Fact]
     public void EditField_EditorIdOnPartialFormRecord_Succeeds()
     {

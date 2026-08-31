@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #417's "Keep as My Edit" exit path: the externally-changed binary at <paramref name="pluginPath"/>
+/// The "Keep as My Edit" exit path: the externally-changed binary at <paramref name="pluginPath"/>
 /// lands as working-tree dirt on exactly the records it actually touched — never a wholesale
 /// re-serialize like <see cref="ExternalChangeAbsorber.Absorb"/>, because landing here must not
 /// clobber the user's own unrelated working-tree edits.
@@ -42,13 +42,13 @@ public static class ExternalChangeEditLander
         var baselineByPath = SourceRepository.EnumerateSourceAtRef(modFolder, pluginName, parkedRef)
             .ToDictionary(f => ToGitPath(f.RelativePath), f => Encoding.UTF8.GetString(f.Bytes), StringComparer.Ordinal);
 
-        // #515: explicit strings parameters — this path always has a mod folder (Keep only ever runs
+        // Explicit strings parameters — this path always has a mod folder (Keep only ever runs
         // against an already-tracked plugin), so LocalizedStrings.ForRead's single-argument overload
         // applies, same as ExternalChangeAbsorber's own identical call.
         var deepParsed = ModFactory.ImportSetter(
             new ModPath(ModKey.FromFileName(pluginName), pluginPath), gameRelease, LocalizedStrings.ForRead(modFolder));
         var touched = new List<TouchedRecord>();
-        // #459: SourceRecordPath.For now needs each record's position among its own group-folder
+        // SourceRecordPath.For needs each record's position among its own group-folder
         // siblings. EnumerateMajorRecords walks the externally-changed binary's own deserialized
         // object graph, which preserves each group's real GRUP order — so a running per-group counter,
         // incremented in the same walk, reproduces exactly the index Track would assign this same
@@ -60,7 +60,7 @@ public static class ExternalChangeEditLander
             var groupFolder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType);
             var containerFormKey = record.FormKey.ToString();
 
-            // #460 (Keep half): a container/embedded record has no flat, directly-computable path, but
+            // A container/embedded record has no flat, directly-computable path, but
             // it may well already have a real file — the overwhelmingly common case, a container Track
             // or a prior edit already wrote to the tree. SourceUnitResolver is the same disk-scan
             // resolution RecordEditService's point-write path already uses successfully for this exact
@@ -74,9 +74,8 @@ public static class ExternalChangeEditLander
                 {
                     // Truly new: never tracked, nowhere in the tree, and the index names no container
                     // that would hold it either. Landing a brand-new container needs the layout grammar
-                    // that places it, which this method does not have — logged and skipped, exactly
-                    // like the old blanket container skip, but now only for the residual case that
-                    // actually has no home to land in (tracked separately as a follow-up).
+                    // that places it, which this method does not have — logged and skipped, only for
+                    // this residual case that actually has no home to land in.
                     if (logger.IsEnabled(LogLevel.Debug))
                     {
                         logger.LogDebug(
@@ -89,8 +88,8 @@ public static class ExternalChangeEditLander
 
                 if (unit.Value.IsEmbedded)
                 {
-                    // This record has no file of its own — it is inlined in its owner's document
-                    // (#450), and that owner is itself walked by this same EnumerateMajorRecords loop,
+                    // This record has no file of its own — it is inlined in its owner's document,
+                    // and that owner is itself walked by this same EnumerateMajorRecords loop,
                     // so its own pass (below, non-embedded) already serializes this child's current
                     // value as part of the owner's whole text. Nothing to separately write here.
                     if (logger.IsEnabled(LogLevel.Trace))
@@ -121,7 +120,7 @@ public static class ExternalChangeEditLander
             var formKey = record.FormKey.ToString();
             var relativePath = SourceRecordPath.For(pluginName, recordType, formKey, record.EditorID, gameRelease, orderIndex);
 
-            // #459 review finding: an external add/delete anywhere earlier in this group shifts every
+            // An external add/delete anywhere earlier in this group shifts every
             // later sibling's own order index, hence its own file name, even when that sibling's own
             // fields never changed — this record can therefore already have a real file sitting at its
             // *old* index. Resolved by FormKey suffix (index- and EditorID-blind, the same lookup

@@ -5,12 +5,9 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests;
 
 /// <summary>
-/// Parks a load just before a named plugin is indexed, and holds it there until the test releases it
-/// (#274). This is what makes progressive loading testable without sleeps: the test drives the load
+/// Parks a load just before a named plugin is indexed, and holds it there until the test releases
+/// it. This is what makes progressive loading testable without sleeps: the test drives the load
 /// to a known point, asserts what is observable *at that instant*, then lets it finish.
-///
-/// Manual testing is not available for this ticket, so a real load order being watched by a
-/// developer is not the fallback it usually is — this gate is the verification.
 /// </summary>
 /// <param name="poisonPlugin">Optional: a plugin whose indexing throws, so a test can assert that a
 /// per-plugin failure is observable at a point where the load is still running.</param>

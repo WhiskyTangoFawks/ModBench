@@ -144,9 +144,8 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Equal(raceFormKey.ToString(), raceField.Value);
     }
 
-    // #272 / ADR-0036: two origins loading the same physical file under different origin values —
-    // nothing loads such a pair through a real load order yet (that's #34), but Index() has already
-    // accepted a real `origin` since #271, so the repository seam itself can be exercised directly.
+    // ADR-0036: two origins loading the same physical file under different origin values —
+    // exercised directly at the repository seam.
     [Fact]
     public void GetAllOverrides_SameFilenameDifferentOrigin_ReturnsDistinctOriginPerRow()
     {
@@ -310,7 +309,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         }
     }
 
-    // --- GetContestedFormKeys (#364: the Conflicts node's candidate population — every FormKey
+    // --- GetContestedFormKeys (the Conflicts node's candidate population — every FormKey
     // with more than one override entry in its stack, before classification decides whether that
     // multiplicity is an actual conflict) ---
 
@@ -383,9 +382,9 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Equal(0, count);
     }
 
-    // --- Type resolution (#421: FindRecordType is rejected from the seam outright — GetDocument
-    // resolves a FormKey's type internally now, so this suite's coverage of that resolution moves
-    // to observing GetDocument's own RecordType instead of a dedicated lookup) ---
+    // --- Type resolution (FindRecordType is rejected from the seam outright — GetDocument
+    // resolves a FormKey's type internally, so this suite's coverage of that resolution
+    // observes GetDocument's own RecordType instead of a dedicated lookup) ---
 
     [Fact]
     public void GetDocument_KnownFormKey_ResolvesRecordType()
@@ -472,7 +471,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Equal(2, element.GetArrayLength());
     }
 
-    // --- Combined filter (kills AND-separator string mutant in BuildWhere) ---
+    // --- Combined filter (the AND separator in BuildWhere) ---
 
     [Fact]
     public void GetRecords_WithPluginAndSearchFilter_AndFiltersApply()
@@ -484,7 +483,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Equal(0, result.Total);
     }
 
-    // --- SearchRecords with filter (kills AddParams mutants) ---
+    // --- SearchRecords with filter ---
 
     [Fact]
     public void SearchRecords_WithPluginFilter_ReturnsMatchingOnly()
@@ -525,7 +524,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         }
     }
 
-    // --- Null EditorID round-trip (kills ReadSummary/ReadDetail conditional mutants) ---
+    // --- Null EditorID round-trip ---
 
     [Fact]
     public void GetRecord_NullEditorId_ReturnsNullEditorId()
@@ -557,7 +556,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Null(detail.EditorId);
     }
 
-    // --- Use before Initialize (kills RequireSchemas null-coalescing mutant) ---
+    // --- Use before Initialize ---
 
     [Fact]
     public void GetRecord_BeforeInitialize_Throws()
@@ -784,7 +783,7 @@ public class DuckDbRecordIndexTests(TestPluginFixture fixture)
         Assert.Null(patchKw.CheckError);
     }
 
-    // #458: editor_id alone is not a unique ordering — several NPCs below share "Dup", two more
+    // editor_id alone is not a unique ordering — several NPCs below share "Dup", two more
     // share a blank EditorID (real plugin data: blank/duplicate EditorIDs are ordinary), so an
     // ORDER BY editor_id with no tiebreak leaves DuckDB free to place tied rows on either side of a
     // LIMIT/OFFSET boundary differently across calls. Paging the full set two records at a time and

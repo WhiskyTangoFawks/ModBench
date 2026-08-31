@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Bridge;
 
 /// <summary>
-/// #417 B10: <see cref="ExternalChangeWatcher"/> — the live-watch half. Real filesystem, real
+/// <see cref="ExternalChangeWatcher"/> — the live-watch half. Real filesystem, real
 /// debounce timing, no mocked <c>FileSystemWatcher</c>.
 /// </summary>
 public sealed class ExternalChangeWatcherTests
@@ -63,7 +63,7 @@ public sealed class ExternalChangeWatcherTests
     }
 
     /// <summary>
-    /// #417 exit path 3, wired end to end: detection alone (before any dialog answer, before any
+    /// Detection alone (before any dialog answer, before any
     /// Esc) is what refuses editing — <c>ExternalChangeDeferral.Unanswered</c> must already be set the
     /// instant a question is queued, not only once the user explicitly dismisses the dialog.
     /// </summary>
@@ -140,7 +140,7 @@ public sealed class ExternalChangeWatcherTests
     }
 
     /// <summary>
-    /// #417 review fix 2: the end-to-end case the ruling actually asked for — a live watcher, and a
+    /// End to end: a live watcher, and a
     /// REAL <see cref="PluginCompileService.Compile"/> (production's own rename-based commit,
     /// <see cref="PluginWriter.SaveFromModAsync"/>/<c>PreparedPluginSave.Commit</c>), not a hand-written
     /// byte-identical write standing in for one. Distinct from <see cref="Watch_DoesNotQueueASelfEcho"/>

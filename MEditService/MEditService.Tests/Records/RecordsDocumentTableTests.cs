@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #413 S3: ingest writes one <c>records</c> document per major record — the table that replaces the
+/// Ingest writes one <c>records</c> document per major record — the table that replaces the
 /// reflected per-type wide tables (ADR-0041).
 ///
 /// Asserted <b>through the SQL door</b> (plain <c>SELECT</c> against the connection), not through
@@ -98,7 +98,7 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
 
     /// <summary>
     /// The body is the codec's source text, byte for byte. A non-container record here on purpose:
-    /// containers need the ingest-side child strip (#413 D8), which is its own slice and its own
+    /// containers need the ingest-side child strip, which has its own
     /// test — pinning a Cell here would conflate the two.
     /// </summary>
     [Fact]
@@ -144,8 +144,8 @@ public sealed class RecordsDocumentTableTests(CutDownPluginFixture fixture) : IC
 
     /// <summary>
     /// The identity columns the read model is rebuilt on. `ref` is here with its one committed
-    /// value and no machinery behind it — ADR-0041 spells it into the published table shape, and a
-    /// second value arrives only with the edit path (#415), not this ticket.
+    /// value and no machinery behind it — ADR-0041 spells it into the published table shape; the
+    /// second value belongs to the edit path.
     /// </summary>
     [Fact]
     public void Index_Document_CarriesItsIdentityColumns()

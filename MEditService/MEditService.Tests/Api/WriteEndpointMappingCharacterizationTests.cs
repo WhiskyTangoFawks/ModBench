@@ -16,22 +16,13 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #604: characterization tests for the write handlers' error-mapping shapes, written *before* the
-/// refactor that centralizes them (a shared <c>PluginKeyOf</c> binder, the refusal/exception→
-/// ProblemDetails mappers, <c>ResolveAnyPhysicalCopy</c>) — pinning today's status code and body
-/// shape for exactly the paths <see cref="EditFieldApiTests"/>, <see cref="RenumberApiTests"/>,
+/// Characterization tests for the write handlers' error-mapping shapes (the shared
+/// <c>PluginKeyOf</c> binder, the refusal/exception→ProblemDetails mappers,
+/// <c>ResolveAnyPhysicalCopy</c>) — pinning status code and body shape for exactly the paths
+/// <see cref="EditFieldApiTests"/>, <see cref="RenumberApiTests"/>,
 /// <see cref="MalformedFormKeyEndpointTests"/> and <see cref="ExternalChangeEndpointsTests"/> do not
-/// reach. Before this file: <c>DeleteRecord</c> and <c>CopyRecordAsOverride</c> had zero
-/// endpoint-layer coverage of any kind; <c>PeekNextFreeFormKey</c> and <c>Compile</c> likewise; and
-/// the <see cref="IOException"/>/<see cref="UnauthorizedAccessException"/> → 500 mapping this ticket
-/// centralizes — the one thing it most wants centralized — was pinned for exactly one of the nine
-/// sites that carry it (<c>EditField</c>, in <see cref="EditFieldApiTests"/>).
-///
-/// <para>Every test here must still pass, unmodified, after the refactor — that is the whole of "no
-/// behavior moved" for the paths #604's other tests don't already prove. The rival: flip one
-/// handler's 500 to a 502, or drop a <c>detail</c> string, and the corresponding test must go red
-/// with an observed failure — confirmed by hand against a scratch copy of this file, never against
-/// <c>git checkout</c>, before the refactor commit.</para>
+/// reach, including the <see cref="IOException"/>/<see cref="UnauthorizedAccessException"/> → 500
+/// mapping every write handler carries.
 /// </summary>
 public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
@@ -199,7 +190,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
     }
 
-    // --- CopyRecordAsOverride (zero prior endpoint-layer coverage) ---
+    // --- CopyRecordAsOverride ---
 
     [Fact]
     public async Task CopyRecordAsOverride_IntoATrackedDestination_Succeeds()
@@ -395,7 +386,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         }
     }
 
-    // --- PeekNextFreeFormKey (zero prior coverage) ---
+    // --- PeekNextFreeFormKey ---
 
     [Fact]
     public async Task PeekNextFreeFormKey_OnATrackedPlugin_Succeeds()
@@ -411,7 +402,7 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("formKey").GetString()));
     }
 
-    // --- Compile (zero prior coverage) ---
+    // --- Compile ---
 
     [Fact]
     public async Task Compile_OnATrackedPlugin_Succeeds()
@@ -452,14 +443,14 @@ public sealed class WriteEndpointMappingCharacterizationTests(LoadedApiFixture<T
 }
 
 /// <summary>
-/// #604: the same characterization purpose as <see cref="WriteEndpointMappingCharacterizationTests"/>,
+/// The same characterization purpose as <see cref="WriteEndpointMappingCharacterizationTests"/>,
 /// for <c>AbsorbExternalChange</c>/<c>KeepExternalChange</c>'s own 500 path — untested by
 /// <see cref="ExternalChangeEndpointsTests"/>, whose own tests exercise the 503/200 paths only.
 /// Direct handler calls, matching that file's own established pattern (both are named static methods,
 /// unlike <c>PeekNextFreeFormKey</c>, which is still an inline lambda and is characterized at the
 /// wire instead). Sabotages the plugin *binary* rather than the mod folder's write permission: both
 /// handlers open it for a fresh deep-parse before anything reaches git, and git failures surface as
-/// <see cref="GitUnavailableException"/> — a type this ticket's 500 mapper does not and must not
+/// <see cref="GitUnavailableException"/> — a type the 500 mapper does not and must not
 /// catch — so a mod-folder-wide write block risks tripping the wrong exception type instead of the
 /// one under test.
 /// </summary>

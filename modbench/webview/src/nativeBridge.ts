@@ -1,17 +1,11 @@
 import { vscode } from './vscode';
 import { EXTENSION_TO_WEBVIEW, WEBVIEW_TO_EXTENSION, type ExtensionToWebview, type WebviewToExtension } from './messages';
 
-// #410/ADR-0041 retired the request/reply bridge this module used to run — the FormKey QuickPick,
-// the condition-function QuickPick, the revert-group modal, the add-script input box, the
-// clipboard read, and the extended field editor — because every one of them fed the retired
-// write path that went with it. #415 added back exactly one poster (editField, fire-and-forget,
-// below) for the one gesture it restored. #426 restores the shared request/reply mechanism itself,
-// for the first native-surface gesture that needs it back: the FormKey picker. Later gesture-
-// inventory slices (the condition-function picker, etc.) extend this same mechanism rather than
-// reinventing it — see the doc comment on `requestReply` and `InFlight`.
+// The webview's bridge to native VS Code surfaces. New native-surface gestures extend the shared
+// request/reply mechanism below rather than reinventing it — see the doc comment on
+// `requestReply` and `InFlight`.
 
-// Issue #212: every native-prompt bridge that used this shape (the FormKey QuickPick, the
-// condition-function QuickPick, the revert-group modal, the add-script input box) shares one
+// Every native-prompt bridge using this shape shares one
 // contract — post a request carrying a fresh requestId, await the extension host's reply
 // correlated by that same requestId, resolve whichever in-flight call matches and leave every
 // other one untouched. `read` absorbs the one genuine difference between bridges — each reply's
@@ -26,7 +20,7 @@ interface InFlight {
 let counter = 0;
 const inFlight = new Map<string, InFlight>();
 
-// Issue #230: the extended editor's commit callback doesn't fit `InFlight` above — a real editor
+// The extended editor's commit callback doesn't fit `InFlight` above — a real editor
 // tab can be saved more than once while it stays open, so EXTENDED_EDITOR_COMMITTED is not a
 // one-shot reply that resolves-then-deletes; the callback stays registered until
 // EXTENDED_EDITOR_CLOSED explicitly says the tab is gone. A second map (rather than stretching
@@ -42,7 +36,7 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     return;
   }
   if (msg.type === EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED) {
-    // Issue #230 (seam): deleted here, not left to accumulate — a load order that opens many
+    // Deleted here, not left to accumulate — a load order that opens many
     // fields' extended editors over time would otherwise grow one stale map entry per tab ever
     // opened, each one holding a closure over that tab's onCommit and everything it captured.
     extendedEditors.delete(msg.requestId);
@@ -66,8 +60,8 @@ function requestReply<T>(
   });
 }
 
-// Issue #210 (#426: restored): the FormKey picker moved off this webview — it cannot call
-// vscode.window.createQuickPick itself, only the extension host can — onto a native QuickPick.
+// The FormKey picker is a native QuickPick — the webview cannot call
+// vscode.window.createQuickPick itself, only the extension host can.
 // Every FormKeyCell call site uses this in place of a rendered picker. `seed` is the current
 // reference (empty string when there is none, e.g. adding a brand-new property) — the extension
 // host seeds the QuickPick's value with it and pre-selects the matching item. Resolves to the
@@ -80,7 +74,7 @@ export function pickFormKey(seed: string, validTypes: string[]): Promise<string 
   );
 }
 
-// Issue #211 (#426 Track 5: restored): the condition-function picker as a native QuickPick — same
+// The condition-function picker as a native QuickPick — same
 // "webview can't call the native API itself" reasoning as pickFormKey above, but simpler: the
 // function catalogue is bounded and game-scoped, so the extension host fetches it once and hands
 // it to a plain `showQuickPick` rather than driving `createQuickPick`'s per-keystroke search.
@@ -95,7 +89,7 @@ export function pickConditionFunction(seed: string): Promise<string | null> {
   );
 }
 
-// Issue #224: Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
+// Ctrl+C's clipboard write — `vscode.env.clipboard.writeText` is extension-host-only
 // (webview clipboard access isn't guaranteed), so DiskCell/DiffRow post the already-computed
 // model value (modelValue.ts) up here instead. Fire-and-forget: nothing needs to come back, since
 // the caller already has the string it copied — there's no answer to wait for, only a write.
@@ -103,7 +97,7 @@ export function copyToClipboard(value: string): void {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD, value });
 }
 
-// #415/ADR-0041: one field edit, on its way to the single write path. Fire-and-forget in the same
+// ADR-0041: one field edit, on its way to the single write path. Fire-and-forget in the same
 // sense COPY_TO_CLIPBOARD is — the panel does not await a value back, because the answer to "what
 // does the record say now" is a re-read (RECORD_EDITED), never this call's return. A refusal
 // surfaces as a native notification from the host, which is why this goes through the bridge at all
@@ -114,7 +108,7 @@ export function editField(
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.EDIT_FIELD, formKey, plugin, origin, fieldPath, value });
 }
 
-// Issue #230 (#426: restored): a `string` cell's double click opens the value in a real editor
+// A `string` cell's double click opens the value in a real editor
 // tab — the extension host can't be reached any other way (only it can call
 // vscode.workspace.openTextDocument/showTextDocument). Unlike every bridge above, this doesn't
 // return a Promise: there's no single answer to await, since the tab can be saved any number of
@@ -125,7 +119,7 @@ export function editField(
 export function openExtendedFieldEditor(
   params: {
     value: string; recordLabel: string; fieldName: string; plugin: string;
-    // #272 / ADR-0036: required alongside `plugin` — #304 folds this into the temp-file path
+    // ADR-0036: required alongside `plugin` — folded into the temp-file path
     // (extendedEditorPath's own directory segment) so two same-filename columns never alias onto
     // one file. See messages.ts' OPEN_EXTENDED_EDITOR doc comment.
     origin: string;

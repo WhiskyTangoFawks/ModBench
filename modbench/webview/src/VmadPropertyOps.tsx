@@ -4,15 +4,12 @@ import { pickFormKey } from './nativeBridge';
 import { ModalShell } from './ModalShell';
 import { ADDABLE_TYPES, defaultOpValue, opScalarKind } from './vmadOps';
 
-// Issue #231 (#426 Track 5: restored): Add Property's own dialog — #229's "one deliberate
-// exception" (three fields at once, a webview modal rather than a QuickPick chain), reached now
-// from the right-click menu's VMAD_OPEN_ADD_PROPERTY broadcast (RecordPanel.tsx) instead of an
-// inline "+prop" button. AddPropertyButton/RemovePropertyButton/SetTypeControl/
-// PropertyFlagsControl — the always-visible buttons/selects this file used to also export — stay
-// deleted (ADR-0034's no-second-route rule: structural ops are right-click-menu-only now,
-// consistent with array operations); Remove Property is a plain broadcast (extension.ts,
-// modbench.vmad.removeProperty) with nothing to render here, and Set Type is deferred (issue
-// #231's own noted scope reduction — Set Property Flags is restored, Set Type is not).
+// Add Property's dialog — the "one deliberate exception" to native prompts (three fields at
+// once, a webview modal rather than a QuickPick chain, see ModalShell.tsx), reached from the
+// right-click menu's VMAD_OPEN_ADD_PROPERTY broadcast (RecordPanel.tsx). Structural ops are
+// right-click-menu-only (ADR-0034's no-second-route rule, consistent with array operations);
+// Remove Property is a plain broadcast (extension.ts, modbench.vmad.removeProperty) with nothing
+// to render here, and Set Type is a deliberately deferred scope reduction.
 
 const dialogInputStyle: React.CSSProperties = {
   fontFamily: mono, fontSize: '12px',
@@ -55,7 +52,7 @@ export function AddPropertyDialog({ onConfirm, onCancel }: Readonly<{
     }
     if (type === 'Object') {
       const fk = (value as { formKey?: string }).formKey ?? '';
-      // Issue #210: the picker itself is a native QuickPick (only the extension host can call
+      // The picker itself is a native QuickPick (only the extension host can call
       // vscode.window.createQuickPick) — there's no current reference to seed here (this is a
       // brand-new property), so pickFormKey gets an empty seed.
       return (

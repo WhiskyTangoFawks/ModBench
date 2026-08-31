@@ -13,7 +13,7 @@ using Noggog.WorkEngine;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #549 Slice 2: <see cref="SpatialContainerMint.BuildSyntheticWorldspaceMod"/> in isolation — no
+/// <see cref="SpatialContainerMint.BuildSyntheticWorldspaceMod"/> in isolation — no
 /// <see cref="MEditService.Core.Edits.RecordEditService"/> involved, just the builder plus the real
 /// whole-mod serializer it hands its output to.
 /// </summary>

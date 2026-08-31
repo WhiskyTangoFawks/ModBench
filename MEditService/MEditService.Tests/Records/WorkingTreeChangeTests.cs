@@ -8,10 +8,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #415 AC1/AC2 at the index seam: <see cref="IRecordIndex.ApplyWorkingTreeChanges"/> is what makes
+/// At the index seam: <see cref="IRecordIndex.ApplyWorkingTreeChanges"/> is what makes
 /// <see cref="RecordRef.Effective"/> and <see cref="RecordRef.Head"/> stop being the same answer.
-/// #421 shipped them identical by construction (<c>At</c> returned <c>this</c>) and pinned that with
-/// <c>RecordRefIdentityTests</c>, which this ticket turns into the divergence tests next door.
 ///
 /// Bodies here are real codec documents — read back out of the index after a real ingest, then
 /// edited as text — not hand-written JSON: the invariant under test is "Body bytes = the source
@@ -104,7 +102,7 @@ public sealed class WorkingTreeChangeTests : IDisposable
             BaseKey, [(formKey, committed.Body!.Replace("OriginalName", "EditedName", StringComparison.Ordinal))]);
         Assert.True(index.GetOverrideStack(formKey)!.Entries.Single().HasWorkingTreeChange);
 
-        // Byte compare *is* the revert-convergence detection (#413 contract) — an edit back to the
+        // Byte compare *is* the revert-convergence detection — an edit back to the
         // committed bytes is not "a change that happens to match", it is no change at all.
         index.ApplyWorkingTreeChanges(BaseKey, [(formKey, committed.Body!)]);
 

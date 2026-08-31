@@ -12,12 +12,10 @@ import type { LoadResult, RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 
-// #410 review: the read-path half of the deleted ArrayDiffRows.test.tsx. Array/struct *rendering*
-// — collapsed counts, expand-to-children, the dimmed em-dash for a null element, deep nesting, and
-// #114's collapsed-aggregate / expanded-defers-to-children conflict-colour rule (CONTEXT.md's own
-// ConflictAll entry states that rule; DiffRow.tsx implements it) — is untouched by #410 and had
-// zero coverage after that file was deleted for its editing content. Restored here without the
-// staging half.
+// Array/struct *rendering* — collapsed counts, expand-to-children, the dimmed em-dash for a null
+// element, deep nesting, and
+// the collapsed-aggregate / expanded-defers-to-children conflict-colour rule (CONTEXT.md's own
+// ConflictAll entry states that rule; DiffRow.tsx implements it) — plus array editing.
 
 const sortedArrayMeta: FieldMetadata = {
   name: 'Keywords',
@@ -348,7 +346,7 @@ describe('RecordPanel — a struct member that is itself an array of structs (is
 
 });
 
-// #426 Track 4 (resurrected #142/#227): Add/Remove/Move Up/Move Down on an unsorted array — the
+// Add/Remove/Move Up/Move Down on an unsorted array — the
 // keyboard accelerators (Insert/Delete/Ctrl+↑/Ctrl+↓) on the focused cell, writing the whole
 // array through the exact same write path (EDIT_FIELD) every other gesture uses.
 describe('RecordPanel — array editing (unsorted, #426)', () => {
@@ -458,12 +456,12 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
       .some(([m]) => (m as { type?: string }).type === WEBVIEW_TO_EXTENSION.EDIT_FIELD)).toBe(false);
   });
 
-  // #426 Track 4: the right-click menu's own trigger — a broadcast from the extension host (no
+  // The right-click menu's own trigger — a broadcast from the extension host (no
   // live reference into this panel's React state), self-filtered on formKey, reaching the exact
   // same handleArrayOp computation the keyboard accelerators already use.
   //
-  // #535: `rootField`/`path` replace `fieldName`/`index` on the wire — a top-level array's element
-  // path is still one hop (`[{kind:'index',index:1}]`), so this pins "top-level unchanged."
+  // `rootField`/`path` are the wire shape — a top-level array's element
+  // path is one hop (`[{kind:'index',index:1}]`).
   it('an ARRAY_REMOVE broadcast for this open record writes the array via EDIT_FIELD', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Values'));
@@ -496,10 +494,10 @@ describe('RecordPanel — array editing (unsorted, #426)', () => {
   });
 });
 
-// #535: the array-op broadcast handler must land at the element's real path for an array nested
-// at least one level inside a struct — the pre-#535 handler synthesized a one-hop path from a bare
-// scalar index (`[{kind:'index',index:msg.index}]` for element ops, `[]` for add), which only ever
-// addressed a top-level array correctly. Mirrors the #533 extended-editor block above: same
+// The array-op broadcast handler must land at the element's real path for an array nested
+// at least one level inside a struct — a handler synthesizing a one-hop path from a bare
+// scalar index would only
+// address a top-level array correctly. Mirrors the extended-editor block below: same
 // nested-struct-array fixture shape, different trigger (ARRAY_ADD/REMOVE/MOVE_UP/MOVE_DOWN instead
 // of FIELD_OPEN_EXTENDED_EDITOR).
 describe('RecordPanel — array ops land at the element\'s real path, at any depth (#535)', () => {
@@ -607,11 +605,11 @@ describe('RecordPanel — array ops land at the element\'s real path, at any dep
     expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'B', Weight: 2 }, { Id: 'A', Weight: 1 }] });
   });
 
-  // The defect explicitly flagged alongside this ticket: Add on a nested array must build its
+  // Add on a nested array must build its
   // default element from the *nested* array's own elementType (a struct here), not the subtree
-  // root's — the pre-#535 handler read fieldMetaMap['Container'].elementType (undefined, Container
-  // is a struct, not an array), so defaultElementValue fell back to its generic scalar default and
-  // appended a malformed (empty-string) element instead of `{ Id: '', Weight: 0 }`.
+  // root's — reading fieldMetaMap['Container'].elementType (undefined, Container
+  // is a struct, not an array) would make defaultElementValue fall back to its generic scalar
+  // default and append a malformed (empty-string) element instead of `{ Id: '', Weight: 0 }`.
   it('ARRAY_ADD on a nested array appends a default element built from the nested array\'s own element type', async () => {
     renderEditablePanel();
     await waitFor(() => screen.getByText('Container'));
@@ -628,9 +626,10 @@ describe('RecordPanel — array ops land at the element\'s real path, at any dep
   });
 });
 
-// #533: hoisted out of the #503 describe block below (module scope, alongside
-// structCollapseExpandResult/nestedStructArrayResult above) so the #533 describe block further
-// down — same shapes, different trigger — can share them without duplicating fixtures.
+// Module scope (alongside
+// structCollapseExpandResult/nestedStructArrayResult above) so the inline-edit and
+// extended-editor describe blocks below — same shapes, different triggers — share fixtures
+// without duplication.
 const editableIntArrayMeta: FieldMetadata = {
   name: 'Values', type: 'array', isArray: true, validFormKeyTypes: [], enumValues: [],
   elementType: { name: '', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] },
@@ -679,11 +678,11 @@ const scalarResult = {
   }],
 };
 
-// #503: a *value* edit inside a complex field commits the whole field, exactly as the arity ops
-// (Add/Remove/Move, above) always did. CONTEXT.md: a complex field is "always edited as one atomic
-// value — a field-level write to the source document, never per-element". Before this, a leaf inside
-// an array or struct committed its own bare value under the array's/struct's field name, the backend
-// applier silently declined the shape, and the write path reported success — the edit vanished.
+// A *value* edit inside a complex field commits the whole field, exactly as the arity ops
+// (Add/Remove/Move, above) do. CONTEXT.md: a complex field is "always edited as one atomic
+// value — a field-level write to the source document, never per-element". A leaf inside
+// an array or struct committing its own bare value under the array's/struct's field name would be
+// silently declined by the backend applier — the edit would vanish.
 describe('RecordPanel — a value edit inside a complex field commits the whole field (#503)', () => {
   function renderEditablePanel() {
     const client: RecordPanelClient = {
@@ -752,7 +751,7 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
     expect(lastEditField()?.value).toEqual({ X1: 7, X2: 100 });
   });
 
-  // The shape #503 was reported against (OMOD `Properties[i].step`): the edited leaf is a member of
+  // The regression shape (OMOD `Properties[i].step`): the edited leaf is a member of
   // a struct that is itself an element of an array, so reconstruction has to run two hops deep.
   it('editing a sub-field of a struct-element array commits the whole root value', async () => {
     currentCompare = nestedStructArrayResult;
@@ -785,12 +784,12 @@ describe('RecordPanel — a value edit inside a complex field commits the whole 
   });
 });
 
-// #533: the extended editor's own trigger (right-click → FIELD_OPEN_EXTENDED_EDITOR → a real Ctrl+S
+// The extended editor's own trigger (right-click → FIELD_OPEN_EXTENDED_EDITOR → a real Ctrl+S
 // in the opened tab, simulated here as EXTENDED_EDITOR_COMMITTED per the pattern
 // RecordPanel.test.tsx's own extended-editor wiring tests already use) reconstructs the whole
-// complex field exactly the way an inline edit already does (#503, above) — before this, it
-// committed the saved text alone under the subtree root's own field path, and the backend's #503
-// shape guards refused it. Same fixtures, same four shapes as the #503 block above; only the
+// complex field exactly the way an inline edit does (above) — committing the
+// saved text alone under the subtree root's own field path would be refused by the backend's
+// shape guards. Same fixtures, same four shapes as the inline-edit block above; only the
 // trigger differs.
 describe('RecordPanel — the extended editor commits the whole field, at any depth (#533)', () => {
   function renderEditablePanel() {
@@ -872,7 +871,7 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
     expect(lastEditField()?.value).toEqual({ X1: '7', X2: 100 });
   });
 
-  // The shape #503/#533 were both reported against (OMOD `Properties[i].step`): the edited leaf is
+  // The regression shape (OMOD `Properties[i].step`): the edited leaf is
   // a member of a struct that is itself an element of an array, two hops deep.
   it('saving a sub-field of a struct-element array commits the whole root value', async () => {
     currentCompare = nestedStructArrayResult;
@@ -889,7 +888,7 @@ describe('RecordPanel — the extended editor commits the whole field, at any de
     expect(lastEditField()?.value).toEqual({ Entries: [{ Id: 'Z', Weight: 1 }] });
   });
 
-  // The other half of the same rule (#503's own both-directions pin): a top-level row *is* the
+  // The other half of the same rule: a top-level row *is* the
   // whole field, so its commit stays the bare value — no double-wrap.
   it('saving a top-level field still commits the bare value', async () => {
     currentCompare = scalarResult;

@@ -1,19 +1,16 @@
 import * as vscode from 'vscode';
 
-/** #247: the Loadout header — a small readout pinned above the domain trees, and the home
+/** The Loadout header — a small readout pinned above the domain trees, and the home
  *  for every action whose scope is the workspace rather than one tree (profile, deployment).
- *  It exists because roughly half the icons the trees had grown were not about those trees at
- *  all; the rubric's first rule ("scope first") needs somewhere for them to go, and VS Code's
- *  container-level `…` is its own auto-generated Views menu, not a contribution point.
- *
- *  #352: the editing backend (Launch/Close mEdit) moved off this header onto the Plugins view
- *  — the maintainer's ruling was that mEdit is an option on Plugins, not a workspace action —
- *  so this view no longer reads backend/load order state at all.
+ *  The title-bar rubric's first rule ("scope first") needs somewhere for such actions to go,
+ *  and VS Code's container-level `…` is its own auto-generated Views menu, not a contribution
+ *  point. mEdit (Launch/Close) is an option on Plugins, not a workspace action, so this view
+ *  reads no backend/load order state at all.
  *
  *  Lives at the composition root, not in either bounded context: it reads a Mod-Management
  *  readout, so importing either context's internals would put the language boundary inside
- *  one file. State arrives as injected getters instead — the same constraint #241 recorded
- *  for the merged plugins provider. */
+ *  one file. State arrives as injected getters instead — the same constraint the merged
+ *  plugins provider keeps. */
 export interface LoadoutHeaderDeps {
   /** False when there is no loadout at all — no workspace open, or one that isn't an MO2
    *  instance. The view still registers on those paths (it is the container's first view and

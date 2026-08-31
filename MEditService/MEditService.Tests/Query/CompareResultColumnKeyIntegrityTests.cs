@@ -15,9 +15,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-// #272 / ADR-0036: replaces the old "every dictionary key contains the delimiter" assertion,
-// which stopped being a valid safety net once ColumnKey.Of started eliding the Data-directory
-// origin — a bare filename is now a *legitimate* key, so "contains '|'" would false-fail on every
+// ADR-0036: a "every dictionary key contains the delimiter" shape assertion is not a valid
+// safety net — ColumnKey.Of elides the Data-directory
+// origin, so a bare filename is a *legitimate* key; "contains '|'" would false-fail on every
 // ordinary single-origin fixture and, worse, would not catch a key that's silently missing its
 // origin (indistinguishable in shape from a legitimate Data-origin key). This asserts by content
 // instead: every dictionary key anywhere in a serialized CompareResult must equal
@@ -28,7 +28,7 @@ namespace MEditService.Tests.Query;
 // own annotation step (see the two Asserts at the bottom of the test) — a classifier-only test
 // would not have caught either.
 //
-// #272 review: the set of "which dictionaries are column-keyed" is derived by reflecting over the
+// The set of "which dictionaries are column-keyed" is derived by reflecting over the
 // [ColumnKeyed] attribute on the DTOs themselves (Queries/Models.cs), not hand-typed here — a
 // hand-typed allowlist is exactly the mechanism that let three column-keyed dictionaries
 // (VmadPropertyDiff.Raw, ConditionDiff.FieldCellStates, ConditionDiff.FieldResolutions) go
@@ -141,11 +141,11 @@ public sealed class CompareResultColumnKeyIntegrityTests
 
     // ---- minimal ILoadOrderMirror/ILoadOrder fakes ----
     //
-    // The repository is hand-indexed twice directly, matching the established pattern from #272's
-    // other AC5 tests (DuckDbRecordIndexTests/PlacementIndexingTests). load order.Plugins gets
+    // The repository is hand-indexed twice directly, matching the established pattern in
+    // DuckDbRecordIndexTests/PlacementIndexingTests. load order.Plugins gets
     // exactly one entry, which is all this test needs: it asserts the *shape* of the response's
-    // column keys, not classification. Since #34 made pluginMasters/pluginParticipates
-    // ColumnKey-keyed, that lone entry resolves masters/participation only for its own origin and
+    // column keys, not classification. pluginMasters/pluginParticipates are
+    // ColumnKey-keyed, so that lone entry resolves masters/participation only for its own origin and
     // the other column falls back to the fail-open defaults — neither of which this test reads.
     // A real two-copy load order is exercised end-to-end in DuplicateFilenameLoadOrderApiTests.
     private sealed class FakeLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
@@ -164,9 +164,9 @@ public sealed class CompareResultColumnKeyIntegrityTests
     {
         public ILoadOrder? LoadOrder => loadOrder;
         public IRecordReads? Reads => reads;
-        // #415: this double exists for read-model shape assertions only — nothing here writes.
+        // This double exists for read-model shape assertions only — nothing here writes.
         public IRecordIndex? Index => null;
-        // #274: these stubs never load, so they are always in the no-load order state.
+        // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => (loadOrder, reads);
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
@@ -274,13 +274,13 @@ public sealed class CompareResultColumnKeyIntegrityTests
         var json = JsonSerializer.SerializeToElement(compare, WireOptions);
         AssertEveryColumnDictKeyIsValid(json, validKeys);
 
-        // The regression this test caught on arrival (#272, RecordQueryService.GetCompare): with
+        // The regression this test caught on arrival (RecordQueryService.GetCompare): with
         // two identical, non-Data-origin columns, ModA (load order 0) is the master and ModB
         // (load order 1, identical fields) is IdenticalToMaster —
         // classification.PluginStates.GetValueOrDefault(o.Plugin, OnlyOne) missed both compound
-        // keys (PluginStates is keyed by ColumnKey.Of since B3) and silently defaulted both
+        // keys (PluginStates is keyed by ColumnKey.Of) and silently defaulted both
         // overrides to OnlyOne instead. Not a two-origin-only bug: elision only spares Data-origin
-        // plugins, and almost no plugin in a real MO2 load order is Data-origin (#269), so this was
+        // plugins, and almost no plugin in a real MO2 load order is Data-origin, so this was
         // live for essentially every conflicted record.
         var modA = compare.Overrides.Single(o => o.Origin == "ModA");
         var modB = compare.Overrides.Single(o => o.Origin == "ModB");

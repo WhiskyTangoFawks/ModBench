@@ -1,7 +1,7 @@
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #549: folds every file under <c>sourceDir</c> into <c>destinationDir</c> at its own relative path
+/// Folds every file under <c>sourceDir</c> into <c>destinationDir</c> at its own relative path
 /// — the counterpart <see cref="Edits.SpatialContainerMint"/> needs to land a synthetic whole-mod
 /// door's scratch output into a destination plugin's already-existing working tree without disturbing
 /// anything already there. Deliberately additive rather than a wholesale directory replace: the

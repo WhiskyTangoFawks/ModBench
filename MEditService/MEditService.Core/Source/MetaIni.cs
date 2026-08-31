@@ -4,11 +4,10 @@ namespace MEditService.Core.Source;
 
 /// <summary>
 /// <c>meta.ini</c> read as a source, never tracked content (ADR-0041 amendment: "never track a file
-/// that changes for non-content reasons") — the one place both halves of #417's meta tell are read:
+/// that changes for non-content reasons") — the one place both halves of the meta tell are read:
 /// <see cref="TrackService"/> at Track time (writing the baseline trailers) and the external-change
 /// classifier at detection time (comparing a freshly-read value against the last baseline's
-/// trailer). Extracted from <see cref="TrackService"/>'s own two private methods so the two callers
-/// share one reading of the file rather than two copies drifting.
+/// trailer), so the two callers share one reading of the file rather than two copies drifting.
 /// </summary>
 internal static class MetaIni
 {

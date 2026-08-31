@@ -16,13 +16,12 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #488: <c>placement</c>/<c>cell_location</c>/<c>container_child</c> now track Effective through a
+/// <c>placement</c>/<c>cell_location</c>/<c>container_child</c> track Effective through a
 /// structural write (delete, renumber, create) the same way <c>form_lookup</c>/<c>form_references</c>
-/// already did — closing the gap <see cref="ContainerChildRow"/>'s own doc comment named. Runs against
-/// <see cref="ContainerModFixture"/> (the same shared fixture <see cref="EmbeddedChildEditTests"/> and
-/// <see cref="GroupOrderRenormalizationTests"/> use), asking the read side
-/// (<see cref="IRecordReads"/>) directly rather than through a compile — these are exactly the
-/// live-load order reads the issue calls out as going stale before a reload.
+/// do. Runs against <see cref="ContainerModFixture"/> (the same shared fixture
+/// <see cref="EmbeddedChildEditTests"/> and <see cref="GroupOrderRenormalizationTests"/> use),
+/// asking the read side (<see cref="IRecordReads"/>) directly rather than through a compile — exactly
+/// the live-load order reads that otherwise go stale before a reload.
 /// </summary>
 public sealed class ContainmentRederivationTests : IDisposable
 {
@@ -35,7 +34,7 @@ public sealed class ContainmentRederivationTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // ---- AC1: delete a placed reference in a cell ----
+    // ---- delete a placed reference in a cell ----
 
     [Fact]
     public void DeletingAnEmbeddedPlacedReference_RemovesItsPlacementRow_SameLoadOrder()
@@ -57,7 +56,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Contains(refs.Persistent, p => p.FormKey == _fixture.PersistentRef.ToString());
     }
 
-    // ---- Mechanism 1 sanity: an embedded container_child-covered slot rebuilds on delete ----
+    // ---- an embedded container_child-covered slot rebuilds on delete ----
 
     // NavigationMesh/Landscape have no schema at all (SchemaReflector publishes none for
     // land/navm/navi), so neither has a `records` row of its own and neither can be named directly
@@ -66,9 +65,8 @@ public sealed class ContainmentRederivationTests : IDisposable
     // limit EmbeddedChildEditTests documents for the identical reason. These two tests exercise the
     // index seam directly instead, doing exactly what RecordEditService's own embedded branch does:
     // read the owner, mutate the child inside its object graph, reserialize, and hand the new owner
-    // body to ApplyWorkingTreeChanges/CreateWorkingTreeRecord — the container_child-covered sibling of
-    // AC1's placed-ref case above, and AC2's own literal target ("an embedded child ... in
-    // container_child").
+    // body to ApplyWorkingTreeChanges/CreateWorkingTreeRecord — the container_child-covered sibling
+    // of the placed-ref case above.
     private async Task<IMajorRecord> ReadEmbedCellAsync()
     {
         var codec = new RecordTextCodec(NullLogger<RecordTextCodec>.Instance);
@@ -101,7 +99,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             index.GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString())!.Value.ParentFormKey);
     }
 
-    // ---- AC2: renumber an embedded child ----
+    // ---- renumber an embedded child ----
 
     [Fact]
     public async Task RenumberingAnEmbeddedNavigationMesh_MovesItsContainerChildRow_ToTheNewFormKey_WithTheSameSlot()
@@ -151,7 +149,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.NotNull(topCellBefore);
 
         // TopCellRef sits inside the *worldspace's* document (Worldspace -> TopCell -> Temporary),
-        // two embed levels down (#453 finding 2's own fixture shape) — deleting it reserializes the
+        // two embed levels down — deleting it reserializes the
         // worldspace, and only a rebuild that recurses into the found TopCell reaches this ref's own
         // placement row at all. A rebuild that stops at the worldspace's immediate slots (TopCell
         // itself, never descending into it) would leave this row exactly as it was: present and
@@ -166,7 +164,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Equal(topCellBefore, index.GetCellLocation(_fixture.Plugin, _fixture.TopCell.ToString()));
     }
 
-    // ---- AC3 (+ AC5's slot-reindex half): delete a folder-split container child ----
+    // ---- delete a folder-split container child (and slot-reindex the survivors) ----
 
     [Fact]
     public void DeletingTheMiddleOfThreeDialogTopics_ReflectsTheRemoval_AndReindexesTheSurvivor_SameLoadOrder()
@@ -205,8 +203,8 @@ public sealed class ContainmentRederivationTests : IDisposable
 
         // The response itself never moved — same FormKey, same file — only its owning DialogTopic's
         // identity changed. Its container_child row must follow, not simply vanish: DialogTopic's
-        // own children are DialogTopic's own accounting, squarely #488's job, not the "another
-        // record's stale pointer into a renamed container" question #488 declined.
+        // own children are DialogTopic's own accounting — distinct from the deliberately unhandled
+        // "another record's stale pointer into a renamed container" question.
         var after = index.GetContainerParent(_fixture.Plugin, _fixture.Response.ToString());
         Assert.NotNull(after);
         Assert.Equal(result.NewFormKey, after!.Value.ParentFormKey);
@@ -217,16 +215,16 @@ public sealed class ContainmentRederivationTests : IDisposable
             c => c.ChildFormKey == _fixture.Response.ToString());
     }
 
-    // ---- #493 AC1: renumbering a container's own record updates its placed refs' placement rows ----
+    // ---- renumbering a container's own record updates its placed refs' placement rows ----
 
     /// <summary>
-    /// #493's first AC — no existing test drives a Cell's own <c>RenumberRecord</c> end to end and
+    /// No other test drives a Cell's own <c>RenumberRecord</c> end to end and
     /// checks its embedded placed refs' <c>placement.parent_cell</c> afterward (the DialogTopic
-    /// regression above, and every AC2 test in this file, exercise the index seam directly instead).
-    /// Green on arrival: <c>Cell.Persistent</c>/<c>Temporary</c> are embedded inline in the Cell's own
+    /// regression above, and the renumber tests in this file, exercise the index seam directly
+    /// instead). <c>Cell.Persistent</c>/<c>Temporary</c> are embedded inline in the Cell's own
     /// document (<c>ContainerChildFields.EmbeddedSlots</c>), so
-    /// <c>CreateWorkingTreeRecord</c>'s existing #488 re-derivation already rebuilds these rows for the
-    /// new FormKey — verified by applying the rival below and watching it fail.
+    /// <c>CreateWorkingTreeRecord</c>'s re-derivation rebuilds these rows for the new FormKey —
+    /// removing it fails this test.
     /// </summary>
     [Fact]
     public void RenumberingAContainersOwnRecord_RepointsItsPlacedRefsPlacementRows_ToTheNewFormKey_SameLoadOrder()
@@ -248,10 +246,10 @@ public sealed class ContainmentRederivationTests : IDisposable
     }
 
     /// <summary>
-    /// #493 AC4 (parity), the Cell/<c>placement</c> half — same reload-parity guard #488's own AC5
-    /// established for <c>container_child</c> (<see cref="AfterDeletingAFolderSplitChild_AFreshReopen_AgreesWithTheLive"/>),
-    /// extended to cover this ticket's other two ACs literally rather than only the Worldspace/
-    /// <c>cell_location</c> scenario <see cref="WorldspaceRenumberContainmentTests"/> already checks.
+    /// The Cell/<c>placement</c> half of the reload-parity guard —
+    /// <see cref="AfterDeletingAFolderSplitChild_AFreshReopen_AgreesWithTheLive"/> is the
+    /// <c>container_child</c> half; <see cref="WorldspaceRenumberContainmentTests"/> covers only the
+    /// Worldspace/<c>cell_location</c> scenario.
     /// </summary>
     [Fact]
     public void AfterRenumberingAContainersOwnRecord_AFreshReopen_AgreesWithTheLivePlacementRow()
@@ -274,13 +272,12 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Equal(freshlyIngested, live);
     }
 
-    // ---- #493 AC3: renumbering a Quest updates its DialogTopics' container_child rows ----
+    // ---- renumbering a Quest updates its DialogTopics' container_child rows ----
 
     /// <summary>
-    /// #493's third AC, the Quest half of the DialogTopic regression above — <c>RepointContainerChildParent</c>
+    /// The Quest half of the DialogTopic regression above — <c>RepointContainerChildParent</c>
     /// is fully FormKey-generic (no type branching), so this exercises the exact same mechanism one
-    /// level up the tree. Green on arrival: verified by applying the rival below (removing the
-    /// <c>RepointContainerChildParent</c> call) and watching it fail.
+    /// level up the tree; removing the <c>RepointContainerChildParent</c> call fails it.
     /// </summary>
     [Fact]
     public void RenumberingAQuest_RepointsItsDialogTopicsContainerChildRows_ToTheNewParentFormKey_SameLoadOrder()
@@ -305,7 +302,7 @@ public sealed class ContainmentRederivationTests : IDisposable
     }
 
     /// <summary>
-    /// #493 AC4 (parity), the Quest/<c>container_child</c> half — see
+    /// The Quest/<c>container_child</c> reload-parity half — see
     /// <see cref="AfterRenumberingAContainersOwnRecord_AFreshReopen_AgreesWithTheLivePlacementRow"/>'s
     /// own doc comment for why this exists alongside the same-load order test above.
     /// </summary>
@@ -333,7 +330,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Equal(freshlyIngested, live);
     }
 
-    // ---- AC4: creating a record whose own body embeds children populates all three tables ----
+    // ---- creating a record whose own body embeds children populates all three tables ----
 
     [Fact]
     public async Task CreatingAWorkingTreeRecord_WithEmbeddedChildren_PopulatesPlacementAndContainerChild()
@@ -372,7 +369,7 @@ public sealed class ContainmentRederivationTests : IDisposable
             Assert.Single(repo.GetContainerChildren(key, cell.FormKey.ToString())).ChildFormKey);
     }
 
-    // ---- AC6: a plain field edit re-derives exactly as today ----
+    // ---- a plain field edit re-derives containment rows unchanged ----
 
     [Fact]
     public void APlainFieldEdit_ReDerivesContainmentRowsIdentically_NoBehaviorChange()
@@ -390,7 +387,7 @@ public sealed class ContainmentRederivationTests : IDisposable
         Assert.Equal(landscapeParentBefore, index.GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString()));
     }
 
-    // ---- AC5: parity against a fresh reconcile ingest of the mutated tree ----
+    // ---- parity against a fresh reconcile ingest of the mutated tree ----
 
     [Fact]
     public void AfterDeletingAFolderSplitChild_AFreshReopen_AgreesWithTheLive()

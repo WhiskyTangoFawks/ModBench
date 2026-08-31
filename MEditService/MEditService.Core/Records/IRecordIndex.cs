@@ -5,11 +5,7 @@ namespace MEditService.Core.Records;
 
 /// <summary>
 /// The Index (glossary sense): ingest plus every read, over one game/load order's worth of indexed
-/// plugins. Replaces <c>IRecordRepository</c>/<c>IRecordReader</c>/<c>IRecordIndexer</c> (#421) and
-/// absorbs the read-model pass-throughs <c>IRecordQueryService</c> used to carry purely to forward
-/// here (<c>GetRecordForPlugin</c>/<c>GetRecordType</c>/<c>GetNativeFormKeys</c>/<c>GetPlacement</c>/
-/// <c>GetVmad</c>/<c>GetConditions</c> — all endpoint-orphaned, deleted rather than kept as
-/// redundant forwarding). One implementation over DuckDB; no ports, no production double.
+/// plugins. One implementation over DuckDB; no ports, no production double.
 ///
 /// No <c>Connection</c> property and no SQL crosses this seam except <see cref="SetFilter"/>
 /// (invariant 8).
@@ -17,20 +13,17 @@ namespace MEditService.Core.Records;
 public interface IRecordIndex : IRecordReads, IDisposable
 {
     /// <summary>Repositions every <see cref="IRecordReads"/> read at <paramref name="recordRef"/>.
-    /// #421 ships <see cref="RecordRef.Head"/> answering identically to the default
-    /// <see cref="RecordRef.Effective"/> surface (the git-ref case is a later, additive addition);
-    /// #415 is what makes them diverge. (Named <c>recordRef</c> rather than the pinned contract's
-    /// literal <c>ref</c>/<c>@ref</c>: CA1716 rejects a virtual/interface parameter named after the
-    /// reserved keyword even escaped.)</summary>
+    /// (Named <c>recordRef</c> rather than a literal <c>ref</c>/<c>@ref</c>: CA1716 rejects a
+    /// virtual/interface parameter named after the reserved keyword even escaped.)</summary>
     IRecordReads At(RecordRef recordRef);
 
     void Initialize(GameRelease release);
 
     /// <summary>Indexes one physical plugin file's records, header, references, form_lookup and
-    /// placement, replacing whatever <paramref name="key"/> previously held (#413/#420: one
+    /// placement, replacing whatever <paramref name="key"/> previously held (one
     /// document per major record plus the extracted index tables derived from it).
     ///
-    /// <para>#585 / ADR-0001: <paramref name="filePath"/> is the physical file this content came
+    /// <para>ADR-0001: <paramref name="filePath"/> is the physical file this content came
     /// from, and giving it is what makes the resulting rows <i>validatable</i> — the index stamps
     /// that file's content hash alongside them, re-checks it every time the index is opened, and
     /// drops the rows when the bytes have moved on. Omitting it is not a shortcut but a different,
@@ -43,13 +36,13 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// copy, written to its <c>registrations</c> row exactly as <see cref="Register"/> would.</para></summary>
     void Index(IModGetter plugin, Registration registration, PluginKey key, string? filePath = null);
 
-    /// <summary>#585 / ADR-0001: the content hash of the file <paramref name="key"/>'s rows were
+    /// <summary>ADR-0001: the content hash of the file <paramref name="key"/>'s rows were
     /// built from, or <see langword="null"/> when the index holds no validated rows for it — never
     /// indexed, indexed from no file at all, or dropped by the open-time validation because the file
     /// vanished or its bytes changed. Non-null therefore reads as "the index already holds this
     /// plugin, and it still matches the disk", which is what lets a reconcile
-    /// <see cref="Register"/> it instead of indexing it (#586) and the runtime watcher tell a real
-    /// change from a touch (#587).
+    /// <see cref="Register"/> it instead of indexing it and the runtime watcher tell a real
+    /// change from a touch.
     ///
     /// <para>Independent of registration, deliberately: it is a fact about a file, and it has to
     /// keep answering for a plugin the load order does not currently hold — a profile switch that
@@ -57,12 +50,12 @@ public interface IRecordIndex : IRecordReads, IDisposable
     string? IndexedContentHash(PluginKey key);
 
     /// <summary>Removes every trace of <paramref name="key"/> from the index — rows and
-    /// registration alike, the inverse of <see cref="Index"/>. #582 / ADR-0001: this is the
+    /// registration alike, the inverse of <see cref="Index"/>. ADR-0001: this is the
     /// <b>file-gone</b> verb — a delete, an uninstall, a file missing at validation — never the
     /// meaning of a copy leaving the load order, which is <see cref="Unregister"/>.</summary>
     void Unindex(PluginKey key);
 
-    /// <summary>#582 / ADR-0001: registration is visibility. Writes <paramref name="key"/>'s
+    /// <summary>ADR-0001: registration is visibility. Writes <paramref name="key"/>'s
     /// <c>registrations</c> row — the whole of its membership in the load order — so its
     /// already-indexed rows answer again on every read path and every generated view, with no
     /// re-index. An upsert: re-registering a held copy with a different <see cref="Registration"/>
@@ -85,14 +78,14 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void Unregister(PluginKey key);
 
     /// <summary>Rebuilds the whole load order's winners — which plugin's copy of each FormKey holds
-    /// the field, at each ref. #584 / ADR-0001: that answer lives in a load-order-owned derived
+    /// the field, at each ref. ADR-0001: that answer lives in a load-order-owned derived
     /// table, not in a column on any indexed row, so this replaces the table rather than updating
     /// rows in place. Every read still spells it <c>is_winner</c>, projected by the view. Only
     /// participating registrations (<see cref="Registration.Participates"/>) compete.</summary>
     void UpdateWinners();
 
     /// <summary>
-    /// #415: folds a plugin's working-tree source changes into the read model, which is what makes
+    /// Folds a plugin's working-tree source changes into the read model, which is what makes
     /// <see cref="RecordRef.Effective"/> and <see cref="RecordRef.Head"/> diverge. Each delta is a
     /// record's source file as it now stands: <paramref name="deltas"/>' <c>Body</c> is the file's
     /// exact bytes, and a <see langword="null"/> <c>Body</c> is that record's <i>deletion</i> from
@@ -102,7 +95,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// <i>convergence</i>: the record goes clean again, exactly as if it had never been edited. That
     /// is what makes reverting a source file through git (or editing a value back by hand) restore
     /// the committed state rather than leave a permanently "dirty" record holding identical bytes —
-    /// byte compare is the detection, per #413's contract, never a <c>content_hash</c> mismatch on
+    /// byte compare is the detection, never a <c>content_hash</c> mismatch on
     /// its own.</para>
     ///
     /// <para>Idempotent, and safe to call with deltas for records this plugin does not hold: an
@@ -112,7 +105,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// convergence against a fixed baseline, snapshot-on-first-divergence) presupposes a baseline that a
     /// create does not have.</para>
     ///
-    /// <para><b>No #417 external-change deferral check lives here, deliberately.</b> This method has
+    /// <para><b>No external-change deferral check lives here, deliberately.</b> This method has
     /// two legitimate callers: <c>Edits.RecordEditService</c> (an actual write gesture) and
     /// <c>Source.SourceFreshness</c>'s read-time self-heal, which must keep folding in whatever the
     /// source file already says even while a plugin's external-change question is unanswered — exit
@@ -127,7 +120,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas);
 
     /// <summary>
-    /// #427: materializes a record that exists at <b>neither</b> ref — the one case
+    /// Materializes a record that exists at <b>neither</b> ref — the one case
     /// <see cref="ApplyWorkingTreeChanges"/> deliberately refuses to express. Inserts one row directly
     /// with <c>ref = working-tree</c> and no <c>records_committed</c> counterpart, which is what makes
     /// it answer at <see cref="RecordRef.Effective"/> and stay absent at <see cref="RecordRef.Head"/>
@@ -142,25 +135,20 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// owns picking a FormKey nothing already answers to; this method only refuses to silently
     /// overwrite one that does.</para>
     ///
-    /// <para><b>No #417 external-change deferral check lives here, deliberately</b> — the same
+    /// <para><b>No external-change deferral check lives here, deliberately</b> — the same
     /// signpost <see cref="ApplyWorkingTreeChanges"/> carries. <c>Edits.RecordEditService.CreateRecord</c>
     /// is the write gesture, and every new write gesture must enter through
     /// <c>Edits.RecordEditService</c> to inherit the deferral/untracked refusals — never call this
     /// method directly for a gesture. Enforcing those guards here would block a path where they mean
     /// nothing.</para>
     ///
-    /// <para><b>#452 removed this method's second caller</b>, and it is worth saying why rather than
-    /// leaving the singular surprising. <c>Source.WorkingTreeCreateRediscovery</c>'s reconcile sweep
-    /// used to call this to rediscover a record a prior, uncompiled load order had created: ordinary
-    /// <see cref="Index"/> ingest knew only the binary, which has no row for it. Ingest-from-source
-    /// reads the working tree, where that record is simply present, so the sweep had nothing left to
-    /// discover and was deleted. Reaching the same end state from the other direction — a record the
+    /// <para>Reaching the same end state from the other direction — a record the
     /// ingest already saw, which no commit holds — is <see cref="MarkWorkingTreeOnly"/>.</para>
     /// </summary>
     void CreateWorkingTreeRecord(PluginKey key, string formKey, string recordType, string body);
 
     /// <summary>
-    /// #415: re-establishes what "committed" <i>means</i> for these records — <c>HEAD</c> has moved
+    /// Re-establishes what "committed" <i>means</i> for these records — <c>HEAD</c> has moved
     /// under the working tree (a commit, rebase, amend or checkout the user made outside Modbench,
     /// which is ordinary git fluency and tolerated by construction, ADR-0041).
     ///
@@ -175,7 +163,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void SetCommittedBaseline(PluginKey key, IReadOnlyList<(string FormKey, string Body)> baselines);
 
     /// <summary>
-    /// #452: says that these already-ingested records exist in the working tree but at <b>no</b>
+    /// Says that these already-ingested records exist in the working tree but at <b>no</b>
     /// committed ref — they stop answering at <see cref="RecordRef.Head"/> and keep answering at
     /// <see cref="RecordRef.Effective"/>, which is <see cref="CreateWorkingTreeRecord"/>'s end state
     /// reached from the other direction.
@@ -193,7 +181,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void MarkWorkingTreeOnly(PluginKey key, IReadOnlyList<string> formKeys);
 
     /// <summary>
-    /// #452: seeds a record that exists at <c>HEAD</c> but <b>not</b> in the working tree — the mirror
+    /// Seeds a record that exists at <c>HEAD</c> but <b>not</b> in the working tree — the mirror
     /// of <see cref="MarkWorkingTreeOnly"/>, and the deletion half of the ref dimension. It answers at
     /// <see cref="RecordRef.Head"/> and is absent at <see cref="RecordRef.Effective"/>, so a user can
     /// still see, diff and revert what they deleted rather than having it vanish from both refs at the
@@ -218,7 +206,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void SeedCommittedOnly(PluginKey key, IReadOnlyList<(string FormKey, string RecordType, string Body)> records);
 
     /// <summary>
-    /// #488: replaces every <c>container_child</c> row for one (<paramref name="parentFormKey"/>,
+    /// Replaces every <c>container_child</c> row for one (<paramref name="parentFormKey"/>,
     /// <paramref name="slotName"/>) folder-split slot with exactly <paramref name="children"/> — the
     /// counterpart to <see cref="MEditService.Core.Source.SourceUnitResolver.RenormalizeGroupOrder"/> for a slot whose child
     /// <i>set</i> a delete or renumber changed. A folder-split child (a Quest's DialogTopic, a
@@ -236,7 +224,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children);
 
     /// <summary>
-    /// #488 review: re-points every <c>container_child</c> row naming <paramref name="oldParentFormKey"/>
+    /// Re-points every <c>container_child</c> row naming <paramref name="oldParentFormKey"/>
     /// as <c>parent_form_key</c> to <paramref name="newParentFormKey"/> instead — an
     /// <c>UPDATE</c>, deliberately not a delete-then-rebuild. A renumbered record's folder-split
     /// children (a renumbered Quest's DialogTopics, a renumbered DialogTopic's Responses) keep their
@@ -251,14 +239,14 @@ public interface IRecordIndex : IRecordReads, IDisposable
     ///
     /// <para>Scoped to exactly the one column a rename invalidates for a record's own children —
     /// not a general FormKey-rename sweep across every containment column (that broader question,
-    /// e.g. a renumbered container's own position within <i>its</i> parent's slot, is #488's own
-    /// declined tier 2, tracked as its own follow-up). Harmless to call for any renumbered record:
+    /// e.g. a renumbered container's own position within <i>its</i> parent's slot, is
+    /// tracked as its own follow-up). Harmless to call for any renumbered record:
     /// the <c>UPDATE</c> matches zero rows for one with no folder-split children of its own.</para>
     /// </summary>
     void RepointContainerChildParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
 
     /// <summary>
-    /// #493: re-points every <c>cell_location</c> row naming <paramref name="oldParentFormKey"/> as
+    /// Re-points every <c>cell_location</c> row naming <paramref name="oldParentFormKey"/> as
     /// <c>parent_worldspace</c> to <paramref name="newParentFormKey"/> instead — <see cref="RepointContainerChildParent"/>'s
     /// own shape, for the sibling gap it explicitly declined: a renumbered Worldspace's <i>exterior</i>
     /// cells (<c>SubCells</c>) rather than its own folder-split children. <c>Worldspace.SubCells</c>
@@ -269,10 +257,9 @@ public interface IRecordIndex : IRecordReads, IDisposable
     /// re-derivation of the renumbered Worldspace's own new document cannot recreate those rows for
     /// the same reason it cannot recreate a folder-split child's <c>container_child</c> row.
     ///
-    /// <para><b>Position relative to <see cref="CreateWorkingTreeRecord"/> does not matter, and this
-    /// is called after it, alongside <see cref="RepointContainerChildParent"/> — verified, not
-    /// assumed: a rival that called this <i>before</i> <see cref="CreateWorkingTreeRecord"/> instead
-    /// was applied and still left exactly one row for the Worldspace's own <c>TopCell</c>, never two.</b>
+    /// <para><b>Position relative to <see cref="CreateWorkingTreeRecord"/> does not matter — it is
+    /// called after it, alongside <see cref="RepointContainerChildParent"/>, but either order leaves
+    /// exactly one row for the Worldspace's own <c>TopCell</c>, never two.</b>
     /// <c>RederiveContainmentForRecord</c>'s own <c>cell_location</c> write for <c>TopCell</c>
     /// deletes-then-inserts keyed by that cell's own unchanging <c>cell_form_key</c>, never by
     /// <c>parent_worldspace</c> — so it unconditionally removes whatever row already exists for that
@@ -291,7 +278,7 @@ public interface IRecordIndex : IRecordReads, IDisposable
     void RepointCellLocationParent(PluginKey key, string oldParentFormKey, string newParentFormKey);
 
     /// <summary>
-    /// #549: gives a cell its own <c>cell_location</c> row directly, copied from wherever the caller
+    /// Gives a cell its own <c>cell_location</c> row directly, copied from wherever the caller
     /// already has it (typically the source plugin's own <see cref="IRecordReads.GetCellLocation"/>
     /// answer for the same FormKey) — a copy-in, never a derivation. Every existing write of this
     /// table (<c>DuckDbRecordIndex.RederiveContainmentForRecord</c>) only ever re-derives a

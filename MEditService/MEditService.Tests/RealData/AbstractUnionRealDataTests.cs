@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #548's own acceptance bar ("a real fixture... matching xEdit's display"), against the committed
+/// "A real fixture... matching xEdit's display", against the committed
 /// cut-down Fallout 4 plugin rather than an in-memory-constructed record
 /// (<see cref="MEditService.Tests.Indexing.AbstractUnionSchemaTests"/> already covers that half).
 /// Read through <see cref="ModFactory.ImportGetter"/> the same way <see cref="CutDownPluginFixture"/>

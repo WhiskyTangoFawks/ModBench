@@ -10,18 +10,17 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #489: any <see cref="RecordEditService.DeleteRecord"/> (and <see cref="RecordEditService.RenumberRecord"/>'s
-/// own delete+create) used to leave a numbering gap in its touched group folder — deliberate,
-/// documented behavior (#459/#427's own "gaps accepted by design" doctrine). <see cref="PluginCompileService"/>'s
-/// round-trip gate (#473) regenerates canonical <c>"[N]"</c> prefixes as contiguous in-memory list
-/// position, so that gap made every subsequent Save &amp; Compile refuse until the user re-Tracked —
-/// for a completely benign reason, on the touched plugin's <i>own</i> next compile, with no container
-/// involved at all.
+/// A numbering gap left in a group folder by <see cref="RecordEditService.DeleteRecord"/> (or
+/// <see cref="RecordEditService.RenumberRecord"/>'s own delete+create) makes every subsequent
+/// Save &amp; Compile refuse until the user re-Tracks — <see cref="PluginCompileService"/>'s
+/// round-trip gate regenerates canonical <c>"[N]"</c> prefixes as contiguous in-memory list
+/// position — for a completely benign reason, on the touched plugin's <i>own</i> next compile, with
+/// no container involved at all.
 ///
-/// <para>The fix: every structural write (<see cref="RecordEditService.DeleteRecord"/>,
-/// <see cref="RecordEditService.RenumberRecord"/>, <see cref="RecordEditService.CreateRecord"/>) now
+/// <para>So every structural write (<see cref="RecordEditService.DeleteRecord"/>,
+/// <see cref="RecordEditService.RenumberRecord"/>, <see cref="RecordEditService.CreateRecord"/>)
 /// renormalizes its touched group folder to contiguous <c>[0..k]</c> as its own last file-system act
-/// (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>). This suite proves the issue's own
+/// (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>). This suite proves the
 /// repro no longer refuses, and that survivors' relative order and content both come through intact.
 /// </para>
 /// </summary>
@@ -52,7 +51,7 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
     private string NpcsDirectory =>
         Path.Combine(_mod.ModFolder, SourceRecordPath.RootFor(TrackedModFixture.PluginName), "Npcs");
 
-    // ---- AC1: the issue's own repro ----
+    // ---- the original repro ----
 
     [Fact]
     public void DeletingTheFirstOfTwoSameTypeRecords_ThenCompiling_Succeeds_AndTheBinaryReflectsTheDelete()
@@ -81,7 +80,7 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
         Assert.StartsWith("[0] " + TrackedModFixture.OtherNpcEditorId, survivor, StringComparison.Ordinal);
     }
 
-    // ---- AC3a: renumber, flat ----
+    // ---- renumber, flat ----
 
     [Fact]
     public void RenumberingTheFirstOfTwo_ThenCompiling_Succeeds_AndTheGroupFolderIsRenormalized()
@@ -105,7 +104,7 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
         }
     }
 
-    // ---- AC3b: delete inside a container-nested folder-split list ----
+    // ---- delete inside a container-nested folder-split list ----
 
     [Fact]
     public void DeletingTheMiddleOfThreeDialogTopics_ThenCompiling_Succeeds_KeepingSurvivorsInOrder()
@@ -118,7 +117,7 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
         var deleted = editService.DeleteRecord(container.Plugin, container.DialogTopic2.ToString());
         Assert.True(deleted.Applied, deleted.Message);
 
-        // Before #489 this refused: "does not round-trip through its own source ... Re-Track".
+        // Without renormalization this refuses: "does not round-trip through its own source ... Re-Track".
         var result = compileService.Compile(container.Plugin, new CompileSource.WorkingTree());
         Assert.True(result.Succeeded, result.RefusalReason);
 
@@ -159,7 +158,7 @@ public sealed class GroupOrderRenormalizationTests : IDisposable
         Assert.Contains(names, n => n!.StartsWith("[1] BrandNew", StringComparison.Ordinal));
     }
 
-    // ---- AC5: stacked operations, no drift ----
+    // ---- stacked operations, no drift ----
 
     [Fact]
     public void StackedDeletesAndCreates_StillCompile_WithNoAccumulatedDrift()

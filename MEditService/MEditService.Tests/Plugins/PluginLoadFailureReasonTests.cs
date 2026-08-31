@@ -2,7 +2,7 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// #395: a load-failure reason built from a bare ex.Message loses the actual cause whenever
+// A load-failure reason built from a bare ex.Message loses the actual cause whenever
 // Mutagen wraps a parse error (which record, which subrecord, offset) inside an outer "failed to
 // read" exception. PluginLoadFailure.ReasonFor flattens the whole InnerException chain instead,
 // outermost first, so the tooltip can narrow the cause down rather than repeat "failed to load".

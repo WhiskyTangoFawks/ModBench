@@ -16,7 +16,7 @@ namespace MEditService.Core.Source;
 /// derived GRUP-header bytes Mutagen's own model backs onto a handful of record types, never a
 /// record's own subrecord content.
 ///
-/// <para><b>Why the mask, not bare <c>Equals</c>.</b> The #513 survey (684 real LitR plugins) found
+/// <para><b>Why the mask, not bare <c>Equals</c>.</b> A survey over 684 real LitR plugins found
 /// bare <c>Equals</c> false-negatives on byte-identical parses for whole record families (Armor,
 /// ArmorAddon, Race, Package, …) — the generated mask is the one Mutagen API proven not to have that
 /// defect.</para>
@@ -26,8 +26,8 @@ namespace MEditService.Core.Source;
 /// <c>&lt;Type&gt;MixIn</c> class, not through a shared interface — there is no other way to call it
 /// once for every Fallout4 record type without a per-type switch. Its result is a per-type generated
 /// <c>&lt;Type&gt;.Mask&lt;bool&gt;</c> object, walked field-by-field/property-by-property
-/// (<see cref="CollectFailingFields"/>) rather than through its printed text: a first version parsed
-/// <c>Mask&lt;TItem&gt;.ToString()</c> and found two real defects that way — its <c>Print</c> only
+/// (<see cref="CollectFailingFields"/>) rather than through its printed text: parsing
+/// <c>Mask&lt;TItem&gt;.ToString()</c> has two real, observed defects — its <c>Print</c> only
 /// emits the type's <i>own</i> declared members, not inherited ones (so a corrupted <c>EditorID</c>,
 /// declared on the base <c>MajorRecord.Mask</c>, never appeared at all), and a nested embedded record
 /// (a <c>Worldspace</c>'s own <c>TopCell</c>) prints its inner <c>Cell.Mask</c>'s field names with no
@@ -60,8 +60,8 @@ public static class ModelIdentity
         ("Cell", "PersistentTimestamp"), ("Cell", "PersistentUnknownGroupData"),
         ("Cell", "TemporaryTimestamp"), ("Cell", "TemporaryUnknownGroupData"),
         ("Worldspace", "SubCellsTimestamp"), ("Worldspace", "SubCellsUnknown"),
-        // #513, found live against the LitR corpus (Slice F's own survey smoke test), not anticipated
-        // at plan time: the top-level SubCellsTimestamp/SubCellsUnknown pair above covers the group
+        // Found live against the LitR corpus:
+        // the top-level SubCellsTimestamp/SubCellsUnknown pair above covers the group
         // wrapping every exterior block, but each individual block/sub-block is its own nested GRUP
         // with the same shape one level deeper (WorldspaceBlock_Generated.cs/WorldspaceSubBlock_Generated.cs:
         // "public Int32 LastModified"/"public Int32 Unknown", populated from that block's own group
@@ -74,7 +74,7 @@ public static class ModelIdentity
     ];
 
     /// <summary>One record that failed the model-identity verdict, or the whole-mod fallback when
-    /// every individual record matched (#506: header/container-only divergence).</summary>
+    /// every individual record matched (header/container-only divergence).</summary>
     public sealed record Divergence(string RecordType, FormKey FormKey, string? EditorId, string Description);
 
     /// <summary>
@@ -104,7 +104,7 @@ public static class ModelIdentity
             }
         }
 
-        // #506: the other direction — a record the recompile produced that the original never had.
+        // The other direction — a record the recompile produced that the original never had.
         foreach (var recompiledRecord in recompiled.EnumerateMajorRecords())
         {
             if (!originalFormKeys.Contains(recompiledRecord.FormKey))
@@ -118,13 +118,13 @@ public static class ModelIdentity
     }
 
     /// <summary>
-    /// #568's own allow-list: the <c>Fallout4ModHeader.Mask</c> fields Mutagen's own model treats as
+    /// The allow-list: the <c>Fallout4ModHeader.Mask</c> fields Mutagen's own model treats as
     /// opaque or otherwise never normalizes on write — carried through purely as data, so a content
     /// corruption on any of them is a real defect, never an encoding artifact. A corruption on any of
-    /// these previously round-tripped silently, because <see cref="FindFirst"/> only ever walks
+    /// these would otherwise round-trip silently, because <see cref="FindFirst"/> only ever walks
     /// <c>original.EnumerateMajorRecords()</c>, and a <c>ModHeader</c> is not an
     /// <c>IMajorRecordGetter</c> (see <c>MEditService/CLAUDE.md</c>'s own "the header is the one
-    /// surviving per-type table" note) — no per-record mask check has ever reached it.
+    /// surviving per-type table" note) — no per-record mask check ever reaches it.
     ///
     /// <para><b>Every one of these 7 has a test that corrupts that field alone and asserts the
     /// resulting refusal names it</b> (<c>ModelIdentityTests</c>' own
@@ -138,11 +138,11 @@ public static class ModelIdentity
     ///
     /// <para><b>Deliberately an allow-list, not every <c>Mask</c> field, and the allow-list plus the
     /// exclusion table below together account for all 16 <c>Fallout4ModHeader.Mask</c> fields — ADR-0042's
-    /// #568 amendment carries the full partition and the excluded-field reasoning, not repeated here.
+    /// amendment carries the full partition and the excluded-field reasoning, not repeated here.
     /// </b> In short: <c>Flags</c>, <c>FormID</c>, <c>Version</c>, <c>FormVersion</c>, <c>Version2</c>
-    /// are well-typed, semantically interpreted fields outside this ticket's "opaque data" scope;
-    /// <c>Stats</c>' own <c>NoNextFormIDProcessing</c>/<c>RecordCountOption.NoCheck</c> (#506,
-    /// <see cref="Source.TrackService"/>'s own <c>VerifyRoundTrip</c>) skip Mutagen's recompute rather
+    /// are well-typed, semantically interpreted fields outside the "opaque data" scope;
+    /// <c>Stats</c>' own <c>NoNextFormIDProcessing</c>/<c>RecordCountOption.NoCheck</c>
+    /// (<see cref="Source.TrackService"/>'s own <c>VerifyRoundTrip</c>) skip Mutagen's recompute rather
     /// than compare it, so whatever the codec parsed survives this write untouched by construction;
     /// <c>MasterReferences</c> and <c>OverriddenForms</c> both have their own confirmed,
     /// currently-tested legitimate divergence paths (ADR-0038's content-derived master pruning — real
@@ -168,7 +168,7 @@ public static class ModelIdentity
     /// lacks) is invisible even in principle: confirmed live that <c>FailingFields</c> returns empty for
     /// a 1-item-vs-0-item <c>TransientTypes</c> list — Mutagen's own generated mask does not flag that
     /// shape as unequal at all. This mechanism cannot cover TNAM; a corrupted or dropped
-    /// <c>TransientTypes</c> entry round-trips silently today. Follow-up filed to close this
+    /// <c>TransientTypes</c> entry round-trips silently today — a known gap, owned
     /// separately.</para>
     /// </summary>
     internal static readonly HashSet<string> OpaqueHeaderFields =
@@ -216,8 +216,8 @@ public static class ModelIdentity
     /// exclusion list — <see cref="FindFirst"/>'s own building block, exposed so a test can assert
     /// against the raw mask directly rather than only through a whole-mod comparison.
     ///
-    /// <para>Typed <see cref="ILoquiObjectGetter"/>, not <see cref="IMajorRecordGetter"/> — #568
-    /// widens this from a record-only seam to also serve <see cref="FindFirstHeaderFieldDivergence"/>'s
+    /// <para>Typed <see cref="ILoquiObjectGetter"/>, not <see cref="IMajorRecordGetter"/> —
+    /// widened from a record-only seam to also serve <see cref="FindFirstHeaderFieldDivergence"/>'s
     /// <c>IFallout4ModHeaderGetter</c> comparison. <c>ILoquiObjectGetter</c> is the narrowest type both
     /// interfaces actually share (confirmed by reflecting on both interfaces' own
     /// <c>GetInterfaces()</c>), so a caller passing something with no Loqui-generated equality mask at
@@ -251,7 +251,7 @@ public static class ModelIdentity
     /// <c>Specific</c> detail, scoped to <i>its own</i> declaring type — so the exclusion list sees the
     /// field's true owner, not its container's;</item>
     /// <item>an indexed list of embedded records (<c>Worldspace.SubCells</c>, each a
-    /// <c>Loqui.MaskItemIndexed&lt;bool, TSub&gt;</c> — found live, #513's own survey: a
+    /// <c>Loqui.MaskItemIndexed&lt;bool, TSub&gt;</c> — found live in the round-trip survey: a
     /// <c>WorldspaceBlock</c>'s <c>LastModified</c>/<c>Unknown</c> are exactly the same class of
     /// GRUP-header-derived field as <c>Cell.Timestamp</c>, just one list level deeper) recurses into
     /// every failing element the same way;</item>
@@ -353,8 +353,8 @@ public static class ModelIdentity
     // One real plugin's worth of records can run to five figures, and Track's own gate calls
     // FailingFields once per record on the accept path (every record, not just a failing one) — the
     // underlying search walks every type in an assembly, so caching per record type is not an
-    // optimization detail, it is the difference between this gate costing roughly what #506 already
-    // measured (+40% on Track) and costing minutes per mega-plugin. Keyed by the exact concrete record
+    // optimization detail, it is the difference between this gate costing the measured
+    // +40% on Track and costing minutes per mega-plugin. Keyed by the exact concrete record
     // type (Cell, Npc, …), never invalidated: the set of generated MixIn classes in a loaded Mutagen
     // assembly cannot change during a process's lifetime.
     private static readonly ConcurrentDictionary<Type, MethodInfo?> MethodByRecordType = new();

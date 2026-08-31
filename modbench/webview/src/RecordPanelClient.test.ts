@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Issue #167 (review): conditionRunOnTargets() logs failures via the same vscode.postMessage
+// conditionRunOnTargets() logs failures via the same vscode.postMessage
 // bridge RecordPanel's own logAction uses (vscode.ts's acquireVsCodeApi() at module load) —
 // stubbed here the same way RecordPanel.test.tsx already does, since most tests below don't care
 // about logging itself (see the dedicated describe block further down for that).
@@ -37,7 +37,7 @@ describe('RecordPanelClient.load', () => {
       if (url.includes('/compare')) return Promise.resolve(jsonResponse({ overrides: [], diffs: [], conflictAll: 'OnlyOne' }));
       if (url.includes('/changes')) return Promise.resolve(jsonResponse([{ id: 'c1' }]));
       if (url.includes('/plugins')) return Promise.resolve(jsonResponse([{ name: 'A.esp', isImmutable: true, loadOrderIndex: 0 }]));
-      // #308: the shared happy-path fixture answers settled — the dedicated describe block below
+      // The shared happy-path fixture answers settled — the dedicated describe block below
       // overrides this per test to exercise the false/failed-fetch cases.
       if (url.includes('/load-order/status')) return Promise.resolve(jsonResponse({ conflictsComputed: true }));
       return Promise.resolve(jsonResponse({}, 404));
@@ -58,19 +58,18 @@ describe('RecordPanelClient.load', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.result.conflictAll).toBe('OnlyOne');
-    // Immutable-set resolution lives behind the client (issue #122 AC). #209: the raw plugin
-    // list itself is no longer exposed on LoadResult — it fetches /plugins internally only to
-    // derive this set, since its only consumer (the deleted PluginTargetPicker/Add Master
-    // dropdown) is gone. #272: keyed by compound column identity (ColumnKey), not the bare
+    // Immutable-set resolution lives behind the client. The raw plugin
+    // list itself is not exposed on LoadResult — it fetches /plugins internally only to
+    // derive this set. Keyed by compound column identity (ColumnKey), not the bare
     // plugin name — this fixture has no `origin`, which columnKey() treats as the elided Data
-    // origin, same as every pre-#272 fixture.
+    // origin.
     expect(r.immutableSet).toEqual(new Set([columnKey('A.esp', null)]));
   });
 
-  // #272 / ADR-0036: the genuinely red case — two PluginInfo entries sharing a filename but
+  // ADR-0036: the genuinely red case — two PluginInfo entries sharing a filename but
   // differing in origin must produce two distinct Set members, or one origin's mutability
-  // silently wins for both columns (RecordPanel.tsx's immutableSet.has(...) checks). Pre-#272,
-  // `.map(p => p.name)` collapsed both into one entry.
+  // silently wins for both columns (RecordPanel.tsx's immutableSet.has(...) checks). A bare
+  // `.map(p => p.name)` would collapse both into one entry.
   it('keys immutableSet by compound identity, so two same-filename different-origin plugins stay distinct', async () => {
     fetchMock.mockImplementation((input: Request | string) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -92,7 +91,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.immutableSet?.has(columnKey('Shared.esp', 'ModB'))).toBe(false);
   });
 
-  // #304 / ADR-0036: notInLoadOrderSet mirrors immutableSet's own compound-identity construction
+  // ADR-0036: notInLoadOrderSet mirrors immutableSet's own compound-identity construction
   // (same PluginInfo list, same columnKey()) — a copy the load order doesn't name is immutable
   // *and* absent from it, and PluginHeader needs the second fact independently of the first (a
   // vanilla master is immutable but still in the load order, and must not read the same way).
@@ -152,7 +151,7 @@ describe('RecordPanelClient.load', () => {
     expect(r.notInLoadOrderSet).toBeNull();
   });
 
-  // #308 / ADR-0035: the record panel's own half of "an absent conflict badge must never be
+  // ADR-0035: the record panel's own half of "an absent conflict badge must never be
   // mistakable for 'no conflict'" — load() reads GET /load-order/status alongside compare/changes/
   // plugins so the panel can state, honestly, whether the comparison it is about to render is
   // settled.
@@ -213,7 +212,7 @@ describe('RecordPanelClient.conditionRunOnTargets', () => {
     expect(targets).toEqual(['Subject', 'Reference']);
   });
 
-  // Issue #167 (review): a non-ok response degrades to [] (never rejects — the Run On dropdown
+  // A non-ok response degrades to [] (never rejects — the Run On dropdown
   // simply has nothing to show, not a blocking error) but must log, mirroring
   // PluginRepository.getConditionFunctions()'s own contract rather than swallowing silently.
   it('returns [] and logs a warning when the response is not ok', async () => {

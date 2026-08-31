@@ -6,15 +6,14 @@ import type { components } from '../../src/medit/generated/api';
 
 type WireSchemas = components['schemas'];
 
-// #297: this file's type-level checks below are enforced by `tsc -p webview/tsconfig.json
+// This file's type-level checks below are enforced by `tsc -p webview/tsconfig.json
 // --noEmit` (the second step of `npm run build`), not by `vitest run` (`npm run test:unit`) —
 // vitest transpiles test files with esbuild, which strips types without validating them. Only the
 // `describe('columnKey', ...)` block below is a genuine vitest runtime suite.
 
-// #297 (generalizes the #272 regression check this file used to hand-roll per-DTO for
-// `winnerColumn` alone): every hand-written interface in `types.ts`/`RecordPanelClient.ts` that
+// Every hand-written interface in `types.ts`/`RecordPanelClient.ts` that
 // mirrors a generated wire DTO gets one containment check here — every key the hand type declares
-// must also exist on the generated schema for the same DTO. A backend rename (e.g. #272's
+// must also exist on the generated schema for the same DTO. A backend rename (e.g.
 // WinnerPlugin -> WinnerColumn) drops the renamed key from the generated side, so
 // `KeysContainedIn` stops resolving to `never` and `AssertNoMissingKeys` fails to compile, naming
 // the stale key in the error (e.g. `Type '"winnerColumn"' does not satisfy the constraint
@@ -22,15 +21,15 @@ type WireSchemas = components['schemas'];
 //
 // Deliberately not a value-level/assignability check (`Hand extends Wire`): the generated schema
 // types every property as optional-and-nullable regardless of the C# side's actual
-// nullability/required-ness (an OpenAPI-generator gap, not specific to any one field — see #297
-// comment 1), so hand-written -> generated is vacuously satisfiable regardless of renames (no
+// nullability/required-ness (an OpenAPI-generator gap, not specific to any one field),
+// so hand-written -> generated is vacuously satisfiable regardless of renames (no
 // required members on the target) and generated -> hand-written fails on nullability even when
 // names agree. Key containment is exactly the tool that catches a rename and ignores nullability.
 type KeysContainedIn<Hand, Wire> = Exclude<keyof Hand, keyof Wire>;
 type AssertNoMissingKeys<T extends never> = T;
 
 // FieldMetadata: `readOnly`/`defaultValue` are synthesized only by the VMAD/Condition tree
-// adapters (#231, see the fields' own doc comments in types.ts) — the backend never emits them, so
+// adapters (see the fields' own doc comments in types.ts) — the backend never emits them, so
 // they're excluded from the wire-containment check rather than expected to appear on the schema.
 export type CheckFieldMetadata =
   AssertNoMissingKeys<KeysContainedIn<Omit<FieldMetadata, 'readOnly' | 'defaultValue'>, WireSchemas['FieldMetadata']>>;
@@ -42,7 +41,7 @@ export type CheckCompareOverride =
   AssertNoMissingKeys<KeysContainedIn<CompareOverride, WireSchemas['CompareOverride']>>;
 
 // FieldDiff: `wirePath`/`collapsedSummary` are synthesized by
-// vmadTreeAdapter.ts/conditionTreeAdapter.ts (#231, see each field's own doc comment in types.ts)
+// vmadTreeAdapter.ts/conditionTreeAdapter.ts (see each field's own doc comment in types.ts)
 // for rows the backend never sends this shape for — excluded for the same reason as
 // FieldMetadata's readOnly/defaultValue above.
 export type CheckFieldDiff = AssertNoMissingKeys<
@@ -68,9 +67,9 @@ export type CheckCompareResult = AssertNoMissingKeys<KeysContainedIn<CompareResu
 // PluginResponse (its own doc comment) — every key it does declare must still exist on the wire.
 export type CheckPluginInfo = AssertNoMissingKeys<KeysContainedIn<PluginInfo, WireSchemas['PluginResponse']>>;
 
-// #272 / ADR-0036: columnKey() is the frontend's own compound column identity, meant to agree
+// ADR-0036: columnKey() is the frontend's own compound column identity, meant to agree
 // with the backend's ColumnKey.Of (MEditService.Core/Queries/ColumnKey.cs) for the same
-// (plugin, origin) pair. The trap this ticket names: with one origin per filename today, almost
+// (plugin, origin) pair. The trap: with one origin per filename today, almost
 // any implementation looks green — the genuinely red case is two columns sharing a filename but
 // differing in origin, which must never collapse to the same key.
 describe('columnKey', () => {
@@ -91,9 +90,8 @@ describe('columnKey', () => {
     expect(columnKey('Shared.esp', 'Data')).toBe('Shared.esp');
   });
 
-  // #275 / ADR-0036: origin is no longer omittable (the contract step removed the default that
-  // let a caller skip it) — a literal `null` is the only way left to reach the elided-Data path,
-  // covered by 'treats a literal null origin the same as a missing one' below.
+  // ADR-0036: origin is not omittable — a literal `null` is the only way to reach the
+  // elided-Data path, covered by 'treats a literal null origin the same as a missing one' below.
 
   // Case-folding is scoped to the Data-origin check only (unlike the backend, which doesn't fold
   // at all — see columnKey()'s doc comment): "Data"/"data"/"DATA" must all elide the same way
@@ -107,7 +105,7 @@ describe('columnKey', () => {
     expect(columnKey('Shared.esp', 'ModA')).toBe('Shared.esp|ModA');
   });
 
-  // #272 review: the generated wire schema types `origin` as `string | null` on every DTO that
+  // The generated wire schema types `origin` as `string | null` on every DTO that
   // carries it (CompareOverride/PluginResponse in generated/api.ts) even though the
   // backend can't actually produce a null there (see columnKey()'s own doc comment) — a `null`
   // makes it through RecordPanelClient's unchecked `as` cast into these hand types regardless of

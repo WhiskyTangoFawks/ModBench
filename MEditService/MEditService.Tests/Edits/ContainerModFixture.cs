@@ -11,14 +11,11 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #466: the container-record counterpart to <see cref="TrackedModFixture"/> — same posture (a real
+/// The container-record counterpart to <see cref="TrackedModFixture"/> — same posture (a real
 /// mod folder, a real plugin, a real git tree, tracked through the real <see cref="TrackService"/>),
 /// different record content. <see cref="TrackedModFixture"/> holds only Npc/Race/Keyword and
-/// structurally cannot exercise a container at all, which is exactly how #451 shipped a container
-/// regression no test could see (three ad-hoc local fixtures grew up around that gap instead — see
-/// git history on <c>ContainerRecordRegressionTests</c>, <c>SourceIngestContainerTests</c> and
-/// <c>EmbeddedChildEditTests</c>). This fixture consolidates those three into one shared instance,
-/// carrying the union of shapes they each needed:
+/// structurally cannot exercise a container at all — a gap that once shipped a container regression
+/// no test could see. One shared instance, carrying the union of shapes its suites need:
 ///
 /// <list type="bullet">
 /// <item><description><see cref="Cell"/> — a standalone Cell with no embedded children, so a
@@ -91,15 +88,15 @@ public sealed class ContainerModFixture : IDisposable
     public const string DialogTopicEditorId = "EmbedTopic";
     public FormKey DialogTopic { get; }
 
-    // #488 review: a folder-split grandchild of its own — DialogTopic.Responses is folder-split same
+    // A folder-split grandchild of its own — DialogTopic.Responses is folder-split same
     // as Quest.DialogTopics is, so renumbering DialogTopic (a container of folder-split children in
-    // its own right) is the shape that regressed container_child for its own children.
+    // its own right) is the shape that regresses container_child for its own children.
     public const string ResponseEditorId = "EmbedResponse";
     public FormKey Response { get; }
 
-    // #461 AC5: two more siblings under the same Quest, so "delete/renumber a mid-list folder-split
+    // Two more siblings under the same Quest, so "delete/renumber a mid-list folder-split
     // child, then compile" has an actual middle and two actual survivors to pin the GRUP order of —
-    // one DialogTopic alone (the #453/#460-era shape above) cannot exercise "gap, not renumbered".
+    // one DialogTopic alone cannot exercise "gap, not renumbered".
     public const string DialogTopic2EditorId = "EmbedTopic2";
     public FormKey DialogTopic2 { get; }
 
@@ -200,7 +197,7 @@ public sealed class ContainerModFixture : IDisposable
 
     /// <summary>The source file whose text contains <paramref name="editorId"/> — found by content
     /// rather than by <see cref="SourceRecordPath.For"/>, which has no flat path for a container and
-    /// throws by design. The same locator all three predecessor fixtures hand-rolled.</summary>
+    /// throws by design.</summary>
     public string SourceFileContaining(string editorId) =>
         Directory.EnumerateFiles(SourceRoot, "RecordData.json", SearchOption.AllDirectories)
             .Single(f => File.ReadAllText(f).Contains($"\"{editorId}\"", StringComparison.Ordinal));
@@ -225,8 +222,8 @@ public sealed class ContainerModFixture : IDisposable
     // octal when core.quotePath's default applies) exactly when it needs to be; this repo's own Track
     // sets core.quotePath=false, so the only escapes a filename built from this fixture's own naming
     // scheme can ever produce are \\ and \" — but is written generally rather than special-cased to
-    // that. Duplicated from TrackedModFixture rather than shared, to keep that fixture (and the 24
-    // files depending on it) untouched by #466.
+    // that. Duplicated from TrackedModFixture rather than shared, to keep that fixture (and the
+    // many files depending on it) untouched.
     private static string UnquotePorcelainLine(string line)
     {
         var space = line.IndexOf(' ');

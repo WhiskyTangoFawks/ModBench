@@ -110,7 +110,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Creates a new plugin at the given path/origin (#288 / ADR-0041), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer per ADR-0024) is responsible for that. */
+        /** @description Creates a new plugin at the given path/origin (ADR-0041), Tracking that destination under the Edits preset first if it is not already tracked. Does NOT add the plugin to any load order — the caller (the extension's Mod Management writer, or a script/agent consumer per ADR-0024) is responsible for that. */
         post: operations["CreatePlugin"];
         delete?: never;
         options?: never;
@@ -176,7 +176,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Create a new record as a working-tree change (#427).
+         * Create a new record as a working-tree change.
          * @description Mints a new record and writes it as a new source file in the plugin's working tree — a git-native create, answering at Effective only until committed and compiled.
          */
         post: operations["CreateRecord"];
@@ -436,8 +436,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Delete a record as a working-tree change (#415/#427).
-         * @description Deletes the record's source file — a git-native, null-Body working-tree change (#415's mechanism): gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0041), the same as any other dangling link.
+         * Delete a record as a working-tree change.
+         * @description Deletes the record's source file — a git-native, null-Body working-tree change: gone at Effective, still served at Head until the deletion is committed and compiled. No reference cascade — a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary compile diagnostic (ADR-0041), the same as any other dangling link.
          */
         post: operations["DeleteRecord"];
         delete?: never;
@@ -456,7 +456,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Renumber a native record's FormKey as a delete+create pair (#427).
+         * Renumber a native record's FormKey as a delete+create pair.
          * @description Native records only. Rewrites the record under a new FormKey (auto-allocated, both-refs collision-safe, or an explicit target) as a working-tree delete of the old source file plus a create of the new one, cascading the FormKey change into every tracked plugin that references it.
          */
         post: operations["RenumberRecord"];
@@ -476,7 +476,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin (#436).
+         * Copy as Override Into… — the source record's bytes, same FormKey, into a destination plugin.
          * @description Serializes the source record's own text, verbatim, into the destination plugin's working tree under the identical FormKey — no Mutagen deserialization, since a record's stored document is already byte-identical to its source file. The destination's master dependency on the record's origin is derived at compile from the bytes it now carries (ADR-0038); no copy-specific master handling happens here.
          */
         post: operations["CopyRecordAsOverride"];
@@ -496,7 +496,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy as New Record Into… — a deep copy of the source record under a fresh FormKey (#436).
+         * Copy as New Record Into… — a deep copy of the source record under a fresh FormKey.
          * @description Deep-copies the source record (Mutagen's own record-level Duplicate — no mod object is constructed) under a fresh FormKey in the destination plugin's working tree. FormKey is the caller's requested one or the next free local FormID, both-refs collision-checked exactly as CreateRecord's own allocation is. A FormLink from the record to itself is remapped onto the new FormKey, so an internal self-reference follows the copy, not the original.
          */
         post: operations["CopyRecordAsNewRecord"];

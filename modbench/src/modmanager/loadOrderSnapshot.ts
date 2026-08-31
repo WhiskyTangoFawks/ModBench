@@ -5,7 +5,7 @@
 // wins comes from the MO2-priority FileConflictIndex, overwrite/ winning-most of all. Vanilla
 // masters are NOT listed here — the backend prepends them from the game directory, forced on and
 // immutable, ahead of this list. Creation Club content cataloged in the game's own [Game].ccc gets
-// the same forced treatment (#434), also prepended server-side — this module never reads that
+// the same forced treatment, also prepended server-side — this module never reads that
 // catalog.
 
 import { readdir } from 'node:fs/promises';
@@ -15,7 +15,7 @@ import { buildFileConflictIndex, foldPath, rootLevelWinnerMods, rootLevelWinners
 import { PLUGIN_EXTENSIONS } from './masterReader';
 import { findUnlistedPlugins } from './unlistedPlugins';
 
-// Reserved origin values (#269 / ADR-0036): the game's Data directory, and MO2's overwrite
+// Reserved origin values (ADR-0036): the game's Data directory, and MO2's overwrite
 // folder — matching their literal directory names. Never a real mod folder name: mod folders live
 // under a different namespace (`mods/`), and "overwrite" is already a reserved MO2 folder name
 // elsewhere in this codebase (modlistText.ts's RESERVED_DIR_NAMES).
@@ -27,12 +27,12 @@ export const OVERWRITE_ORIGIN = 'overwrite';
 export interface LoadOrderPlugin {
   name: string;
   path: string;
-  /** The mod folder that provided this copy, or a reserved origin value above (#269 / ADR-0036). */
+  /** The mod folder that provided this copy, or a reserved origin value above (ADR-0036). */
   origin: string;
   /** The name's plugins.txt line index, or null when no line names it. A losing copy of a listed
    *  name carries the same slot as the winning one. */
   slot: number | null;
-  /** The line's `*` prefix (#270 / ADR-0035); false when no line names the file. */
+  /** The line's `*` prefix (ADR-0035); false when no line names the file. */
   enabled: boolean;
   /** This copy is the one the Mod override order resolves the name to — overwrite/ first, then the
    *  winning enabled mod. Editing derives participation (`enabled AND winning AND listed`) on its
@@ -57,7 +57,7 @@ export function resolvePluginPaths(
 }
 
 /** Root-level files directly under the instance's overwrite/ folder, keyed by case-folded name to
- *  their real on-disk name (#269 / ADR-0036). MO2's VFS makes overwrite/ winning-most of
+ *  their real on-disk name (ADR-0036). MO2's VFS makes overwrite/ winning-most of
  *  all — above every mod and the Data folder — so a plugin found here always wins path resolution
  *  too, not just origin classification. Root-level only, mirroring rootLevelWinners' own reasoning:
  *  a nested file sharing a plugin's basename must not shadow the real plugin. Empty when the
@@ -80,7 +80,7 @@ type BuildIndex = (
 ) => Promise<FileConflictIndex>;
 
 /** Builds the snapshot for `PUT /load-order`: the winning copy of every plugins.txt line (disabled
- *  ones included — the `*` prefix becomes `enabled` rather than deciding whether it is sent, #270 /
+ *  ones included — the `*` prefix becomes `enabled` rather than deciding whether it is sent,
  *  ADR-0035), then every other root-level plugin copy an enabled mod or overwrite/ provides — a
  *  losing copy of a listed name at that name's slot, an unlisted file with no slot — as
  *  `winning: false` unless it is the one the Mod override order would pick. Sole callers are the
@@ -89,7 +89,7 @@ export async function buildLoadOrderSnapshot(
   source: Source,
   instanceRoot: string,
   dataFolder: string,
-  // buildFileConflictIndex requires a log (#322). This function itself takes no log/channel
+  // buildFileConflictIndex requires a log. This function itself takes no log/channel
   // parameter, so the default stays a no-op rather than growing this signature for it — but the
   // real caller (extension.ts) passes its own outputChannel-backed buildIndex explicitly, so the
   // walker's skip/cycle/broken-link surfacing does reach the Output channel in production; this

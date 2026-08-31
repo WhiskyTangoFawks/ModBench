@@ -12,12 +12,12 @@ using Noggog;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// Permanent gate (#369): a binary round trip on the committed real-data subset
+/// Permanent gate: a binary round trip on the committed real-data subset
 /// (<see cref="CutDownPluginFixture"/>) must not silently corrupt a plugin. Runs unconditionally
 /// in the default suite (no environment gate, unlike <see cref="RealInstallSmokeTests"/>).
 ///
 /// Both tests assert two properties separately — <c>original == write1</c> and
-/// <c>write1 == write2</c> — deliberately stronger than AC1's bare "write1 == write2" asks for:
+/// <c>write1 == write2</c> — deliberately stronger than bare "write1 == write2":
 /// the fixture is itself Mutagen-written, so there is no legitimate first-write normalization gap
 /// (measured: holds on both seams below, at both the 0.53.1 pin and the 0.54.0 pin this gate
 /// exists to catch). <c>write1 == write2</c> alone is structurally blind to a defect that
@@ -35,11 +35,11 @@ public sealed class BinaryRoundTripGateTests
     /// <summary>
     /// Guards the production save path: <see cref="PluginWriter.SaveAsync"/> called the way
     /// <c>LoadOrderMirror.SavePlugin</c> actually calls it — a real link cache and an explicit
-    /// master-writing order (#337/ADR-0038), not the bare defaults <see cref="PluginWriter"/> falls
+    /// master-writing order (ADR-0038), not the bare defaults <see cref="PluginWriter"/> falls
     /// back to when both are omitted.
     ///
     /// This test does <b>not</b> go red on Mutagen 0.54.0's known ObjectTemplate-duplication
-    /// regression (spike #359) — confirmed by direct investigation, including editing one of the
+    /// regression — confirmed by direct investigation, including editing one of the
     /// four affected weapons through this exact seam. The regression is confined to the lazy
     /// binary-overlay reader (see <see cref="LazyOverlayReloadAndRewrite_ProducesByteIdenticalOutput"/>
     /// for the mechanism); <c>ModFactory.ImportSetter</c> resolves to <c>Fallout4Mod.CreateFromBinary</c>
@@ -112,7 +112,7 @@ public sealed class BinaryRoundTripGateTests
     /// path opens every load order plugin via <c>ModFactory.ImportGetter</c> (logged there as "Opening
     /// binary overlay"), which resolves to the exact same <c>Fallout4ModBinaryOverlay</c> type this
     /// test exercises. This test only pins that reader's write-back stability, not read-side
-    /// correctness — see #369's report for the read-side implication.
+    /// correctness.
     /// </summary>
     [Fact]
     public async Task LazyOverlayReloadAndRewrite_ProducesByteIdenticalOutput()

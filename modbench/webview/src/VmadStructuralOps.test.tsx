@@ -12,11 +12,11 @@ import type { RecordPanelClient } from './RecordPanelClient';
 import { vscode } from './vscode';
 import { WEBVIEW_TO_EXTENSION, EXTENSION_TO_WEBVIEW } from './messages';
 
-// Issue #231 (#426 Track 5: restored): VMAD's structural-op right-click menu — same
-// broadcast-and-self-filter shape as ArrayDiffRows.test.tsx's own "array editing (unsorted,
-// #426)" suite (the extension host has no live reference into this panel's React state), except
+// VMAD's structural-op right-click menu — same
+// broadcast-and-self-filter shape as ArrayDiffRows.test.tsx's own unsorted-array-editing
+// suite (the extension host has no live reference into this panel's React state), except
 // every op here (bar Add Property's own dialog) collapses to one VMAD_STRUCTURAL_OP broadcast
-// carrying an op-envelope value RecordFieldWriter.ApplyVmadField (Track 0) already dispatches on
+// carrying an op-envelope value RecordFieldWriter.ApplyVmadField already dispatches on
 // — writing through the exact same EDIT_FIELD write path every other gesture uses, with no
 // webview-side computation of a next value the way an array op needs.
 

@@ -7,10 +7,10 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Records;
 
-// #547: CollectDiagnostics used to point-read one document per record (two DuckDB round trips
-// each — ~7,880 queries and ~40s of a 41s Compile on the real 3,940-record fixture), so the seam
-// grew a bulk read: every document one plugin's copy holds, in one query. These tests pin the bulk
-// read against the point read it replaces — the two run independent SQL, so agreement is evidence,
+// Point-reading one document per record costs two DuckDB round trips
+// each (~7,880 queries and ~40s of a 41s Compile on the real 3,940-record fixture), so the seam
+// carries a bulk read: every document one plugin's copy holds, in one query. These tests pin the
+// bulk read against the point read — the two run independent SQL, so agreement is evidence,
 // not tautology.
 public class GetDocumentsTests
 {

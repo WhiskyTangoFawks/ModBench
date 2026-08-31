@@ -14,7 +14,7 @@ vi.mock('vscode', () => ({
   },
 }));
 
-// Issue #230: openExtendedFieldEditor has its own deep test suite (extendedFieldEditor.test.ts,
+// openExtendedFieldEditor has its own deep test suite (extendedFieldEditor.test.ts,
 // which exercises the real temp-file/save/close mechanics) — this file only needs to prove the
 // router dispatches OPEN_EXTENDED_EDITOR to it with the right params, so the function itself is
 // mocked here rather than pulling its full vscode surface into this file's own vscode mock too.
@@ -37,10 +37,10 @@ function fakeChannel() {
 }
 const fakeReporter = { report: vi.fn() };
 
-// #415: the edit path's two deps default to "applied, nobody listening" so every pre-existing case
-// below keeps exercising exactly what it did; the edit tests override them explicitly.
-// #426: searchRecords/getConditionFunctions are unused outside their own OPEN_*_PICKER tests below
-// (which build their own *PickerDeps.repository), but both fields are required now that this
+// The edit path's two deps default to "applied, nobody listening"; the edit tests override them
+// explicitly.
+// searchRecords/getConditionFunctions are unused outside their own OPEN_*_PICKER tests below
+// (which build their own *PickerDeps.repository), but both fields are required because this
 // router's shared `repository` field covers editField and both pickers' own catalogue fetches.
 const fakeRepository = { editRecordField: vi.fn(), searchRecords: vi.fn(), getConditionFunctions: vi.fn() };
 const onRecordEdited = vi.fn();
@@ -49,7 +49,7 @@ function makeDeps(overrides: Partial<RouteRecordPanelMessageDeps> = {}): RouteRe
   return {
     channel: fakeChannel(), reporter: fakeReporter,
     repository: fakeRepository, onRecordEdited,
-    // #426: undefined by default, matching every other per-panel bridge bundle — a message that
+    // Undefined by default, matching every other per-panel bridge bundle — a message that
     // arrives with no deps wired is a no-op, not a crash.
     formKeyPicker: undefined,
     conditionFunctionPicker: undefined,
@@ -65,7 +65,7 @@ function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSu
   };
 }
 
-// Issue #210 (#426: restored): a minimal fake of vscode.QuickPick — real VS Code has no test
+// A minimal fake of vscode.QuickPick — real VS Code has no test
 // harness here, so this stands in for the event-emitter-driven object pickFormKeyViaQuickPick
 // drives (value/items/activeItems/selectedItems as plain properties, onDidChangeValue/onDidAccept/
 // onDidHide as listener registries the test triggers directly, matching real QuickPick's "calling
@@ -96,9 +96,9 @@ function makeFakeQuickPick() {
   };
 }
 
-// Issue #174: the record editor webview and the extension host are different processes, bridged
+// The record editor webview and the extension host are different processes, bridged
 // only by `postMessage` — this is the single dispatch point for every message the webview sends
-// up. #410/ADR-0041: three routes survive, all reads.
+// up.
 describe('routeRecordPanelMessage', () => {
   beforeEach(() => {
     executeCommand.mockReset();
@@ -155,16 +155,16 @@ describe('routeRecordPanelMessage', () => {
   });
 });
 
-// #284: openEditorBeside makes a second, independently-opened panel possible — this is the
-// plumbing behind the issue's "Ctrl+C in one panel, Ctrl+V in the other" acceptance criterion.
+// openEditorBeside makes a second, independently-opened panel possible — this is the
+// plumbing behind "Ctrl+C in one panel, Ctrl+V in the other".
 // openRecordPanel wires a fresh onDidReceiveMessage listener per real WebviewPanel, but every one
 // of them dispatches through this same routeRecordPanelMessage with no panel identity anywhere in
 // its signature (RouteRecordPanelMessageDeps' own doc comment) — so "two panels" here is two
 // independently-built deps bundles, exactly what openRecordPanel constructs fresh per panel (see
 // its onDidReceiveMessage closure), not two of anything this file has to special-case.
 // There is no PASTE message type to route: per ADR-0034 and DiskCell/ScalarCell's own doc
-// comments, Ctrl+V lands in a focused cell's plain <input> (native browser paste, #410/ADR-0041
-// retired the bespoke paste bridge), and committing it is the ordinary EDIT_FIELD write already
+// comments, Ctrl+V lands in a focused cell's plain <input> (native browser paste — there is no
+// bespoke paste bridge), and committing it is the ordinary EDIT_FIELD write already
 // covered above — this test's job is only to prove that commit lands against the panel it was
 // invoked in, using the value copied out of the *other* one, not the panel it was copied from.
 describe('cross-panel copy/paste — two independently-opened panels share this router unmodified (#284)', () => {
@@ -202,7 +202,7 @@ describe('cross-panel copy/paste — two independently-opened panels share this 
   });
 });
 
-// #415/ADR-0041: the one write the panel can ask for. Routed through the host rather than posted
+// ADR-0041: the one write the panel can ask for. Routed through the host rather than posted
 // to the backend from the webview precisely so a refusal can become a native notification — which
 // is what these cases are really pinning.
 describe('routeRecordPanelMessage — EDIT_FIELD (#415)', () => {
@@ -295,7 +295,7 @@ describe('normalizeFormKeyQuery (issue #218)', () => {
     expect(normalizeFormKeyQuery('DogmeatRace [ 000019:Fallout4.esm ]')).toBe('000019:Fallout4.esm');
   });
 
-  // #210's behaviour, unchanged: a bare EditorID and a bare FormKey are both searched as typed.
+  // A bare EditorID and a bare FormKey are both searched as typed.
   it('passes an unbracketed query through untouched', () => {
     expect(normalizeFormKeyQuery('Dogmeat')).toBe('Dogmeat');
     expect(normalizeFormKeyQuery('000019:Fallout4.esm')).toBe('000019:Fallout4.esm');
@@ -313,7 +313,7 @@ describe('normalizeFormKeyQuery (issue #218)', () => {
   });
 });
 
-// Issue #210 (#426: restored): the FormKey picker as a native QuickPick — the extension-host half
+// The FormKey picker as a native QuickPick — the extension-host half
 // of the bridge pickFormKey (webview/src/nativeBridge.ts) talks to. Exercised directly here,
 // separately from routeRecordPanelMessage's dispatch.
 describe('pickFormKeyViaQuickPick (issue #210)', () => {
@@ -344,11 +344,11 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
     await resultPromise;
   });
 
-  // Issue #218 AC 3: the seed is the composite the cell displays, not the bare FormKey, so that a
+  // The seed is the composite the cell displays, not the bare FormKey, so that a
   // *mutable* FormKey cell can hand over what it shows — the picker's input is native, so Ctrl+A/
   // Ctrl+C there is the copy path on a column that has no read-only surface. The search half
-  // already tolerated this (normalizeFormKeyQuery), but pre-selection compared the raw seed
-  // against item.formKey and would have silently stopped matching.
+  // tolerates this (normalizeFormKeyQuery); pre-selection must normalize too, or comparing the
+  // raw seed against item.formKey would silently stop matching.
   it('pre-selects the seeded record when the seed is a whole "EditorID [FormKey]" composite', async () => {
     const record = makeRecord(1, 'Seeded');
     const { deps, searchRecords } = fakeDeps(vi.fn().mockResolvedValue({ items: [record], total: 1 }));
@@ -382,9 +382,9 @@ describe('pickFormKeyViaQuickPick (issue #210)', () => {
     await resultPromise;
   });
 
-  // Issue #218: pasting a whole "EditorID [FormKey]" label copied from a cell searches on the
+  // Pasting a whole "EditorID [FormKey]" label copied from a cell searches on the
   // FormKey, not on the literal — the normalizer's one wiring point. The unbracketed case is
-  // covered by the debounce test below, which is #210's behaviour and must not regress.
+  // covered by the debounce test below and must not regress.
   it('normalizes a pasted composite label to its FormKey before searching', async () => {
     vi.useFakeTimers();
     const { deps, searchRecords } = fakeDeps();
@@ -567,8 +567,8 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
     );
   });
 
-  // #272 / ADR-0036: origin is forwarded even though extendedEditorPath doesn't use it yet
-  // (unreachable path collision until #34) — the router's own job is just faithful forwarding.
+  // ADR-0036: origin is forwarded faithfully — the router's own job is just forwarding;
+  // extendedEditorPath folds it into the temp-file path.
   it('forwards origin through to openExtendedFieldEditor', async () => {
     const reply = vi.fn();
     const extendedFieldEditorDeps = { tempRoot: '/tmp/x', reply, log: vi.fn(), reporter: fakeReporter };
@@ -585,7 +585,7 @@ describe('routeRecordPanelMessage — OPEN_EXTENDED_EDITOR (issue #230)', () => 
   });
 });
 
-// Issue #211 (#426 Track 5: restored): the condition-function picker — unlike pickFormKeyViaQuickPick,
+// The condition-function picker — unlike pickFormKeyViaQuickPick,
 // the catalogue is bounded/game-scoped and fetched once, so this is a plain showQuickPick, not a
 // debounced createQuickPick search.
 describe('pickConditionFunctionViaQuickPick (issue #211)', () => {

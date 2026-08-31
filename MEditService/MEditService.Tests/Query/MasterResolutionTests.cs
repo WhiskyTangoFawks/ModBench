@@ -3,11 +3,11 @@ using MEditService.Core.Queries;
 
 namespace MEditService.Tests.Query;
 
-// #277 / ADR-0037: a plugin declaring a master absent from the load order is flagged, distinguishing
+// ADR-0037: a plugin declaring a master absent from the load order is flagged, distinguishing
 // a directly-missing master (never attempted) from one that is itself unloadable (attempted,
 // recorded in LoadOrder.LoadFailures) — a pure set-difference over data the load order already has,
 // never a Mutagen re-read. No cascade: only a plugin's own Masters list is consulted, never a
-// master's own Masters (AC5).
+// master's own Masters.
 public class MasterResolutionTests
 {
     private static PluginMetadata Plugin(string name, params string[] masters) =>
@@ -58,7 +58,7 @@ public class MasterResolutionTests
         Assert.False(result.ContainsKey("Patch.esp"));
     }
 
-    // AC5: no transitive cascade. B masters A (A loaded fine); A itself masters missing C.
+    // No transitive cascade. B masters A (A loaded fine); A itself masters missing C.
     // B's own declared-masters list is just [A] — B must not be flagged over C.
     [Fact]
     public void Classify_MastersMasterIsMissing_DoesNotCascadeToDependent()

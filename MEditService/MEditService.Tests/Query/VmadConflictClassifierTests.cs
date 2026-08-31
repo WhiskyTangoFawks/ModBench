@@ -34,8 +34,8 @@ public sealed class VmadConflictClassifierTests
     private static VmadPluginInput InputWithOrigin(string plugin, string origin, int loadOrder, params VmadScriptData[] scripts) =>
         new(plugin, loadOrder, new VmadData(scripts), origin);
 
-    // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin — bare-plugin
-    // dictionary keys would collide here even though nothing loads such a pair yet (#34).
+    // ADR-0036: two columns sharing a filename, differing in origin — bare-plugin
+    // dictionary keys would collide here.
     [Fact]
     public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
     {
@@ -71,7 +71,7 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, result.ConflictContribution);
     }
 
-    // #267 / ADR-0035: a non-participating plugin's VMAD is excluded before classification — a
+    // ADR-0035: a non-participating plugin's VMAD is excluded before classification — a
     // differing property between an enabled master and a disabled override is not a conflict.
     [Fact]
     public void Classify_DisabledPluginDiffers_ExcludedFromClassification_ReturnsNoConflict()
@@ -314,7 +314,7 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal(ConflictThis.Override, refProp.CellStates["B.esp"]);
     }
 
-    // Issue #116: a null Object property must expose a null leaf value — not a stringified
+    // A null Object property must expose a null leaf value — not a stringified
     // "{null} [{alias}]" — so the webview's absent-value rendering (and its refusal to
     // linkify) actually gets reached instead of a non-null sentinel string.
     [Fact]
@@ -408,7 +408,7 @@ public sealed class VmadConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictContribution);
     }
 
-    // Issue #148: same bug #116 fixed in LeafValue, but in Canon — a null Object value's
+    // The same null-Object bug as LeafValue's, but in Canon — a null Object value's
     // comparison key must not stringify the null into " [-1]"; it must canonicalize distinctly
     // from a non-null Object that happens to share the same alias.
     [Fact]

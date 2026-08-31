@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #416 S2/S3: masters are derived from content (ADR-0038), and written in the load order's *current*
+/// Masters are derived from content (ADR-0038), and written in the load order's *current*
 /// load order — never Mutagen's alphabetical default, and never the plugin's own prior header.
 /// </summary>
 public sealed class PluginCompileServiceMastersTests : IDisposable
@@ -28,14 +28,13 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
     private readonly FormKey _npc;
     private readonly FormKey _bravoKeyword;
     private readonly FormKey _charlieKeyword;
-    // Loaded alongside the others but never referenced at Track time — AC2's own fixture:
+    // Loaded alongside the others but never referenced at Track time —
     // "a cross-plugin reference edit updates the declaring plugin's masters without user action"
     // needs a plugin that provably was *not* already a master before the edit introduces it.
     private readonly FormKey _deltaKeyword;
 
     // Charlie.esm loads *before* Bravo.esm — deliberately not alphabetical, so an order assertion
-    // can't pass by coincidence (mutation review, #416 review's own "name the rival" ask for this
-    // green-on-arrival slice).
+    // can't pass by coincidence.
     public PluginCompileServiceMastersTests()
     {
         var bravoPath = Path.Combine(_gameDirectory, BravoName);
@@ -115,10 +114,10 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         Assert.Equal([CharlieName, BravoName], masterNames);
     }
 
-    // #416 review (AC2 gap): the literal scenario the AC names — "a cross-plugin reference edit
-    // updates the declaring plugin's masters without user action" — exercised through the real edit
-    // door (RecordEditService), not pre-baked into the tracked baseline. DeltaName is loaded but
-    // never referenced at Track time, so it provably isn't a master before this edit runs.
+    // "A cross-plugin reference edit updates the declaring plugin's masters without user action" —
+    // exercised through the real edit door (RecordEditService), not pre-baked into the tracked
+    // baseline. DeltaName is loaded but never referenced at Track time, so it provably isn't a
+    // master before this edit runs.
     [Fact]
     public void Compile_AfterAnEditIntroducesAReferenceToAPreviouslyUnreferencedPlugin_AddsItAsAMaster()
     {
@@ -142,7 +141,7 @@ public sealed class PluginCompileServiceMastersTests : IDisposable
         var masterNames = overlay.MasterReferences.Select(m => m.Master.FileName.String).ToList();
         Assert.Contains(DeltaName, masterNames);
         // Load order (Charlie, Bravo, Delta all precede MastersHost in that order), not the order
-        // the edit happened to list FormKeys in — the same ADR-0038/#416 S2 claim, now checked
+        // the edit happened to list FormKeys in — the same ADR-0038 claim, checked
         // against a master this test's own edit is what makes effective at all.
         Assert.Equal([CharlieName, BravoName, DeltaName], masterNames);
     }

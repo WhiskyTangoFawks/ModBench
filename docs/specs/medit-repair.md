@@ -1,13 +1,11 @@
 # Repair — Surface Specification (malformed-plugin repair)
 
-**Status: Specced — not built.** Grilled to closure 2026-08-27; decision recorded in [ADR-0043](../adr/0043-malformed-plugins-are-repaired-by-a-byte-level-table-driven-engine.md). Depends on the diagnosis floor — split at #519's own plan-gate (2026-08-29, past the orchestrator's slice ceiling) into #519 (the `PluginDiagnosis` core and Kind A tail), #569 (the Kind B per-class detector tables), and #570 (the Problems-panel/session-load surface, blocked on #569); every "#519" below means this ticket family unless a specific one is named. Upstream context
-and the Kind A / Kind B split: #516. Survey evidence: #513 (684-plugin LitR survey,
-2026-08-27); harness `MEditService.Tests/RealData/RoundTripSurvey.cs`.
+**Status: Specced — not built.** Decision recorded in [ADR-0043](../adr/0043-malformed-plugins-are-repaired-by-a-byte-level-table-driven-engine.md). Depends on the diagnosis floor, which splits into three pieces of work: the `PluginDiagnosis` core and Kind A tail; the Kind B per-class detector tables; and the Problems-panel/reconcile surface (blocked on the detectors). Survey evidence: the 684-plugin LitR round-trip survey; harness `MEditService.Tests/RealData/RoundTripSurvey.cs`.
 
 Editing context — operates on plugins, records and subrecords; never on mods or downloads
 ([CONTEXT-MAP.md](../../CONTEXT-MAP.md)). Vocabulary: **Diagnosis**, **Malformed plugin**,
-**Repair** (lossless / lossy) in [CONTEXT.md](../../CONTEXT.md); #381's journal replay is
-*Crash recovery* there, so "repair" is unambiguous.
+**Repair** (lossless / lossy) in [CONTEXT.md](../../CONTEXT.md); journal replay after an
+interrupted write is *Crash recovery* there, so "repair" is unambiguous.
 
 xEdit reference ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)):
 xEdit's answer to a malformed plugin is *tolerance* — it loads what it can, shows the rest as
@@ -28,7 +26,7 @@ silently drops what follows the anomaly. Today the user gets `MalformedDataExcep
 ModKey and no record, and no path forward inside Modbench.
 
 Not every failure is the plugin's fault. Where the data is legitimate and Mutagen's model
-is what's wrong (Kind A: Mutagen #685–#688), the answer is *refuse and name the upstream
+is what's wrong (Kind A: Mutagen upstream issues 685–688), the answer is *refuse and name the upstream
 issue* — a byte-level "repair" of correct data is data destruction and this surface must
 never offer one. Repair exists only for **Kind B**: plugins malformed by the CK's own
 conventions, where the canonical form is known and provable against vanilla.
@@ -37,12 +35,12 @@ conventions, where the canonical form is known and provable against vanilla.
 
 Two surfaces, one engine:
 
-1. **Diagnosis** (the floor, #519) — every refusal names the record, subrecord, defect
+1. **Diagnosis** (the floor) — every refusal names the record, subrecord, defect
    class, observed vs expected, and a suggested fix. Kind B detectors are byte-level and
    ~1 ms/plugin, so they also run at **reconcile** and publish Problems-panel entries —
    a silently-lossy plugin (R1, R2) parses cleanly and would otherwise look healthy until
    Track. Kind A detectors need Mutagen to throw and run only on failure. This spec assumes
-   the floor owns both the detection (#569) and the Problems-panel surface (#570).
+   the floor owns both the detection and the Problems-panel surface.
 2. **Repair** — an explicit gesture on a plugin that has at least one *repairable*
    diagnosis. Shows exactly what it will change, at subrecord granularity, and writes a new
    plugin binary only on confirmation. Never invoked by Track, Compile, or any load path.
@@ -70,10 +68,10 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
 
 ## The surfaces
 
-### Diagnosis (floor — #519, restated here only where Repair reads it)
+### Diagnosis (the floor, restated here only where Repair reads it)
 
 - **Where**: the refusal message of Track / Save & Compile (existing path), and the
-  Problems panel at reconcile for every plugin carrying a Kind B diagnosis (#570).
+  Problems panel at reconcile for every plugin carrying a Kind B diagnosis.
   There is no separate "Diagnose" command — the Problems entries are the diagnosis and
   Repair's QuickPick is the detailed view.
 - **Shape**: `<Type> <FormKey> (<EditorID>) — <subrecord>: <defect class>; observed …;
@@ -103,10 +101,10 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   `UnfinishedBatch`, and the ADR-0008 timestamped `<plugin>.bak` beside the file, pruned to
   five) — no repair-specific backup file. MO2 recognises plugins by `.esp/.esm/.esl` suffix
   only, so the `.bak` is invisible to its plugin list. Header `HEDR.NumRecords`/`NextObjectID`
-  untouched (#506); record and GRUP sizes recomputed by the engine, which is the only
+  untouched; record and GRUP sizes recomputed by the engine, which is the only
   header-level edit it makes.
 - **After**: the diagnosis re-runs on the written bytes. Success = Mutagen's deep parse
-  succeeds and the subrecord inventory (#514) of the repaired plugin equals the original's
+  succeeds and the subrecord inventory of the repaired plugin equals the original's
   *plus* the repair's own declared additions/removals — the repair is verified against its
   own preview, not just "parses now". Anything else rolls back from the `.bak` and reports.
   The endpoint then **reloads that plugin in the load order itself** (it already holds the
@@ -116,8 +114,8 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   from the parked ref's point of view and gets the standing external-change dialog
   ([medit-version-control.md](medit-version-control.md) § External change) — repair does
   not special-case it.
-- **Eligibility** follows editability: only a plugin in the load order's load order that is the
-  file-level winner (resolution stack, #397); a file-level loser is refused naming the
+- **Eligibility** follows editability: only a plugin in the load order that is the
+  file-level winner (Resolution stack — [CONTEXT.md](../../CONTEXT.md)); a file-level loser is refused naming the
   winner. **Immutable plugins** (vanilla/DLC masters) are never diagnosed for Kind B — they
   *are* the proof set the table is built from; a hit there is a test failure, not a
   diagnosis.
@@ -125,7 +123,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
   through the existing load-order-derived `FileDecorationProvider` (ADR-0037's master /
   load-failure decorations, badge-priority rule in [plugins.md](plugins.md)) — no new
   mechanism. Later, in the Diagnostics & code actions milestone, the diagnosis is a
-  lightbulb whose fix action is this gesture (#525).
+  lightbulb whose fix action is this gesture.
 - **Not offered**: a repair whose table row lacks a vanilla proof or a fixture; any change to
   a *Blocked upstream* defect; batch repair across plugins (one plugin per gesture — a
   modlist-wide "repair everything" is a script over the endpoint, if ever).
@@ -135,7 +133,7 @@ counter pairs with which entries), each row backed by a vanilla-scan proof and a
 Every row: observed in the LitR survey, its canonical form proven by scanning every record
 of the type in `Fallout4.esm` + all DLC ESMs, and a real fixture identified. A row without
 all three does not ship. Game-generic by construction (the engine is format-level); the
-*table entries* are per game, and #517's Skyrim survey extends them.
+*table entries* are per game; a Skyrim survey extends them.
 
 | # | Defect class | Fixture (real) | Vanilla proof | Operation | Loss |
 |---|---|---|---|---|---|
@@ -153,10 +151,10 @@ change to this spec, not a table addition.
 
 Explicitly *not* in the catalogue — these are Kind A and route to **Blocked upstream**:
 
-- MSWP differing `FNAM` (Mutagen #687 — the version gate is dead code).
-- FormLinks inside `ScriptStructListProperty` (Mutagen #688 — master pruned on write; #520).
-- Region "second same-type `RDAT`" — retracted; the real defect was R2.
-- Anything model-identity (#513) or encoding-class (`-0.0`, float colours, zlib level).
+- MSWP differing `FNAM` (Mutagen upstream issue 687 — the version gate is dead code).
+- FormLinks inside `ScriptStructListProperty` (Mutagen upstream issue 688 — master pruned on write).
+- Region "second same-type `RDAT`" — not a defect; the real defect was R2.
+- Anything model-identity (ADR-0042's gate) or encoding-class (`-0.0`, float colours, zlib level).
 
 ## Requirements
 
@@ -182,13 +180,13 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
    write; the engine re-reads and re-diagnoses at write time and refuses if the bytes moved.
 9. **Kind A is untouchable.** A defect classed *Blocked upstream* is never offered an
    operation, regardless of how trivial the byte fix looks.
-10. **Cost.** Kind B detection is the ~1 ms/plugin byte walk at reconcile (#569/#570); Kind A
+10. **Cost.** Kind B detection is the ~1 ms/plugin byte walk at reconcile; Kind A
     detection runs only after a failure. Repair's own cost is one walk + one write; no index
     rebuild unless the plugin is in the load order, in which case the standing external-change
     path handles reload.
 11. **Vocabulary.** `CONTEXT.md` defines **Diagnosis**, **Malformed plugin**, **Repair**
     (lossless / lossy); "fix", "clean", "sanitize" are avoided (xEdit's *clean* means ITM/UDR
-    removal), and #381 is *Crash recovery*.
+    removal), and journal replay is *Crash recovery*.
 
 ## Implementation Decisions
 
@@ -199,8 +197,9 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
   extension command is a wrapper over the two; a CLI, if ever wanted, is a second thin front
   over the same module and is not part of this spec.
 - **Engine origin**: the `RoundTripSurvey` walker (`Walk`, `Subrecords`, `Inflate`) is the
-  reference implementation, promoted to Core once for #514, #519 and this — one walker.
-- **Detectors are the diagnosis's** (#569); Repair adds only the operation column. The table
+  reference implementation, promoted to Core once and shared by the subrecord inventory, the
+  diagnosis and this — one walker.
+- **Detectors are the diagnosis's**; Repair adds only the operation column. The table
   is data (a static registry in Core, per game release), not configuration.
 - **Compressed records**: inflate, operate, deflate with Mutagen's own level so the bytes
   match what Compile would later write; the size fields cascade (record → GRUPs) exactly as
@@ -211,37 +210,20 @@ Explicitly *not* in the catalogue — these are Kind A and route to **Blocked up
 ## Testing Decisions
 
 - One fixture per catalogue row, cut down to the single offending record where the cutter
-  (`CutDownPluginGenerator`) can, else the real plugin lifted into `TestData` (as #506 did).
+  (`CutDownPluginGenerator`) can, else the real plugin lifted into `TestData`.
 - Per row: (a) diagnosis names the record/subrecord/class exactly; (b) repair preview text
   matches a literal; (c) repaired bytes deep-parse in Mutagen; (d) subrecord inventory of the
   result = original ± the row's declared change; (e) the repaired plugin then passes Track's
   round-trip gate (R1–R5) — or, for R6, is refused only for what the row said it would leave.
 - Vanilla proof scans live as an env-gated test beside `RoundTripSurvey` (`MEDIT_SURVEY_MODS`
-  pattern), so #517 re-runs them on Skyrim.
+  pattern), so the Skyrim survey can re-run them.
 - Ownership: a test that mutates the plugin between diagnose and repair and asserts refusal.
 
 ## Out of Scope
 
-- Fixing Kind A defects here (Mutagen #685–#688; our #520).
+- Fixing Kind A defects here (Mutagen upstream issues 685–688).
 - Semantic conversions (R7 and its kin) — a future record-aware tool, if ever, is a different
   surface with Mutagen in the loop.
 - Modlist-wide batch repair; scheduled or automatic repair.
 - xEdit script generation or any Pascal.
-- Changing what Track/Compile refuse (#513) or how the diagnosis is worded (#519).
-
-## Resolved at grilling (2026-08-27)
-
-- Lossy consent is the unchecked QuickPick item plus the modal naming the byte total — no
-  per-record prompt.
-- Backup is the standing ADR-0008 `.bak`; no repair-specific file.
-- Kind B detection runs at reconcile and publishes to the Problems panel; the detectors
-  are #569's, that surface is #570's. No standalone Diagnose command.
-- Vocabulary landed in `CONTEXT.md`; #381 renamed *Crash recovery* in the glossary and the
-  version-control spec (code keeps "crash repair").
-- After a repair the endpoint reloads the plugin in the load order and republishes its Problems
-  entries; no watcher change.
-- Eligibility = editability (load-order member, file-level winner); immutable plugins are
-  never diagnosed.
-- Row decoration reuses ADR-0037's provider; lightbulb fix action deferred to milestone
-  "Diagnostics & code actions" (#525).
-- Recorded as [ADR-0043](../adr/0043-malformed-plugins-are-repaired-by-a-byte-level-table-driven-engine.md).
+- Changing what Track/Compile refuse or how the diagnosis is worded.

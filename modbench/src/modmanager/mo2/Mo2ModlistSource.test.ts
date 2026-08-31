@@ -9,10 +9,10 @@ import type { Mod } from '../model';
 // real passthrough by default, so every existing real-fs test in this file is
 // unaffected; only the one test below that calls `.mockImplementation` on it
 // diverts a single path to a synthetic error, restoring the passthrough before
-// it returns. #317: this is how a real, non-ENOENT read failure on a download's
+// it returns. This is how a real, non-ENOENT read failure on a download's
 // `.meta` is constructed deterministically — chmod-based permission denial is
 // silently bypassed when the test runner is root, which a real fs precondition
-// isn't (verified: this wrapper passes through all 37 pre-existing tests here).
+// isn't.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return { ...actual, readFile: vi.fn(actual.readFile) };
@@ -181,7 +181,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(after).not.toContain('*Unofficial Fallout 4 Patch.esp');
   });
 
-  // #288: the New Plugin gesture's own write to disk.
+  // The New Plugin gesture's own write to disk.
   it('appendPlugin writes a new enabled entry line to disk', async () => {
     const before = await readFile(pluginsPath(), 'utf8');
     await src.appendPlugin('NewPlugin.esp');
@@ -280,7 +280,7 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     await expect(readFile(join(dir, 'mods', 'Harder VATS', 'meta.ini'), 'utf8')).rejects.toThrow();
   });
 
-  // #240: the symmetric half of Install's writeback — uninstalling a mod
+  // The symmetric half of Install's writeback — uninstalling a mod
   // whose meta.ini names an installationFile present in downloads/ marks
   // that download uninstalled=true, without ever failing the uninstall itself.
   describe('removeMod — Downloads writeback (#240)', () => {

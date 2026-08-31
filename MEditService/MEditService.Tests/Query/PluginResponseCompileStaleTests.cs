@@ -5,7 +5,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #449: <see cref="PluginResponse.FromMetadata"/> wires <see cref="Core.Source.ModFolders.CompileFreshnessOf"/>
+/// <see cref="PluginResponse.FromMetadata"/> wires <see cref="Core.Source.ModFolders.CompileFreshnessOf"/>
 /// onto the wire — the seam a stale/never-updated implementation of that delegation would leave every
 /// plugin reporting <c>CompileStale: false</c> regardless of real git state.
 /// </summary>

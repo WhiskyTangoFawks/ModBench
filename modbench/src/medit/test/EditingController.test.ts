@@ -65,9 +65,9 @@ function makeClient({
             : drainedError(400, 'Bad Request'),
         );
       }
-      // #427: create/delete/renumber — the wire shapes RecordEndpoints/PluginEndpoints actually
-      // serve (RecordCreateResponse/RecordDeleteResponse/RecordRenumberResponse), not the retired
-      // retired-model shapes (e.g. `groupId`) these paths carried before ADR-0041/#410.
+      // Create/delete/renumber — the wire shapes RecordEndpoints/PluginEndpoints actually
+      // serve (RecordCreateResponse/RecordDeleteResponse/RecordRenumberResponse), not
+      // retired-model shapes (e.g. `groupId`).
       if (path === '/plugins/{plugin}/records') {
         return Promise.resolve(
           createRecordOk
@@ -89,10 +89,9 @@ function makeClient({
             : drainedError(422, 'Unprocessable Content'),
         );
       }
-      // #436/#494 — the two restored copy gestures' real wire shapes (RecordCopyAsOverrideResponse/
-      // RecordCopyAsNewRecordResponse), not the single retired /copy-to/{targetPlugin} endpoint
-      // (RetiredEditingWireSurfaceTests.cs pins that route absent — these are new shapes, not a
-      // resurrection of it).
+      // The two copy gestures' real wire shapes (RecordCopyAsOverrideResponse/
+      // RecordCopyAsNewRecordResponse), not the retired /copy-to/{targetPlugin} endpoint
+      // (RetiredEditingWireSurfaceTests.cs pins that route absent).
       if (path === '/records/{formKey}/copy-as-override') {
         return Promise.resolve(
           copyAsOverrideOk
@@ -124,14 +123,13 @@ function makeRepository({
     getActiveFilter: vi.fn().mockResolvedValue(activeFilter),
     getPlugins: vi.fn().mockResolvedValue(plugins),
     getLoadOrderStatus: vi.fn().mockResolvedValue(makeStatus()),
-    // #414 review F2.
     getTrackStatus: vi.fn().mockResolvedValue({ phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 }),
     getRecordTypes: vi.fn().mockResolvedValue([]),
     getRecords: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   } as any;
 }
 
-/** #307: one `GET /load-order/status` answer. Defaults describe a load that has done nothing yet,
+/** One `GET /load-order/status` answer. Defaults describe a load that has done nothing yet,
  *  so a test states only the field it is about. */
 function makeStatus({
   totalPlugins = 2,
@@ -162,7 +160,7 @@ function makeDeps(overrides: Partial<EditingControllerDeps> = {}): EditingContro
 describe('EditingController.createPlugin', () => {
   beforeEach(() => vi.resetAllMocks());
 
-  // #288: the destination (path/origin) is now the caller's — Mod Management's QuickPick, not an
+  // The destination (path/origin) is the caller's — Mod Management's QuickPick, not an
   // implicit write into the Data folder — and the created plugin's own name comes back from the
   // response rather than being assumed, so the composition root's plugins.txt append names
   // whatever the backend actually wrote.
@@ -179,10 +177,9 @@ describe('EditingController.createPlugin', () => {
     expect(result).toEqual({ name: 'test.esp' });
   });
 
-  // The rival this guards against is #288's own starting point: createPlugin used to refresh the
-  // tree itself immediately on success. Under #288 the tree must not refresh until the caller's
+  // The tree must not refresh until the caller's
   // own plugins.txt append has also landed — refreshing here would show a plugin the load order
-  // doesn't name yet — so refreshTree becomes strictly the composition root's call, never this
+  // doesn't name yet — so refreshTree is strictly the composition root's call, never this
   // method's own.
   it('never refreshes the tree itself — that is the caller\'s job, after its own plugins.txt append', async () => {
     const deps = makeDeps();
@@ -205,7 +202,7 @@ describe('EditingController.createPlugin', () => {
   });
 });
 
-// ── copyRecordAsOverride / copyRecordAsNewRecord (#436/#494) ──────────────────
+// ── copyRecordAsOverride / copyRecordAsNewRecord ──────────────────────────────
 
 describe('EditingController.copyRecordAsOverride', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -222,7 +219,7 @@ describe('EditingController.copyRecordAsOverride', () => {
       body: { sourcePlugin: 'Fallout4.esm', sourceOrigin: 'Data', destinationPlugin: 'MyPatch.esp', destinationOrigin: 'ModA' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: a copy lands as a working-tree change on the destination plugin's own source — same
+    // A copy lands as a working-tree change on the destination plugin's own source — same
     // reason createRecord/deleteRecord/renumberRecord refresh it.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
@@ -271,7 +268,7 @@ describe('EditingController.copyRecordAsNewRecord', () => {
       },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: same reason as copyRecordAsOverride above — a copy is a working-tree change too.
+    // Same reason as copyRecordAsOverride above — a copy is a working-tree change too.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
@@ -335,7 +332,7 @@ describe('EditingController.setFilter', () => {
     expect(deps.showError).not.toHaveBeenCalled();
   });
 
-  // #278 / ADR-0035 amending ADR-0018: a plugin's chevron depends on the filter's per-plugin
+  // ADR-0035 amending ADR-0018: a plugin's chevron depends on the filter's per-plugin
   // match set, which is only current as of the filter that produced it — a new filter has to
   // trigger a fresh derivation, or a chevron the old filter suppressed (or restored) would keep
   // stating the wrong thing about the new one.
@@ -348,7 +345,7 @@ describe('EditingController.setFilter', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalledOnce();
   });
 
-  // #255: the Plugins tree's description names both narrowing axes, so the record filter has to
+  // The Plugins tree's description names both narrowing axes, so the record filter has to
   // say *which* filter — raw SQL is unreadable as a readout, and "a filter is active" sends the
   // user back to the palette to find out which one.
   it('forwards the filter source label to the readout alongside the SQL', async () => {
@@ -392,7 +389,7 @@ describe('EditingController.clearFilter', () => {
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
-  // #278 / ADR-0035 amending ADR-0018: the mirror-image bug this ticket exists to kill — a stale
+  // ADR-0035 amending ADR-0018: a stale
   // `false` surviving past the filter that produced it would leave a plugin permanently
   // unexpandable even with nothing filtering it any more.
   it('refreshes the plugin-match set, so a stale no-match chevron does not survive the filter that produced it', async () => {
@@ -484,7 +481,7 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.client.PUT).toHaveBeenCalledWith(
       '/load-order',
       expect.objectContaining({
-        // #592 / ADR-0001: instanceRoot is what the backend keys its persistent index on — omitting
+        // ADR-0001: instanceRoot is what the backend keys its persistent index on — omitting
         // it would let two MO2 instances with same-named mod folders read each other's records.
         body: { plugins, gameDirectory: '/game/Data', instanceRoot: '/instance', gameRelease: 'Fallout4' },
       }),
@@ -493,12 +490,11 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.showError).not.toHaveBeenCalled();
   });
 
-  // #308 / ADR-0035: reaching this method at all means the load PUT — which the backend only
-  // answers after the winner sweep (#274) — resolved successfully, so this is the one reliable,
+  // ADR-0035: reaching this method at all means the load PUT — which the backend only
+  // answers after the winner sweep — resolved successfully, so this is the one reliable,
   // already-existing point at which conflicts become computed. Record panels open mid-load learn
   // this to refetch their own settled comparison (RecordPanel's CONFLICTS_COMPUTED
-  // handler); no poller is added for it — see this call site's own comment for the reasoning #307
-  // ruled out (the tick stream stops before/at this same transition).
+  // handler); no poller is added for it — the tick stream stops before/at this same transition.
   it('notifies that conflicts are computed on a successful load', async () => {
     const client = {
       ...makeClient(),
@@ -529,7 +525,7 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).toHaveBeenCalledOnce();
   });
 
-  // #277 / ADR-0037 AC7: the tree decoration needs the same failures the toast already
+  // ADR-0037 AC7: the tree decoration needs the same failures the toast already
   // consumes — the caller reads them off the return value rather than a second read of state.
   it('resolves with the reconcile failures so the caller can decorate the tree with them', async () => {
     const client = {
@@ -544,7 +540,7 @@ describe('EditingController.putLoadOrder', () => {
 
     const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
 
-    // #307: a tagged outcome, not a bare array — three outcomes (loaded / failed / abandoned)
+    // A tagged outcome, not a bare array — three outcomes (loaded / failed / abandoned)
     // need three answers, and a second sentinel would be one every call site has to remember.
     expect(result).toEqual({
       outcome: 'reconciled', failures: [{ name: 'Bad.esp', reason: 'Malformed record' }], crashRepairOffers: [],
@@ -561,12 +557,12 @@ describe('EditingController.putLoadOrder', () => {
 
     const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
 
-    // #307: still distinguishable from a failed load — now by the outcome tag rather than by
+    // Still distinguishable from a failed load — by the outcome tag rather than by
     // `[]` versus `undefined`.
     expect(result).toEqual({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
   });
 
-  // #381: crashRepairOffers rides the same response failures already does — the caller (extension.ts)
+  // crashRepairOffers rides the same response failures already does — the caller (extension.ts)
   // reads them off the return value to run the repair-offer dialog, never a second fetch.
   it('resolves with the crash-repair offers the load-order response carried, string reason trusted over the generated numeric type', async () => {
     const client = {
@@ -648,7 +644,7 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  // #588 / ADR-0001 point 6: another window holds this instance's index. The backend answers 423
+  // ADR-0001 point 6: another window holds this instance's index. The backend answers 423
   // with a ProblemDetails whose `detail` is the sentence for the user; that sentence — not the
   // JSON around it — is what the toast says, and the load is a plain failure: no retry, no wait.
   it('tells the user which cause refused the load when another window holds the instance (423)', async () => {
@@ -675,9 +671,9 @@ describe('EditingController.putLoadOrder', () => {
     expect(deps.refreshTree).not.toHaveBeenCalled();
   });
 
-  // #295 AC4: the caller (makeEnterEditing) tells a failed load apart from a load that
-  // simply had nothing to report by the return value alone — `[]` is ambiguous with
-  // "loaded, zero failures" and previously meant both. Backend-confirmed (LoadOrderManager.
+  // The caller (makeEnterEditing) tells a failed load apart from a load that
+  // simply had nothing to report by the return value alone — `[]` would be ambiguous with
+  // "loaded, zero failures". Backend-confirmed (LoadOrderManager.
   // LoadExplicitCore disposes the old load order unconditionally, before the new one can even
   // fail to build), so a failed PUT really does mean "no load order", not "the old one, stale".
   it('reports a failed load as failed, so it is never mistaken for a load with zero failures', async () => {
@@ -690,19 +686,19 @@ describe('EditingController.putLoadOrder', () => {
 
     const result = await ctrl.putLoadOrder(plugins, '/game/Data', '/instance');
 
-    // #307: `undefined` was #295's way of saying this. It is now the `failed` tag, stated in a
-    // way that leaves room for the third outcome. ADR-0044: the backend tore nothing down — it
+    // The `failed` tag leaves room for the third outcome.
+    // ADR-0044: the backend tore nothing down — it
     // still holds what it held — so the caller leaves the view alone rather than exiting.
     expect(result).toEqual({ outcome: 'failed' });
-    // #308: nothing settled, so nothing to notify — there is no fresher comparison for an open
+    // Nothing settled, so nothing to notify — there is no fresher comparison for an open
     // panel to refetch.
     expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
 });
 
-// ── putLoadOrder: progressive load (#307 / ADR-0035) ───────────────────
+// ── putLoadOrder: progressive load (ADR-0035) ───────────────────
 
-// The load PUT stays blocking (#274 kept its contract), and the generated openapi-fetch client
+// The load PUT stays blocking, and the generated openapi-fetch client
 // has no streaming path — so progress is polled off GET /load-order/status *alongside* the still
 // in-flight PUT. This is the seam the polling logic is tested at: no VS Code types, a fake
 // client and a fake repository, fake timers for the cadence.
@@ -771,7 +767,7 @@ describe('EditingController.putLoadOrder progress polling', () => {
     expect(repository.getLoadOrderStatus.mock.calls).toHaveLength(pollsAtCompletion);
   });
 
-  // AC6: a per-plugin failure is reported the moment it happens, not held back until the load
+  // A per-plugin failure is reported the moment it happens, not held back until the load
   // finishes — the caller decorates that row straight away (ADR-0026).
   it('carries the failures reported so far on each tick, before the load has finished', async () => {
     const { PUT, finish } = heldLoad();
@@ -821,12 +817,12 @@ describe('EditingController.putLoadOrder progress polling', () => {
   });
 });
 
-// ── putLoadOrder: a deliberately abandoned load is not a failure (#307 AC7) ─
+// ── putLoadOrder: a deliberately abandoned load is not a failure ─────────────
 
-// Two ways a load ends without failing, both of which used to be reported to the user as an
-// error. 409 is the backend saying "your snapshot was superseded" (LoadOrderEndpoints.SupersededReconcile) —
+// Two ways a load ends without failing.
+// 409 is the backend saying "your snapshot was superseded" (LoadOrderEndpoints.SupersededReconcile) —
 // nothing went wrong, and the newer load now owns the load order. An aborted PUT is the user
-// closing mEdit mid-load. Neither is something to toast, and — the bug this fixes — neither may
+// closing mEdit mid-load. Neither is something to toast, and neither may
 // make the caller tear down a load order it does not own.
 describe('EditingController.putLoadOrder abandonment', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -844,10 +840,10 @@ describe('EditingController.putLoadOrder abandonment', () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining('superseded'));
   });
 
-  // The pre-existing bug (#307 investigation): a superseded load returned the same "no load order"
-  // answer a failed one does, and makeEnterEditing responds to that by calling exitToLoadout() —
+  // If a superseded load returned the same "no load order"
+  // answer a failed one does, makeEnterEditing would respond by calling exitToLoadout() —
   // tearing the backend down out from under the newer load that legitimately owns the load order.
-  // Reachable today by running Reload Load order while a load is still running.
+  // Reachable by running Reload Load Order while a load is still running.
   it('reports a superseded load as abandoned, distinctly from a failed one', async () => {
     const client = { ...makeClient(), PUT: vi.fn().mockResolvedValue(drainedError(409, 'superseded')) };
     const deps = makeDeps({ client });
@@ -855,7 +851,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
     const result = await new EditingController(deps).putLoadOrder(plugins, '/game/Data', '/instance');
 
     expect(result).toEqual({ outcome: 'abandoned' });
-    // #308: whatever load superseded this one owns the notification, if any — this one never
+    // Whatever load superseded this one owns the notification, if any — this one never
     // reached a settled state of its own to announce.
     expect(deps.notifyConflictsComputed).not.toHaveBeenCalled();
   });
@@ -880,7 +876,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
   });
 
   // The signal is what aborts the request itself rather than waiting for a dead socket — the
-  // whole reason AC7 uses stdlib AbortSignal instead of a bespoke cancellation flag.
+  // whole reason this uses stdlib AbortSignal instead of a bespoke cancellation flag.
   it('forwards the abort signal to the PUT so the request is cancelled, not merely ignored', async () => {
     const signal = new AbortController().signal;
     const client = {
@@ -894,7 +890,7 @@ describe('EditingController.putLoadOrder abandonment', () => {
   });
 });
 
-// ── resolveOrigin (#414) ─────────────────────────────────────────────────────
+// ── resolveOrigin ────────────────────────────────────────────────────────────
 
 describe('EditingController.resolveOrigin', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -919,14 +915,14 @@ describe('EditingController.resolveOrigin', () => {
     expect(origin).toBeUndefined();
   });
 
-  // #505: before Launch mEdit, no backend exists to answer GET /plugins at all — a rejected
+  // Before Launch mEdit, no backend exists to answer GET /plugins at all — a rejected
   // repository call, not a 200 with an empty/mismatched list. Every sibling EditingController
-  // method (track, compile, rebaseOntoMain, …) already catches its own transport failure and
-  // degrades to a caught, logged outcome; resolveOrigin was the one method that didn't, so this
-  // rejection propagated out of Track/Rebase/Save & Compile's command callbacks uncaught — VS
+  // method (track, compile, rebaseOntoMain, …) catches its own transport failure and
+  // degrades to a caught, logged outcome; without the same here the
+  // rejection would propagate out of Track/Rebase/Save & Compile's command callbacks uncaught — VS
   // Code's own raw "Error running command … fetch failed" toast, not this codebase's error
   // surfacing. Degrading to the same `undefined` "not found" already returns costs nothing new:
-  // every one of the four callers already turns that into a clear, existing message.
+  // every caller already turns that into a clear, existing message.
   it('degrades to undefined — not a thrown rejection — when the backend itself is unreachable', async () => {
     const repository = makeRepository({ plugins: makePlugins(2) });
     repository.getPlugins = vi.fn().mockRejectedValue(new Error('fetch failed'));
@@ -941,7 +937,7 @@ describe('EditingController.resolveOrigin', () => {
   });
 });
 
-// ── track (#414) ────────────────────────────────────────────────────────────
+// ── track ───────────────────────────────────────────────────────────────────
 
 describe('EditingController.track', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -987,7 +983,7 @@ describe('EditingController.track', () => {
   });
 });
 
-// ── create/delete/renumber record (#427) ────────────────────────────────────
+// ── create/delete/renumber record ───────────────────────────────────────────
 
 describe('EditingController.createRecord', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -1004,7 +1000,7 @@ describe('EditingController.createRecord', () => {
       body: { origin: 'ModA', recordType: 'npc_', editorId: 'NewNpc', formKey: null },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: a create is a working-tree change to a tracked plugin's source — the compile-staleness
+    // A create is a working-tree change to a tracked plugin's source — the compile-staleness
     // decoration needs the same re-derive refreshTree's sibling facts already get here.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
@@ -1064,7 +1060,7 @@ describe('EditingController.deleteRecord', () => {
       body: { plugin: 'MyPatch.esp', origin: 'ModA' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: same reason as createRecord above — a delete is a working-tree change too.
+    // Same reason as createRecord above — a delete is a working-tree change too.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
@@ -1109,7 +1105,7 @@ describe('EditingController.renumberRecord', () => {
       body: { plugin: 'MyPatch.esp', origin: 'ModA', newFormKey: null },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: same reason as createRecord above — a renumber (delete+create) is a working-tree
+    // Same reason as createRecord above — a renumber (delete+create) is a working-tree
     // change too.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
@@ -1126,7 +1122,7 @@ describe('EditingController.renumberRecord', () => {
     });
   });
 
-  // Covers both the untracked-referencer refusal and a partial-cascade I/O failure (#427 Q5) —
+  // Covers both the untracked-referencer refusal and a partial-cascade I/O failure —
   // both are already-messaged, non-2xx responses by the time they reach this method, so they are
   // one code path here regardless of which one produced the response.
   it('surfaces a refusal and reports that it did not happen', async () => {
@@ -1155,7 +1151,7 @@ describe('EditingController.renumberRecord', () => {
   });
 });
 
-// #414 review F2: "reports progress" (AC4) — polled off GET /plugins/track/status alongside the
+// Track progress is polled off GET /plugins/track/status alongside the
 // still in-flight track POST, the identical seam/idiom the load-progress suite above tests
 // (a held POST + fake timers, no VS Code types).
 describe('EditingController.track progress polling', () => {
@@ -1230,7 +1226,7 @@ describe('EditingController.track progress polling', () => {
   });
 });
 
-// #417 ────────────────────────────────────────────────────────────────────────
+// ── absorb / keep / rebase ────────────────────────────────────────────────────
 
 describe('EditingController.absorbUpstreamUpdate', () => {
   beforeEach(() => vi.resetAllMocks());
@@ -1249,7 +1245,7 @@ describe('EditingController.absorbUpstreamUpdate', () => {
       body: { origin: 'ModA' },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: absorbing a new baseline moves the source under this plugin the same way a track
+    // Absorbing a new baseline moves the source under this plugin the same way a track
     // does — the compile-staleness decoration needs the same re-derive.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
@@ -1298,7 +1294,7 @@ describe('EditingController.keepAsMyEdit', () => {
     await controller.keepAsMyEdit('Fixture.esp', 'ModA');
 
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: keeping an external change deserializes into working-tree dirt — same reason as
+    // Keeping an external change deserializes into working-tree dirt — same reason as
     // absorbUpstreamUpdate above.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
@@ -1321,7 +1317,7 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
     expect(result).toEqual({ outcome: 'Clean', refusalReason: null, conflictedPaths: [] });
     expect(client.POST).toHaveBeenCalledWith('/plugins/rebase', { body: { origin: 'ModA' } });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // #449: a rebase moves the branch, which can change a tracked plugin's compile-freshness
+    // A rebase moves the branch, which can change a tracked plugin's compile-freshness
     // answer — same reason absorbUpstreamUpdate/keepAsMyEdit above refresh it.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });

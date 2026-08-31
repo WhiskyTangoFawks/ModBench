@@ -10,7 +10,7 @@ namespace MEditService.Core.Edits;
 public sealed record CompileDiagnostic(string FormKey, string SourceRelativePath, string Message);
 
 /// <summary>
-/// The pinned contract's return type (#416 comment 1 on the issue). A refusal
+/// A refusal
 /// (<see cref="Refused"/>) is a typed result naming why, never an exception — reserved for a state
 /// that is <b>structurally impossible to emit</b> (a FormKey collision the write pipeline cannot
 /// encode without renumbering, or a source record with no parent slot anywhere in the plugin's own

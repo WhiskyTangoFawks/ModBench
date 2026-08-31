@@ -8,16 +8,12 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Api;
 
-// #34 / ADR-0036: the end-to-end guard rail the identity migration (#271/#272/#275/#296) never
-// had. Every one of those tickets proved its own seam against a hand-constructed pair built
-// *below* LoadOrder — `repo.Index(mod, origin: "ModA")` at the repository seam, fake mirror,
-// webview fixtures — because no load order could hold two same-filename plugins to build a real pair
-// from. This test is the one that goes through the real load path: two physical copies of one
-// filename, in two mod folders, loaded together and read back over the wire.
-//
-// It is deliberately the first thing this ticket does, because three of the five live bugs the
-// migration found were at the *joins* between phases rather than inside them — exactly what a
-// seam-local test cannot see. It also removes ColumnKey.Of's blind spot by construction: that
+// ADR-0036: the end-to-end guard rail for compound plugin identity, through the real load path:
+// two physical copies of one filename, in two mod folders, loaded together and read back over the
+// wire. Seam-local tests build their same-filename pairs *below* LoadOrder — `repo.Index(mod,
+// origin: "ModA")` at the repository seam, fake mirror, webview fixtures — so they cannot see bugs
+// at the *joins* between phases, which is where most of the identity-migration bugs actually were.
+// This suite also removes ColumnKey.Of's blind spot by construction: that
 // method elides the reserved DataDirectory origin, so any fixture using the default origin passes
 // whether or not the code is correct, and both copies here carry real mod-folder origins.
 public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded)
@@ -28,7 +24,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
     // Both copies answer to one filename and are distinguishable only by content: each carries a
     // single NPC whose EditorID names the mod folder it came from. Both NPCs land on the same
     // FormKey (each copy runs its own NextFormID sequence from the same ModKey), which is what
-    // makes this the delta-comparison case the ticket is named for rather than two unrelated files.
+    // makes this a delta comparison rather than two unrelated files.
     private static ScatteredFixtureData BuildTwoCopies() =>
         new PluginFixtureBuilder("api-duplicate-filename")
             .WithPlugin("Shared.esp", mod => mod.Npcs.AddNew("FromModA").Name = "NameFromModA", origin: "ModA")
@@ -82,7 +78,7 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         await PutBothCopies(fx);
 
         // Deliberately unfiltered by plugin: `?plugin=` resolves origin from the filename
-        // server-side (PluginOriginResolver, #296), so it can only ever answer for one of two
+        // server-side (PluginOriginResolver), so it can only ever answer for one of two
         // same-filename copies. Giving that route an explicit origin is its own slice; what this
         // one proves is that the *index* holds each copy's own content.
         var records = await _client.GetFromJsonAsync<JsonElement>("/records?type=npc_&limit=50");
@@ -126,8 +122,8 @@ public sealed class DuplicateFilenameLoadOrderApiTests(LoadedApiFixture<TestPlug
         var columns = compare.GetProperty("overrides").EnumerateArray()
             .ToDictionary(o => o.GetProperty("origin").GetString()!, o => o);
 
-        // The two copies are one column each, carrying their own record — this is the delta
-        // comparison the ticket exists for. GetCompare builds its masters and participation
+        // The two copies are one column each, carrying their own record — the delta comparison
+        // under test. GetCompare builds its masters and participation
         // lookups keyed by bare filename, so a second copy of one filename makes them ambiguous
         // (in fact a duplicate-key throw) rather than merely mis-keyed.
         Assert.Equal("FromModA", columns["ModA"].GetProperty("editorId").GetString());

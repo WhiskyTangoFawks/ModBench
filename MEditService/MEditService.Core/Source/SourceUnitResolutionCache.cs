@@ -1,7 +1,7 @@
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// A per-operation memo for <see cref="SourceUnitResolver.Resolve"/> (#547). Compile's diagnostics
+/// A per-operation memo for <see cref="SourceUnitResolver.Resolve"/>. Compile's diagnostics
 /// pass resolves every record that has something to report against one tree; without this, each
 /// folder-split child (a dialog response, a scene) re-enumerated its whole subtree to find its own
 /// file, and each embedded child re-read and re-scanned its parent — on the real 3,940-record

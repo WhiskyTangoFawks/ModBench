@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// #198: makeReporter is the ADR-0026 surfacing reporter (log always, toast on
+// makeReporter is the ADR-0026 surfacing reporter (log always, toast on
 // warning/error) — pulled out of extension.ts (which imports the real 'vscode'
 // module and can't be unit-tested directly) so its severity→level dispatch has a
 // real seam, matching the existing recordPanelMessageRouter.ts precedent.

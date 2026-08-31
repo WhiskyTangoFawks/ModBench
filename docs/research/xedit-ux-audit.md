@@ -5,10 +5,9 @@ model for mEdit's record editor. mEdit's goal is to port xEdit's interaction mod
 closely as the platform allows, so this document is the thing mEdit is measured *against* — it
 describes xEdit, not mEdit, and takes no position on what mEdit should do.
 
-Written after discovering that mEdit had specified **single-click-to-edit**, which xEdit does not do.
-That one wrong assumption forced a cascade of gesture conflicts (no gesture left for selection, drag
-competing with text selection, a cursor that could only advertise one of two available actions) that
-cost several tickets. Auditing first would have been cheaper.
+Exists because specifying from memory of xEdit once produced **single-click-to-edit** — which xEdit
+does not do — and that one wrong assumption cascaded into gesture conflicts. Audit first; it is
+cheaper.
 
 ## Sources
 

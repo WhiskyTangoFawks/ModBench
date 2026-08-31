@@ -3,10 +3,10 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #433: <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built by interpolating the plugin's raw
+/// <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built by interpolating the plugin's raw
 /// filename, and git ref names forbid spaces, <c>[</c>/<c>]</c> and several other characters that
-/// almost every real Fallout 4 plugin filename contains — this is the regression coverage the issue
-/// asks for "at the layer this is cheapest to catch": <see cref="SourceRepository"/>'s own unit
+/// almost every real Fallout 4 plugin filename contains — regression coverage at the layer this is
+/// cheapest to catch: <see cref="SourceRepository"/>'s own unit
 /// tests, against real-world-shaped names, not just the higher-level Track/Compile suites whose
 /// fixtures happened to use ref-safe names.
 /// </summary>

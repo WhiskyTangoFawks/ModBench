@@ -10,8 +10,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B8 (Keep as My Edit): AC1 (lands on the right records) and AC5 (refuses over a collision
-/// with existing uncommitted dirt on the same record).
+/// Keep as My Edit: lands on the right records, and refuses over a collision with existing
+/// uncommitted dirt on the same record.
 /// </summary>
 public sealed class ExternalChangeEditLanderTests : IDisposable
 {
@@ -71,7 +71,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.Null(ExternalChangeDeferral.Unanswered(_mod.ModFolder, TrackedModFixture.PluginName));
     }
 
-    /// <summary>AC5: an external change colliding with uncommitted dirt on the same record refuses
+    /// <summary>An external change colliding with uncommitted dirt on the same record refuses
     /// with a clear message, and — git's checkout-over-dirt rule — the user's own edit survives
     /// byte-for-byte.</summary>
     [Fact]
@@ -92,7 +92,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     }
 
     /// <summary>
-    /// #459 review finding: <c>Keep</c>'s per-group order-index counter is recomputed from scratch on
+    /// <c>Keep</c>'s per-group order-index counter is recomputed from scratch on
     /// every land, over whatever the incoming binary actually holds. An external add or delete
     /// <i>anywhere earlier</i> in a flat group therefore shifts every later sibling's own <c>"[N] "</c>
     /// order index — and with it, its own file name — even though that sibling's fields never changed.
@@ -100,21 +100,20 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
     /// the old one behind (two files claiming one FormKey is exactly the corrupt-tree state
     /// <see cref="AmbiguousSourceUnitException"/> exists to catch elsewhere).
     ///
-    /// <para><b>Not the DialogTopic.Responses scenario literally asked for</b> — traced, not assumed:
+    /// <para><b>Not the DialogTopic.Responses scenario</b> — traced, not assumed:
     /// <c>RecordTypeDispatch.FolderNameFor</c>'s own doc comment names "a dialog topic" and (on
     /// <c>GroupFolderNameFor</c>) "dialog responses" among the types with no top-level group at all, so
     /// both hit <c>Keep</c>'s "container records have no flat source path yet" skip <i>before</i> ever
     /// reaching the order-index counter — landing an external change anywhere inside a
-    /// Quest/DialogTopic/Response chain is already-documented #453 territory this method cannot
-    /// represent at all, order-shift or not, regardless of #459. The reachable analogue is a flat
-    /// group (Npcs here), which is what this test exercises — the shape of damage is the same one the
-    /// review named, just on a record kind this method can actually land.</para>
+    /// Quest/DialogTopic/Response chain is a documented limitation this method cannot represent at
+    /// all, order-shift or not. The reachable analogue is a flat group (Npcs here), which is what
+    /// this test exercises — the same shape of damage, on a record kind this method can actually
+    /// land.</para>
     ///
     /// <para><b>What this does not claim to fix</b>: a genuinely <i>deleted</i> record's own stale file
     /// (here, <c>MiddleNpc</c>'s) is not cleaned up — <c>Keep</c> only ever iterates records the
-    /// incoming binary still holds, so it has no way to notice one dropped out entirely. That gap
-    /// predates #459 (this method has no external-deletion detection of any kind, order-shifted or
-    /// not) and is not what this fix addresses.</para>
+    /// incoming binary still holds, so it has no way to notice one dropped out entirely (this method
+    /// has no external-deletion detection of any kind).</para>
     /// </summary>
     [Fact]
     public void Keep_AfterAnExternalMidListDelete_MovesTheLaterSiblingWithoutLeavingADuplicateFile()
@@ -172,7 +171,7 @@ public sealed class ExternalChangeEditLanderTests : IDisposable
         Assert.Equal(otherNpcTextBeforeDelete, File.ReadAllText(survivor));
     }
 
-    /// <summary>#433: <c>Keep</c> reads the parked baseline through
+    /// <summary><c>Keep</c> reads the parked baseline through
     /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> (<see cref="SourceRepository.EnumerateSourceAtRef"/>)
     /// and re-parks through <see cref="SourceRepository.ParkCompileSnapshot"/> after landing — both
     /// must survive a real-world-shaped, ref-unsafe plugin name, not just the fixture's own

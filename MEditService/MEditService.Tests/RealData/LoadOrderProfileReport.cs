@@ -6,7 +6,7 @@ using MEditService.Tests.TestSupport;
 
 namespace MEditService.Tests.RealData;
 
-/// <summary>Per-plugin phase costs, summed from the load path's timing lines (#113).</summary>
+/// <summary>Per-plugin phase costs, summed from the load path's timing lines.</summary>
 public sealed class PluginCost
 {
     public long ImportMs { get; set; }
@@ -25,7 +25,7 @@ public sealed class PluginCost
 }
 
 /// <summary>
-/// One measured reconcile — cold or warm (#589) — aggregated from the Debug/Info lines the load path
+/// One measured reconcile — cold or warm — aggregated from the Debug/Info lines the load path
 /// logs. The regexes parse those lines by wording, so a rewording of one of the *required* phases'
 /// lines (<c>Opened</c> in <c>LoadOrder</c>; <c>IndexInit</c>/<c>Reconciled</c> in
 /// <c>LoadOrderMirror</c>; <c>Validated</c> in <c>DuckDbRecordIndex</c>) must fail <see cref="Parse"/>
@@ -36,7 +36,7 @@ public sealed class ProfileRun
 {
     public long WallMs { get; private set; }
     public long IndexInitMs { get; private set; }
-    /// <summary>#585: the open-time content-hash validation of every indexed file — the cost a warm
+    /// <summary>The open-time content-hash validation of every indexed file — the cost a warm
     /// launch pays instead of indexing.</summary>
     public long ValidateMs { get; private set; }
     public int ValidatedCount { get; private set; }
@@ -44,7 +44,7 @@ public sealed class ProfileRun
     public string FirstUsableMs { get; private set; } = "?";
     public long WinnersMs { get; private set; }
     public int IndexedCount { get; private set; }
-    /// <summary>#586: plugins that took the registration-only path (a row, no re-index).</summary>
+    /// <summary>Plugins that took the registration-only path (a row, no re-index).</summary>
     public int RegisteredCount { get; private set; }
     public Dictionary<string, PluginCost> Costs { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -52,21 +52,19 @@ public sealed class ProfileRun
 
     private static readonly Regex Opened = new(@"^(?<p>.+?) opened in (?<i>\d+) ms \+ (?<m>\d+) ms metadata$");
 
-    // #616: deliberately unenforced — each of these five is legitimately absent from a *valid* run
+    // Deliberately unenforced — each of these five is legitimately absent from a *valid* run
     // shape, not a symptom of a rewording, so requiring them would make Parse throw on real,
     // correctly-measured runs:
     //  - Indexing/Indexed/IndexPhases share one population: every plugin that does NOT take the
     //    register path (RegisterOrIndex's guard, LoadOrderMirror.cs). A warm run whose whole load
-    //    order is already-indexed-and-unchanged binaries — the steady state #586/ADR-0044 exists
-    //    for — never logs any of the three; only Registering does. (Falsifiable directly, each
-    //    verified in isolation: requiring any of the three breaks
-    //    Measure_ColdThenWarm_ParsesTheRealLogLines_AndTheWarmRunRegistersEverything and
+    //    order is already-indexed-and-unchanged binaries — the steady state ADR-0044 exists
+    //    for — never logs any of the three; only Registering does. (Requiring any of the three
+    //    breaks Measure_ColdThenWarm_ParsesTheRealLogLines_AndTheWarmRunRegistersEverything and
     //    Parse_DoesNotThrow_WhenNoPluginIsFreshlyIndexed_AllRegisteredWarmRun; requiring Indexed or
-    //    IndexPhases additionally breaks the already-green Render_Throws_WhenTheColdRunIndexedNothing
-    //    test — Indexing alone does not, because that test's filtered stream still contains an
-    //    "Indexing " line.)
+    //    IndexPhases additionally breaks Render_Throws_WhenTheColdRunIndexedNothing — Indexing
+    //    alone does not, because that test's filtered stream still contains an "Indexing " line.)
     //  - Registering never fires in a cold run: the index file is deleted first, so nothing is
-    //    "already indexed and unchanged" yet (#585/ADR-0001).
+    //    "already indexed and unchanged" yet (ADR-0001).
     //  - Ingested only fires for a tracked (git-managed) plugin (ADR-0041/0042); a load order with
     //    no tracked plugins never logs it, cold or warm.
     private static readonly Regex Indexing = new(@"^Indexing (?<p>.+?) \(\d+ records\)$");
@@ -78,7 +76,7 @@ public sealed class ProfileRun
     private static readonly Regex Validated = new(@"^Validated (?<n>\d+) indexed plugin\(s\) against disk in (?<ms>\d+) ms$");
     private static readonly Regex Reconciled = new(@"^Load order reconciled in (?<t>\d+) ms: .* \(first plugin usable after (?<f>\S+) ms, winner sweep (?<w>\d+) ms\)$");
 
-    // #616: the phases every *valid* run — cold or warm — logs unconditionally, so a miss here is
+    // The phases every *valid* run — cold or warm — logs unconditionally, so a miss here is
     // never a legitimate run shape; it is either a rewording or a genuinely broken measurement (e.g.
     // a load order every plugin failed to open, which is not a real profile either). Each name is a
     // field above, so a rename here fails the build rather than silently going stale.
@@ -87,8 +85,7 @@ public sealed class ProfileRun
     // Measure_ColdThenWarm_ParsesTheRealLogLines_AndTheWarmRunRegistersEverything (a plain, ungated
     // [Fact] in LoadOrderProfileReportTests) runs LoadOrderProfile.Measure over a real fixture
     // instance and parses the load path's actual emitted lines, so a required-phase reword fails
-    // there — verified directly by breaking the IndexInit pattern and watching that test fail with
-    // "No log line matched for required phase(s) IndexInit". Separately, this same check also fires
+    // there. Separately, this same check also fires
     // at real measurement time (LoadOrderProfile.ProfileReconcile, env-gated), turning a drifted log
     // text into a loud exception instead of a quietly-zeroed phase in the report. What remains
     // genuinely unprotected, in both places, is the five optional phases above: a rewording there
@@ -130,7 +127,7 @@ public sealed class ProfileRun
 
 public sealed record ProfileHeader(string InstanceRoot, string Profile, string DataFolder, int ExplicitCount, int OpenedCount, int FailureCount);
 
-/// <summary>The markdown report: cold and warm side by side (#589), then the cold run's per-plugin
+/// <summary>The markdown report: cold and warm side by side, then the cold run's per-plugin
 /// breakdown — a warm run has no per-plugin index cost to rank.</summary>
 public static class LoadOrderProfileReport
 {

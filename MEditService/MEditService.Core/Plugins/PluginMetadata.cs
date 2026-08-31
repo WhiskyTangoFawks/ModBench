@@ -8,9 +8,9 @@ namespace MEditService.Core.Plugins;
 // load-order membership are derived from those three, never stored, so a reconcile that moves a
 // flag cannot leave a cached verdict behind.
 //
-// Origin (#269 / ADR-0036): the mod folder that provided this physical file, or one of the
+// Origin (ADR-0036): the mod folder that provided this physical file, or one of the
 // reserved values in PluginOrigin — opaque here, never interpreted. Record tables key on
-// (form_key, origin, plugin). Required (#275): every construction site must say which origin this
+// (form_key, origin, plugin). Required: every construction site must say which origin this
 // is, not fall back to one silently.
 //
 // LoadOrderIndex: the name's plugins.txt slot offset past the game's forced masters, or null when
@@ -57,7 +57,7 @@ public record PluginMetadata(
 /// is reported here rather than surfacing as a failed reconcile.</summary>
 public record PluginLoadFailure(string Name, string Reason)
 {
-    /// <summary>#395: the reason a failure reports is never just the outer exception's message —
+    /// <summary>The reason a failure reports is never just the outer exception's message —
     /// Mutagen typically wraps a parse error (which record, which subrecord, offset) naming the
     /// actual cause several levels down the <see cref="Exception.InnerException"/> chain, and a
     /// bare <c>ex.Message</c> discards exactly that detail. This flattens the whole chain,

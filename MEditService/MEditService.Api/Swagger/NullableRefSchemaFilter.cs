@@ -5,7 +5,7 @@ using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace MEditService.Api.Swagger;
 
-// Issue #161: OpenAPI 3.0 forbids sibling keywords next to $ref, so Swashbuckle never emits
+// OpenAPI 3.0 forbids sibling keywords next to $ref, so Swashbuckle never emits
 // `nullable: true` alongside a bare $ref — any nullable object-typed property (a $ref, not an
 // array/dictionary/primitive) silently loses its nullability in the generated spec, and
 // downstream api.ts generates it without `| null` even though the C# type is genuinely nullable.

@@ -13,9 +13,9 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #417 B12: the HTTP door over the Source/Bridge machinery those layers already test exhaustively —
-/// thin, mapping-only assertions per this run's plan (resolve target, call through, shape the
-/// response), not a re-derivation of every Source-level scenario.
+/// The HTTP door over the Source/Bridge machinery those layers already test exhaustively —
+/// thin, mapping-only assertions (resolve target, call through, shape the response), not a
+/// re-derivation of every Source-level scenario.
 /// </summary>
 public sealed class ExternalChangeEndpointsTests : IDisposable
 {

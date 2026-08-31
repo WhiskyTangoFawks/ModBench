@@ -7,8 +7,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #414/ADR-0041: the wire contract for the Track gesture — the fourth of #414's touch points
-/// (backend endpoint, the others are the frontend command chain). Real HTTP host, real load order,
+/// ADR-0041: the wire contract for the Track gesture. Real HTTP host, real load order,
 /// real mod folder on disk.
 /// </summary>
 public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
@@ -85,7 +84,7 @@ public sealed class TrackApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
     }
 
-    // #414 review F2: GET /plugins/track/status — polled alongside the in-flight POST. This test
+    // GET /plugins/track/status — polled alongside the in-flight POST. This test
     // only asserts the at-rest answer (nothing running); TrackServiceTests' own
     // TrackAsync_ProgressAdvancesDuringATrack_ObservableMidFlight covers the in-flight case at the
     // service seam this endpoint is a thin read over.

@@ -5,12 +5,11 @@ using System.Text.Json.Nodes;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>
-/// Golden-file comparison for the read model's observable output (#413 slice S0).
+/// Golden-file comparison for the read model's observable output.
 ///
-/// The goldens are captured from the implementation as it stood <b>before</b> the documents swap
-/// and reviewed by hand, so they are an independent source of truth for AC3 ("conflict
-/// classification and the compare grid produce identical results to before the swap") rather than
-/// a snapshot of whatever the new code happens to emit. That distinction is the whole point: a
+/// The goldens were captured from a prior known-good implementation
+/// and reviewed by hand, so they are an independent source of truth rather than
+/// a snapshot of whatever the current code happens to emit. That distinction is the whole point: a
 /// round trip through one mechanism asserted against itself passes even when both directions share
 /// a defect.
 ///

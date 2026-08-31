@@ -33,7 +33,7 @@ public class ConflictClassifierTests
         new("000001:Test.esp", plugin, loadOrder, isWinner, null,
             [.. fields.Select(f => new FieldValue(Meta(f.name), f.value))], Origin: origin);
 
-    // #491: a Partial Form override — its own fields are excluded from conflict detection
+    // A Partial Form override — its own fields are excluded from conflict detection
     // regardless of their content (not merely when null, unlike the generic absent-field rule
     // above).
     private static RecordDetail MakePartialFormOverride(string plugin, int loadOrder, bool isWinner,
@@ -82,15 +82,15 @@ public class ConflictClassifierTests
     {
         var a = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var b = MakeOverride("B.esp", 1, false, ("name", "Bob"));
-        // MakeOverride uses FormKey "000001:Test.esp" — message must name it so mutants
-        // that swap FirstOrDefault→First (different generic message) or blank the string are killed.
+        // MakeOverride uses FormKey "000001:Test.esp" — the message must name it, not be a
+        // generic or blank string.
         var ex = Assert.Throws<InvalidOperationException>(() => Classify([a, b]));
         Assert.Contains("000001:Test.esp", ex.Message);
     }
 
-    // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin. Bare-plugin
+    // ADR-0036: two columns sharing a filename, differing in origin. Bare-plugin
     // dictionary keys (o.Plugin) would collide here — ToDictionary throws on the literal duplicate
-    // key "Shared.esp" — even though nothing loads such a pair through a real load order yet (#34).
+    // key "Shared.esp".
     [Fact]
     public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
     {
@@ -105,8 +105,8 @@ public class ConflictClassifierTests
         Assert.Equal("FromModB", nameDiff.Values["Shared.esp|ModB"]);
     }
 
-    // A change to one column's value must never appear on the other column's diff entry — the
-    // "action on one never affects the other" half of AC5, exercised at the value level.
+    // A change to one column's value must never appear on the other column's diff entry —
+    // "action on one never affects the other", exercised at the value level.
     [Fact]
     public void Classify_SameFilenameDifferentOrigin_ActionOnOneDoesNotAffectOther()
     {
@@ -142,7 +142,8 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_FourPlugins_OneITM_TwoDisagree_ReturnsConflict()
     {
-        // hasAnyChange: Any()=true (B,D change), All()=false (C is ITM) — mutant returns NoConflict.
+        // hasAnyChange: Any()=true (B,D change), All()=false (C is ITM) — an All()-based check
+        // would wrongly return NoConflict.
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"));
         var loser = MakeOverride("B.esp", 1, false, ("name", "Bob"));
         var itm = MakeOverride("C.esp", 2, false, ("name", "Alice"));
@@ -197,7 +198,7 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Participation (#267 / ADR-0035) ---
+    // --- Participation (ADR-0035) ---
 
     [Fact]
     public void Classify_OneEnabledOneDisabled_ReturnsOnlyOne_NotConflict()
@@ -226,7 +227,7 @@ public class ConflictClassifierTests
         Assert.Empty(result.Diffs);
     }
 
-    // ADR-0044 / #594 AC3: a losing copy of one filename is registered beside the winning one and
+    // ADR-0044: a losing copy of one filename is registered beside the winning one and
     // reaches the classifier as a second column with the same name; only the participating
     // (winning, enabled, listed) copy counts. Keyed by ColumnKey — (plugin|origin) — so the two
     // copies are distinct entries, and the loser is filtered out before any diff is computed.
@@ -278,7 +279,8 @@ public class ConflictClassifierTests
     {
         // C (winner) changes only "level". B changes "name" (not in C's changedFields).
         // B.level=5=C.level → B doesn't contest level. B.name not in C's changedFields.
-        // With && original: not contested → Override. With || mutant: B.name non-null → contested.
+        // With && in the contest check: not contested → Override; an || would wrongly read
+        // B.name non-null as contesting.
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 1));
         var other = MakeOverride("B.esp", 1, false, ("name", "Bob"), ("level", 5));
         var winner = MakeOverride("C.esp", 2, true, ("name", "Alice"), ("level", 5));
@@ -327,11 +329,11 @@ public class ConflictClassifierTests
         Assert.NotEqual(ConflictAll.Conflict, result.ConflictAll);
     }
 
-    // --- Per-field WinnerColumn/WinnerValue fallthrough (#491 review, condition (a)) ---
-    // Not Partial Form specific — a dedicated pin for the generalized null-field fallthrough this
-    // ticket's fix also applies to any ordinary record: before this fix, a field the record-wide
-    // winner simply never set (a null, same as any other absent field) reported that winner's own
-    // (null) value instead of falling through to whichever plugin actually carries the value.
+    // --- Per-field WinnerColumn/WinnerValue fallthrough ---
+    // Not Partial Form specific — a dedicated pin for the generalized null-field fallthrough on
+    // any ordinary record: a field the record-wide winner simply never set (a null, same as any
+    // other absent field) must not report that winner's own (null) value instead of falling
+    // through to whichever plugin actually carries the value.
 
     [Fact]
     public void Classify_RecordWideWinnerHasNullField_WinnerColumnFallsThroughToEarlierPlugin()
@@ -347,7 +349,7 @@ public class ConflictClassifierTests
         Assert.Equal(1, level.WinnerValue);
     }
 
-    // --- Partial Form flag rule (#491) ---
+    // --- Partial Form flag rule ---
 
     [Fact]
     public void Classify_PartialFormOverride_OwnNonNullFieldDiffersFromMaster_StillNoConflict()
@@ -434,7 +436,7 @@ public class ConflictClassifierTests
     public void Classify_PartialInjection_OnlyOneOverrideMissingOrigin_ReturnsConflictCritical()
     {
         // B.esp has originPlugin in masters (not injected), C.esp doesn't (injected).
-        // Any()=true (C.esp injected), All()=false (B.esp is not) → kills the Any→All mutant.
+        // Any()=true (C.esp injected), All()=false (B.esp is not) — one injected override suffices.
         var master = new RecordDetail("000001:Origin.esm", "Origin.esm", 0, false, null,
             [new FieldValue(Meta("name"), "Alice")], Origin: "Data");
         var override1 = new RecordDetail("000001:Origin.esm", "B.esp", 1, false, null,
@@ -521,7 +523,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_SortedArrayDifferentLengths_ReturnsOverride()
     {
-        // Length check (line 155): [a] vs [a,b] differ in count → not equal → Override.
+        // Length check: [a] vs [a,b] differ in count → not equal → Override.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"a\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"a\",\"b\"]");
         var master = new RecordDetail("000001:Test.esp", "A.esp", 0, false, null,
@@ -549,7 +551,7 @@ public class ConflictClassifierTests
     public void Classify_UnsortedArraySameElementsDifferentOrder_ReturnsOverride()
     {
         // isSortedArray=false: [1,2] vs [2,1] differ by raw JSON text → Override, not NoConflict.
-        // Logical mutants (|| instead of && in ValuesEqual) would sort-compare them and return NoConflict.
+        // An || instead of && in ValuesEqual would sort-compare them and return NoConflict.
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[1,2]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[2,1]");
         var master = MakeOverride("A.esp", 0, false, ("keywords", (object?)arrayA));
@@ -634,7 +636,7 @@ public class ConflictClassifierTests
         Assert.True(nameDiff.CellStates.ContainsKey("C.esp"));
     }
 
-    // --- Per-node ConflictAll (#114: bottom-up, scoped to one FieldDiff's own subtree — distinct
+    // --- Per-node ConflictAll (bottom-up, scoped to one FieldDiff's own subtree — distinct
     // from ClassifyResult.ConflictAll, the record-wide value the Plugins-tree badge still uses) ---
 
     [Fact]
@@ -668,7 +670,7 @@ public class ConflictClassifierTests
         Assert.Equal(ConflictAll.Conflict, nameDiff.ConflictAll);
     }
 
-    // The literal regression guard for #114: a naive implementation that stamped the record-wide
+    // The literal regression guard: a naive implementation that stamped the record-wide
     // ConflictAll onto every FieldDiff would make "level" (which every plugin agrees on) read
     // Override, same as "name" — this proves the two sibling rows carry independent values.
     [Fact]
@@ -744,7 +746,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_PerNodeConflictAll_DoesNotChangeRecordWideConflictAll()
     {
-        // AC: the record-wide ClassifyResult.ConflictAll (Plugins-tree badge) is a different,
+        // The record-wide ClassifyResult.ConflictAll (Plugins-tree badge) is a different,
         // legitimate use of the same concept at record scope and must stay untouched by this.
         var master = MakeOverride("A.esp", 0, false, ("name", "Alice"), ("level", 5));
         var override1 = MakeOverride("B.esp", 1, true, ("name", "Bob"), ("level", 5));
@@ -923,7 +925,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_StructField_SubFieldWinnerIsHighestLoadOrder()
     {
-        // Kills the MaxBy → MinBy mutant: WinnerColumn must be the highest load-order plugin with a value.
+        // WinnerColumn must be the highest load-order plugin with a value (MaxBy, not MinBy).
         var subX = Meta("X", "int");
         var structMeta = StructMeta("Pos", subX);
 
@@ -943,7 +945,7 @@ public class ConflictClassifierTests
     [Fact]
     public void Classify_StructField_JsonNullSubField_TreatedAsAbsent()
     {
-        // Kills the false-condition mutant on ExtractSubFieldValue: JSON null must map to null, not a JsonElement.
+        // ExtractSubFieldValue: JSON null must map to null, not a JsonElement.
         var subX = Meta("X", "int");
         var subY = Meta("Y", "int");
         var structMeta = StructMeta("Bounds", subX, subY);

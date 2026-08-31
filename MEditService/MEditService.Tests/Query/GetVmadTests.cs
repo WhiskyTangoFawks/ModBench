@@ -9,10 +9,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Query;
 
-// #421: GetVmad is rejected from IRecordReads/IRecordIndex outright — VMAD reconstitution moved to
-// Queries/RecordDocumentCodecs, operating on RecordDocument.Body. This suite's own reader-level
-// coverage is preserved by calling that relocated logic through the local GetVmad helper below
-// (same fixtures, same assertions) rather than the deleted repository method directly.
+// GetVmad is rejected from IRecordReads/IRecordIndex outright — VMAD reconstitution lives in
+// Queries/RecordDocumentCodecs, operating on RecordDocument.Body, so this suite's reader-level
+// coverage calls that logic through the local GetVmad helper below.
 public sealed class GetVmadTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -260,9 +259,9 @@ public sealed class GetVmadTests : IDisposable
         Assert.Null(GetVmad(repo, _plainNpcFormKey.ToString(), "VmadQuery.esp", origin: "Data"));
     }
 
-    // Invariant 7 (missing data reads as null, never a throw): distinct from the case above, where
+    // Missing data reads as null, never a throw: distinct from the case above, where
     // a `records` row exists but carries no VMAD. Here no row exists at all for this FormKey — the
-    // synthetic header FormKey is the real production example (D8: a ModHeader is never an
+    // synthetic header FormKey is the real production example (a ModHeader is never an
     // IMajorRecordGetter, so it never had a document to begin with) — exercising ReadRecordBody's
     // "no row" branch rather than its "row with a null VirtualMachineAdapter" branch.
     [Fact]

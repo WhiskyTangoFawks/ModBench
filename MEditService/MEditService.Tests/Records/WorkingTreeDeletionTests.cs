@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #415 S2: what a working-tree change does to everything the read model <i>derives</i> from a
+/// What a working-tree change does to everything the read model <i>derives</i> from a
 /// document, rather than to the document itself — winner status, FormKey resolution and the
 /// reference graph. A body is not just bytes to serve back: it is the thing every extracted index
 /// table was built from, so an edit that updates one and not the others leaves the read model

@@ -21,12 +21,7 @@ public class SearchRecordsTests(TestPluginFixture fixture)
         return manager;
     }
 
-    // #421: the old GetRecords(single type)/SearchRecords(type list) comparison test is gone —
-    // both collapsed into one Search(RecordQuery) method, so asserting they "match" would compare
-    // one code path against itself. RecordQuery's RecordTypes list is exercised below, both single-
-    // and multi-element.
-
-    // Issue #210: the picker's search has no `type` filter when a field allows more than one
+    // The picker's search has no `type` filter when a field allows more than one
     // record type (e.g. any object reference), so it goes through the multi-table union path
     // rather than a single-type query — the FormKey-shaped match needs to resolve there too.
     [Fact]

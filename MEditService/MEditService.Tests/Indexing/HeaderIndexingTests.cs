@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// Issue #1 slice A1: the header is indexed as a single row per plugin at the synthetic
+// The header is indexed as a single row per plugin at the synthetic
 // FormKey `000000:<plugin>`, bypassing the major-record indexing loop (ModHeader is never
 // an IMajorRecordGetter) via a dedicated HeaderIndexer — mirroring the VmadIndexer/
 // PlacementWalker precedent for structurally-foreign data.
@@ -135,13 +135,11 @@ public class HeaderIndexingTests
         Assert.Equal("PluginB.esp", overridesB[0].Plugin.Name);
     }
 
-    // #272 / ADR-0036: two origins loading the same physical filename — the header table's write
-    // side already carried origin since #271 (HeaderIndexer.Index), but IndexHeader's delete step
-    // stayed filename-only until this fix, so indexing ModB's copy of a shared-filename plugin
-    // silently deleted ModA's header row (masters, ESL flag, load-order fields) before inserting
-    // ModB's, even though every other table (records/VMAD/conditions/placement) already survived
-    // the same scenario. Mirrors PlacementIndexingTests.GetPlacement_SameFilenameDifferentOrigin_
-    // ScopesToOrigin's origin: "ModA"/"ModB" pattern.
+    // ADR-0036: two origins loading the same physical filename — a filename-only delete step in
+    // IndexHeader would make indexing ModB's copy of a shared-filename plugin silently delete
+    // ModA's header row (masters, ESL flag, load-order fields) before inserting ModB's.
+    // Mirrors PlacementIndexingTests.GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin's
+    // origin: "ModA"/"ModB" pattern.
     [Fact]
     public void Index_TwoOrigins_SameFilename_EachGetsOwnHeaderRow_NeitherOverridesTheOther()
     {

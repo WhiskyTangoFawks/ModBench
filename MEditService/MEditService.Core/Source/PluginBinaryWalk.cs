@@ -7,13 +7,11 @@ namespace MEditService.Core.Source;
 /// <summary>
 /// Mutagen-free byte-level walker over a plugin's own record/GRUP/subrecord structure — record
 /// header, GRUP header, subrecord header (including <c>XXXX</c>-extended length), and
-/// zlib-compressed record payloads. Promoted from the #511 survey harness
-/// (<c>RoundTripSurvey.Walk</c>/<c>Subrecords</c>/<c>Inflate</c>,
-/// <c>MEditService.Tests/RealData</c>) for #514's Track subrecord-inventory tripwire, and named
-/// as the shared engine <c>docs/specs/medit-repair.md</c> already forward-references for the
-/// Repair surface (#519/#525): "one walker" for both. That is also why it references no Mutagen
+/// zlib-compressed record payloads. The shared engine <c>docs/specs/medit-repair.md</c> names for
+/// both Track's subrecord-inventory tripwire and the Repair surface — one walker for both. That is
+/// also why it references no Mutagen
 /// type — a repair/diagnosis engine built on Mutagen's own object model couldn't see the exact
-/// class of defect this ticket exists to catch, since that model is where the data went missing
+/// class of defect this exists to catch, since that model is where the data went missing
 /// in the first place (ADR-0043's own "Mutagen-free engine" requirement).
 /// </summary>
 public static class PluginBinaryWalk
@@ -104,14 +102,14 @@ public static class PluginBinaryWalk
     }
 
     /// <summary>
-    /// #514's tripwire itself: every subrecord signature <paramref name="originalData"/> holds more
+    /// The subrecord-loss tripwire: every subrecord signature <paramref name="originalData"/> holds more
     /// occurrences of than <paramref name="rewrittenData"/> does — a signature the rewrite silently
     /// dropped one or more instances of. Subrecord <b>order</b> and <b>content</b> are deliberately not
     /// this check's concern (that is model identity's job — <c>ModelIdentity.FindFirst</c>
     /// — and encoding-class differences' — a same-multiset reorder or a byte-for-byte content change to
     /// an unchanged-count signature reports nothing here. A signature the rewrite has <i>more</i> of — a
     /// canonical marker insertion (<c>FURN FNAM/MNAM</c>, <c>WRLD ONAM/DATA</c>, <c>INNR KSIZ</c>,
-    /// observed harmless in the #511 survey) — reports nothing either: only a decrease is loss.
+    /// observed harmless in the round-trip survey) — reports nothing either: only a decrease is loss.
     /// </summary>
     /// <returns>Dropped signatures in first-seen order within <paramref name="originalData"/>, for a
     /// stable, reproducible message; empty when nothing was dropped.</returns>
@@ -137,12 +135,12 @@ public static class PluginBinaryWalk
     /// Walks <paramref name="originalPluginBytes"/> and <paramref name="rewrittenPluginBytes"/> in
     /// parallel (mirroring <c>RoundTripSurvey.Classify</c>'s own positional walk) and returns the first
     /// record — in the original's own GRUP order — whose subrecord inventory shows a genuine drop.
-    /// <c>TES4</c>'s own <c>MAST</c>/<c>DATA</c> pair is the one exemption (#563): every write in this
+    /// <c>TES4</c>'s own <c>MAST</c>/<c>DATA</c> pair is the one exemption: every write in this
     /// codebase re-derives the header's master list from live content, unconditionally — ADR-0038,
     /// Mutagen's default <c>MastersListContentOption.Iterate</c> (see <c>PluginWriter</c>'s own comment
     /// on that same default). <c>WithLoadOrderFromHeaderMasters</c> only fixes the *order* masters are
-    /// written in, not whether an unreferenced one survives — it does not, contrary to what this comment
-    /// used to claim, keep the header's master list identical to the original by construction. A
+    /// written in, not whether an unreferenced one survives — it does not keep the header's master
+    /// list identical to the original by construction. A
     /// MAST/DATA count decrease on the header record is therefore that sanctioned pruning, not a
     /// parse-time loss, and is excluded from this check's verdict. Nothing else about TES4 is exempted:
     /// a genuine drop of any other header subrecord still reports.

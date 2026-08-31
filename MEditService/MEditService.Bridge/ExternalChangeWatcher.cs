@@ -5,7 +5,7 @@ using Timer = System.Timers.Timer;
 namespace MEditService.Bridge;
 
 /// <summary>
-/// #417's live-watch half: a <see cref="FileSystemWatcher"/> per watched (mod folder, plugin) pair,
+/// External-change detection's live-watch half: a <see cref="FileSystemWatcher"/> per watched (mod folder, plugin) pair,
 /// debounced, calling straight into <see cref="ExternalChangeClassifier"/> — the only mechanic this
 /// class owns is the watch lifecycle and the unanswered-question queue; classification, self-echo
 /// suppression and crash-marker suppression all live in <c>MEditService.Core.Source</c>, exactly as
@@ -73,7 +73,7 @@ public sealed class ExternalChangeWatcher : IDisposable
         // finalPath), the shape every production binary write actually takes) surfaces here,
         // never as Changed/Created — see the NotifyFilter comment above.
         fsWatcher.Renamed += (_, _) => Restart(debounceTimer);
-        // #587: a deletion is a settle like any other. It is the whole point of a mirror watch (the
+        // A deletion is a settle like any other. It is the whole point of a mirror watch (the
         // rows go), and a no-op for a classification watch, whose Settle finds no bytes to read and
         // returns — the load-time check is what reports a tracked plugin's missing binary.
         fsWatcher.Deleted += (_, _) => Restart(debounceTimer);
@@ -82,7 +82,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     /// <summary>
-    /// #587 / ADR-0001: one indexed binary changed or vanished on disk while a load order is live.
+    /// ADR-0001: one indexed binary changed or vanished on disk while a load order is live.
     /// Raised only for the plugins watched through <see cref="WatchIndexed"/> — the ones whose rows
     /// come from the binary — never for a tracked plugin, whose out-of-band writes are a question
     /// for the user (Absorb / Keep) rather than a silent re-index.
@@ -103,7 +103,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     public Func<IndexedBinaryEvent, bool>? IndexedBinaryChanged { get; set; }
 
     /// <summary>
-    /// #587 / ADR-0001: starts mirroring one <b>indexed</b> binary — the game's <c>Data/</c>
+    /// ADR-0001: starts mirroring one <b>indexed</b> binary — the game's <c>Data/</c>
     /// included — so a write by MO2, xEdit, Steam or the user reaches the index with no reload.
     /// <paramref name="contentHash"/> is what the index's rows were built from, and is what makes a
     /// <i>touch</i> free: a settle that hashes to the same bytes raises nothing at all. Re-watching
@@ -162,11 +162,11 @@ public sealed class ExternalChangeWatcher : IDisposable
     /// own to ask the question once) uses this so both triggers share one queue and one dialog
     /// surface.
     ///
-    /// <para>Also the one place that sets <see cref="ExternalChangeDeferral"/>'s marker (#417 exit
-    /// path 3: the plugin is refused for editing from the instant a question is detected, not only
+    /// <para>Also the one place that sets <see cref="ExternalChangeDeferral"/>'s marker (the
+    /// plugin is refused for editing from the instant a question is detected, not only
     /// after an explicit Esc) — both triggers land here, so both get the refusal without either
     /// remembering to set it themselves. Set <i>inside</i> the same lock, before <see cref="_unanswered"/>
-    /// is updated (#500): the lock's exit barrier is what makes "refused from the instant a question
+    /// is updated: the lock's exit barrier is what makes "refused from the instant a question
     /// is detected" true for another thread, not merely likely — without it, a caller reacting to
     /// <see cref="Unanswered"/> going non-empty (e.g. the live-watch test's own polling loop) can
     /// observe that before the marker file is durably written, since a plain file write has no
@@ -213,7 +213,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 
     /// <summary>
-    /// #587: what a mirror watch does when the writes stop — re-hash, and say what actually
+    /// What a mirror watch does when the writes stop — re-hash, and say what actually
     /// happened. Identical bytes raise nothing, which is what keeps a <c>touch</c>, a mod manager's
     /// re-link or a rewrite of the same content from costing a re-index.
     ///
@@ -316,7 +316,7 @@ public sealed class ExternalChangeWatcher : IDisposable
     }
 }
 
-/// <summary>#587: what happened to one indexed binary on disk.</summary>
+/// <summary>What happened to one indexed binary on disk.</summary>
 public enum IndexedBinaryChange
 {
     /// <summary>Its bytes changed — the index must re-read it.</summary>
@@ -326,7 +326,7 @@ public enum IndexedBinaryChange
     Deleted,
 }
 
-/// <summary>#587 / ADR-0001: one indexed binary's disk event, carrying the compound plugin identity
+/// <summary>ADR-0001: one indexed binary's disk event, carrying the compound plugin identity
 /// (<c>origin</c> plus filename) the index is keyed by. Deliberately says nothing about mirror,
 /// indexes or DuckDB — this assembly knows none of those, and that is enforced rather than agreed:
 /// <c>BridgeKnowsNothingOfLoadOrdersTests</c> fails on any reference from here to the load order or
@@ -336,7 +336,7 @@ public enum IndexedBinaryChange
 /// reassembles one; deciding what to do about the event is its job.</summary>
 public sealed record IndexedBinaryEvent(string PluginName, string Origin, string PluginPath, IndexedBinaryChange Change);
 
-/// <summary>One plugin's unanswered external-change question, as the watcher (or, once the load-time
-/// check is wired, the same classification from that path) last observed it — what
+/// <summary>One plugin's unanswered external-change question, as the watcher (or the load-time
+/// check, via the same classification) last observed it — what
 /// <c>GET /plugins/external-changes/status</c> hands the extension to drive the one dialog.</summary>
 public sealed record UnansweredExternalChange(string ModFolder, string PluginName, ExternalChangeClassification.ExternalChange Classification);

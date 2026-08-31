@@ -13,15 +13,14 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #539 (the header-write half of #491's Partial Form work): the one sanctioned write to header
-/// flag bit 14 — clearing it restores full editability (AC1), the write touches only that bit
-/// (AC2), and a pre-existing uncoordinated write surface (correction 2) can no longer flip the same
-/// bit as a side effect.
+/// The header-write half of the Partial Form work: the one sanctioned write to header
+/// flag bit 14 — clearing it restores full editability, the write touches only that bit,
+/// and no other write surface can flip the same bit as a side effect.
 /// </summary>
 public sealed class PartialFormHeaderWriteTests : IDisposable
 {
     private const int PartialFormBit = 0x0000_4000;
-    // An extra, unrelated bit riding alongside PartialFormBit on the fixture cell — AC2's own rival
+    // An extra, unrelated bit riding alongside PartialFormBit on the fixture cell — the rival
     // (a full-overwrite Set) clobbers this the moment it's exercised, so its presence is what makes
     // the byte-diff assertion a real test rather than one that would pass by coincidence on a cell
     // that carried no other flag at all.
@@ -79,7 +78,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
     private RecordEditService Service() =>
         new(_mirror, SharedSchemaReflector.Instance, NullLogger<RecordEditService>.Instance);
 
-    // AC1: refusal on a body field while flagged, success clearing the flag, success on the
+    // Refusal on a body field while flagged, success clearing the flag, success on the
     // previously-refused field once cleared. xEdit's own SetIsPartialForm
     // (wbImplementation.pas:14146-14221) re-populates a cleared override from its nearest
     // non-partial predecessor; mEdit's minimum, stated in CONTEXT.md's own Partial Form entry, is
@@ -123,7 +122,7 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
-    // AC2: the write flips only header-flag bit 14 — a byte-diff over the record's own source file,
+    // The write flips only header-flag bit 14 — a byte-diff over the record's own source file,
     // not just an in-memory assertion, so a codec-level bug (e.g. reserializing more than the one
     // changed property) would also be caught.
     [Fact]
@@ -190,13 +189,13 @@ public sealed class PartialFormHeaderWriteTests : IDisposable
         Assert.Equal(beforeOthers, afterOthers);
     }
 
-    // Correction 2: two reflected columns alias the same MajorRecordFlagsRaw int bit 14 lives in.
+    // Two reflected columns alias the same MajorRecordFlagsRaw int bit 14 lives in.
     // is_partial_form is the one sanctioned door — a generic write that would flip bit 14 as a side
     // effect is refused, and nothing lands on disk. Both exercised starting from an UNFLAGGED
-    // record, deliberately: the pre-existing PartialFormFieldReadOnly guard already blocks every
+    // record, deliberately: the PartialFormFieldReadOnly guard already blocks every
     // non-exempt field (these two columns included) whenever the flag IS currently set, so that
-    // shape reaches the *old* guard, not this one — correction 2's own emphasis is that the second
-    // door is live precisely when the record is unflagged, which is what these fixtures set up.
+    // shape reaches that guard, not this one — the second door is live precisely when the record
+    // is unflagged, which is what these fixtures set up.
     [Fact]
     public void EditField_MajorFlags_AttemptingToSetBit14OnUnflaggedRecord_IsRefused()
     {

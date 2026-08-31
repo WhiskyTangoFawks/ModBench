@@ -3,8 +3,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
-// Per-plugin VMAD tree for one record, ordered by load order (master = first). Origin (#272 /
-// ADR-0036) is required since #275 — every input must say which origin, not fall back to one.
+// Per-plugin VMAD tree for one record, ordered by load order (master = first). Origin (ADR-0036)
+// is required — every input must say which origin, not fall back to one.
 public sealed record VmadPluginInput(string Plugin, int LoadOrderIndex, VmadData? Vmad, string Origin);
 
 public sealed record VmadClassifyResult(VmadCompare Compare, ConflictAll ConflictContribution);
@@ -16,7 +16,7 @@ public static class VmadConflictClassifier
 {
     // Bundles the per-Classify-call context (all plugin inputs, master plugin, the shared conflict
     // accumulator, and the ADR-0031 resolver) that every recursive Build*/ChildDiff step needs —
-    // mirrors ConflictClassifier.DiffContext so the two classifiers stay consistent within this PR.
+    // mirrors ConflictClassifier.DiffContext so the two classifiers stay consistent.
     private sealed record VmadDiffContext(
         IReadOnlyList<VmadPluginInput> Inputs,
         string MasterColumn,
@@ -29,11 +29,11 @@ public static class VmadConflictClassifier
     // the same lookup as FieldDiff — no VMAD-specific index or expected-type list exists at this
     // layer, so every resolved Object is either ResolvedValidType or Unresolved, never
     // ResolvedWrongType (there's no Papyrus-declared expected record type to compare against).
-    // pluginParticipates (#267 / ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
-    // plugin, origin) since #34 — a filename alone can name two loaded copies. A
+    // pluginParticipates (ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
+    // plugin, origin) — a filename alone can name two loaded copies. A
     // non-participating plugin's VMAD is excluded before any diff/winner/cell-state computation —
     // mirrors ConflictClassifier.Classify's identical filter. Null (the default) means every plugin
-    // in inputs participates, preserving prior behavior for existing callers.
+    // in inputs participates.
     public static VmadClassifyResult Classify(
         IReadOnlyList<VmadPluginInput> inputs,
         GameRelease release,
@@ -59,7 +59,7 @@ public static class VmadConflictClassifier
         var scriptDiffs = scriptNames
             .ConvertAll(scriptName =>
             {
-                // #272 / ADR-0036: keyed by the compound column identity — two inputs sharing a
+                // ADR-0036: keyed by the compound column identity — two inputs sharing a
                 // filename but differing in origin must land as two independent entries, not collide.
                 var perPlugin = inputs.ToDictionary(
                     i => ColumnKey.Of(i.Plugin, i.Origin),
@@ -117,7 +117,7 @@ public static class VmadConflictClassifier
 
     // Only an "object"-kind leaf carries Resolutions — never aggregated from Children, so a
     // dangling Object in one array element/struct member doesn't hide a live link on its siblings
-    // (ADR-0031, same independence fix as FieldDiff).
+    // (ADR-0031, same independence rule as FieldDiff).
     private static Dictionary<string, FormKeyResolution>? BuildResolutions(
         string kind,
         Dictionary<string, VmadPropertyValue?> perPlugin,
@@ -227,7 +227,7 @@ public static class VmadConflictClassifier
         IReadOnlyList<VmadPluginInput> inputs, string masterColumn, Func<string, string?> valueOf)
     {
         // Materialize each plugin's canonical value once — valueOf can recurse through a struct
-        // subtree. Keyed by the compound column identity (#272 / ADR-0036), matching perPlugin.
+        // subtree. Keyed by the compound column identity (ADR-0036), matching perPlugin.
         var canon = inputs.ToDictionary(i => ColumnKey.Of(i.Plugin, i.Origin), i => (object?)valueOf(ColumnKey.Of(i.Plugin, i.Origin)));
         var columnOrder = inputs.Select(i => (ColumnKey.Of(i.Plugin, i.Origin), i.LoadOrderIndex)).ToList();
 

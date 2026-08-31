@@ -13,19 +13,19 @@ export interface EditingControllerDeps {
   setStatusText: (text: string) => void;
   showWarning: (msg: string) => void;
   showError: (msg: string) => void;
-  /** #255: `label` names the filter's *source* (a `.sql` filename, or the document it was applied
+  /** `label` names the filter's *source* (a `.sql` filename, or the document it was applied
    *  from) for the Plugins tree's description readout — undefined when it isn't known, which is
    *  the case for a filter read back off the backend when it comes up. */
   setFilterActive: (active: boolean, sql?: string, label?: string) => void;
-  /** #278 / ADR-0035 amending ADR-0018: called whenever the record filter's per-plugin match set
+  /** ADR-0035 amending ADR-0018: called whenever the record filter's per-plugin match set
    *  can have changed — after `setFilter` succeeds, and after `clearFilter` — so the caller can
    *  re-fetch and re-publish `PluginMetadata.hasMatchingRecords` to `PluginsTreeComposite`'s
    *  chevron. Symmetric on purpose: a stale `false` surviving a clear would leave a plugin
-   *  permanently unexpandable, the mirror image of the bug this ticket exists to kill. Takes no
+   *  permanently unexpandable. Takes no
    *  argument — the same "something changed, go re-derive it" shape as `refreshTree` — because
    *  the fetch and the derivation both belong to the caller, not here. */
   refreshMatchingPlugins: () => void;
-  // #308 / ADR-0035: called exactly when a `putLoadOrder` resolves `{ outcome: 'reconciled' }` —
+  // ADR-0035: called exactly when a `putLoadOrder` resolves `{ outcome: 'reconciled' }` —
   // see that call site's own comment for why this is the one reliable, already-existing point at
   // which conflicts become computed, and why no poller is added for it. ADR-0044: every reconcile
   // that changes anything re-sweeps, so this fires on every reconcile — a reorder, an enable, a
@@ -34,12 +34,12 @@ export interface EditingControllerDeps {
   log?: (msg: string) => void;
 }
 
-/** #307 / ADR-0035: how often the in-flight reconcile is asked what it has indexed so far.
+/** ADR-0035: how often the in-flight reconcile is asked what it has indexed so far.
  *
  *  500ms matches `BackendManager`'s own `GET /health` cadence — the one in-repo precedent for
  *  polling this backend, which is a better answer than a number picked by feel. Slow enough not
  *  to be a busy loop against a backend that is already working hard, fast enough that chevrons
- *  arrive smoothly rather than in visible lurches. Tuned against a real load order under #313;
+ *  arrive smoothly rather than in visible lurches. Tuned against a real load order;
  *  this constant is the single dial. */
 export const STATUS_POLL_INTERVAL_MS = 500;
 
@@ -62,12 +62,12 @@ export interface LoadOrderPluginInput {
   winning: boolean;
 }
 
-/** #307: how a reconcile ended. Three outcomes, because there are three, and a caller must respond
+/** How a reconcile ended. Three outcomes, because there are three, and a caller must respond
  *  to each differently:
  *
  *  - `reconciled` — the load order is held; `failures` are the copies it could not open or index
- *    (#277 / ADR-0037 AC7, each a row in an error state — ADR-0044); `crashRepairOffers` are
- *    #381's own loud detect-and-offer targets — a plugin this same reconcile found with an
+ *    (ADR-0037 AC7, each a row in an error state — ADR-0044); `crashRepairOffers` are
+ *    the loud detect-and-offer targets — a plugin this same reconcile found with an
  *    interrupted compile or an unreadable binary, riding the response the same way `failures`
  *    already does.
  *  - `failed` — the PUT itself failed, already surfaced (ADR-0026 "explicit action failed").
@@ -78,13 +78,13 @@ export interface LoadOrderPluginInput {
  *    and nothing for the caller to tear down: the newer snapshot owns the load order now.
  *
  *  A tagged union rather than a third sentinel value: `undefined` already had to be documented
- *  everywhere it was read (#295), and a second one would be a rule every call site must remember. */
+ *  everywhere it was read, and a second one would be a rule every call site must remember. */
 export type LoadOrderOutcome =
   | { outcome: 'reconciled'; failures: { name?: string | null; reason?: string | null }[]; crashRepairOffers: CrashRepairOffer[] }
   | { outcome: 'failed' }
   | { outcome: 'abandoned' };
 
-// #381: the generated CrashRepairReason is numeric (0|1) for the same Swashbuckle/
+// The generated CrashRepairReason is numeric (0|1) for the same Swashbuckle/
 // JsonStringEnumConverter mismatch PluginRepository's toWorkingTreeState/toTrackPhase already
 // document — Program.cs registers that converter globally, so the real wire value is the string.
 // Trust the string.
@@ -104,7 +104,7 @@ function crashRepairOffersFrom(
   return (data?.crashRepairOffers ?? []).map(toCrashRepairOffer);
 }
 
-/** #307: what a caller may pass to observe (and abandon) a reconcile in progress. Deliberately
+/** What a caller may pass to observe (and abandon) a reconcile in progress. Deliberately
  *  plain stdlib — `AbortSignal`, not a bespoke token — so this interface still carries no VS Code
  *  types and `openapi-fetch` can forward it straight to `fetch`, cancelling the request itself
  *  rather than leaving it to notice a dead socket. */
@@ -126,7 +126,7 @@ export class EditingController {
   }
 
   /**
-   * #288 / ADR-0041: creates a plugin at a caller-resolved destination (path/origin — Mod
+   * ADR-0041: creates a plugin at a caller-resolved destination (path/origin — Mod
    * Management's destination QuickPick: overwrite/, an existing mod, or a freshly installed mod
    * folder) and Tracks it if untracked, the same division of labour `track` already follows. Returns the created plugin's own name (never assumed to equal the requested
    * one) on success, undefined on failure. Deliberately does not refresh the tree — that only
@@ -150,11 +150,11 @@ export class EditingController {
    *  profile switch, a modlist/plugins.txt write, an install, a checkbox toggle and a drag reorder
    *  all come through here. `gameDirectory` must be the resolved Data folder — the backend
    *  prepends implicit masters from it. `instanceRoot` is the MO2 instance the mod folders belong
-   *  to: the backend keys its persistent index on it (#592 / ADR-0001), because `origin` is a mod
+   *  to: the backend keys its persistent index on it (ADR-0001), because `origin` is a mod
    *  folder *name* and so is unique only within one instance.
    *
    *  Resolves with a tagged {@link LoadOrderOutcome}; on `reconciled` it carries the reconcile's
-   *  own `failures` (#277 / ADR-0037 AC7) — the same data the toast below already consumes, so
+   *  own `failures` (ADR-0037 AC7) — the same data the toast below already consumes, so
    *  the caller (the Plugins tree's hand-off) can decorate those rows with their reason instead of
    *  re-deriving the fact a second way. */
   async putLoadOrder(
@@ -164,7 +164,7 @@ export class EditingController {
     gameRelease = 'Fallout4',
     options: LoadOrderOptions = {},
   ): Promise<LoadOrderOutcome> {
-    // #307 / ADR-0035: the PUT stays blocking (#274 kept that contract) and the generated
+    // ADR-0035: the PUT stays blocking and the generated
     // openapi-fetch client has no streaming path, so progress is *polled* off GET /load-order/status
     // alongside the still in-flight PUT. Started before the await, stopped in the finally: the
     // poll's whole reason to exist is the window this await covers.
@@ -173,7 +173,7 @@ export class EditingController {
     try {
       result = await this.deps.client.PUT('/load-order', {
         body: { plugins, gameDirectory, instanceRoot, gameRelease },
-        // #307 AC7: aborts the request itself rather than leaving it to notice a dead socket.
+        // Aborts the request itself rather than leaving it to notice a dead socket.
         ...(options.signal ? { signal: options.signal } : {}),
       });
     } catch (e) {
@@ -183,7 +183,7 @@ export class EditingController {
       stopPolling();
     }
     const { data, error, response } = result;
-    // #307 AC7: 409 is the backend saying this snapshot was superseded by a newer one or by
+    // 409 is the backend saying this snapshot was superseded by a newer one or by
     // closing (LoadOrderEndpoints.SupersededReconcile) — a warning there, not an error, and the
     // same here. Surfacing it would toast the user for something they asked for, and treating it
     // as a failure would make the caller act on a load order the *newer* snapshot now owns.
@@ -201,10 +201,10 @@ export class EditingController {
     return this.reportReconciled(plugins, data?.failures ?? [], crashRepairOffersFrom(data));
   }
 
-  /** #307 AC7: whether a rejected PUT was the user closing mEdit rather than a fault. An abort is
+  /** Whether a rejected PUT was the user closing mEdit rather than a fault. An abort is
    *  the one rejection that is not a failure — the teardown they asked for is already underway,
    *  so there is nothing to report and nothing to tear down. Every other network-level rejection
-   *  still propagates to the caller's own handler, as before. */
+   *  still propagates to the caller's own handler. */
   private wasDeliberatelyAborted(signal: AbortSignal | undefined): boolean {
     if (!signal?.aborted) return false;
     this.log('[EditingController] putLoadOrder was aborted — mEdit was closed while it reconciled');
@@ -213,7 +213,7 @@ export class EditingController {
 
   /** The successful reconcile's own reporting: what it could not open, whether it holds anything
    *  that can actually win a FormKey, and the tree/status refresh. Split out of putLoadOrder purely
-   *  for that method's complexity budget once #307 gave it three outcomes to classify. */
+   *  for that method's complexity budget. */
   private reportReconciled(
     plugins: LoadOrderPluginInput[],
     failures: { name?: string | null; reason?: string | null }[],
@@ -235,17 +235,17 @@ export class EditingController {
     }
     this.deps.setStatusText(`$(check) mEdit: Ready (${plugins.length} plugin copies)`);
     this.deps.refreshTree();
-    // #308 / ADR-0035: the backend only answers this PUT after the winner sweep (#274), so
+    // ADR-0035: the backend only answers this PUT after the winner sweep, so
     // reaching here *is* "conflicts are now computed" — reusing that existing fact rather than
     // adding a second poller or a second notion of "is the load order settled". Record panels open
     // mid-reconcile are listening for this to refetch their own comparison instead of staying on
     // the partial one they opened against. ADR-0044: every reconcile that changed anything
-    // re-swept, so this fires on every one — the forward coupling #97 owed is paid here.
+    // re-swept, so this fires on every one.
     this.deps.notifyConflictsComputed();
     return { outcome: 'reconciled', failures, crashRepairOffers };
   }
 
-  /** #307: poll `GET /load-order/status` until the caller stops us, reporting each answer. Returns
+  /** Poll `GET /load-order/status` until the caller stops us, reporting each answer. Returns
    *  the stop function; a reconcile with no `onProgress` polls nothing at all.
    *
    *  Self-rescheduling `setTimeout` rather than `setInterval`: a slow status read must not be
@@ -277,10 +277,9 @@ export class EditingController {
     return () => { stopped = true; clearTimeout(timer); };
   }
 
-  /** #414 review F2: `track`'s own poller — identical shape to `pollLoadOrderStatus` above (same
+  /** `track`'s own poller — identical shape to `pollLoadOrderStatus` above (same
    *  self-rescheduling `setTimeout`, same "no `onProgress` polls nothing" contract, same reasons),
-   *  reading `GET /plugins/track/status` instead. No `signal`: Track has no cancellation (out of
-   *  scope, per the finding this exists to close). */
+   *  reading `GET /plugins/track/status` instead. No `signal`: Track has no cancellation. */
   private pollTrackStatus(onProgress: ((status: TrackStatus) => void) | undefined): () => void {
     if (!onProgress) return () => {};
     let stopped = false;
@@ -338,22 +337,18 @@ export class EditingController {
     this.deps.setFilterActive(sql !== null, sql ?? undefined, undefined);
   }
 
-  /** #414: the origin (mod folder identity) the load order names for this plugin — the copy
+  /** The origin (mod folder identity) the load order names for this plugin — the copy
    *  plugins.txt points at, never a losing copy of the same name (ADR-0044 holds both) — what the
    *  Track command needs to know which mod folder to track, resolved off the same already-fetched
    *  plugin list the tree itself reads, not a stale/current MO2 resolution.
-   *  `undefined` when the load order names no plugin of this name — the same outcome #505
-   *  gives a backend that isn't even running yet (Track/Rebase/compileAtMain, and Save &
-   *  Compile's own tree-row tier, all resolve their target through this call first —
-   *  {@link resolveCompileTarget}'s other tiers have their own #505 fix, `getRecordOwner`'s
-   *  own call site). `PluginRepository.getPlugins()` deliberately lets a transport failure
-   *  propagate as-is (its own doc comment); every other `LoadOrderController` method already
-   *  catches that at this boundary — ADR-0026 background/recoverable tier, same posture the
-   *  poll-failure catches elsewhere in this file already cite — and degrades to a caught,
-   *  reported outcome (`track`, `compile`, `rebaseOntoMain`, …). This was the one method that
-   *  didn't, so a call before Launch mEdit surfaced as VS Code's own raw, uncaught "fetch failed"
-   *  toast instead of this codebase's own error surfacing. Degrading to the existing "not found"
-   *  `undefined` costs nothing new: every caller already turns it into a clear message. */
+   *  `undefined` when the load order names no plugin of this name — and equally when the backend
+   *  isn't running yet (Track/Rebase/compileAtMain, and Save & Compile's own tree-row tier, all
+   *  resolve their target through this call first). `PluginRepository.getPlugins()` deliberately
+   *  lets a transport failure propagate as-is (its own doc comment); it is caught here — ADR-0026
+   *  background/recoverable tier, same posture the poll-failure catches elsewhere in this file —
+   *  and degraded to the existing "not found" `undefined`, which every caller already turns into
+   *  a clear message. Without the catch, a call before Launch mEdit surfaces as VS Code's own
+   *  raw, uncaught "fetch failed" toast instead of this codebase's own error surfacing. */
   async resolveOrigin(pluginName: string): Promise<string | undefined> {
     let plugins;
     try {
@@ -365,7 +360,7 @@ export class EditingController {
     return plugins.find((p) => p.name === pluginName && p.inLoadOrder)?.origin;
   }
 
-  /** #414/ADR-0041: the Track gesture. Origin names the mod folder — every loaded plugin sharing
+  /** ADR-0041: the Track gesture. Origin names the mod folder — every loaded plugin sharing
    *  it is tracked together, resolved backend-side — Mod Management resolved the origin.
    *
    *  Returns whether it happened. A failure is ADR-0026's "explicit action failed" tier: the user
@@ -374,7 +369,7 @@ export class EditingController {
   async track(
     origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
   ): Promise<boolean> {
-    // #414 review F2: the POST stays blocking, same contract as putLoadOrder's own — so
+    // The POST stays blocking, same contract as putLoadOrder's own — so
     // progress is polled off GET /plugins/track/status *alongside* the still in-flight POST.
     // Started before the await, stopped in the finally: the poll's whole reason to exist is the
     // window this await covers.
@@ -403,7 +398,7 @@ export class EditingController {
     return true;
   }
 
-  /** #427: create-record — mints a new record as a working-tree source file (ADR-0041), answering
+  /** Create-record — mints a new record as a working-tree source file (ADR-0041), answering
    *  at Effective only until committed and compiled. `formKey` is xEdit's typed-FormID path; left
    *  undefined, the backend auto-allocates the next free local FormID (both-refs collision-safe).
    *
@@ -425,7 +420,7 @@ export class EditingController {
         return undefined;
       }
       this.deps.refreshTree();
-      // #449: a create is a working-tree change to a tracked plugin's source — the compile-staleness
+      // A create is a working-tree change to a tracked plugin's source — the compile-staleness
       // decoration needs the same re-derive refreshTree's sibling facts already get here.
       this.deps.refreshMatchingPlugins();
       return data?.formKey ?? undefined;
@@ -437,7 +432,7 @@ export class EditingController {
     }
   }
 
-  /** #427: delete-record — the source file goes away and #415's null-Body mechanism takes it from
+  /** Delete-record — the source file goes away and the null-Body mechanism takes it from
    *  there (gone at Effective, still served at Head until compiled). The confirmation ("are you
    *  sure") is extension-side UX, the same division `compile`'s compile-at-main modal already
    *  established — this method never asks, only acts. Returns whether it happened. */
@@ -454,7 +449,7 @@ export class EditingController {
         return false;
       }
       this.deps.refreshTree();
-      // #449: same reason as createRecord above — a delete is a working-tree change too.
+      // Same reason as createRecord above — a delete is a working-tree change too.
       this.deps.refreshMatchingPlugins();
       return true;
     } catch (e) {
@@ -465,11 +460,11 @@ export class EditingController {
     }
   }
 
-  /** #427: renumber — a delete+create pair plus the cross-plugin reference cascade (native records
+  /** Renumber — a delete+create pair plus the cross-plugin reference cascade (native records
    *  only; an override is refused server-side, naming the originating plugin). `newFormKey` is
    *  xEdit's typed-FormID path; left undefined, the backend auto-allocates. Returns the new FormKey
    *  on success, `undefined` on failure (already surfaced, including the untracked-referencer and
-   *  partial-cascade-failure cases — both typed/messaged server-side, per #427's pinned contract). */
+   *  partial-cascade-failure cases — both typed/messaged server-side). */
   async renumberRecord(formKey: string, plugin: string, origin: string, newFormKey?: string): Promise<string | undefined> {
     try {
       const { data, error, response } = await this.deps.client.POST('/records/{formKey}/renumber', {
@@ -483,7 +478,7 @@ export class EditingController {
         return undefined;
       }
       this.deps.refreshTree();
-      // #449: same reason as createRecord above — a renumber (delete+create) is a working-tree
+      // Same reason as createRecord above — a renumber (delete+create) is a working-tree
       // change too.
       this.deps.refreshMatchingPlugins();
       return data?.newFormKey ?? undefined;
@@ -495,7 +490,7 @@ export class EditingController {
     }
   }
 
-  /** #436/#494: Copy as Override Into… — the source record's own bytes land under the identical
+  /** Copy as Override Into… — the source record's own bytes land under the identical
    *  FormKey in the destination plugin's working tree. No confirmation ("are you sure") — xEdit's
    *  own CopyInto asks nothing before an override copy either, only before an EditorID-changing
    *  copy-as-new. Returns whether it happened; success carries no new FormKey to report (the
@@ -516,7 +511,7 @@ export class EditingController {
         return false;
       }
       this.deps.refreshTree();
-      // #449: a copy lands as a working-tree change on the destination plugin's own source, same
+      // A copy lands as a working-tree change on the destination plugin's own source, same
       // reason createRecord/deleteRecord/renumberRecord above refresh it.
       this.deps.refreshMatchingPlugins();
       return true;
@@ -528,7 +523,7 @@ export class EditingController {
     }
   }
 
-  /** #436/#494: Copy as New Record Into… — a deep copy under a fresh FormKey (auto-allocated,
+  /** Copy as New Record Into… — a deep copy under a fresh FormKey (auto-allocated,
    *  both-refs collision-safe, or `requestedFormKey`'s explicit typed-FormID path). No EditorID
    *  prompt, unlike xEdit's own copy-as-new: the backend's request carries no EditorID field at
    *  all, and `createRecord`'s own "land immediately, rename via the grid afterward" posture
@@ -553,7 +548,7 @@ export class EditingController {
         return undefined;
       }
       this.deps.refreshTree();
-      // #449: same reason as copyRecordAsOverride above — a copy is a working-tree change too.
+      // Same reason as copyRecordAsOverride above — a copy is a working-tree change too.
       this.deps.refreshMatchingPlugins();
       return data?.newFormKey ?? undefined;
     } catch (e) {
@@ -564,13 +559,13 @@ export class EditingController {
     }
   }
 
-  /** #416: Save & Compile. `atRef` is the compile-at-`main` gesture's own target (never a
+  /** Save & Compile. `atRef` is the compile-at-`main` gesture's own target (never a
    *  "confirmed" flag — the confirmation itself is extension-side UX, S13); undefined is the
    *  normal working-tree compile. Returns null (not a thrown error) on a transport/HTTP failure —
    *  distinct from `CompileResult.succeeded === false`, which is a *typed refusal* the caller
    *  should show as-is, not a surprise. Never refreshes the tree itself: a compiled binary changes
    *  nothing `GET /plugins` reports (masters, load order), only bytes on disk — which the index's
-   *  own mirror watch re-reads (#587). */
+   *  own mirror watch re-reads. */
   async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | null> {
     try {
       const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/compile', {
@@ -592,7 +587,7 @@ export class EditingController {
     }
   }
 
-  /** #417: Absorb Upstream Update. Returns null on a transport/HTTP failure, distinct from
+  /** Absorb Upstream Update. Returns null on a transport/HTTP failure, distinct from
    *  `ExternalChangeActionResult.succeeded === false` (a typed refusal, shown as-is — Absorb only
    *  refuses on an IO fault, per the pinned contract). Refreshes the tree: a new baseline can move
    *  provenance the tree reads (trailers), the same reason `track` does. */
@@ -609,7 +604,7 @@ export class EditingController {
         return null;
       }
       const result = data ? toExternalChangeActionResult(data) : null;
-      // #449: absorbing a new baseline moves the source under this plugin the same way a track
+      // Absorbing a new baseline moves the source under this plugin the same way a track
       // does — the compile-staleness decoration needs the same re-derive refreshTree's sibling
       // facts already get here.
       if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
@@ -622,7 +617,7 @@ export class EditingController {
     }
   }
 
-  /** #417: Keep as My Edit. A same-record collision with existing working-tree dirt is a typed
+  /** Keep as My Edit. A same-record collision with existing working-tree dirt is a typed
    *  refusal (`succeeded === false`, `refusalReason` naming the records), never an HTTP error. */
   async keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | null> {
     try {
@@ -637,7 +632,7 @@ export class EditingController {
         return null;
       }
       const result = data ? toExternalChangeActionResult(data) : null;
-      // #449: keeping an external change deserializes into working-tree dirt — same reason as
+      // Keeping an external change deserializes into working-tree dirt — same reason as
       // absorbUpstreamUpdate above.
       if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
       return result;
@@ -649,7 +644,7 @@ export class EditingController {
     }
   }
 
-  /** #417: the offered rebase — origin-scoped (the repo, not any one plugin, is the unit of
+  /** The offered rebase — origin-scoped (the repo, not any one plugin, is the unit of
    *  baselines and rebase). Refresh happens either way: `Clean` moved the branch, `Refused` is
    *  worth nothing to refresh, `Conflicted` leaves the repo mid-rebase, which the panel should
    *  reflect regardless. */
@@ -657,7 +652,7 @@ export class EditingController {
     return this.postRebase('/plugins/rebase', origin, 'rebaseOntoMain');
   }
 
-  /** #417: resumes a rebase left mid-flight by {@link rebaseOntoMain}'s own `Conflicted` outcome,
+  /** Resumes a rebase left mid-flight by {@link rebaseOntoMain}'s own `Conflicted` outcome,
    *  after the user has hand-resolved the conflicted source file(s) in the native merge editor. */
   async continueRebase(origin: string): Promise<RebaseResult | null> {
     return this.postRebase('/plugins/rebase/continue', origin, 'continueRebase');
@@ -676,7 +671,7 @@ export class EditingController {
       }
       const result = data ? toRebaseResult(data) : null;
       this.deps.refreshTree();
-      // #449: a rebase moves the branch (or leaves it mid-conflict), either of which can change a
+      // A rebase moves the branch (or leaves it mid-conflict), either of which can change a
       // tracked plugin's compile-freshness answer — same reason absorbUpstreamUpdate/keepAsMyEdit
       // above refresh it, and unconditional here for the same reason refreshTree above already is.
       this.deps.refreshMatchingPlugins();
@@ -720,7 +715,7 @@ function toRebaseResult(data: {
   refusalReason?: string | null;
   conflictedPaths?: string[] | null;
 }): RebaseResult {
-  // #417 review note: the generated Outcome type is a numeric union, same Swashbuckle/
+  // The generated Outcome type is a numeric union, same Swashbuckle/
   // JsonStringEnumConverter mismatch toTrackPhase already works around in PluginRepository.ts —
   // the wire bytes are the real string values ("Clean"/"Refused"/"Conflicted").
   const outcome = typeof data.outcome === 'string' ? (data.outcome as RebaseResult['outcome']) : 'Refused';

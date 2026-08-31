@@ -23,7 +23,7 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
   };
 }
 
-// ── trackedModFoldersOf (#414) ───────────────────────────────────────────────
+// ── trackedModFoldersOf ────────────────────────────────────────────────────
 
 describe('trackedModFoldersOf', () => {
   it('finds a tracked mod folder — one whose folder contains .git — via a real filesystem check', () => {
@@ -67,7 +67,7 @@ describe('trackedModFoldersOf', () => {
   });
 });
 
-// ── registerTrackedRepositories (#414 AC: no duplicate SCM registration) ────
+// ── registerTrackedRepositories (no duplicate SCM registration) ─────────────
 
 describe('registerTrackedRepositories', () => {
   it('calls openRepository exactly once per distinct mod folder', async () => {
@@ -83,17 +83,16 @@ describe('registerTrackedRepositories', () => {
   it('never calls openRepository twice for the same folder', async () => {
     const openRepository = vi.fn().mockResolvedValue(undefined);
 
-    // trackedModFoldersOf already dedupes, but this function is the AC's own contract
-    // ("no duplicate SCM registration") — it must not re-introduce a duplicate even if handed
+    // trackedModFoldersOf already dedupes, but "no duplicate SCM registration" is this
+    // function's own contract too — it must not re-introduce a duplicate even if handed
     // one, e.g. by a caller that merged two plugin lists without re-deduping.
     await registerTrackedRepositories(openRepository, ['/mods/A', '/mods/A']);
 
     expect(openRepository).toHaveBeenCalledTimes(1);
   });
 
-  // #557: the returned repository handles are what extension.ts now keeps around to prompt a
-  // post-edit Source Control status refresh — previously this function returned `Promise<void>`
-  // and threw every resolved `Repository` away, which is why nothing could ever be refreshed.
+  // The returned repository handles are what extension.ts keeps around to prompt a
+  // post-edit Source Control status refresh — discarding them would leave nothing to refresh.
   it('resolves to a Map of folder to the repository openRepository returned', async () => {
     const repoA = { name: 'repoA' };
     const repoB = { name: 'repoB' };
@@ -115,7 +114,7 @@ describe('registerTrackedRepositories', () => {
   });
 });
 
-// ── pluginRepositoriesOf (#557 review: extension.ts carries no business logic) ─────────────────
+// ── pluginRepositoriesOf (extension.ts carries no business logic) ──────────────────────────────
 
 describe('pluginRepositoriesOf', () => {
   it("maps each plugin's own filename to the repository resolved for its mod folder", () => {

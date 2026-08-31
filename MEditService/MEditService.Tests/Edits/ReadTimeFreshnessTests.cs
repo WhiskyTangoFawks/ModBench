@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415 AC2, and the mechanism the issue comment pinned for it: git-mediated source changes are
+/// Git-mediated source changes are
 /// caught at <b>read time</b> by comparing what the file holds against what the index stored — no
 /// watcher, because Modbench owns the <c>.git</c> folder and cannot be told when git moves under it.
 ///
@@ -94,10 +94,10 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     }
 
     /// <summary>
-    /// #561 review: a source file rewritten with a leading UTF-8 BOM — content otherwise byte-for-byte
+    /// A source file rewritten with a leading UTF-8 BOM — content otherwise byte-for-byte
     /// identical, the way some external editors write UTF-8 by default (root CLAUDE.md's
-    /// never-assume-exclusive-ownership rule) — must not read as a working-tree change. Before this
-    /// ticket the flat case read through <c>File.ReadAllText</c>, which strips a BOM via
+    /// never-assume-exclusive-ownership rule) — must not read as a working-tree change. The
+    /// flat case reads through <c>File.ReadAllText</c>, which strips a BOM via
     /// <c>StreamReader</c>'s own byte-order-mark detection; the general resolver's own read has to
     /// strip it the same way, or a BOM-carrying file mismatches the codec's own BOM-free body on
     /// <i>every</i> read — a self-heal that writes the BOM'd text in as Effective, which still
@@ -118,14 +118,13 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     }
 
     /// <summary>
-    /// #453 review finding 1, the path a user actually walks: the hand edit above, then <b>read
-    /// again</b>.
+    /// The path a user actually walks: the hand edit above, then <b>read again</b>.
     ///
     /// <para>The first read folds the new EditorID in from the file's content, so the index now says
     /// "RenamedByHand" while the file on disk is still named after "FixtureNpc" — nothing renames a
-    /// file when its content is edited by a text editor. The second read then computes the source path
-    /// from the <i>indexed</i> EditorID, finds nothing at that name, and — before this was fixed —
-    /// concluded the file had been deleted and marked a live record gone at Effective. One hand edit,
+    /// file when its content is edited by a text editor. A second read that computed the source path
+    /// from the <i>indexed</i> EditorID would find nothing at that name, conclude the file had been
+    /// deleted, and mark a live record gone at Effective. One hand edit,
     /// two reads, and the record vanishes.</para>
     ///
     /// <para>Resolution leans on the FormKey suffix instead, which the rename never touches, so
@@ -160,7 +159,7 @@ public sealed class ReadTimeFreshnessTests : IDisposable
     [Fact]
     public void AFileRenamedOnDiskWithItsContentUnchanged_IsStillFoundAndEditable()
     {
-        // #459: NpcSourceFile now resolves the record's real *current* file (SourceUnitResolver, live
+        // NpcSourceFile resolves the record's real *current* file (SourceUnitResolver, live
         // off disk) rather than a fixed computed path, so it must be captured before the hand-rename
         // below — otherwise every later read of it would just re-find the file at its new location and
         // this test would stop testing anything.
@@ -175,13 +174,13 @@ public sealed class ReadTimeFreshnessTests : IDisposable
         Assert.True(result.Applied, result.Message);
         // Written into the file that actually holds the record, not recreated at the stale computed
         // path — two files claiming one FormKey is the corruption AmbiguousSourceUnitException exists
-        // for, and the flat path is the one that used never to look.
+        // for.
         Assert.False(File.Exists(originalPath));
         Assert.Contains("0.6", File.ReadAllText(renamed), StringComparison.Ordinal);
         Assert.NotNull(_mod.Mirror.Index!.GetDocument(_mod.Npc.ToString(), _mod.Plugin));
     }
 
-    // #422: the self-heal above folds an externally-changed source file into the read model as a
+    // The self-heal above folds an externally-changed source file into the read model as a
     // side effect of a *read* — still a mutation as far as _filter's one-shot snapshot is concerned,
     // so a record that only now matches an active filter must not stay hidden just because nothing
     // went through the explicit edit path.

@@ -1,4 +1,4 @@
-// #363: Filter to Selected Plugins — the ordinary record filter (ADR-0018), pre-restricted to a
+// Filter to Selected Plugins — the ordinary record filter (ADR-0018), pre-restricted to a
 // plugin-name set drawn from the Plugins-tree selection (adopted from xEdit's own
 // mniNavFilterApplySelected, xeMainForm.pas:13976-14027). `records` is the base documents table
 // (form_key, plugin, origin, record_type, ... — MEditService.Core/Records/TableDdlBuilder.cs), so

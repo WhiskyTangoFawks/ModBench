@@ -4,14 +4,14 @@ status: accepted
 
 # The plugin is the source of truth; the source is its lossless, gate-verified editable form
 
-Decided 2026-08-22. Defines what a tracked mod's source *is*; the workflow around it is
+Defines what a tracked mod's source *is*; the workflow around it is
 [ADR-0041](0041-manual-git-tracking-compile-from-text.md). Restates
 [ADR-0002](0002-plugins-as-source-of-truth.md) for tracked mods.
 
 ## Context
 
 An earlier posture (see Alternatives rejected) made Spriggit's text format the system of
-record and the binary a compiled artifact. Finishing the dialogue-order work (#459) under that
+record and the binary a compiled artifact. Working under that
 model surfaced three facts: Spriggit's format is **lossy on purpose** (omitted fields come back
 as defaults, Creation-Kit-shuffled lists are re-sorted — its goal is clean diffs, not fidelity),
 so a format that loses on purpose cannot be tested for losing by accident; Spriggit is not
@@ -30,7 +30,7 @@ Modbench-owned copy, and the plugin is not committed to the mod's repository:
 wrote it", and the load-time hash check and bridge watcher are how external change is observed.
 
 **2. The source is Modbench's own format, and it is lossless. The round-trip verdict is model
-identity, not byte identity (2026-08 amendment, #513).** A survey of 684 real, mixed-tool LitR
+identity, not byte identity.** A survey of 684 real, mixed-tool LitR
 plugins found only 37% survive `write(parse(plugin)) == plugin` byte-for-byte — the rest diverge
 on Mutagen's own encoding choices (recompressed zlib, `-0.0`→`+0.0`, subrecord/GRUP-child
 reordering, derived sizes, ADR-0038's own master pruning, recomputed derived counters), never on
@@ -52,12 +52,10 @@ and Mutagen's writer unconditionally re-adds them, materializing `Furniture.Flag
 `null` to a real derived value. That is a genuine content change, correctly refused, naming the
 record type, FormKey and field (`SourceRoundTripFailedException`), until Mutagen is fixed.
 
-*(An earlier draft of this decision cited `NPC_/QNAM` float precision drift on write as a second
-example, "observed in 118 of 684 survey plugins" — that claim does not hold up: `NPC_/QNAM` is
-`System.Drawing.Color`, quantized to a byte per channel at **parse** time, so any precision is
+*(`NPC_/QNAM` float precision drift is **not** a refusal source, despite appearances: `NPC_/QNAM`
+is `System.Drawing.Color`, quantized to a byte per channel at **parse** time, so any precision is
 already destroyed identically on both sides of the comparison before this gate ever runs. Direct
-re-verification against the full LitR corpus found zero genuine float-precision refusals; retracted
-here rather than left uncorrected.)*
+verification against the full LitR corpus found zero genuine float-precision refusals.)*
 
 **Known limitation, not yet closed: the mask is not literally bit-exact for `Single` fields.**
 Mutagen's generated `FillEqualsMask` compares `Single` (float32) fields with `EqualsWithin`, a
@@ -69,7 +67,7 @@ field in `Mutagen.Bethesda.Fallout4` reaches `EqualsWithin`, so the gap does not
 `ModelIdentityFloatEpsilonCharacterizationTests` pins the current (accepted, not refused) behavior
 for a sub-epsilon mutation near zero, so the boundary is documented with a test rather than left
 implicit. Whether to accept the epsilon as-is or bypass the mask for bit-exact numeric comparison
-is its own decision, filed separately (#564) rather than resolved here.
+is its own open decision, not resolved here.
 
 **The one exclusion, and the only one:** derived GRUP-header fields Mutagen's own generated model
 backs onto a handful of record types — populated at parse time from the enclosing group's own
@@ -89,12 +87,11 @@ elsewhere on their own declaring types (`FaceFxPhonemes.Unknowns`, `PlacedObject
 | Quest | `Timestamp`, `Unknown` | QuestChildren |
 | DialogTopic | `Timestamp`, `Unknown` | TopicChildren |
 
-The `WorldspaceBlock`/`WorldspaceSubBlock` rows were found live against the real LitR corpus while
-building the survey harness below, not anticipated at plan time — proof that this table is
-expected to grow exactly this way as more real plugins are checked, never by guessing a field name
+This table grows only from evidence: rows are found live against real corpora (the
+`WorldspaceBlock`/`WorldspaceSubBlock` rows arrived that way), never by guessing a field name
 in the abstract.
 
-**#568 amendment: the gate also checks a fixed allow-list of `ModHeader` (TES4) fields.**
+**The gate also checks a fixed allow-list of `ModHeader` (TES4) fields.**
 `ModelIdentity.FindFirst`'s own per-record walk never reaches `ModHeader` — it is not an
 `IMajorRecordGetter`, so `EnumerateMajorRecords()` never yields it. `TrackService.VerifyRoundTrip`
 runs a second, header-only check (`ModelIdentity.FindFirstHeaderFieldDivergence`) against the same
@@ -123,7 +120,7 @@ the other five fields on this list.
 | `Flags` | Write-time-derived from `IsMaster`/`UsingLocalization`/`IsSmallMaster` — a legitimate normalization, not opaque data. |
 | `FormID` | Always `0` on a header record; structurally inert. |
 | `Version`, `FormVersion`, `Version2` | Well-typed, semantically interpreted format fields, not opaque byte data. |
-| `Stats` (`NumRecords`/`NextFormID`) | This same write's own `NoNextFormIDProcessing`/`RecordCountOption.NoCheck` (#506) skip Mutagen's recompute rather than force agreement — whatever the codec parsed survives the write untouched, so a divergence here would be a codec question, not a Track-gate one. |
+| `Stats` (`NumRecords`/`NextFormID`) | This same write's own `NoNextFormIDProcessing`/`RecordCountOption.NoCheck` skip Mutagen's recompute rather than force agreement — whatever the codec parsed survives the write untouched, so a divergence here would be a codec question, not a Track-gate one. |
 | `MasterReferences` | ADR-0038's content-derived master pruning is a confirmed, currently-tested legitimate divergence (`MasterPruningRoundTripGateTests`, real fixtures). |
 | `OverriddenForms` (ONAM) | `OverriddenFormsOption` is its own write option with a legitimate divergence path. |
 | `TransientTypes` (TNAM) | **Not a legitimate-divergence exclusion — a confirmed gap in what this mechanism can detect**, deliberately not papered over. `Fallout4ModHeader.Mask.TransientTypes` is a nested indexed-list mask; a per-item corruption is reported by the shared mask-walking helper against the nested leaf's own declaring type (`TransientType`/`FormType`), never against the outer `TransientTypes` name this allow-list would need to match — reproduced live: a per-item `FormType` corruption yields no allow-list match. A list-count divergence is worse: Mutagen's own generated mask does not flag a 1-item-vs-0-item list as unequal at all, confirmed live, so no field-name mapping fix could catch that shape either. A corrupted or dropped `TransientTypes` entry round-trips silently through this gate today; tracked as a follow-up, not fixed here. |
@@ -141,7 +138,7 @@ negative zero, subrecord order, GRUP child order, derived sizes and counts, mast
 out of it emits Mutagen's own) — is **documented here, not gated**: a real plugin written by
 CK/xEdit/another tool is no longer refused for encoding-only differences. Track logs which of
 these an accepted plugin's first Save & Compile will lose, so nothing is silent — informational
-only, deliberately not surfaced on the API response in this amendment (a categorized report is a
+only, not surfaced on the API response (a categorized report is a
 clean, separately-scoped follow-up if wanted).
 
 **Byte identity stays the test for our own codec, unchanged.** `compile(serialize(plugin))` is
@@ -194,7 +191,7 @@ and every text posted to another project is signed off by the maintainer first.
 
 ## Alternatives rejected
 
-- **Spriggit as format specification (2026-08-21 → 2026-08-22).** The source tree adopted
+- **Spriggit as format specification.** The source tree adopted
   Spriggit's layout and customizations file for file, three replica customization classes plus a
   parity oracle (the real tool run as a subprocess) and a pinned allowlist of named divergences
   held us to it, a `.spriggit` sidecar and `SpriggitSource` metadata carried package coordinates,
@@ -208,16 +205,14 @@ and every text posted to another project is signed off by the maintainer first.
   model.** Version-independent, but discards the file-addressing write path, needs a new
   mechanism for pristine restore, and loses git-native merge/rebase of content. A *verified*
   lossless text is trustworthy input, which gets the safety without the loss.
-- **Committed binary + commit-compiles hook** (this ADR's own first draft, withdrawn within
-  hours). Once the text is lossless, a committed binary only guards against our own codec bugs;
+- **Committed binary + commit-compiles hook.** Once the text is lossless, a committed binary only guards against our own codec bugs;
   a second plugin copy confuses "which one is real?" and makes git see every external tool's
   edit as binary dirt; and with no pair to keep honest the hook degrades to auto-compile on
   commit, reversing ADR-0041's ungated commit for no remaining invariant.
-- **A stored format-identity stamp with load-time refusal** (this ADR's original decision 5,
-  retired the same day). A version mismatch is a *guess* that the source won't compile, wrong
+- **A stored format-identity stamp with load-time refusal.** A version mismatch is a *guess* that the source won't compile, wrong
   both ways: it refuses mods that round-trip fine and says nothing about a hand edit that
   doesn't. Compile itself is the signal.
 - **Fork Spriggit / ask for a library / per-record API upstream.** Tool packaging, .NET target
   and exact Mutagen pins all mismatch, and it binds us to their version on their schedule.
-- **A local `[N] ` prefix on `Responses/` only, byte-identical to a hoped-for upstream fix**
-  (#459 option D) — moot: numbering every folder-split list is our format's definition.
+- **A local `[N] ` prefix on `Responses/` only, byte-identical to a hoped-for upstream fix** —
+  moot: numbering every folder-split list is our format's definition.

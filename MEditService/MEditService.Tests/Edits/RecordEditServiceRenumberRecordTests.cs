@@ -12,7 +12,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #427: renumber, the delete+create pair plus cross-plugin reference cascade. Two-mod fixture
+/// Renumber, the delete+create pair plus cross-plugin reference cascade. Two-mod fixture
 /// because the interesting question — does a renumber rewrite a FormLink living in a <i>different</i>
 /// mod folder's own repo — cannot be asked of one.
 /// </summary>
@@ -37,7 +37,7 @@ public sealed class RecordEditServiceRenumberRecordTests
     }
 
     /// <summary>
-    /// #573: a record that never reached Head — straight off <see cref="RecordEditService.CreateRecord"/>,
+    /// A record that never reached Head — straight off <see cref="RecordEditService.CreateRecord"/>,
     /// still working-tree-only (<c>Added</c>) — is exactly the shape the original bug report renumbered
     /// (<c>workingTreeState: "Added"</c> on both old and new FormKeys). <see cref="TrackedModFixture"/>'s
     /// own <c>Npc</c> is committed/Head-backed, so a regression built on it alone would pass unmodified —
@@ -77,7 +77,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(requested, result.NewFormKey);
     }
 
-    // #501: renumber's typed-target path shares CreateRecord's own ResolveTargetFormKey — a light
+    // Renumber's typed-target path shares CreateRecord's own ResolveTargetFormKey — a light
     // plugin must refuse a renumber target above its 0xFFF ESL local-FormID range the same way create
     // does.
     [Fact]
@@ -91,7 +91,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.LightPluginFormIdOutOfRange, result.Refusal);
     }
 
-    // #422: the renumbered record's editor_id is unchanged, but it lands under a brand-new FormKey
+    // The renumbered record's editor_id is unchanged, but it lands under a brand-new FormKey
     // that _filter's snapshot never evaluated — the old FormKey (which did match) is gone, so without
     // re-materializing, the record vanishes from a filtered listing across the renumber entirely.
     [Fact]
@@ -121,7 +121,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.NotNativeRecord, result.Refusal);
     }
 
-    // Review finding #1: the auto-allocator's own exhaustion must be a typed refusal here too, not
+    // The auto-allocator's own exhaustion must be a typed refusal here too, not
     // an InvalidOperationException the endpoint's load order-missing catch would misreport.
     [Fact]
     public void RenumberRecord_Refuses_WhenTheFormKeySpaceIsExhausted()
@@ -166,7 +166,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Contains(index.GetReferencedBy(result.NewFormKey!), r => r.FormKey == two.ReferencerNpc.ToString());
     }
 
-    // Review finding #2: the reapply that only ran on the try block's success path left _filter
+    // A reapply that only runs on the try block's success path leaves _filter
     // stale for whatever referencer rewrites had already landed durably before the target's own
     // write failed — the same honest-partial-state doctrine the writtenRepos disclosure follows.
     // Chmod-mid-cascade technique from PluginCompileServiceJournalTests: the target mod folder is
@@ -232,7 +232,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.UntrackedReferencer, result.Refusal);
         Assert.Contains(TwoModFixture.ReferencerPluginName, result.Message, StringComparison.Ordinal);
 
-        // Q5(a)/AC "no half-applied state": refused before any write, on either side of the cascade.
+        // "No half-applied state": refused before any write, on either side of the cascade.
         Assert.True(File.Exists(oldRaceSourceFile));
         Assert.NotNull(two.Mirror.Index!.GetDocument(two.TargetRace.ToString(), two.TargetPlugin));
         var referencerBody = two.Mirror.Index!.GetDocument(two.ReferencerNpc.ToString(), two.ReferencerPlugin)!.Body!;
@@ -289,7 +289,7 @@ public sealed class RecordEditServiceRenumberRecordTests
         Assert.Equal(RecordEditRefusal.RecordNotFound, suggested.Refusal);
     }
 
-    // Review finding #2: brought to the same typed-refusal standard as Create/Renumber.
+    // The same typed-refusal standard as Create/Renumber.
     [Fact]
     public void PeekNextFreeFormKey_Refuses_WhenTheFormKeySpaceIsExhausted()
     {
@@ -371,8 +371,8 @@ public sealed class RecordEditServiceRenumberRecordTests
 
         public static TwoModFixture Create(bool trackReferencer) => new(trackReferencer);
 
-        // #459: resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
-        // now needs an order index this fixture has no reason to track.
+        // Resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
+        // needs an order index this fixture has no reason to track.
         public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
             SourceUnitResolver.FlatSourcePath(
                 plugin.Origin == TargetOrigin ? TargetModFolder : ReferencerModFolder,

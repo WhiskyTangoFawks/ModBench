@@ -49,13 +49,13 @@ public class TableDdlBuilderTests
         var cols = GetColumns(conn, "registrations");
         // ADR-0044: the three facts a registration carries — and no `participates`, which is
         // derived from them, never stored.
-        // #585 / ADR-0001: the load order, and only the load order. Nothing about the file — that
+        // ADR-0001: the load order, and only the load order. Nothing about the file — that
         // is mirror.files below — and above all no `file_mtime`, the clock-based check the
         // decision exists to rule out.
         Assert.Equal(["plugin", "origin", "load_order_idx", "enabled", "winning"], cols);
     }
 
-    // #585 / ADR-0001: the file-mirror half — what the index believes is on disk, kept apart from
+    // ADR-0001: the file-mirror half — what the index believes is on disk, kept apart from
     // the registration so that unregistering a plugin never throws away the hash that makes
     // re-registering it cheap.
     [Fact]
@@ -85,7 +85,7 @@ public class TableDdlBuilderTests
     [Fact]
     public void CreateTables_CreatesHeaderTable_WithAuthorFlagsMastersColumns()
     {
-        // Issue #1 slice A1: the header table is entirely schema-driven — no DDL changes
+        // The header table is entirely schema-driven — no DDL changes
         // needed once SchemaReflector's schemas dictionary carries a "header" entry.
         using var conn = OpenMemory();
         _builder.CreateTables(conn, GameRelease.Fallout4);
@@ -109,7 +109,7 @@ public class TableDdlBuilderTests
         _builder.CreateTables(conn, GameRelease.Fallout4); // should not throw
     }
 
-    // #583 / ADR-0001: load order lives only on `registrations` now. The mirror record-shaped
+    // ADR-0001: load order lives only on `registrations`. The mirror record-shaped
     // tables carry file-derived facts only; `load_order_idx` reaches a reader exclusively through
     // the registered view's join to `registrations` (TableDdlBuilder.CreateRegisteredViews), never
     // as a stored column.
@@ -145,7 +145,7 @@ public class TableDdlBuilderTests
         Assert.Contains("load_order_idx", cols);
     }
 
-    // #584 / ADR-0001: the same split for `is_winner`. Winning is a fact about the whole registered
+    // ADR-0001: the same split for `is_winner`. Winning is a fact about the whole registered
     // stack a FormKey sits in, not about one row's bytes, so no mirror table stores it — it is
     // derived in the registered view by joining `winners`, the load order-owned table the sweep
     // rebuilds.
@@ -185,8 +185,8 @@ public class TableDdlBuilderTests
 
     // The load order-winners relation itself: (record_ref, form_key) -> (plugin, origin), carrying the
     // ref because Effective and Head can name different winners for one FormKey
-    // (TableDdlBuilder.CreateHeadView). Bare in `main` — #593 moved it out of the mirror schema, since
-    // it is load-order-derived, not a file mirror.
+    // (TableDdlBuilder.CreateHeadView). Bare in `main`, not the mirror schema — it is
+    // load-order-derived, not a file mirror.
     [Fact]
     public void CreateTables_CreatesWinnersTable_MappingARefAndFormKeyToOnePlugin()
     {
@@ -201,7 +201,7 @@ public class TableDdlBuilderTests
     public void CreateFormReferencesTable_CreatesTargetFormKeyIndex()
     {
         using var conn = OpenMemory();
-        // #582: through CreateTables rather than the per-table helper — the helper writes into the
+        // Through CreateTables rather than the per-table helper — the helper writes into the
         // `mirror` schema, which only CreateTables creates.
         _builder.CreateTables(conn, GameRelease.Fallout4);
 

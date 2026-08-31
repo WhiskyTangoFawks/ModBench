@@ -4,9 +4,9 @@ status: accepted
 
 # The load order is mirrored, not loaded: one reconcile verb, every copy registered, no session
 
-Decided 2026-08-30. Rewrites [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md) § The
-loading model and § Live mutation in place, and amends [ADR-0001](0001-persistent-per-instance-index-session-is-a-registration.md)
-points 2 and 4 and the Mod Management → Editing relationship in [CONTEXT-MAP.md](../../CONTEXT-MAP.md).
+Governs [ADR-0035](0035-one-plugins-tree-editing-is-a-capability.md) § The
+loading model and § Live mutation, [ADR-0001](0001-persistent-per-instance-index-session-is-a-registration.md)
+points 2 and 4, and the Mod Management → Editing relationship in [CONTEXT-MAP.md](../../CONTEXT-MAP.md).
 
 ## Context
 
@@ -17,10 +17,10 @@ plugins, load them, work, exit. That model leaked into Modbench as `POST /sessio
 as a patch to it: `/plugins/reread` for a mod-order change (`pluginDrift.ts`),
 `/plugins/{p}/participation` for an enable/disable, `/plugins/load`/`unload` for a copy the load
 order does not point at, and — the largest event — a plugins.txt reorder still fell back to the
-full reload ([#97](https://github.com/WhiskyTangoFawks/ModBench/issues/97)).
+full reload.
 
 Modbench is not two programs. Mods are installed, reordered, enabled and disabled while the editor
-is open, and the editor must follow. ADR-0001 (2026-08-29) made the index a persistent mirror of
+is open, and the editor must follow. ADR-0001 made the index a persistent mirror of
 the plugin *files* that validates itself against disk; the load order was the one input the index
 still received as a command rather than as state. There was no moment at which Editing could ask
 "is my load order still true?" — it could only be told, and only in whole.
@@ -65,8 +65,8 @@ still received as a command rather than as state. There was no moment at which E
    by reconcile. Nothing is loaded, reloaded or exited: a plugin that fails to parse is a row in an
    error state, the way a file with a diagnostic is still a file. `SessionManager`, `GameSession`,
    `modbench.reloadSession`, "session settled", "exit to Loadout on load failure" and the
-   `/session/*` route prefix go with the concept. Opening the index file no longer clears the
-   registration table (ADR-0001 point 4, amended): the rows are the last known load order, and the
+   `/session/*` route prefix go with the concept. Opening the index file does not clear the
+   registration table (ADR-0001 point 4): the rows are the last known load order, and the
    first reconcile corrects them.
 
 ## What does not change
@@ -91,13 +91,13 @@ still received as a command rather than as state. There was no moment at which E
   disabled mods is a Mod Management change if ever wanted, not a boundary change.
 - Two registered copies can share a filename (a winning copy and a losing copy). Editing keys
   them by `(origin, name)`; the losing copy is not displayed today — whether and how it surfaces
-  is an open UX design (#576), and showing its origin will be a display obligation when it does.
+  is an open UX design, and showing its origin will be a display obligation when it does.
 - Editing still cannot verify the load order against the profile files on its own after a
   restart; it trusts the next snapshot, and the extension sends one on activation. Whether Editing
   should read the profile itself — which would move Mod override order resolution across the
   context boundary — is deliberately left open.
-- #97 (reorder live), #590 (mirror watches for plugins registered mid-session) and
-  `pluginDrift.ts` fold into the reconcile verb rather than being fixed separately.
+- Live reorder, mirror watches for plugins registered mid-session, and
+  `pluginDrift.ts` all fold into the reconcile verb rather than being fixed separately.
 
 ## Alternatives rejected
 

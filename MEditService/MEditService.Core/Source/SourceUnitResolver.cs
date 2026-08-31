@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// Which file holds a record, when that file is not the record's own — #453 scope 1.
+/// Which file holds a record, when that file is not the record's own.
 /// </summary>
 /// <param name="FullPath">The file to read and write. For a container or an embedded child this is a
 /// file that was <i>found</i> on disk, because there is no path to compute for one. For a flat record
@@ -28,9 +28,9 @@ internal readonly record struct SourceUnit(
     /// <summary>
     /// True when <see cref="FullPath"/> is a directory-per-record container's own field file (a
     /// Cell/Worldspace/Quest, or a nested folder-split child such as a Quest's DialogTopic) rather
-    /// than a flat record's single file. #461 review: this exact test used to be retyped at every
-    /// call site (<c>RecordEditService.RenameSourceUnit</c>, <c>DeleteRecord</c>,
-    /// <c>RenumberTheRecordItself</c>) — one definition here, alongside <see cref="IsEmbedded"/>,
+    /// than a flat record's single file. One definition here rather than each call site
+    /// (<c>RecordEditService.RenameSourceUnit</c>, <c>DeleteRecord</c>,
+    /// <c>RenumberTheRecordItself</c>) retyping the test — alongside <see cref="IsEmbedded"/>,
     /// which <see cref="SourceUnit"/> already carries the same way.
     /// </summary>
     internal bool IsDirectoryPerRecord =>
@@ -39,12 +39,12 @@ internal readonly record struct SourceUnit(
 
 /// <summary>
 /// The record→source-unit question, answered for <b>every</b> record shape the source layout has
-/// (#453 scope 1; ADR-0041's #444 amendment: one source unit is one file). <see cref="SourceRecordPath"/>
+/// (ADR-0041 amendment: one source unit is one file). <see cref="SourceRecordPath"/>
 /// answers it for flat records by computing a path; this answers it for the rest — containers, whose
 /// directory nesting is not derivable from the index, and embedded children, which have no file at all.
 ///
-/// <para><b>Why the disk and not a path map.</b> #453's scope note asked for a path map built at
-/// ingest, on the premise that #452's extraction already walks this structure. It does not:
+/// <para><b>Why the disk and not a path map.</b> A path map built at
+/// ingest would presume ingest's extraction already walks this structure. It does not:
 /// <see cref="SourceIngest.Ingest"/> hands the whole tree to the generated deserializer and the
 /// resulting <c>IModGetter</c> to <see cref="IRecordIndex.Index"/>, so every extractor downstream
 /// (<c>EnumerateMajorRecords</c>, <see cref="PlacementWalker"/>, <see cref="ContainerChildFields"/>)
@@ -57,8 +57,8 @@ internal readonly record struct SourceUnit(
 /// never-assume-exclusive-ownership answer, since anything may have moved a file since Modbench last
 /// looked.
 ///
-/// <para><b>What it costs, measured.</b> A full-tree scan of a tree the size of the #444 spike's
-/// 20 MB mega-plugin (18,880 files / 31,145 directories) is <b>0.39 s warm</b> — a visible stall on
+/// <para><b>What it costs, measured.</b> A full-tree scan of a
+/// 20 MB mega-plugin's tree (18,880 files / 31,145 directories) is <b>0.39 s warm</b> — a visible stall on
 /// an interactive gesture. So the scan is narrowed twice. Flat records never scan at all
 /// (<see cref="SourceRecordPath.For"/> computes their path, and it is tried first). A placed
 /// reference never scans either — the index knows its cell outright. Everything else scans one
@@ -144,9 +144,9 @@ internal static class SourceUnitResolver
     /// FormKey, and failing both the computed path anyway.
     ///
     /// <para><b>The filename's EditorID and the document's EditorID are not guaranteed to agree, and
-    /// resolution must not assume they do.</b> Since #452 a tracked plugin's indexed EditorID comes
+    /// resolution must not assume they do.</b> A tracked plugin's indexed EditorID comes
     /// from the file's <i>content</i>; the file <i>name</i> carries whatever EditorID it had when it
-    /// was last written (#451). Nothing keeps those in step. Two ordinary things pull them apart: a
+    /// was last written. Nothing keeps those in step. Two ordinary things pull them apart: a
     /// user or another tool editing <c>EditorID</c> inside a source file with their own editor — the
     /// standing never-assume-exclusive-ownership case, and the likelier of the two — and a crash
     /// between <c>RecordEditService</c>'s rename and the content write that follows it.</para>
@@ -155,8 +155,8 @@ internal static class SourceUnitResolver
     /// into a <i>false deletion</i>: the file is not where the name says, so <c>File.Exists</c> is
     /// false, and both this class's caller and <see cref="SourceFreshness"/> would read "absent" as
     /// "the user deleted this record" and mark a live record gone at Effective. Resolution therefore
-    /// leans on the FormKey, which is the stable half of the name — exactly what #453's own scope 3
-    /// says it is for ("FormKey in the suffix keeps resolution stable mid-rename").</para>
+    /// leans on the FormKey, which is the stable half of the name — the FormKey in the suffix keeps
+    /// resolution stable mid-rename.</para>
     ///
     /// <para><b>It costs nothing when nothing is wrong.</b> The fallback runs only when the computed
     /// path is absent, and it lists <i>one</i> group directory non-recursively — never the tree walk
@@ -164,14 +164,13 @@ internal static class SourceUnitResolver
     /// so the caller's existing "edit from the indexed body and rewrite the file" recovery is
     /// untouched.</para>
     ///
-    /// <para><b>#459 shrank the guess's hit rate, and did not remove it.</b> <see cref="SourceRecordPath.For"/>
-    /// now needs the record's order index to compute an exact name, which this method does not have
+    /// <para><b>The ordering prefix shrank the guess's hit rate, and did not remove it.</b> <see cref="SourceRecordPath.For"/>
+    /// needs the record's order index to compute an exact name, which this method does not have
     /// without a scan — so the "computed" guess below is index 0 specifically, which still resolves
     /// with zero scan for every group that has exactly one member (common) or whose first-ever sibling
     /// is being looked up right after a fresh create (also common). Every other position falls straight
     /// through to the same one-directory, non-recursive suffix scan below, which is FormKey-suffix
-    /// matching (<see cref="NameCarries"/>) and was already blind to position before this class had one
-    /// to be blind to.</para>
+    /// matching (<see cref="NameCarries"/>) and blind to position.</para>
     /// </summary>
     internal static string FlatSourcePath(
         string modFolder, string pluginFileName, string recordType, string formKey, string? editorId,
@@ -220,7 +219,7 @@ internal static class SourceUnitResolver
         IRecordReads reads, PluginKey plugin, string modFolder, string ownerFormKey, GameRelease release,
         SourceUnitResolutionCache? cache)
     {
-        // #547: one cell's worth of placed refs shares one owner read and one scan.
+        // One cell's worth of placed refs shares one owner read and one scan.
         if (cache != null && cache.Owners.TryGetValue(ownerFormKey, out var memoized)) return memoized;
 
         SourceUnit? resolved = null;
@@ -234,7 +233,7 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
-    /// Which of <paramref name="formKeys"/> more than one source unit in the tree claims — #454's
+    /// Which of <paramref name="formKeys"/> more than one source unit in the tree claims — the
     /// FormKey-collision refusal, which compile cannot ask the deserialized mod because by then the
     /// answer is already gone.
     ///
@@ -247,8 +246,8 @@ internal static class SourceUnitResolver
     /// to be asked of the <i>tree</i>. Two files in <i>different</i> group folders survive as two
     /// records and would be catchable either way; this covers both with one mechanism.</para>
     ///
-    /// <para>Reachable, not theoretical: #453 fixed Modbench's own half-completed rename, but nothing
-    /// stops another tool duplicating a file, a partially restored backup, or a user copying a record
+    /// <para>Reachable, not theoretical: a half-completed rename, another tool duplicating a file, a
+    /// partially restored backup, or a user copying a record
     /// file to experiment (root CLAUDE.md's never-assume-exclusive-ownership rule).
     /// <see cref="Resolve"/>'s own <see cref="AmbiguousSourceUnitException"/> exists for exactly this
     /// state on the write path.</para>
@@ -294,7 +293,7 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>The tails <paramref name="leaf"/> carries under <see cref="NameCarries"/> — the whole
-    /// name (order prefix stripped, #459), plus whatever follows each <c>" - "</c> in it. More than one
+    /// name (order prefix stripped), plus whatever follows each <c>" - "</c> in it. More than one
     /// candidate arises only when an EditorID itself contains <c>" - "</c>, which is legal and is
     /// precisely why a file name cannot be split into EditorID and FormKey unambiguously (see
     /// <see cref="SourceRecordIdentity"/>'s own doc comment); counting every candidate costs nothing,
@@ -327,7 +326,7 @@ internal static class SourceUnitResolver
         if (!Directory.Exists(scanRoot)) return null;
 
         var suffix = FilesafeFormKey(formKey);
-        // #547: with a cache the subtree is listed once for the whole operation and the wildcard's
+        // With a cache the subtree is listed once for the whole operation and the wildcard's
         // "leaf contains the FormKey" pre-filter runs in memory; AsSourceUnitFile is the real test
         // either way, so the two paths cannot disagree on what is a source unit.
         var candidates = cache == null
@@ -370,7 +369,7 @@ internal static class SourceUnitResolver
     // The whole-mod door's own two name shapes (SerializationHelper.RecordFileNameProvider): the
     // filesafe FormKey alone when the record has no EditorID, or "<EditorID> - " ahead of it when it
     // does. Anchored at both ends rather than a bare Contains, so a name that merely happens to
-    // embed the text cannot match. The leading "[N] " ordering prefix (#459) is stripped first, so
+    // embed the text cannot match. The leading "[N] " ordering prefix is stripped first, so
     // FormKey-suffix matching stays exactly as blind to a record's position as it always was.
     private static bool NameCarries(string leaf, string tail)
     {
@@ -380,14 +379,14 @@ internal static class SourceUnitResolver
                 && trimmed.EndsWith($" - {tail}", StringComparison.Ordinal));
     }
 
-    /// <summary>Strips a leading <c>"[N] "</c> ordering prefix (#459) when <paramref name="leaf"/>
+    /// <summary>Strips a leading <c>"[N] "</c> ordering prefix when <paramref name="leaf"/>
     /// genuinely has one — never on a false positive, so an EditorID that happens to start with a
     /// bracketed number of its own (legal, if unusual) is left alone.</summary>
     private static string WithoutOrderPrefix(string leaf) =>
         TryGetOrderIndex(leaf) is null ? leaf : leaf[(leaf.IndexOf("] ", StringComparison.Ordinal) + 2)..];
 
     /// <summary>
-    /// The <c>"[N] "</c> ordering prefix (#459) <paramref name="leaf"/> carries, or null when it has
+    /// The <c>"[N] "</c> ordering prefix <paramref name="leaf"/> carries, or null when it has
     /// none — used both to recognise one (<see cref="WithoutOrderPrefix"/>,
     /// <see cref="NextOrderIndex"/>) and to carry an existing sibling's own index across a rename
     /// (<see cref="Edits.RecordEditService.RenameSourceUnit"/>: an EditorID edit must not silently drop
@@ -404,9 +403,9 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
-    /// #459, re-scoped by #489: the index a brand-new sibling should carry — one past the highest
+    /// The index a brand-new sibling should carry — one past the highest
     /// <c>"[N] "</c> prefix already present in <paramref name="groupDirectory"/> (0 for an empty or
-    /// not-yet-created folder). <see cref="RenormalizeGroupOrder"/> now keeps every group directory
+    /// not-yet-created folder). <see cref="RenormalizeGroupOrder"/> keeps every group directory
     /// gap-free as its own last file-system act after every structural write, so max+1 and the plain
     /// sibling <i>count</i> coincide in the steady state — max+1 stays the expression here regardless,
     /// because it also does the right thing (still no collision, no premature renormalization needed)
@@ -430,9 +429,10 @@ internal static class SourceUnitResolver
     }
 
     /// <summary>
-    /// #489: closes whatever gap a structural write (delete, renumber's delete+create, or a
-    /// defensively-checked create) just left or could have inherited — the fix for "a gap-leaving
-    /// delete permanently breaks that plugin's Save &amp; Compile" (round-trip regenerates canonical
+    /// Closes whatever gap a structural write (delete, renumber's delete+create, or a
+    /// defensively-checked create) just left or could have inherited — a gap-leaving
+    /// delete would otherwise permanently break that plugin's Save &amp; Compile (round-trip
+    /// regenerates canonical
     /// <c>"[N]"</c> prefixes as contiguous list position, which a gap can never match).
     /// <see cref="Edits.RecordEditService"/>'s three structural-write entry points call this as their
     /// own last file-system act, so a group directory is contiguous <c>[0..k]</c> again by the time any
@@ -457,9 +457,9 @@ internal static class SourceUnitResolver
     /// index prefix.</para>
     ///
     /// <para><b>Fail-safe by construction, not by any new journal.</b> This is the last file-system act
-    /// of the write that called it (#489's own key-interfaces note); a crash mid-pass leaves a
+    /// of the write that called it; a crash mid-pass leaves a
     /// half-renumbered group, which <see cref="Edits.PluginCompileService"/>'s existing byte-exact
-    /// round-trip gate (#473) already refuses correctly (some sibling's canonical name will not match
+    /// round-trip gate already refuses correctly (some sibling's canonical name will not match
     /// what is on disk) — the same "re-Track to repair" recovery that gate has always offered, needing
     /// nothing new to keep offering it here.</para>
     /// </summary>
@@ -496,7 +496,7 @@ internal static class SourceUnitResolver
     /// kind of drift this class exists to prevent. Callers must already know <paramref name="recordType"/>
     /// has a flat group folder (both do, having passed <c>RefuseIfContainerType</c> first) — this does
     /// not re-check, so a caller that hasn't would NRE on the null-forgiving <c>FolderNameFor</c> rather
-    /// than fail closed silently. #489: both callers also renormalize their own group directory
+    /// than fail closed silently. Both callers also renormalize their own group directory
     /// afterward, so a gap this returns into is transient at worst, closed before either call returns.
     /// </summary>
     internal static int NextOrderIndexFor(string modFolder, string pluginFileName, string recordType, GameRelease release)

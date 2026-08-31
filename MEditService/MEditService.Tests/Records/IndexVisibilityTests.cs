@@ -9,9 +9,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #274 / ADR-0035: a plugin becomes readable at the instant it is indexed, and never before it is
-/// whole. Progressive loading is what makes this observable — reads now arrive *during* indexing,
-/// where previously the whole load order was unreachable until every plugin had landed.
+/// ADR-0035: a plugin becomes readable at the instant it is indexed, and never before it is
+/// whole. Progressive loading is what makes this observable — reads arrive *during* indexing.
 ///
 /// An in-between count is the failure this guards: a plugin that reads as "412 records" while its
 /// remaining 1,588 are still being written is worse than one that reads as absent, because nothing

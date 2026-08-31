@@ -11,22 +11,19 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Queries;
 
 /// <summary>
-/// VMAD/condition reconstitution from a record's document body (#413 D1 / #420's pattern) —
-/// relocated here from <c>Records/DuckDbRecordIndex</c> by #421's reshape. <c>GetVmad</c>/
-/// <c>GetConditions</c> are rejected from <see cref="Records.IRecordReads"/> outright (raw-SQL and
-/// per-capability members were both explicitly ruled out for the seam); the capability survives at
-/// the query-service level instead, exactly as the ticket's own amendment describes it —
-/// deserializing <see cref="RecordDocument.Body"/> through <see cref="RecordTextCodec"/> and
-/// walking the same <c>VmadCodec</c>/<see cref="IConditionCodec"/> this logic always used. Moved
-/// verbatim, not reimplemented, so the values stay byte-identical.
+/// VMAD/condition reconstitution from a record's document body. <c>GetVmad</c>/<c>GetConditions</c>
+/// are deliberately not <see cref="Records.IRecordReads"/> members (raw-SQL and per-capability
+/// members are both ruled out for the seam); the capability lives at the query-service level
+/// instead — deserializing <see cref="RecordDocument.Body"/> through <see cref="RecordTextCodec"/>
+/// and walking the same <c>VmadCodec</c>/<see cref="IConditionCodec"/>.
 /// </summary>
 internal static class RecordDocumentCodecs
 {
     private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    // Invariant 7 (missing data reads as null/empty, never a throw): a null Body — the header
-    // (D8: never an IMajorRecordGetter, so it never had a document) — reads as "no VMAD", the same
-    // as a record that simply carries none.
+    // Missing data reads as null/empty, never a throw: a null Body — the header, which is never an
+    // IMajorRecordGetter and so has no document — reads as "no VMAD", the same as a record that
+    // simply carries none.
     public static VmadData? GetVmad(RecordDocument document, GameRelease release, ILogger logger)
     {
         if (Deserialize(document, release) is not IHaveVirtualMachineAdapterGetter { VirtualMachineAdapter: { } vmad })
@@ -55,11 +52,10 @@ internal static class RecordDocumentCodecs
         return new VmadData(scripts);
     }
 
-    // Owners are re-sorted by FieldPath (ordinal) because Extract's own discovery order (reflection
-    // order for flat fields, then nested owners appended after) does not match the pre-#420 SQL's
-    // `ORDER BY owner_field_path` — deliberate behaviour-preservation, carried over unchanged.
+    // Owners are re-sorted by FieldPath (ordinal): Extract's own discovery order (reflection order
+    // for flat fields, then nested owners appended after) is not a stable presentation order.
     //
-    // Invariant 7: a null Body reads as "no conditions", same as GetVmad's null-VMAD case.
+    // A null Body reads as "no conditions", same as GetVmad's null-VMAD case.
     public static IReadOnlyList<ConditionOwner> GetConditions(RecordDocument document, GameRelease release, IConditionCodec? conditionCodec)
     {
         if (conditionCodec == null) return [];
@@ -85,7 +81,7 @@ internal static class RecordDocumentCodecs
             : Codec.DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(body), release, document.RecordType)
                 .GetAwaiter().GetResult();
 
-    // #165: only a Number-category parameter is ever decodable (Form/Text are already
+    // Only a Number-category parameter is ever decodable (Form/Text are already
     // human-legible); a Form/Text row's stored number_value is null regardless of category, so this
     // also guards the null-Number case a Number row itself can never actually hit (Number.Value is
     // always non-null once category checks out).

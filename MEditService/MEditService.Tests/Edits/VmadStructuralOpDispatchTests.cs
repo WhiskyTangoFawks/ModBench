@@ -6,15 +6,15 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #426 Track 0: VMAD's structural ops (<see cref="Core.Schema.VmadCodec.ApplyScriptOp"/>/
-/// <see cref="Core.Schema.VmadCodec.ApplyPropertyOp"/>) survived #410 fully implemented and unit-
-/// tested (<c>VmadCodecTests</c>) but orphaned — nothing on the write path reached them. This class
+/// VMAD's structural ops (<see cref="Core.Schema.VmadCodec.ApplyScriptOp"/>/
+/// <see cref="Core.Schema.VmadCodec.ApplyPropertyOp"/>) are unit-tested at the codec
+/// (<c>VmadCodecTests</c>); this class
 /// proves the dispatch wiring only: that <see cref="RecordEditService.EditField"/>, through
-/// <c>RecordFieldWriter</c>, now reaches them and produces real working-tree dirt. The codec's own
+/// <c>RecordFieldWriter</c>, reaches them and produces real working-tree dirt. The codec's own
 /// behavior (which op does what) is not re-proven here.
 ///
 /// <para>Wire contract: <c>fieldPath</c> addresses the script (or script+property) exactly as a
-/// scalar VMAD edit does; <c>value</c> is either a plain scalar (unchanged #415 behavior) or an op
+/// scalar VMAD edit does; <c>value</c> is either a plain scalar or an op
 /// envelope — a JSON object carrying a string <c>"op"</c> member, reusing VmadCodec's own opName
 /// vocabulary and doubling as its <c>op</c> parameter. See RecordFieldWriter.ApplyVmadField's own
 /// doc comment for the one accepted ambiguity.</para>
@@ -91,7 +91,7 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         Assert.Contains("42", body, StringComparison.Ordinal);
     }
 
-    // #401: malformed struct-op payloads never crash, they fall back to NotFound like any other
+    // Malformed struct-op payloads never crash, they fall back to NotFound like any other
     // shape RecordFieldWriter.ApplyVmadField doesn't recognize.
 
     // No "op" member at all, targeting a script-level path — TryGetOpName answers false (not an op
@@ -122,13 +122,11 @@ public sealed class VmadStructuralOpDispatchTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldNotFound, result.Refusal);
     }
 
-    // ── Guard inheritance (#417's carried requirement) ─────────────────────────────────────────
-    // The new op-envelope dispatch above still enters through the one guarded door
-    // (RecordEditService.EditField), never IRecordIndex.ApplyWorkingTreeChanges directly, so both
-    // refusals below are green on arrival — proving that requires a rival, not just a passing
-    // assertion (standing rule: a guard test is vacuous until watched fail). See this file's
-    // companion rival run in the implementation report for the observed failure when the checks are
-    // removed.
+    // ── Guard inheritance ──────────────────────────────────────────────────────────────────────
+    // The op-envelope dispatch above still enters through the one guarded door
+    // (RecordEditService.EditField), never IRecordIndex.ApplyWorkingTreeChanges directly. Proving
+    // that requires a rival, not just a passing assertion (standing rule: a guard test is vacuous
+    // until watched fail) — the rival, with the checks removed, was observed to fail both.
 
     [Fact]
     public void EditField_AddScriptOp_Refuses_WhileAnExternalChangeQuestionIsUnansweredForThePlugin()

@@ -10,8 +10,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #413 slice S0 — the other half of the AC3 safety net: conflict classification and the compare
-/// grid, captured from the pre-swap implementation over a load order that actually conflicts.
+/// Golden capture of conflict classification and the compare
+/// grid over a load order that actually conflicts.
 ///
 /// <see cref="RealData.RealDataReadGoldenTests"/> pins per-record *values* against authentic
 /// Bethesda data; this pins what the classifier makes of several plugins disagreeing about the same

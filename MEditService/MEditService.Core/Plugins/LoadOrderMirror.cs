@@ -23,14 +23,14 @@ public sealed class LoadOrderMirror(
     private readonly ILogger<LoadOrderMirror> _logger = logger ?? NullLogger<LoadOrderMirror>.Instance;
     private readonly IRecordIndexFactory _indexFactory = indexFactory;
     private readonly IModImporter _modImporter = modImporter ?? new DefaultModImporter();
-    // #463: the same reflector ReconcileHeadStructurally's SourceRecordType.Resolve needs for a
+    // The same reflector ReconcileHeadStructurally's SourceRecordType.Resolve needs for a
     // container's Head-only deletion — DI already registers SchemaReflector as its own singleton
     // (Program.cs), so this is a direct constructor parameter rather than routed through
     // IRecordIndexFactory, which has no other reason to carry it.
     private readonly SchemaReflector _schemaReflector = schemaReflector ?? new SchemaReflector();
     private LoadOrder? _loadOrder;
     private IRecordIndex? _index;
-    // #274: the reconcile's own progress. Guarded by _lock like _loadOrder/_index — written by
+    // The reconcile's own progress. Guarded by _lock like _loadOrder/_index — written by
     // the reconciling thread as each plugin lands, read by whoever asks for Status meanwhile.
     private readonly List<IndexedPlugin> _indexed = [];
     private bool _conflictsComputed;
@@ -42,7 +42,7 @@ public sealed class LoadOrderMirror(
     // while a fix made in xEdit is picked up by the very next reconcile.
     private readonly Dictionary<string, (PluginKey Key, string? Hash)> _failedHashes = new(StringComparer.OrdinalIgnoreCase);
 
-    // #274: at most one reconcile or teardown at a time, and an in-flight reconcile stops promptly
+    // At most one reconcile or teardown at a time, and an in-flight reconcile stops promptly
     // when another arrives. Two mechanisms, because one is not enough: the token *asks* the loop to
     // stop, and the gate waits until it actually has. Cancelling without draining is the dangerous
     // half — it would let a teardown dispose the DuckDB connection while the loop is still writing
@@ -75,7 +75,7 @@ public sealed class LoadOrderMirror(
     public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => RequireScopeCore();
 
     /// <summary>
-    /// #605: the actual gate behind <see cref="RequireScope"/> — every write-side method below
+    /// The actual gate behind <see cref="RequireScope"/> — every write-side method below
     /// needs the concrete <see cref="Plugins.LoadOrder"/> and the write-capable <see cref="IRecordIndex"/>
     /// underneath it, not the narrower (<see cref="ILoadOrder"/>, <see cref="IRecordReads"/>) the
     /// public method hands out. One lock, one null check, one message: <see cref="CreatePlugin"/>,
@@ -93,7 +93,7 @@ public sealed class LoadOrderMirror(
     }
 
     /// <summary>
-    /// What the mirror can honestly say about itself right now (#274 / ADR-0035) — the read behind
+    /// What the mirror can honestly say about itself right now (ADR-0035) — the read behind
     /// <c>GET /load-order/status</c>. Assembled from live state rather than cached, so it cannot
     /// drift from the reconcile it describes; failures come straight off the load order's own list
     /// rather than being copied into a second place that could disagree with it.
@@ -139,7 +139,7 @@ public sealed class LoadOrderMirror(
         }
         catch (IndexHeldElsewhereException ex)
         {
-            // #588: refused, not failed — the user has two windows on one instance, and nothing is
+            // Refused, not failed — the user has two windows on one instance, and nothing is
             // held here (EnsureScope tore the previous scope down before the open that refused).
             _logger.LogWarning(ex, "Load order refused: the index at {Path} is held by another window", ex.IndexPath);
             throw;
@@ -178,11 +178,11 @@ public sealed class LoadOrderMirror(
     /// <summary>
     /// The load order and index this snapshot reconciles against — the ones already held when the
     /// snapshot names the same instance, game directory and release, else a fresh pair replacing
-    /// whatever was held. #592 / ADR-0001: the MO2 instance is what gives the index a home — one
+    /// whatever was held. ADR-0001: the MO2 instance is what gives the index a home — one
     /// persistent file per instance, so a fresh open finds whatever the last run left there,
     /// registrations included (ADR-0044). Never wider than the instance: `origin` is a mod folder
     /// name, unique only within one. Published before any plugin is opened, which is what makes
-    /// the reconcile progressive (#274 / ADR-0035).
+    /// the reconcile progressive (ADR-0035).
     /// </summary>
     private (LoadOrder LoadOrder, IRecordIndex Index) EnsureScope(
         string gameDirectory, GameRelease gameRelease, string? instanceRoot)
@@ -234,7 +234,7 @@ public sealed class LoadOrderMirror(
     /// <summary>
     /// ADR-0044's reconcile, over the resolved snapshot. The diff is computed first and without
     /// side effects: an identical snapshot returns before touching the index or the status, which
-    /// is what makes a redundant PUT free (AC4). Then, in order: every registration the snapshot no
+    /// is what makes a redundant PUT free. Then, in order: every registration the snapshot no
     /// longer names is dropped (before anything new is opened, so a freshly opened index file's
     /// last-run rows stop answering as early as possible); every held copy whose registration moved
     /// is re-registered, SQL-only; every copy new to the load order is opened and registered or
@@ -291,22 +291,22 @@ public sealed class LoadOrderMirror(
 
         foreach (var plugin in moved)
         {
-            // #97 / ADR-0044: a reorder, an enable, a disable, a change of which copy wins — all
+            // ADR-0044: a reorder, an enable, a disable, a change of which copy wins — all
             // the same SQL-only move: no re-read, no re-index, and the DuckDB connection never
             // changes, which is what makes this safe to apply live and unprompted.
             var metadata = loadOrder.Update(held[KeyOf(plugin.Key)], plugin.Registration);
             index.Register(metadata.Key, metadata.Registration);
         }
 
-        // #113: two numbers ADR-0035 makes distinct — time to the first queryable plugin (the tree
+        // Two numbers ADR-0035 makes distinct — time to the first queryable plugin (the tree
         // becomes usable) and time to the winner sweep completing. Measured here rather than
         // client-side, where the 500 ms status poll caps the resolution.
         var timer = Stopwatch.StartNew();
         long? firstUsableMs = null;
 
-        // #274: open and index one plugin at a time. Opening the whole set first cost the same
-        // total time but made every plugin wait on the slowest one before any of them could be
-        // indexed, and buried each open failure until the end.
+        // Open and index one plugin at a time. Opening the whole set first would cost the same
+        // total time but make every plugin wait on the slowest one before any of them could be
+        // indexed, and bury each open failure until the end.
         foreach (var plugin in arriving)
         {
             // At the top of each plugin rather than mid-plugin: a plugin is indexed in one
@@ -332,7 +332,7 @@ public sealed class LoadOrderMirror(
         var winnersTimer = Stopwatch.StartNew();
         index.UpdateWinners();
         lock (_lock) _conflictsComputed = true;
-        // #422: any of the above can change which records match an active filter.
+        // Any of the above can change which records match an active filter.
         ReapplyFilter();
 
         if (_logger.IsEnabled(LogLevel.Information))
@@ -357,7 +357,7 @@ public sealed class LoadOrderMirror(
     }
 
     /// <summary>
-    /// #586 / ADR-0001: a copy the index has already seen is *registered* rather than indexed.
+    /// ADR-0001: a copy the index has already seen is *registered* rather than indexed.
     /// Registering is a single <c>registrations</c> row — the rows this plugin's file produced are
     /// already in the file, and the open-time validation has already re-hashed them against the
     /// disk, so a non-null content hash here means "held, and still matching the bytes on disk".
@@ -385,7 +385,7 @@ public sealed class LoadOrderMirror(
             index.Register(key, plugin.Registration);
             // Counted exactly as an indexed plugin is, and for the same reason: Status promises a
             // plugin listed here is wholly queryable, and a registered one is. This is what makes
-            // a warm reconcile visibly advance rather than sit at zero until the sweep (#586 AC4).
+            // a warm reconcile visibly advance rather than sit at zero until the sweep.
             lock (_lock) _indexed.Add(new IndexedPlugin(plugin.Name, plugin.Origin));
             return;
         }
@@ -397,7 +397,7 @@ public sealed class LoadOrderMirror(
         var indexTimer = Stopwatch.StartNew();
         try
         {
-            // #271 / ADR-0036: threads the origin into the index, so the DuckDB row is identified
+            // ADR-0036: threads the origin into the index, so the DuckDB row is identified
             // by (origin, plugin) together, not filename alone.
             IndexOnePlugin(loadOrder, index, plugin, loadOrder.GetMod(plugin.Name, plugin.Origin)!, sourceTree, token);
             if (_logger.IsEnabled(LogLevel.Debug))
@@ -430,7 +430,7 @@ public sealed class LoadOrderMirror(
     }
 
     /// <summary>
-    /// Where one plugin's records come from (#452 / ADR-0041's #444 amendment, point 2): a tracked
+    /// Where one plugin's records come from (ADR-0041 amendment, point 2): a tracked
     /// plugin's own source tree, and the binary for everything else. Both branches end in the same
     /// <see cref="IRecordIndex.Index"/> call over the same <c>IModGetter</c> shape, which is what
     /// keeps the read model free of a dialect — see <see cref="SourceIngest"/>'s own doc comment.
@@ -500,8 +500,8 @@ public sealed class LoadOrderMirror(
     }
 
     /// <summary>
-    /// #288 / ADR-0041: the New Plugin gesture, re-scoped from writing straight into the game's Data
-    /// folder to landing in whatever <paramref name="path"/>/<paramref name="origin"/> the caller
+    /// ADR-0041: the New Plugin gesture — lands in whatever
+    /// <paramref name="path"/>/<paramref name="origin"/> the caller
     /// resolved (Mod Management's destination QuickPick — overwrite/, an existing mod, or a freshly
     /// installed mod folder; see <c>PluginEndpoints.CreatePlugin</c>'s doc comment for the full
     /// division of labour). This method's job stops at the boundary: it writes the binary, holds it
@@ -576,7 +576,7 @@ public sealed class LoadOrderMirror(
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
         var modPath = new ModPath(modKey, metadata.Path);
-        // #515: same explicit strings parameters every other deep-parse call site now builds.
+        // Same explicit strings parameters every other deep-parse call site builds.
         using var loaded = _modImporter.Import(
             modPath, gameRelease, LocalizedStrings.ForRead(ModFolders.Of(metadata.Origin, metadata.Path), _loadOrder!.DataFolderPath));
 
@@ -584,7 +584,7 @@ public sealed class LoadOrderMirror(
         {
             index.Index(loaded.Getter, metadata.Registration, metadata.Key, metadata.Path);
             index.UpdateWinners();
-            // #422: re-indexed content can flip filter membership either way.
+            // Re-indexed content can flip filter membership either way.
             ReapplyFilter();
         }
 
@@ -606,7 +606,7 @@ public sealed class LoadOrderMirror(
             _index.Unindex(key);
             // A removal moves winners for every FormKey it held, exactly as an re-index does.
             _index.UpdateWinners();
-            // #422: rows that no longer exist cannot match a filter that a stale _filter still lists.
+            // Rows that no longer exist cannot match a filter that a stale _filter still lists.
             ReapplyFilter();
         }
     }
@@ -624,7 +624,7 @@ public sealed class LoadOrderMirror(
         }
     }
 
-    // #422: the one place `_filter` gets re-run against current index state. `_lock` is reentrant,
+    // The one place `_filter` gets re-run against current index state. `_lock` is reentrant,
     // so every mutation path calls this from inside the same lock scope it already holds around its
     // Index/UpdateWinners calls, rather than dropping and retaking it.
     public void ReapplyFilter()
@@ -654,7 +654,7 @@ public sealed class LoadOrderMirror(
     public void Close()
     {
         // Cancels an in-flight reconcile and waits for it to stop *before* disposing anything —
-        // the teardown half of #274's cancellation. Disposing while the loop still holds the
+        // the teardown half of the cancellation. Disposing while the loop still holds the
         // index is a native crash, not a catchable one.
         EnterExclusive();
         try { lock (_lock) DisposeCurrent(); }

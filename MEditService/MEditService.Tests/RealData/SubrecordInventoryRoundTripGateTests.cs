@@ -11,18 +11,18 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #514's own real fixture, in <see cref="BinaryRoundTripGateTests"/>' (#369) shape: a real, unrelated
+/// A real fixture in <see cref="BinaryRoundTripGateTests"/>' shape: a real, unrelated
 /// plugin whose own bytes trip <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, not a forged one.
 ///
 /// <c>LitR - TrueStorms.esp</c> (from the LitR modlist's "LitR - General Conflict Resolution Patches",
-/// #513's 684-plugin survey) carries a REGN record, FormID <c>001D2AF4</c>, whose Map region-data entry
+/// recovered from the 684-plugin survey) carries a REGN record, FormID <c>001D2AF4</c>, whose Map region-data entry
 /// opens with a malformed 6-byte <c>RDAT</c> (the format's own fixed size is 8 — the 2 missing bytes are
 /// unused pad; catalogued as R2 in <c>docs/specs/medit-repair.md</c>). Parsing that short subrecord
 /// desyncs Mutagen's own reader, which then silently drops every subrecord that follows it in the
 /// record: <c>RDMP</c> (the map's own path name), <c>ANAM</c>, and the entire Sound entry (<c>RDAT</c> +
 /// <c>RDMO</c> + <c>RDSA</c>) — verified directly against this exact file (deep-parse, round-trip write,
-/// hex-diff the record) while building this test; not the plugin's originally-suspected defect (a
-/// literal second same-type <c>RDAT</c>, which <c>medit-repair.md</c> itself already retracts). Model
+/// hex-diff the record); not a literal second same-type <c>RDAT</c>,
+/// which <c>medit-repair.md</c> itself already retracts. Model
 /// identity cannot see this: both the original parse and the recompiled-from-source parse already lost
 /// the same bytes at parse time, so they agree with each other and disagree with the file on disk — only
 /// a byte-level subrecord count comparison, run against the two *binaries*, can name it.
@@ -32,7 +32,7 @@ public sealed class SubrecordInventoryRoundTripGateTests
     private const string FixtureFileName = "LitR - TrueStorms.esp";
     private static string FixturePath => Path.Combine(AppContext.BaseDirectory, "TestData", FixtureFileName);
 
-    /// <summary>AC1: Track refuses this real plugin, naming the record and the dropped signatures —
+    /// <summary>Track refuses this real plugin, naming the record and the dropped signatures —
     /// not silently accepted the way <see cref="ModelIdentity.FindFirst"/> alone would leave it
     /// (its own mask comparison sees no difference here, since both sides of it already lost the same
     /// bytes at parse time; only this byte-level check can name it).</summary>

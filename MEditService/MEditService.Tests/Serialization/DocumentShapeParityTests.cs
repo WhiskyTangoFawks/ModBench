@@ -8,19 +8,17 @@ using Mutagen.Bethesda.Serialization.Newtonsoft;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>
-/// #450 AC1 — <b>one document shape everywhere</b>, at the byte level. ADR-0041's #444 amendment
+/// <b>One document shape everywhere</b>, at the byte level. ADR-0041
 /// rests on the claim that the per-record codec's bytes for a record and the whole-mod folder-split
 /// path's file for that same record are the same bytes: untracked ingest (per-record, from binary),
 /// tracked ingest (from files) and point writes all produce and consume one shape, so nothing
-/// downstream ever has to know which door a document came through. The #444 spike measured that
-/// claim and found exactly two deltas, both this codec's own choices (a discriminator on every
-/// document, and a self-added trailing newline); both are gone as of #450, and this is the standing
-/// gate that keeps them gone. <b>Zero normalization</b> is the whole point — the spike's own probe
-/// normalized both deltas away to measure them, and this is that probe with the normalization
-/// removed.
+/// downstream ever has to know which door a document came through. Measurement found
+/// exactly two possible deltas, both this codec's own choices (a discriminator on every
+/// document, and a self-added trailing newline); both are gone, and this is the standing
+/// gate that keeps them gone. <b>Zero normalization</b> is the whole point.
 ///
 /// <para><b>This is Tests-side deliberately.</b> The generated whole-mod mixin is what
-/// <c>RecordTextCodecGeneratorSeed</c>'s AC2 guard keeps out of <c>MEditService.Core</c>; that guard
+/// <c>RecordTextCodecGeneratorSeed</c>'s whole-mod guard keeps out of <c>MEditService.Core</c>; that guard
 /// scans Core's own sources, so comparing against the whole-mod door from a test is exactly how the
 /// two are meant to be checked against each other.</para>
 ///
@@ -28,9 +26,8 @@ namespace MEditService.Tests.Serialization;
 /// where the kernel's own indentation newline is <c>\n</c> and the codec's <c>\r</c>-strip is a
 /// no-op. On Windows the whole-mod door's <c>Environment.NewLine</c> would make its file
 /// <c>\r\n</c>-delimited while the codec still emits bare <c>\n</c> — the canonical form. That
-/// difference is #444's open Windows question (ADR-0041: "Windows behavior of the whole-mod door to
-/// be verified at implementation") — the gate ADR-0041 named to adjudicate it was #455's Spriggit
-/// parity gate, retired by #468, so this is currently unaddressed by any automated check; it
+/// difference is the open Windows question (ADR-0041: "Windows behavior of the whole-mod door to
+/// be verified at implementation"), currently unaddressed by any automated check; it
 /// belongs to the whole-mod door's own configuration, not to this codec, whose canonical output is
 /// defined as bare <c>\n</c> with no trailing newline on every platform.</para>
 /// </summary>
@@ -117,7 +114,7 @@ public sealed class DocumentShapeParityTests
     }
 
     /// <summary>
-    /// #470 AC3's remaining two clauses, on record shapes the committed real fixture cannot exercise:
+    /// Two more "nothing is omitted" clauses, on record shapes the committed real fixture cannot exercise:
     /// its <c>ModHeader.OverriddenForms</c> is genuinely null (the fixture's header is built fresh by
     /// <c>CutDownPluginGenerator</c>, never copied from the real Fallout4.esm header it slices), and
     /// every <c>Fallout4Group</c>/<c>Worldspace</c> in it is likewise constructed fresh with only
@@ -130,18 +127,14 @@ public sealed class DocumentShapeParityTests
     /// <c>LastModified</c> is reachable through <see cref="RecordTextCodec"/>, which only ever takes a
     /// single <see cref="Mutagen.Bethesda.Plugins.Records.IMajorRecordGetter"/>.
     ///
-    /// <para><b><c>OverriddenForms</c>: green on arrival, cited rather than re-derived.</b> Nothing in
-    /// this codebase's current <c>Serialization/</c> or <c>Source/</c> code has ever suppressed it —
-    /// the per-type customization that once did was deleted whole in #468's revert of #455, and its own
-    /// test (recoverable at <c>git show 3f4e447:.../SpriggitOmitCustomizationsTests.cs</c>) is the rival
-    /// already applied and observed there, in the prior ticket: with that customization active, the
-    /// committed fixture's root document had no <c>"OverriddenForms"</c> key at all.</para>
+    /// <para><b><c>OverriddenForms</c>:</b> nothing in <c>Serialization/</c> or <c>Source/</c> may
+    /// suppress it — a per-type Omit customization would leave the root document with no
+    /// <c>"OverriddenForms"</c> key at all.</para>
     ///
-    /// <para><b><c>LastModified</c>/<c>SubCellsTimestamp</c>: live rival, applied and observed here</b>
-    /// — with <see cref="Serialization.RecordTextCodecCustomization"/>'s <c>.OmitLastModifiedData()</c>
-    /// still present, this test failed with "Assert.Contains() Failure: Sub-string not found" against a
-    /// <c>Cells/[0] 0/GroupRecordData.json</c> that was empty (<c>{}</c>); confirmed by running this
-    /// exact assertion against that unmodified state before the call was deleted.</para>
+    /// <para><b><c>LastModified</c>/<c>SubCellsTimestamp</c>:</b>
+    /// with <c>.OmitLastModifiedData()</c> in <see cref="Serialization.RecordTextCodecCustomization"/>,
+    /// this test fails with "Assert.Contains() Failure: Sub-string not found" against a
+    /// <c>Cells/[0] 0/GroupRecordData.json</c> that is empty (<c>{}</c>).</para>
     /// </summary>
     [Fact]
     public async Task Serialize_OfASyntheticModWithNonDefaultGroupAndHeaderFields_WritesThemUnomitted()

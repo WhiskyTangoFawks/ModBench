@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// #270 / ADR-0035. The merged Plugins tree is one view fed by two bounded contexts, and the whole
+// ADR-0035. The merged Plugins tree is one view fed by two bounded contexts, and the whole
 // reason ADR-0027 could be amended rather than overridden is that the merge is structural: Mod
 // Management owns the rows, Editing owns the children, and neither imports the other's vocabulary.
 // That is an invariant about source text, so it is checked as one — a reviewer reading a diff that
-// touches one provider has no reason to notice a term arriving from the other context, which is
-// exactly why #270 was flagged as needing a developer in the loop rather than a checklist.
+// touches one provider has no reason to notice a term arriving from the other context.
 //
 // The composite itself is deliberately not scanned: it is the composition root's join and has to
 // be able to say in prose what it joins, the same way LoadoutHeaderProvider does. What it must not
@@ -36,7 +35,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect(imports).toEqual(['vscode']);
   });
 
-  // #255: the name filter serves views from both contexts (Mods, the merged Plugins tree,
+  // The name filter serves views from both contexts (Mods, the merged Plugins tree,
   // Downloads), so like the composite it belongs to neither folder and lives at the composition
   // root. What makes that placement honest is the same property, so it is checked the same way:
   // structural deps, and nothing imported but `vscode`. Its own docstring cites this test — a
@@ -73,10 +72,10 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
     expect([...code.matchAll(/\b(records?|formkeys?|editorids?)\b/gi)].map((m) => m[0])).toEqual([]);
   });
 
-  // #288: three modmanager files the New Plugin gesture touched, none of them the merged tree's
+  // Three modmanager files the New Plugin gesture touches, none of them the merged tree's
   // own row/child/composite/filter/drift set above but all of them the same shape — plain
-  // modmanager/ modules reachable from the composition root, exactly what let a medit import slip
-  // in unnoticed until a reviewer's manual read caught it (review comment on #288). Held to the
+  // modmanager/ modules reachable from the composition root, exactly the shape that once let a
+  // medit import slip in unnoticed until a reviewer's manual read caught it. Held to the
   // same "imports nothing from Editing" bar PluginListProvider's own check uses, not the stricter
   // "nothing but vscode" bar the composition-root joiners (composite/nameFilter/loadOrderSync) get —
   // these have real modmanager-internal dependencies, just never a medit/ one.
@@ -93,9 +92,9 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   });
 
   it('the row provider contains no record vocabulary', () => {
-    // #276: "immutable"/"read-only" pinned alongside the original record vocabulary — Editing's
+    // "immutable"/"read-only" pinned alongside the original record vocabulary — Editing's
     // "Immutable plugin" (read-only-for-editing) is a distinct concept from this row's own
-    // "can't be toggled or moved" facts (the lock, #276/ADR-0035) and must stay decided and named
+    // "can't be toggled or moved" facts (the lock, ADR-0035) and must stay decided and named
     // on the Editing/composite side (PluginsTreeComposite.ts, deliberately exempted from this
     // scan), never here. Bare `readonly` is excluded — it's a TypeScript keyword this file uses
     // throughout for unrelated reasons, not the domain term.

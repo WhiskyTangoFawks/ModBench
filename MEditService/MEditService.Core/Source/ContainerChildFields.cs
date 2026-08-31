@@ -6,23 +6,20 @@ namespace MEditService.Core.Source;
 /// Which fields of a container record hold <b>child major records</b> — a Cell's placed refs,
 /// landscape and navmeshes, a Worldspace's top cell, a Quest's dialog topics/branches/scenes, a
 /// DialogTopic's responses. One table, read by the thing that still needs to know a parent-child
-/// relationship exists: the index's <c>container_child</c> rows (#416 S1b), which
+/// relationship exists: the index's <c>container_child</c> rows, which
 /// <see cref="SourceUnitResolver"/> in turn reads to place an embedded child in its owner's file.
-/// Compile no longer reads it at all — #454 retired <c>ContainerAssembler</c>, because the tree's own
-/// directory nesting <i>is</i> the containment.
+/// Compile does not read it at all — the tree's own directory nesting <i>is</i> the containment.
 ///
-/// <para><b>This used to be <c>ContainerStripFields</c>, and it no longer strips anything</b> (#450 /
-/// ADR-0041's #444 amendment). The shallow-strip posture existed because driving the un-customized
-/// per-record serializer over a container spilled its children into sibling folders keyed by field
-/// name, which two containers sharing a directory silently cross-contaminated on read (#387). The
-/// #444 spike showed that defect is an artifact of that one path — the whole-mod folder-split door
-/// does not have it, by construction — so the answer is Spriggit's embed customization, not a strip.
-/// A container's document now carries its embedded children, and its children are index rows
-/// extracted from it rather than a reason to hollow it out.</para>
+/// <para><b>Nothing is stripped</b> (ADR-0041 amendment): a container's document carries its
+/// embedded children, and its children are index rows extracted from it rather than a reason to
+/// hollow it out. A shallow-strip posture would only guard a defect specific to driving the
+/// un-customized per-record serializer over a container (children spilled into sibling folders keyed
+/// by field name, which two containers sharing a directory silently cross-contaminated on read); the
+/// whole-mod folder-split door does not have it, by construction — the answer is Spriggit's embed
+/// customization, not a strip.</para>
 ///
-/// <para><b>Hand-maintained table, not generic reflection — investigated (#370 Q5), and re-verified
-/// by mechanical enumeration (#416, after <c>Quest.Scenes</c> proved the original investigation
-/// incomplete: it was checked by inspection, not swept).</b> The rule is "a property is child-major
+/// <para><b>Hand-maintained table, not generic reflection — re-verified
+/// by mechanical enumeration.</b> The rule is "a property is child-major
 /// if its type is (or is a collection of) another major record type with no top-level group of its
 /// own" — it correctly finds Cell's four fields (Persistent/Temporary/NavigationMeshes are
 /// <c>ExtendedList&lt;IPlaced&gt;</c>/<c>ExtendedList&lt;NavigationMesh&gt;</c>, Landscape is a bare
@@ -40,17 +37,16 @@ namespace MEditService.Core.Source;
 /// containment, the other about file layout; they are not the same list and must not be merged.</para>
 ///
 /// <para><see cref="MEditService.Tests.Source.ContainerChildFieldsCompletenessTests"/> runs the rule
-/// by enumeration over every schema-registered major record type — verified exhaustive as of #416's
-/// landing, not merely inspected — and is the standing defence against the next gap (a future Mutagen
-/// bump or game module adding a child-major field nobody hand-adds here). Given a real,
-/// previously-undetected gap once already (Quest.Scenes), the hand-maintained table is still what
-/// ships, now backed by that sweep rather than by the original investigation's own say-so.
+/// by enumeration over every schema-registered major record type — swept, not merely
+/// inspected — and is the standing defence against the next gap (a future Mutagen
+/// bump or game module adding a child-major field nobody hand-adds here). Quest.Scenes was once a
+/// real, undetected gap, which is why the hand-maintained table ships backed by that sweep rather
+/// than by inspection alone.
 ///
-/// <para>That sweep is now the <i>only</i> line of defence, and deliberately so (#454). There used to
-/// be a second one at compile time — <c>ContainerAssembler</c> refused a source record it could find
-/// no parent slot for — but compile no longer places anything: the deserializer reads a record from
+/// <para>That sweep is the <i>only</i> line of defence, deliberately. Compile places
+/// nothing: the deserializer reads a record from
 /// wherever the tree already puts it, so "unplaceable" is not a state it can reach. A gap in this
-/// table now costs an index row (<c>container_child</c>), never a record missing from the compiled
+/// table costs an index row (<c>container_child</c>), never a record missing from the compiled
 /// binary.</para>
 /// </summary>
 internal static class ContainerChildFields
@@ -59,15 +55,11 @@ internal static class ContainerChildFields
     {
         ["Cell"] = ["Persistent", "Temporary", "NavigationMeshes", "Landscape"],
         ["Worldspace"] = ["TopCell", "SubCells"],
-        // "Scenes" (#416): Quest.Scenes is exactly the same child-major shape as DialogBranches/
+        // Quest.Scenes is exactly the same child-major shape as DialogBranches/
         // DialogTopics — Scene is IMajorRecordGetter, has no top-level group, and EnumerateMajorRecords
-        // already flattens it into its own top-level "scen" row — but it was missing from this table
-        // since #370/#387 originally built it. The defect was pure omission: a Scene had no *recorded
-        // parent slot anywhere* — the same "index gap" shape as the other four relationships that
-        // ticket also closed. Found once compile's completeness guard tried to attach a Scene to its
-        // Quest and had nowhere to put it (the real #369 fixture: 59 Scene records). Corroborated
-        // independently by Fallout4ConditionCodecTests' own "Scene is itself IMajorRecordGetter (a
-        // 'child record'...)" comment, written for an unrelated feature well before that ticket.
+        // already flattens it into its own top-level "scen" row. It was once omitted from this
+        // table — a Scene had no recorded parent slot anywhere — the gap the completeness sweep now
+        // exists to catch.
         ["Quest"] = ["DialogBranches", "DialogTopics", "Scenes"],
         ["DialogTopic"] = ["Responses"],
     };
@@ -84,7 +76,7 @@ internal static class ContainerChildFields
     /// <summary>A binary overlay's runtime type is <c>"&lt;ConcreteName&gt;BinaryOverlay"</c> — the
     /// same Mutagen naming convention <c>RecordTextCodec</c>'s own dispatch relies on. Normalizing
     /// this once means every caller here (and <see cref="MEditService.Core.Records.DuckDbRecordIndex"/>'s
-    /// container_child skip-list, #416 S1b) keys off the same name whether handed an overlay getter
+    /// container_child skip-list) keys off the same name whether handed an overlay getter
     /// (ingest) or an already-deep-parsed setter (Track).</summary>
     internal static string NormalizedTypeName(Type recordType)
     {
@@ -94,7 +86,7 @@ internal static class ContainerChildFields
 
     /// <summary>
     /// <paramref name="record"/>'s child major records, read non-destructively off a getter, so
-    /// ingest can capture parentage (#416 S1b's <c>container_child</c> side table) in the same pass
+    /// ingest can capture parentage (the <c>container_child</c> side table) in the same pass
     /// that writes the parent's own document. Yields nothing for a non-container type.
     ///
     /// <para><c>SlotIndex</c> is the child's position within its own field (always 0 for a
@@ -104,25 +96,25 @@ internal static class ContainerChildFields
     /// <summary>One child located inside a parent's live object graph — the slot it sits in, and the
     /// child itself as a <i>settable</i> record. <see cref="Child"/> is the real object hanging off
     /// the parent, not a copy, which is the whole point: mutating it and reserializing the parent is
-    /// how #453 writes an embedded child without a JSON path
+    /// how the edit path writes an embedded child without a JSON path
     /// (<c>Edits.RecordEditService.EditField</c>).</summary>
     internal readonly record struct EmbeddedChild(string SlotName, int SlotIndex, IMajorRecord Child);
 
     /// <summary>
     /// <paramref name="formKey"/>'s child record inside <paramref name="parent"/>, or null when
-    /// <paramref name="parent"/> does not carry it. This is the answer to #453 scope 1's "at which
+    /// <paramref name="parent"/> does not carry it. This is the answer to "at which
     /// JSON path inside the file", given through Mutagen's own object model instead of a JSON
     /// pointer: the child is a real record in the parent's graph, so every existing write mechanism —
     /// <c>RecordFieldWriter</c>, the codecs it dispatches to, the refusal set around it — applies to
     /// it completely unchanged, and there is no second copy of the document's structure to keep in
     /// step with the serializer.
     ///
-    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> (#453 review
-    /// finding 2 — this used to stop at one, on the stated premise that "anything deeper is its own
-    /// source unit with its own file", which is false for exactly one real shape). A worldspace's
+    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> —
+    /// "anything deeper is its own
+    /// source unit with its own file" is false for exactly one real shape. A worldspace's
     /// <c>RecordData.json</c> embeds its <c>TopCell</c>, and that cell embeds its own placed
     /// references: such a reference is <b>two</b> levels down inside one file, with no file of its own
-    /// anywhere. Stopping at one level refused it — and refused it citing an external change that had
+    /// anywhere. Stopping at one level would refuse it — citing an external change that had
     /// not happened.</para>
     ///
     /// <para><b>Descent is bounded to <see cref="EmbeddedSlots"/>, and that bound is
@@ -139,7 +131,7 @@ internal static class ContainerChildFields
             : null;
 
     /// <summary>
-    /// #461: <paramref name="formKey"/>'s removal from wherever <see cref="FindEmbeddedChild"/> would
+    /// <paramref name="formKey"/>'s removal from wherever <see cref="FindEmbeddedChild"/> would
     /// have found it — the same <see cref="FindEmbeddedChildSlot"/> traversal, but acting on the match
     /// instead of only reporting it, so a Cell/Worldspace deleted through
     /// <c>Edits.RecordEditService.DeleteRecord</c> comes back with its embedded child genuinely gone
@@ -171,21 +163,20 @@ internal static class ContainerChildFields
     /// <summary>
     /// <paramref name="formKey"/>'s slot inside <paramref name="parent"/>'s object graph, or null when
     /// <paramref name="parent"/> does not carry it. This is the one recursive descent
-    /// <see cref="FindEmbeddedChild"/> and <see cref="RemoveEmbeddedChild"/> both need — #461 review:
-    /// they used to retype this walk near line-for-line, differing only in what happened at the match;
-    /// this is the shared traversal, and each caller now only states what it does with the slot found.
-    /// This is the answer to #453 scope 1's "at which JSON path inside the file", given through
-    /// Mutagen's own object model instead of a JSON pointer: the child is a real record in the parent's
+    /// <see cref="FindEmbeddedChild"/> and <see cref="RemoveEmbeddedChild"/> both share — a single
+    /// traversal, where each caller states only what it does with the slot found.
+    /// The child is located through Mutagen's own object model instead of a JSON
+    /// pointer: it is a real record in the parent's
     /// graph, so every existing write mechanism — <c>RecordFieldWriter</c>, the codecs it dispatches to,
     /// the refusal set around it — applies to it completely unchanged, and there is no second copy of
     /// the document's structure to keep in step with the serializer.
     ///
-    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> (#453 review
-    /// finding 2 — this used to stop at one, on the stated premise that "anything deeper is its own
-    /// source unit with its own file", which is false for exactly one real shape). A worldspace's
+    /// <para><b>Descends through embedded slots, which reach more than one level deep</b> —
+    /// "anything deeper is its own
+    /// source unit with its own file" is false for exactly one real shape. A worldspace's
     /// <c>RecordData.json</c> embeds its <c>TopCell</c>, and that cell embeds its own placed
     /// references: such a reference is <b>two</b> levels down inside one file, with no file of its own
-    /// anywhere. Stopping at one level refused it — and refused it citing an external change that had
+    /// anywhere. Stopping at one level would refuse it — citing an external change that had
     /// not happened.</para>
     ///
     /// <para><b>Descent is bounded to <see cref="EmbeddedSlots"/>, and that bound is
@@ -218,10 +209,10 @@ internal static class ContainerChildFields
     }
 
     /// <summary>
-    /// #440: clears every child-major slot <paramref name="record"/>'s object graph actually carries a
-    /// value in — the plain "own fields only" half of a shallow Copy as Override on a container (AC3):
+    /// Clears every child-major slot <paramref name="record"/>'s object graph actually carries a
+    /// value in — the plain "own fields only" half of a shallow Copy as Override on a container:
     /// xEdit's own Copy as Override always lands own-fields-only for every record type, containers
-    /// included — only "Deep copy as override" (#551) keeps children. Built over
+    /// included — only "Deep copy as override" keeps children. Built over
     /// <see cref="EnumerateChildren"/>'s own yield rather than <see cref="ByTypeName"/>'s raw field
     /// list, deliberately: that already excludes <c>Worldspace.SubCells</c> (its items are
     /// <c>WorldspaceBlock</c>, not <see cref="IMajorRecordGetter"/>) and, for a Quest or DialogTopic
@@ -245,9 +236,9 @@ internal static class ContainerChildFields
     }
 
     /// <summary>
-    /// #440 Slice 6: appends <paramref name="child"/> onto the end of <paramref name="parent"/>'s
+    /// Appends <paramref name="child"/> onto the end of <paramref name="parent"/>'s
     /// <paramref name="slotName"/> list — the write-side counterpart to <see cref="RemoveFromSlot"/>,
-    /// for a copy landing a new child into an existing container override (AC2). Only ever a list slot
+    /// for a copy landing a new child into an existing container override. Only ever a list slot
     /// in practice for this method's one caller (Persistent/Temporary, the placement-tracked embedded
     /// lists) — a single-value slot (Landscape, TopCell) has no "append" to make sense of.
     /// </summary>

@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-/// <summary>#364: a two-plugin load order with one contested record (an uncontested field override —
+/// <summary>A two-plugin load order with one contested record (an uncontested field override —
 /// ConflictAll.Override, not .Conflict; a genuine two-sided disagreement needs a third plugin,
 /// already covered at the service layer) and one uncontested (single-plugin) record —
 /// <c>ConflictsApiTests</c>' fixture for <c>GET /records/conflicts</c>.</summary>

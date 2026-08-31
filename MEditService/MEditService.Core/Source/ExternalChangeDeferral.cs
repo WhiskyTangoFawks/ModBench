@@ -3,8 +3,8 @@ using System.Text.Json;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #417 exit path 3: "Until answered, the affected plugin is refused for editing... Deferral is
-/// per-plugin, not per-load order." — set the moment detection queues a question (never only on an
+/// Until an external-change question is answered, the affected plugin is refused for editing;
+/// deferral is per-plugin, never per-load-order — set the moment detection queues a question (never only on an
 /// explicit Esc: Esc's own contribution is that nothing further gets written, but the plugin is
 /// already refused from the instant it was detected, by <c>Bridge.ExternalChangeWatcher.
 /// ReportExternalChange</c>, the one shared choke point both the live watcher and the load-time
@@ -12,15 +12,14 @@ namespace MEditService.Core.Source;
 /// plain file inside the repo's own <c>.git</c>, not a registry — but keyed per <b>plugin</b>, not
 /// per repo, and a mod folder can hold more than one plugin whose dialogs answer independently.
 ///
-/// <para>This is the one place both doors #415 pinned onto the single write path consult before
+/// <para>This is the one place the single write path consults before
 /// writing anything: <see cref="Edits.RecordEditService.EditField"/> checks <see cref="Unanswered"/>
-/// before touching the source file or the index, so every edit gesture that goes through it — today
-/// and whatever #426/#427 add later — inherits the refusal without adding its own check.</para>
+/// before touching the source file or the index, so every edit gesture that goes through it
+/// inherits the refusal without adding its own check.</para>
 ///
-/// <para>Public (not internal) since #417: <c>MEditService.Bridge</c> is the one place that writes
-/// this marker (<c>ExternalChangeWatcher.ReportExternalChange</c>) and cannot see Core's internals —
-/// the same "promote once a second real consumer exists" rule <c>ModFolders</c>/<c>SourceRecordType</c>
-/// already followed.</para>
+/// <para>Public (not internal): <c>MEditService.Bridge</c> is the one place that writes
+/// this marker (<c>ExternalChangeWatcher.ReportExternalChange</c>) and cannot see Core's
+/// internals.</para>
 /// </summary>
 public static class ExternalChangeDeferral
 {

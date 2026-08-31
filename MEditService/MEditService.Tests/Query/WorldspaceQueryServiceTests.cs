@@ -23,7 +23,7 @@ public class WorldspaceQueryServiceTests
             return cells;
         }
 
-        // #296/#305: capture the origin each method actually resolved (or was explicitly given)
+        // Capture the origin each method actually resolved (or was explicitly given)
         // and passed down, so the plumbing (not just the repository-level filter) is verified
         // independently of DuckDB.
         public string? LastSearchOrigin { get; private set; }
@@ -67,9 +67,9 @@ public class WorldspaceQueryServiceTests
     {
         public ILoadOrder? LoadOrder => loadOrder;
         public IRecordReads? Reads => repo;
-        // #415: read-side double — the worldspace queries never write to the index.
+        // Read-side double — the worldspace queries never write to the index.
         public IRecordIndex? Index => null;
-        // #274: these stubs never load, so they are always in the no-load order state.
+        // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         // This double's own tests only ever exercise the Reads/RequireReads() side — loadOrder
         // defaults to null in most of them, which would make a real "both null together"
@@ -89,7 +89,7 @@ public class WorldspaceQueryServiceTests
         public void ReapplyFilter() => throw new NotSupportedException();
     }
 
-    // #296: a minimal fake load order whose Plugins list is real enough to exercise
+    // A minimal fake load order whose Plugins list is real enough to exercise
     // PluginOriginResolver.Resolve — used only by the origin-resolution plumbing test below.
     private sealed class StubLoadOrder(IReadOnlyList<PluginMetadata> plugins) : ILoadOrder
     {
@@ -154,8 +154,8 @@ public class WorldspaceQueryServiceTests
             block00.SubBlocks.Select(s => (s.X, s.Y)).ToArray());
     }
 
-    // Regression (#173): GetWorldspaces queried table "worldspace", but the schema's real table
-    // name — like every other spatial type ("cell", "refr", "achr") — is the raw record
+    // Regression: a GetWorldspaces querying table "worldspace" misses — the schema's real table
+    // name, like every other spatial type ("cell", "refr", "achr"), is the raw record
     // signature lowercased ("wrld"). The StubReader above ignores its table-name argument, so it
     // can't catch this; this test runs against a real DuckDbRecordIndex (via the committed
     // cut-down Fallout4.esm fixture) so a wrong table name surfaces as a real failure.
@@ -195,7 +195,7 @@ public class WorldspaceQueryServiceTests
         Assert.Null(result[1].EditorId);
     }
 
-    // #296: GetWorldspaces called repo.GetRecords("wrld", plugin, ...) with no origin at all — the
+    // GetWorldspaces must not call repo.GetRecords("wrld", plugin, ...) with no origin — the
     // same class of bug as the other worldspace-tree reads, just one hop further away (through
     // GetRecords rather than a repository method GetWorldspaceCells/GetInteriorCells/
     // GetCellReferences own directly). Verifies the plumbing resolves the load order's real origin for
@@ -214,9 +214,9 @@ public class WorldspaceQueryServiceTests
         Assert.Equal("ModA", reader.LastSearchOrigin);
     }
 
-    // #305: a caller that already knows which copy it's browsing (a tree row built from a
+    // A caller that already knows which copy it's browsing (a tree row built from a
     // specific origin) states it explicitly, and that must win over whatever the load order would
-    // otherwise resolve — the same shape RecordQueryService.GetRecords already has (#34). The
+    // otherwise resolve — the same shape RecordQueryService.GetRecords already has. The
     // load order here resolves "M.esp" to "ModA", so a passing "ModB" through only proves the
     // explicit value, not the fallback, actually reached GetRecords.
     [Fact]
@@ -261,11 +261,10 @@ public class WorldspaceQueryServiceTests
         Assert.Equal("ModB", reader.LastGetInteriorCellsOrigin);
     }
 
-    // #305: the only prior coverage of GetInteriorCells with an omitted origin
-    // (WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation, above) only proves the no-load order guard —
-    // it asserts nothing about real content flowing through with the load-order-resolved origin.
-    // Mirrors GetWorldspaces_MapsRecordsToSummaries so the omitted-origin path stays pinned by a
-    // real assertion, not just "it doesn't throw", once GetInteriorCells takes an optional origin.
+    // The omitted-origin path stays pinned by a real assertion, not just "it doesn't throw" —
+    // WorldspaceQuery_NoLoadOrder_ThrowsInvalidOperation above only proves the no-load-order
+    // guard and asserts nothing about real content flowing through with the load-order-resolved
+    // origin. Mirrors GetWorldspaces_MapsRecordsToSummaries.
     [Fact]
     public void GetInteriorCells_OmittedOrigin_ReturnsRealContent()
     {
@@ -295,11 +294,10 @@ public class WorldspaceQueryServiceTests
         Assert.Single(result.Blocks);
     }
 
-    // #251: GetWorldspaceBlocks used to pick the *first* block-less row as TopCell and build Blocks
-    // only from rows that had block coordinates — a second block-less row was in neither, silently
-    // dropped. Confirmed against the pre-fix code (SCRATCH_GetWorldspaceBlocks_TwoBlocklessCellRows_
-    // TodayOnlyOneIsReachable, since removed) that this really did drop data at runtime, not just in
-    // theory. Both rows must now be reachable, with only the first flagged as the persistent cell.
+    // A GetWorldspaceBlocks that picks the *first* block-less row as TopCell and builds Blocks
+    // only from rows that have block coordinates leaves a second block-less row in neither —
+    // silently dropped (real runtime data loss, not just theory).
+    // Both rows must be reachable, with only the first flagged as the persistent cell.
     [Fact]
     public void GetWorldspaceBlocks_TwoBlocklessCellRows_SurfacesBoth()
     {
@@ -316,7 +314,7 @@ public class WorldspaceQueryServiceTests
         Assert.False(result.TopCells[1].IsPersistentWorldspaceCell);
     }
 
-    // #497: GetWorldspaceCells's repository row carries a FULL name independently of grid
+    // GetWorldspaceCells's repository row carries a FULL name independently of grid
     // coordinates / persistence — this pins that GetWorldspaceBlocks actually forwards it into both
     // CellSummary construction sites (TopCells and a block/sub-block's Cells) rather than dropping
     // it on the floor. The tree-provider label precedence itself is a frontend concern; this only

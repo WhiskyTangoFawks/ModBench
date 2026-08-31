@@ -3,12 +3,11 @@ import type { WorkingTreeState, ConflictAll } from './ApiClient';
 import { parseRecordResourceUri } from './recordResourceUri';
 
 /**
- * #428: record-row M/A badges — VS Code's own git-idiom vocabulary (single-letter badge, the
+ * Record-row M/A badges — VS Code's own git-idiom vocabulary (single-letter badge, the
  * exact `gitDecoration.*ResourceForeground` theme colours git's own decorations use), via a
  * `FileDecorationProvider` keyed on {@link recordResourceUri}'s synthetic scheme.
  *
- * Deleted is not a value here (orchestrator ruling on #428's plan gate, follow-up filed
- * separately): a working-tree-deleted record has no row in the Plugins tree to badge at all —
+ * Deleted is not a value here: a working-tree-deleted record has no row in the Plugins tree to badge at all —
  * `Search()` is Effective-only, and a deleted record has no Effective row (the backend's own
  * `RecordSummaryWorkingTreeStateTests` and `WorkingTreeState`'s doc comment pin this). This
  * mirrors VS Code's own Explorer, which drops a deleted file's row rather than badging it D; the
@@ -21,40 +20,40 @@ import { parseRecordResourceUri } from './recordResourceUri';
  * `onDidChangeFileDecorations` emitter (see {@link refresh}), because unlike a hidden-download or
  * implicit-master flag (which only ever changes in lockstep with a `TreeDataProvider` refresh this
  * codebase's own tree-redraw-requeries-decorations doctrine already covers), a field edit does
- * *not* redraw the tree at all (#428 Q1 ruling — a full page-cache invalidation per committed cell
+ * *not* redraw the tree at all (a full page-cache invalidation per committed cell
  * edit is a refetch storm) yet still has to flip a badge on an already-rendered row. `refresh`
  * exists for exactly that gap: `FileDecorationProvider` re-queries independently of any tree
  * redraw when fired for a URI, so the badge updates with zero network cost.
  *
  * **Committing or reverting through the native Source Control panel pushes no live signal here**
- * (#428 Q2, orchestrator gate ruling — punt approved, stated rather than hidden). #557 has
- * `extension.ts` retain the `Repository` handle `openRepository` returns (`pluginRepositories`),
+ * — a stated, accepted gap. `extension.ts` retains the `Repository` handle
+ * `openRepository` returns (`pluginRepositories`),
  * but only to drive the *outbound* direction — prompting that repository's own `status()` after a
  * Modbench edit, so the native Source Control panel picks up our write. Nothing yet subscribes to
  * the repository's own `state.onDidChange`, so the *inbound* direction is still unaddressed: a
  * badge set by a Modbench-driven edit only clears (or a badge a native commit/revert should have
  * changed only updates) at the next Modbench-driven read — the same no-watcher posture the record
- * editor and compare grid already carry (#413's own "reverting through git restores the committed
+ * editor and compare grid already carry ("reverting through git restores the committed
  * value at the next read"). Live reactivity to bare git-panel activity remains the open follow-up.
  *
- * **#364: the record conflict badge shares this same URI-keyed provider** rather than a second
+ * **The record conflict badge shares this same URI-keyed provider** rather than a second
  * one — a row has exactly one `FileDecoration`, so the two badges have to be reconciled in one
  * place, not painted independently and left to whichever provider VS Code asks last. `lookup`
  * (M/A) always wins when it has an answer: an uncommitted local edit is the more actionable,
- * load order-local fact, and the orchestrator's #364 plan-gate ruling made this the explicit default
- * rather than leaving it to whichever check happened to run first. `conflictAllLookup` is
- * consulted only when `lookup` has nothing to say, and it is expected to already apply #307's own
- * gate (`PluginTreeProvider.conflictAllOf` does — undefined while `conflictsComputed` is false or
+ * load order-local fact — an explicit default,
+ * never left to whichever check happened to run first. `conflictAllLookup` is
+ * consulted only when `lookup` has nothing to say, and it is expected to already apply the
+ * conflictsComputed gate (`PluginTreeProvider.conflictAllOf` does — undefined while `conflictsComputed` is false or
  * for a record nothing has fetched a conflict state for yet) — this provider does not re-decide
  * that itself, only renders what it's told. OnlyOne/NoConflict never badge either
  * (`medit-record-editor.md`'s "no tint" rule, reused here as "no badge"): a badge is reserved for
  * "this needs attention", not for every record with more than one plugin's opinion on file.
  *
- * **#364 review finding: the conflict lookup only ever runs for a URI `parseRecordResourceUri`
+ * **The conflict lookup only ever runs for a URI `parseRecordResourceUri`
  * marks `fromConflictsNode`.** `conflictAllLookup` is keyed purely on (plugin, origin, formKey) —
  * the same record shown via an ordinary `RecordTypeNode -> RecordNode` row elsewhere in the tree
  * resolves to the identical lookup key, so without this gate that row would inherit a badge that
- * belongs only to its Conflicts-node row (the AC's explicit scope — Option B's "badge everywhere"
+ * belongs only to its Conflicts-node row ("badge everywhere"
  * was deliberately not built). The marker, not the lookup's own cache, is what closes this: the
  * cache stays a plain identity map (one conflictAll per record is still a true fact regardless of
  * who asks), but only a Conflicts-node-built row's URI ever asks.
@@ -78,13 +77,13 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider {
     if (state === 'Added') {
       return { badge: 'A', color: new vscode.ThemeColor('gitDecoration.addedResourceForeground'), tooltip: 'Added' };
     }
-    // #364 review finding: never even attempt a conflict lookup for a row outside the Conflicts
+    // Never even attempt a conflict lookup for a row outside the Conflicts
     // node — see the class doc comment.
     if (!identity.fromConflictsNode) return undefined;
     return this.conflictDecoration(identity.plugin, identity.origin, identity.formKey);
   }
 
-  /** #364: ADR-0016's Axis 1 only (record-wide ConflictAll) — Axis 2 (per-cell ConflictThis) is
+  /** ADR-0016's Axis 1 only (record-wide ConflictAll) — Axis 2 (per-cell ConflictThis) is
    *  the compare grid's own concern, never this tree's. Colours reuse existing sanctioned tokens
    *  rather than inventing new ones, matching the compare grid's own "no new colors" rule
    *  (ADR-0016's 2026-08-11 update): green/red are the same tokens the M/A badges above already
@@ -100,7 +99,7 @@ export class RecordDecorationProvider implements vscode.FileDecorationProvider {
       case 'ConflictCritical':
         return { badge: '!', color: new vscode.ThemeColor('problemsErrorIcon.foreground'), tooltip: 'Conflict (critical)' };
       default:
-        // OnlyOne, NoConflict, or undefined (not computed / not fetched) — #307: nothing rendered,
+        // OnlyOne, NoConflict, or undefined (not computed / not fetched) — nothing rendered,
         // never a badge that could be mistaken for "no conflict".
         return undefined;
     }

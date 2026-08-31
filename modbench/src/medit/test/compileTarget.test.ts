@@ -57,8 +57,8 @@ describe('resolveCompileTarget (#416 review)', () => {
     expect(d.pickPlugin).not.toHaveBeenCalled();
   });
 
-  // #505: before Launch mEdit (or after Close mEdit, since exitToLoadout never resets
-  // ActiveRecordTracker/closes an open record panel — the same reachable path #530 documents for
+  // Before Launch mEdit (or after Close mEdit, since exitToLoadout never resets
+  // ActiveRecordTracker/closes an open record panel — the same reachable path as
   // this priority tier), getRecordOwner has no backend to ask and rejects rather than answering
   // 404. Exact parity with the already-tested "cannot be resolved to a plugin" case above: falls
   // through to the palette fallback rather than letting the rejection propagate as a raw,
@@ -71,7 +71,7 @@ describe('resolveCompileTarget (#416 review)', () => {
     expect(d.pickPlugin).toHaveBeenCalledOnce();
   });
 
-  // #530: unlike tier 2's getRecordOwner rejection above (which still has a fallback tier below
+  // Unlike tier 2's getRecordOwner rejection above (which still has a fallback tier below
   // it), tier 3 is the last tier — pickPlugin rejecting (e.g. repository.getPlugins() with no
   // backend to ask, before Launch mEdit) has nowhere further to fall through to, so it must report
   // through onError and resolve to no target instead of propagating as a raw, uncaught toast.

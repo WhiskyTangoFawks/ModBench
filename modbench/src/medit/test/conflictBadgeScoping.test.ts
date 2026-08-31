@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import type { RecordSummary, ConflictingRecord } from '../ApiClient';
 import type { PluginRepository } from '../PluginRepository';
 
-// #364 review finding: the record conflict badge must render only on the Conflicts node's own
+// The record conflict badge must render only on the Conflicts node's own
 // rows, never on an ordinary RecordTypeNode -> RecordNode row for the same record elsewhere in
-// the tree — the AC's explicit scope decision, contradicted by the original implementation (a bare
-// identity-keyed FileDecorationProvider lookup badges every URI sharing that identity). This is
+// the tree — a bare
+// identity-keyed FileDecorationProvider lookup would badge every URI sharing that identity. This is
 // the direct cross-module proof: PluginTreeProvider builds both flavors of RecordNode for the
 // identical (plugin, origin, formKey), and RecordDecorationProvider — wired the same way
 // extension.ts wires it in production — badges one and not the other.

@@ -7,30 +7,29 @@ export function toStr(v: unknown): string {
   return JSON.stringify(v) ?? '';
 }
 
-// #272 / ADR-0036: `key` is this column's compound identity, minted once here (buildColumns) via
+// ADR-0036: `key` is this column's compound identity, minted once here (buildColumns) via
 // columnKey() rather than re-derived at every render/lookup site — every consumer (DiffRow,
 // RecordPanel) reads `col.key` instead of `col.override.plugin`/`col.plugin`, which is what makes
 // two same-filename columns stop colliding on collapsedColumns/immutableSet/focusedCell/
 // overrideMap. `plugin`/`origin` stay present on the overlay variant (mirroring
 // CompareOverride's own plugin+origin fields) only for display/decomposition, never parsed back
 // out of `key` itself.
-// #410/ADR-0041: one column per override. The companion column retired with the model
-// that fed it, so this is no longer a union — kept as a discriminated shape anyway (`kind: 'disk'`)
-// because DiffRow's own render loop still branches on it and #415 brings a second column kind back.
+// ADR-0041: one column per override. Kept as a discriminated shape (`kind: 'disk'`) even though
+// there is currently only one kind — DiffRow's own render loop branches on it.
 export type Column = { kind: 'disk'; key: ColumnKey; override: CompareOverride };
 
 export function buildColumns(overrides: CompareOverride[]): Column[] {
   return overrides.map(o => ({ kind: 'disk' as const, key: columnKey(o.plugin, o.origin), override: o }));
 }
 
-// #304: the *reason* a column is read-only — `immutableSet` alone (RecordPanelClient.ts) says
+// The *reason* a column is read-only — `immutableSet` alone (RecordPanelClient.ts) says
 // only that it is, which is genuinely ambiguous: a vanilla/DLC master is immutable and still named
-// by the load order, while a copy the load order doesn't name (ADR-0036, #34) is immutable
+// by the load order, while a copy the load order doesn't name (ADR-0036) is immutable
 // *because* it isn't. a losing copy's registration derives IsImmutable:true alongside
 // InLoadOrder:false, so the two are never independent on the wire today — but a reader that only
 // checked isImmutable couldn't tell them apart, and PluginHeader needs to: the tooltip names a
 // different cause, and only the second dims (ADR-0035's "non-participating copies render dimmed").
-// #415 / ADR-0041: `untracked` joins the two, and is the only one of the three the user can undo —
+// ADR-0041: `untracked` is the only one of the three the user can undo —
 // "editing requires tracking; viewing never does", and the escape is one command, once, per mod.
 export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | null;
 
@@ -40,10 +39,10 @@ export type ReadOnlyReason = 'vanillaMaster' | 'notInLoadOrder' | 'untracked' | 
  * Ordered by what the user can do about it, deliberately: the two reasons they cannot fix here come
  * first, so a vanilla master is never told to run Track — a command that does not apply to it and
  * would send them somewhere that leads nowhere. Naming the wrong way out is worse than naming none
- * (AC4: "no silent dead UI" is about dead *ends*, not only about silence).
+ * ("no silent dead UI" is about dead *ends*, not only about silence).
  *
- * `isTracked` defaults true so a caller that has not learned about tracking yet keeps its
- * pre-#415 answer rather than silently reporting every column as untracked; the record editor,
+ * `isTracked` defaults true so a caller that does not pass it
+ * is not silently reporting every column as untracked; the record editor,
  * which is the surface that gates on it, always passes it.
  */
 export function readOnlyReason(
@@ -53,7 +52,7 @@ export function readOnlyReason(
   return isTracked ? null : 'untracked';
 }
 
-// #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
+// ADR-0036: "origin appears inline in the header only when two loaded copies share a
 // filename" — computed from the overrides *this* compare response carries (CompareResult.Overrides
 // via buildColumns' own input), never the load order's whole plugin list. Two CompareOverride rows can
 // never share both plugin and origin (the backend's own (form_key, origin, plugin) key), so any
@@ -70,7 +69,7 @@ export function parseElementIndex(fieldName: string): number {
   return Number.parseInt(fieldName.slice(1, -1), 10);
 }
 
-// Issue #168 (resurrected #426): the one definition of "does this plugin's own array actually
+// The one definition of "does this plugin's own array actually
 // have an element at this index" — a row's index comes from the union-aligned tree across every
 // plugin's column (an ordinary array with differing per-plugin lengths, or VMAD/Condition's own
 // positional alignment), not from this one plugin's own array, so it can be at or past *this
@@ -81,14 +80,14 @@ export function hasElementAt(length: number, index: number): boolean {
   return index >= 0 && index < length;
 }
 
-// Issue #227 (resurrected #426): the three pure array-arity/order mutations behind Move Up/Move
+// The three pure array-arity/order mutations behind Move Up/Move
 // Down/Remove/Add — shared by the keyboard accelerator (DiskCell's onKeyDown, a pure in-webview
 // call) and the right-click menu's broadcast handler (RecordPanel, arriving asynchronously from
 // the extension host), so both write the array identically without needing to share one runtime
 // call path. Each returns a new array; callers commit the whole thing via onEditCell, the same
 // as any other field commit.
 //
-// Issue #168: `index` itself must be bounds-checked here, not just the swap target `j` (index ===
+// `index` itself must be bounds-checked here, not just the swap target `j` (index ===
 // array.length, direction -1 → j = index - 1, which passes a j-only guard) — without it, the
 // destructuring swap extends the array by one slot and duplicates a value instead of the "return
 // the array unchanged" no-op every other boundary already gets.
@@ -100,7 +99,7 @@ export function moveArrayElement(array: unknown[], index: number, direction: -1 
   return next;
 }
 
-// Issue #168: bounds-checked the same way moveArrayElement is — `Array.prototype.filter` already
+// Bounds-checked the same way moveArrayElement is — `Array.prototype.filter` already
 // leaves the *content* unchanged for an out-of-range index, but it still hands back a new array
 // reference, which defeats a caller's reference-equality no-op check.
 export function removeArrayElement(array: unknown[], index: number): unknown[] {
@@ -112,13 +111,13 @@ export function appendArrayElement(array: unknown[], value: unknown): unknown[] 
   return [...array, value];
 }
 
-// ── Native right-click menu contexts (issue #227, resurrected #426) ──────────
+// ── Native right-click menu contexts ──────────────────────────────────────────
 //
 // VS Code's own `contributes.menus["webview/context"]` gates on a `data-vscode-context` attribute
 // carrying JSON VS Code parses itself and hands to the invoked command — never a rendered
 // `<ul role="menu">`. `combineVscodeContexts` below lets one row carry more than one of these at
 // once (a VMAD array-of-scalars property is both an array parent/element and a VMAD structural-op
-// target, Track 5), so each builder returns the plain object rather than a JSON string itself.
+// target), so each builder returns the plain object rather than a JSON string itself.
 // The two interfaces themselves live in `src/medit/messages.ts` (imported below), not here —
 // extension.ts's own command handlers need the identical shape to type the `ctx` parameter VS
 // Code hands them, and that module is the one place both processes already share a contract.
@@ -131,20 +130,17 @@ import type {
   StringValueContext,
 } from './messages';
 
-// Issue #227: DiffRow only attaches this on a mutable column's unsorted-array cell — its mere
-// presence is the gate, so no separate immutable/isSortable flag travels in the payload the way
-// ColumnHeaderContext's `immutable` once did (Track 5/#427, if that surface returns). `arrayLength`
+// DiffRow only attaches this on a mutable column's unsorted-array cell — its mere
+// presence is the gate, so no separate immutable/isSortable flag travels in the payload.
+// `arrayLength`
 // only exists to derive canMoveUp/canMoveDown (package.json's `when`-clause gate for Move Up/Move
-// Down, mirroring `immutable`'s old role) — Remove has no boundary condition, so the last path
+// Down) — Remove has no boundary condition, so the last path
 // segment's index alone still gates it.
 //
-// #535: `path` is the row's own restage coordinates (RowContext, DiffRow.tsx) — the element's full
-// chain of hops from the subtree root, replacing the old bare scalar `index` (a top-level array's
-// element is still a one-hop path, but a nested array's element needs every hop, which a scalar
-// index could never carry — the truncation this ticket closes). `rootField` replaces the old
-// `fieldName`: that parameter's own pre-#535 doc comment already said it *was* `context.rootField`
-// (the two only ever coincided, no distinct display role the way StringValueContext's `fieldName`
-// has), so this renames rather than carrying two always-identical fields.
+// `path` is the row's own restage coordinates (RowContext, DiffRow.tsx) — the element's full
+// chain of hops from the subtree root, never a bare scalar index (a top-level array's
+// element is a one-hop path, but a nested array's element needs every hop, which a scalar
+// index could never carry).
 export function arrayElementContext(
   formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[], arrayLength: number,
 ): ArrayElementContext {
@@ -152,7 +148,7 @@ export function arrayElementContext(
   const index = lastSeg?.kind === 'index' ? lastSeg.index : -1;
   return {
     webviewSection: 'arrayElement', formKey, plugin, origin, rootField, path,
-    // Issue #168: `canMoveUp` must also check hasElementAt (this plugin's own real length), or
+    // `canMoveUp` must also check hasElementAt (this plugin's own real length), or
     // the menu offers Move Up on a row this plugin doesn't have an element in at all — canMoveDown
     // doesn't need the same explicit check since index < arrayLength - 1 already implies it.
     canMoveUp: index > 0 && hasElementAt(arrayLength, index), canMoveDown: index < arrayLength - 1,
@@ -160,15 +156,15 @@ export function arrayElementContext(
   };
 }
 
-// #535: `path` addresses the array itself (the row's own path when it *is* the array — a top-level
-// array's is `[]`, matching the pre-#535 "the root field is the array" shape exactly).
+// `path` addresses the array itself (the row's own path when it *is* the array — a top-level
+// array's is `[]`).
 export function arrayParentContext(
   formKey: string, plugin: string, origin: string, rootField: string, path: PathSegment[],
 ): ArrayParentContext {
   return { webviewSection: 'arrayParent', formKey, plugin, origin, rootField, path, preventDefaultContextMenuItems: true };
 }
 
-// Issue #231 (resurrected #426 Track 5): same mechanism as arrayElementContext/arrayParentContext
+// Same mechanism as arrayElementContext/arrayParentContext
 // above, carried by VMAD's own row kinds instead — see VmadScriptsContext/VmadScriptContext/
 // VmadPropertyContext's own doc comment (messages.ts) for why no extra identity travels beyond
 // script/property name.
@@ -190,8 +186,8 @@ export function vmadPropertyContext(
   };
 }
 
-// #494: the record editor's column header — restores Copy as Override Into…/Copy as New Record
-// Into… (#436) as native `webview/context` entries, the same mechanism every other row-level menu
+// The record editor's column header — Copy as Override Into…/Copy as New Record
+// Into… as native `webview/context` entries, the same mechanism every other row-level menu
 // here already uses. No mutable/immutable/tracked gating baked in here: the column's own
 // read-only-ness is irrelevant to whether it can be a *source* — copying from a vanilla master is
 // the headline case — so every column carries this context unconditionally.
@@ -199,19 +195,18 @@ export function headerCellContext(formKey: string, plugin: string, origin: strin
   return { webviewSection: 'recordHeader', formKey, plugin, origin, preventDefaultContextMenuItems: true };
 }
 
-// #258 / ADR-0039: a `string` value cell's own right-click entry — the extended editor's only
-// remaining trigger, now that no left-click gesture reaches it (the debounced double-click-to-tab
-// binding this replaces is gone from ScalarCell). Offered unconditionally on every string leaf
+// ADR-0039: a `string` value cell's own right-click entry — the extended editor's only
+// trigger, since no left-click gesture may reach it. Offered unconditionally on every string leaf
 // cell in the field grid, mutable or immutable alike — `readOnly` is what the command's own
 // `when` clause (and the tab it opens) act on, not the cell's mere presence here. `value` is the
 // cell's own current model value (DiffRow already computes this identically for display/copy), so
 // the extension host never needs to re-derive it.
 //
-// #533: `path`/`rootField` are the row's own restage coordinates (RowContext, DiffRow.tsx) — both
+// `path`/`rootField` are the row's own restage coordinates (RowContext, DiffRow.tsx) — both
 // already in scope at every call site (DiffRow already builds `context.path`/`context.rootField`
-// for its own array/VMAD contexts), so a save from the extended editor can reach RecordPanel's
-// whole-field reconstruction (handleCellCommit, the same one an inline edit already goes through,
-// #503) instead of committing the saved text alone under `rootField` — the defect this closes.
+// for its own array/VMAD contexts), so a save from the extended editor reaches RecordPanel's
+// whole-field reconstruction (handleCellCommit, the same one an inline edit
+// goes through) instead of committing the saved text alone under `rootField`.
 export function stringValueContext(
   formKey: string, plugin: string, origin: string, fieldName: string, value: string, readOnly: boolean,
   path: PathSegment[], rootField: string,
@@ -222,7 +217,7 @@ export function stringValueContext(
   };
 }
 
-// Issue #231 (review): combines every context object sharing one row into the single
+// Combines every context object sharing one row into the single
 // `data-vscode-context` string that element actually carries — VS Code's own `webviewSection` key
 // supports a space-separated multi-token value via the `=~` regex `when`-clause operator, so this
 // becomes the union of every context's own token, and every command's `package.json` `when`
@@ -241,19 +236,18 @@ export function combineVscodeContexts(...contexts: (object | undefined)[]): stri
   return JSON.stringify({ ...merged, webviewSection: sections.join(' ') });
 }
 
-// Issue #168: shared by VMAD's and Condition's tree adapters (vmadTreeAdapter.ts/
+// Shared by VMAD's and Condition's tree adapters (vmadTreeAdapter.ts/
 // conditionTreeAdapter.ts) — both align their own array elements positionally across plugins
 // (VmadConflictClassifier.IndexedChildren / ConditionConflictClassifier.BuildDiff), and both
 // backends report *every* plugin at *every* union-aligned position, null past that plugin's own
 // real length (always trailing — a plugin's own list is contiguous, so a null here only ever means
 // "this plugin's list ends before this position," never a genuine mid-list hole). Reconstructing
 // each plugin's own array must skip those nulls rather than carry them through as literal filler:
-// carrying them through was VMAD's actual bug (buildSiblingsByPlugin, pre-#168) — a shorter
-// plugin's "current array" ended up padded to the union's length, so a Remove/Move on it restaged
+// otherwise a shorter
+// plugin's "current array" ends up padded to the union's length, so a Remove/Move on it restages
 // an array still containing the padding nulls (VmadCodec.RebuildList's `el.GetInt32()`/
-// `GetBoolean()`/`GetSingle()` throw on a JSON null element at save time). Condition's own
-// equivalent (conditionsSparseByPlugin) already skipped correctly; this is that same logic, shared
-// rather than duplicated, so the two can't drift.
+// `GetBoolean()`/`GetSingle()` throw on a JSON null element at save time). Shared
+// rather than duplicated across the two adapters, so they can't drift.
 export function sparseArrayByPlugin<T>(perPositionValues: Record<string, T | null>[]): Record<string, T[]> {
   const result: Record<string, T[]> = {};
   for (const [i, values] of perPositionValues.entries()) {
@@ -266,7 +260,7 @@ export function sparseArrayByPlugin<T>(perPositionValues: Record<string, T | nul
   return result;
 }
 
-// ── Conflict aggregation (issue #114) ─────────────────────────────────────────
+// ── Conflict aggregation ──────────────────────────────────────────────────────
 //
 // The compare grid colors each row from its own FieldDiff.conflictAll (DiffRow), not a
 // record-wide value smeared across every row. The backend computes it for an ordinary reflected
@@ -316,22 +310,18 @@ export function aggregateConflictAll(
   return result;
 }
 
-// ── Generic path-based node access (issue #231) ───────────────────────────────
+// ── Generic path-based node access ────────────────────────────────────────────
 //
 // A row's own value can sit at any depth inside the field/wire-path it writes as one atomic
 // unit (a complex field is always written as one atomic unit, CONTEXT.md — an edit anywhere in a
 // struct/array writes the whole thing). `PathSegment[]`
-// (#533: defined in src/medit/messages.ts — StringValueContext/FIELD_OPEN_EXTENDED_EDITOR need it
+// (defined in src/medit/messages.ts — StringValueContext/FIELD_OPEN_EXTENDED_EDITOR need it
 // too, and that module is the one the extension host already imports directly; re-exported from
 // types.ts, which re-exports it here) is the chain from that root down to a given row — a struct
 // hop addressed by member name, an unsorted-array hop by position, a sorted (pure FormLink) array
 // hop by the element's own value (there is nothing to address *beneath* a sortKey hop: a sorted
 // array's elements are themselves the value, never a struct/array). getAtPath/setAtPath are the one
-// generic implementation every nesting depth shares — the same recursion VmadSection already
-// needed for arbitrarily-deep struct/structList members (nodeAt/setNodeValue/removeAt) generalized
-// here to the one shared row model instead of staying a VMAD-only duplicate, and replacing
-// RecordPanel/DiffRow's old hand-built top-level/array-element/struct-child/grandchild special
-// cases (which could not express a fourth level of nesting at all).
+// generic implementation every nesting depth shares.
 export type { PathSegment };
 
 export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown {
@@ -344,7 +334,7 @@ export function getAtPath(root: unknown, path: readonly PathSegment[]): unknown 
   return cur;
 }
 
-// #426 (resurrected from before #410): setAtPath's own write-side counterpart — the one generic
+// getAtPath's write-side counterpart — the one generic
 // implementation an edit anywhere in a struct/array writes through (ADR-0041: the whole subtree
 // commits as one atomic source write). Never mutates its input: each hop copies its own level before
 // recursing, so a caller can compare the result against the original root by reference.
@@ -367,14 +357,14 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
   return arr.map(e => (e === seg.key ? value : e));
 }
 
-// #535: getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value —
+// getAtPath/setAtPath's metadata-side counterpart, over FieldMetadata instead of a value —
 // needed by the array-op broadcast handler (RecordPanel.tsx), which has only the wire's
 // rootField/path to work with, never a render-time `context.overrideMeta` the way DiffRow's own
 // buildRows resolves a row's meta by hand (member → `.fields`, index/sortKey → `.elementType`,
-// the same two hops this mirrors). Reading `fieldMetaMap[rootField].elementType` directly (the
-// pre-#535 shape) only found the right element type when the array itself was the subtree root —
-// for a *nested* array it named the wrong node's (or, off a struct root, no) elementType, and
-// defaultElementValue built a malformed added element from the fallback.
+// the same two hops this mirrors). Reading `fieldMetaMap[rootField].elementType` directly
+// would only find the right element type when the array itself is the subtree root —
+// for a *nested* array it would name the wrong node's (or, off a struct root, no) elementType, and
+// defaultElementValue would build a malformed added element from the fallback.
 export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathSegment[]): FieldMetadata | undefined {
   let cur = meta;
   for (const seg of path) {
@@ -384,12 +374,12 @@ export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathS
   return cur;
 }
 
-// mirrors VmadSection's defaultElementValue/defaultNode pair, but keyed off the compare grid's
+// Keyed off the compare grid's
 // own FieldMetadata shape rather than VMAD's raw node JSON, which the two do not share.
 // The `default` arm is deliberate, not lazy: an unrecognized/future `type` returns '' rather than
 // falling through to `undefined`, which would silently append a hole into a saved array.
 export function defaultElementValue(meta: FieldMetadata): unknown {
-  // Issue #231: an explicit override wins outright — a condition list's own elementType carries
+  // An explicit override wins outright — a condition list's own elementType carries
   // one (a real `ParsedCondition`, since its wire shape doesn't match this function's generic
   // per-display-field-name struct default). Absent for every ordinary/VMAD elementType.
   if (meta.defaultValue !== undefined) return structuredClone(meta.defaultValue);
@@ -400,8 +390,7 @@ export function defaultElementValue(meta: FieldMetadata): unknown {
     case 'enum': return meta.enumValues[0] ?? '';
     case 'struct': return Object.fromEntries((meta.fields ?? []).map(f => [f.name, defaultElementValue(f)]));
     case 'array': return [];
-    // Issue #231: a VMAD ArrayOfObject's default element — mirrors VmadSection's own
-    // defaultElementValue('Object') now that a VMAD array reuses this same generic control.
+    // A VMAD ArrayOfObject's default element.
     case 'vmadObject': return { formKey: '', alias: -1 };
     default: return '';
   }

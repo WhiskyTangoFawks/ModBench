@@ -3,18 +3,16 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-// Issue #210: FormKeyCell (rendered for formKey-typed fields) now imports the pickFormKey
+// FormKeyCell (rendered for formKey-typed fields) imports the pickFormKey
 // bridge, which touches vscode.ts's acquireVsCodeApi() at module load — stubbed here since
 // these tests don't exercise the picker itself (see FormKeyCell.test.tsx for that).
-// Issue #224: copyToClipboard is DiffRow's own import now (Ctrl+C's clipboard write) — mocked
-// here too so the #224 describe block below can assert on it directly.
-// Issue #225: readClipboardText is DiffRow's own import too (Ctrl+V's clipboard read) — mocked so
-// the #225 describe block below can control what it resolves to per test.
+// copyToClipboard is DiffRow's own import (Ctrl+C's clipboard write) — mocked
+// here too so tests can assert on it directly.
 const copyToClipboard = vi.fn();
 const pickFormKey = vi.fn().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({
   copyToClipboard: (...args: unknown[]) => copyToClipboard(...args),
-  // #426: FormKeyCell's own picker bridge — stubbed here so the wiring test below can assert
+  // FormKeyCell's own picker bridge — stubbed here so the wiring test below can assert
   // DiffRow reaches it with the right editable/onCommit contract without a real extension host
   // (FormKeyCell.test.tsx/nativeBridge.test.ts own the picker's own behavior).
   pickFormKey: (...args: unknown[]) => pickFormKey(...args),
@@ -54,29 +52,27 @@ function diff(partial: Partial<FieldDiff> = {}): FieldDiff {
 function baseProps(overrides: Partial<React.ComponentProps<typeof DiffRow>> = {}): React.ComponentProps<typeof DiffRow> {
   const master = override('Fallout4.esm');
   const mod = override('MyMod.esp');
-  // Issue #231: a top-level row's own rootField is always its diff's own fieldName by
+  // A top-level row's own rootField is always its diff's own fieldName by
   // construction (RecordPanel sets it that way) — derived from whichever `diff` this call ends up
   // using (an override or the default) so a test overriding only `diff` still gets a consistent
-  // default `context` without also having to override it, the same auto-tracking the old
-  // `context: { kind: 'top-level' }` gave for free.
+  // default `context` without also having to override it.
   const effectiveDiff = overrides.diff ?? diff();
   return {
     diff: effectiveDiff,
     columns: [diskColumn(master), diskColumn(mod)],
     overrideMap: { [columnKey('Fallout4.esm', null)]: master, [columnKey('MyMod.esp', null)]: mod },
     fieldMetaMap: { Name: strMeta },
-    // #304 / ADR-0035: defaults empty — Fallout4.esm is immutable per this fixture (a stand-in
+    // ADR-0035: defaults empty — Fallout4.esm is immutable per this fixture (a stand-in
     // for a vanilla master) but must not dim on that basis alone; only a column genuinely absent
     // from the load order does (see the dedicated describe block below).
     notInLoadOrderSet: new Set(),
     collapsedColumns: new Set(),
-    // #415: empty by default, so every pre-existing case here keeps asserting against read-only
-    // cells exactly as it did — editability is opt-in per fixture, never something a test inherits
+    // Empty by default — editability is opt-in per fixture, never something a test inherits
     // without saying so.
     editableColumns: new Set(),
     onOpen: vi.fn(),
     context: { path: [], rootField: effectiveDiff.fieldName },
-    // Issue #222: rowKey matches diff().fieldName below — the same identity RecordPanel derives
+    // rowKey matches diff().fieldName below — the same identity RecordPanel derives
     // for its own `key=` at each nesting level (top-level/array-element/struct-child/grandchild).
     rowKey: 'Name',
     focusedCell: null,
@@ -114,10 +110,10 @@ describe('DiffRow — top-level scalar row', () => {
     expect(screen.getByText('▼')).toBeInTheDocument();
   });
 
-  // #410/ADR-0041: no cell opens an editor on any gesture — the record editor is a viewer.
+  // ADR-0041: with no editable columns wired, no cell opens an editor on any gesture.
   it('a value cell opens no editor on click, second click or double click', () => {
     renderRow({ fieldMetaMap: { Name: intMeta }, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
-    const cell = screen.getAllByText('5')[1]; // MyMod.esp — the mutable column, pre-#410
+    const cell = screen.getAllByText('5')[1]; // MyMod.esp
     fireEvent.click(cell);
     fireEvent.click(cell);
     fireEvent.doubleClick(cell);
@@ -125,9 +121,7 @@ describe('DiffRow — top-level scalar row', () => {
     expect(screen.queryByDisplayValue('5')).not.toBeInTheDocument();
   });
 
-  // See the F2 case above for the same rationale — post-#226 there is no `onDoubleClick` on the
-  // immutable branch either (for a non-string type — #230 gives `string` alone a read-only
-  // extended editor on double click, covered separately below).
+  // There is no `onDoubleClick` on the immutable branch — an immutable cell opens nothing.
   it('double click on an immutable disk cell opens nothing', () => {
     renderRow({ focusedCell: null, fieldMetaMap: { Name: intMeta }, diff: diff({ values: { 'Fallout4.esm': 5, 'MyMod.esp': 5 } }) });
     fireEvent.doubleClick(screen.getAllByText('5')[0]); // Fallout4.esm — immutable
@@ -151,7 +145,7 @@ describe('DiffRow — top-level scalar row', () => {
   });
 });
 
-// #491: a Partial Form column dims the same way notInLoadOrderSet already does — read straight off
+// A Partial Form column dims the same way notInLoadOrderSet already does — read straight off
 // the column's own override.isPartialForm (already riding on the Column the row is handed), not a
 // separately-threaded Set, since the fact already lives on data DiffRow already has.
 describe('DiffRow — Partial Form column dimming (#491)', () => {
@@ -175,7 +169,7 @@ describe('DiffRow — Partial Form column dimming (#491)', () => {
 
 describe('DiffRow — drag affordance on leaf cells', () => {
 
-  // Issue #222 / ADR-0034: `grab` is removed from every value cell — the grid rests on the
+  // ADR-0034: no `grab` on any value cell — the grid rests on the
   // default arrow, and drag is simply unadvertised (as in xEdit) rather than shown by the cursor.
   it('shows no grab cursor at rest on a leaf cell', () => {
     renderRow();
@@ -185,7 +179,7 @@ describe('DiffRow — drag affordance on leaf cells', () => {
 });
 
 
-// Issue #222 / ADR-0034: click focuses a cell — the row highlights, one cell carries real DOM
+// ADR-0034: click focuses a cell — the row highlights, one cell carries real DOM
 // focus. Focus identity lives above DiffRow (RecordPanel); DiffRow just reports which row/plugin
 // was clicked and reflects back whether its own cells match the `focusedCell` it was given.
 describe('DiffRow — cell focus', () => {
@@ -238,11 +232,11 @@ describe('DiffRow — cell focus', () => {
     expect(document.body).toHaveFocus();
   });
 
-  // #272 / ADR-0036: the genuinely red case — two columns sharing a filename ('Shared.esp') but
-  // differing in origin must focus independently. Pre-#272, FocusedCell.plugin was a bare string
-  // (both columns' own `.plugin` field is literally "Shared.esp" — display never changes), so
+  // ADR-0036: the genuinely red case — two columns sharing a filename ('Shared.esp') but
+  // differing in origin must focus independently. With a bare-string FocusedCell.plugin
+  // (both columns' own `.plugin` field is literally "Shared.esp" — display never changes),
   // isCellFocused's `focusedCell.plugin === plugin` comparison couldn't tell them apart: focusing
-  // ModA's cell would also have read ModB's cell (same row) as focused.
+  // ModA's cell would also read ModB's cell (same row) as focused.
   it('focusing one of two same-filename, different-origin columns does not focus the other (AC5)', () => {
     const colA = override('Shared.esp', { origin: 'ModA' });
     const colB = override('Shared.esp', { origin: 'ModB' });
@@ -270,9 +264,9 @@ describe('DiffRow — non-top-level contexts', () => {
   });
 });
 
-// Issue #157 / ADR-0031 regression coverage: the affordance must key off the leaf's own
+// ADR-0031 regression coverage: the affordance must key off the leaf's own
 // `diff.resolutions` entry, not the parent field's aggregate `checkError` (looked up via
-// `overrideMap`/the old lookup field) — a dangling sibling in the same struct/array must not hide
+// `overrideMap`) — a dangling sibling in the same struct/array must not hide
 // a live link on the leaf next to it.
 describe('DiffRow — FormKey leaf resolution is independent of the parent field aggregate', () => {
   const fkMeta: FieldMetadata = { name: '', type: 'formKey', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -280,9 +274,9 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
   const wrongType: FormKeyResolution = { state: 'ResolvedWrongType', recordType: 'npc_', editorId: 'SomeNpc' };
   const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-  // Simulates today's aggregate bug: the parent field carries a checkError (e.g. because a
-  // *different* sibling element/member is dangling), which the old code read via overrideMap +
-  // the lookup field regardless of which leaf row was rendering.
+  // The parent field carries a checkError (e.g. because a
+  // *different* sibling element/member is dangling) — reading it via overrideMap
+  // regardless of which leaf row is rendering is the aggregate bug this pins.
   function leafProps(
     kind: 'array-element' | 'struct-child',
     resolution: FormKeyResolution,
@@ -356,7 +350,7 @@ describe('DiffRow — FormKey leaf resolution is independent of the parent field
   });
 });
 
-// #426: the flags branch gets the same editable/onCommit wiring the scalar branch already has —
+// The flags branch gets the same editable/onCommit wiring the scalar branch already has —
 // presence in editableColumns plus a supplied onEditCell is what makes a bitmask cell writable.
 describe('DiffRow — flags cell wiring (#426)', () => {
   const flagMeta: FieldMetadata = {
@@ -389,8 +383,8 @@ describe('DiffRow — flags cell wiring (#426)', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 
-  // #503: the column and the value, and no field path — where the value goes is the row builder's
-  // to decide now (RecordPanel binds this per row), not something a row states alongside its value.
+  // The column and the value, and no field path — where the value goes is the row builder's
+  // to decide (RecordPanel binds this per row), not something a row states alongside its value.
   it('toggling a checkbox calls onEditCell with the column and the new bitmask', () => {
     const onEditCell = vi.fn();
     flagsRow({
@@ -404,7 +398,7 @@ describe('DiffRow — flags cell wiring (#426)', () => {
   });
 });
 
-// #426: the formKey branch gets the same editable/onCommit wiring, plus its own picker bridge.
+// The formKey branch gets the same editable/onCommit wiring, plus its own picker bridge.
 describe('DiffRow — formKey cell wiring (#426)', () => {
   const fkMeta: FieldMetadata = { name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [] };
 
@@ -448,12 +442,12 @@ describe('DiffRow — formKey cell wiring (#426)', () => {
   });
 });
 
-// #258 / ADR-0039: no left-click gesture reaches the extended editor any more — its only trigger
+// ADR-0039: no left-click gesture reaches the extended editor — its only trigger
 // is the string cell's own right-click menu, a native `webview/context` contribution driven by
 // the `data-vscode-context` attribute DiskCell carries (recordUtils.ts's stringValueContext).
-// Rival this guards against: the pre-#258 code, where a double click called onOpenExtendedEditor
-// directly and an immutable cell (no onEditCell wired) got no vscodeContext at all — the literal
-// proof of the AC gap this closes (today, right-click on an immutable string cell offers nothing).
+// Rival this guards against: a double click calling onOpenExtendedEditor
+// directly, with an immutable cell (no onEditCell wired) getting no vscodeContext at all —
+// right-click on an immutable string cell would then offer nothing.
 describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
   function stringContext(text: string, index = 0): Record<string, unknown> {
     const td = screen.getAllByText(text)[index].closest('td');
@@ -475,7 +469,7 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
       fieldName: 'Name',
       value: 'disk-value',
       readOnly: false,
-      // #533: a top-level row's own path is always empty, and its rootField is always its diff's
+      // A top-level row's own path is always empty, and its rootField is always its diff's
       // own fieldName (baseProps' own default context, above) — see the nested-path test below for
       // a row inside a struct/array.
       path: [],
@@ -491,7 +485,7 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
     expect(ctx.readOnly).toBe(true);
   });
 
-  // #533: a string leaf nested inside a struct/array must carry its own path within the field
+  // A string leaf nested inside a struct/array must carry its own path within the field
   // (not just the subtree root's) — without this, the right-click context looks identical to a
   // top-level field's and RecordPanel's commit has nothing to reconstruct with.
   it('a nested string cell carries the row\'s own path and the subtree root\'s wire path, not just the root', () => {
@@ -505,7 +499,7 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
     expect(ctx.path).toEqual(path);
     expect(ctx.rootField).toBe('Struct');
     // fieldName keeps its own existing role (the extended-editor tab's own display path) — same
-    // value as rootField at this call site, unchanged from before this ticket.
+    // value as rootField at this call site.
     expect(ctx.fieldName).toBe('Struct');
   });
 
@@ -516,10 +510,10 @@ describe('DiffRow — string cell right-click menu (#258 / ADR-0039)', () => {
   });
 });
 
-// #535: the array context-menu payload must carry the row's own full path/rootField, not just the
+// The array context-menu payload must carry the row's own full path/rootField, not just the
 // subtree root plus a bare scalar index — a nested array's element is more than one hop from its
-// subtree root, which the old scalar-index shape could never express. Mirrors the #533 string-cell
-// block above (top-level case unchanged, a nested case pins the new behavior).
+// subtree root, which a scalar-index shape could never express. Mirrors the string-cell
+// block above (a top-level case, then a nested case pinning the full-path behavior).
 describe('DiffRow — array parent/element right-click context (#535)', () => {
   function vscodeContextFor(text: string, index = 0): Record<string, unknown> {
     const td = screen.getAllByText(text)[index].closest('td');
@@ -561,9 +555,9 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
     expect(ctx.fieldName).toBeUndefined();
   });
 
-  // The defect this closes: a nested array's own "Add" context must address the array itself (the
-  // row's own path from the subtree root), not just carry the subtree root's field name — the
-  // pre-#535 shape meant "the root field is the array," false here.
+  // A nested array's own "Add" context must address the array itself (the
+  // row's own path from the subtree root), not just carry the subtree root's field name —
+  // "the root field is the array" is false here.
   it('a nested array-parent row\'s context carries the row\'s own path from the subtree root', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Items' }];
     renderRow({
@@ -593,8 +587,8 @@ describe('DiffRow — array parent/element right-click context (#535)', () => {
     expect(ctx.index).toBeUndefined();
   });
 
-  // The defect this closes: a nested array's own element ops must address the element's real
-  // (multi-hop) path — before #535, the payload carried only the trailing index, truncating every
+  // A nested array's own element ops must address the element's real
+  // (multi-hop) path — a payload carrying only the trailing index truncates every
   // hop before it.
   it('a nested array-element row\'s context carries every hop of its own path', () => {
     const path: PathSegment[] = [{ kind: 'member', name: 'Entries' }, { kind: 'index', index: 0 }];

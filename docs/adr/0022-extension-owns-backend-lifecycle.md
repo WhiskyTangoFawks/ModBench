@@ -26,7 +26,7 @@ level.
 
 ## Alternatives rejected
 
-- **User-launched backend, extension only connects (2026-06 → 2026-07).** The extension never
+- **User-launched backend, extension only connects.** The extension never
   spawned the backend; the user added it to MO2's Tools list and started it from MO2 so it ran
   inside usVFS and saw MO2's merged `Data/`, then VS Code attached over `GET /health`. The one
   reason for it — the VFS — stopped applying once the extension reconstructed MO2's view from

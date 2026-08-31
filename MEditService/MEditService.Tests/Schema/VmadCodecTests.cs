@@ -202,7 +202,7 @@ public class VmadCodecTests
         Assert.Equal(7, Assert.IsType<ScriptIntProperty>(Assert.Single(nested.Members).Properties[0]).Data);
     }
 
-    // Issue #116: a struct member Object property now reads as a null formKeyValue (the
+    // A struct member Object property reads as a null formKeyValue (the
     // previous test above), so apply must accept that shape back and build a null Object
     // member, not fail the whole struct the way a malformed value does.
     [Fact]
@@ -532,7 +532,7 @@ public class VmadCodecTests
         Assert.Equal(@"\Ref", reference.RelativePath);
     }
 
-    // Issue #116: a null Object member must read back with no FormKey, the same as a
+    // A null Object member must read back with no FormKey, the same as a
     // top-level null Object property (Parse_NullObjectProperty_ReturnsNoValueAndNoRefs) —
     // not the stringified "000000:Null" sentinel a naive unconditional ToString() produces.
     [Fact]
@@ -587,7 +587,7 @@ public class VmadCodecTests
         Assert.Equal(json, VmadCodec.Parse(rebuilt)!.StructJson);
     }
 
-    // Issue #116: the same round trip, but the Object member is null — writing a value on a
+    // The same round trip, but the Object member is null — writing a value on a
     // property that reads as null must not be misread as "delete this property".
     [Fact]
     public void Parse_ThenApplyValue_RoundTripsAStructWithNullObjectMember()
@@ -627,7 +627,7 @@ public class VmadCodecTests
     public void ValueFormKeys_ValueWithoutFormKeys_ReturnsNone(string json) =>
         Assert.Empty(VmadCodec.ValueFormKeys(J(json)));
 
-    // #160: a Struct's value is a bare array of member-node objects (the same shape
+    // A Struct's value is a bare array of member-node objects (the same shape
     // ApplyStructProperty/TryBuildMemberProperty consume), not a { "members": [...] } wrapper.
     [Fact]
     public void ValueFormKeys_StructValue_ReturnsMemberFormKey() =>

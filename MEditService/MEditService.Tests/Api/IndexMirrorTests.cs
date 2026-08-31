@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #587 / ADR-0001: the runtime mirror, wired the way the composition root wires it — a real
+/// ADR-0001: the runtime mirror, wired the way the composition root wires it — a real
 /// load order, the real <see cref="ExternalChangeWatcher"/>, the real
 /// <see cref="ExternalChangeLoadOrderHook"/> deciding which plugins get an index-mirror watch, and
 /// <see cref="IndexMirror"/> turning each disk event into an index verb. What is asserted is what
@@ -52,7 +52,7 @@ public sealed class IndexMirrorTests
     private static IReadOnlyList<string?> EditorIds(TrackedModFixture fixture, PluginKey key) =>
         [.. fixture.Mirror.Index!.GetDocuments(key).Select(d => d.EditorId)];
 
-    // AC1. An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the
+    // An untracked plugin's bytes move while the backend runs and the index follows, with no reload — the
     // whole point of extending the watcher past the tracked binaries.
     [Fact]
     public void AnUntrackedPluginChangedMidReconcile_IsReindexedWithNoReload()
@@ -67,7 +67,7 @@ public sealed class IndexMirrorTests
         Assert.Contains("ArrivedExternally", EditorIds(fixture, fixture.Plugin));
     }
 
-    // AC2. A deletion removes the rows rather than re-reading a file that is not there: the index
+    // A deletion removes the rows rather than re-reading a file that is not there: the index
     // holds exactly what exists, and the copy stops answering.
     [Fact]
     public void AnIndexedPluginDeletedMidReconcile_StopsAnswering()
@@ -83,7 +83,7 @@ public sealed class IndexMirrorTests
         Assert.Null(fixture.Mirror.Index!.IndexedContentHash(fixture.Plugin));
     }
 
-    // AC4. A tracked plugin keeps the behaviour it had: its binary changing is a question for the
+    // A tracked plugin's binary changing is a question for the
     // user (Absorb / Keep), never a silent re-index — its rows come from its source tree, so
     // re-reading the binary would overwrite the working tree with the compiled artifact.
     [Fact]

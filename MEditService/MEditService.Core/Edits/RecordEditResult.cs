@@ -2,8 +2,8 @@ namespace MEditService.Core.Edits;
 
 /// <summary>
 /// Why an edit was refused — typed, never a string a caller would have to match on (ADR-0026). The
-/// UI and the HTTP API both branch on this: two of these values are the untracked signposting AC4
-/// pins, and each names a different way out, so collapsing them into one "read-only" would lose the
+/// UI and the HTTP API both branch on this: two of these values are the untracked signposting,
+/// and each names a different way out, so collapsing them into one "read-only" would lose the
 /// only thing the message has to say.
 /// </summary>
 public enum RecordEditRefusal
@@ -23,8 +23,8 @@ public enum RecordEditRefusal
     /// <summary>The plugin holds no such record at the effective ref.</summary>
     RecordNotFound,
 
-    /// <summary>No field of that name on this record type — or (#532) the schema names one (a
-    /// #263 sibling-merge column, e.g. GLOB's <c>output_char</c>, declared only on one of several
+    /// <summary>No field of that name on this record type — or the schema names one (a
+    /// sibling-merge column, e.g. GLOB's <c>output_char</c>, declared only on one of several
     /// concrete subclasses sharing the table) but this particular record's own runtime type doesn't
     /// declare the backing property. Both read the same to a caller: this record genuinely has no
     /// such field.</summary>
@@ -38,27 +38,27 @@ public enum RecordEditRefusal
     /// Always a data error, and blocked at edit time rather than reported afterwards.</summary>
     InvalidFormLink,
 
-    /// <summary>#417 exit path 3: the plugin's binary changed outside Modbench and the one dialog
+    /// <summary>The plugin's binary changed outside Modbench and the one dialog
     /// (Absorb Upstream Update / Keep as My Edit) has not been answered yet. Refused rather than
     /// silently served, per-plugin, until answered — the way out is answering the unanswered question,
     /// not a command.</summary>
     ExternalChangeUnanswered,
 
-    /// <summary>#427 create: no schema table of that name (or it names the header, which is not a
+    /// <summary>Create: no schema table of that name (or it names the header, which is not a
     /// major record and cannot be created this way).</summary>
     RecordTypeNotFound,
 
-    /// <summary>#427 create/renumber: the target FormKey is already held by a record at either ref —
+    /// <summary>Create/renumber: the target FormKey is already held by a record at either ref —
     /// checked server-side even for an allocator-suggested value, since a caller can also supply its
     /// own (xEdit's typed-FormID path).</summary>
     FormKeyCollision,
 
-    /// <summary>#427 renumber: at least one plugin holding a reference to the record being renumbered
+    /// <summary>Renumber: at least one plugin holding a reference to the record being renumbered
     /// is not tracked, so the cascade that would rewrite its FormLink cannot land as a working-tree
     /// change there. Refused before anything is written, naming every untracked referencer.</summary>
     UntrackedReferencer,
 
-    /// <summary>#427: one FormKey, not native to the plugin being edited, in either of two shapes —
+    /// <summary>One FormKey, not native to the plugin being edited, in either of two shapes —
     /// renumber's *source* is an override (its FormKey's ModKey is not the plugin being edited, so
     /// renumbering it would mean renumbering the record it overrides, across every plugin in the
     /// stack — a different and bigger operation than this gesture does), or create/renumber's
@@ -68,61 +68,58 @@ public enum RecordEditRefusal
     /// auto-allocate.</summary>
     NotNativeRecord,
 
-    /// <summary>#427 create/renumber/peek: the plugin's native FormKey space is full — every local ID
-    /// up to <c>0xFFFFFF</c> is already in use at one ref or the other. A typed refusal (review
-    /// finding #1), not an exception: a full plugin refusing a new record is an ordinary, expected
+    /// <summary>Create/renumber/peek: the plugin's native FormKey space is full — every local ID
+    /// up to <c>0xFFFFFF</c> is already in use at one ref or the other. A typed refusal,
+    /// not an exception: a full plugin refusing a new record is an ordinary, expected
     /// outcome on this write path, the same doctrine as every other refusal here — never conflated
     /// with "no usable load order" by a caller's generic exception handling.</summary>
     FormKeySpaceExhausted,
 
     /// <summary>
-    /// #451 review: the record has no flat source path — a container type whose own directory holds a
+    /// The record has no flat source path — a container type whose own directory holds a
     /// <c>RecordData.json</c> (Cell, Worldspace, Quest), or a record with no top-level group at all
     /// whose bytes live inside a container's document (a placed reference, a landscape, a navmesh, a
-    /// dialog topic, a scene). The message used to name only the first group, which was narrower than
-    /// what actually triggers it (#453 finding).
+    /// dialog topic, a scene).
     ///
-    /// <para><b>Field edits no longer refuse for this reason</b> — #453 gave them
-    /// <c>SourceUnitResolver</c>. <b>#461 did the same for delete and renumber</b>: both now resolve
-    /// through the same record→source-unit lookup instead of refusing outright — a container's own
-    /// delete/renumber and an embedded child's are mechanical once that question has an answer. The
-    /// one gesture still refused here is <see cref="CreateRecord"/> (<b>#462</b>): a brand-new record
-    /// has no containment until someone chooses interior-vs-worldspace and block coordinates, which no
-    /// gesture asks yet — that is a UX decision, not a mechanical one, and this refusal is what is left
-    /// once delete/renumber stopped needing it.</para>
+    /// <para>Field edits, delete and renumber do not refuse for this reason — they resolve through
+    /// <c>SourceUnitResolver</c>'s record→source-unit lookup, which makes a container's own
+    /// delete/renumber and an embedded child's mechanical. The one gesture still refused is
+    /// <see cref="CreateRecord"/>: a brand-new record has no containment until someone chooses
+    /// interior-vs-worldspace and block coordinates, which no gesture asks yet — a UX decision, not
+    /// a mechanical one.</para>
     /// </summary>
     ContainerRecordNotYetSupported,
 
     /// <summary>
-    /// #453: nothing on disk holds this record, and the index names no container that would. Distinct
+    /// Nothing on disk holds this record, and the index names no container that would. Distinct
     /// from <see cref="RecordNotFound"/>, which is about the index alone: this is the index and the
     /// working tree disagreeing, i.e. the never-assume-exclusive-ownership case — a file another tool
-    /// moved or removed since the reconcileed. Refused rather than recreated at a computed path,
+    /// moved or removed since the last reconcile. Refused rather than recreated at a computed path,
     /// because for a container there is no path to compute: its directory nesting lives in the tree,
     /// and inventing one would put the record somewhere the tree does not say it belongs.
     /// </summary>
     SourceUnitNotFound,
 
     /// <summary>
-    /// #503: the field exists and is writable, but the value's JSON shape is not the one it takes — an
+    /// The field exists and is writable, but the value's JSON shape is not the one it takes — an
     /// array field given something that is not an array, or a struct field given something that is not
     /// an object. Always a caller bug rather than a data question, and its own refusal because the
-    /// alternative is what #503 was: the applier returning without writing while the write path
-    /// reported success, so a per-element payload for a complex field (CONTEXT.md: always written as
-    /// one atomic value, never per-element) lost the user's edit with no signal at all.
+    /// alternative is the applier returning without writing while the write path reports success, so
+    /// a per-element payload for a complex field (CONTEXT.md: always written as one atomic value,
+    /// never per-element) loses the user's edit with no signal at all.
     ///
-    /// <para>#532: reused for the scalar/FormLink half of the identical defect — a converter that
+    /// <para>Also covers the scalar/FormLink half of the identical defect — a converter that
     /// threw or declined (an unrecognised enum member, a non-numeric string), a JSON <c>null</c> into
     /// a non-nullable column, or an unparseable/wrongly-shaped FormKey. Not split into its own value:
     /// unlike <see cref="ListElementTypeUnresolved"/> below (whose fix is a specific, different
-    /// action — name a discriminator), every one of these cases has the same fix as #503's own —
+    /// action — name a discriminator), every one of these cases has the same fix —
     /// send a value this field actually accepts — which is exactly what the message this refusal
     /// already carries says.</para>
     /// </summary>
     FieldValueShapeMismatch,
 
     /// <summary>
-    /// #501: a caller-typed target FormKey (create's or renumber's own typed-FormID path) whose local
+    /// A caller-typed target FormKey (create's or renumber's own typed-FormID path) whose local
     /// ID exceeds <c>0xFFF</c> on a plugin that is ESL-flagged (header <c>Small</c> flag, or a plain
     /// <c>.esl</c> extension — <see cref="MEditService.Core.Plugins.PluginFlagPredicates.IsLight"/>).
     /// The engine can only address a local FormID up to <c>0xFFF</c> from a light plugin's load-order
@@ -133,7 +130,7 @@ public enum RecordEditRefusal
     LightPluginFormIdOutOfRange,
 
     /// <summary>
-    /// #531: distinct from <see cref="FieldValueShapeMismatch"/> — the value genuinely is the JSON
+    /// Distinct from <see cref="FieldValueShapeMismatch"/> — the value genuinely is the JSON
     /// shape the field takes (an array field given an array), but at least one element's own concrete
     /// type is abstract (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c> today, seven
     /// concrete leaves) and could not be determined from that element's own payload. The way out is
@@ -145,28 +142,27 @@ public enum RecordEditRefusal
     ListElementTypeUnresolved,
 
     /// <summary>
-    /// #491: the record carries the Partial Form header flag (bit 14, <c>0x4000</c> — CONTEXT.md's
+    /// The record carries the Partial Form header flag (bit 14, <c>0x4000</c> — CONTEXT.md's
     /// Partial Form entry), so its own fields are read-only — the game and xEdit fall through to the
     /// previous non-partial override for them, so a value written here would never be seen. Its own
     /// value rather than <see cref="FieldReadOnly"/>: the way out is different (clear the flag, or
     /// edit a different, non-partial override) from that value's causes (masters, FormKey, the
-    /// widened text columns — permanent, not state-dependent), the same distinction #531's
+    /// widened text columns — permanent, not state-dependent), the same distinction
     /// <see cref="ListElementTypeUnresolved"/> already draws against
-    /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable — #539 landed
-    /// that write path (<c>is_partial_form</c>, including clearing this flag).
+    /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable
+    /// (<c>is_partial_form</c>, including clearing this flag).
     ///
-    /// <para><b>EditorID is exempt</b> (#491 review): xEdit's own <c>CanAssignInternal</c>
+    /// <para><b>EditorID is exempt</b>: xEdit's own <c>CanAssignInternal</c>
     /// (<c>wbImplementation.pas:9905-9914</c>) explicitly allows EDID assignment on a Partial Form
-    /// record — ADR-0034 makes that binding here, not a divergence #539's scope needed to excuse.
-    /// EditorID is an ordinary, already-writable field (<c>RecordFieldWriter.EditorIdFieldPath</c>),
-    /// not part of #539's flag-write surface, so exempting it needed no header write path to exist
-    /// first. Every other field is refused unless written through <c>is_partial_form</c>.
+    /// record — ADR-0034 makes that binding here. EditorID is an ordinary, already-writable field
+    /// (<c>RecordFieldWriter.EditorIdFieldPath</c>), outside the flag-write surface. Every other
+    /// field is refused unless written through <c>is_partial_form</c>.
     /// </para>
     /// </summary>
     PartialFormFieldReadOnly,
 
     /// <summary>
-    /// #539: a field write reached header flag bit 14 (Partial Form, <c>0x4000</c>) through some
+    /// A field write reached header flag bit 14 (Partial Form, <c>0x4000</c>) through some
     /// field path other than <c>is_partial_form</c> — a generic reflected column that happens to
     /// alias the same underlying <c>MajorRecordFlagsRaw</c> int (Mutagen's own
     /// <c>&lt;Game&gt;MajorRecordFlags</c>/per-type <c>MajorFlags</c> passthrough-property
@@ -185,11 +181,11 @@ public enum RecordEditRefusal
     PartialFormFlagIndirectWrite,
 
     /// <summary>
-    /// #440 Slice 6: Copy as Override on a placed reference (or the Cell it belongs to) whose parent
+    /// Copy as Override on a placed reference (or the Cell it belongs to) whose parent
     /// chain the destination does not already carry, and the missing piece is exterior — a Worldspace's
     /// SubCells cell, or the reference's own Cell when that Cell is one. Auto-creating an exterior
     /// container needs spatial placement (worldspace block/sub-block) this write path does not compute
-    /// yet, tracked separately (#549); an interior Cell auto-creates instead (Slice 7) rather than
+    /// yet, tracked separately; an interior Cell auto-creates instead rather than
     /// refusing here, since interior placement carries no gameplay meaning to compute in the first
     /// place (<see cref="RecordEditService"/>'s own <c>CreateInteriorCellParent</c> doc comment has the
     /// full argument for auto-creating it as Partial Form — a deliberate mEdit-specific choice, not
@@ -198,19 +194,19 @@ public enum RecordEditRefusal
     ContainerParentMissingInDestination,
 
     /// <summary>
-    /// #440 Slice 8: Copy as New Record on a type xEdit itself refuses in both its UI and its engine —
+    /// Copy as New Record on a type xEdit itself refuses in both its UI and its engine —
     /// CELL, WRLD (and, per xEdit's own hardcoded blacklist, LAND/NAVM/PGRD/ROAD/NAVI, none of which
     /// reach this check in mEdit's own schema: <see cref="Schema.SchemaReflector"/> surfaces no table
     /// for them at all, so a copy naming one already refuses earlier as <see cref="RecordNotFound"/>).
     /// Permanent, unlike <see cref="ContainerRecordNotYetSupported"/>'s "not yet" for Quest/DialogTopic/
-    /// INFO (#550's own scope to widen) — a fresh FormKey for one of these would leave the record
+    /// INFO — a fresh FormKey for one of these would leave the record
     /// duplicated with no parent group to place the copy into, which xEdit blocks for exactly that
     /// structural reason, not because the feature is unbuilt.
     /// </summary>
     CopyAsNewRecordDisallowedForType,
 
     /// <summary>
-    /// #440 review (Standards 3): a placed reference's own file was written, but one of the two index
+    /// A placed reference's own file was written, but one of the two index
     /// calls that follow it (<c>CreateWorkingTreeRecord</c> for the reference's own row,
     /// <c>ApplyWorkingTreeChanges</c> for its Cell's changed body) threw — a should-never-happen guard
     /// tripping (both calls' own preconditions are already checked before either runs), never an
@@ -225,9 +221,9 @@ public enum RecordEditRefusal
 
 /// <summary>
 /// One edit's outcome. <see cref="Message"/> is user-facing prose for the refusal — it names the way
-/// out, since a refusal the user cannot act on is just dead UI (AC4's "no silent dead UI").
+/// out, since a refusal the user cannot act on is just dead UI.
 /// <see cref="NewFormKey"/> is null for every gesture except a successful create, renumber or
-/// <c>PeekNextFreeFormKey</c> (#427), which are the only ones that mint or suggest a FormKey the
+/// <c>PeekNextFreeFormKey</c>, which are the only ones that mint or suggest a FormKey the
 /// caller did not already have.
 /// </summary>
 public sealed record RecordEditResult(bool Applied, RecordEditRefusal Refusal, string Message, string? NewFormKey = null)

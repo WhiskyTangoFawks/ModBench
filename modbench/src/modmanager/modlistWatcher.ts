@@ -1,8 +1,8 @@
 import type * as vscode from 'vscode';
 import { createDebouncedFsWatcher } from './fsWatcher';
 
-/** Watches every profile's `modlist.txt`; calls `onChange` on any create, change, or delete
- *  (#279). Installing, uninstalling and reprioritising a mod all rewrite this file, which makes it
+/** Watches every profile's `modlist.txt`; calls `onChange` on any create, change, or delete.
+ *  Installing, uninstalling and reprioritising a mod all rewrite this file, which makes it
  *  the one signal covering all three — `modsWatcher.ts` sees only what lands under `mods/`, and a
  *  reprioritise touches nothing there.
  *

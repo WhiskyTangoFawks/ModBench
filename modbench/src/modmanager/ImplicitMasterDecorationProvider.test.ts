@@ -8,10 +8,10 @@ vi.mock('vscode', () => ({
 import * as vscode from 'vscode';
 import { ImplicitMasterDecorationProvider } from './ImplicitMasterDecorationProvider';
 
-// #276: reproduces MO2's `foregroundData()` graying of `COL_NAME` for a `forceLoaded` row
+// Reproduces MO2's `foregroundData()` graying of `COL_NAME` for a `forceLoaded` row
 // (`pluginlist.cpp`) — the one piece of MO2's forced-master presentation the platform *does*
 // let this surface adopt verbatim (unlike the checkbox itself, see ImplicitMasterNode). Same
-// resourceUri + FileDecorationProvider pattern as HiddenDownloadDecorationProvider (#238).
+// resourceUri + FileDecorationProvider pattern as HiddenDownloadDecorationProvider.
 describe('ImplicitMasterDecorationProvider (#276)', () => {
   const dataFolder = '/game/Data';
   const dataUri = (name: string) => ({ fsPath: join(dataFolder, name) } as never);
@@ -20,7 +20,7 @@ describe('ImplicitMasterDecorationProvider (#276)', () => {
     const provider = new ImplicitMasterDecorationProvider(() => Promise.resolve(dataFolder), () => new Set(['fallout4.esm']));
     const decoration = await provider.provideFileDecoration(dataUri('Fallout4.esm'));
     expect(decoration).toBeDefined();
-    // MO2's foregroundData() grays via this exact theme color (#276) — check the
+    // MO2's foregroundData() grays via this exact theme color — check the
     // id itself, not just that some color object was constructed.
     expect(decoration!.color).toEqual(new vscode.ThemeColor('disabledForeground'));
     expect(decoration!.badge).toBeUndefined();

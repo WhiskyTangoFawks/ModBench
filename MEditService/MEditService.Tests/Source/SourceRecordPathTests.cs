@@ -5,13 +5,12 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #451 slice E: <see cref="SourceRecordPath"/> speaks the source tree's flat layout —
+/// <see cref="SourceRecordPath"/> speaks the source tree's flat layout —
 /// <c>source/&lt;plugin&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>
-/// (#441: one root <c>source/</c> folder per mod, not a per-plugin <c>&lt;plugin&gt;.source/</c> sibling
+/// (one root <c>source/</c> folder per mod, not a per-plugin <c>&lt;plugin&gt;.source/</c> sibling
 /// tree), group-folder names resolved via <see cref="RecordTypeDispatch"/> rather than hardcoded here,
-/// so these tests do not silently drift from whatever the reflection walk actually decides. Rewritten
-/// from the pre-#451 flat <c>&lt;recordType&gt;/&lt;originModKey&gt;/&lt;hex6&gt;.json</c> version —
-/// <see cref="SourceRecordIdentity"/> no longer carries a FormKey (see its own doc comment for why).
+/// so these tests do not silently drift from whatever the reflection walk actually decides.
+/// <see cref="SourceRecordIdentity"/> carries no FormKey (see its own doc comment for why).
 /// </summary>
 public sealed class SourceRecordPathTests
 {
@@ -30,18 +29,18 @@ public sealed class SourceRecordPathTests
     // through a patch plugin) — the two segments must recombine into the *origin's* FormKey, not the
     // target plugin's.
     [InlineData("Vendor.esp", "npc_", "000800:Master1.esm", "AnOverride")]
-    // Non-ASCII plugin names and EditorIDs are ordinary in this modding scene (review finding 1, #368)
-    // — the identity recovered from the path must carry the same plugin-name bytes For() started from.
+    // Non-ASCII plugin names and EditorIDs are ordinary in this modding scene — the identity
+    // recovered from the path must carry the same plugin-name bytes For() started from.
     [InlineData("Café.esp", "npc_", "000800:Café.esp", "Né")]
     [InlineData("Плагин.esp", "npc_", "0012AB:Плагин.esp", "Имя")]
     public void For_ThenTryParse_RoundTripsPluginAndRecordType(
         string pluginFileName, string recordType, string formKeyString, string? editorId)
     {
-        // The order index is never part of identity (#459's own doc comment on this class) — an
+        // The order index is never part of identity (this class's own doc comment) — an
         // arbitrary non-zero value proves TryParse doesn't accidentally depend on it being 0.
         var path = SourceRecordPath.For(pluginFileName, recordType, formKeyString, editorId, Release, orderIndex: 7);
 
-        // #441: everything nests under one root "source/" folder, the plugin its own child directory —
+        // Everything nests under one root "source/" folder, the plugin its own child directory —
         // not a "<plugin>.source/" sibling tree. Asserted here, not just implied by TryParse round-
         // tripping: a broken root that still happened to be 4 segments deep would round-trip too.
         var segments = path.Split(Path.DirectorySeparatorChar);
@@ -53,7 +52,7 @@ public sealed class SourceRecordPathTests
         Assert.True(ok, $"expected TryParse to succeed for a path For() itself produced: '{path}'");
         Assert.Equal(pluginFileName, identity.PluginFileName);
         // TryParse answers RecordTypeDispatch's own schema-table-name spelling (DuckDbRecordIndex's
-        // own dictionary is keyed by that spelling only — #451 review); For() accepts either spelling
+        // own dictionary is keyed by that spelling only); For() accepts either spelling
         // (RecordTypeDispatch.ConcreteFor's dual keying). The two need not match textually, only
         // resolve to the same concrete type, which this equality (via the same lookup) checks for real
         // rather than assuming a spelling.
@@ -62,7 +61,7 @@ public sealed class SourceRecordPathTests
         Assert.Equal(expectedConcrete, RecordTypeDispatch.For(Release).ConcreteFor(identity.RecordType));
     }
 
-    /// <summary>#459: the order index is a leading <c>"[N] "</c> ahead of everything else <see cref="For"/>
+    /// <summary>The order index is a leading <c>"[N] "</c> ahead of everything else <see cref="For"/>
     /// already produced — exactly <c>SerializationHelper.DecorateWithNumber</c>'s own shape, verified
     /// against the decompiled 1.37.1 assembly at implementation, not reconstructed from memory.</summary>
     [Theory]
@@ -116,7 +115,7 @@ public sealed class SourceRecordPathTests
     [InlineData("source/Vendor.esp/NotARealFolder/000800.json")]
     public void TryParse_MalformedOrUnmappedPaths_FailsCleanly(string relativePath)
     {
-        // Malformed input must fail outright, not return a *wrong* parse (review finding 2, #368) — a
+        // Malformed input must fail outright, not return a *wrong* parse — a
         // silent mis-parse would mislabel a user's change, which is worse than dropping it. Every OS
         // uses '/' as its own DirectorySeparatorChar equally happily as a path separator here
         // (Path.Combine on Windows would have written '\\', but these theories construct the string

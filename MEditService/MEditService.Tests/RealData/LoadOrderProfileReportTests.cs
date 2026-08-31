@@ -5,7 +5,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.RealData;
 
-// #589: the profile harness's report is built from the load path's own log lines, for a cold run
+// The profile harness's report is built from the load path's own log lines, for a cold run
 // and a warm run of the same order. These pin the parse against the current wordings and the
 // side-by-side shape of the report, so the harness itself (env-gated, minutes long) is never the
 // first place a drifted log text is noticed.
@@ -86,7 +86,7 @@ public sealed class LoadOrderProfileReportTests
         Assert.Contains("update the regexes", ex.Message, StringComparison.Ordinal);
     }
 
-    // #616: Reconciled was the only phase with this protection; every required phase gets it now,
+    // Every required phase gets the same loud-failure protection,
     // named individually so the message points straight at the drifted line.
     [Fact]
     public void Parse_Throws_WhenTheIndexInitLineIsMissing()
@@ -100,8 +100,8 @@ public sealed class LoadOrderProfileReportTests
         Assert.Contains("IndexInit", ex.Message, StringComparison.Ordinal);
     }
 
-    // #616: the flip side of the required set. Indexing/Indexed/IndexPhases/Registering/Ingested
-    // must stay optional — an all-registered warm run (#586/ADR-0044's steady state, nothing newly
+    // The flip side of the required set. Indexing/Indexed/IndexPhases/Registering/Ingested
+    // must stay optional — an all-registered warm run (ADR-0044's steady state, nothing newly
     // indexed) never logs any of them, and that is not a rewording, it is what a correct warm
     // measurement looks like.
     [Fact]

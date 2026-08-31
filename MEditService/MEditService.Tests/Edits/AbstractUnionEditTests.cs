@@ -12,11 +12,11 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #548: the write half of the general abstract Loqui union mechanism
+/// The write half of the general abstract Loqui union mechanism
 /// (<c>SchemaReflector.ResolveAbstractUnionConcreteType</c>) for its two mandatory types —
 /// <c>Npc.Level</c> (<c>BuildStructColumn</c>'s own single-object discriminator resolution) and
 /// <c>Quest.Aliases</c> (<c>ApplyListJson</c>'s <c>ResolveAbstractListElementType</c>, generalized
-/// beyond #531's OMOD-only case). Same posture as <see cref="ComplexFieldElementEditTests"/>'s own
+/// beyond the OMOD-only case). Same posture as <see cref="ComplexFieldElementEditTests"/>'s own
 /// <c>OmodFixture</c> — a real mod folder, a real tracked load order, no mocks; the edit lands as a
 /// real Mutagen binary write/re-parse round trip through <c>RecordEditService</c>. Verified against the
 /// written source document's own text (same idiom <c>ComplexFieldElementEditTests</c> already uses for

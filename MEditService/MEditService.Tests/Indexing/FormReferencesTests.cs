@@ -104,8 +104,6 @@ public class FormReferencesTests
         repo.Index(mod, Registration.Participating(0), new PluginKey(mod.ModKey.FileName.ToString(), "Data"));  // re-index same plugin
         repo.UpdateWinners();
 
-        // The race row + any other FormLinks on the NPC — should be exactly the same as after first index
-        // Specifically, the Race entry must not be duplicated
         using var raceCmd = repo.Connection.CreateCommand();
         raceCmd.CommandText = "SELECT COUNT(*) FROM form_references WHERE field_path = 'race' AND source_plugin = 'Reindex.esp'";
         var raceCount = (long)raceCmd.ExecuteScalar()!;

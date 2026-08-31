@@ -87,7 +87,7 @@ If `yes`: same labels/states as issues, via `gh pr`:
 - **List external PRs**: `gh pr list --state open --json number,title,body,labels,author,authorAssociation,comments`; keep `authorAssociation` = `CONTRIBUTOR`/`FIRST_TIME_CONTRIBUTOR`/`NONE`; drop `OWNER`/`MEMBER`/`COLLABORATOR`.
 - **Comment/label/close**: `gh pr comment`, `gh pr edit --add-label`/`--remove-label`, `gh pr close`.
 
-Issues/PRs share one number space — bare `#42` may be either; try `gh pr view 42`, fall back `gh issue view 42`.
+Issues/PRs share one number space — a bare number may be either; try `gh pr view <n>`, fall back `gh issue view <n>`.
 
 ## When a skill says "publish to the issue tracker"
 

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B5: <see cref="ExternalChangeClassifier"/> — self-echo suppression, crash-marker
+/// <see cref="ExternalChangeClassifier"/> — self-echo suppression, crash-marker
 /// suppression, and the meta tell, against real tracked-mod fixtures (never a mocked git or a
 /// mocked compile).
 /// </summary>
@@ -16,8 +16,7 @@ public sealed class ExternalChangeClassifierTests
     private static string NewModFolder() => Directory.CreateTempSubdirectory("medit-classify-").FullName;
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // ── Self-echo: proven with a REAL Compile, not a fabricated matching hash (#417 orchestrator
-    //    addition 3: "prove it with a test where a real Compile runs while the watcher is live"). ──
+    // ── Self-echo: proven with a REAL Compile, not a fabricated matching hash. ──
 
     [Fact]
     public void Classify_ReportsSelfEcho_ForTheBinaryARealCompileJustWrote()
@@ -59,7 +58,7 @@ public sealed class ExternalChangeClassifierTests
         }
     }
 
-    // ── Crash-marker suppression: #381's territory, never #417's dialog for the same event. ──
+    // ── Crash-marker suppression: crash recovery's territory, never the external-change dialog for the same event. ──
 
     [Fact]
     public void Classify_ReportsCrashRecovery_WhenAJournalMarkerIsUnfinished_EvenWithAHashMismatch()
@@ -88,7 +87,7 @@ public sealed class ExternalChangeClassifierTests
     /// The discriminating case for check <i>order</i>: an unlanded marker in the same repo (for any
     /// plugin — the marker is per-repo, not per-plugin, per <see cref="CompileJournal"/>'s own doc
     /// comment) alongside a binary whose hash *does* match the parked ref (a genuine self-echo
-    /// condition on its own). Marker wins regardless — #417 comment 2 on the issue: the two prompts
+    /// condition on its own). Marker wins regardless: the two prompts
     /// must never both fire for one event, and an interrupted batch is the more urgent, more certain
     /// signal even when the surviving hash happens to still agree with the parked ref.
     /// </summary>

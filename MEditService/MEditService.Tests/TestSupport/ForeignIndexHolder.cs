@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace MEditService.Tests.TestSupport;
 
 /// <summary>
-/// #588: another <i>process</i> holding an index file — what a second Modbench window is. It has
+/// Another <i>process</i> holding an index file — what a second Modbench window is. It has
 /// to be a process: DuckDB's file lock is per process, and DuckDB.NET shares one database instance
 /// per path inside a process, so a second connection from this test host would simply join the
 /// first. The holder is <c>python3</c> calling <c>duckdb_open</c> on the test output's own

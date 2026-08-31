@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #515: every deep parse (Track, compile round-trip verification, load order ingest's binary path,
+/// Every deep parse (Track, compile round-trip verification, load order ingest's binary path,
 /// external-change absorption) needs to tell Mutagen where a Localized plugin's own
 /// <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c> files live. Passing no
 /// <see cref="BinaryReadParameters"/> at all does not mean "no localization support" — Mutagen still
@@ -73,7 +73,7 @@ public static class LocalizedStrings
     public static BinaryReadParameters ForRead(string modFolder) => ForRead(modFolder, modFolder);
 
     /// <summary>
-    /// AC2 (#515): a Localized plugin whose strings files are missing must be refused by name, never
+    /// A Localized plugin whose strings files are missing must be refused by name, never
     /// with Mutagen's own listings-path exception (which <see cref="EnsureLocalAppDataDefault"/> now
     /// prevents) and never silently — <see cref="Mutagen.Bethesda.Strings.TranslatedString.TryLookup"/>
     /// returns <see langword="false"/> for a missing file with no exception at all, so nothing else
@@ -81,7 +81,7 @@ public static class LocalizedStrings
     /// source files for a language the moment any string in that language is registered — even an
     /// otherwise-empty one — so a real Localized plugin missing any one of the three has lost data,
     /// not merely omitted an unused source. Checked for English only: the one language Modbench reads
-    /// and writes today (translation/multi-language UX is explicitly out of #515's scope).
+    /// and writes today (translation/multi-language UX is deliberately out of scope).
     /// </summary>
     /// <returns>The missing file's own name, or null when every expected file is present (or the
     /// plugin is not Localized at all, in which case there is nothing to check).</returns>

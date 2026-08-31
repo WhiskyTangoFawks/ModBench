@@ -8,16 +8,14 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #452 AC3 at the container seam: a Cell's <b>embedded</b> children — the placed references Spriggit
-/// writes inline into the parent document rather than as files of their own — are still their own
-/// queryable records after a tracked plugin is ingested from its source tree, at both refs.
+/// Ingest-from-source at the container seam: a Cell's <b>embedded</b> children — the placed
+/// references written inline into the parent document rather than as files of their own — are still
+/// their own queryable records after a tracked plugin is ingested from its source tree, at both refs.
 ///
-/// <para>Runs against the shared <see cref="ContainerModFixture"/> (#466) rather than a local Cell
+/// <para>Runs against the shared <see cref="ContainerModFixture"/> rather than a local Cell
 /// fixture of its own — the shared <c>TrackedModFixture</c> holds Npc/Race/Keyword and no containers
-/// at all, so it structurally cannot exercise any of this, which is exactly how #451 shipped a
-/// container regression no test could see; <see cref="ContainerModFixture"/> is the consolidated
-/// answer to that gap, covering the same ground this suite always needed (an embedded placed ref, a
-/// flat record beside it) plus what its siblings needed.
+/// at all, so it structurally cannot exercise any of this, which is exactly how a container
+/// regression once shipped with no test able to see it.
 /// (<c>SourceIngestParityTests</c> covers the same ground across 2,577 real records; this suite is the
 /// fast, readable statement of the specific property.)</para>
 /// </summary>
@@ -38,7 +36,7 @@ public sealed class SourceIngestContainerTests : IDisposable
         return mirror;
     }
 
-    // ---- AC3: embedded children survive the round trip through the tree ----
+    // ---- Embedded children survive the round trip through the tree ----
 
     [Fact]
     public void AnEmbeddedPlacedReference_IsItsOwnRecord_AfterIngestFromSource()
@@ -88,26 +86,20 @@ public sealed class SourceIngestContainerTests : IDisposable
         Assert.Contains(ContainerModFixture.TemporaryRefEditorId, cell.Body, StringComparison.Ordinal);
     }
 
-    // ---- #463: container Head reconciliation ----
+    // ---- Container Head reconciliation ----
 
     /// <summary>
-    /// A container edited in the working tree is read correctly at Effective, and now also
-    /// reconciles at <b>Head</b>, closing the gap this test used to pin as expected behaviour.
+    /// A container edited in the working tree is read correctly at Effective and also reconciles at
+    /// <b>Head</b>.
     ///
     /// <para><c>SourceIngest.ReconcileHead</c> identifies a dirty source unit through
-    /// <see cref="SourceRecordPath.TryParse"/>, which still fails closed for every container path by
+    /// <see cref="SourceRecordPath.TryParse"/>, which fails closed for every container path by
     /// design — recovering a record type from <c>Cells/&lt;b&gt;/&lt;sb&gt;/&lt;name&gt;/RecordData.json</c>
     /// needs a structure-aware reader, and ADR-0041's 2026-08-23 amendment rules that reader out
-    /// permanently (declined twice already, #453/#454, for the same reason each time). What changed is
-    /// what happens on that parse failure: rather than being dropped, a dirty path under the plugin's
-    /// own tree now falls through to <c>SourceIngest.ReconcileHeadStructurally</c>, which deserializes
-    /// <c>HEAD</c> the same whole-mod way Effective already was and diffs the two mod objects by
-    /// FormKey — no path grammar involved.</para>
-    ///
-    /// <para>History, so this is not misattributed a third time: #453 said "#453/#454"; #453's own
-    /// landing narrowed that to "#454's", on the premise that compile-reads-structure-from-the-tree
-    /// would have to build a path → record-identity reader this could reuse. #454 landed and built no
-    /// such thing, so the gap survived untouched and became its own ticket, #463 — closed here.</para>
+    /// permanently. On that parse failure a dirty path under the plugin's own tree falls through to
+    /// <c>SourceIngest.ReconcileHeadStructurally</c>, which deserializes <c>HEAD</c> the same
+    /// whole-mod way Effective already was and diffs the two mod objects by FormKey — no path
+    /// grammar involved.</para>
     /// </summary>
     [Fact]
     public void AnExternallyEditedContainer_ReconcilesItsHeadState_ThroughStructuralDiff()
@@ -135,8 +127,8 @@ public sealed class SourceIngestContainerTests : IDisposable
     [Fact]
     public void AFlatRecordEditedBesideTheContainer_DoesReconcileItsHead()
     {
-        // #459: resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
-        // now needs an order index this test has no reason to track.
+        // Resolved through SourceUnitResolver rather than SourceRecordPath.For directly — For
+        // needs an order index this test has no reason to track.
         var npcFile = SourceUnitResolver.FlatSourcePath(
             _fixture.ModFolder, ContainerModFixture.PluginName, "npc_", _fixture.Npc.ToString(),
             ContainerModFixture.NpcEditorId, GameRelease.Fallout4);
@@ -152,7 +144,7 @@ public sealed class SourceIngestContainerTests : IDisposable
             reloaded.Index!.At(RecordRef.Head).GetDocument(_fixture.Npc.ToString(), _fixture.Plugin)!.EditorId);
     }
 
-    /// <summary>The acceptance criteria's other named case: not the container itself, but one of its
+    /// <summary>Not the container itself, but one of its
     /// <b>embedded children</b> — <see cref="ContainerModFixture.TemporaryRef"/> has no file of its own
     /// (it lives inline in <see cref="ContainerModFixture.EmbedCell"/>'s document), so this exercises
     /// the structural diff finding a divergent FormKey <i>inside</i> a container's body, not just the

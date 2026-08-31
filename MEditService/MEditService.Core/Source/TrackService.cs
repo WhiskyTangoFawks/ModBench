@@ -12,24 +12,23 @@ using Noggog.WorkEngine;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #414's orchestration seam: the Track gesture end to end. Resolves every plugin the load order
+/// The Track gesture's orchestration seam, end to end. Resolves every plugin the load order
 /// loaded under one mod-folder origin, deep-parses each (the load order's own overlay reader is
-/// read-only and, per #369's pinned defect, not always structurally faithful), then serializes the
-/// whole mod through the whole-mod door (#451 slice A — ADR-0041's #444 amendment: the source tree
+/// read-only and not always structurally faithful), then serializes the
+/// whole mod through the whole-mod door (ADR-0041 amendment: the source tree
 /// took over the whole-mod door's own file layout wholesale), computes provenance, then hands the
 /// git mechanics to
 /// <see cref="SourceRepository.Track"/>. This class invents no record content and no provenance
 /// content on its own account either — the binary hash and <c>meta.ini</c> version string are both
 /// read as opaque bytes, never interpreted.
 ///
-/// <para><b>This is a designated door</b> for the generated whole-mod mixin
-/// (<see cref="Serialization.RecordTextCodecGeneratorSeed"/>'s AC2 guard, re-scoped by #451 from "no
-/// caller, ever" to "only the designated doors" — <see cref="Serialization.RecordTextCodecGeneratorSeedTests"/>
-/// enforces the whitelist).</para>
+/// <para><b>This is a designated door</b> for the generated whole-mod mixin —
+/// only the designated doors may call it; <see cref="Serialization.RecordTextCodecGeneratorSeedTests"/>
+/// enforces the whitelist.</para>
 /// </summary>
 public sealed class TrackService(ILogger<TrackService> logger)
 {
-    // #414 review F2: "reports progress" (AC4) — one shared instance on this singleton, read
+    // One shared instance on this singleton, read
     // concurrently by GET /plugins/track/status while a track's own POST is still in flight, same
     // idiom LoadOrderMirror.Status/GET /load-order/status already established for the reconcile. A
     // reference-type field, so Volatile.Read/Write is enough for cross-thread visibility of each
@@ -44,7 +43,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
     /// <summary>
     /// Same gesture as the public overload, with one extra seam: which function reads the tree
     /// <see cref="VerifyRoundTrip"/> just wrote for a plugin back into a mod, for the round-trip
-    /// gate below (#471, ADR-0042 decision 2). Every real caller goes through the public overload,
+    /// gate below (ADR-0042 decision 2). Every real caller goes through the public overload,
     /// which passes <see langword="null"/> here and gets the real whole-mod door
     /// (<see cref="Serialization.RecordTextCodecGeneratorSeed.DeserializeWholeMod"/>). The only
     /// override is the negative test proving the gate actually refuses a plugin: no known codec
@@ -72,7 +71,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
         var modFolder = Path.GetDirectoryName(plugins[0].Path)
             ?? throw new InvalidOperationException($"Plugin path '{plugins[0].Path}' has no containing folder.");
 
-        // Fail fast (#414 review F3): both checks are cheap and both make the entire deep-parse/
+        // Fail fast: both checks are cheap and both make the entire deep-parse/
         // serialize loop below pointless if they fail, so they run before it, not after — an
         // already-tracked folder or a missing git must never pay the full (worst-case tens-of-
         // seconds, mega-plugin) parse cost just to learn an answer that was available up front.
@@ -96,7 +95,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 // Reader-agnosticism between the two — that a deep-parsed record and an overlay
                 // serialize to the same bytes — is what RecordTextCodecRealDataTests protects at the
                 // codec seam.
-                // #515: explicit strings parameters, not null — see LocalizedStrings' own doc
+                // Explicit strings parameters, not null — see LocalizedStrings' own doc
                 // comment for why "pass nothing" is not neutral for a Localized plugin.
                 IMod deepParsed;
                 try
@@ -107,9 +106,8 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 }
                 catch (Exception ex)
                 {
-                    // #519: this call had no catch at all before — any Mutagen parse exception
-                    // propagated raw, with whatever identity happened to survive in its own
-                    // unlocated Message (never FormKey/EditorID; RecordException carries those only
+                    // A raw Mutagen parse exception carries no located identity in its own Message
+                    // (never FormKey/EditorID; RecordException carries those only
                     // on its ToString(), confirmed live). PluginDiagnosis.FromParseException walks
                     // the exception's own InnerException chain for the innermost RecordException, so
                     // a real record identity survives even when Mutagen wrapped it in one or more
@@ -119,7 +117,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                         $"{plugin.Name} could not be parsed from its own binary: {diagnosis.Describe()}", ex);
                 }
 
-                // #515 AC2: refuse by name before anything else — never Mutagen's own listings-path
+                // Refuse by name before anything else — never Mutagen's own listings-path
                 // exception (which the strings parameters above already prevent) and never a silent
                 // empty string (TranslatedString.TryLookup returns false for a missing file with no
                 // exception at all).
@@ -136,7 +134,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 SetProgress(origin, TrackPhase.Serializing, parsedDone - 1, plugins.Count);
                 var pluginPristineFiles = await SerializeToPristineFiles(deepParsed, plugin.Name, cancel);
 
-                // #471, ADR-0042 decision 2: the gate. Refuses before a single byte of this plugin —
+                // ADR-0042 decision 2: the gate. Refuses before a single byte of this plugin —
                 // or any other plugin sharing this Track call — is committed, so a failure here
                 // leaves the mod folder exactly as untracked as it was on entry
                 // (SourceRepository.Track below never runs). Reported under the same Serializing
@@ -168,7 +166,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
     }
 
     /// <summary>
-    /// ADR-0042 decision 2's gate (2026-08 amendment, #513), run live against the plugin actually
+    /// ADR-0042 decision 2's gate (2026-08 amendment), run live against the plugin actually
     /// being tracked: writes <paramref name="pristineFilesForThisPlugin"/> (the tree
     /// <see cref="SerializeToPristineFiles"/> just produced from <paramref name="original"/>) into a
     /// scratch tree, reads it back through <paramref name="deserialize"/>, recompiles that to a
@@ -186,10 +184,10 @@ public sealed class TrackService(ILogger<TrackService> logger)
     /// tree carries — comparing against it could never see anything Mutagen's own binary *writer*
     /// does to a value (zlib re-deflate, <c>-0.0</c>→<c>+0.0</c>, or a writer defect like
     /// <c>Furniture.Flags</c> materializing from <see langword="null"/> once <c>FNAM</c>/<c>MNAM</c>
-    /// are re-added — #513's own survey finding, real content this amendment exists to still refuse).
+    /// are re-added — a real survey finding, content this amendment exists to still refuse).
     /// Only a reparse of what was actually written can.</para>
     ///
-    /// <para><b>#514: an independent diagnosis tried first.</b> <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>
+    /// <para><b>An independent diagnosis tried first.</b> <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>
     /// runs straight over the same two byte buffers this method already has in hand — no extra parse,
     /// no extra write. It exists because Mutagen's own model can be lossy on the way *in*: a record
     /// whose original bytes and recompiled bytes both parse into equal objects can still differ on
@@ -226,7 +224,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
             // mirrors BinaryRoundTripGateTests' own precedent for exactly this "reproduce the
             // original's own bytes" shape (as opposed to PluginCompileService's load-order-derived
             // load order, which answers a different question: what should the masters be now).
-            // NoNextFormIDProcessing/RecordCountOption.NoCheck mirror PluginWriter (#506): the
+            // NoNextFormIDProcessing/RecordCountOption.NoCheck mirror PluginWriter: the
             // source's own stored HEDR.NextObjectID/NumRecords are the bytes to reproduce, not
             // Mutagen's recompute of them.
             try
@@ -241,13 +239,13 @@ public sealed class TrackService(ILogger<TrackService> logger)
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
-                // #520: ADR-0038's content-derived master pass (MastersListContentOption.Iterate,
+                // ADR-0038's content-derived master pass (MastersListContentOption.Iterate,
                 // the same default this write and PluginWriter both take) prunes a master this
                 // write still needs when the only reference to it lives somewhere Mutagen's own
                 // EnumerateFormLinks does not walk (a VMAD struct-list script property —
-                // Mutagen-Modding/Mutagen#688, real fixture SpaDia_AMR.esp). Everything but this
-                // one Kind A shape still propagates raw below — never fall back to a silent
-                // NoCheck, and never widen this catch to any other write failure (#516's decision).
+                // Mutagen-Modding/Mutagen upstream issue 688, real fixture SpaDia_AMR.esp).
+                // Everything but this one Kind A shape still propagates raw below — never fall back
+                // to a silent NoCheck, and never widen this catch to any other write failure.
                 var diagnosis = PluginDiagnosis.FromWriteException(ex);
                 throw new SourceRoundTripFailedException(
                     $"{pluginName} does not round-trip through its own tracked source: {diagnosis.Describe()}", ex);
@@ -277,7 +275,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                     divergence.Description);
             }
 
-            // #568: ModelIdentity.FindFirst above never reaches ModHeader (not an IMajorRecordGetter,
+            // ModelIdentity.FindFirst above never reaches ModHeader (not an IMajorRecordGetter,
             // never walked by EnumerateMajorRecords) — this is the header's own model-identity check,
             // scoped to ModelIdentity.OpaqueHeaderFields' allow-list rather than every Mask field (see
             // that allow-list's own doc comment for why a blanket sweep is wrong: MasterReferences and
@@ -291,8 +289,8 @@ public sealed class TrackService(ILogger<TrackService> logger)
                     $"TES4 header field '{headerField}' changed after being recompiled from its own tracked source.");
             }
 
-            // #513: bytes differ but every record's own content is model-identical — an encoding-only
-            // difference ADR-0042 decision 2 now documents rather than gates (zlib level, negative
+            // Bytes differ but every record's own content is model-identical — an encoding-only
+            // difference ADR-0042 decision 2 documents rather than gates (zlib level, negative
             // zero, subrecord/GRUP-child order, derived sizes and counts, master pruning). Reported,
             // not silent, and never a refusal.
             if (logger.IsEnabled(LogLevel.Information))
@@ -321,14 +319,11 @@ public sealed class TrackService(ILogger<TrackService> logger)
     /// (<c>RecordTextCodecGeneratorSeedTests</c>) exists to keep whole-mod serialization in few enough
     /// places that the sequential dropoff and the <c>\r</c> canonicalization happen the same way
     /// everywhere; a second hand-rolled implementation elsewhere would satisfy the guard's letter
-    /// while defeating its purpose. That is not hypothetical — it is exactly what happened.
-    /// <see cref="ExternalChangeAbsorber"/> rebuilt the tree one record at a time and omitted the
-    /// root <c>RecordData.json</c> that ADR-0041's #444 amendment makes the mod header's source file.
-    /// Since <see cref="SourceRepository.CommitPristineToMain"/> writes only what it is handed, with no
-    /// merge against the previous tree, that <i>deleted</i> the header from the baseline, and the
-    /// resulting tree could not be read back at all — the whole-mod door takes ModKey and GameRelease
-    /// from that file. Found by #454, which is the first thing to read a whole tree back; latent for
-    /// ingest-from-source (#452) on the same call for just as long.</para>
+    /// while defeating its purpose. The hazard is concrete: a hand-rolled rebuild that omits the
+    /// root <c>RecordData.json</c> (the mod header's source file, ADR-0041 amendment) <i>deletes</i>
+    /// the header from the baseline — <see cref="SourceRepository.CommitPristineToMain"/> writes only
+    /// what it is handed, with no merge against the previous tree — and the resulting tree cannot be
+    /// read back at all: the whole-mod door takes ModKey and GameRelease from that file.</para>
     ///
     /// <para>The caller supplies the already-parsed mod rather than a path: both callers parse for
     /// their own reasons (Track reports progress around it; Absorb parses the binary that changed
@@ -340,10 +335,10 @@ public sealed class TrackService(ILogger<TrackService> logger)
         var scratchDir = Directory.CreateTempSubdirectory("medit-serialize-").FullName;
         try
         {
-            // The whole-mod door — this class is one of the designated callers (AC2 re-scope, #451).
+            // The whole-mod door — this class is one of the designated callers.
             // Always a sequential/inline dropoff, explicitly, even though it is already the library's
             // own default (SerializationMetaData falls back to InlineWorkDropoff when handed null):
-            // the #444 spike's own finding 4 is a real upstream race in MajorRecordListParallelHelper
+            // there is a real upstream race in MajorRecordListParallelHelper
             // under a genuinely parallel dropoff (nested-list containers writing into each other's
             // folders), so this is named rather than relied on implicitly —
             // RecordTextCodecGeneratorSeedTests' companion guard fails loudly if this ever gets
@@ -357,7 +352,7 @@ public sealed class TrackService(ILogger<TrackService> logger)
                 InlineWorkDropoff.Instance,
                 cancel);
 
-            // #451 AC4: canonicalization at the door. The whole-mod door's writer goes through the
+            // Canonicalization at the door. The whole-mod door's writer goes through the
             // same JSON kernel the per-record codec does, whose own doc comment already established
             // (RecordTextCodec.SerializeCoreAsync) that Newtonsoft's JsonTextWriter has no reachable
             // NewLine to pin — the per-record codec answers this with its own post-write \r-strip,
@@ -412,7 +407,7 @@ public sealed class SourceRoundTripFailedException : Exception
 
 /// <summary>Thrown by <see cref="TrackService.TrackAsync(ILoadOrder, string, SourcePreset, CancellationToken)"/>
 /// when a Localized plugin is missing one of its own <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c>
-/// files (#515, AC2) — named so the endpoint layer maps it to its own HTTP response, the same way
+/// files — named so the endpoint layer maps it to its own HTTP response, the same way
 /// <see cref="SourceRoundTripFailedException"/> is, rather than surfacing as a bare
 /// <see cref="InvalidOperationException"/>.</summary>
 public sealed class MissingLocalizationStringsException : Exception

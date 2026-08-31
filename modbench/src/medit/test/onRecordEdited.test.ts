@@ -19,11 +19,11 @@ function fakeDecorationProvider(): RecordDecorationProvider {
   return { refresh: vi.fn() } as unknown as RecordDecorationProvider;
 }
 
-// #449: this is the actual production callback a field edit drives — driven here through a real
+// This is the actual production callback a field edit drives — driven here through a real
 // call, not by hand-feeding a decoration's own accessor the way PluginsTreeComposite.test.ts's own
 // compile-staleness tests do. That distinction is the point: those tests prove the decoration renders
 // correctly *given* a compile-staleness answer; this proves an edit is what makes that answer change
-// in the first place — the exact seam #449's review found unwired.
+// in the first place.
 describe('makeOnRecordEdited — compile-staleness refresh (#449)', () => {
   it('calls the injected refreshCompileStale on every edit', () => {
     const refreshCompileStale = vi.fn();
@@ -69,7 +69,7 @@ describe('makeOnRecordEdited — compile-staleness refresh (#449)', () => {
   });
 });
 
-// #557: the native Source Control panel doesn't pick up a field edit's working-tree dirt on its
+// The native Source Control panel doesn't pick up a field edit's working-tree dirt on its
 // own — this is the wiring that closes that gap, driven through the same real call every other
 // onRecordEdited-fires test in this file uses, not by hand-feeding some other accessor directly.
 describe('makeOnRecordEdited — Source Control refresh (#557)', () => {
@@ -86,7 +86,7 @@ describe('makeOnRecordEdited — Source Control refresh (#557)', () => {
   });
 
   it('calls refreshSourceControl even when the record-row cache has no entry for this FormKey', () => {
-    // Same reasoning as refreshCompilePending above (#449): the edit already landed server-side
+    // Same reasoning as refreshCompileStale above: the edit already landed server-side
     // by the time this fires, so the Source Control refresh must not be gated on the record-row
     // cache's own hit/miss either.
     const refreshSourceControl = vi.fn();

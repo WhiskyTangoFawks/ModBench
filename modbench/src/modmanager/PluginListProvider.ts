@@ -18,9 +18,9 @@ const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(
 
 /** Constructor options for {@link PluginListProvider}. Field order matches
  *  ModListProvider's identically-shaped options so the two siblings read the
- *  same (issue #80: replaces five positional args whose order diverged).
+ *  same.
  *
- *  #357: `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
+ *  `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
  *  while Modbench runs, so a value captured once at construction could go stale for the life of
  *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface PluginListProviderOptions {
@@ -34,15 +34,15 @@ export interface PluginListProviderOptions {
 /** A single plugins.txt line, with a native checkbox mirroring its `*` (enabled)
  *  state. Toggling the checkbox writes plugins.txt immediately (wired via the
  *  view's `onDidChangeCheckboxState` handler in extension.ts). An order-aware
- *  missing-master `status` (issue #67) overlays an error icon/description/tooltip
+ *  missing-master `status` overlays an error icon/description/tooltip
  *  when a declared master isn't loaded before this plugin — deliberately worded
  *  distinctly from the Mods tree's presence-only "Missing master:" badge.
  *
  *  No `resourceUri`: VS Code infers a file-type base icon from one whenever no explicit
  *  `iconPath` overrides it, so setting one would change every row's rendered icon — a regression
- *  no unit test here could catch (`iconPath` itself would stay untouched). #595: a plugin whose
+ *  no unit test here could catch (`iconPath` itself would stay untouched). A plugin whose
  *  filename more than one enabled mod provides renders exactly like any other row — the losing
- *  copies are registered (ADR-0044) but not displayed; their surface is an open UX design (#576). */
+ *  copies are registered (ADR-0044) but not displayed; their surface is an open UX design. */
 export class PluginNode extends vscode.TreeItem {
   readonly kind = 'plugin' as const;
   constructor(
@@ -51,13 +51,13 @@ export class PluginNode extends vscode.TreeItem {
   ) {
     super(plugin.name, vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'plugin';
-    // #345 (xEdit parity — vstNavChange/TryViewOrCompareSelectedRecords, xeMainForm.pas: selecting
+    // xEdit parity (vstNavChange/TryViewOrCompareSelectedRecords, xeMainForm.pas: selecting
     // a plugin node shows its File Header as a matter of course, no separate affordance): opening
     // the header panel is routed through the existing modbench.openHeader bridge command, never
     // built directly here — this row provider is forbidden Editing's own vocabulary
     // (contextBoundary.test.ts), and openHeader already owns the plugin-name-to-header-panel
-    // translation on the composition-root side of that boundary (extension.ts), singleton-
-    // retargeting per #284.
+    // translation on the composition-root side of that boundary (extension.ts), retargeting
+    // the singleton panel.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     this.checkboxState = plugin.enabled
       ? vscode.TreeItemCheckboxState.Checked
@@ -74,7 +74,7 @@ export class PluginNode extends vscode.TreeItem {
 }
 
 /** This row's order-aware badge's flagged master names, or undefined when it carries none
- *  (#277 / ADR-0037 AC8) — the composite's structured access to what `PluginNode`'s constructor
+ *  (ADR-0037) — the composite's structured access to what `PluginNode`'s constructor
  *  above otherwise only bakes into rendered icon/description/tooltip text, so the load order-aware
  *  reconciliation there can dedupe by master name without parsing that text. */
 export function orderIssueMastersOf(node: PluginListNode): string[] | undefined {
@@ -84,7 +84,7 @@ export function orderIssueMastersOf(node: PluginListNode): string[] | undefined 
 }
 
 /** A synthetic row for one of the game's implicitly-loaded vanilla/DLC masters
- *  (issue #108) — discovered from the resolved Data folder (a plugin file that
+ *  — discovered from the resolved Data folder (a plugin file that
  *  is NOT a hardlink), never hardcoded. Rendered ahead of plugins.txt's own
  *  rows, in topological order. No checkbox (unset, so VS Code renders none —
  *  nothing to toggle), and excluded from drag by `handleDrag`'s existing
@@ -92,7 +92,7 @@ export function orderIssueMastersOf(node: PluginListNode): string[] | undefined 
  *  (`pluginImplicit`, distinct from `plugin`) lets package.json menu `when`
  *  clauses hide any plugin-only command (reorder, toggle) for it.
  *
- *  #276 / ADR-0035: the leading slot answers exactly one question — "can you
+ *  ADR-0035: the leading slot answers exactly one question — "can you
  *  change whether this loads?" — so this row (forced on, can't be toggled or
  *  moved) renders a lock where a togglable row renders a checkbox, adopting
  *  MO2's own `forceLoaded` wording verbatim (`pluginlist.cpp`) rather than
@@ -113,7 +113,7 @@ export class ImplicitMasterNode extends vscode.TreeItem {
     this.contextValue = 'pluginImplicit';
     this.iconPath = new vscode.ThemeIcon('lock');
     this.tooltip = [name, "This plugin can't be disabled or moved (enforced by the game)."].join('\n');
-    // #345 — see PluginNode's own comment above for why this routes through the modbench.openHeader
+    // See PluginNode's own comment above for why this routes through the modbench.openHeader
     // bridge command rather than building the header panel's target directly here.
     this.command = { command: 'modbench.openHeader', title: 'Open Header', arguments: [this] };
     if (path !== undefined) this.resourceUri = vscode.Uri.file(path);
@@ -145,11 +145,11 @@ export class EmptyNode extends vscode.TreeItem {
 export type PluginListNode = PluginNode | ImplicitMasterNode | ErrorNode | EmptyNode;
 
 /** The `kind`s this provider produces — see `handleDrop`, which has to tell its own rows from a
- *  row some other provider contributed to the same view (#270). */
+ *  row some other provider contributed to the same view. */
 const OWN_ROW_KINDS = new Set<string>(['plugin', 'implicitMaster', 'error', 'empty']);
 
 /** The plugin file a row stands for, or undefined when the row stands for no file (the error and
- *  empty-state rows). #270: this is what the merged Plugins tree's composite asks a row for — the
+ *  empty-state rows). This is what the merged Plugins tree's composite asks a row for — the
  *  boundary object CONTEXT-MAP.md names, and the only thing about these rows anything outside
  *  Mod Management needs to know. Kept here, next to the node classes, so no caller has to
  *  destructure them. */
@@ -168,7 +168,7 @@ function isPluginListNode(node: unknown): node is PluginListNode {
   return OWN_ROW_KINDS.has((node as { kind: string }).kind);
 }
 
-/** #363: Filter to Selected Plugins' own selection-extractor — the clicked row plus its
+/** Filter to Selected Plugins' own selection-extractor — the clicked row plus its
  *  multi-selection (VS Code's `view/item/context` invocation shape, `(clicked, selected[])`),
  *  collapsed to the deduped plugin-name set the command scopes its Editing-side narrowing to.
  *  Mirrors `DownloadsPanel.ts`'s own `selectionNames`: falls back to the clicked row alone when
@@ -177,7 +177,7 @@ function isPluginListNode(node: unknown): node is PluginListNode {
  *  `selected` is deliberately untyped beyond `unknown[]` — the merged Plugins tree's selection can
  *  hold Editing's own child rows too, and this drops every one of them rather than import their
  *  shape: `isPluginListNode` only ever asks "is this one of the four rows Mod Management owns",
- *  never what an Editing row is instead. That is #363's own, deliberate divergence from xEdit's
+ *  never what an Editing row is instead. That is a deliberate divergence from xEdit's
  *  `mniNavFilterApplySelected` (`xeMainForm.pas:13976-14027`), which resolves a selected *element*
  *  up to its owning file — not reproducible here without importing Editing's row types into Mod
  *  Management, which the bounded-context split forbids. In practice the drop only ever manifests
@@ -189,7 +189,7 @@ export function pluginNamesInSelection(clicked: PluginListNode | undefined, sele
   return [...new Set(names)];
 }
 
-/** #97 / ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
+/** ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
  *  and its new `plugins.txt` `*` state, exactly as `setPluginEnabled` just wrote it. Fired only
  *  from a real toggle, never from `invalidate()`'s generic re-render (a filter keystroke, an
  *  external plugins.txt edit picked up by a watcher) — those have nothing for a backend
@@ -213,7 +213,7 @@ export class PluginListProvider
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<PluginListNode | undefined>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  // #97 / ADR-0035 § Live mutation: see PluginParticipationChange's own doc comment for why this
+  // ADR-0035 § Live mutation: see PluginParticipationChange's own doc comment for why this
   // is a distinct event from onDidChangeTreeData rather than reusing it.
   private readonly _onDidChangeParticipation = new vscode.EventEmitter<PluginParticipationChange>();
   readonly onDidChangeParticipation = this._onDidChangeParticipation.event;
@@ -231,17 +231,17 @@ export class PluginListProvider
   /** Active title-bar filter (case-insensitive substring on plugin name); empty = off. */
   private filterText = '';
   private filterLower = '';
-  /** Issue #79: caches the unfiltered computed row list (implicit masters +
+  /** Caches the unfiltered computed row list (implicit masters +
    *  PluginNodes with badges) so a filter keystroke re-renders instead of
    *  re-reading plugins.txt / re-walking the conflict index and status pass.
    *  `invalidate()` clears it; `render()` (setFilter) leaves it intact. */
   private cache?: { rows: PluginListNode[] };
 
-  /** `instanceRoot`, when provided, enables the order-aware missing-master badge
-   *  (issue #67): each plugin's declared masters are read and checked against the
+  /** `instanceRoot`, when provided, enables the order-aware missing-master badge:
+   *  each plugin's declared masters are read and checked against the
    *  Plugin load order. Omitted in tests using an in-memory-only source.
    *  `dataFolder` reads the game's resolved Data folder through the single
-   *  game-directory resolver (#357) — for locating vanilla/DLC/CC plugins no mod
+   *  game-directory resolver — for locating vanilla/DLC/CC plugins no mod
    *  ships; an undefined resolution degrades those lookups. */
   constructor(options: PluginListProviderOptions) {
     this.source = options.source;
@@ -254,13 +254,13 @@ export class PluginListProvider
   /** Clears the cached row set and re-renders — a mutation (toggle, drop, ...)
    *  invalidated what's on disk, so the next `getChildren()` must re-read
    *  plugins.txt/enabled state. Also the title-bar Refresh button's action.
-   *  Issue #79: distinct from `render()`, which only re-renders already-built rows. */
+   *  Distinct from `render()`, which only re-renders already-built rows. */
   invalidate(): void {
     this.cache = undefined;
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Re-renders already-built rows without touching the cache. Issue #79: the
+  /** Re-renders already-built rows without touching the cache. The
    *  only call site is `setFilter` — a filter keystroke never changes what's on
    *  disk, so it must not force a re-read of plugins.txt/enabled state. */
   private render(): void {
@@ -270,7 +270,7 @@ export class PluginListProvider
   /** Set the title-bar filter (empty string clears it) and re-render. Narrows the
    *  rendered rows to plugins whose name contains `text`, case-insensitively —
    *  the same transient-InputBox pattern used across every Modbench list surface.
-   *  Render-only (#79): the filter narrows which already-built rows show — it
+   *  Render-only: the filter narrows which already-built rows show — it
    *  never invalidates the cache. */
   setFilter(text: string): void {
     this.filterText = text;
@@ -280,7 +280,7 @@ export class PluginListProvider
 
   /** Toggle a plugin's `*` (enabled) state, writing plugins.txt immediately, then
    *  invalidate so the tree re-reads the persisted state. Fires `onDidChangeParticipation`
-   *  after the write succeeds (#97 / ADR-0035 § Live mutation) — the composition root's cue to
+   *  after the write succeeds (ADR-0035 § Live mutation) — the composition root's cue to
    *  apply the same change to a running backend, live. */
   async setPluginEnabled(pluginName: string, enabled: boolean): Promise<void> {
     await this.source.setPluginEnabled(pluginName, enabled);
@@ -292,7 +292,7 @@ export class PluginListProvider
    *  FileConflictIndex winner for a mod-provided plugin, else the game's Data
    *  folder for an unmanaged vanilla/DLC/CC plugin (the same resolution the
    *  editing-load order builder performs via `resolvePluginPaths`). Used by the
-   *  Reveal in Explorer row action (issue #69). Returns undefined when no
+   *  Reveal in Explorer row action. Returns undefined when no
    *  instanceRoot is configured or resolution fails (ini/index unreadable) — a
    *  fresh read each call, since reveal is a rare explicit action. */
   async resolvePluginPath(name: string): Promise<string | undefined> {
@@ -331,7 +331,7 @@ export class PluginListProvider
   }
 
   /** Reads plugins.txt/enabled state and computes the full unfiltered row set
-   *  (issue #79: the cache-population path, run only on a cache miss). Returns a
+   *  (the cache-population path, run only on a cache miss). Returns a
    *  discriminated result rather than caching an error/empty placeholder, so a
    *  transient read failure or a momentarily-empty plugins.txt never sticks
    *  around as stale cached state. */
@@ -355,9 +355,9 @@ export class PluginListProvider
 
     this.lastOrder = order;
 
-    // The game's implicitly-loaded vanilla/DLC masters (issue #108): discovered from
+    // The game's implicitly-loaded vanilla/DLC masters: discovered from
     // the resolved Data folder, never from plugins.txt. Rendered first, forced on — can't be
-    // toggled or moved (#276). A name in both sets renders exactly once — as the implicit row — so its
+    // toggled or moved. A name in both sets renders exactly once — as the implicit row — so its
     // plugins.txt line (if any, e.g. a stale CC .esl entry) is filtered out here.
     // `fullOrder` (implicit-first) is used for row rendering and badge computation
     // ONLY; `this.lastOrder` above stays plugins.txt's raw order, since that's what
@@ -381,7 +381,7 @@ export class PluginListProvider
     return { kind: 'ok', cache: { rows } };
   }
 
-  /** The lowercased implicit-master names from the last render (#276) — what
+  /** The lowercased implicit-master names from the last render — what
    *  `ImplicitMasterDecorationProvider` matches a `resourceUri` against to gray an
    *  implicit master's label the way MO2 grays `COL_NAME` for a `forceLoaded` row. Empty
    *  before the first render; a live read (not a snapshot), same convention as
@@ -429,7 +429,7 @@ export class PluginListProvider
    *  drop is past the last row / onto a non-plugin node), writing plugins.txt
    *  immediately. `dropIndexForMove` reconciles the drop target with
    *  `movePluginsInText`'s post-removal index convention. A drop onto the
-   *  undraggable implicit-master block (issue #108) is not a plugins.txt position —
+   *  undraggable implicit-master block is not a plugins.txt position —
    *  those rows have no line — so it lands at file-index 0, the top of the
    *  reorderable region, computed against `this.lastOrder` (plugins.txt's raw order,
    *  NEVER the display-composed implicit-first order — writing against the
@@ -460,7 +460,7 @@ export class PluginListProvider
   /** The plugins.txt index the dragged block should land at, or undefined when the drop is not a
    *  position at all and must be refused.
    *
-   *  #270 makes that distinction load-bearing. This view's rows have children now, so VS Code can
+   *  That distinction is load-bearing: this view's rows have children now, so VS Code can
    *  hand the drop a row this controller never produced, and "not one of my rows" is not the same
    *  as "past the last row" — the latter legitimately means the end of the load order, so letting
    *  a foreign row fall through to it would silently move the dragged plugins to the bottom of

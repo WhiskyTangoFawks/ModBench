@@ -16,7 +16,7 @@ const DND_MIME = 'application/vnd.medit.modlist-node';
 /** Tags a failed drop mutation with which of `applyDrop`'s three branches threw,
  *  so `handleDrop`'s catch can log a specific `<operation> failed: ...` line
  *  instead of a generic one — without re-deriving the branch from the drop
- *  payload (#130 review follow-up). `message` mirrors the original error so
+ *  payload. `message` mirrors the original error so
  *  the reporter's user-facing detail is unaffected. */
 class DropMutationError extends Error {
   constructor(
@@ -33,9 +33,9 @@ const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(
 
 /** Constructor options for {@link ModListProvider}. Field order matches
  *  PluginListProvider's identically-shaped options so the two siblings read the
- *  same (issue #80: replaces five positional args whose order diverged).
+ *  same.
  *
- *  #357: `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
+ *  `dataFolder` is a getter, not a settled `Promise` — the setting it resolves is editable
  *  while Modbench runs, so a value captured once at construction could go stale for the life of
  *  the provider. Each call re-reads through the single game-directory resolver. */
 export interface ModListProviderOptions {
@@ -125,7 +125,7 @@ export class ModNode extends vscode.TreeItem {
   }
 }
 
-/** Pinned read-only leaf over the instance's `overwrite/` folder (#82). Not a
+/** Pinned read-only leaf over the instance's `overwrite/` folder. Not a
  *  modlist.txt entry — no checkbox, no drag, no mod actions. Single-click and
  *  the sole context action both reveal the folder in the Explorer. */
 export class OverwriteNode extends vscode.TreeItem {
@@ -134,8 +134,8 @@ export class OverwriteNode extends vscode.TreeItem {
     super('Overwrite', vscode.TreeItemCollapsibleState.None);
     this.contextValue = 'overwrite';
     // No explicit icon or color here: the spec scopes the row's look to a reddish
-    // tint applied by a FileDecorationProvider keyed on resourceUri (issue #83);
-    // #82 only carries the resourceUri. Let VS Code render the folder icon.
+    // tint applied by a FileDecorationProvider keyed on resourceUri; this node
+    // only carries the resourceUri. Let VS Code render the folder icon.
     this.tooltip = `${fileCount} file(s) swept from Data/ — reassign in the Explorer or clear.`;
     this.command = {
       command: 'modbench.modList.overwrite.reveal',
@@ -186,7 +186,7 @@ export class ModListProvider
    *  `reporter`, when provided, surfaces a status-computation failure as a
    *  warning (ADR-0026: badges silently absent would otherwise look
    *  identical to "no conflicts"). `dataFolder` reads the game's resolved
-   *  Data folder through the single game-directory resolver (#357) — its
+   *  Data folder through the single game-directory resolver — its
    *  vanilla/DLC masters seed the missing-master check; an undefined
    *  resolution degrades that check to an empty set. */
   constructor(options: ModListProviderOptions) {
@@ -199,7 +199,7 @@ export class ModListProvider
 
   /** Clears cached data and re-renders — a mutation (drop, toggle, profile
    *  switch, ...) invalidated what's on disk, so the next read must re-walk
-   *  the source. Issue #79: distinct from `render()`, which only re-renders
+   *  the source. Distinct from `render()`, which only re-renders
    *  already-built rows. */
   invalidate(): void {
     this.tree = undefined;
@@ -209,15 +209,15 @@ export class ModListProvider
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Re-renders already-built rows without touching cached data. Issue #79:
-   *  the only call site is `setFilter` — a filter keystroke never changes what's
+  /** Re-renders already-built rows without touching cached data.
+   *  The only call site is `setFilter` — a filter keystroke never changes what's
    *  on disk, so it must not force a re-read/re-walk of the source. */
   private render(): void {
     this._onDidChangeTreeData.fire(undefined);
   }
 
   /** Update the filter and re-render. Clears always resets groupingOn to true.
-   *  Render-only (#79): the filter narrows which already-built rows show —
+   *  Render-only: the filter narrows which already-built rows show —
    *  it never invalidates cached data. */
   setFilter(text: string, grouping: boolean): void {
     this.filterText = text;
@@ -263,16 +263,15 @@ export class ModListProvider
 
   /** Dispatches a drop's mutation call: mod-onto-separator, mod-reorder, or
    *  separator-block-reorder. Split out of `handleDrop` only to keep that
-   *  method's cyclomatic complexity under lint's threshold once the failure
-   *  handling was added (#130) — no behavior change from the prior inline body.
+   *  method's cyclomatic complexity under lint's threshold.
    *  Each branch runs through `runMutation` so a throw carries which branch it
-   *  came from (#130 review follow-up: specific log lines over a generic one). */
+   *  came from (specific log lines over a generic one). */
   private async applyDrop(kind: 'mod' | 'separator', name: string, target: ModlistNode | undefined): Promise<void> {
     // A drop hands us the *pre-removal* target ("insert before this row"), but
     // moveModInText/moveSeparatorBlockInText count toIndex among the entries with
     // the moved line(s) already removed — so any moved entry above the target
     // shifts it left. dropIndexForMove reconciles that; a separator drops its
-    // whole block, so all block members count as "moved" (#76).
+    // whole block, so all block members count as "moved".
     const order = this.cachedEntries?.map((e) => e.name) ?? [];
     const targetName = this.targetName(target);
     if (kind === 'mod') {
@@ -322,7 +321,7 @@ export class ModListProvider
 
   /** A separator moves with its real (preceding) members as a block: every
    *  entry back to (not including) the previous separator, then the separator
-   *  itself last — matching moveSeparatorBlockInText's block extent (#107). */
+   *  itself last — matching moveSeparatorBlockInText's block extent. */
   private separatorBlockNames(sepName: string): string[] {
     const entries = this.cachedEntries ?? [];
     const idx = entries.findIndex((e) => e.kind === 'separator' && e.name === sepName);

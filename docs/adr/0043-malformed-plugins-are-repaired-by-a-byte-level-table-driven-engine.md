@@ -4,8 +4,8 @@ status: accepted
 
 # Malformed plugins are repaired by a byte-level, table-driven engine; legitimate-but-unparseable plugins are refused, never repaired
 
-Decided in the 2026-08-27 triage session that verified #516 (the 684-plugin LitR round-trip
-survey, #513) and grilled `docs/specs/medit-repair.md` to closure.
+The full contract is [docs/specs/medit-repair.md](../specs/medit-repair.md). Evidence base:
+the 684-plugin LitR round-trip survey.
 
 ## Context
 
@@ -14,7 +14,7 @@ different reasons a real plugin fails it, and they need opposite answers:
 
 - **Kind A — the data is legitimate; Mutagen's model is wrong.** `GenderedItem` equality,
   `Package.Data` ordering, a dead form-version gate in `MaterialSwap`, script struct-list
-  links invisible to master derivation (Mutagen #685–#688). Vanilla plugins carry exactly
+  links invisible to master derivation (Mutagen upstream issues 685–688). Vanilla plugins carry exactly
   these shapes.
 - **Kind B — the plugin departs from what the Creation Kit writes.** Template subrecords out
   of order, a fixed-size `RDAT` two bytes short, a fixed-count `NAME` list one short, a
@@ -39,14 +39,14 @@ order); or repair the bytes ourselves before Mutagen ever sees them.
    needing a sixth operation is a design change, not a table addition.
 4. **Repair is explicit and previewed.** Never run by Track, Compile or load. Lossless rows
    are pre-selected, lossy rows unselected with their byte cost, all confirmed in one modal.
-   Detection (the diagnosis floor, #519) runs at load and after failures; repair only on the
+   Detection (the diagnosis floor) runs at load and after failures; repair only on the
    gesture.
 
 ## Consequences
 
 - We own a second, partial knowledge of the plugin format — deliberately shallow: the
   container grammar plus a table. It is game-generic by construction; the *rows* are per game
-  and grow only through surveys with vanilla proof (#517 for Skyrim).
+  and grow only through surveys with vanilla proof.
 - The engine is testable without Mutagen and without game files beyond the fixtures; the
   vanilla proof scans stay as env-gated tests so they can be re-run when a game updates.
 - Semantic conversions (e.g. legacy perk `EPFT 2` → `AVIF`) are out of reach on purpose;
@@ -58,7 +58,7 @@ order); or repair the bytes ourselves before Mutagen ever sees them.
 
 - **Upstream leniency**: Mutagen's typed model has nowhere to put a 33rd `NAME` or a junk
   `EPF2`; order-tolerance might be accepted, shape-tolerance would not — and every upstream
-  fix arrives bundled with an upgrade (0.54.0 broke us, Mutagen #684). Doesn't serve the
+  fix arrives bundled with an upgrade (0.54.0 broke us — Mutagen upstream issue 684). Doesn't serve the
   user who has the plugin today.
 - **xEdit as the mechanism**: right by construction but breaks the flow — a Windows/Wine
   round-trip mid-Track, no automation, no CI, a second language to maintain. Kept as the

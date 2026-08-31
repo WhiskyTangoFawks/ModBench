@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #513, ADR-0042 decision 2's 2026-08 amendment: <see cref="ModelIdentity"/> is the shared,
+/// ADR-0042 decision 2's 2026-08 amendment: <see cref="ModelIdentity"/> is the shared,
 /// standalone seam both <see cref="TrackService"/>'s gate and the test suite's own Compile
 /// assertions (<c>StaleNextObjectIdRoundTripGateTests</c>) call into — tested directly here, not only
 /// through <c>TrackService</c>, so a regression in the mask reflection or the exclusion list fails at
@@ -18,13 +18,11 @@ public sealed class ModelIdentityTests
     private static string FixturePath(string fileName) => Path.Combine(AppContext.BaseDirectory, "TestData", fileName);
 
     /// <summary>
-    /// The concrete real-world case this whole ticket exists for: a real plugin
-    /// (<c>RecruitSierra.esl</c>, #513's own survey — 114 overrides, zero self-authored) whose bytes
-    /// change on a Mutagen rewrite (zlib re-deflate/negative-zero/subrecord-order, per the survey) but
-    /// whose content does not. <b>Named rival</b>: the byte-identity check this gate is replacing
-    /// would refuse this file outright (confirmed separately — this exact fixture is one of the two
-    /// #506/#511 fixtures a byte-identity gate cannot pass); this test proves the seam that replaces
-    /// it accepts the same file on model content alone.
+    /// The concrete real-world case: a real plugin (<c>RecruitSierra.esl</c> — 114 overrides, zero
+    /// self-authored) whose bytes change on a Mutagen rewrite
+    /// (zlib re-deflate/negative-zero/subrecord-order) but whose content does not. <b>Named
+    /// rival</b>: a byte-identity check would refuse this file outright (confirmed separately);
+    /// this test proves the seam accepts the same file on model content alone.
     /// </summary>
     [Fact]
     public async Task FindFirst_OfARealPluginThatOnlyChangesBytesOnRewrite_ReturnsNull()
@@ -45,8 +43,7 @@ public sealed class ModelIdentityTests
     /// Names the exact field the mask disagrees on — not just the record — for a genuine content
     /// difference. <c>HeightMin</c> is a plain <c>float</c> NPC_ subrecord field, chosen because it
     /// round-trips through a real binary write/reparse unmolested, so any observed divergence is the
-    /// forged mutation, not an encoding artifact — the shape of #513's own "forge a deserializer that
-    /// mutates a float" acceptance criterion.
+    /// forged mutation, not an encoding artifact.
     /// </summary>
     [Fact]
     public void FindFirst_WhenAFieldGenuinelyDiffers_NamesTheRecordAndTheField()
@@ -97,8 +94,7 @@ public sealed class ModelIdentityTests
     }
 
     /// <summary>
-    /// #513 finding, caught by the Slice F survey smoke test against real LitR data (not anticipated
-    /// at plan time): a <c>Worldspace</c>'s own <c>TopCell</c> is a genuine embedded <c>Cell</c>, and
+    /// Caught against real LitR data: a <c>Worldspace</c>'s own <c>TopCell</c> is a genuine embedded <c>Cell</c>, and
     /// Mutagen's generated mask for it nests a full <c>Cell.Mask&lt;bool&gt;</c> underneath
     /// <c>Worldspace.Mask&lt;bool&gt;.TopCell</c>. A <c>TopCell.Timestamp</c> divergence must still be
     /// excluded — it is exactly the same GRUP-header-derived field the direct-Cell test above already
@@ -127,8 +123,8 @@ public sealed class ModelIdentityTests
     }
 
     /// <summary>
-    /// #513 finding, caught the same way as the TopCell test above — this time against the LitR
-    /// corpus itself (Slice F's own survey smoke test): a real plugin's <c>Worldspace.SubCells</c> is
+    /// Caught the same way as the TopCell test above, against the LitR corpus itself: a real
+    /// plugin's <c>Worldspace.SubCells</c> is
     /// an <i>indexed list</i> of embedded <c>WorldspaceBlock</c>s, not a single nested record, and each
     /// block's own <c>LastModified</c>/<c>Unknown</c> are exactly the same class of GRUP-header field
     /// as <c>Cell.Timestamp</c>, one list level deeper. A block whose only divergence is that pair must
@@ -152,7 +148,7 @@ public sealed class ModelIdentityTests
         Assert.Null(divergence);
     }
 
-    /// <summary>#568: the header counterpart to <see cref="FindFirst"/>'s per-record check. Every
+    /// <summary>The header counterpart to <see cref="FindFirst"/>'s per-record check. Every
     /// <see cref="ModelIdentity.OpaqueHeaderFields"/> member set to a distinguishable, matching value
     /// on both sides — the accept case a real Track that only recompiles (never edits) a plugin's
     /// header must hit. <c>TransientTypes</c> is also set (matching, on both sides) despite not being
@@ -174,7 +170,7 @@ public sealed class ModelIdentityTests
     }
 
     /// <summary>
-    /// #568 review: an allow-list entry with no test that corrupts <i>that field alone</i> and asserts
+    /// An allow-list entry with no test that corrupts <i>that field alone</i> and asserts
     /// the refusal names it is a claim nobody can cash — the exact vacuity that let a dead
     /// <c>TransientTypes</c> entry sit on this list undetected. One case per
     /// <see cref="ModelIdentity.OpaqueHeaderFields"/> member, each leaving every other header field at
@@ -227,7 +223,7 @@ public sealed class ModelIdentityTests
     }
 
     /// <summary>
-    /// #568 review Finding 2, pinned so it stays honestly documented rather than quietly forgotten:
+    /// Pinned so it stays honestly documented rather than quietly forgotten:
     /// <c>TransientTypes</c> is deliberately not on <see cref="ModelIdentity.OpaqueHeaderFields"/> (see
     /// that field's own doc comment) because a per-item corruption is reported by
     /// <see cref="ModelIdentity.FailingFields"/> against the nested leaf's own declaring type
@@ -235,7 +231,7 @@ public sealed class ModelIdentityTests
     /// the allow-list would need to match. This test proves that stays true: a real per-item
     /// corruption is not named by this gate. If this ever starts returning "TransientTypes", the
     /// nested-name mapping described in <c>OpaqueHeaderFields</c>' doc comment has changed and that
-    /// doc comment (and the ADR-0042 #568 amendment) need updating alongside whatever fixed it.
+    /// doc comment (and the corresponding ADR-0042 amendment) need updating alongside whatever fixed it.
     /// </summary>
     [Fact]
     public void FindFirstHeaderFieldDivergence_WithATransientTypesItemCorruption_KnownGap_ReturnsNull()
@@ -252,7 +248,7 @@ public sealed class ModelIdentityTests
     }
 
     /// <summary>
-    /// #568 review Finding 2's second half, independently pinned: Mutagen's own generated equality
+    /// The known gap's second half, independently pinned: Mutagen's own generated equality
     /// mask does not flag a <c>TransientTypes</c> list-count divergence as unequal at all (a
     /// pre-existing Mutagen quirk, not introduced here) — <see cref="ModelIdentity.FailingFields"/>
     /// itself returns nothing for a 1-item-vs-0-item list, before this gate's allow-list even runs.

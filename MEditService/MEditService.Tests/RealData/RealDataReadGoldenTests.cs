@@ -8,19 +8,19 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #413 slice S0 — the AC3 safety net, captured from the pre-swap implementation over authentic
+/// The golden safety net over authentic
 /// Bethesda records (the committed cut-down plugin: real translated strings, real flags bitmasks,
 /// real struct/array columns, real GLOB multi-subclass columns, real VMAD, real conditions, a real
 /// worldspace/cell/placement tree).
 ///
-/// This is the fixture that makes "identical results to before the swap" a testable claim. The
+/// The
 /// documents read model reconstitutes each record from its own source JSON and runs the <i>same</i>
 /// <c>ColumnSpec.Extract</c> delegates the wide tables were filled from, so every value below must
-/// survive the swap unchanged — and where one does not, this test names the field rather than
+/// match the captured golden — and where one does not, this test names the field rather than
 /// leaving it to be discovered in the compare grid.
 ///
 /// Field <i>values</i> only, deliberately, not <c>FieldMetadata</c>: metadata is schema-derived
-/// (identical by construction on both sides of the swap, since both read the same reflected
+/// (identical by construction, since both sides read the same reflected
 /// ColumnSpecs) and would bury the values under thousands of lines of enum domains.
 /// </summary>
 public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : IClassFixture<CutDownPluginFixture>
@@ -34,8 +34,8 @@ public sealed class RealDataReadGoldenTests(CutDownPluginFixture fixture) : ICla
     private static readonly IReadOnlyDictionary<string, RecordTableSchema> Schemas =
         SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4);
 
-    // #421: GetVmad/GetConditions are rejected from IRecordReads/IRecordIndex — reconstitution
-    // moved to Queries/RecordDocumentCodecs, operating on RecordDocument.Body.
+    // GetVmad/GetConditions are rejected from IRecordReads/IRecordIndex — reconstitution
+    // lives in Queries/RecordDocumentCodecs, operating on RecordDocument.Body.
     private VmadData? GetVmad(string formKey)
     {
         var document = _repo.GetDocument(formKey, new PluginKey(TestPluginName, Origin));

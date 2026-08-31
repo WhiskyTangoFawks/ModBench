@@ -3,8 +3,8 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B1: <see cref="SourceRepository.WorkingTreeStatus"/> — "does the working tree have any
-/// uncommitted change at all", the primitive every refuse-over-dirt check in #417 (rebase-over-dirt,
+/// <see cref="SourceRepository.WorkingTreeStatus"/> — "does the working tree have any
+/// uncommitted change at all", the primitive every refuse-over-dirt check (rebase-over-dirt,
 /// Keep-as-My-Edit's same-record collision) is built on. Real git repo, real git CLI — same house
 /// pattern as every other <see cref="SourceRepository"/> test.
 /// </summary>

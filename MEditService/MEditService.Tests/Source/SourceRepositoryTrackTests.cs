@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041: <see cref="SourceRepository.Track"/> — the repo-layer verb the Track gesture
+/// ADR-0041: <see cref="SourceRepository.Track"/> — the repo-layer verb the Track gesture
 /// calls once it has serialized every record and computed provenance. Built up one behavior at a
 /// time (init+commit+trailers here; .gitignore/branch/config/parked-ref/cleanup/PATH-check in
 /// their own test files) against a real git repo in a scratch mod folder — never a mocked git,

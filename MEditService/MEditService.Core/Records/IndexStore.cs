@@ -9,13 +9,13 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// #606 stage 2: the connection/DDL/validate/rebuild collaborator extracted out of
+/// The connection/DDL/validate/rebuild collaborator of
 /// <see cref="DuckDbRecordIndex"/> — opening the file (or an in-memory database), the
 /// <c>mirror.files</c>/<see cref="IndexVersion"/> machinery that decides whether a file must be
 /// rebuilt from scratch, and the by-content validation against disk. Internal, private to the
 /// <c>Records</c> module — not part of any public seam.
 ///
-/// <para><b>Validate is a pure question, not an action</b> (deliberately, by design review): this
+/// <para><b>Validate is a pure question, not an action</b>: this
 /// class never removes a plugin's rows itself. <see cref="ValidateAgainstDisk"/> returns the stale
 /// set; the caller (<see cref="DuckDbRecordIndex.Initialize"/>) is the one that already owns
 /// <c>Unindex</c> as an orchestrating verb spanning registration and every ingest-owned table, so
@@ -23,7 +23,7 @@ namespace MEditService.Core.Records;
 /// </summary>
 internal sealed class IndexStore
 {
-    /// <summary>#585: the file-mirror table, named once so the writes, the open-time validation
+    /// <summary>The file-mirror table, named once so the writes, the open-time validation
     /// and the version check cannot drift onto different spellings of it.</summary>
     private const string FilesRelation = "mirror.files";
 
@@ -88,7 +88,7 @@ internal sealed class IndexStore
     /// corrupt one and must never be answered by rebuilding: deleting a file another process has
     /// open succeeds on POSIX and destroys that window's live index, which is precisely the "silent
     /// divergence" the decision rejects. Such an open throws <see cref="IndexHeldElsewhereException"/>
-    /// naming the file instead (#588), which <c>PUT /load-order</c> answers 423 Locked.
+    /// naming the file instead, which <c>PUT /load-order</c> answers 423 Locked.
     ///
     /// <para>Matched on DuckDB's own message because that is the only thing it offers — the lock
     /// conflict and a corrupt file arrive as the same exception type. Both platforms' wordings share
@@ -119,7 +119,7 @@ internal sealed class IndexStore
     }
 
     /// <summary>
-    /// #585 / ADR-0001: a codec or schema version change invalidates the <b>whole</b> file. There is
+    /// ADR-0001: a codec or schema version change invalidates the <b>whole</b> file. There is
     /// no partial answer — the stored documents are the codec's output and the generated views are
     /// the reflector's, so a file written under another version describes a read model this process
     /// does not have — and no in-place migration either, which is what "rebuilt from scratch" means:
@@ -183,7 +183,7 @@ internal sealed class IndexStore
     }
 
     /// <summary>
-    /// #585 / ADR-0001: validity is by content, never by clock. Every plugin the file holds rows for
+    /// ADR-0001: validity is by content, never by clock. Every plugin the file holds rows for
     /// is checked against the file those rows were built from and the stale ones — gone, or moved to
     /// different bytes — are returned for the caller to <c>Unindex</c>, so the next load re-indexes
     /// them in place and no read can ever answer from rows the disk no longer backs. A hash, never an
@@ -271,7 +271,7 @@ internal sealed class IndexStore
             $"SELECT content_hash FROM {FilesRelation} WHERE plugin = $1 AND origin = $2",
             key.Name, key.Origin!);
 
-    // #585 / ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
+    // ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
     // were written in. Called inside Index()'s own transaction (owned by DuckDbRecordIndex), so a
     // re-index that throws partway leaves neither the rows nor the claim about them behind. A caller
     // that names no file (an in-memory mod, which is every fixture in the suite and the New Plugin

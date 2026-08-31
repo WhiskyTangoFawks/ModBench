@@ -1,14 +1,13 @@
 import * as vscode from 'vscode';
 
 /** The name filter every Modbench list view narrows by — Mods, the merged Plugins tree and
- *  Downloads (#247 made it one widget; [#255](https://github.com/WhiskyTangoFawks/ModBench/issues/255)
- *  made it durable).
+ *  Downloads: one widget, and a durable one.
  *
- *  #255's whole point is where the filter *lives*. It used to live in the `InputBox`, which is a
+ *  What matters is where the filter *lives*. The `InputBox` is a
  *  quick-pick-family widget: it hides the moment focus leaves, and clicking a tree row is the
- *  first thing anyone does with a filtered list — so the filter cleared itself before it could be
- *  used. The box is now an entry mechanism that reports changes and nothing more; the term lives
- *  here, and the rows' narrowing state lives (as it always did) in each view's own provider.
+ *  first thing anyone does with a filtered list — a filter living there would clear itself before
+ *  it could be used. So the box is an entry mechanism that reports changes and nothing more; the
+ *  term lives here, and the rows' narrowing state lives in each view's own provider.
  *  Enter, Escape and clicking away all arrive as the same `onDidHide` event, so none of them can
  *  mean "discard" — clearing is only ever the explicit clear command.
  *
@@ -25,8 +24,7 @@ export interface NameFilterDeps {
    *  context key are derived from it — `<viewId>.filter` (also what `ctrl+F` is bound to, so it
    *  stays reachable while filtered, by which point the slot-1 icon has swapped),
    *  `<viewId>.clearFilter`, and `<viewId>.filterActive`. Derived rather than passed so the three
-   *  views cannot drift into three naming conventions, which is how the filter came to mean
-   *  three different things in the first place (#247). The literals still appear in
+   *  views cannot drift into three naming conventions. The literals still appear in
    *  `package.json`, its test, and the integration test's `EXPECTED_COMMANDS` — which is what
    *  catches a declared-but-unregistered command. The context key is deliberately not the record
    *  filter's `modbench.filterActive`: two independent axes, two keys. */
@@ -51,7 +49,7 @@ export interface NameFilter extends vscode.Disposable {
    *  the base rather than replace it. */
   setBaseDescription(text: string | undefined): void;
   /** Restate the readout. For the one view where something else legitimately writes the same
-   *  message surface — the Plugins tree, whose reconcile speaks there (#307) — this is how
+   *  message surface — the Plugins tree, whose reconcile speaks there — this is how
    *  the filter's own statement comes back once the load has stopped talking. */
   refresh(): void;
 }
@@ -61,7 +59,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
   let toggleOn = true;
   let base: string | undefined;
 
-  /** The persistent chip #255 asks for, in the surface the platform already provides. The term
+  /** The persistent filter chip, in the surface the platform already provides. The term
    *  reads first: it is the volatile fact the user just applied, and on the Plugins tree the base
    *  is the *other* filter axis, which the term is naturally read before. */
   const render = (): void => {
@@ -71,7 +69,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
 
   /** The no-matches statement (`TreeView.message`), or nothing. Only ever *clears* a message it
    *  put there itself: the Plugins view uses the same property for the reconcile's own
-   *  statement (#307's `say`), and a filter keystroke must not silently erase it.
+   *  statement (extension.ts's `say`), and a filter keystroke must not silently erase it.
    *
    *  `generation` drops the answer of a `hasRows` call that a later keystroke has already
    *  overtaken — the provider is asked asynchronously, and out-of-order resolutions would
@@ -115,7 +113,7 @@ export function registerNameFilter(deps: NameFilterDeps): NameFilter {
       updateButtons();
     });
     box.onDidChangeValue((text) => apply(text, toggleOn));
-    // Dispose the widget, keep the filter. This one line is the whole of #255.
+    // Dispose the widget, keep the filter — this one line is what makes the filter durable.
     box.onDidHide(() => box.dispose());
     box.show();
   };

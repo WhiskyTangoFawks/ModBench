@@ -11,12 +11,11 @@ using Noggog;
 namespace MEditService.Tests.Indexing;
 
 /// <summary>
-/// #541's third acceptance criterion: a reflector test that walks Mutagen's own type graph for one
+/// A reflector test that walks Mutagen's own type graph for one
 /// game and asserts no property of a schema-registered record type is silently dropped from the
 /// reflected schema without an explicit, commented exclusion — so this class of gap (P3Int16/
 /// P3Float leaves, a list nested inside a struct; before that VMAD, condition-owning fields) fails a
-/// test instead of needing a manual per-record-type audit
-/// (<c>docs/research/record-type-audit/</c>, deleted with #254).
+/// test instead of needing a manual per-record-type audit.
 ///
 /// <para>Modeled directly on the existing sweep for a different field class,
 /// <c>MEditService.Tests.Source.ContainerChildFieldsCompletenessTests</c>: independently re-derive
@@ -33,27 +32,23 @@ namespace MEditService.Tests.Indexing;
 /// (<see cref="EveryStructOrArrayColumns_OwnDirectProperties_AreRepresentedOrExplicitlyExcluded"/>)
 /// — rather than walking arbitrarily deep. Going further would mean re-deriving
 /// <c>SchemaReflector</c>'s own recursive dispatch structurally in the test: a tautology (the
-/// assertion recomputing the expected value the way the code does), and #541's own two gaps are both
-/// within two levels — <c>ObjectBounds</c> at depth 0 (the whole column was missing), <c>Destructible
-/// .Resistances/Stages</c> at depth 1 (present column, missing sub-fields). Provably not vacuous:
-/// reverting either fix in isolation reproduces a named failure here (verified — see each fix's own
-/// commit; <c>Container.ObjectBounds</c> and <c>IDestructibleGetter.Resistances</c>/<c>Stages</c> are
-/// exactly the two gaps this suite named red before #541 landed).</para>
+/// assertion recomputing the expected value the way the code does), and the two gaps that motivated
+/// this sweep are both within two levels — <c>ObjectBounds</c> at depth 0 (the whole column was
+/// missing), <c>Destructible.Resistances/Stages</c> at depth 1 (present column, missing sub-fields).
+/// Provably not vacuous: reverting either fix in isolation reproduces a named failure here.</para>
 ///
 /// <para><b>Scoped to shapes SchemaReflector's own dispatch vocabulary already recognizes</b>
 /// (<see cref="IsRecognizedShape"/>: primitive, translated string, enum, form-link, Loqui struct,
 /// P3Int16/P3Float, or a list of one of those) — not "every property of every type, however wire-
-/// encoded." A first version of this sweep without that filter found several more currently-real
-/// gaps of a <i>different</i> kind: <c>System.Drawing.Color</c> fields (e.g. every
-/// <c>WeatherColor</c> member) and raw <c>ReadOnlyMemorySlice&lt;byte&gt;</c> blobs (e.g.
-/// <c>Model.Data</c>) that <c>SchemaReflector</c> has never had a case for at all, on any type, ever
-/// — a materially bigger, unplanned audit, reported to the orchestrator rather than folded in
-/// silently. #541's own two gaps are both shapes the reflector demonstrably <i>does</i> handle
-/// elsewhere (a P3Int16 leaf failing only for <c>ObjectBounds</c>'s two properties; a struct-nested
-/// list failing only because <c>GetSubFieldInfo</c>, unlike <c>GetColumnInfo</c>, never had an
-/// <c>IsListType</c> arm) — a recognized shape falling through a specific crack, which is the class
-/// this test exists to catch. An unrecognized shape falling through everywhere, on every type, is a
-/// different and larger problem than #541's own "leaf coverage" framing names.</para>
+/// encoded." Without that filter the sweep also surfaces gaps of a <i>different</i> kind:
+/// <c>System.Drawing.Color</c> fields (e.g. every <c>WeatherColor</c> member) and raw
+/// <c>ReadOnlyMemorySlice&lt;byte&gt;</c> blobs (e.g. <c>Model.Data</c>) that
+/// <c>SchemaReflector</c> has never had a case for at all, on any type. A recognized shape falling
+/// through a specific crack (a P3Int16 leaf failing only for <c>ObjectBounds</c>'s two properties;
+/// a struct-nested list failing only because <c>GetSubFieldInfo</c>, unlike <c>GetColumnInfo</c>,
+/// lacked an <c>IsListType</c> arm) is the class this test exists to catch; an unrecognized shape
+/// falling through everywhere, on every type, is a different and larger problem than this suite's
+/// "leaf coverage" scope.</para>
 /// </summary>
 public sealed class SchemaReflectorLeafCoverageCompletenessTests
 {
@@ -79,38 +74,28 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     };
 
     // Known, accepted gaps — every one named and explained, never passed over silently. (OwnerType
-    // .Name, PropertyName) at whichever depth the pair is walked. Discovered running this sweep
-    // during #541's own implementation; every one reported to the orchestrator, not folded in
-    // silently — none is P3Int16/P3Float or a struct-nested list, so none was #541's to fix.
-    //
-    // #546 closed the former Category 1 (Cell.Grid.Point, a Noggog.P2Int — #541's own two types
-    // widened to the rest of the small value-vector struct family) and, with it, three Category 3
-    // entries that shared the exact same root cause under a different label (WorldspaceMaxHeight/
-    // WorldspaceMap/WorldDefaultLevelData: each struct's *only* members are themselves P2Int/
-    // P2Int16/P2UInt8, not the "raw byte blob" shape the rest of Category 3 actually means — a
-    // mis-filed pair of categories, corrected by removal rather than by leaving a stale comment
-    // behind). No entries remain for either.
+    // .Name, PropertyName) at whichever depth the pair is walked.
     private static readonly HashSet<(string Owner, string Property)> KnownGaps = new()
     {
-        // ── Category 2 (closed by #548 for every real abstract union): a base interface (Mutagen's
+        // ── Category 2 (closed for every real abstract union): a base interface (Mutagen's
         // own "A<Name>" naming convention) whose real per-subclass data lives on concrete classes
-        // that inherit *from* the abstract base, the same shape #360 already solved narrowly for one
-        // case (OMOD's own Properties element, BuildObjectModPropertyLeafFields). #548 generalizes
-        // this reflectively (SchemaReflector.BuildAbstractUnionLeafFields) for every "A<Name>" type
-        // whose generated C# class is actually `abstract` — most of them are excluded here no more;
+        // that inherit *from* the abstract base — solved narrowly at first for one
+        // case (OMOD's own Properties element, BuildObjectModPropertyLeafFields), then generalized
+        // reflectively (SchemaReflector.BuildAbstractUnionLeafFields) for every "A<Name>" type
+        // whose generated C# class is actually `abstract`.
         // CoveredAbstractUnions/CoveredNestedAbstractUnions below are the "asserted, not incidental"
-        // set this mechanism now covers instead, including two name corrections against the real
-        // Mutagen source this file's own prior entries had wrong: BookTeachTarget (not
+        // set this mechanism covers. Two names differ from what the naming convention suggests,
+        // verified against the real Mutagen source: BookTeachTarget (not
         // ABookTeachTarget) and ASoundDescriptor (not ASoundDescriptorData).
         //
         // ASceneActionType is the one "A<Name>"-named exception: its generated class
         // (ASceneActionType_Generated.cs) is `public partial class ASceneActionType`, not `public
         // abstract partial class` — confirmed against the real source, not assumed from the naming
-        // convention. #548's own mechanism keys off IsAbstract precisely so it never guesses a
+        // convention. The mechanism keys off IsAbstract precisely so it never guesses a
         // discriminator scheme onto a type it cannot safely tell apart from an ordinary instantiable
-        // one (WhiskyTangoFawks triage: "any type the mechanism cannot faithfully model must fall
-        // through to today's empty sub-schema") — so this one correctly declines rather than being
-        // silently mis-covered. #612 ran that follow-up down to ground:
+        // one (any type the mechanism cannot faithfully model must fall
+        // through to the empty sub-schema) — so this one correctly declines rather than being
+        // silently mis-covered.
         //
         // The scheme (Scene.xml declares SceneAction.Type as `binary="Custom"`, so Loqui generates
         // no read/write code for it at all — it is entirely hand-written): SceneAction.cs reads the
@@ -157,9 +142,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         //
         // Contingent, not permanent: if Mutagen ever implements that overlay getter for real and
         // marks ASceneActionType abstract in Scene.xml (bringing it in line with ANpcLevel/
-        // AQuestAlias), both blockers lift together and #548's existing mechanism would cover this
+        // AQuestAlias), both blockers lift together and the existing mechanism would cover this
         // type with no extension needed — "cannot yet", not "cannot". Until then, KnownGaps stays.
-        // #548 review (Finding 1): Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
+        // Condition/ConditionData and AVirtualMachineAdapter (VMAD) are
         // ALSO genuinely `abstract`, structurally identical to ANpcLevel/AQuestAlias — the
         // mechanism's own IsAbstract gate would cover them the same way. It doesn't:
         // SchemaReflector.AbstractUnionExcludedTypeNames names both explicitly, because they are
@@ -168,20 +153,18 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         // file's own exclusion list either — nothing here would ever surface a Condition/VMAD field
         // as a gap to begin with (BaseSkip/IsConditionListField/vmadInterfaceType already keep them
         // off the depth-0 walk this file does), so there is nothing to name in KnownGaps for them.
-        ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; #612
+        ("ISceneActionGetter", "Type"),            // ASceneActionType — deliberately not abstract; see above
 
         // ── Category 3: a real, non-abstract Loqui struct whose only members are themselves an
-        // unrecognized shape — a raw byte blob, not a Noggog vector struct (that was the former
-        // WorldspaceMaxHeight/WorldspaceMap/WorldDefaultLevelData trio here, closed by #546: every
-        // member of all three turned out to be P2Int/P2Int16/P2UInt8, the same root cause as the
-        // former Category 1, not this one). ScenePhaseUnusedData appears on both Scene's own phase
+        // unrecognized shape — a raw byte blob, not a Noggog vector struct.
+        // ScenePhaseUnusedData appears on both Scene's own phase
         // data and SceneAction; the same reason both are named.
         ("ISceneGetter", "Unused"),                // ScenePhaseUnusedData
         ("ISceneGetter", "Unused2"),               // ScenePhaseUnusedData
         ("ISceneActionGetter", "Unused"),          // ScenePhaseUnusedData
 
         // ── Category 4: not a reflector gap at all — a false positive of this test's own simplistic
-        // column-name matching against #263's sibling-shape merge. DamageType and its sibling
+        // column-name matching against the sibling-shape merge. DamageType and its sibling
         // DamageTypeIndexed share one GRUP signature and both declare a `DamageTypes` property with
         // *different* shapes (IReadOnlyList<IDamageTypeItemGetter> vs IReadOnlyList<UInt32>) —
         // MergeSiblingColumn's own widening machinery (already covered by its own tests) resolves
@@ -193,9 +176,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         ("IDamageTypeItemGetter", "Spell"),
     };
 
-    // #548: every (Owner, Property) pair the general abstract-union mechanism covers — named here
-    // rather than left as an incidental byproduct of removing most of Category 2 above, per the
-    // ticket's own triage note ("a byproduct type quietly changing shape you would not [notice]").
+    // Every (Owner, Property) pair the general abstract-union mechanism covers — named here
+    // rather than left as an incidental byproduct of removing most of Category 2 above
+    // (a byproduct type quietly changing shape would otherwise go unnoticed).
     // The two mandatory types (ANpcLevel, AQuestAlias) plus every other real abstract union (its
     // generated C# class actually `abstract` — see ASceneActionType's own Category 2 comment for the
     // one "A<Name>"-named exception that is not), verified by reading the real generated Mutagen
@@ -221,8 +204,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         ("IHolotapeGetter", "Data"),                 // AHolotapeData
         ("ISoundDescriptorGetter", "Data"),          // ASoundDescriptor
         ("IPerkGetter", "Effects"),                  // APerkEffect / APerkEntryPointEffect (two-level chain)
-        // #548 review (Finding 2): the census's own re-run turned these two up as also-covered —
-        // named here rather than left invisible the same way the original 9 would have been.
+        // The census's own re-run turned these two up as also-covered —
+        // named here rather than left invisible.
         ("IMagicEffectGetter", "Archetype"),         // AMagicEffectArchetype
         ("IAudioEffectChainGetter", "Effects"),      // AAudioEffect
     ];
@@ -341,7 +324,7 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
             foreach (var column in schema.RecordColumns)
             {
                 var ownerProp = ownProperties.FirstOrDefault(p => p.Name == column.PropertyName);
-                if (ownerProp == null) continue; // not this schema's own property (e.g. #263 merge) — depth-0 test covers it on its own type
+                if (ownerProp == null) continue; // not this schema's own property (e.g. sibling-shape merge) — depth-0 test covers it on its own type
                 if (NestedGetterType(ownerProp.PropertyType) is not { } nestedType) continue;
 
                 var subFields = column.IsArray ? column.ElementType?.Fields : column.SubFields;
@@ -377,8 +360,8 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
     // Absolute) that are computed, not serialized data, and several (P3Int16, P2UInt8, P3UInt8,
     // P3UInt16) have their own self-referencing Point (`P3Int16 Point => this`) — "all public
     // properties" is the wrong model of "this type's own data" for any of them, the same reason
-    // BuildVectorComponentSubFields itself is a fixed name list rather than a property walk. #546:
-    // a 2-component type (P2Int, P2UInt8, P2Int16, P2Float) has no "Z" — GetProperty returns null
+    // BuildVectorComponentSubFields itself is a fixed name list rather than a property walk.
+    // A 2-component type (P2Int, P2UInt8, P2Int16, P2Float) has no "Z" — GetProperty returns null
     // for it, which the null filter below drops rather than crashing on `.Name` downstream, mirroring
     // BuildVectorComponentSubFields' own `if (componentProp == null) continue`.
     private static IEnumerable<PropertyInfo> DirectDataProperties(Type type, HashSet<string> skip)
@@ -439,9 +422,9 @@ public sealed class SchemaReflectorLeafCoverageCompletenessTests
         type.IsInterface && !IsFormLink(type)
         && type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    // Mirrors SchemaReflector.VectorStructTypes — #546 widened this from #541's original
-    // {P3Int16, P3Float} to every Noggog small value-vector struct actually reachable in FO4's
-    // schema graph (verified by grepping references/Mutagen/Mutagen.Bethesda.Fallout4, not assumed):
+    // Mirrors SchemaReflector.VectorStructTypes — every Noggog small value-vector struct actually
+    // reachable in FO4's schema graph (verified by grepping
+    // references/Mutagen/Mutagen.Bethesda.Fallout4, not assumed):
     // P2Int (Cell.Grid.Point), P2UInt8 (WorldDefaultLevelData), P2Int16 (WorldspaceMaxHeight and
     // others, including as a list element on LocationCoordinate.Coordinates), P3UInt8
     // (LandscapeVertexHeightMap.Unknown), P3UInt16 (RegionObject.AngleVariance), P2Float

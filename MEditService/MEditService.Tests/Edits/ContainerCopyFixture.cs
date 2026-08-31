@@ -11,8 +11,8 @@ using Noggog;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #440: the container-copy counterpart to <see cref="CopyFixture"/> — two real mod folders (a
-/// container-rich, untracked source; a minimal, tracked destination), the shape every Arc A copy
+/// The container-copy counterpart to <see cref="CopyFixture"/> — two real mod folders (a
+/// container-rich, untracked source; a minimal, tracked destination), the shape every container-copy
 /// scenario needs (does a copy read a container from one plugin's tree/index and write it into a
 /// different one's). <see cref="ContainerModFixture"/> is the nearest sibling but holds only one
 /// plugin, which cannot ask the copy-across-plugins question at all.
@@ -46,7 +46,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string DialogTopicEditorId = "SourceTopic";
     public FormKey DialogTopic { get; }
 
-    // Interior — the non-spatial case (#440 slices 6/7): a real block/sub-block pair, but one whose
+    // Interior — the non-spatial case: a real block/sub-block pair, but one whose
     // number carries no gameplay meaning (PlacementWalker.Walk's own interior branch, verified: block/
     // sub/grid are always null for an interior cell_location row).
     public const string InteriorCellEditorId = "SourceInteriorCell";
@@ -65,10 +65,10 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string LandscapeEditorId = "SourceLandscape";
     public FormKey Landscape { get; }
 
-    // Exterior — the spatial case Arc A deliberately keeps refusing (slice 6's negative boundary,
-    // #549's own scope to widen). TopCell is the simplest real exterior shape: PlacementWalker.
-    // WalkWorldspace emits it with isInterior:false and no block/sub/grid at all, so it proves the
-    // "exterior, ancestor missing" refusal without needing a genuine SubCells grid position.
+    // Exterior — the spatial case copy deliberately keeps refusing. TopCell is the simplest real
+    // exterior shape: PlacementWalker.WalkWorldspace emits it with isInterior:false and no
+    // block/sub/grid at all, so it proves the "exterior, ancestor missing" refusal without needing
+    // a genuine SubCells grid position.
     public const string WorldspaceEditorId = "SourceWorld";
     public FormKey Worldspace { get; }
 
@@ -78,7 +78,7 @@ public sealed class ContainerCopyFixture : IDisposable
     public const string TopCellRefEditorId = "SourceTopCellRef";
     public FormKey TopCellRef { get; }
 
-    // #549 Arc B (AC1): the genuine spatial-exterior shape TopCell above deliberately isn't — a real
+    // The genuine spatial-exterior shape TopCell above deliberately isn't — a real
     // SubCells cell with its own block/sub-block/grid position, distinct in every coordinate (and not
     // reproducible by a naive floor(grid/N)-style formula) so a wrong implementation that recomputed
     // rather than copied CellLocationRow's own numbers cannot pass by coincidence.

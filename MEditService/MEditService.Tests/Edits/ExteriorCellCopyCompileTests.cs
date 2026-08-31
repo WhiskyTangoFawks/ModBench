@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #549 Arc B (AC1) Slice 5: the binary-level guard. A source-tree-shape check alone (assert a file
+/// The binary-level guard for exterior-cell copy. A source-tree-shape check alone (assert a file
 /// exists at some computed path) only proves this feature's own writer believes it wrote the right
 /// path — it cannot catch a write/reader naming mismatch, where the folder looks right by string
 /// comparison but the whole-mod door's own reader (the same one <see cref="PluginCompileService"/>

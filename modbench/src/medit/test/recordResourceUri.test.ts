@@ -38,7 +38,7 @@ describe('recordResourceUri / parseRecordResourceUri (#428)', () => {
     expect(parseRecordResourceUri({ scheme: 'file', path: '/tmp/x' } as never)).toBeUndefined();
   });
 
-  // #364 review finding: the marker that lets RecordDecorationProvider scope the conflict badge
+  // The marker that lets RecordDecorationProvider scope the conflict badge
   // to the Conflicts node's own rows — see recordResourceUri.ts's own doc comment.
   it('carries fromConflictsNode through the query string when set', () => {
     const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', true);

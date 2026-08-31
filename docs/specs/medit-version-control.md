@@ -1,69 +1,10 @@
 # Version control — Surface Specification (Track, branch, compile)
 
-**Status: Implemented.** Track (#414), the text-first edit path (#415), Save & Compile
-(#416), external-change handling (#417), the editor gesture inventory (#426), the
-lifecycle gestures (#427), record-row Modified/Added badges (#428), the closeout
-truing (#418), crash recovery (#381), and New Plugin (#288) have all shipped.
-Track is live end to end: preset QuickPick, progress-reported eager serialization, pristine
-`main` with `Upstream-Version`/`Binary-SHA256`/`Meta-SHA256` trailers, checked-out `edit`
-branch, parked `refs/medit/last-compile/<plugin>` ref, and native SCM registration via
-`vscode.git` `openRepository`. Editing is live on the git-native model: a field edit writes
-the record's working-tree source JSON (the single write path — scalar inline gesture in the
-grid, plus `POST /records/{formKey}/field` for scripts/agents); the editor and compare grid
-render working-tree values; reverting through git restores the committed value at the next
-read (read-time freshness validation via `content_hash`, no watcher); untracked plugins are
-hard read-only with signposting (`Modbench: Track…`, or the patch-plugin path for vanilla
-masters). Save & Compile is live end to end: `modbench.saveAndCompile` (record-editor icon
-resolving the active record's plugin, tree-row context menu, palette QuickPick fallback) and
-`modbench.pluginListTree.compileAtMain` (row-only, behind a modal naming the ref) compile
-source text to the binary through the journaled write pipeline — masters derived from content
-in load order, container structure assembled from the index (`container_child` +
-placement), typed refusals for unemittable states, diagnostics to the Problems panel on
-success, per-repo `.git` journal markers (batch of one, `UnfinishedBatch` readable), and a
-parked `refs/medit/last-compile/<plugin>` advance after every landed write, `AtRef`
-included. External-change handling is live: the Bridge watcher and the load-time hash
-check classify against the parked ref (self-echo suppressed, crash markers routed away
-from this dialog), one modal per affected repo offers Absorb Upstream Update / Keep as My
-Edit / defer-read-only (deferral refuses edits per-plugin until answered), Absorb commits
-new baselines to `main` by plumbing and offers the rebase
-(`modbench.pluginListTree.rebase` re-runs it; conflicts resolve in the merge editor and
-the result compiles), and collisions with uncommitted dirt refuse naming the records.
-The full editor gesture inventory is live on the same write path (#426): FormKey and
-condition-function pickers (native QuickPick), flag multi-select, the extended-field
-editor (#230 redirect), VMAD structural ops via the op-envelope through `EditField`, and
-array add/remove/move (withheld on sorted arrays). Lifecycle gestures are live (#427),
-on the Plugins-tree context menus with xEdit's own captions (Add / Remove / Change
-FormID…): create allocates the next-free FormID collision-safe against both refs and
-lands as a working-tree source file (absent at Head; rediscovered at reconcile if
-uncompiled), delete confirms modally and removes the source file (still served at Head),
-renumber is a delete+create pair with a cross-repo reference cascade — referencing repos
-write first, the target last, any untracked referencer refuses up front, and a typed
-refusal covers overrides, collisions, and FormKey-space exhaustion. Record-row dirty
-badges are live (#428): `RecordSummary.WorkingTreeState` (`Search()`'s own `"ref"` plus a
-`records_committed` presence check — None/Modified/Added) reaches the Plugins tree, whose
-`RecordNode`s carry a synthetic `medit-record:/<plugin>/<origin>/<formKey>` resourceUri
-(path-only, no authority — identity only, never state — deliberately not the real source
-path, which would double against `vscode.git`'s own decoration on the same tracked file)
-for a `FileDecorationProvider` to badge M/A with git's own
-`gitDecoration.modifiedResourceForeground`/`addedResourceForeground` colours. A field edit
-patches the one cached record (never downgrading a still-uncommitted create's Added to
-Modified) and fires the decoration event for just that URI rather than a tree-wide
-refresh. A Modbench edit itself prompts the edited plugin's own `Repository.status()`
-(#557), so the native Source Control panel picks up the resulting working-tree change
-without a manual Refresh click — the extension does retain a `Repository` handle from
-`openRepository` for this outbound direction. But committing or reverting through the
-native Source Control panel still pushes no live signal to these badges: nothing yet
-subscribes to that same `Repository`'s `state.onDidChange`, so a badge set by a
-Modbench-driven edit only clears (or a badge a native commit/revert should have changed
-only updates) at the next Modbench-driven read, the same no-watcher posture the record
-editor and compare grid already carry. Deleted is
-out of scope (follow-up filed separately): `Search()` is Effective-only, so a
-working-tree-deleted record has no row to badge at all — the same way VS Code's own
-Explorer drops a deleted file's row rather than badging it; the native Source Control
-panel already shows that D for free. This is the Track/Compile surface spec the
-milestone-5 rebuild names ([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)
-and its 2026-08-19 amendment; PRD #366; UX contract pinned on #417) — it replaces the
-retired aggregate-SCM and staged-edit tree specs, both deleted by #418's closeout.
+**Status: Implemented.** Track, the text-first edit path, Save & Compile,
+external-change handling, the editor gesture inventory, the lifecycle gestures,
+record-row Modified/Added badges, crash recovery, and New Plugin have all shipped.
+This is the Track/Compile surface spec of the git-native model
+([ADR-0041](../adr/0041-manual-git-tracking-compile-from-text.md)).
 
 Editing context — operates on **records**, **FormKeys**, **plugins**, and **tracked mods**
 (glossary: Tracked mod, Track, Source, Edit branch, Baseline, Save & Compile, Working-tree
@@ -100,7 +41,7 @@ review work:
 ## The workflows
 
 The point of this surface is to express mod editing in terms of git workflows that
-already exist. Nothing below is enforced, stored, or branched on (ADR-0041 amendment:
+already exist. Nothing below is enforced, stored, or branched on (ADR-0041:
 Track is uniform; Authored vs Modified is workflow, not a mode) — each is an ordinary git
 topology the user drives with ordinary git gestures, and drifting between them is just
 using git.
@@ -169,8 +110,8 @@ using git.
   `modbench.modList.installFromFolder` uses, with an empty source directory — the mod
   registers in `modlist.txt` and the Mods tree exactly as any other install does, disabled by
   default until the user enables it, same as every other install).
-- **Creation is Editing's job, participation is Mod Management's** (#288, an unwritten
-  implication of ADR-0035 — the two contexts still never share a payload beyond origin + path,
+- **Creation is Editing's job, participation is Mod Management's** (an implication of
+  ADR-0035 — the two contexts still never share a payload beyond origin + path,
   ADR-0036). The backend writes the binary, Tracks the destination under the **Edits** preset
   if it is not already tracked (silently — no second preset prompt; the destination QuickPick's
   one-keystroke framing rules out one, and Edits is Track's own default. A user wanting a
@@ -183,8 +124,8 @@ using git.
   its index entry are already real.
 - **A created plugin is ordinary working-tree text on its destination mod's edit branch** — no
   Authored mode, no provenance flag. "Authored" is what merging to `main` at will already means
-  (ADR-0041 amendment); a created plugin arrives no differently than any other tracked edit.
-- **Accepted residue, not rolled back** (#288 review): the "new mod" destination registers the
+  (ADR-0041); a created plugin arrives no differently than any other tracked edit.
+- **Accepted residue, not rolled back**: the "new mod" destination registers the
   mod folder in `modlist.txt` (via the ordinary install path) *before* the create call that
   writes the plugin into it, so a backend failure on that call leaves an empty, disabled, but
   registered mod behind — visible in the Mods tree, harmless, and the user's own delete undoes
@@ -196,7 +137,7 @@ using git.
 - **Where**: a plugin row's context menu (Plugins tree) and the command palette. The
   command tracks the plugin's *mod folder* — one repo per mod, covering all its plugins.
 - **Preset QuickPick**: **Edits** (default — everything ignored except `source/**`, the
-  one root folder holding every tracked plugin's own tree — #441)
+  one root folder holding every tracked plugin's own tree)
   or **Everything** (authoring — assets tracked too). Plugin binaries are ignored in both;
   the `.gitignore` is generated once and then owned by the user (ADR-0041).
 - **Progress**: eager, complete serialization is progress-reported (typically sub-second;
@@ -204,14 +145,14 @@ using git.
   on `main` (provenance trailers: `Upstream-Version`, `Binary-SHA256`, `Meta-SHA256`, all
   optional, read from `meta.ini` as opaque bytes), the edit branch checked out, and the
   parked ref initialized — and the mod appears in the Source Control panel.
-- **The `source/` folder's lifecycle, in one place** (#441): Track is what creates it —
+- **The `source/` folder's lifecycle, in one place**: Track is what creates it —
   eager serialization writes `source/<plugin>/…` for every plugin Track covers, the moment
   Track runs. The edit path (field edits, create/delete/renumber) writes into an
   already-tracked plugin's own tree under it. Compile reads from it (working tree or a
   named ref). No other gesture creates or deletes the folder or a plugin's tree inside
   it — untracking is deleting `.git` by hand, which leaves the folder exactly where it
   is (never assume exclusive ownership); there is no separate cleanup or migration step.
-- **Track is uniform** (ADR-0041 amendment): no Authored/Modified mode is chosen or
+- **Track is uniform** (ADR-0041): no Authored/Modified mode is chosen or
   stored. "Authored" is the workflow of merging into `main` at will.
 - **Untrack is not a command** — deleting the `.git` folder is the gesture (git itself
   has no registry either). The mod reads as untracked at the next look, no residue, no
@@ -220,19 +161,19 @@ using git.
   with a message naming the Track command — except plugins with no mod folder (vanilla and
   DLC masters), whose refusal signposts the blessed path instead: author a patch plugin.
   No silent dead UI in either case.
-- **No half-repo on failure** (#414, cleanup broadened by #508): a Track that fails partway
+- **No half-repo on failure**: a Track that fails partway
   leaves the mod folder exactly as if Track were never attempted — `.git`, `.gitignore` and
   the partially-written `source/` tree are all removed on any failure, not just `.git`. One
   catch block wraps the whole init→checkout sequence, so cleanup is uniform regardless of
   which step failed.
-- **Localized plugins** (#515): Track, Compile and load order ingest resolve `TranslatedString`
+- **Localized plugins**: Track, Compile and load order ingest resolve `TranslatedString`
   values from the plugin's own mod-folder `Strings/` folder first, then the game Data
   folder — every deep parse passes an explicit strings lookup rather than relying on
   Mutagen's own game-listings fallback (which throws on non-Windows hosts with no
   `LocalAppData`). A Localized plugin missing an expected strings file is refused naming
   the specific missing filename. Compile writes a tracked Localized plugin's strings back
   beside the compiled plugin — through the same temp-write-then-rename discipline as the
-  `.esp`/`.esm` itself (#537): strings are produced into the plugin's temp dir during prepare
+  `.esp`/`.esm` itself: strings are produced into the plugin's temp dir during prepare
   (a failed prepare never touches the real `Strings/` files) and moved into place only by the
   same commit step that renames the plugin. The move step is per-file, not a cross-file
   transaction — a crash mid-commit can still pair a committed plugin with partially-updated
@@ -251,11 +192,11 @@ using git.
 - Everything the panel offers is git's own: staging, commit, discard, branch switching,
   history. Commit is ungated (ADR-0041) — no closure checks, no prompts, no vocabulary of
   ours on the panel.
-- Source diffs are readable by construction: canonical JSON formatting (#412 — stable key
+- Source diffs are readable by construction: canonical JSON formatting (stable key
   order, fixed indentation) means a one-field edit is a one-line diff.
 - **Branch gestures have honest consequences, not guards.** Checking out any ref —
   `main` included — changes the working-tree text, and every editing surface follows it
-  at the next read (#413 read-time freshness). The binary does not change until Save &
+  at the next read (read-time freshness). The binary does not change until Save &
   Compile: a checkout is never an implicit compile, and the panel's state is always the
   true state. Merging the edit branch into `main` (the Authored workflow) is the same
   ordinary gesture.
@@ -267,18 +208,54 @@ using git.
 - `refs/medit/*` (the parked compile snapshots) never appear in the panel or in any
   porcelain surface; they are mechanics, not UX.
 
+### The edit path
+
+- Every edit lands as working-tree source text — the single write path. A scalar inline
+  gesture in the grid and `POST /records/{formKey}/field` (scripts and agents) both land
+  the same way.
+- The full editor gesture inventory rides that one path: FormKey and condition-function
+  pickers (native QuickPick), flag multi-select, the extended-field editor, VMAD
+  structural ops via the op-envelope through `EditField`, and array add/remove/move
+  (withheld on sorted arrays).
+- **Lifecycle gestures** live on the Plugins-tree context menus with xEdit's own captions
+  (Add / Remove / Change FormID…): create allocates the next-free FormID collision-safe
+  against both refs and lands as a working-tree source file (absent at Head; rediscovered
+  at reconcile if uncompiled); delete confirms modally and removes the source file (still
+  served at Head); renumber is a delete+create pair with a cross-repo reference cascade —
+  referencing repos write first, the target last, any untracked referencer refuses up
+  front, and a typed refusal covers overrides, collisions, and FormKey-space exhaustion.
+- Untracked plugins are hard read-only with signposting (`Modbench: Track…`, or the
+  patch-plugin path for vanilla masters).
+
 ### Working-tree state in the editing surfaces
 
 - The record editor and compare grid render **Effective** state — committed text with
-  working-tree changes overlaid (#413 contract); reverting a file through the panel
-  restores the committed value at the next read.
+  working-tree changes overlaid; reverting a file through the panel
+  restores the committed value at the next read (read-time freshness validation via
+  `content_hash`, no watcher).
 - Record rows carrying working-tree changes are badged with git's own single-letter
   vocabulary via `FileDecorationProvider` — the same idiom, the same letters, as every
-  git-decorated surface in VS Code (#428). `M` (edited existing record) and `A` (created,
+  git-decorated surface in VS Code. `RecordSummary.WorkingTreeState` (None/Modified/Added)
+  reaches the Plugins tree, whose `RecordNode`s carry a synthetic
+  `medit-record:/<plugin>/<origin>/<formKey>` resourceUri (path-only, identity only,
+  never state — deliberately not the real source path, which would double against
+  `vscode.git`'s own decoration on the same tracked file) for the provider to badge M/A
+  with git's own `gitDecoration.modifiedResourceForeground`/`addedResourceForeground`
+  colours. A field edit patches the one cached record (never downgrading a
+  still-uncommitted create's Added to Modified) and fires the decoration event for just
+  that URI, never a tree-wide refresh.
+- A Modbench edit also prompts the edited plugin's own `Repository.status()`, so the
+  native Source Control panel picks up the resulting working-tree change without a manual
+  Refresh click. The reverse direction has no live signal: nothing subscribes to that
+  `Repository`'s `state.onDidChange`, so a badge a native commit/revert should change
+  updates only at the next Modbench-driven read — the same no-watcher posture the record
+  editor and compare grid carry.
+- `M` (edited existing record) and `A` (created,
   no committed counterpart) ship; `D` does not — `Search()` (what the Plugins tree lists)
   is Effective-only, so a working-tree-deleted record has no row to badge at all, the same
   way Explorer drops a deleted file's row rather than badging it. The native Source Control
-  panel already shows that D for free.
+  panel already shows that D for free
+  ([docs/out-of-scope/deleted-record-rows-in-plugins-tree.md](../out-of-scope/deleted-record-rows-in-plugins-tree.md)).
 
 ### Save & Compile
 
@@ -288,26 +265,30 @@ using git.
 - **Target resolution from the palette** (no tree row, no active record): falls through to
   a QuickPick over every loaded plugin. Any failure resolving a target — including the
   backend being unreachable (before Launch mEdit) — reports a clear Modbench-authored
-  error and ends quietly, never VS Code's raw "fetch failed" toast (#505/#530).
-- **Behavior** (#416 pinned contract): serialize the plugin's working tree to the binary
-  through the journaled pipeline (timestamped `.bak` per ADR-0008). Masters are derived
-  from content and written in current plugin load order. Semantic breakage (dangling
+  error and ends quietly, never VS Code's raw "fetch failed" toast.
+- **Behavior**: serialize the plugin's working tree to the binary
+  through the journaled pipeline (timestamped `.bak` per ADR-0008; per-repo `.git` journal
+  markers, batch of one, `UnfinishedBatch` readable). Masters are derived
+  from content and written in current plugin load order; container structure is assembled
+  from the index (`container_child` + placement). Semantic breakage (dangling
   FormLinks and kin) compiles *successfully* with diagnostics published to the Problems
   panel against the source files; only structurally unemittable states refuse, as a typed
   message naming the reason — including states that cannot be emitted without changing
-  FormKeys (no silent renumber; ADR-0041 amendment).
+  FormKeys (no silent renumber; ADR-0041).
 - **Compile at `main`**: compiling at ref `main` (no checkout — the edit branch and its
   dirt are untouched) writes the binary as `main` has it, behind one confirmation. In the
   Modified workflow that is the pristine restore; in the Authored workflow it rebuilds
   the release line. No mode is stored, so the confirmation names the ref, never
   "pristine".
-- Each compile parks a snapshot commit at `refs/medit/last-compile/<plugin>` — invisible
-  here, load-bearing for the dialog below and for crash repair.
+- Each compile advances the parked snapshot at `refs/medit/last-compile/<plugin>`
+  (`AtRef` compiles included) — invisible here, load-bearing for the dialog below and for
+  crash recovery.
 
 ### External change: the one dialog
 
-Pinned in full on #417; summarized here. When a tracked plugin's binary changes outside
-Modbench (bridge watcher live, hash check at load — both compare against the parked ref):
+When a tracked plugin's binary changes outside
+Modbench (bridge watcher live, hash check at load — both compare against the parked ref;
+self-echo of Modbench's own writes is suppressed, crash markers route to Crash recovery):
 
 - **One native modal per affected mod repo**, queued sequentially when several changed —
   never a mega-dialog. Message names the plugin and mod folder; detail states what was
@@ -315,7 +296,7 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
   (version <old> → <new>)`).
 - **Buttons**: `Absorb Upstream Update` / `Keep as My Edit` / Esc. The default (first)
   button follows the `Meta-SHA256` compare — trailers may inform defaults, never actions
-  (ADR-0041 amendment); the human always answers. The dialog is uniform across
+  (ADR-0041); the human always answers. The dialog is uniform across
   workflows: for an authored mod's own xEdit load order the meta tell doesn't fire and the
   default is already `Keep as My Edit`.
 - **Absorb Upstream Update**: new baselines committed to `main` by plumbing (no checkout,
@@ -334,16 +315,16 @@ Modbench (bridge watcher live, hash check at load — both compare against the p
 - A destroyed repo (MO2 Replace install) is **not** this dialog — the mod reads as
   untracked, per ADR-0041.
 
-### Crash recovery (#381)
+### Crash recovery
 
-(Glossary term: *Crash recovery* — "crash repair" survives as the code/API name. *Repair* now means malformed-plugin repair, [medit-repair.md](medit-repair.md).)
+(Glossary term: *Crash recovery* — "crash repair" survives as the code/API name. *Repair* means malformed-plugin repair, [medit-repair.md](medit-repair.md).)
 
-Live: the load-time hash check (`ExternalChangeLoadOrderHook`, shared with #417) covers two
+The load-time hash check (`ExternalChangeLoadOrderHook`, shared with external-change detection) covers two
 states on every tracked plugin, both detected only at reconcile — the only moment either
 can newly arise, since one is this same process's own interrupted compile and the other is a
 read failure a running load order would already have hit once. An unfinished `CompileJournal` marker
 (a crash, or a kill, between the binary write landing and the marker clearing) classifies as
-`CrashRecovery` and routes here, never to #417's dialog — the two prompts never both fire for
+`CrashRecovery` and routes here, never to the external-change dialog — the two prompts never both fire for
 one event, checked at the classifier itself before any hash compare. A tracked plugin's binary
 that cannot be read at all (deleted, moved, or torn, while the mod folder and its repo
 survive — distinct from the repo itself being destroyed, which reads as untracked per
@@ -360,7 +341,7 @@ cleverer default) or **Compile at main**, composing Save & Compile's existing ta
 (`compileAndReport`) rather than a second compile path — accepting either button is the same
 call `saveAndCompile`/`compileAtMain` already make. The detail text names exactly what was
 detected (interrupted compile vs missing/unreadable binary), the evidence shown, not hidden,
-same posture as #417's own dialog. Esc/dismiss is a true decline: nothing is written, the
+same posture as the external-change dialog. Esc/dismiss is a true decline: nothing is written, the
 marker or missing binary stays exactly as it is, editing stays live throughout (text at `main`
 is authoritative for tracked records regardless of binary staleness — nothing gates edits on
 this state), and the offer re-appears at the next reconcile by construction. Untracked
@@ -368,17 +349,16 @@ plugins are never probed at all.
 
 ## Implementation Decisions
 
-- **Contracts are pinned on the slices**, not restated here: the Index seam and
-  `content_hash` (#413), the repo-layer verbs and their error modes (#414), `Compile` and
-  `CompileResult` (#416), the dialog UX (#417). This spec is the user-facing composition
-  of those contracts.
+- **This spec is the user-facing composition of pinned backend contracts** — the Index
+  seam and `content_hash`, the repo-layer verbs and their error modes,
+  `Compile`/`CompileResult`, and the dialog UX — which are not restated here.
 - **Tracked = `.git` exists.** No registry, no reconciliation sweeps; every surface above
   tolerates the repo having vanished since last observed and reads the mod as untracked.
 - **Track pins repo-local git config** — `core.autocrlf=false` at minimum (the
   byte-equality invariant depends on it); identity fallback and `commit.gpgsign` handling
-  are decided in-slice (#414).
+  are the repo layer's own decisions.
 - **`meta.ini` is a source, never content**: read for trailer values at baseline moments,
-  never committed (ADR-0041 amendment — never track a file that changes for non-content
+  never committed (ADR-0041 — never track a file that changes for non-content
   reasons).
 - **Refusal posture is git's**: refuse and the user fixes it — rebase-over-dirt,
   deserialize-over-dirt, renumber-forcing compiles. Automation on top may come later;
@@ -389,54 +369,52 @@ plugins are never probed at all.
 - Backend seams test against **real git repositories through the real CLI** (the house
   pattern the retired aggregate SCM provider established); fixtures verify the full Track
   product — source, baseline, trailers, `.gitignore`, branch, parked ref — and compile
-  round-trips re-parse clean (round-trip gate #369, permanent —
+  round-trips re-parse clean (the permanent round-trip gate —
   `BinaryRoundTripGateTests`/`CompileRoundTripGateTests`,
   `MEditService.Tests/RealData/`, run in the ordinary `dotnet test`).
-- **Track's round-trip gate also catches subrecord loss the model can't see** (#514): Mutagen's
+- **Track's round-trip gate also catches subrecord loss the model can't see**: Mutagen's
   parse occasionally drops a subrecord silently (a malformed length field desyncing the parser,
   a duplicate-slot collision) — invisible to the model-identity check, since the in-memory model
   never held what was dropped. A byte-level walk (`MEditService.Core/Source/PluginBinaryWalk.cs`,
   Mutagen-free) compares the original and recompiled binaries' subrecord signatures per record;
   any signature occurring fewer times in the rewrite is refused naming the record type, FormID
   and dropped signature(s) (more occurrences — a canonical marker insertion — is not a refusal).
-  One exemption (#563): a TES4 record's `MAST`/`DATA` pair dropping is ADR-0038's sanctioned
+  One exemption: a TES4 record's `MAST`/`DATA` pair dropping is ADR-0038's sanctioned
   master-list pruning, not a loss — Mutagen unconditionally re-derives the header's master list
   from live content on every write, so this exact signature pair is excluded from the check (72%
   of all real Track refusals in the one available real-world corpus, before this exemption). The
-  exemption covers a partial prune as much as a total one (#567): a plugin declaring four masters
+  exemption covers a partial prune as much as a total one: a plugin declaring four masters
   and referencing three loses the unused one from the middle of the list and has every surviving
   FormID's master index renumbered around the hole — invisible to model identity, which compares
   by ModKey-based `FormKey`, so it tracks clean.
   Compile has no independent binary to diff against and gets no live version of this gate; the
   guarantee is inherited transitively, since this loss class can only be introduced by
   deserializing an external binary, which happens at Track, never Compile.
-- The dialog's paths are fixture-driven per #417's acceptance criteria, including the
+- The dialog's paths are fixture-driven, including the
   upstream fixture arriving the only way it can while `.git` survives (Merge install /
   manual overwrite).
 - Integration suite: every command above in `EXPECTED_COMMANDS`; activation with several
   tracked mods (including the mega fixture) measured for the steady-state
-  `openRepository` cost (#414).
+  `openRepository` cost.
 
-### ADR-0041 gates — standing state (#418)
+### ADR-0041 gates — standing state
 
-- **Filter probe verdict** — settled on
-  [#366](https://github.com/WhiskyTangoFawks/ModBench/issues/366): #411's real-corpus
+- **Filter probe verdict** — a real-corpus
   probe found the generated `json_extract` views comfortably fast once the filter is
   materialised once per apply rather than evaluated per query, so no field is promoted to
-  a real extracted column. See #366's probe comment and its follow-up correction for the
-  full measurement.
+  a real extracted column.
 - **Round-trip gate** — `BinaryRoundTripGateTests` and `CompileRoundTripGateTests`
-  (`MEditService.Tests/RealData/`), permanent per #369, exercised on every `dotnet test`.
+  (`MEditService.Tests/RealData/`), permanent, exercised on every `dotnet test`.
 - **Mutagen pin** — `Mutagen.Bethesda.Fallout4` is pinned at an exact version (not a
   floating range) in `MEditService.Core.csproj`; the pin comment there records the
-  `ObjectTemplate`/`refr.Base` regression the pinned version avoids and names #385 as the
+  `ObjectTemplate`/`refr.Base` regression the pinned version avoids and names the
   upstream-fix tracking issue that gates moving off it.
 
 ## Out of Scope
 
 - **Agent/script runs as branches, merge = acceptance** — deferred milestone; compatible
   by construction (branching is the core idiom).
-- **Grid review mode** for diffs (#380) — the native text diff is this milestone's answer.
+- **Grid review mode** for diffs — the native text diff is this milestone's answer.
 - **LFS / asset-history management** — waits for a real need (Everything-preset history
   bloat is a recorded accepted cost).
 - **Managed installation** — roadmap (milestone 10); it pre-answers the dialog and writes
@@ -445,8 +423,7 @@ plugins are never probed at all.
   git's whole-file discard is the granularity this milestone ships.
 - **Remotes** — push, pull, hosting: nothing prevents a user adding a remote to a
   tracked mod's repo; nothing in the product reads or writes one.
-- **Mod lineage identity across re-tracks** — ruled out until a consumer exists (#413
-  addendum).
+- **Mod lineage identity across re-tracks** — ruled out until a consumer exists.
 
 ## Further Notes
 

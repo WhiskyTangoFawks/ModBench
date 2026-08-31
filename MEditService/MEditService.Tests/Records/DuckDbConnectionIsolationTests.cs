@@ -4,7 +4,7 @@ using DuckDB.NET.Data;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// Characterization of DuckDB.NET's own behaviour, not of ours (#274). Progressive loading indexes
+/// Characterization of DuckDB.NET's own behaviour, not of ours. Progressive loading indexes
 /// on a second connection over the same in-memory database while readers keep answering on the
 /// first, and the whole design rests on two properties this file pins down: a duplicated connection
 /// sees the *same* database, and it does not see another connection's uncommitted transaction.

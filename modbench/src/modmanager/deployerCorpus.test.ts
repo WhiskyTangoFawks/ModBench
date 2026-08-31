@@ -1,19 +1,12 @@
-// #41 corpus — the hardlink deploy/purge pipeline against the committed
+// Corpus test: the hardlink deploy/purge pipeline against the committed
 // mo2-instance-corpus fixture, driven end-to-end: read the real modlist, build the
 // real FileConflictIndex by walking real mods/ folders, deploy, then purge. The
-// standing regression this guards (closed once already, #438): a tracked mod's
-// `.git/` and `source/` subtrees (ADR-0041) must never be walked, hardlinked into
-// Data/, or otherwise disturbed by any of this — deployer.test.ts covers the
-// mechanics in isolation; this proves it holds against a real multi-mod instance.
-//
-// Scope note: #41's 2026-08-28 re-scope excludes "deploy" — but that exclusion is
-// specifically the real-instance, environment-gated leg (does a real deploy
-// reproduce what MO2 would produce on a tester's actual instance), which stays
-// with /manual-test. This file is a different thing: synthetic-fixture,
-// composition-level coverage that deploy/purge don't corrupt files they shouldn't
-// touch and round-trip Data/ back byte-identically — exactly what the ADR-0041
-// addendum asks for ("not disturbing (or deploying) that [tracked mod] state").
-// Kept in scope on that basis.
+// standing regression this guards: a tracked mod's `.git/` and `source/` subtrees
+// (ADR-0041) must never be walked, hardlinked into Data/, or otherwise disturbed
+// by any of this — deployer.test.ts covers the mechanics in isolation; this proves
+// it holds against a real multi-mod instance. (Real-instance, environment-gated
+// deploy verification against a tester's actual MO2 instance stays with
+// /manual-test; this is synthetic-fixture, composition-level coverage.)
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -85,7 +78,7 @@ describe('deploy/purge corpus', () => {
       ]),
     );
 
-    // The exact #438 regression: nothing from .git/ or source/ ever reaches Data/.
+    // The exact regression pinned: nothing from .git/ or source/ ever reaches Data/.
     const dataFiles = [...after.keys()].filter((p) => p.startsWith('game/Data/'));
     expect(dataFiles.sort()).toEqual(
       ['game/Data/NonAsciiRetexture - Addon.esl', 'game/Data/NonAsciiRetexture.esp', 'game/Data/Tracked Patch Mod.esp'].sort(),

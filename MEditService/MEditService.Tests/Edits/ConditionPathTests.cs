@@ -79,11 +79,4 @@ public sealed class ConditionPathTests
     {
         Assert.False(ConditionPath.TryParseParameterIndex("Function", out _));
     }
-
-    // TryParseNestedFieldPath moved from ConditionPath (Edits/) into Fallout4ConditionCodec
-    // (Schema/) as part of #184: IConditionCodec.IsNestedConditionListField now takes the raw
-    // composed field path directly and does its own arbitrary-depth parsing internally, since no
-    // production caller ever needed the parsed pieces themselves. See
-    // Fallout4ConditionCodecTests.IsNestedConditionListField_* for the parsing/shape coverage that
-    // used to live here.
 }

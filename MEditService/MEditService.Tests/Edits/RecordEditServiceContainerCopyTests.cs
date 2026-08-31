@@ -6,14 +6,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #440 Arc A: widens <see cref="RecordEditService.CopyRecordAsOverride"/> off the blanket
-/// <c>ContainerRecordNotYetSupported</c> refusal #436 shipped with — a container's own top-level
-/// record (Cell, Worldspace, Quest) can now be copied as override. This suite is Slice 1's own
-/// contract: the widening is safe before any embed-stripping (Slice 2) or parent-chain (Slices 6/7)
-/// code exists, proven on a type with nothing embedded to strip — a Quest's own fields land, and its
+/// A container's own top-level record (Cell, Worldspace, Quest) can be copied as override through
+/// <see cref="RecordEditService.CopyRecordAsOverride"/> — no blanket
+/// <c>ContainerRecordNotYetSupported</c> refusal. The base contract is proven on a type with
+/// nothing embedded to strip — a Quest's own fields land, and its
 /// folder-split children (DialogTopics) never do, because a plain "Copy as Override" is own-fields-only
 /// for every record type, containers included (xEdit parity — only "Deep copy as override" carries
-/// children, #551's own gesture).
+/// children, a separate gesture).
 /// </summary>
 public sealed class RecordEditServiceContainerCopyTests
 {
@@ -41,8 +40,8 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.False(Directory.Exists(Path.Combine(questDirectory, "DialogTopics")));
     }
 
-    // #440 Slice 2 (AC3's plain-copy half): a Cell's own fields land, but its four embedded slots
-    // (Persistent/Temporary/NavigationMeshes/Landscape — all inline in its own document since #450)
+    // A Cell's own fields land, but its four embedded slots
+    // (Persistent/Temporary/NavigationMeshes/Landscape — all inline in its own document)
     // come back empty, not verbatim. Their FormKeys never land as their own rows in the destination
     // either, matching "empty child lists" literally, not just an empty JSON array.
     [Fact]
@@ -70,13 +69,13 @@ public sealed class RecordEditServiceContainerCopyTests
         var text = File.ReadAllText(cellFile);
         Assert.DoesNotContain(ContainerCopyFixture.PersistentRefEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.TemporaryRefEditorId, text, StringComparison.Ordinal);
-        // #440 review (Spec 1): the comment above claims all four embedded slots come back empty —
-        // Navmesh/Landscape were populated in the fixture but never actually checked until now.
+        // The comment above claims all four embedded slots come back empty —
+        // Navmesh/Landscape are populated in the fixture so their absence here is a real check.
         Assert.DoesNotContain(ContainerCopyFixture.NavmeshEditorId, text, StringComparison.Ordinal);
         Assert.DoesNotContain(ContainerCopyFixture.LandscapeEditorId, text, StringComparison.Ordinal);
     }
 
-    // #440 Slice 2: same "own fields only" rule for a Worldspace — TopCell (its one embedded slot,
+    // Same "own fields only" rule for a Worldspace — TopCell (its one embedded slot,
     // per EmbeddedSlots) comes back empty rather than carrying the source's TopCell along.
     [Fact]
     public void CopyRecordAsOverride_OnAWorldspace_Succeeds_OwnFieldsLand_TopCellEmpty()
@@ -97,7 +96,7 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.DoesNotContain(ContainerCopyFixture.TopCellEditorId, File.ReadAllText(worldFile), StringComparison.Ordinal);
     }
 
-    // #440 Slice 6 (AC2): copying a placed reference into a plugin that already overrides its Cell
+    // Copying a placed reference into a plugin that already overrides its Cell
     // appends into that Cell's own document — untouched otherwise, Partial Form flag included (it was
     // false before this copy and stays false, since an ordinary explicit copy is never auto-created).
     [Fact]
@@ -125,11 +124,11 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.False(cellDoc!.IsPartialForm);
     }
 
-    // #440 Slice 6's own permanent boundary — still current for a Worldspace's own TopCell
-    // specifically, post-#549: TopCell's own cell_location row carries no block/sub/grid at all
+    // A permanent boundary for a Worldspace's own TopCell specifically:
+    // TopCell's own cell_location row carries no block/sub/grid at all
     // (PlacementWalker.WalkWorldspace hardcodes those null for it), so there is nothing for
-    // MintExteriorCell to place it at — genuinely out of #549 Arc B's own scope (a real SubCells
-    // exterior cell), not a residual gap in it. That genuine case is
+    // MintExteriorCell to place it at — distinct from a real SubCells
+    // exterior cell, not a residual gap. That genuine case is
     // CopyRecordAsOverride_OnAGenuineExteriorPlacedReference_MintsWrldAndCellOverrides below.
     [Fact]
     public void CopyRecordAsOverride_OnATopCellPlacedReference_Refuses_WhenDestinationHasNoCellOverride()
@@ -144,11 +143,11 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TopCellRef.ToString(), fixture.DestinationPlugin));
     }
 
-    // #440 review (Spec 2): the direct sibling of the placed-reference test above — copying the
+    // The direct sibling of the placed-reference test above — copying the
     // TopCell itself as override (not one of its children) hits its own, separate check
     // (RecordEditService.cs's isCell branch in CopyRecordAsOverride, not CopyPlacedReferenceAsOverride)
     // and needs its own test rather than relying on the placed-reference variant to stand in for it.
-    // Still refuses post-#549 for the same reason as its sibling above.
+    // Refuses for the same reason as its sibling above.
     [Fact]
     public void CopyRecordAsOverride_OnATopCellItself_Refuses()
     {
@@ -162,10 +161,10 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Null(fixture.Mirror.Index!.GetDocument(fixture.TopCell.ToString(), fixture.DestinationPlugin));
     }
 
-    // #549 Arc B (AC1): the genuine SubCells exterior case — destination has neither the worldspace
+    // The genuine SubCells exterior case — destination has neither the worldspace
     // nor the cell. Both mint as bare, Partial Form ancestors; the REFR itself lands with its real
     // fields, in the same slot (Persistent/Temporary) the source has it in; cell_location for the new
-    // cell matches the source's own row exactly (Slice 1's write, exercised end to end).
+    // cell matches the source's own row exactly (the copy-in write, exercised end to end).
     [Fact]
     public void CopyRecordAsOverride_OnAGenuineExteriorPlacedReference_MintsWrldAndCellOverrides_WhenDestinationHasNeither()
     {
@@ -200,7 +199,7 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Equal(expectedLocation, index.GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
     }
 
-    // #549 Arc B (AC1) review: "REFR in the same Persistent/Temporary slot as the source" — the
+    // "REFR in the same Persistent/Temporary slot as the source" — the
     // Temporary half, so an implementation that hardcodes the Persistent slot cannot pass.
     [Fact]
     public void CopyRecordAsOverride_OnAGenuineExteriorTemporaryPlacedReference_LandsInTheTemporarySlot()
@@ -218,7 +217,7 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Equal("temporary", index.GetPlacement(fixture.ExteriorTemporaryRef.ToString(), fixture.DestinationPlugin)?.PlacementGroup);
     }
 
-    // #549 Arc B (AC1): the direct sibling of the placed-reference case above — copying the exterior
+    // The direct sibling of the placed-reference case above — copying the exterior
     // Cell itself as override. The requested record (the Cell) lands with its own real fields and is
     // NOT Partial Form; only the auto-created WRLD ancestor is. The rival this guards against: an
     // implementation that Partial-Forms everything in the newly-minted chain, including the record the
@@ -251,7 +250,7 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.Equal(expectedLocation, index.GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
     }
 
-    // #440 Slice 7: the interior sibling of the case above — no destination override of the Cell
+    // The interior sibling of the case above — no destination override of the Cell
     // exists yet, but interior placement carries no gameplay meaning to compute, so one auto-creates:
     // bare fields (WaterHeight never copied from the source — genuine xEdit parity), Partial Form
     // flagged (a deliberate mEdit-specific divergence from xEdit's own bare/unflagged ancestor —
@@ -271,7 +270,7 @@ public sealed class RecordEditServiceContainerCopyTests
         Assert.True(cellDoc!.IsPartialForm);
 
         // The destination has no other Cell yet, so exactly one RecordData.json under Cells/ exists —
-        // no EditorID to search by (the auto-created cell is bare, per this slice's own contract).
+        // no EditorID to search by (the auto-created cell is bare, per the contract above).
         var cellFile = Directory
             .EnumerateFiles(Path.Combine(fixture.DestinationSourceRoot, "Cells"), "RecordData.json", SearchOption.AllDirectories)
             .Single();

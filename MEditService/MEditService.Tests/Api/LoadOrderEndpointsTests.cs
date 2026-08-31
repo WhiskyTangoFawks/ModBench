@@ -13,9 +13,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #381: the HTTP door over <see cref="ExternalChangeLoadOrderHook"/>'s crash-repair offers — thin,
-/// mapping-only assertions (the same posture <c>ExternalChangeEndpointsTests</c> already
-/// established for #417's own door), proving the response actually carries what the hook found
+/// The HTTP door over <see cref="ExternalChangeLoadOrderHook"/>'s crash-repair offers — thin,
+/// mapping-only assertions (the same posture as <c>ExternalChangeEndpointsTests</c>),
+/// proving the response actually carries what the hook found
 /// rather than re-deriving every hook-level scenario here.
 /// </summary>
 public sealed class LoadOrderEndpointsTests : IDisposable
@@ -57,7 +57,7 @@ public sealed class LoadOrderEndpointsTests : IDisposable
         Assert.Empty(ok.Value!.CrashRepairOffers);
     }
 
-    // #588 / ADR-0001 point 6: the second window's PUT is answered 423 Locked, naming the cause, so
+    // ADR-0001 point 6: the second window's PUT is answered 423 Locked, naming the cause, so
     // the client can tell "another window holds this instance" from a failed reconcile (500) and
     // from its own superseded snapshot (409). The other window is a real second process.
     [ForeignIndexHolderFact]

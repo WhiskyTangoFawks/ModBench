@@ -3,9 +3,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Plugins;
 
 /// <summary>
-/// Engine-authoritative light/master predicate (#509), shared by every call site that needs to
-/// know whether a plugin is light or a master — <see cref="LoadOrder"/>'s
-/// <c>BuildPluginMetadata</c> today, <c>RecordEditService</c>'s ESL FormID cap (#501) next. The
+/// Engine-authoritative light/master predicate, shared by every call site that needs to know
+/// whether a plugin is light or a master. The
 /// overwhelmingly common light plugin in the wild is a header-flagged <c>.esp</c>, not a distinct
 /// extension, and an ESM-flagged <c>.esp</c> is a legal, common master; a filename-only check
 /// misses both. Matches Mutagen's own <c>IModFlagsGetter</c> semantics

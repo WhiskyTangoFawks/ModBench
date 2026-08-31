@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #413 S2 / D3: <c>documents.content_hash</c> is <b>the git blob hash</b> of the document body —
+/// <c>documents.content_hash</c> is <b>the git blob hash</b> of the document body —
 /// not "a hash", and not a hash of our own devising. That is the whole point: the same bytes sitting
 /// in a tracked mod folder's source have exactly this hash in git's object database, so a SQL
 /// aggregate over content_hash and a <c>git cat-file</c> are talking about the same object.
@@ -45,7 +45,7 @@ public class GitBlobHashTests
     }
 
     /// <summary>
-    /// The case the ticket actually cares about: a real record's real source text, straight out of
+    /// The central case: a real record's real source text, straight out of
     /// the codec — the exact bytes ingest will store as the document body.
     /// </summary>
     [Fact]

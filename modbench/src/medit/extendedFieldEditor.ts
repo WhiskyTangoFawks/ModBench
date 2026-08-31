@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview } from './messages';
 import type { Reporter } from '../modmanager/deployer';
 
-// Issue #230: filesystem-safe rendering of one path segment (a record label, field name, or
+// Filesystem-safe rendering of one path segment (a record label, field name, or
 // plugin name — any of which may carry a FormKey's `:`, or characters Windows paths reject
 // outright). Collapsed whitespace and a length cap keep the result a sane single segment even for
 // an unusually long EditorID; the `|| '_'` guards the (practically unreachable, but real) case of
@@ -17,14 +17,14 @@ function sanitizeForPath(segment: string): string {
     .slice(0, 80) || '_';
 }
 
-// Issue #230 (seam: tab naming): deterministic — not random — per record+field+plugin, so
+// Deterministic — not random — per record+field+plugin, so
 // re-double-clicking the same cell reveals the same already-open tab (VS Code's own per-URI
 // reuse) instead of opening a duplicate. Directory keyed by the record (readable, and groups a
 // record's several open fields together); filename is what the tab title shows by default —
 // `Description [SomePlugin.esp].txt`, naming the field and the plugin without repeating the
 // record identity the directory already carries.
 //
-// #304 / ADR-0036: `origin` is its own directory segment, between the record and the field.
+// ADR-0036: `origin` is its own directory segment, between the record and the field.
 // Two columns can share a filename (a shadowed copy), and without origin here they'd alias onto
 // the same temp file: column A's tab would silently show column B's content (right commit target
 // — the closure is bound in the webview — wrong displayed content). No "elide the Data origin"
@@ -48,18 +48,15 @@ export interface OpenExtendedFieldEditorParams {
   recordLabel: string;
   fieldName: string;
   plugin: string;
-  // #272 / ADR-0036: required alongside `plugin`, consistent with every other column-identity
-  // message in this ticket — but deliberately NOT threaded into extendedEditorPath below. Two
-  // same-filename columns sharing a temp-file path (right target, wrong content) is unreachable
-  // until #34 (nothing loads such a pair yet); the fix is path derivation, which is #34-shaped.
-  // Carrying `origin` on the message now means #34 only has to change extendedEditorPath, not
-  // this message's shape too.
+  // ADR-0036: required alongside `plugin`, consistent with every other column-identity
+  // message — threaded into extendedEditorPath (its own directory segment) so two
+  // same-filename columns never alias onto one temp file.
   origin: string;
   readOnly: boolean;
 }
 
 export interface ExtendedFieldEditorDeps {
-  // Issue #230 (seam: vehicle mechanics): the temp directory every extended-editor file is
+  // The temp directory every extended-editor file is
   // written under — injected rather than computed from `os.tmpdir()` here, so a test can point it
   // at its own throwaway directory instead of littering (and depending on) the real OS temp dir.
   tempRoot: string;
@@ -68,7 +65,7 @@ export interface ExtendedFieldEditorDeps {
   reporter: Reporter;
 }
 
-// Issue #230: opens a `string` cell's value as a real editor tab — a temp file, not a
+// Opens a `string` cell's value as a real editor tab — a temp file, not a
 // FileSystemProvider and not an `untitled:` document (design note:
 // docs/specs/medit-record-editor.md, Editing § extended editor). A real file gets native
 // dirty-tracking and the native "Save changes to X? Save/Don't Save/Cancel" close prompt for
@@ -76,7 +73,7 @@ export interface ExtendedFieldEditorDeps {
 // enforce that — and read-only enforcement is the OS file-permission bit VS Code already honors
 // (`chmod` below), not a bespoke read-only UI state.
 //
-// Issue #230 (seam: commit trigger): each `Ctrl+S` re-sends the current content through
+// Each `Ctrl+S` re-sends the current content through
 // EXTENDED_EDITOR_COMMITTED — the same discrete, explicit-action shape every other commit in this
 // surface has (never on keystroke, never only on close). Closing sends only
 // EXTENDED_EDITOR_CLOSED, the signal nativeBridge needs to drop its own bookkeeping for this
@@ -88,7 +85,7 @@ export async function openExtendedFieldEditor(
   const path = extendedEditorPath(deps.tempRoot, params.recordLabel, params.fieldName, params.plugin, params.origin);
   try {
     await mkdir(join(path, '..'), { recursive: true });
-    // Issue #230 (review fix): the path is deterministic (same record+field+plugin -> same
+    // The path is deterministic (same record+field+plugin -> same
     // file), so a *second* open of an immutable cell finds a file already `chmod`-ed 0o444 by
     // its first open — writeFile against a non-writable file throws EACCES. Force it writable
     // before writing, every open, not just the first; ENOENT (nothing to chmod yet — the very
@@ -98,7 +95,7 @@ export async function openExtendedFieldEditor(
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
     });
     await writeFile(path, params.value, 'utf8');
-    // Issue #230 (seam: immutable column): read-only, not absent — a read-only tab is still the
+    // Read-only, not absent — a read-only tab is still the
     // only way to read a long value in full. Enforced by the OS permission bit rather than any
     // renderer-side state: VS Code shows a locked, uneditable editor for a non-writable local
     // file natively, so there is nothing bespoke to build or to get out of sync. Applied *after*
@@ -132,7 +129,7 @@ export async function openExtendedFieldEditor(
     // The user double-clicked a cell — an explicit action — so a failure here is ADR-0026's
     // "explicit action failed" row: error notification + log, not a silent swallow.
     deps.reporter.report('error', 'Could not open the extended editor.', err instanceof Error ? err.message : String(err));
-    // Issue #230 (review fix): no tab ever opened on this path, so there is no
+    // No tab ever opened on this path, so there is no
     // onDidCloseTextDocument left to fire EXTENDED_EDITOR_CLOSED the normal way — without this,
     // nativeBridge's requestId -> onCommit map entry (registered optimistically, before any
     // reply exists) would never be deleted. Reusing EXTENDED_EDITOR_CLOSED rather than inventing

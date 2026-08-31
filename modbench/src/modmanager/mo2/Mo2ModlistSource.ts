@@ -145,7 +145,7 @@ export class Mo2ModlistSource implements IModlistSource {
     }
   }
 
-  /** #240: the symmetric half of Install's `installed=true` writeback — set
+  /** The symmetric half of Install's `installed=true` writeback — set
    *  `uninstalled=true` on the source download's `.meta` (never clearing
    *  `installed`; `parseDownloadMeta` resolves the precedence). Uninstall must
    *  never fail because of this bookkeeping: an absent/unreadable meta.ini, a

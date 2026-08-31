@@ -13,8 +13,8 @@ public interface ILoadedMod : IDisposable
 public interface IModImporter
 {
     /// <summary>
-    /// #515: <paramref name="param"/> is optional only for callers with nothing localization-
-    /// specific to say (a test double, typically) — every real deep parse should build one through
+    /// <paramref name="param"/> is optional only for callers with nothing localization-specific to
+    /// say (a test double, typically) — every real deep parse should build one through
     /// <see cref="Source.LocalizedStrings.ForRead(string?, string)"/>, the same as every other
     /// deep-parse call site.
     /// </summary>

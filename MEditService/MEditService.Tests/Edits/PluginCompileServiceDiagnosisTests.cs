@@ -6,15 +6,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #519's diagnosis floor at Compile's own <c>DeserializeSource</c> seam, forged — the same
-/// convention <c>RealData/BinaryRoundTripGateTests</c> already establishes for this class of defect
+/// The diagnosis floor at Compile's own <c>DeserializeSource</c> seam, forged — the same
+/// convention <c>RealData/BinaryRoundTripGateTests</c> establishes for this class of defect
 /// (a hand-corrupted fixture, not a real-world one), because no real tracked-source corruption
-/// naturally exists to lift into <c>TestData</c> the way Track's own seam had (#519's own planning
-/// searched for one; none exists — deserializing a source tree is a JSON operation that never
-/// touches Mutagen's binary parser at all).
+/// naturally exists to lift into <c>TestData</c> the way Track's own seam had: deserializing a
+/// source tree is a JSON operation that never touches Mutagen's binary parser at all.
 ///
-/// <para><b>Different exception vocabulary than Track's own seam, confirmed live while planning
-/// this ticket.</b> A corrupt <c>FormKey</c> string in a tracked NPC's source JSON does not throw
+/// <para><b>Different exception vocabulary than Track's own seam, confirmed live.</b>
+/// A corrupt <c>FormKey</c> string in a tracked NPC's source JSON does not throw
 /// Mutagen's <c>RecordException</c> — it throws
 /// <c>Mutagen.Bethesda.Serialization.Exceptions.FilePathedException</c> wrapping a plain
 /// <see cref="ArgumentException"/>, whose only identity is the source file path. That shape is

@@ -3,11 +3,8 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #410: <see cref="GitCli"/> is on ADR-0041's keep-list, but every test that reached it did so
-/// through the hidden-gitdir layer this ticket deletes. One direct test replaces that indirect
-/// coverage at the same seam, so the keep-list item is not left unverified until Track (#413)
-/// arrives to use it. Real git against a scratch directory — the only way this class is ever
-/// exercised, by its own design note.
+/// Direct coverage of <see cref="GitCli"/> (ADR-0041's keep-list) at its own seam. Real git against
+/// a scratch directory — the only way this class is ever exercised, by its own design note.
 /// </summary>
 public sealed class GitCliTests
 {
@@ -50,7 +47,7 @@ public sealed class GitCliTests
     }
 
     /// <summary>
-    /// #405: a failing git invocation must not put the absolute paths its own <c>args</c> carried
+    /// A failing git invocation must not put the absolute paths its own <c>args</c> carried
     /// (e.g. a scratch-spill path passed via <c>-m</c>) onto the exception message, since that
     /// message reaches the wire verbatim via the endpoint convention's <c>Results.Problem(ex.Message)</c>.
     /// <c>commit-tree</c> against a made-up tree-ish isolates this from the separate, out-of-scope

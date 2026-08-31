@@ -63,7 +63,7 @@ const pluginsResponse = [
   { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
 ];
 
-// ── fixtures for the restored read-path suites (#410 review) ──────────────────
+// ── fixtures for the read-path suites ─────────────────────────────────────────
 
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const fkMeta: FieldMetadata = {
@@ -96,7 +96,7 @@ const fkCompareResult = {
       winnerColumn: 'Fallout4.esm',
       winnerValue: '00013918:Fallout4.esm',
       cellStates: {},
-      // ADR-0031: the backend now carries a resolution signal per FormKey value — this fixture
+      // ADR-0031: the backend carries a resolution signal per FormKey value — this fixture
       // mirrors a resolved reference so the Ctrl-hover affordance/navigation tests below exercise
       // real product behavior instead of an unresolved default.
       resolutions: { 'Fallout4.esm': { state: 'ResolvedValidType', recordType: 'race', editorId: 'HumanRace' } },
@@ -197,7 +197,7 @@ const notInLoadOrderPluginsResponse = [
   { name: 'Solo.esp', origin: 'ShadowMod', isImmutable: true, loadOrderIndex: 5, inLoadOrder: false },
 ];
 
-// #539: mirrors pluginsResponse, but MyMod.esp is tracked — the Partial Form toggle is disabled
+// Mirrors pluginsResponse, but MyMod.esp is tracked — the Partial Form toggle is disabled
 // on an untracked column (canWrite), so exercising the real dispatch needs a column that can
 // actually write.
 const partialFormTrackedPluginsResponse = [
@@ -205,7 +205,7 @@ const partialFormTrackedPluginsResponse = [
   { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
 ];
 
-// #491: mirrors compareResult, but MyMod.esp is a Partial Form override of the master rather than
+// Mirrors compareResult, but MyMod.esp is a Partial Form override of the master rather than
 // an ordinary conflicting one.
 const partialFormCompareResult = {
   conflictAll: 'NoConflict',
@@ -378,41 +378,39 @@ const vmadCapableCompareResult = {
 
 
 
-// #163: a minimal stand-in for a client write method's typed WriteResult — the panel reads
-// .ok/.status/.data/.error now, not a raw Response's .ok/.status/.statusText/.json().
 interface FakeOpts {
   plugins?: unknown[];
-  // #308 / ADR-0035: defaults to true (settled, no banner) — the overwhelmingly common fixture
-  // case, and the one every pre-#308 test implicitly assumed. The two banner-specific tests below
+  // ADR-0035: defaults to true (settled, no banner) — the overwhelmingly common fixture
+  // case. The two banner-specific tests below
   // override it.
   conflictsComputed?: boolean;
   load?: RecordPanelClient['load'];
   conditionRunOnTargets?: RecordPanelClient['conditionRunOnTargets'];
 }
 
-// Issue #122: a fake record-load order client. `load` returns the composite view built from the
-// given compare fixture; write methods are spies tests can assert on and override.
+// A fake record-load order client. `load` returns the composite view built from the
+// given compare fixture.
 function fakeClient(compare: unknown, opts: FakeOpts = {}): RecordPanelClient {
   const pl = (opts.plugins ?? pluginsResponse) as { name: string; isImmutable: boolean; origin?: string; inLoadOrder?: boolean; isTracked?: boolean }[];
   const okLoad = {
     ok: true, result: compare, plugins: pl,
-    // #272 / ADR-0036: mirrors RecordPanelClient.load()'s own columnKey()-keyed construction —
-    // a fake that built this as a bare-plugin-name Set (pre-#272) would silently pass every AC5
+    // ADR-0036: mirrors RecordPanelClient.load()'s own columnKey()-keyed construction —
+    // a fake that built this as a bare-plugin-name Set would silently pass every same-filename
     // test that exercises immutableSet, since the fake itself wouldn't reproduce the bug.
     immutableSet: new Set(pl.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin ?? null))),
-    // #304 / ADR-0035: mirrors RecordPanelClient.load()'s own `=== false` filter — a fixture
-    // that never sets inLoadOrder (every pre-#304 fixture) must default every column to
+    // ADR-0035: mirrors RecordPanelClient.load()'s own `=== false` filter — a fixture
+    // that never sets inLoadOrder must default every column to
     // in-load-order, the same defensive default the real client applies.
     notInLoadOrderSet: new Set(pl.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin ?? null))),
-    // #415 / ADR-0041: mirrors RecordPanelClient.load()'s own `=== true` filter — every
-    // pre-existing fixture here omits isTracked, so every column defaults to untracked exactly as
+    // ADR-0041: mirrors RecordPanelClient.load()'s own `=== true` filter — a
+    // fixture omitting isTracked defaults every column to untracked exactly as
     // the real client's own fail-closed default does.
     trackedSet: new Set(pl.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin ?? null))),
     conflictsComputed: opts.conflictsComputed ?? true,
   } as unknown as LoadResult;
   return {
     load: opts.load ?? vi.fn().mockResolvedValue(okLoad),
-    // Issue #167: the Run On target dropdown's catalog — load-order-wide, fetched once on mount.
+    // The Run On target dropdown's catalog — load-order-wide, fetched once on mount.
     conditionRunOnTargets: opts.conditionRunOnTargets ?? vi.fn().mockResolvedValue([]),
   };
 }
@@ -453,7 +451,7 @@ describe('RecordPanel', () => {
     expect(screen.getByText('Override Name')).toBeInTheDocument();
   });
 
-  // Issue #111: there is no edit mode. Editing affordances follow the column's plugin
+  // There is no edit mode. Editing affordances follow the column's plugin
   // mutability, not a mode the user has to enter on every record navigation.
   it('renders no Edit/View mode toggle', async () => {
     renderPanel(compareResult);
@@ -462,8 +460,7 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('View')).not.toBeInTheDocument();
   });
 
-  // Issue #136: the panel's Save button called POST /plugins/{plugin}/save — a route the
-  // backend does not implement and will not. Writing the binary is the separate Save & Compile
+  // Writing the binary is the separate Save & Compile
   // gesture, scoped to a whole plugin from the tree/palette, never a per-plugin control on this
   // panel (ADR-0041, medit-version-control.md).
   it('offers no per-plugin Save — writing the binary is Save & Compile, not this panel', async () => {
@@ -472,14 +469,9 @@ describe('RecordPanel', () => {
     expect(screen.queryByText('Save')).not.toBeInTheDocument();
   });
 
-  // Issue #111: a cell in an immutable column never activates an *editable* input, however it is
-  // clicked (spec: field-type rendering rule 6, story 17). Before this, editMode reached the
-  // cells with no per-column mutability check, so a read-only column rendered inputs whose PATCH
-  // the backend then rejected with a 409 "Plugin is read-only".
-  //
-  // Issue #226 / ADR-0034: the read-only value surface is retired, so the cell now opens no input
-  // at all — the 409 this test was written to prevent stays prevented for the more direct reason
-  // that nothing ever reaches a PATCH from here.
+  // A cell in an immutable column never activates an *editable* input, however it is
+  // clicked (spec: field-type rendering rule 6). ADR-0034: the cell opens no input
+  // at all — nothing ever reaches a write from here.
   it('a cell in an immutable column opens nothing when clicked', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('Original Name'));
@@ -493,40 +485,27 @@ describe('RecordPanel', () => {
 // ── postMessage wiring ────────────────────────────────────────────────────────
 
 
-// Override fixture — conflictAll: 'Override', second plugin has conflictThis: 'Override'
-
-// Issue #114: two sibling top-level fields, only one of which differs — proves the compare grid
-// colors each row from its own field's conflictAll, not a record-wide value smeared across every
-// row (the literal bug #114 reports). "Level" here is agreed by every plugin.
-
-// Three-plugin conflict fixture for per-cell ConflictLoses/ConflictWins tests
-
-// #272 / ADR-0036: two columns sharing a filename ('Shared.esp') but differing in origin —
+// ADR-0036: two columns sharing a filename ('Shared.esp') but differing in origin —
 // display never changes (both columns' own `.plugin` reads "Shared.esp"), so only the compound
-// (plugin, origin) identity can tell them apart. Nothing loads such a pair today (blocked on
-// #34), but the backend already returns this shape (ColumnKey-keyed dictionaries, per-override
-// Origin) once two rows exist for one FormKey — this fixture is that shape, built by hand rather
-// than through a real reconcile, the same way the backend's own AC5 tests do.
+// (plugin, origin) identity can tell them apart. The backend already returns this shape
+// (ColumnKey-keyed dictionaries, per-override
+// Origin) once two rows exist for one FormKey — the sameFilename fixture is that shape, built by
+// hand rather than through a real reconcile.
 
 describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // The genuinely red case for collapsedColumns: pre-#272, collapsedColumns.has(o.plugin)
-  // collided on the bare "Shared.esp" filename both columns share, so collapsing one collapsed
-  // (or left expanded) both.
-
-  // The genuinely red case for collapsedColumns: pre-#272, collapsedColumns.has(o.plugin)
-  // collided on the bare "Shared.esp" filename both columns share, so collapsing one collapsed
-  // (or left expanded) both.
+  // The genuinely red case for collapsedColumns: collapsedColumns.has(o.plugin) would
+  // collide on the bare "Shared.esp" filename both columns share, so collapsing one would
+  // collapse (or leave expanded) both.
   it('collapsing one column does not collapse the other same-filename column', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
     await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
     expect(screen.getByText('FromB')).toBeInTheDocument();
 
-    // #304: deliberately changed from the pre-#304 `getAllByText('Shared.esp')[0]` — that query
-    // could no longer tell the two columns apart by text, which was itself the bug this ticket
-    // fixes (ADR-0036: origin renders inline in the header exactly when two loaded copies share a
+    // A bare-text query cannot tell the two columns apart
+    // (ADR-0036: origin renders inline in the header exactly when two loaded copies share a
     // filename, which this fixture does).
     const colAHeader = screen.getByText('Shared.esp (ModA)');
     fireEvent.click(colAHeader); // collapses ModA's column only
@@ -535,7 +514,7 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
     expect(screen.getByText('FromB')).toBeInTheDocument();
   });
 
-  // #304 / ADR-0036: "origin appears inline in the header only when two loaded copies share a
+  // ADR-0036: "origin appears inline in the header only when two loaded copies share a
   // filename" — this fixture is exactly that collision, on both columns at once (neither is the
   // sole owner of the plain filename).
   it('renders origin inline in both column headers when two loaded copies share a filename', async () => {
@@ -557,7 +536,7 @@ describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', (
   });
 });
 
-// #494: restores Copy as Override Into…/Copy as New Record Into… (#436) as the column header's
+// Copy as Override Into…/Copy as New Record Into… on the column header's
 // own native right-click menu — proves the real end-to-end wiring (RecordPanel → PluginHeader),
 // not just PluginHeader.test.tsx's own component-level pin, the same two-layer treatment VMAD's
 // own contexts got (recordUtils.test.ts's builder test + VmadStructuralOps.test.tsx's panel test).
@@ -581,7 +560,7 @@ describe('RecordPanel — column header native right-click menu (#494)', () => {
     const { container } = renderPanel(compare);
     await waitFor(() => expect(screen.getByText('MyMod.esp')).toBeInTheDocument());
 
-    // Same `th > div` query the #304 dimming test above uses — the context lives on
+    // Same `th > div` query the dimming test above uses — the context lives on
     // PluginHeader's own root div, nested inside RecordPanel's <th>.
     const headerRoot = container.querySelector('th > div');
     expect(JSON.parse(headerRoot!.getAttribute('data-vscode-context')!)).toEqual({
@@ -604,7 +583,7 @@ describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)'
 
     const th = screen.getByText('Solo.esp').closest('th');
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
-    // #304 review: dimming must apply exactly once — PluginHeader's own root <div>, nested
+    // Dimming must apply exactly once — PluginHeader's own root <div>, nested
     // directly inside this dimmed <th>, must not carry a second opacity (CSS opacity compounds on
     // nesting, so two 0.55s would render at ~0.30, not 0.55). Real nesting, not a standalone
     // PluginHeader render, is what proves this can't silently regress.
@@ -645,10 +624,10 @@ describe('RecordPanel — a Partial Form column (#491)', () => {
   });
 });
 
-// #539: the column header's own Partial Form checkbox dispatches the sanctioned is_partial_form
+// The column header's own Partial Form checkbox dispatches the sanctioned is_partial_form
 // write — proves the real end-to-end wiring (RecordPanel → PluginHeader → handleEditCell →
 // vscode.postMessage), not just PluginHeader.test.tsx's own component-level pin of
-// onTogglePartialForm, the same two-layer treatment #494's right-click menu and VMAD's own
+// onTogglePartialForm, the same two-layer treatment the header right-click menu and VMAD's own
 // contexts got.
 describe('RecordPanel — Partial Form header toggle (#539)', () => {
   beforeEach(() => {
@@ -679,12 +658,8 @@ describe('RecordPanel — Partial Form header toggle (#539)', () => {
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // Issue #114: these two used to assert the record-wide CompareResult.conflictAll was smeared
-  // onto the row — now each field's own diffs[].conflictAll drives its own row, exercised
-  // end-to-end through RecordPanel's merge/recursion pipeline (not just DiffRow's own props).
-
-  // Issue #114: these two used to assert the record-wide CompareResult.conflictAll was smeared
-  // onto the row — now each field's own diffs[].conflictAll drives its own row, exercised
+  // Each field's own diffs[].conflictAll drives its own row — never the record-wide
+  // CompareResult.conflictAll smeared onto every row — exercised
   // end-to-end through RecordPanel's merge/recursion pipeline (not just DiffRow's own props).
   it('applies green row background to a field whose own conflictAll is Override', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
@@ -702,7 +677,7 @@ describe('RecordPanel — conflict color coding', () => {
     expect(row.style.backgroundColor).toBe('rgba(255, 152, 0, 0.20)');
   });
 
-  // The literal #114 regression guard: two sibling fields, only one differs — the agreeing
+  // The regression guard: two sibling fields, only one differs — the agreeing
   // sibling's row must show no background even though the record as a whole (and the other
   // field) is Override. A record-wide smear would incorrectly tint both rows the same way.
   it('colors only the field that actually differs — an agreeing sibling row gets no background', async () => {
@@ -760,7 +735,7 @@ describe('RecordPanel — postMessage wiring', () => {
 
   it('calls vscode.postMessage with type openRecord when a FormKey link is Ctrl+clicked', async () => {
     renderPanel(fkCompareResult, { plugins: fkPlugins });
-    // Resolved per fkCompareResult's diff.resolutions — labeled with the #218 composite, so the
+    // Resolved per fkCompareResult's diff.resolutions — labeled with the "EditorID [FormKey]" composite, so the
     // reference is identifiable from the cell alone rather than only by its EditorID.
     await waitFor(() => screen.getByText('HumanRace [00013918:Fallout4.esm]'));
     fireEvent.click(screen.getByText('HumanRace [00013918:Fallout4.esm]'), { ctrlKey: true });
@@ -783,10 +758,10 @@ describe('RecordPanel — postMessage wiring', () => {
     await waitFor(() => expect(client.load).toHaveBeenCalledWith('000002:Fallout4.esm'));
   });
 
-  // #258 / ADR-0039: the string cell's right-click command reaches the extended editor only
-  // through this broadcast now — no left-click gesture in the webview calls openExtendedFieldEditor
-  // any more. Rival this guards against: pre-#258 code has no listener branch for this message
-  // type at all, so nothing would be posted here.
+  // ADR-0039: the string cell's right-click command reaches the extended editor only
+  // through this broadcast — no left-click gesture in the webview calls openExtendedFieldEditor.
+  // Rival this guards against: code with no listener branch for this message
+  // type at all, where nothing would be posted here.
   it('opens the extended editor bridge call when fieldOpenExtendedEditor arrives for the open record', async () => {
     renderPanel(compareResult);
     await waitFor(() => screen.getByText('TestNPC [000001:Fallout4.esm]'));
@@ -814,9 +789,9 @@ describe('RecordPanel — postMessage wiring', () => {
     })));
   });
 
-  // #533: readOnly still travels through unchanged (the extension host's own OS-permission-based
+  // readOnly travels through unchanged (the extension host's own OS-permission-based
   // enforcement — extendedFieldEditor.ts's chmod 0o444 — is what actually refuses a save on this
-  // path; unaffected by this ticket, already covered there). This is the webview's own half: the
+  // path, covered there). This is the webview's own half: the
   // right-click command must still open the tab read-only for an immutable/untracked column.
   it('still opens the extended editor read-only when fieldOpenExtendedEditor arrives with readOnly: true', async () => {
     renderPanel(compareResult);
@@ -950,7 +925,7 @@ describe('RecordPanel — incomplete-comparison banner (#308 / ADR-0035)', () =>
     expect(screen.queryByText(recordPanelIncompleteMessage(false)!)).not.toBeInTheDocument();
   });
 
-  // AC4: a panel already open when the sweep lands must reflect the settled data, not just clear
+  // A panel already open when the sweep lands must reflect the settled data, not just clear
   // its own banner over stale content — this asserts both halves land together (the refetch, and
   // the banner clearing as a consequence of the fresher conflictsComputed it carries), not just
   // that the message was heard.

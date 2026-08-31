@@ -9,12 +9,11 @@ using Mutagen.Bethesda.Plugins.Binary.Parameters;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #511 survey (2026-08-27): how far does a real, mixed-tool plugin population sit from
+/// Survey: how far does a real, mixed-tool plugin population sit from
 /// <c>write(parse(plugin)) == plugin</c>, and why? Deep-parses every mod-root plugin under
-/// <c>MEDIT_SURVEY_MODS</c>, writes it back with the #506 header options, then walks both
-/// binaries' record structures in parallel (<see cref="PluginBinaryWalk"/> — this harness is
-/// where that walker started, #514 promoted it into Core, and this class was refactored to call
-/// the promoted copy rather than keep its own, so there is exactly one) and classifies each
+/// <c>MEDIT_SURVEY_MODS</c>, writes it back with the header-preserving write options, then walks both
+/// binaries' record structures in parallel (<see cref="PluginBinaryWalk"/> — the one shared
+/// walker, in Core) and classifies each
 /// differing record: <c>header</c> (TES4 subrecord), <c>compressed-only</c> (decompressed
 /// payloads equal), <c>negzero</c> (only -0.0 → +0.0 word changes), <c>grup-size</c> (derived
 /// group sizes), or <c>other:TYPE/SIG</c> — the bucket that answers "what else is out there".
@@ -73,12 +72,12 @@ public sealed class RoundTripSurvey
                         .WriteAsync();
                     var rewritten = await File.ReadAllBytesAsync(outFile);
 
-                    // #513: "would Track accept" — the same verdict TrackService.VerifyRoundTrip computes in
+                    // "Would Track accept" — the same verdict TrackService.VerifyRoundTrip computes in
                     // production, reusing its own shared checker (MEditService.Core.Source.ModelIdentity)
-                    // rather than this harness's own separate (and, it turned out, incomplete — see
-                    // ModelIdentity's own doc comment on why a single most-derived GetEqualsMask misses
-                    // base-level fields like EditorID) bare-Equals-based "model" column below, kept only for
-                    // continuity with pre-#513 survey runs.
+                    // rather than this harness's own separate, incomplete bare-Equals-based "model"
+                    // column below (see ModelIdentity's own doc comment on why a single most-derived
+                    // GetEqualsMask misses base-level fields like EditorID), kept only for continuity
+                    // with earlier survey runs.
                     if (rewritten.AsSpan().SequenceEqual(original))
                     {
                         accept = "accept";
@@ -214,11 +213,11 @@ public sealed class RoundTripSurvey
     /// <summary>Mutagen's generated GetEqualsMask(rhs, Include.OnlyFailures), found by reflection on the record's
     /// getter interface, printed — names exactly which fields the generated Equals disagrees on.
     ///
-    /// <para>#513: this is dump-only, kept for its human-readable raw mask text (every field, not just
-    /// the failing ones' names) — the "would Track accept" verdict itself no longer uses this method or
-    /// its single-most-derived-type reflection (which the promoted <c>ModelIdentity</c> found and fixed
-    /// was incomplete: a <c>Mask&lt;TItem&gt;.Print</c> only lists the fields <i>that type itself</i>
-    /// declares, so this method alone could never see a base-level field like <c>EditorID</c> diverge).
+    /// <para>Dump-only, kept for its human-readable raw mask text (every field, not just
+    /// the failing ones' names) — the "would Track accept" verdict itself does not use this method or
+    /// its single-most-derived-type reflection (incomplete: a <c>Mask&lt;TItem&gt;.Print</c> only
+    /// lists the fields <i>that type itself</i> declares, so this method alone can never see a
+    /// base-level field like <c>EditorID</c> diverge).
     /// Only <c>ModelIdentity.FindFirst</c>, above, decides <c>accept</c>.</para>
     /// </summary>
     private static string EqualsMaskFailures(object lhs, object rhs)
@@ -246,10 +245,9 @@ public sealed class RoundTripSurvey
 
     // ---- structure walk -------------------------------------------------------------------
     // The walk itself (record/GRUP/subrecord, XXXX-extended length, zlib inflate) lives in
-    // MEditService.Core.Source.PluginBinaryWalk — promoted from here by #514 so there is exactly
-    // one implementation, not two to keep in sync by hand (docs/specs/medit-repair.md's own
-    // Implementation Decisions: "one walker" shared by #514/#519/#525). What stays here is this
-    // survey's own classification on top of it.
+    // MEditService.Core.Source.PluginBinaryWalk — exactly one implementation, not two to keep in
+    // sync by hand (docs/specs/medit-repair.md's own Implementation Decisions: "one walker").
+    // What stays here is this survey's own classification on top of it.
 
     private const uint CompressedFlag = 0x00040000;
 

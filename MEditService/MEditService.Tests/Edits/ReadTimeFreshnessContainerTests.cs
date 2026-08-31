@@ -8,14 +8,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #561, the container/embedded-child counterpart to <see cref="ReadTimeFreshnessTests"/>: the same
-/// "git-mediated revert must be picked up at the next read" behaviour that suite already pins for a
+/// The container/embedded-child counterpart to <see cref="ReadTimeFreshnessTests"/>: the same
+/// "git-mediated revert must be picked up at the next read" behaviour that suite pins for a
 /// flat record (an Npc), pinned here for a directory-per-record container (a Quest) and for an
-/// embedded child (a placed reference) — the two shapes <c>SourceFreshness.ValidateOne</c> used to
-/// skip entirely, because it resolved a record's source through the flat-only
-/// <c>SourceUnitResolver.FlatSourcePath</c>, which throws <c>NotSupportedException</c> for both. The
-/// caller's own catch turned that into "serve the indexed state" — so a git revert of either shape's
-/// source file never reached the record editor, which is exactly the bug report.
+/// embedded child (a placed reference) — the two shapes a <c>SourceFreshness.ValidateOne</c> that
+/// resolved a record's source through the flat-only
+/// <c>SourceUnitResolver.FlatSourcePath</c> (which throws <c>NotSupportedException</c> for both)
+/// skipped entirely: the caller's own catch turned that into "serve the indexed state", so a git
+/// revert of either shape's source file never reached the record editor.
 ///
 /// <para>Runs against <see cref="ContainerModFixture"/> rather than <see cref="TrackedModFixture"/>,
 /// which holds only flat records and structurally cannot exercise either shape.</para>
@@ -41,10 +41,10 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
 
     /// <summary>
     /// The container case: a Quest's own <c>RecordData.json</c> — no flat path
-    /// <c>SourceRecordPath.For</c> can compute, only found on disk (#453).
+    /// <c>SourceRecordPath.For</c> can compute, only found on disk.
     ///
     /// <para><c>filter</c> rather than <c>editor_id</c> deliberately: an EditorID edit renames the
-    /// Quest's own directory (#453 scope 3), which would entangle the git-restore step below with a
+    /// Quest's own directory, which would entangle the git-restore step below with a
     /// rename instead of a pure content revert. <c>filter</c> is an ordinary scalar field with no such
     /// side effect.</para>
     /// </summary>
@@ -69,8 +69,8 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     }
 
     /// <summary>
-    /// #561 review (Spec axis, AC1's own wording — "the record editor <b>and compare grid</b>"): the
-    /// flat-record precedent (<c>ReadTimeFreshnessTests.RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheCompareGrid</c>)
+    /// "The record editor <b>and compare grid</b>": the flat-record precedent
+    /// (<c>ReadTimeFreshnessTests.RestoringASourceFileThroughGit_PutsTheCommittedValueBackInTheCompareGrid</c>)
     /// has a dedicated <c>GetCompare</c> assertion alongside its <c>GetRecord</c> one; this is that
     /// same coverage for a container, reusing the Quest case above rather than asserting only through
     /// the record editor and assuming the compare grid follows because the plumbing is shared.
@@ -99,7 +99,7 @@ public sealed class ReadTimeFreshnessContainerTests : IDisposable
     /// <summary>
     /// The embedded-child case: a placed reference, which has no source file of its own at all — its
     /// text lives inline inside its owning Cell's <c>RecordData.json</c> (one of the five slots
-    /// Spriggit serializes this way; #453). Reverting the <i>owner's</i> file — the only file git
+    /// Spriggit serializes this way). Reverting the <i>owner's</i> file — the only file git
     /// tracks for this record — must still restore the committed value for the child.
     /// </summary>
     [Fact]

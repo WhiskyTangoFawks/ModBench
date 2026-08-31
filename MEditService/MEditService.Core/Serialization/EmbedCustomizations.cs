@@ -4,17 +4,18 @@ using Mutagen.Bethesda.Serialization.Customizations;
 namespace MEditService.Core.Serialization;
 
 /// <summary>
-/// The five <c>EmbedRecordsInSameFile</c> customizations across Cell/Worldspace — historically
-/// adopted at #450 from Spriggit's own <c>CellCustomization</c>/<c>WorldspaceCustomization</c>, and
-/// kept today on this project's own grounds rather than as a compatibility claim: one document per
-/// cell is the tree a human wants (#468, ADR-0042 decision 4).
+/// The five <c>EmbedRecordsInSameFile</c> customizations across Cell/Worldspace —
+/// adopted from Spriggit's own <c>CellCustomization</c>/<c>WorldspaceCustomization</c>, and
+/// kept on this project's own grounds rather than as a compatibility claim: one document per
+/// cell is the tree a human wants (ADR-0042 decision 4).
 ///
 /// <para><b>Deliberately excluded: Spriggit's own <c>SortList</c> calls</b> (re-sorting
 /// <c>Persistent</c>/<c>Temporary</c> by FormKey for a cleaner diff). That is exactly the kind of
 /// customization ADR-0042 rules out on principle, not merely a feature this project's Serialization
 /// pin happens to lack: "nothing is omitted and nothing is re-sorted in the files — ever" (decision
 /// 3). Reordering a Cell's own children for diff-cleanliness would be a permanent, silent loss of
-/// the binary's actual child order — the same kind of loss #459 tracks for folder-split children —
+/// the binary's actual child order — the same kind of loss the folder-split <c>"[N] "</c> ordering
+/// prefix exists to prevent —
 /// so this is never adopted, regardless of what a future Serialization bump makes available. Nothing
 /// else in Spriggit's FO4 customization suite is an embed: everything else there is <c>SortList</c>
 /// or <c>Omit</c>, neither of which this project uses.</para>

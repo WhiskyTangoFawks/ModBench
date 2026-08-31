@@ -229,7 +229,7 @@ public sealed class LoadOrderTests
         Assert.Equal(isMaster, plugin.IsMaster);
     }
 
-    // #509: the overwhelmingly common light/master plugin in the wild is a header-flagged .esp, not
+    // The overwhelmingly common light/master plugin in the wild is a header-flagged .esp, not
     // a distinct extension — engine-authoritative light/master must follow the header flag.
     [Fact]
     public void Open_HeaderFlaggedEsp_FollowsTheHeaderFlag()

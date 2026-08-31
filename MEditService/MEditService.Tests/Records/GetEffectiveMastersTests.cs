@@ -10,14 +10,14 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// Orchestrator correction 1 on #421's plan: <see cref="IRecordReads.GetEffectiveMasters"/> is
+/// <see cref="IRecordReads.GetEffectiveMasters"/> is
 /// DERIVED from content — the union of (a) the owning plugin of every FormKey this plugin's
 /// records reference outward (<c>form_references</c>) and (b) the owning plugin of every FormKey
 /// this plugin carries that isn't native to it (an override forces that master) — never the
 /// plugin's own declared header master list (ADR-0038's read-time derivation is retired, but the
 /// "effective, not declared" property survives here).
 ///
-/// The fixture is the discriminating case the correction asked for: Patch.esp's header declares
+/// The fixture is the discriminating case: Patch.esp's header declares
 /// three masters, but only two are actually required by its content. Header-declared semantics
 /// would wrongly include the third (Unused.esm) — that is the built-in rival.
 /// </summary>
@@ -55,8 +55,8 @@ public sealed class GetEffectiveMastersTests : IDisposable
                 // must be excluded from the derived result.
             },
             // Mutagen's own writer recomputes the header's masters from live content by default
-            // (MastersListContentOption.Iterate) — the same "derived, not declared" rule this
-            // ticket applies, which would silently prune the deliberately-unused Unused.esm
+            // (MastersListContentOption.Iterate) — the same "derived, not declared" rule under
+            // test, which would silently prune the deliberately-unused Unused.esm
             // reference above before it ever reached disk. NoCheck keeps exactly what was set,
             // which is the only way to get a genuinely over-declared header onto disk for this test.
             writeParams: new BinaryWriteParameters { MastersListContent = MastersListContentOption.NoCheck })

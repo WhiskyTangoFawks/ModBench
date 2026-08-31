@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B3: <see cref="SourceRepository.LatestBaselineTrailers"/> — reads back exactly what
+/// <see cref="SourceRepository.LatestBaselineTrailers"/> — reads back exactly what
 /// <see cref="SourceRepository.Track"/> (and, later, Absorb Upstream Update's plumbing commit)
 /// wrote onto <c>main</c>'s tip, the meta-tell classifier's other data source.
 /// </summary>

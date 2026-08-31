@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #416 review: every compile — including this single-plugin Save & Compile — runs through
+/// Every compile — including this single-plugin Save & Compile — runs through
 /// <see cref="CompileJournal"/>, batch of one, through the real <see cref="PluginCompileService.Compile"/>
 /// door rather than only through <c>CompileJournal.RunBatch</c> directly (that door's own tests,
 /// <c>CompileJournalTests</c>, cover the primitive in isolation; this covers it wired in).

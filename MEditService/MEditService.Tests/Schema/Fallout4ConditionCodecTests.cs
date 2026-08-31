@@ -12,7 +12,7 @@ public class Fallout4ConditionCodecTests
 
     private static JsonElement J(string raw) => JsonDocument.Parse(raw).RootElement.Clone();
 
-    // ---- Extract: condition-owner discovery (#154) ----
+    // ---- Extract: condition-owner discovery ----
 
     [Fact]
     public void Extract_RecordWithSingleConditionField_ReturnsOneOwner()
@@ -29,7 +29,7 @@ public class Fallout4ConditionCodecTests
 
     // Quest has two flat, top-level condition-carrying fields (DialogConditions, UnusedConditions)
     // — Extract must discover both, each independently keyed by its own field name, rather than
-    // only the single hardcoded "Conditions" property this codec used to look for.
+    // only a single hardcoded "Conditions" property.
     [Fact]
     public void Extract_RecordWithMultipleConditionFields_ReturnsOneOwnerPerField()
     {
@@ -64,7 +64,7 @@ public class Fallout4ConditionCodecTests
         Assert.Empty(Codec.Extract(quest));
     }
 
-    // ---- Extract: per-array-item nested condition lists (#181) ----
+    // ---- Extract: per-array-item nested condition lists ----
 
     // Ingestible.Effects[i].Conditions — the simplest, most widespread one-level nesting shape
     // (also shared by Ingredient/Spell/ObjectEffect's own Effects lists). Effect is a plain Loqui
@@ -138,9 +138,9 @@ public class Fallout4ConditionCodecTests
         Assert.Contains(owners, o => o.FieldPath == "Effects[10].Conditions");
     }
 
-    // ---- Extract: two levels of array-item nesting (#184) ----
+    // ---- Extract: two levels of array-item nesting ----
 
-    // Perk.Effects[i].Conditions[j].Conditions — the case #154 was originally descoped from. The
+    // Perk.Effects[i].Conditions[j].Conditions — the
     // middle level (APerkEffect.Conditions) is a list of PerkCondition wrappers, not itself a
     // condition list (PerkCondition doesn't implement IConditionGetter) — so this exercises a real
     // second recursion hop, not just a coincidentally-named middle field.
@@ -162,7 +162,7 @@ public class Fallout4ConditionCodecTests
     }
 
     // A Perk with several effects, only some carrying conditions, shows a group only for the ones
-    // that do (#184 AC).
+    // that do.
     [Fact]
     public void Extract_TwoLevelNesting_OnlySomeEffectsCarryConditions_ReturnsOwnersOnlyForThose()
     {
@@ -226,7 +226,7 @@ public class Fallout4ConditionCodecTests
         Assert.Contains(owners, o => o.FieldPath == "Actions[0].StartScenes[0].Conditions");
     }
 
-    // ---- WalkNestedArrays: the discovery walk's recursion bound (#184 AC) ----
+    // ---- WalkNestedArrays: the discovery walk's recursion bound ----
     // internal (not exercised through the public Extract(IMajorRecordGetter) seam): a genuine object
     // cycle can never be built from real Mutagen types, since IsArrayOfNestableStructsProperty's
     // child-record exclusion already breaks the only realistic cycle path (a shared major-record
@@ -264,7 +264,7 @@ public class Fallout4ConditionCodecTests
     }
 
     // A malformed binary plugin's Mutagen overlay can throw mid-enumeration of an array property
-    // (e.g. #<issue>: a PerkEntryPointAbsoluteValue with an unexpected parameter type flag) — the
+    // (e.g. a PerkEntryPointAbsoluteValue with an unexpected parameter type flag) — the
     // raw Mutagen exception alone doesn't say *where* in the record's array it happened. The walk
     // must re-throw with the array property's own path and the index that failed, since that's the
     // coordinate a user needs to find the offending entry in xEdit.
@@ -299,11 +299,11 @@ public class Fallout4ConditionCodecTests
         Assert.Equal("Effects[2]: malformed entry", ex.Message);
     }
 
-    // ---- IsNestedConditionListField: validation-time shape check (#182, generalized to N levels #184) ----
+    // ---- IsNestedConditionListField: validation-time shape check ----
     // The Type-only twin of ExtractNested's per-instance discovery, used by PluginWriter.IsReadOnly
-    // for a CTDA-prefixed indexed path. A separate method from IsConditionListField (#182 seam
-    // decision) so the bare-fieldpath whole-list-restage gate (#183's boundary) is never loosened
-    // as a side effect of resolving indexed paths here. #184: takes the raw composed field path
+    // for a CTDA-prefixed indexed path. A separate method from IsConditionListField
+    // so the bare-fieldpath whole-list-restage gate is never loosened
+    // as a side effect of resolving indexed paths here. Takes the raw composed field path
     // directly and parses it internally (arbitrary depth), rather than pre-parsed arrayProp/
     // nestedField pieces — no production caller ever needed the parsed pieces themselves.
 
@@ -337,7 +337,7 @@ public class Fallout4ConditionCodecTests
         Assert.False(Codec.IsNestedConditionListField(typeof(IIngestibleGetter), "Conditions"));
     }
 
-    // Quest.Aliases[i].Conditions (#169/#182 AC#4): IAQuestAliasGetter is a marker interface with
+    // Quest.Aliases[i].Conditions: IAQuestAliasGetter is a marker interface with
     // zero data properties — the direct-property check on the element type alone would say no. The
     // permissive rule must accept anyway, because a concrete subtype (e.g. QuestReferenceAlias)
     // declares Conditions. Getter-interface form (schema.RecordType, as PluginWriter.IsReadOnly
@@ -357,9 +357,9 @@ public class Fallout4ConditionCodecTests
         Assert.True(Codec.IsNestedConditionListField(typeof(Quest), "Aliases[0].Conditions"));
     }
 
-    // ---- IsNestedConditionListField: two-level composed path (#184) ----
+    // ---- IsNestedConditionListField: two-level composed path ----
 
-    // Perk.Effects[i].Conditions[j].Conditions — the case #154 was originally descoped from. Both
+    // Perk.Effects[i].Conditions[j].Conditions — both
     // hops (Effects -> APerkEffect, Conditions -> PerkCondition) must resolve in order before the
     // terminal Conditions (ExtendedList<Condition>) is checked.
     [Fact]
@@ -380,7 +380,7 @@ public class Fallout4ConditionCodecTests
         Assert.False(Codec.IsNestedConditionListField(typeof(IPerkGetter), "Effects[0].Conditions[0].NotAConditionField"));
     }
 
-    // ---- ApplyFieldValue: write-back (#152) ----
+    // ---- ApplyFieldValue: write-back ----
 
     [Fact]
     public void ApplyFieldValue_Operator_SetsCompareOperator()
@@ -440,7 +440,7 @@ public class Fallout4ConditionCodecTests
         Assert.Equal(ConditionApplyResult.NotFound, result);
     }
 
-    // #401: the record-level overload (fieldPath -> live property, used by RecordFieldWriter — the
+    // The record-level overload (fieldPath -> live property, used by RecordFieldWriter — the
     // list-level overload every other ApplyFieldValue test above exercises has no fieldPath to get
     // wrong) skips gracefully rather than crashing when fieldPath names nothing on the record.
     [Fact]
@@ -731,12 +731,12 @@ public class Fallout4ConditionCodecTests
         Assert.Equal("bLeftHandedMode", parsed.Parameters[0].Text);
     }
 
-    // ---- DecodeParamValue: enum-valued Number parameters (#165) ----
+    // ---- DecodeParamValue: enum-valued Number parameters ----
     // xEdit decodes these to member names (wbSexEnum/wbAxisEnum/etc.,
     // references/TES5Edit/Core/wbDefinitionsCommon.pas); Mutagen only exposes the raw int. Scoped to
     // the seven Number-category ParameterTypes with real static xEdit enum tables actually used by an
-    // FO4 Function (Sex, Axis, CrimeType, CriticalStage, Alignment, CastingSource, WardState) — issue
-    // #165. ActorValue is deliberately excluded: Mutagen categorizes it as Form (an AVIF FormID link),
+    // FO4 Function (Sex, Axis, CrimeType, CriticalStage, Alignment, CastingSource, WardState).
+    // ActorValue is deliberately excluded: Mutagen categorizes it as Form (an AVIF FormID link),
     // not Number, in FO4 — already decoded via FormKeyCell, never reaches this method.
     [Theory]
     [InlineData("Sex", 0, "Male")]
@@ -840,7 +840,7 @@ public class Fallout4ConditionCodecTests
         Assert.Equal(reference.ToString(), parsed.RunOnReference);
     }
 
-    // ---- ApplyListValue: whole-list restage write-back (#153) ----
+    // ---- ApplyListValue: whole-list restage write-back ----
     // The wire shape is the same ParsedCondition-derived shape ConditionDiff.PerPlugin already
     // sends the frontend (camelCase field names) — ApplyListValue and Parse are inverses.
 

@@ -42,7 +42,7 @@ public class FormKeyResolutionTests
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
     }
 
-    // #613: engine-hardcoded FormIDs (Player 00000007 and friends) — a lookup miss in the
+    // Engine-hardcoded FormIDs (Player 00000007 and friends) — a lookup miss in the
     // implicitly-always-loaded master's module space is not a broken link, it is a record type the
     // lookup was never going to carry. xEdit's own reference (wbImplementation.pas,
     // FileFormIDtoLoadOrderFormID/RemoveMainRecord): ObjectID < $800 gates the same way.
@@ -81,7 +81,7 @@ public class FormKeyResolutionTests
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, resolution.State);
     }
 
-    // Regression found running the full suite for #613: a malformed, not-yet-validated editor
+    // A malformed, not-yet-validated editor
     // string (e.g. "not-a-formkey") reaches here too, before RecordEditService's own refusal path
     // has a chance to reject it — FormKey.Factory throws for it, so the hardcoded check must use
     // TryFactory and treat "can't even parse" as "definitely not hardcoded", same as any other miss.

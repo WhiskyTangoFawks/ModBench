@@ -10,11 +10,11 @@ using Noggog.WorkEngine;
 namespace MEditService.Core.Edits;
 
 /// <summary>
-/// #549 Arc B (AC1): mints a brand-new WRLD/CELL directory into a destination plugin's working tree,
+/// Mints a brand-new WRLD/CELL directory into a destination plugin's working tree,
 /// at the exact spatial position (worldspace block/sub-block) the source plugin's own already-parsed
-/// object graph carries — without ever computing that position itself. ADR-0041 twice declined a
-/// path-computation grammar for containers (#453/#454: "container source units are found by scanning
-/// the tree, never by computing a path"); this does not reopen that, because it never computes a
+/// object graph carries — without ever computing that position itself. ADR-0041 declined a
+/// path-computation grammar for containers (container source units are found by scanning
+/// the tree, never by computing a path); this does not reopen that, because it never computes a
 /// path. It builds a synthetic, minimal <see cref="Fallout4Mod"/> holding only the new subtree (one
 /// <see cref="Worldspace"/> → one <see cref="WorldspaceBlock"/>/<see cref="WorldspaceSubBlock"/>, whose
 /// own <c>BlockNumberX/Y</c> are copied verbatim from a <see cref="CellLocationRow"/> the caller
@@ -30,8 +30,7 @@ namespace MEditService.Core.Edits;
 ///
 /// <para>A designated door for <see cref="RecordTextCodecGeneratorSeed.SerializeWholeMod"/>, alongside
 /// <see cref="Source.TrackService"/> — listed in <c>RecordTextCodecGeneratorSeedTests</c>' own
-/// whitelist the same way Track was when it shipped (#451 AC2 re-scope: "a whitelist of the doors that
-/// pay that cost deliberately, once, in their own designated place").</para>
+/// whitelist of the doors that pay that cost deliberately, once, in their own designated place.</para>
 /// </summary>
 internal static class SpatialContainerMint
 {

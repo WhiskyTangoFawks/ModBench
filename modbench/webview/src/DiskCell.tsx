@@ -3,21 +3,15 @@ import { focusedCellStyle } from './gridStyles';
 
 // A field grid's value cell.
 //
-// Issue #222 / ADR-0034: this is where "is this the focused cell" becomes real DOM focus, not
+// ADR-0034: this is where "is this the focused cell" becomes real DOM focus, not
 // just painted state — `tabIndex` makes the cell itself a focusable element, and the effect below
 // calls `.focus()` on it whenever it becomes (or re-becomes, after a re-render) the panel's
-// focused cell. That is deliberate, not a convenience: Ctrl+C (#224) needs `keydown` to land on a
+// focused cell. That is deliberate, not a convenience: Ctrl+C needs `keydown` to land on a
 // real focused element.
-//
-// #410/ADR-0041 reduced this to focus + copy — drag-to-copy, the F2/second-click editor trigger,
-// the Ctrl+X/Ctrl+V mutating half of the clipboard contract, the array-op accelerators and the
-// data-vscode-context menu gating all retired with the write path they staged through. #426
-// restores the array-op accelerators and native context-menu gating (Track 4) — the rest stay
-// out of scope for this ticket.
 const cellAlreadyHasFocus = (cell: HTMLTableCellElement | null): boolean =>
   cell !== null && (document.activeElement === cell || cell.contains(document.activeElement));
 
-// Issue #227 (#426: restored): the four array-arity/order ops behind Insert/Delete/Ctrl+↑/Ctrl+↓
+// The four array-arity/order ops behind Insert/Delete/Ctrl+↑/Ctrl+↓
 // — DiffRow builds whichever of these apply to this exact (row, column) cell (add only on a
 // mutable unsorted-array's own row; remove/moveUp/moveDown only on a mutable unsorted-array
 // element's row) and leaves the rest undefined, so an inapplicable key is inert by construction,
@@ -35,15 +29,15 @@ export function DiskCell({
   style: React.CSSProperties;
   isFocused: boolean;
   onFocusCell: () => void;
-  // Issue #224 / ADR-0034: Ctrl+C on the focused cell — DiffRow already knows this column's own
+  // ADR-0034: Ctrl+C on the focused cell — DiffRow already knows this column's own
   // model value (modelValue.ts) by the time it builds this prop, so this is a plain thunk, not a
   // value: the cell doesn't need to know *what* it copies, only *when*.
   onCopy: () => void;
-  // Issue #227: Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu
+  // Insert/Delete/Ctrl+↑/Ctrl+↓ accelerators onto the same ops the right-click menu
   // offers — pure in-webview state (the array's own new value writes through the ordinary
   // onEditCell path), no extension-host round trip needed for the keys themselves.
   arrayOps?: ArrayOps;
-  // Issue #208/#227 (#426: restored): the already-combined `data-vscode-context` JSON string
+  // The already-combined `data-vscode-context` JSON string
   // (recordUtils.ts's combineVscodeContexts) VS Code's own `contributes.menus["webview/context"]`
   // gates on — undefined when this cell carries no structural-op menu at all.
   vscodeContext?: string;
@@ -68,7 +62,7 @@ export function DiskCell({
           onCopy();
           return;
         }
-        // #415 / ADR-0034: F2 is one of xEdit's three "open the editor" triggers, and the only one
+        // ADR-0034: F2 is one of xEdit's three "open the editor" triggers, and the only one
         // that is a key rather than a click. Dispatched at the cell's own editable element rather
         // than lifted into a callback, so the cell content stays the single owner of what opening
         // means: a cell with nothing editable in it (a read-only column, a struct row) renders no

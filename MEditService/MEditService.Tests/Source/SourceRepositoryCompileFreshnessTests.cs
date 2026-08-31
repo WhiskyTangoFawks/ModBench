@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #449: a tracked plugin whose source has moved past what <c>refs/medit/last-compile/&lt;plugin&gt;</c>
+/// A tracked plugin whose source has moved past what <c>refs/medit/last-compile/&lt;plugin&gt;</c>
 /// parked — "the game can't see your edits yet". Cheap and bounded by dirt (freshness philosophy,
 /// <see cref="SourceFreshness"/>): scoped to this plugin's own <c>source/&lt;plugin&gt;/</c> subtree,
 /// never the whole repo or record count.
@@ -176,7 +176,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     [Fact]
     public void CompileFreshnessOf_ForAPluginTrackNeverParkedARefFor_IsNeverStale()
     {
-        // #288: a plugin created after Track into an already-tracked mod folder may have no parked
+        // A plugin created after Track into an already-tracked mod folder may have no parked
         // ref at all yet — degrade-safe "never stale" rather than a false positive with nothing to
         // compare against (first compile is what parks the ref).
         var modFolder = NewModFolder();
@@ -198,7 +198,7 @@ public sealed class SourceRepositoryCompileFreshnessTests
     [Fact]
     public void CompileFreshnessOf_ForAPluginNameWithSpacesAndBrackets_ScopesCorrectlyDespiteGitPathspecMagicChars()
     {
-        // #459's own lesson, applied here: '[' and ']' are git pathspec glob magic characters. A
+        // '[' and ']' are git pathspec glob magic characters. A
         // pathspec built without :(literal) would silently fail to match this plugin's own source
         // folder, or match something else, either of which reads as "never stale" no matter what
         // actually changed.

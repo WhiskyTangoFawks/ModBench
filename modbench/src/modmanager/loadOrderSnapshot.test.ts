@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { buildLoadOrderSnapshot } from './loadOrderSnapshot';
 
-// ADR-0044 / #594: the snapshot Mod Management sends Editing — every physical plugin copy, each
+// ADR-0044: the snapshot Mod Management sends Editing — every physical plugin copy, each
 // with its slot, `*` prefix and winning flag. Origins are asserted against their literal reserved
 // values ('Data' / 'overwrite'), not against the DATA_DIRECTORY_ORIGIN/OVERWRITE_ORIGIN constants
 // the module itself uses to produce them — those constants are a documented wire contract
-// (#269/ADR-0036: they match MO2's literal directory names), and asserting against the same symbol
+// (ADR-0036: they match MO2's literal directory names), and asserting against the same symbol
 // the code under test reads from would pass even if that symbol's value changed.
 
 type Provider = { winner: string; winnerMod: string; providers?: string[] };

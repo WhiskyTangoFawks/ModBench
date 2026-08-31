@@ -5,17 +5,13 @@ import { pickConditionFunction } from './nativeBridge';
 import { mono, fg } from './gridStyles';
 import type { FieldMetadata, FormKeyResolution, ParsedConditionParam } from './types';
 
-// Issue #231: the four `renderCell` dispatch targets for Condition's composite leaf types —
+// The four `renderCell` dispatch targets for Condition's composite leaf types —
 // `conditionFunction` opens a QuickPick over the function catalogue (never a text/dropdown
 // editor); `conditionRunOn`/`conditionComparison`/`conditionParam` each pick their own widget from
-// their own current value's shape, the same pattern #229's VmadObjectEditor established, rather
+// their own current value's shape, the same pattern VmadObjectEditor established, rather
 // than a second per-plugin metadata branch DiffRow would otherwise need. All four gate their own
 // click-to-open on `editable && isFocused`, matching FormKeyCell's identical gate, and carry
 // `data-open-trigger` so F2 (DiskCell) reaches them the same way it reaches every other leaf.
-//
-// #426 Track 5: restores the editable half #410 retired — ported from before that (git history
-// b1992bf~1) with no behavioral change beyond retargeting at the #415 write path's `onCommit`
-// contract, the same as every other cell this ticket restores.
 
 function enumMeta(enumValues: string[]): FieldMetadata {
   return { name: '', type: 'enum', isArray: false, validFormKeyTypes: [], enumValues };
@@ -39,7 +35,7 @@ const functionButtonStyle: React.CSSProperties = {
 
 interface CompositeCellProps {
   value: unknown;
-  // #415/#426: optional, defaulting to non-editable — matches every other leaf's contract
+  // Optional, defaulting to non-editable — matches every other leaf's contract
   // (presence of somewhere to write is the editability signal).
   editable?: boolean;
   isFocused?: boolean;
@@ -63,11 +59,11 @@ export function ConditionFunctionCell({ value, editable, isFocused = true, onCom
 
 interface RunOnValue { target: string; reference: string | null }
 
-// Issue #167: `meta.enumValues` is the server's Run On target catalog (GET
+// `meta.enumValues` is the server's Run On target catalog (GET
 // /condition-run-on-targets, threaded in by conditionTreeAdapter's `runOnMeta`) — no hardcoded
-// FO4 member list here anymore, so a future game's differently-shaped RunOnType enum offers
+// FO4 member list here, so a future game's differently-shaped RunOnType enum offers
 // exactly what it resolves, never a name it can't parse or write.
-// resolution (#166): ADR-0031's FormKey→EditorID signal for the Reference FormKey, sourced from
+// resolution: ADR-0031's FormKey→EditorID signal for the Reference FormKey, sourced from
 // conditionTreeAdapter's `fieldResolutions["runOn"][plugin]` via DiffRow's existing generic
 // per-leaf resolution pass-through — same prop FormKeyCell already accepts for the generic field
 // path (FormKeyCell.tsx).
@@ -92,8 +88,8 @@ export function ConditionRunOnCell({ value, meta, editable, isFocused, onCommit,
 // A bare scalar — the wire value is exactly what the backend's Comparison subfield already
 // expects (a plain float, or a plain GLOB FormKey string when UseGlobal), no wrapper object, so
 // this infers which widget to show from the value's own JS type rather than a sibling UseGlobal
-// flag this row has no access to (each condition field commits independently, #231's own "wire
-// paths differ" friction — there is no single parent object here to read a sibling off of).
+// flag this row has no access to (each condition field commits independently — there is no
+// single parent object here to read a sibling off of).
 export function ConditionComparisonCell({ value, editable, isFocused, onCommit, onOpen, resolution }: Readonly<CompositeCellProps & { onOpen: (fk: string) => void; resolution?: FormKeyResolution }>) {
   if (typeof value === 'string') {
     return (
@@ -128,7 +124,7 @@ export function ConditionParamCell({ value, editable, isFocused, onCommit, onOpe
       </span>
     );
   }
-  // Issue #165: once DecodeParamValue resolves a name, xEdit's own wbConditionToStr shows only
+  // Once DecodeParamValue resolves a name, xEdit's own wbConditionToStr shows only
   // that name (e.g. "Male") — no raw value, no (TypeName) suffix (matches its own summary text
   // exactly). Editing still targets the raw number unchanged (ScalarCell.displayOverride only
   // substitutes the resting label).

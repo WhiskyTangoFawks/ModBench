@@ -47,7 +47,7 @@ into the game directory's `Data/`, while editing loads plugins by physical path 
 them in place — neither operation needs the other. Because a record edit writes straight
 to the source mod file (which the hardlink shares by inode anyway), an external manager
 like MO2 can remain the deployer while Modbench only edits, with no process handoff and no
-VFS. The sidebar switches between this Mods view and the mEdit views; **editing never
+VFS. The Mods view and the mEdit views are co-visible in one sidebar; **editing never
 requires a deploy.**
 
 ## User Stories
@@ -131,8 +131,8 @@ requires a deploy.**
     change only the bytes that need changing, so that my comments, CRLF line endings,
     unmanaged (`*`) lines, and separators survive verbatim and MO2 still reads the files.
 32. As a user, I want a "Launch mEdit" action reachable from the Plugins view's title bar
-    (moved there from the Loadout header by #352 — see [plugins.md](plugins.md)) that switches
-    to the editing views and spins up the record editor against my active loadout, so that I
+    (see [plugins.md](plugins.md)) that spins up the record editor
+    against my active loadout, so that I
     can move from managing mods to editing records without a manual setup step.
 33. As a user, I want an "update available" indicator on mods (planned) once Nexus
     integration lands, so that I can tell when an installed mod is behind its Nexus
@@ -182,14 +182,14 @@ requires a deploy.**
 - **A workspace missing `ModOrganizer.ini`, `mods/`, or `profiles/` isn't an MO2 instance**,
   detected structurally (existence only, never content) at activation. The Mods view shows
   persistent `viewsWelcome` content — "this isn't an MO2 instance, open the folder
-  containing `ModOrganizer.ini`" — instead of an error tree (issue #192). A real instance
+  containing `ModOrganizer.ini`" — instead of an error tree. A real instance
   with a genuinely corrupt or unreadable `modlist.txt` still reports as an error
   ([ADR-0026](../adr/0026-error-surfacing-policy.md)) — that distinction is structural
   presence vs. content, not "did a read fail."
 - **The welcome renders only once that check has actually run, not merely on the verdict** —
   gated on `modbench.workspaceMo2CheckDone` (a second, separate context key, set alongside the
   instance verdict on every activation exit path), so a workspace VS Code hasn't checked yet
-  reads as "no welcome" rather than as a false "not an instance" (issue #554).
+  reads as "no welcome" rather than as a false "not an instance".
 - Modbench edits mod files in place and MO2 deploys them on its next run, so the two
   **coexist at the filesystem level** — no process handoff, no VFS
   ([ADR-0022](../adr/0022-extension-owns-backend-lifecycle.md)).
@@ -201,8 +201,8 @@ Two independent operations against the same physical mod files:
 - **Deploy (Build)** exists to let the *game* run. It hardlinks enabled mods' files into
   the game directory's `Data/`. It never needs an editing backend.
 - **Edit** exists to inspect/modify *records*. The backend loads plugins by physical path
-  (`load-explicit`) and writes them in place, reading vanilla masters from the game
-  directory. It never needs a deployed `Data/`.
+  (the load-order snapshot, ADR-0044) and writes them in place, reading vanilla masters
+  from the game directory. It never needs a deployed `Data/`.
 
 Because edits write to the physical mod file directly — which a hardlink in `Data/` would
 share by inode anyway — record edits go straight to the source mod file with no sync step.
@@ -235,7 +235,7 @@ share by inode anyway — record edits go straight to the source mod file with n
   which needs a deploy. Deploy/Purge/Launch Game are withdrawn from both the title bar and
   the command palette at this default, so a fresh install exposes no path that writes into
   the game directory. Standalone deploy stays fully implemented and reachable by explicitly
-  setting `deploymentMode: "standalone"`, keeping the post-alpha path (#96) testable (#186).
+  setting `deploymentMode: "standalone"`, keeping the post-alpha path testable.
 - **Same-drive constraint**: `mods/` and the game directory must be on the same volume.
   Checked at first deploy; on violation, prompt to move the staging folder, create a stock
   game folder on the mods volume, or use the **symlink fallback** (no special permission on
@@ -281,10 +281,10 @@ The extension owns the editing backend process
 
 - **Spawn** — lazily, on **Launch mEdit** (the first editing backend for the active
   modlist).
-- **Load order** — built via the backend's `load-explicit` source: an ordered
-  `{name, physicalPath, origin, participates}` list of every `plugins.txt` line — disabled
-  entries included since #270 / ADR-0035, with the `*` prefix carried as `participates` — plus
-  vanilla masters. One backend, one load order (ADR-0015).
+- **Load order** — sent whole as the `PUT /load-order` snapshot (ADR-0044): every physical
+  plugin copy in the instance as `(name, path, origin, slot, enabled, winning)` — disabled
+  entries included (ADR-0035) — with vanilla masters prepended by the backend. One backend,
+  one load order (ADR-0015).
 - **Teardown** — explicit **Close mEdit**, switching profile/modlist, or closing the
   workspace. Restarted on crash; re-entering editing re-spawns and re-indexes.
 
@@ -292,10 +292,11 @@ The extension owns the editing backend process
 
 - **Header**: title "MODS"; description = current profile name; a first non-interactive
   count node ("N active / M installed"); title-bar icon buttons for Filter, Sort Direction
-  and Collapse All — three, and nothing else. Switch Profile, Launch mEdit, Refresh, Deploy
-  and Purge all moved to the [Loadout header](loadout-header.md) in #247: none of them are
-  about *this tree*, and the nine icons this bar had grown were past the point where VS Code
-  keeps them visible in a narrow sidebar. Launch Game is superseded outright (see
+  and Collapse All — three, and nothing else. Switch Profile, Refresh, Deploy
+  and Purge live on the [Loadout header](loadout-header.md), Launch mEdit on the
+  [Plugins view](plugins.md): none of them are
+  about *this tree*, and nine icons is past the point where VS Code
+  keeps them visible in a narrow sidebar. Launch Game does not exist (see
   *Deploy / purge* below).
 - **Structure**: separator nodes (each grouping the mods that follow it in `modlist.txt`)
   render first; ungrouped mods (before the first separator — the **winning end**) render as
@@ -319,10 +320,10 @@ The extension owns the editing backend process
   (default): sections with matches auto-expand, empty ones hide, matches show in section
   context; **off**: a flat list of matching mods, separators hidden. The toggle resets to on
   when the filter clears and is not persisted. This is the **shared filter widget** every
-  Modbench list view uses (#247) — the separator toggle is an option on it, not a second
+  Modbench list view uses — the separator toggle is an option on it, not a second
   implementation, and Downloads reuses the same widget rather than VS Code's native tree Find.
 
-  **The filter is durable (#255)** — this section is the canonical description of behavior that
+  **The filter is durable** — this section is the canonical description of behavior that
   is identical on the [Plugins tree](plugins.md) and [Downloads](downloads.md):
 
   - **Entry**: the slot-1 magnifier, or `ctrl+F` with focus anywhere in the view.
@@ -331,7 +332,7 @@ The extension owns the editing backend process
     clicking away. These are one event at the API (`onDidHide`) and none of them is an intent to
     discard; the box is an entry mechanism, and the filter lives in `nameFilter.ts` and each
     view's provider. Reopening the box is prefilled with the active term, so it edits rather
-    than restarts. (The pre-#255 behavior — dismissing restored the full list — made the filter
+    than restarts. (Dismiss-clears-filter would make the filter
     usable only while typing, since clicking a result is the first thing anyone does with one.)
   - **Clearing is only ever explicit**: slot 1 swaps to a `$(clear-all)` variant while filtered,
     gated on a per-view `<viewId>.filterActive` context key — the same two-command-plus-context-key
@@ -348,9 +349,8 @@ The extension owns the editing backend process
     not whether the term matched.
   - **Lifetime**: durable within the load order, across tree refreshes and underlying data changes;
     not persisted across window reloads. It is a lens, not a setting.
-  - **Icon note**: `$(clear-all)` matches VS Code's own "Clear Extensions Search Results".
-    [#247](https://github.com/WhiskyTangoFawks/ModBench/issues/247) owns the icon rubric and may
-    override it; the choice is recorded here rather than silently inherited.
+  - **Icon note**: `$(clear-all)` matches VS Code's own "Clear Extensions Search Results";
+    the choice is recorded here rather than silently inherited.
 - **Profile selector**: reached from the [Loadout header](loadout-header.md)'s Profile row,
   not this tree — switching profile swaps the modlist *and* `plugins.txt` *and* invalidates
   any running editing backend's load order, so its scope is the workspace. It opens a quick pick
@@ -403,8 +403,8 @@ The extension owns the editing backend process
 - **Purge**: read the manifest, delete each listed hardlink, move `Data/` files that are
   neither in the manifest nor vanilla into `overwrite/` (F4SE outputs, MCM INI
   writes), then delete the manifest.
-- **Excluded from the conflict index and every deploy plan** (`fileConflictIndex.ts`'s walk,
-  #441, closing #438): any dot-prefixed file or directory, at any depth (a tracked mod's own
+- **Excluded from the conflict index and every deploy plan** (`fileConflictIndex.ts`'s
+  walk): any dot-prefixed file or directory, at any depth (a tracked mod's own
   `.git/`, `.gitignore`, editor/OS droppings), and a root-level directory literally named
   `source` (case-insensitive — Mod Management learns this by the fixed name mEdit's Track
   writes, `source/<plugin>/…`, never by calling the backend). Root-anchored: a *nested*
@@ -419,11 +419,11 @@ The extension owns the editing backend process
   *state* of the game directory, not a per-launch transient. MO2 can treat it as transient
   because usvfs is a live VFS it holds up across however many tool runs; physical hardlinks
   have no such lifetime, so "deployed" is a mode the user is in.
-- **Superseded and now removed** (#247): a Launch Game action that deployed, ran the game,
-  and purged on child exit. Its replacement is the [Loadout header](loadout-header.md)'s
+- **There is no Launch Game action** (deploy, run, purge-on-exit). The affordance is the
+  [Loadout header](loadout-header.md)'s
   **Launch…**, a task picker over the executables registry — one affordance that launches and
-  nothing else. The reasons it was withdrawn, recorded before it was:
-  Withdrawn for three reasons, none of them cost: (1) *the launched process is not the game* — a script
+  nothing else. Deploy-run-purge coupling was
+  rejected for three reasons, none of them cost: (1) *the launched process is not the game* — a script
   extender loader starts it, injects, and exits, so exit-on-child is a false signal, which is
   why MO2 tracks a whole process tree via a Job Object instead; (2) *purge mutates* — it
   sweeps non-manifest `Data/` files into `overwrite/` and prunes directories, so a false exit
@@ -435,10 +435,10 @@ The extension owns the editing backend process
   purge ~0.76 s, and walking a real 14,865-file `mods/` ~0.14 s (warm cache). The coupling
   was cheap and wrong, not expensive.
 
-### Launching executables as tasks (*specced, not yet implemented* — #96)
+### Launching executables as tasks (*specced, not yet implemented*)
 
-Everything in this section is a decision, not current behavior: what ships today is the
-superseded Launch Game command described above. Implementation replaces it.
+Everything in this section is a decision, not current behavior: today the
+[Loadout header](loadout-header.md)'s Launch… affordance is placed but unwired.
 
 Launching is a **VS Code task**, not a button. Tasks are the native "run a program" mechanism
 — a picker, user-editable configuration, terminal output, exit codes — and per
@@ -476,11 +476,11 @@ MO2 entries are authored against MO2's view of the filesystem, which is neither 
 nor Linux's. Two translations are mandatory:
 
 - **Wine drive letters.** `Z:` maps to the filesystem root; `C:` maps to the Proton prefix's
-  `drive_c` (#187). `normalizeGamePath` translates each explicitly — `Z:` strips to root
+  `drive_c`. `normalizeGamePath` translates each explicitly — `Z:` strips to root
   unchanged, `C:` resolves under an injected prefix detector's `drive_c`, and any other drive
   letter throws rather than guessing, since a third, user-custom-mapped letter is not
   guaranteed to live under the prefix at all. It is applied solely to `gamePath` today;
-  wiring it into consuming executables' `C:` tool paths is #96's executables-registry scope,
+  wiring it into consuming executables' `C:` tool paths is the executables-registry scope,
   not yet built. The translation is anchored to the start of the path, so a colon inside a
   folder name (`mods/A:B/…`) survives intact; it takes the platform as an explicit argument
   rather than reading `process.platform`, and on `win32` returns the path untouched.
@@ -542,7 +542,7 @@ difference is intentional and documented, not a defect.
 same plugins indexed leaves that index stale with no notification. Resolution is deferred, and
 it is an Editing-surface concern (see [medit.md](medit.md)), not a Loadout one.
 
-### Overwrite folder (#40)
+### Overwrite folder
 
 Purge sweeps `Data/` files that are neither a deployed link nor vanilla into
 `overwrite/` (runtime outputs — F4SE logs, MCM INI writes). This surfaces that
@@ -608,7 +608,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
   enable/disable, reorder, separator ops — asserted byte-faithfully; and the
   `FileConflictIndex` — winner resolution, conflict/override counts, missing-master and
   missing-mod detection.
-- **Non-regular dirents inside `mods/<Mod>/`** (#322): a symlink is followed transparently —
+- **Non-regular dirents inside `mods/<Mod>/`**: a symlink is followed transparently —
   file or directory — and participates in the index and deploy like a real entry, matching
   what `references/modorganizer/`'s own walker does with a reparse point. A symlinked file
   deploys as a real hardlink to the resolved target, not a duplicated symlink — `fs.link`'s
@@ -648,7 +648,7 @@ folder so the user can reassign or discard those files without leaving Modbench.
 - **Per-profile isolated saves and base-game config** (`local savegames` / INI) — optional
   MO2 features, deferred.
 - **Delta / overlay editing** — loading an arbitrary overriding-plugin set side-by-side
-  (xEdit-like) builds on `load-explicit`; deferred.
+  (xEdit-like) builds on the load-order snapshot; deferred.
 - **Reimplementing modding tools natively** — plugin editors, patcher frameworks and LOD/
   texture generators are *invoked* as tasks, not rebuilt. A task buys invocation, not
   integration: no output parsing, no conflict awareness, no result surfacing.
@@ -669,5 +669,5 @@ folder so the user can reassign or discard those files without leaving Modbench.
   and the Vortex adapter awaits confirmation that `vortex.deployment.json` is stable enough
   to bother with.
 - **Vision**: one tool handles the whole modding workflow — install → manual sort → launch
-  → inspect conflicts → edit records → patch — with the sidebar switching between this Mods
-  view and the mEdit views, and editing never requiring a deploy.
+  → inspect conflicts → edit records → patch — with the Mods view and the mEdit views side
+  by side, and editing never requiring a deploy.

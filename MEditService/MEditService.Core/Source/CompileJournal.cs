@@ -3,16 +3,14 @@ using System.Text.Json;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #416 comment 3 on the issue: the reduced-form journal, rebuilt against the recovery unit the
-/// ADR-0041 amendment gives compile — <c>refs/medit/last-compile/&lt;plugin&gt;</c> — rather than
-/// reusing the retired stage-1 journal (external <c>%LOCALAPPDATA%</c> storage, <c>LedgerGroupCommitter</c>,
-/// change-group GUID keys — all gone with #410's hidden-gitdir layer).
+/// The compile journal, built against the recovery unit the
+/// ADR-0041 amendment gives compile — <c>refs/medit/last-compile/&lt;plugin&gt;</c>.
 ///
 /// <para><b>What a crash mid-batch can and cannot corrupt</b>: each individual plugin's own binary
 /// write is already atomic by construction (temp-file-then-rename, <see cref="SourceRepository.ParkCompileSnapshot"/>
 /// only ever runs after that rename lands) — a crash can never leave one plugin's own binary/parked-ref
 /// pair inconsistent with itself. What it *can* leave is a multi-plugin batch silently half-done: plugin
-/// A compiled, plugin B didn't, and nothing says so — the user (or #417's dialog) has no way to tell
+/// A compiled, plugin B didn't, and nothing says so — the user (or the external-change dialog) has no way to tell
 /// "everything in this Save & Compile landed" from "only some of it did". This class exists for that
 /// gap alone.</para>
 ///
@@ -21,10 +19,6 @@ namespace MEditService.Core.Source;
 /// written before a batch starts, updated as each plugin's compile lands, and deleted when the whole
 /// batch has. A multi-plugin batch can span mod folders (each mod folder is its own repo), so recovery
 /// is per-repo by construction — one marker per <c>.git</c>, named by nothing but that folder.</para>
-///
-/// <para><b>Built, not wired</b> (#416 review): this ticket owns the primitive and its own tests; the
-/// crash-repair loud offer (#381) and #417's dialog suppression are the callers that will read
-/// <see cref="UnfinishedBatch"/>, on their own tickets.</para>
 /// </summary>
 public static class CompileJournal
 {
@@ -66,7 +60,7 @@ public static class CompileJournal
 
     /// <summary>
     /// A journal marker present in <paramref name="modFolder"/>'s repo, or null when the last batch
-    /// (if any) completed cleanly — the one small public read #381's crash-repair offer and #417's
+    /// (if any) completed cleanly — the one small public read the crash-repair offer and the
     /// external-change dialog both route on: a marker here means the mismatch between what's on disk
     /// and what the parked refs say is Modbench's own interrupted compile, not an external change.
     /// </summary>

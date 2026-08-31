@@ -2,7 +2,7 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Queries;
 
-// #272 / ADR-0036: the compound identity a compare-grid column is keyed by everywhere two
+// ADR-0036: the compound identity a compare-grid column is keyed by everywhere two
 // same-filename, different-origin columns must stay distinguishable — FieldDiff.Values/CellStates/
 // Resolutions, VmadPropertyDiff/VmadScriptDiff/ConditionDiff's equivalents, ClassifyResult.
 // PluginStates, SaveGroupResponse.ByPlugin. `|` is illegal in a Windows filename and an MO2
@@ -12,11 +12,9 @@ namespace MEditService.Core.Queries;
 //
 // PluginOrigin.DataDirectory is elided: a plugin resolved from the game's single Data directory is
 // already uniquely identified by its filename (there is only one Data/), so the plain filename is
-// itself a collision-free key for that case, not a shortcut that loses information. Before #34, two
-// same-filename plugins could never load together at all, so every fixture/load order of the day was
-// single-origin and this elision cost nothing to add; ADR-0044 has since made a winning and a losing
-// copy sharing a filename routine, and ColumnKeyTests/DuplicateFilenameLoadOrderApiTests now exercise
-// the multi-origin case directly.
+// itself a collision-free key for that case, not a shortcut that loses information. ADR-0044 makes
+// a winning and a losing copy sharing a filename routine; ColumnKeyTests/
+// DuplicateFilenameLoadOrderApiTests exercise the multi-origin case directly.
 public static class ColumnKey
 {
     private const char Delimiter = '|';
@@ -27,13 +25,11 @@ public static class ColumnKey
             : $"{plugin}{Delimiter}{origin}";
 }
 
-// #272 review: marks a DTO property whose dictionary keys are `ColumnKey.Of(plugin, origin)`
-// values — the single source of truth `CompareResultColumnKeyIntegrityTests` reflects over,
-// instead of a hand-typed property-name allowlist (which drifted three times on this ticket alone:
-// missed `VmadPropertyDiff.Raw`, `ConditionDiff.FieldCellStates`, `ConditionDiff.FieldResolutions`,
-// and carried one dead entry, `ClassifyResult.PluginStates`, which is never itself serialized).
-// Sits next to the property it marks, so adding a new column-keyed dictionary means annotating it
-// here, not remembering to also update a test file elsewhere.
+// Marks a DTO property whose dictionary keys are `ColumnKey.Of(plugin, origin)` values — the
+// single source of truth `CompareResultColumnKeyIntegrityTests` reflects over, instead of a
+// hand-typed property-name allowlist, which drifts. Sits next to the property it marks, so adding
+// a new column-keyed dictionary means annotating it here, not remembering to also update a test
+// file elsewhere.
 //
 // A dictionary whose *values* are themselves column-keyed dictionaries (FieldCellStates/
 // FieldResolutions: outer key is a field id like "function"/"param:0", inner key is the column) is

@@ -32,7 +32,7 @@ public class RecordIndexFactoryTests : IDisposable
         return path;
     }
 
-    // Writes a one-Npc plugin under the instance and indexes it, mirroring the shape #592 is about:
+    // Writes a one-Npc plugin under the instance and indexes it, mirroring the two-instance shape:
     // both instances use the same mod folder name, so the PluginKey is identical in each.
     private static PluginKey IndexOnePlugin(IRecordIndex index, string instanceRoot, string editorId)
     {
@@ -60,7 +60,7 @@ public class RecordIndexFactoryTests : IDisposable
         Assert.Equal(0, result.Total);
     }
 
-    // The whole of #592 at this seam: `origin` is a mod folder name, unique only within an MO2
+    // `origin` is a mod folder name, unique only within an MO2
     // instance, so an index keyed any wider than the instance would hand one instance the other's
     // rows for the same (plugin, origin).
     [Fact]

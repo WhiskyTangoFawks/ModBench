@@ -149,7 +149,7 @@ describe('BackendManager.start', () => {
     expect(mgr.isHealthy).toBe(true);
   });
 
-  // #205: the Output channel's level, translated by the caller into Serilog
+  // The Output channel's level, translated by the caller into Serilog
   // spawn args, rides along on the same argv as --urls.
   it('appends the injected Serilog level args when spawning', async () => {
     const state = { healthy: false };

@@ -19,15 +19,14 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
     .CreateBootstrapLogger();
 
-// #515: the "LocalAppData" env var default this used to set by hand now lives in
-// LocalizedStrings.EnsureLocalAppDataDefault, called from every Core deep-parse call site
-// (Source.LocalizedStrings.ForRead) before Mutagen ever needs it — no reconcile runs (and no
-// Mutagen call at all) before this process's first plugin parse, so nothing here needs to set it
-// up front any more.
+// The "LocalAppData" env var default lives in LocalizedStrings.EnsureLocalAppDataDefault, called
+// from every Core deep-parse call site (Source.LocalizedStrings.ForRead) before Mutagen ever
+// needs it — no reconcile runs (and no Mutagen call at all) before this process's first plugin
+// parse, so nothing here needs to set it up front.
 
 try
 {
-    // #343: default content root is the launching process's cwd, not this binary's own directory —
+    // Default content root is the launching process's cwd, not this binary's own directory —
     // the extension spawns us without setting one, so appsettings.json (and its
     // Microsoft.AspNetCore: Warning override) silently never loaded. Anchor to our own directory so
     // every launch mode (dev-attached, extension-spawned) behaves alike.
@@ -60,7 +59,7 @@ try
     builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
     builder.Services.AddSingleton<SchemaReflector>();
     builder.Services.AddSingleton<TableDdlBuilder>();
-    // #592 / ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —
+    // ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —
     // the load request names it, so there is nothing for the composition root to state here.
     builder.Services.AddSingleton<IRecordIndexFactory, DuckDbRecordIndexFactory>();
     builder.Services.AddSingleton<ConflictClassifier>();
@@ -72,18 +71,18 @@ try
     builder.Services.AddSingleton<ContainerChildQueryService>();
     builder.Services.AddSingleton<RecordTextCodec>();
     builder.Services.AddSingleton<TrackService>();
-    // #415: the single write path, plus the read-time freshness validation the read model consumes.
+    // The single write path, plus the read-time freshness validation the read model consumes.
     builder.Services.AddSingleton<SourceFreshness>();
     builder.Services.AddSingleton<RecordEditService>();
-    // #416: the write path's other half — source text -> binary.
+    // The write path's other half — source text -> binary.
     builder.Services.AddSingleton<PluginCompileService>();
-    // #417: the bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
+    // The bridge's own live-watch lifecycle and unanswered-question queue — one instance for the
     // whole process, so the reconcile-time check (PUT /load-order) and the live watcher share it.
     builder.Services.AddSingleton<ExternalChangeWatcher>();
 
     var app = builder.Build();
 
-    // #587 / ADR-0001: the index keeps mirroring the disk while a load order is held. Subscribed
+    // ADR-0001: the index keeps mirroring the disk while a load order is held. Subscribed
     // once here rather than per reconcile — the watcher is a process singleton, and re-subscribing
     // on every reconcile would stack a handler per reconcile; which plugins are watched is re-decided
     // per reconcile instead (ExternalChangeLoadOrderHook.RunAfterReconcile).
@@ -92,7 +91,7 @@ try
         app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(nameof(IndexMirror)));
     app.Services.GetRequiredService<ExternalChangeWatcher>().IndexedBinaryChanged = indexMirror.Apply;
 
-    // #343: one summary line per request instead of ASP.NET Core's own six-line pipeline log (now
+    // One summary line per request instead of ASP.NET Core's own six-line pipeline log (now
     // silenced by appsettings.json's Microsoft.AspNetCore: Warning override — a different category
     // than this middleware writes under, so the override doesn't touch it and no second override is
     // needed here). The level is what makes it a win rather than a regression: most endpoint guards

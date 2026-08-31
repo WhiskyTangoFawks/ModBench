@@ -12,9 +12,8 @@ namespace MEditService.Core.Source;
 /// created, destroyed or replaced outside Modbench between any two calls — MO2's Replace install
 /// shell-deletes the whole folder — so the answer is re-derived every time it is asked.
 ///
-/// Public (not internal) since #417: the load-time hash check runs from <c>MEditService.Api</c>'s
-/// reconcile handlers, which cannot see Core's internals — the same "promote once a second real
-/// consumer exists" rule <c>SourceRecordType</c> followed.
+/// Public (not internal): the load-time hash check runs from <c>MEditService.Api</c>'s
+/// reconcile handlers, which cannot see Core's internals.
 /// </summary>
 public static class ModFolders
 {
@@ -54,7 +53,7 @@ public static class ModFolders
     public static string? TrackedOf(ILoadOrder? loadOrder, PluginKey plugin) =>
         Of(loadOrder, plugin) is { } modFolder && SourceRepository.IsTracked(modFolder) ? modFolder : null;
 
-    /// <summary>#449: this plugin's own compile-freshness answer — "source ahead of binary" — or the
+    /// <summary>This plugin's own compile-freshness answer — "source ahead of binary" — or the
     /// degrade-safe empty answer for a plugin with no mod folder at all (a Data-directory master).
     /// The same rule stated over the two facts it needs, mirroring <see cref="IsEditable"/>.</summary>
     public static CompileFreshness CompileFreshnessOf(string origin, string pluginPath, string pluginFileName) =>

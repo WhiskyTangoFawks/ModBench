@@ -14,13 +14,10 @@ namespace MEditService.Core.Edits;
 /// Writes a plugin binary: import, write to a sibling temp file, commit by rename, drop a
 /// timestamped <c>.bak</c> beside it (ADR-0008), prune the oldest.
 ///
-/// #410/ADR-0041 reduced this to exactly that. Its other half — applying a list of
-/// a change list to the imported mod (field, header, create, delete, renumber, VMAD and
-/// condition paths, plus the read-only-field rule) — retired with the write model it consumed.
-/// What remains is the mechanism the text-first write path needs: ADR-0041's Save &amp; Compile
-/// serializes a working tree into a mod and hands it here to become bytes on disk.
+/// Mechanism only, no edit semantics: ADR-0041's Save &amp; Compile serializes a working tree into
+/// a mod and hands it here to become bytes on disk.
 ///
-/// The #369 binary round-trip stability gate runs through <see cref="SaveAsync"/> and stays the
+/// The binary round-trip stability gate runs through <see cref="SaveAsync"/> and stays the
 /// permanent guard on it.
 /// </summary>
 public sealed class PluginWriter(ILogger<PluginWriter> logger)
@@ -31,7 +28,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
 
     /// <summary>
     /// Imports the plugin at <paramref name="pluginPath"/> and writes it back out to a temp file,
-    /// returning the uncommitted result. <paramref name="loadOrder"/> (#337/ADR-0038): plugin
+    /// returning the uncommitted result. <paramref name="loadOrder"/> (ADR-0038): plugin
     /// filenames in the load order's current load order, used to order the written master list
     /// explicitly (xEdit-familiar canonical form on disk — ADR-0034 at the file level) rather than
     /// leaving it to Mutagen's undefined default. Optional, because PluginWriter has no load order
@@ -43,7 +40,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         IReadOnlyList<string>? loadOrder = null)
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(pluginPath));
-        // #515: same explicit strings parameters every other deep-parse call site now builds. This
+        // Same explicit strings parameters every other deep-parse call site builds. This
         // method has no load order concept of its own (see its own doc comment) and so no origin to
         // distinguish a mod folder from the game Data folder — the single-argument ForRead overload
         // applies, the same as ExternalChangeAbsorber/ExternalChangeEditLander's identical call.
@@ -52,7 +49,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     }
 
     /// <summary>
-    /// <see cref="PrepareAsync"/>'s other half (#416): writes an already-assembled <paramref name="mod"/>
+    /// <see cref="PrepareAsync"/>'s other half: writes an already-assembled <paramref name="mod"/>
     /// rather than importing one from <paramref name="pluginPath"/> first — Save &amp; Compile's own
     /// entry point, since compile's mod is deserialized whole from the source tree
     /// (<see cref="PluginCompileService"/>), never read off the binary it is about to replace.
@@ -70,7 +67,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         var tmpPath = Path.Combine(tmpDir, Path.GetFileName(pluginPath));
         Directory.CreateDirectory(tmpDir);
 
-        // #520 review: everything from here down can throw before this method ever returns a
+        // Everything from here down can throw before this method ever returns a
         // PreparedPluginSave — most concretely, a plugin whose only reference to a master lives in
         // a VMAD struct-list script property (Mutagen-Modding/Mutagen#688) throws
         // UnmappableFormIDException out of WriteAsync below, on every retry, for as long as that
@@ -84,7 +81,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
         // and the ADR does not decide it, so this method doesn't either.
         try
         {
-            // #506/ADR-0042: HEDR.NextObjectID and HEDR.NumRecords are written verbatim from the mod's
+            // ADR-0042: HEDR.NextObjectID and HEDR.NumRecords are written verbatim from the mod's
             // own header, never recomputed. Mutagen's defaults (NextFormIDOption.Iterate,
             // RecordCountOption.Iterate) re-derive both from the record set — NextObjectID as max
             // self-authored FormID + 1 (or the game's initial value when there are none) — and real-world
@@ -100,13 +97,13 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
                 .NoNextFormIDProcessing()
                 .WithRecordCount(RecordCountOption.NoCheck);
 
-            // #515 AC1/AC3, #537: a Localized mod's own strings must land beside the *real* plugin, not
+            // A Localized mod's own strings must land beside the *real* plugin, not
             // orphaned in the temp directory this method discards — but not written directly to their
             // real destination either. Mutagen's own default (PluginUtilityTranslation.SetStringsWriter,
             // which only fires when nothing here supplies one) derives its write folder from the write
             // path — the temp path here — which is why a writer must be supplied explicitly at all.
-            // #537 nests that writer's own folder inside the same tmpDir the plugin binary already
-            // writes to, rather than pointing it at pluginPath's real Strings/ folder directly: the real
+            // That writer's own folder nests inside the same tmpDir the plugin binary already
+            // writes to, rather than pointing at pluginPath's real Strings/ folder directly: the real
             // .esp/.esm gets the same temp-write-then-rename discipline from PreparedPluginSave.Commit,
             // and the strings files now get it too, moved into place only once every write here has
             // succeeded.
@@ -119,7 +116,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
                     encodingProvider: MutagenEncoding.Default));
             }
 
-            // #337/ADR-0038: masters are wholly content-derived, unconditionally, on every write —
+            // ADR-0038: masters are wholly content-derived, unconditionally, on every write —
             // Mutagen's default MastersListContentOption.Iterate. Ordering is explicit rather than left
             // to Mutagen's default (alphabetical, masters-first): the load order's current load order when
             // supplied, so the written file's master list matches what a modder opening it in xEdit
@@ -129,7 +126,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
 
             await writeBuilder.WriteAsync();
 
-            // #537: whatever StringsWriter actually produced (only present when UsingLocalization, and
+            // Whatever StringsWriter actually produced (only present when UsingLocalization, and
             // only once WriteAsync's own StringsWriter.Dispose has run) rides to its real Strings/ folder
             // through Commit(), never written here directly.
             var stringsFiles = Directory.Exists(tmpStringsDir)
@@ -148,8 +145,8 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
             // directory is exactly when Directory.Delete itself throws — if that escaped unguarded it
             // would replace the real exception (UnmappableFormIDException, the one
             // PluginDiagnosis.HasUnmappableFormID and every catch downstream is built to recognize)
-            // with a confusing IOException about a temp directory, silently reverting to the
-            // pre-#520 crash exactly when the filesystem is uncooperative. This method is static, so
+            // with a confusing IOException about a temp directory, exactly when the filesystem is
+            // uncooperative. This method is static, so
             // there is no ILogger in scope to note the failed cleanup with; an orphaned tmpDir is
             // strictly better than losing the diagnosis, so it is swallowed rather than escalated.
             try { Directory.Delete(tmpDir, recursive: true); }
@@ -172,7 +169,7 @@ public sealed class PluginWriter(ILogger<PluginWriter> logger)
     }
 
     /// <summary><see cref="SaveAsync"/>'s <see cref="PrepareFromModAsync"/> counterpart — Save &amp;
-    /// Compile's own entry point (#416).</summary>
+    /// Compile's own entry point.</summary>
     public async Task<string> SaveFromModAsync(
         IMod mod,
         string pluginPath,

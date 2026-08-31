@@ -1,7 +1,7 @@
 import type { LoadOrderProgress } from './EditingController';
 
-/** #307 / ADR-0035: what the Plugins view says about itself while a reconcile is running — the text
- *  behind `TreeView.message`, and the whole of AC3.
+/** ADR-0035: what the Plugins view says about itself while a reconcile is running — the text
+ *  behind `TreeView.message`.
  *
  *  The statement exists because **an absent conflict badge is indistinguishable from "no
  *  conflict"**. If browsing opens at second five and the winner sweep lands at second ninety,
@@ -30,7 +30,7 @@ function countedPhase(status: LoadOrderProgress): string {
   // "0 of 0 plugins indexed" reads as a stalled reconcile rather than one still resolving the
   // snapshot, so the count waits until there is one to state.
   if (status.totalPlugins === 0) return 'Reconciling load order…';
-  // #342: the reconcile opens and indexes one plugin at a time, so an empty
+  // The reconcile opens and indexes one plugin at a time, so an empty
   // `indexedPlugins` here is honest — the load order's first plugin (often a large base-game
   // master) can take a real while to open and index before anything lands. But a bare "0 of 612"
   // reads exactly like a stalled reconcile, indistinguishable from one that truly is stuck, so this
@@ -42,8 +42,8 @@ function countedPhase(status: LoadOrderProgress): string {
   return `Reconciling load order — ${status.indexedPlugins.length} of ${status.totalPlugins} plugins indexed.`;
 }
 
-/** #308 / ADR-0035: the record editor's own half of "an absent conflict badge must never be
- *  mistakable for 'no conflict'" (#307 built the tree's). Unlike the tree, this surface *does*
+/** ADR-0035: the record editor's own half of "an absent conflict badge must never be
+ *  mistakable for 'no conflict'" (`loadOrderProgressMessage` above is the tree's). Unlike the tree, this surface *does*
  *  render conflict colouring today — an unmarked cell here doesn't just omit a badge, it actively
  *  paints a verdict — so the statement has to name both facts: the comparison itself is
  *  incomplete, and the colouring rendered from it is not final because of that. One without the
@@ -62,7 +62,7 @@ export function recordPanelIncompleteMessage(conflictsComputed: boolean): string
     + 'computed for every plugin, so the colouring here is not final.';
 }
 
-/** #307: one poll tick of a running reconcile, translated into what the tree and the view should do
+/** One poll tick of a running reconcile, translated into what the tree and the view should do
  *  about it — chevrons for what is indexed, decorations for what has failed, and the statement of
  *  what is not yet known.
  *
@@ -89,7 +89,7 @@ export function makeReconcileProgressHandler(deps: {
     // Apply only when something actually landed. Applying re-renders the whole tree, and
     // `PluginTreeProvider.getPluginChildren` is uncached, so re-applying an unchanged tick every
     // poll would re-fetch record types for every expanded row — a request storm on a deep tree,
-    // for no visible change. Failures count as landing too (AC6): a plugin that failed to index
+    // for no visible change. Failures count as landing too: a plugin that failed to index
     // is never added to the indexed set, so counting only plugins would leave its row
     // undecorated until the next plugin happened to land.
     const landed = `${status.indexedPlugins.length}:${status.failures.length}`;

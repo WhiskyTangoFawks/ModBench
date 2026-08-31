@@ -10,12 +10,11 @@ namespace MEditService.Core.Schema;
 /// <see cref="ColumnSpec.Apply"/> (record-level) and <c>SchemaReflector</c>'s own sub-field appliers
 /// (a struct member or array element, one level down from a column).
 ///
-/// <para>#532: replaces a bare <c>bool</c> that could only ever mean "the outer JSON shape didn't
-/// match" (#503's array-vs-single-element / struct-vs-single-member guard). <see cref="PropertyNotFound"/>
+/// <para><see cref="PropertyNotFound"/>
 /// and <see cref="ValueRejected"/> answer "no" for two different reasons with two different fixes — a
 /// caller needs to tell them apart rather than collapsing both into one undifferentiated
-/// <c>false</c>, the same reasoning #531's own <c>RecordEditRefusal.ListElementTypeUnresolved</c>
-/// applied a level up. The two are not merely a top-level-column distinction, either: one level down,
+/// <c>false</c>, the same reasoning behind <c>RecordEditRefusal.ListElementTypeUnresolved</c>
+/// a level up. The two are not merely a top-level-column distinction, either: one level down,
 /// inside a sub-field shared by several concrete sibling leaf types that don't all declare it (OMOD's
 /// own sparse leaf-union — <c>SchemaReflector.BuildObjectModPropertyLeafFields</c>), <see cref="PropertyNotFound"/>
 /// is an <i>expected, silent</i> outcome (see <c>SchemaReflector.ApplySubFields</c>), while
@@ -48,23 +47,21 @@ public enum ApplyOutcome
     /// unparseable or wrongly-shaped FormKey), a JSON <c>null</c> into a non-nullable column, or (one
     /// level up, for a struct/array column) the whole value not being the JSON shape the field takes
     /// at all. Always a refusal, at every level: a struct/array column with a rejected member never
-    /// attaches its partially-built value to the record, the same "before <c>SetValue</c>" invariant
-    /// #503/#531 already established for the outer shape guards.</summary>
+    /// attaches its partially-built value to the record — the same "nothing written before
+    /// <c>SetValue</c>" invariant the outer shape guards hold.</summary>
     ValueRejected,
 
     /// <summary>
-    /// #531/#532: the array <i>is</i> the JSON shape the field takes, but at least one element's own
+    /// The array <i>is</i> the JSON shape the field takes, but at least one element's own
     /// concrete type is abstract (OMOD <c>properties</c>' <c>AObjectModProperty&lt;T&gt;</c> today)
     /// and could not be determined from that element's own payload
     /// (<c>SchemaReflector.ResolveAbstractListElementType</c>). Its own value, distinct from
-    /// <see cref="ValueRejected"/>, because it used to be inferred one layer up in
-    /// <c>RecordEditService.RefuseFieldOutcome</c> from "the outcome was a rejection and the value
-    /// happens to be a genuine JSON array" — a heuristic that #532 broke: a well-typed element whose
-    /// own <i>sub-field</i> value is declined (<c>ApplySubFields</c>' fold, still
-    /// <see cref="ValueRejected"/>) is now also "a rejection with a genuine JSON array", and the two
-    /// need different messages (name a discriminator vs. send a value this field accepts). Answering
-    /// the fix's own outcome directly, rather than reconstructing it from the value's shape, is what
-    /// makes the two unambiguous again.
+    /// <see cref="ValueRejected"/>: inferring it from "a rejection whose value is a genuine JSON
+    /// array" is ambiguous — a well-typed element whose own <i>sub-field</i> value is declined
+    /// (<c>ApplySubFields</c>' fold, still <see cref="ValueRejected"/>) matches that description
+    /// too, and the two need different messages (name a discriminator vs. send a value this field
+    /// accepts). Answering the outcome directly, rather than reconstructing it from the value's
+    /// shape, is what keeps the two unambiguous.
     /// </summary>
     ListElementTypeUnresolved,
 }
@@ -80,20 +77,13 @@ public sealed record ColumnSpec(
     /// <summary>
     /// Writes this column's whole value onto a record, or <c>null</c> when the column is read-only.
     ///
-    /// <para>#503: originally a plain <c>bool</c> — returns whether the write happened. A complex
-    /// field (CONTEXT.md: array or struct) is written as one atomic value, so an applier handed
-    /// something that is not array-/object-shaped has nothing it could sensibly write and answered
-    /// <c>false</c> — which <c>RecordFieldWriter.TryApply</c> turned into a refusal naming the field.
-    /// It used to be an <c>Action</c> that simply returned, and the write path reported success
-    /// regardless, so a per-element payload lost the user's edit silently. A <c>bool</c> here was what
-    /// made that unrepresentable rather than merely fixed: a future guard cannot no-op its way into
-    /// "applied".</para>
-    ///
-    /// <para>#532: widened from that <c>bool</c> to <see cref="ApplyOutcome"/> for the scalar and
-    /// FormLink appliers, which had exactly this same silent-<c>true</c> defect one layer down — a
-    /// missing property on the record's runtime type, a converter that threw or declined, an
-    /// unparseable FormKey — see <see cref="ApplyOutcome"/> for why a second bool state was not
-    /// enough.</para>
+    /// <para>A complex field (CONTEXT.md: array or struct) is written as one atomic value, so an
+    /// applier handed something that is not array-/object-shaped has nothing it could sensibly
+    /// write and answers a non-Applied outcome, which <c>RecordFieldWriter.TryApply</c> turns into
+    /// a refusal naming the field. Returning an outcome rather than being a fire-and-forget
+    /// <c>Action</c> is what makes a silently lost edit unrepresentable: a guard cannot no-op its
+    /// way into "applied". See <see cref="ApplyOutcome"/> for why the failure outcomes are
+    /// distinct.</para>
     /// </summary>
     Func<IMajorRecord, JsonElement, ApplyOutcome>? Apply,
     bool IsArray = false,
@@ -103,13 +93,13 @@ public sealed record ColumnSpec(
     bool IsBitmask = false,
     IReadOnlyList<string>? EnumBitValues = null,
 
-    // ── #413 view-generation facts ────────────────────────────────────────────
-    // Three things the generated json_extract views (ADR-0041 / D2) need to know that nothing else
-    // does. All set mechanically at reflection time from the CLR type — never from a curated list of
-    // field names, which is the property D2's rule turns on.
+    // ── View-generation facts ─────────────────────────────────────────────────
+    // Three things the generated json_extract views (ADR-0041) need to know that nothing else
+    // does. All set mechanically at reflection time from the CLR type — never from a curated list
+    // of field names, which is the property the rule turns on.
 
     /// <summary>
-    /// This column is the #263 scalar widen: several concrete subclasses share one GRUP signature
+    /// This column is a scalar widen: several concrete subclasses share one GRUP signature
     /// and disagree about the field's type, so it became a read-only text column whose Extract
     /// dispatches on the record's runtime type. It has no single JSON path with consistent
     /// semantics — the document holds a number for one sibling and a string for another — so views
@@ -136,7 +126,7 @@ public sealed record ColumnSpec(
     string? ViewDefaultLiteral = null)
 {
     /// <summary>
-    /// Whether a generated view can carry this column at all (D2, as amended): scalar leaves only.
+    /// Whether a generated view can carry this column at all: scalar leaves only.
     /// Arrays and structs are omitted because the document's nested shape has no faithful scalar
     /// rendering, and the widened columns because they have no consistent path — in both cases "no
     /// column" beats "a column with broken semantics".
@@ -166,7 +156,7 @@ public sealed class RecordTableSchema
     /// Whether this record type can carry a VMAD (script attachment) subrecord — computed once at
     /// schema-reflection time from Mutagen's own type system
     /// (<c>IHaveVirtualMachineAdapterGetter</c>), the same interface
-    /// <see cref="Records.DuckDbRecordIndex.IndexVmad"/> already keys off. Issue #179: drives
+    /// <see cref="Records.DuckDbRecordIndex.IndexVmad"/> already keys off. Drives
     /// whether the frontend renders a Scripts (VMAD) section at all, rather than relying on
     /// per-record data (a VMAD-capable type with no scripts yet should still show an empty,
     /// addable section; a VMAD-incapable type like CMPO must never show one).

@@ -25,15 +25,10 @@ reviewed in SCM. Modbench already matches that exactly.
 Building the badge would mean teaching both backend query paths a Head-union view
 so the tree could render ghost rows — records present at Head but absent at
 Effective. That is backend surgery across two read paths in order to *diverge
-from* the native idiom. The #444 rearchitecture (ingest-from-source) does not
-change this question: a deleted record is still "absent from source, visible in
-SCM" under any ingest design — which is why this is recorded as a rejection
-rather than closed as superseded.
+from* the native idiom. An ingest-from-source rearchitecture does not change this
+question: a deleted record is still "absent from source, visible in SCM" under
+any ingest design.
 
 If SCM's file-path presentation (`…/NPC_/0001A2B3.json` rather than a record
 display name) ever hurts in practice, the cheaper future answer is enriching SCM
 presentation, not ghost rows in the tree.
-
-## Prior requests
-
-- #430 — "Deleted-record badge in the plugins tree: Head-union listing + type counts, or wontfix per Explorer idiom" (split from #428's plan gate; decided 2026-08-21)

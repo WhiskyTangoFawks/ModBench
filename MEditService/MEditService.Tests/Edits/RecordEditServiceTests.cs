@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415 AC1: editing a field on a tracked plugin produces working-tree dirt on that record's source
+/// Editing a field on a tracked plugin produces working-tree dirt on that record's source
 /// file — the single write path (ADR-0041). Asserted against a real git repo through the real CLI,
 /// because "visible and diffable in the native Source Control panel" is a claim about what
 /// <c>git status</c> says, and nothing else can answer it.
@@ -25,17 +25,16 @@ public sealed class RecordEditServiceTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // ---- #453 scope 3 / AC2: an editor_id edit is a rename as well as a content change ----
+    // ---- an editor_id edit is a rename as well as a content change ----
 
     /// <summary>
     /// The source unit's file name carries the EditorID, so writing a new one has to move the file as
     /// well as rewrite it — otherwise path and content disagree, and the tree claims a record still has
     /// the name it no longer has.
     ///
-    /// <para><b>Nothing could edit <c>editor_id</c> at all before #453</b>, which is why nothing
-    /// observed the gap: <c>SchemaReflector.BaseSkip</c> excludes <c>EditorID</c> from the reflected
-    /// columns (it is a row identity column, carried separately), so <c>RecordFieldWriter</c> answered
-    /// <c>FieldNotFound</c> and the edit refused before any path was computed.</para>
+    /// <para><c>SchemaReflector.BaseSkip</c> excludes <c>EditorID</c> from the reflected
+    /// columns (it is a row identity column, carried separately), so <c>RecordFieldWriter</c> alone
+    /// would answer <c>FieldNotFound</c> — this edit needs its own dedicated path.</para>
     /// </summary>
     [Fact]
     public void EditingEditorId_MovesTheSourceFileToItsNewName()
@@ -48,7 +47,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.False(File.Exists(Path.Combine(_mod.ModFolder, oldRelative)));
-        // #459: resolved *after* the rename, not before — RelativeSourcePath answers where the record
+        // Resolved *after* the rename, not before — RelativeSourcePath answers where the record
         // actually is right now (SourceUnitResolver, live off disk), and before the rename that is
         // still the old file (FormKey-suffix matching finds it under either EditorID).
         //
@@ -67,13 +66,13 @@ public sealed class RecordEditServiceTests : IDisposable
     }
 
     /// <summary>
-    /// AC2, asserted in the form git can actually produce.
+    /// The rename, asserted in the form git can actually produce.
     ///
     /// <para><b>Unstaged, git reports a rename as delete + untracked add, always</b> — measured on real
-    /// git during #453's design: <c>git status --porcelain</c> gives <c>" D &lt;old&gt;"</c> plus
+    /// git: <c>git status --porcelain</c> gives <c>" D &lt;old&gt;"</c> plus
     /// <c>"?? &lt;new&gt;"</c>, and <c>git diff -M</c> agrees, because git does no rename detection
-    /// against untracked paths. That is git's design and not a deficiency in this write path, which is
-    /// why AC2's literal wording ("git status shows a rename") is not satisfiable by any
+    /// against untracked paths. That is git's design and not a deficiency in this write path — "git
+    /// status shows a rename" is not satisfiable by any
     /// implementation. Rename detection is a diff-time inference from content similarity, so it appears
     /// the moment the change is staged — the gesture that precedes every commit.</para>
     ///
@@ -81,7 +80,7 @@ public sealed class RecordEditServiceTests : IDisposable
     /// pass: <c>R099</c> for a container's <c>RecordData.json</c>, <c>R067</c> for a four-line flat
     /// record, and <c>R050</c> for the pathological minimum (a document holding nothing but FormKey and
     /// EditorID, renamed from a 1-character EditorID to a 10-character one) — exactly git's default 50%
-    /// threshold. If the document shape ever shrinks, R050 is the number that says AC2 is at risk.</para>
+    /// threshold. If the document shape ever shrinks, R050 is the number that says this is at risk.</para>
     /// </summary>
     [Fact]
     public void EditingEditorId_ShowsAsARenameOnceStaged_NotADeleteAndAdd()
@@ -91,7 +90,7 @@ public sealed class RecordEditServiceTests : IDisposable
 
         Assert.True(Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "editor_id", Json("\"RenamedNpc\"")).Applied);
 
-        // #459: resolved *after* the rename — see the sibling test's own comment. Resolving both paths
+        // Resolved *after* the rename — see the sibling test's own comment. Resolving both paths
         // up front would have them collide on the same (still-old) file and make the assertions below
         // pass without checking anything.
         var newRelative = _mod.RelativeSourcePath(_mod.Npc, "npc_", "RenamedNpc").Replace('\\', '/');
@@ -206,7 +205,7 @@ public sealed class RecordEditServiceTests : IDisposable
         Assert.Empty(_mod.GitStatus());
     }
 
-    // #422: _filter is a one-shot snapshot of whatever matched when SetFilter ran — a field edit that
+    // _filter is a one-shot snapshot of whatever matched when SetFilter ran — a field edit that
     // changes the value a filter predicate reads can flip that record's membership, and nothing but
     // the edit path itself is positioned to re-materialize it afterward.
     [Fact]

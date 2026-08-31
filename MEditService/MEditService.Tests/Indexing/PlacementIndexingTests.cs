@@ -348,9 +348,9 @@ public class PlacementIndexingTests
         Assert.Null(b.Repo.GetPlacement("FFFFFF:TestWorld.esp", new PluginKey("TestWorld.esp", "Data")));
     }
 
-    // #272 / ADR-0036: two origins loading the same physical file — the `placement` table already
-    // carries `origin` (#271) and IndexPlacement already scopes its delete by it; GetPlacement's own
-    // read side was the remaining filename-only-keyed gap.
+    // ADR-0036: two origins loading the same physical file — the `placement` table
+    // carries `origin` and IndexPlacement scopes its delete by it; GetPlacement's own
+    // read side must scope by it too, not by filename alone.
     [Fact]
     public void GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
@@ -372,10 +372,10 @@ public class PlacementIndexingTests
         Assert.Null(repo.GetPlacement(formKey, new PluginKey("Placed.esp", "ModC")));
     }
 
-    // #296 / ADR-0036: same shape as GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin above —
-    // one mod indexed twice under the same filename at two real (non-Data) origins. Worldspace tree
-    // reads' outer WHERE filtered by plugin filename alone, so before this fix a query scoped to one
-    // origin still returned both origins' rows merged together.
+    // ADR-0036: same shape as GetPlacement_SameFilenameDifferentOrigin_ScopesToOrigin above —
+    // one mod indexed twice under the same filename at two real (non-Data) origins. A worldspace
+    // tree read whose outer WHERE filters by plugin filename alone answers a query scoped to one
+    // origin with both origins' rows merged together.
     private sealed record WorldspaceFixture(
         DuckDbRecordIndex Repo, string WorldspaceFk, string ExtCellFk, string PlacedFk, string IntCellFk)
         : IDisposable
@@ -473,7 +473,7 @@ public class PlacementIndexingTests
         Assert.Null(bare.CellY);
     }
 
-    // #458: same non-unique-ordering shape as Search's — several interior cells below share
+    // Same non-unique-ordering shape as Search's — several interior cells below share
     // "DupCell", two more share a blank EditorID (ordinary in real plugin data), so an
     // ORDER BY c.editor_id with no tiebreak leaves DuckDB free to place tied rows on either side of
     // a LIMIT/OFFSET boundary differently across calls. Paging the full set two cells at a time and

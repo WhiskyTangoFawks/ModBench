@@ -13,13 +13,13 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     // resolveFormKey: ADR-0031's O(1) lookup (IRecordReads.Resolve), batched once per
     // Classify call so every formKey-typed FieldDiff leaf's Resolutions is populated in this same
     // pass rather than round-tripped per value. Null when the caller has no resolver available
-    // (existing behavior — no Resolutions populated).
+    // (no Resolutions populated).
     //
-    // pluginParticipates (#267 / ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
-    // plugin, origin) since #34 — a filename alone can name two loaded copies. A
+    // pluginParticipates (ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
+    // plugin, origin) — a filename alone can name two loaded copies. A
     // non-participating plugin's override is excluded before conflict/diff computation — it can
     // never contribute a conflict, regardless of its field values. Null (the default) means every
-    // plugin in conflictingRecords participates, preserving prior behavior for existing callers.
+    // plugin in conflictingRecords participates.
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
@@ -27,7 +27,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
-        // #267 / ADR-0035: a non-participating plugin's override never contributes to conflict
+        // ADR-0035: a non-participating plugin's override never contributes to conflict
         // classification — filtered out before OnlyOne/winner/diff computation below, not just
         // masked in the result, so it can't leak into pluginMasters/IsInjectedRecord either.
         conflictingRecords = ConflictRules.FilterParticipating(
@@ -60,7 +60,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
 
-        // #272 / ADR-0036: keyed by the compound column identity, not the bare plugin — two
+        // ADR-0036: keyed by the compound column identity, not the bare plugin — two
         // overrides sharing a filename but differing in origin must land as two independent entries
         // here, not collide (ToDictionary would throw on a literal duplicate key).
         var pluginConflictThis = conflictingRecords.ToDictionary(
@@ -112,9 +112,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private const int MaxArrayChildCount = 500;
 
     // Bundles the per-Classify-call context (master plugin, all overrides, logger, and the ADR-0031
-    // resolver) that every recursive Build*Children/MakeChild step needs, so adding the resolver
-    // didn't push any method over the parameter-count limit.
-    // MasterColumn (#272 / ADR-0036): the compound (plugin, origin) identity of the master record,
+    // resolver) that every recursive Build*Children/MakeChild step needs.
+    // MasterColumn (ADR-0036): the compound (plugin, origin) identity of the master record,
     // pre-computed by the caller via ColumnKey.Of — every dictionary/lookup below is keyed the same
     // way, so a plain-plugin comparison never accidentally matches the wrong column.
     private sealed record DiffContext(
@@ -132,31 +131,27 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         HashSet<string> sortedArrays)
     {
         // Record-wide fallback only — used when *no* plugin has a value for a field (the per-field
-        // computation below has nothing to fall through to at that point, matching prior behavior
-        // for a field genuinely absent everywhere).
+        // computation below has nothing to fall through to at that point).
         var recordWinnerColumn = ColumnKey.Of(winner.Plugin, winner.Origin);
         var masterFieldMeta = records[0].Fields
             .ToDictionary(f => f.Metadata.Name, f => f.Metadata);
         return [.. fieldNames
             .Select(fieldName =>
             {
-                // #491: a Partial Form override's own fields are excluded from conflict detection
-                // entirely — treated the same way a genuinely-null field already is (the "PartialForm
-                // null rule" above), regardless of what value this field actually carries. That reuse
-                // is deliberate: ComputeCellStates/PickWinner/BuildStructChildren already skip a null
+                // A Partial Form override's own fields are excluded from conflict detection
+                // entirely — treated the same way a genuinely-null field already is, regardless of
+                // what value this field actually carries. That reuse is deliberate:
+                // ComputeCellStates/PickWinner/BuildStructChildren already skip a null
                 // value's plugin as a candidate for winning, contesting or contributing a cell state,
                 // which is exactly "this override's own fields fall through to the previous
                 // non-partial override" (CONTEXT.md's Partial Form entry) with no new state to invent.
                 var values = records.ToDictionary(
                     o => ColumnKey.Of(o.Plugin, o.Origin),
                     o => o.IsPartialForm ? null : o.Fields.FirstOrDefault(f => f.Metadata.Name == fieldName)?.Value);
-                // #491: WinnerColumn/WinnerValue are this *field's* own winner — the highest
+                // WinnerColumn/WinnerValue are this *field's* own winner — the highest
                 // load-order plugin that actually carries a (non-excluded) value for it — not the
-                // record-wide winner. Mirrors BuildStructChildren's own per-field winner below, which
-                // already worked this way; before this fix a field's WinnerValue silently went null
-                // whenever the record-wide winner happened to have no value for that one field
-                // (Partial Form is the case that surfaced it, but any genuinely-null field on the
-                // record-wide winner hit the same gap — #491 review, condition (a)).
+                // record-wide winner, which may have no value for this one field (Partial Form, or
+                // a genuinely-null field). Mirrors BuildStructChildren's per-field winner below.
                 var fieldWinner = records
                     .Where(r => values.GetValueOrDefault(ColumnKey.Of(r.Plugin, r.Origin)) != null)
                     .MaxBy(r => r.LoadOrderIndex);
@@ -302,7 +297,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                 foreach (var el in kv.Value!.Value.EnumerateArray())
                 {
                     var k = el.GetString();
-                    if (k != null) pluginLookup.TryAdd(k, el); // keep first on dup key, matching original FirstOrDefault
+                    if (k != null) pluginLookup.TryAdd(k, el); // keep first on dup key
                 }
                 lookups[kv.Key] = pluginLookup;
             }
@@ -376,7 +371,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             : null;
     }
 
-    // #114: a FieldDiff node's own bottom-up ConflictAll — this node's own CellStates reduced via
+    // A FieldDiff node's own bottom-up ConflictAll — this node's own CellStates reduced via
     // the shared rule, escalated against each already-built child's own (already-aggregated)
     // ConflictAll. Escalate's "worst of two" folding is associative/commutative over
     // {NoConflict, Override, Conflict} (Reduce never produces OnlyOne/ConflictCritical, which are

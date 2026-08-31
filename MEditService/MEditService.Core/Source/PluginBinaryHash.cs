@@ -6,8 +6,8 @@ namespace MEditService.Core.Source;
 /// The content hash of a plugin binary on disk — ADR-0001's "validity is by content, never by
 /// clock", written once. Two callers depend on producing the *same* string for the same bytes and
 /// would be silently broken by drifting apart: the index stamps a file's hash beside the rows it
-/// built from it (#585), and the runtime mirror compares a settled file against that same stamp to
-/// tell a real change from a touch (#587). They live in different assemblies — <c>Core.Records</c>
+/// built from it, and the runtime mirror compares a settled file against that same stamp to
+/// tell a real change from a touch. They live in different assemblies — <c>Core.Records</c>
 /// and <c>MEditService.Bridge</c>, which may not see each other — so this sits in the one namespace
 /// both are allowed to reference.
 /// </summary>

@@ -13,7 +13,7 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #515 AC1: a tracked Localized plugin compiles with its strings written back beside it — the
+/// A tracked Localized plugin compiles with its strings written back beside it — the
 /// compile half of the fixture <see cref="Source.TrackServiceTests"/> tracks on the read side.
 /// Deliberately its own small fixture rather than <see cref="TrackedModFixture"/>: none of that
 /// fixture's records carry a translated string, and widening it would cost every other test in this
@@ -54,7 +54,7 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
         Directory.Delete(_gameDir, recursive: true);
     }
 
-    // Rival observed by hand before this fix (not committed): with PluginWriter.PrepareFromModAsync's
+    // Rival observed by hand (not committed): with PluginWriter.PrepareFromModAsync's
     // WithStringsWriter call removed, Compile still reports success (Mutagen's own
     // PluginUtilityTranslation.SetStringsWriter auto-attaches a writer of its own when none is
     // supplied) — but that auto writer is rooted at the *temp* write path
@@ -90,13 +90,13 @@ public sealed class PluginCompileServiceLocalizedTests : IDisposable
 
         Assert.True(result.Succeeded, result.RefusalReason);
 
-        // AC1: the recompiled binary keeps the Localized flag.
+        // The recompiled binary keeps the Localized flag.
         using var overlayDisposable = ModFactory.ImportGetter(
             new ModPath(ModKey.FromFileName(PluginName), pluginPath), GameRelease.Fallout4,
             LocalizedStrings.ForRead(_modFolder, _gameDir));
         Assert.True(((IFallout4ModGetter)overlayDisposable).UsingLocalization);
 
-        // AC1: every strings file compile just (re)wrote is byte-identical to what Track originally
+        // Every strings file compile just (re)wrote is byte-identical to what Track originally
         // captured — a real change (StringsWriter re-assigns sequential keys in registration order)
         // would show up here even though the .esp's own bytes already round-trip.
         foreach (var (fileName, originalBytes) in originalStringsFiles)

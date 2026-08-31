@@ -9,7 +9,7 @@ import { buildTes4Buffer } from './test/buildTes4Buffer';
 
 // Scoped to this file only, passthrough by default: wraps `stat` so a single
 // test below can divert one specific path to a synthetic non-ENOENT error.
-// Same wrapper shape as Mo2ModlistSource.test.ts's `readFile` mock (#317) —
+// Same wrapper shape as Mo2ModlistSource.test.ts's `readFile` mock —
 // chmod-based permission denial is silently bypassed when the test runner is
 // root, which a real fs precondition isn't.
 vi.mock('node:fs/promises', async (importOriginal) => {

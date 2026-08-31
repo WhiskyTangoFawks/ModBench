@@ -71,7 +71,7 @@ async function detectLinux(): Promise<GamePaths | null> {
 /** The Proton prefix root (`steamapps/compatdata/<appid>/pfx`) for the FO4 Steam library, or
  *  `null` if the library can't be found — reuses `findFo4Library`'s lookup (the same one
  *  `detectLinux` already does to build `Plugins.txt`'s path) so `gameDirectory.ts`'s Wine
- *  drive-letter translation (#187) doesn't re-derive it. */
+ *  drive-letter translation doesn't re-derive it. */
 export async function detectWinePrefix(): Promise<string | null> {
   const library = await findFo4Library();
   return library ? path.join(library, 'steamapps', 'compatdata', FO4_APP_ID, 'pfx') : null;

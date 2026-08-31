@@ -12,7 +12,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #452 / ADR-0041's #444 amendment, point 2: "Tracked plugins ingest from source. Working tree →
+/// ADR-0041's tracked-source amendment, point 2: "Tracked plugins ingest from source. Working tree →
 /// Effective, git <c>HEAD</c> → Head; the binary is never consulted for a tracked plugin's content."
 ///
 /// <para>Every test here reloads the mod folder in a <b>brand-new</b> <see cref="LoadOrderMirror"/> —
@@ -36,7 +36,7 @@ public sealed class SourceIngestTests
         return mirror;
     }
 
-    // ---- AC1: the working tree is Effective ----
+    // ---- The working tree is Effective ----
 
     [Fact]
     public void AnExternalEditToASourceFile_IsAtEffectiveAfterReload_WithNoPointRead()
@@ -56,7 +56,7 @@ public sealed class SourceIngestTests
         Assert.Equal("ExternallyRenamed", record!.EditorId);
     }
 
-    // ---- AC1: the #430/#432 reappearing-record gap, resolved by construction ----
+    // ---- The reappearing-record gap, resolved by construction ----
 
     [Fact]
     public void AWorkingTreeDeletedRecord_IsAbsentAtEffectiveAfterReload()
@@ -96,7 +96,7 @@ public sealed class SourceIngestTests
             mod.Npc, "npc_", TrackedModFixture.NpcEditorId)), head.Body);
     }
 
-    // ---- AC2: HEAD is Head, the working tree is Effective, and they diverge ----
+    // ---- HEAD is Head, the working tree is Effective, and they diverge ----
 
     [Fact]
     public void AnUncommittedEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
@@ -140,7 +140,7 @@ public sealed class SourceIngestTests
     /// <summary>
     /// Reconciliation is <i>targeted</i>: the record whose file was edited reads dirty and its
     /// untouched sibling reads clean. Asserted at the listing seam (<see cref="RecordSummary.WorkingTreeState"/>
-    /// — what the Plugins tree's own dirty decoration renders, #428) rather than by comparing two
+    /// — what the Plugins tree's own dirty decoration renders) rather than by comparing two
     /// bodies, because "the two refs happen to hold equal bytes" is true of a great many wrong
     /// implementations, while "one is Modified and the other is None" is the distinction the ref
     /// dimension actually exists to make.
@@ -165,7 +165,7 @@ public sealed class SourceIngestTests
         Assert.Equal(WorkingTreeState.None, byFormKey[mod.Race.ToString()].WorkingTreeState);
     }
 
-    // ---- Q4: a source tree that cannot be read degrades to the binary, visibly ----
+    // ---- A source tree that cannot be read degrades to the binary, visibly ----
 
     [Fact]
     public void AnUnreadableSourceTree_FallsBackToTheBinary_AndSaysSoInTheFailures()
@@ -201,7 +201,7 @@ public sealed class SourceIngestTests
     /// with a failure path that calls <c>Index</c> on that same key <i>again</i>. A working-tree
     /// deletion early in the dirty set commits a snapshot row; a later dirty path throws; the binary
     /// fallback rebuilds <c>records</c> — and <c>Index</c>/<c>Unindex</c> have never cleared
-    /// <c>records_committed</c> (that half predates this ticket). Two rows, one FormKey.</para>
+    /// <c>records_committed</c>. Two rows, one FormKey.</para>
     ///
     /// <para>Deliberately a different failure from the test above: corrupting the root
     /// <c>RecordData.json</c> makes the whole-mod read throw <i>before</i> any snapshot can be written,
@@ -241,20 +241,20 @@ public sealed class SourceIngestTests
         Assert.Equal(1, atHead);
     }
 
-    // ---- #453 slice 4: a renamed source unit is one dirty record, not two half-records ----
+    // ---- A renamed source unit is one dirty record, not two half-records ----
 
     /// <summary>
     /// An EditorID edit moves the source unit's file, so the next reconcile sees the same FormKey
     /// twice in the dirty set: the old path, gone from the working tree but present in <c>HEAD</c>, and
     /// the new path, present in the working tree and in no commit. Reconciled naively those are a
     /// delete and a create — which would put one FormKey in <b>both</b> halves of <c>records_head</c>,
-    /// the disjointness #452's own review landed to protect. Paired, they are what they actually are:
+    /// breaking the disjointness invariant above. Paired, they are what they actually are:
     /// one record, dirty, whose committed bytes are the ones at its old path.
     ///
     /// <para>Flat record on the shared fixture deliberately: this is a property of the reconciliation
     /// pass, not of containers, and the ~24 files built on this fixture should see it. A renamed
     /// <i>container</i> never reaches this same pairing step — <see cref="SourceRecordPath.TryParse"/>
-    /// still fails closed on container paths — but it is not left unreconciled either (#463):
+    /// still fails closed on container paths — but it is not left unreconciled either:
     /// <c>SourceIngest.ReconcileHeadStructurally</c> diffs by FormKey rather than by path, so a
     /// container's directory rename (its own EditorID edit) lands there as an ordinary edit, old bytes
     /// at Head and new at Effective under the one FormKey throughout, with no pairing needed at
@@ -277,9 +277,9 @@ public sealed class SourceIngestTests
         Assert.NotNull(effective);
         Assert.Equal("RenamedAcrossReload", effective!.EditorId);
 
-        // Head is HEAD: the old name, served from the blob at the record's *former* path. Before the
-        // pairing this was null — the new path marked the record working-tree-only, which removes it
-        // from Head entirely — while the old path simultaneously seeded it as committed-only.
+        // Head is HEAD: the old name, served from the blob at the record's *former* path. Without the
+        // pairing this is null — the new path marks the record working-tree-only, which removes it
+        // from Head entirely — while the old path simultaneously seeds it as committed-only.
         var head = reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin);
         Assert.NotNull(head);
         Assert.Equal(TrackedModFixture.NpcEditorId, head!.EditorId);

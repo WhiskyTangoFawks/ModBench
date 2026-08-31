@@ -1,7 +1,6 @@
-// #41 corpus — deleteDownload against the committed mo2-instance-corpus fixture.
-// Found during the write-path enumeration for #41, not in the issue's original
-// known-set: deleteDownload() mutates MO2-owned state (downloads/*.meta and the
-// archive itself) via injected deps, purpose-built for exactly this kind of
+// Corpus test: deleteDownload against the committed mo2-instance-corpus fixture.
+// deleteDownload() mutates MO2-owned state (downloads/*.meta and the archive
+// itself) via injected deps, purpose-built for exactly this kind of
 // unit-testability (see deleteDownload.ts's own module comment).
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { rm } from 'node:fs/promises';

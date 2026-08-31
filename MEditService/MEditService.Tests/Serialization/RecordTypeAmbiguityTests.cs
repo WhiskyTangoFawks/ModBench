@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>
-/// #450: <see cref="RecordTypeDispatch"/> derives "which documents must name their own type" from
+/// <see cref="RecordTypeDispatch"/> derives "which documents must name their own type" from
 /// the game's own group structure rather than from a table anyone maintains. Derived is only better
 /// than tabulated if the derivation is swept — a rule read off reflection can be quietly wrong for a
 /// whole class of types and still look right for the two anyone tried by hand.
@@ -44,7 +44,7 @@ public sealed class RecordTypeAmbiguityTests
     {
         // "header" is the one table with no document to reconstitute — a ModHeader is not an
         // IMajorRecordGetter, so it never reaches this codec at all and RecordDocument.Body is null
-        // for it (MEditService/CLAUDE.md, #413 D8). Excluded by name rather than by predicate, so a
+        // for it (MEditService/CLAUDE.md). Excluded by name rather than by predicate, so a
         // second unresolvable table name cannot hide behind a rule that quietly grew to cover it.
         var tableNames = SharedSchemaReflector.Instance.GetSchemas(GameRelease.Fallout4).Keys
             .Where(n => n != "header")
@@ -57,7 +57,7 @@ public sealed class RecordTypeAmbiguityTests
     }
 
     /// <summary>
-    /// The rule itself, stated in both directions on types whose whole-mod behaviour the #444 spike
+    /// The rule itself, stated in both directions on types whose whole-mod behaviour was
     /// measured: GLOB and GMST split into several concrete subclasses under an abstract group element
     /// and keep their discriminators; WEAP/NPC_ have concrete group elements; CELL has no
     /// <c>Group&lt;Cell&gt;</c> at all and neither do the child records — all four of those write no

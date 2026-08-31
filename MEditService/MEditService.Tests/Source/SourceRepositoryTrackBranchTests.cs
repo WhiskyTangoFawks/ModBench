@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041: Track creates and checks out the edit branch after committing the pristine
+/// ADR-0041: Track creates and checks out the edit branch after committing the pristine
 /// baseline to <c>main</c> — "Modified vs Authored is repo topology": `git diff main &lt;branch&gt;`
 /// is "everything I changed", and it must be genuinely empty right after Track, not empty because
 /// no distinct branch exists at all (that would make the diff command fail outright, not pass

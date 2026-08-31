@@ -14,7 +14,7 @@ namespace MEditService.Tests.Source;
 /// ≈ <c>m</c> × 1.19e-7, so 1e-9 is mathematically equivalent to bit-exact for any
 /// <c>|value| ≳ 0.01</c> — this class exists to pin the one place it genuinely is not: values very
 /// close to zero. A sub-epsilon mutation there is currently accepted (not refused), and this test
-/// characterizes that as it stands today, so the eventual decision on it (#564: accept the epsilon
+/// characterizes that as it stands today, so the eventual decision on it (accept the epsilon
 /// as-is, or bypass the mask for bit-exact numeric comparison) has a test to flip rather than an
 /// undocumented gap to rediscover.
 /// </summary>

@@ -12,16 +12,16 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #503: a complex field (CONTEXT.md — array or struct) is written as one atomic value, and a payload
+/// A complex field (CONTEXT.md — array or struct) is written as one atomic value, and a payload
 /// shaped like a single <i>element</i> of one is refused rather than silently dropped.
 ///
 /// <para>The defect these pin: <c>SchemaReflector</c>'s list and struct appliers both returned without
 /// writing when the JSON was not array-/object-shaped, and <c>RecordFieldWriter.TryApply</c> reported
 /// <c>Applied</c> regardless — so the webview's per-element commit (which sent the bare leaf value
 /// under the array's own field name) reported success while the source document stayed byte-identical.
-/// The write half is fixed in the webview (it reconstructs the whole value before committing, the same
-/// thing the array arity ops always did); this file pins the backend half of the contract — the whole
-/// value lands, and anything element-shaped is a refusal a user can see.</para>
+/// The webview reconstructs the whole value before committing (the same thing the array arity ops
+/// always did); this file pins the backend half of the contract — the whole value lands, and anything
+/// element-shaped is a refusal a user can see.</para>
 /// </summary>
 public sealed class ComplexFieldElementEditTests : IDisposable
 {
@@ -76,8 +76,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
     /// <summary>
     /// A struct-element array (OMOD <c>properties</c>), given the bare value of one element's own
-    /// sub-field — the shape #503 was reported against, and the one two levels of reconstruction away
-    /// from the field's whole value.
+    /// sub-field — the shape two levels of reconstruction away from the field's whole value.
     /// </summary>
     [Fact]
     public void OmodPropertiesArray_PerSubFieldPayload_IsRefusedAndWritesNothing()
@@ -98,9 +97,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
 
     /// <summary>
     /// The reconstructed payload an element edit produces once the webview has done its job: the whole
-    /// array, with one element different. This is the same write the sanctioned array arity ops already
-    /// performed, so byte fidelity is unchanged by #503 — what changed is only that a value edit now
-    /// sends this shape too.
+    /// array, with one element different — the same write the sanctioned array arity ops already
+    /// perform, so byte fidelity is shared with them.
     /// </summary>
     [Fact]
     public void KeywordsArray_WholeArrayWrite_LandsInTheSourceDocument()
@@ -128,14 +126,10 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     /// <c>RankPlacement</c>), where what the user edited is one element's own <c>rank</c> sub-field and
     /// what reaches this method is the whole array carrying it.
     ///
-    /// <para><b>Not OMOD <c>properties</c>, which #503 named</b> — that field's element type is the
-    /// abstract <c>AObjectModProperty&lt;T&gt;</c>, and <c>SchemaReflector.BuildListElement</c> used to
-    /// derive its element type from the list's generic argument and call <c>Activator.CreateInstance</c>
-    /// on it directly, which threw <c>MissingMethodException</c> for any abstract element type. That was
-    /// independent of #503 (the sanctioned array arity ops hit it too) and was filed separately as #531,
-    /// now fixed a few tests below in this same file; this field is the same struct-element-array shape
-    /// with a concrete element type, so it pinned the reconstruction contract without depending on that
-    /// fix while #531 was still open.</para>
+    /// <para><b>Not OMOD <c>properties</c></b> — that field's element type is the abstract
+    /// <c>AObjectModProperty&lt;T&gt;</c>, covered by the abstract-element tests below; this field is
+    /// the same struct-element-array shape with a concrete element type, so it pins the reconstruction
+    /// contract independently of discriminator resolution.</para>
     /// </summary>
     [Fact]
     public void FactionsStructArray_WholeArrayWriteWithAChangedSubField_LandsInTheSourceDocument()
@@ -159,16 +153,17 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.Contains("\"Rank\": 9", NpcBody(), StringComparison.Ordinal);
     }
 
-    // ── #531: write-side polymorphism — OMOD properties' element type is abstract ─────────────
+    // ── write-side polymorphism — OMOD properties' element type is abstract ──────────────────
 
     /// <summary>
-    /// The refusal AC #531 asks for: an abstract list element (OMOD's <c>AObjectModProperty&lt;T&gt;</c>)
-    /// whose payload carries no <c>value_type</c> discriminator can never be constructed — before this
-    /// fix, <c>SchemaReflector.BuildListElement</c> threw <see cref="MissingMethodException"/> straight
-    /// out of the write path (uncaught, not this refusal) for <i>any</i> write to this field, discriminator
-    /// or not. This is otherwise a well-formed whole-array write (an array, one well-shaped element) — the
-    /// only thing wrong with it is the missing discriminator, which is what the message must actually say
-    /// rather than repeating the "send an array" text #503's own per-element-payload refusal above uses.
+    /// An abstract list element (OMOD's <c>AObjectModProperty&lt;T&gt;</c>) whose payload carries no
+    /// <c>value_type</c> discriminator can never be constructed — the naive design
+    /// (<c>SchemaReflector.BuildListElement</c> activating the list's generic argument directly) threw
+    /// <see cref="MissingMethodException"/> straight out of the write path (uncaught, not this refusal)
+    /// for <i>any</i> write to this field, discriminator or not. This is otherwise a well-formed
+    /// whole-array write (an array, one well-shaped element) — the only thing wrong with it is the
+    /// missing discriminator, which is what the message must actually say rather than repeating the
+    /// "send an array" text the per-element-payload refusal above uses.
     /// Its own <see cref="RecordEditRefusal.ListElementTypeUnresolved"/> value, not
     /// <see cref="RecordEditRefusal.FieldValueShapeMismatch"/> — the value genuinely is array-shaped, so
     /// a caller branching on the enum (ADR-0026) needs a different discriminator to reach for a
@@ -214,12 +209,11 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     /// <summary>
-    /// #531 AC1: a whole-array write carrying one <c>ObjectModIntProperty</c>-shaped element (own
+    /// A whole-array write carrying one <c>ObjectModIntProperty</c>-shaped element (own
     /// <c>value_type</c> discriminator plus its own <c>value</c>/<c>value2</c>/<c>function_type</c> data)
     /// lands, with the concrete type <i>and</i> the data preserved on re-read — not just the type: giving
     /// the discriminator a working resolution but leaving the leaf union fields <c>Apply: null</c> would
-    /// construct the right type and then silently drop every value onto it, which is the latent bug this
-    /// ticket also closes (see <c>ApplySubFields</c>).
+    /// construct the right type and then silently drop every value onto it (see <c>ApplySubFields</c>).
     /// </summary>
     [Fact]
     public void OmodPropertiesArray_WholeArrayWriteWithIntProperty_LandsWithConcreteTypeAndValuePreserved()
@@ -237,7 +231,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     /// <summary>
-    /// #531 AC2: a second concrete subtype round-trips too, proving the choice is read from each
+    /// A second concrete subtype round-trips too, proving the choice is read from each
     /// element's own <c>value_type</c> rather than hardcoded to Int (the only leaf the fixture's binary
     /// seed itself ever carries).
     /// </summary>
@@ -257,7 +251,7 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     /// <summary>
-    /// #531 AC3 (Move Up/Move Down): reordering two elements of <i>different</i> concrete leaf types is
+    /// Move Up/Move Down: reordering two elements of <i>different</i> concrete leaf types is
     /// the one shape that would defeat a position-based "reuse the existing element's type by index"
     /// design — the element now at index 0 is Float-shaped data, not the Int that used to be there. Each
     /// element's own <c>value_type</c> is what has to drive this, not its position.
@@ -291,7 +285,6 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.True(floatIdx < intIdx, $"Float element should now precede Int in:\n{body}");
     }
 
-    /// <summary>#531 AC3 (Add): growing the array by one brand-new element alongside the existing one.</summary>
     [Fact]
     public void OmodPropertiesArray_WholeArrayWriteAddingANewElement_LandsAlongsideTheExisting()
     {
@@ -311,10 +304,10 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     /// <summary>
-    /// #531 AC3 (Remove) and the data-loss regression guard for the latent <c>ApplySubFields</c> bug:
+    /// The data-loss regression guard for the latent <c>ApplySubFields</c> bug:
     /// removing the second element must not reset the surviving first element's own <c>Value</c>/
-    /// <c>Value2</c> back to defaults — which is exactly what would happen if the leaf union fields kept
-    /// <c>Apply: null</c> while element construction itself got fixed.
+    /// <c>Value2</c> back to defaults — which is exactly what happens if the leaf union fields keep
+    /// <c>Apply: null</c> while element construction itself works.
     /// </summary>
     [Fact]
     public void OmodPropertiesArray_RemoveShapedWholeArrayWrite_PreservesSurvivorsValue()
@@ -339,10 +332,10 @@ public sealed class ComplexFieldElementEditTests : IDisposable
         Assert.DoesNotContain("ObjectModFloatProperty", body, StringComparison.Ordinal);
     }
 
-    // ── #532: a declined member fails the whole struct/array write, not just that member ──────
+    // ── a declined member fails the whole struct/array write, not just that member ───────────
 
     /// <summary>
-    /// #532 AC4: <c>weight</c> is an ordinary (non-abstract-element) struct, so every one of its
+    /// <c>weight</c> is an ordinary (non-abstract-element) struct, so every one of its
     /// sub-fields is reflected directly off <c>NpcWeight</c> — there is no leaf-union "doesn't apply
     /// to this concrete type" case here, only "the value itself couldn't be converted"
     /// (<c>thin</c>'s own float converter throwing on a non-numeric string). One bad member inside an
@@ -365,8 +358,8 @@ public sealed class ComplexFieldElementEditTests : IDisposable
     }
 
     /// <summary>
-    /// An OMOD carrying one <c>ObjectModIntProperty</c> — the struct-element array #503 was reported
-    /// against, which <see cref="TrackedModFixture"/>'s three-record NPC shape has no equivalent of.
+    /// An OMOD carrying one <c>ObjectModIntProperty</c> — a struct-element array with an abstract
+    /// element type, which <see cref="TrackedModFixture"/>'s three-record NPC shape has no equivalent of.
     /// Same posture as that fixture: a real mod folder, a real tracked load order, no mocks.
     /// </summary>
     private sealed class OmodFixture : IDisposable

@@ -4,15 +4,15 @@ One living spec per Modbench UI surface. A **surface** is a top-level UI unit th
 
 | Spec | Surface | Status |
 |---|---|---|
-| [loadout-header.md](loadout-header.md) | Loadout header — workspace-scope readout and action home (profile, load order, deployment) | Implemented; Launch… wiring deferred (#293) |
-| [mods.md](mods.md) | Mods (Loadout) — install, order, enable, deploy | Implemented; executables-as-tasks specced (#96) |
+| [loadout-header.md](loadout-header.md) | Loadout header — workspace-scope readout and action home (profile, load order, deployment) | Implemented; Launch… wiring deferred |
+| [mods.md](mods.md) | Mods (Loadout) — install, order, enable, deploy | Implemented; executables-as-tasks specced |
 | [plugins.md](plugins.md) | Plugins — the one Plugins tree: enable/reorder `plugins.txt` (Mod Management), plus record navigation and the SQL record filter whenever the backend is running (Editing) | Implemented |
 | [downloads.md](downloads.md) | Downloads — Nexus integration, download queue | Specced — MVP ready to build |
 | [medit.md](medit.md) | **mEdit — context overview** (load order lifecycle, status bar, command palette, seams). Not a surface | Implemented |
 | [medit-record-editor.md](medit-record-editor.md) | mEdit Record editor panel — compare grid, in-place editing | Implemented |
 | [medit-referenced-by.md](medit-referenced-by.md) | mEdit Referenced By tree — what points at this record | Implemented |
 | [medit-version-control.md](medit-version-control.md) | Version control — Track, branch, compile — native Source Control panel review, Save & Compile, external-change handling | Implemented |
-| [medit-repair.md](medit-repair.md) | Repair — diagnose a malformed plugin and, for defects with a CK-proven canonical form, rewrite it losslessly (or lossy by consent) so Mutagen can parse it | Specced — depends on the diagnosis floor (#519) |
+| [medit-repair.md](medit-repair.md) | Repair — diagnose a malformed plugin and, for defects with a CK-proven canonical form, rewrite it losslessly (or lossy by consent) so Mutagen can parse it | Specced — depends on the diagnosis floor |
 
 A view spanning several surfaces gets one **context overview** plus one spec per surface —
 [medit.md](medit.md) is the worked example. The overview holds only what is genuinely shared

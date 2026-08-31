@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 /**
- * #428: a synthetic `medit-record:` URI identifies one record row — (plugin, origin, formKey), the
+ * A synthetic `medit-record:` URI identifies one record row — (plugin, origin, formKey), the
  * same compound identity ADR-0036 already requires everywhere a record row is addressed — so
  * {@link RecordDecorationProvider} (`RecordDecorationProvider.ts`) has a `resourceUri` to key its
  * `FileDecorationProvider` on.
@@ -15,21 +15,21 @@ import * as vscode from 'vscode';
  * at all, which today only the backend computes (`SourceRecordPath`, internal to
  * `MEditService.Core`).
  *
- * Identity only, never state (#428 orchestrator ruling) — `WorkingTreeState` never appears in the
+ * Identity only, never state — `WorkingTreeState` never appears in the
  * URI. Encoding volatile state into a resourceUri would make every dirty/clean transition a
  * different URI string, which is exactly the kind of stale-identity churn VS Code's tree/selection
  * machinery is not built to absorb silently. The decoration provider instead holds its own live
  * lookup, keyed by this same identity.
  *
- * `fromConflictsNode` (#364 review finding) is not an exception to that rule — it is fixed for a
+ * `fromConflictsNode` is not an exception to that rule — it is fixed for a
  * node's whole lifetime at construction (which tree location built this row), never a live value
  * that changes underneath an already-rendered row the way `WorkingTreeState` would.
  */
 const SCHEME = 'medit-record';
 
-/** #364 review finding: the conflict badge must render only on the Conflicts node's own rows, not
- *  on every location a record happens to appear (the AC's explicit scope decision — Option B's
- *  "badge everywhere" is deliberately not built). `RecordDecorationProvider` is registered once,
+/** The conflict badge must render only on the Conflicts node's own rows, not
+ *  on every location a record happens to appear ("badge everywhere" is
+ *  deliberately not built). `RecordDecorationProvider` is registered once,
  *  globally, keyed purely on this URI's identity — with no location marker, a record's ordinary
  *  `RecordTypeNode -> RecordNode` row would inherit a badge that belongs to its Conflicts-node
  *  row instead, since both would otherwise resolve to the identical URI. This query-string marker
@@ -50,7 +50,7 @@ export interface RecordResourceIdentity {
   plugin: string;
   origin: string;
   formKey: string;
-  /** #364 review finding: whether this URI was built for a row under the Conflicts node
+  /** Whether this URI was built for a row under the Conflicts node
    *  specifically — see the module-level doc comment above {@link CONFLICTS_NODE_QUERY}. */
   fromConflictsNode: boolean;
 }

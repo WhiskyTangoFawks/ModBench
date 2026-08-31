@@ -7,11 +7,10 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// #216: only per-plugin progress lines stay at Info — every other pipeline-level milestone
+// Only per-plugin progress lines stay at Info — every other pipeline-level milestone
 // (reconcile start, DuckDB init, conflict-winner computation) is Debug. These tests assert on log
-// *level* directly via CollectingLoggerProvider; the broader Plugins/ suite covers
-// pipeline *behavior* and remain the safety net for a regression introduced while touching these
-// call sites — none of them assert level, which is why this file exists.
+// *level* directly via CollectingLoggerProvider; the broader Plugins/ suite covers pipeline
+// *behavior* but never asserts level, which is why this file exists.
 public sealed class ReconcileLoggingTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()

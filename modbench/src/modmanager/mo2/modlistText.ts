@@ -201,13 +201,13 @@ export function removeModFromText(text: string, modName: string): string {
 }
 
 // Ungrouped means "after the last separator" — the file's tail among entry
-// lines — never a position relative to the first separator (#107).
+// lines — never a position relative to the first separator.
 function ungroupedInsertAt(lines: string[]): number {
   const last = [...lines.keys()].findLast((i: number) => isEntryLine(lines[i]));
   return last === undefined ? lines.length : last + 1;
 }
 
-// A separator's section is the mods that PRECEDE it (#107); its last member sits
+// A separator's section is the mods that PRECEDE it; its last member sits
 // immediately above the separator's own line, so the insert point for "append to
 // this section" is simply the separator line's own index.
 function separatorSectionInsertAt(lines: string[], separatorName: string): number {
@@ -217,7 +217,7 @@ function separatorSectionInsertAt(lines: string[], separatorName: string): numbe
 }
 
 /** Move a mod to the end of a separator's child section (immediately preceding
- *  the separator's own line — #107), or to the ungrouped section (the file's
+ *  the separator's own line), or to the ungrouped section (the file's
  *  tail, after the last entry) when `separatorName` is null. */
 export function moveModToSeparatorEndInText(
   text: string,
@@ -257,7 +257,7 @@ export function moveSeparatorBlockInText(
     // Extent of the block: everything back to (but not including) the previous
     // separator line, or the file's first entry line if none, up to and
     // including the sep's own line — the separator trails its real (preceding)
-    // members (#107). Falling back to line 0 instead of the first entry would
+    // members. Falling back to line 0 instead of the first entry would
     // sweep a leading comment/blank line into the block.
     let prevSepIdx = -1;
     for (let i = sepIdx - 1; i >= 0; i--) {

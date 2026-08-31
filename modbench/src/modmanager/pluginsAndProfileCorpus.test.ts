@@ -1,4 +1,4 @@
-// #41 corpus — plugins.txt mutations and profile switching against the committed
+// Corpus test: plugins.txt mutations and profile switching against the committed
 // mo2-instance-corpus fixture. As with modlistCorpus.test.ts, the point is composition:
 // proving these writers touch only their own file and nothing else (not modlist.txt,
 // not meta.ini, not the other profile) — pluginsText.test.ts already proves plugins.txt

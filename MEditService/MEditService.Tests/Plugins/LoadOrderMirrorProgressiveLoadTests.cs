@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Fallout4;
 namespace MEditService.Tests.Plugins;
 
 /// <summary>
-/// #274 / ADR-0035: the load order answers while it is still loading. Each test drives a load to a
+/// ADR-0035: the load order answers while it is still loading. Each test drives a load to a
 /// known point with <see cref="GatedIndexRepositoryFactory"/>, asserts what is observable at that
 /// instant, then releases it — no sleeps, no timing assumptions.
 /// </summary>
@@ -45,8 +45,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         await gate.WaitUntilParkedAsync();
 
         // Parked before B.esp is indexed: the load order exists, and A.esp — indexed one step ago — is
-        // fully queryable. Before #274 there was nothing to ask: the load order was published only
-        // after the whole load order had been indexed and swept.
+        // fully queryable — not published only after the whole load order has been indexed and swept.
         Assert.NotNull(manager.LoadOrder);
         Assert.NotNull(manager.Reads);
         Assert.Equal(1, manager.Reads!.GetRecordTypeCounts(new PluginKey("A.esp", PluginOrigin.DataDirectory))
@@ -79,7 +78,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         Assert.Equal(LoadOrderState.Reconciling, loading.State);
         Assert.Equal(3, loading.TotalPlugins);
         Assert.Equal(["Fallout4.esm", "A.esp"], loading.IndexedPlugins.Select(p => p.Name));
-        // The whole reason this ticket exists: conflict information is not merely absent here, it is
+        // Conflict information is not merely absent here, it is
         // *reported* absent. Nothing downstream may read an unmarked record as conflict-free.
         Assert.False(loading.ConflictsComputed);
 
@@ -143,9 +142,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         gate.Release();
         await load;
 
-        // #271 / #275: a plugin is identified by (origin, filename) together. A status contract that
-        // shipped bare filenames would be a new surface reintroducing the identity this codebase
-        // spent four tickets removing.
+        // A plugin is identified by (origin, filename) together. A status contract that
+        // shipped bare filenames would be a new surface reintroducing bare-filename identity.
         Assert.All(manager.Status.IndexedPlugins, p => Assert.False(string.IsNullOrWhiteSpace(p.Origin)));
     }
 
@@ -154,8 +152,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
     {
         // Four plugins, gated on the third: a plugin is appended to the list when it is *opened*,
         // one step before it is indexed, so parking before B's index leaves C.esp — and only C.esp —
-        // still to be appended. Gate on the last plugin and nothing mutates the list after the park,
-        // which is how the first version of this test passed while exercising nothing.
+        // still to be appended. Gating on the last plugin instead would leave nothing mutating the
+        // list after the park, and the test would exercise nothing.
         using var fx = new PluginFixtureBuilder("sm-progressive-enumeration")
             .WithPlugin("Fallout4.esm")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
@@ -169,8 +167,8 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // GetPlugins, PluginOriginResolver and BuildTypedLinkCache all walk this list,
-        // and until #274 nothing could append to it while they did. Interleaved exactly rather than
+        // GetPlugins, PluginOriginResolver and BuildTypedLinkCache all walk this list while the
+        // load appends to it. Interleaved exactly rather than
         // raced: begin an enumeration, let the load open one more plugin, then keep enumerating —
         // which is the shape that throws on a plain List<T>, deterministically.
         var plugins = manager.LoadOrder!.Plugins;

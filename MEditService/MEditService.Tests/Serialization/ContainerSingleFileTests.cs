@@ -9,14 +9,14 @@ using Noggog;
 namespace MEditService.Tests.Serialization;
 
 /// <summary>
-/// #370 Slice F's layout claim, kept and re-based on #450's document shape: <b>one source unit, one
-/// file</b>, for every container type, with children <i>populated</i>. It used to hold because the
-/// caller stripped the children off first; it now holds for two different reasons at once — the
+/// The layout claim: <b>one source unit, one
+/// file</b>, for every container type, with children <i>populated</i>. It
+/// holds for two different reasons at once — the
 /// slots Spriggit embeds are written inline into the parent's own file, and the ones it does not are
 /// suppressed on their way to the filesystem
 /// (<c>RecordTextCodec.DiscardChildRecordStreams</c>/<c>NoRecordFolders</c>). Either mechanism
-/// breaking spills sibling folders next to the record's file, which is the #387 cross-contamination
-/// hazard this has always guarded.
+/// breaking spills sibling folders next to the record's file, which is the cross-contamination
+/// hazard this guards.
 ///
 /// <para>Populated, not empty, on purpose: a childless container is one file no matter what any of
 /// this does, so an empty fixture here would pass forever without testing anything.
@@ -44,7 +44,7 @@ public class ContainerSingleFileTests
 
             // Round-trips without throwing — a container whose children the writer tried to spill
             // into a sibling folder fails here, not merely looks wrong — and comes back as its own
-            // concrete type, reconstituted from the record_type the caller states (#450: none of
+            // concrete type, reconstituted from the record_type the caller states (none of
             // these four is path-ambiguous, so none of their documents self-describes).
             var roundTripped = await codec.DeserializeAsync(filePath, GameRelease.Fallout4, recordType);
             Assert.IsType(concreteType, roundTripped);

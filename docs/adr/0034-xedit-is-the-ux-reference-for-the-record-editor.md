@@ -36,7 +36,7 @@ power-user addition with no xEdit counterpart needs no platform-limitation justi
 provided the default experience remains xEdit's (the addition is reached by an explicit, opt-in
 affordance, never a changed default), no existing xEdit gesture or meaning is redefined to reach
 or operate it, and where the addition overlaps ground xEdit does cover, xEdit's vocabulary and
-semantics carry into it. First instance: the transposed record view (#341), an optional
+semantics carry into it. First instance: the transposed record view, an optional
 plugins-as-rows orientation on top of the default plugins-as-columns grid.
 
 ### The gesture model
@@ -87,8 +87,8 @@ is the default arrow; drag is not advertised, exactly as in xEdit.
    Source Control idioms. A product difference, not a UX one, and out of this ADR's scope.
 5. **Record creation always prompts for an EditorID**, on both "Add" and "Copy as New Record" —
    not xEdit's own split behavior (silent default on Add, prompted-and-skippable on Copy as New,
-   `xeMainForm.pas` `mniNavAddClick` vs. `CopyInto`'s wrapped-copy path). Maintainer ruling,
-   2026-08-29 (#571): a deliberate divergence, not a platform-limitation one — Add's *default*
+   `xeMainForm.pas` `mniNavAddClick` vs. `CopyInto`'s wrapped-copy path). Maintainer
+   ruling: a deliberate divergence, not a platform-limitation one — Add's *default*
    changes, which "Baseline, not ceiling" above would otherwise forbid without an opt-in
    affordance. Recorded here rather than silently overridden.
 6. **NPC template-sourced fields are gated, not freely editable.** xEdit gates editability only
@@ -96,7 +96,7 @@ is the default arrow; drag is not advertised, exactly as in xEdit.
    `TwbMainRecord.GetIsEditable`, `Core/wbImplementation.pas`; template flags carry only a
    visibility callback, `wbTemplateActorDontShow`). mEdit instead treats fields covered by an
    active template flag as not editable until that flag is cleared, warning when clearing a flag
-   whose covered fields conflict with the template. Maintainer ruling, 2026-08-31 (#479): a
+   whose covered fields conflict with the template. Maintainer ruling: a
    correctness divergence, not preference — with the flag set, the engine sources those fields
    from the template, so xEdit's permissiveness lets the user edit data the game demonstrably
    ignores. Where xEdit's answer is demonstrably wrong about the domain, it is not a reference.
@@ -113,7 +113,7 @@ Anything not on this list aligns.
 - Cell focus is state that lives in the grid, above any leaf.
 - The gesture matrix in the record-editor spec derives from this: with copy on the model value,
   availability stops varying by type and column kind.
-- Select-on-focus in the editor and the placeholder rule for `{…}`/`[3]`/`—` survive from #201.
+- Select-on-focus in the editor and the placeholder rule for `{…}`/`[3]`/`—` stand.
 
 ## Applies beyond this surface
 
@@ -131,7 +131,7 @@ Management, which has no xEdit counterpart and takes its cues from MO2 instead
 
 ## Alternatives rejected
 
-- **Left-click = edit, "one gesture, one meaning" (2026-08-09 → 2026-08-14).** Three gestures
+- **Left-click = edit, "one gesture, one meaning".** Three gestures
   with one meaning each — left-click activates the cell's text surface (an editor on a mutable
   column, read-only on an immutable one), drag copies a value, right-click holds named actions —
   plus a cursor contract (`grab` at rest, caret when clicked) so copy and paste could be the

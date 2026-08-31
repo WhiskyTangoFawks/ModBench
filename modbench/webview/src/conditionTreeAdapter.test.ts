@@ -131,8 +131,8 @@ describe('buildConditionRows — condition fields', () => {
     expect(gateMeta?.readOnly).toBe(true);
   });
 
-  // Issue #167: buildConditionRows' own `runOnTargets` param is the only source of Run On's
-  // dropdown options — no hardcoded FO4 member list left in this adapter either.
+  // buildConditionRows' own `runOnTargets` param is the only source of Run On's
+  // dropdown options — no hardcoded FO4 member list in this adapter either.
   it('threads the runOnTargets argument into the Run On field\'s own enumValues, defaulting to empty', () => {
     const { metaMap: withCatalog } = buildConditionRows(
       { groups: [{ fieldPath: 'Conditions', conditions: [diff] }] }, ['Foo', 'Bar'],
@@ -155,7 +155,7 @@ describe('buildConditionRows — condition fields', () => {
     expect(functionField?.cellStates).toEqual({ 'MyMod.esp': 'ConflictWins' });
   });
 
-  // #166: FormKey resolution (ADR-0031) for the condition's three FormKey-bearing slots — sourced
+  // FormKey resolution (ADR-0031) for the condition's three FormKey-bearing slots — sourced
   // from the same fieldResolutions bag fieldCellStates already uses, threaded onto each field's own
   // FieldDiff.resolutions so FormKeyCell (via DiffRow's generic resolution pass-through, already
   // wired for every leaf row) can render "EditorID [FormKey]" instead of the bare FormKey.
@@ -187,7 +187,7 @@ describe('buildConditionRows — a fresh condition\'s default value matches Pars
   });
 });
 
-// Issue #231 (review, design call): the collapsed row's own xEdit-style prose summary
+// The collapsed row's own xEdit-style prose summary
 // (`wbConditionToStr`) — DiffRow.tsx shows this instead of the generic "{…}" placeholder.
 describe('buildConditionRows — collapsedSummary (xEdit-style one-line prose, design call)', () => {
   it('formats RunOn.Function(params) Op Comparison, a Reference target and Global comparison included, no trailing conjunction on the plugin\'s own last condition', () => {
@@ -232,7 +232,7 @@ describe('buildConditionRows — collapsedSummary (xEdit-style one-line prose, d
     expect(diffs[0].children?.[0].collapsedSummary?.['Fallout4.esm']).toBe('Subject.A = 0 AND');
   });
 
-  // Issue #165: matches xEdit's own wbConditionToStr — a decoded Number parameter's summary text
+  // Matches xEdit's own wbConditionToStr — a decoded Number parameter's summary text
   // is its member name alone (e.g. "Male"), never the raw number.
   it('a decoded Number parameter shows its member name, not the raw number', () => {
     const c = condition({
@@ -245,7 +245,7 @@ describe('buildConditionRows — collapsedSummary (xEdit-style one-line prose, d
   });
 });
 
-// Issue #114: every synthesized FieldDiff node this adapter builds must populate its own
+// Every synthesized FieldDiff node this adapter builds must populate its own
 // bottom-up conflictAll — DiffRow reads it directly, with no fallback computation of its own.
 describe('buildConditionRows — per-node conflictAll (issue #114)', () => {
   it('a field leaf carries its own reduced conflictAll', () => {

@@ -101,7 +101,7 @@ public sealed class PlacementWalker
     }
 
     /// <summary>
-    /// #488: the per-item half of <see cref="EmitCell"/>'s own cell_location row, factored out so a
+    /// The per-item half of <see cref="EmitCell"/>'s own cell_location row, factored out so a
     /// single already-in-hand cell (found through <see cref="Source.ContainerChildFields.EnumerateChildren"/>
     /// rather than a whole-mod walk — <c>DuckDbRecordIndex</c>'s working-tree re-derivation) can be
     /// answered without re-deriving the block/sub/worldspace facts a lone document cannot carry: those
@@ -121,7 +121,7 @@ public sealed class PlacementWalker
         return new CellLocationRow(cellFk, parentWorldspace, blockX, blockY, subX, subY, gx, gy, isInterior);
     }
 
-    /// <summary>#488: the per-item half of <see cref="EmitPlaced"/>'s own placement row — see
+    /// <summary>The per-item half of <see cref="EmitPlaced"/>'s own placement row — see
     /// <see cref="EmitCellLocationRow"/>'s doc comment for why a single-item variant exists
     /// alongside the whole-mod walk.</summary>
     internal PlacementRow EmitPlacementRow(IMajorRecordGetter placed, string parentCellFormKey, string group)

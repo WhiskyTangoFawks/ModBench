@@ -80,7 +80,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
         Assert.NotEmpty(firstRepo!.GetRecordTypeCounts(new PluginKey("A.esp", "Data")));
     }
 
-    // A single plugin whose binary data Mutagen can't parse (e.g. #<issue>: a malformed
+    // A single plugin whose binary data Mutagen can't parse (e.g. a malformed
     // PerkEntryPointAddActivateChoice missing its EPF3 record) must not abort the whole load
     // order — mirrors the existing per-plugin isolation around ModFactory.ImportGetter in
     // LoadOrder, extended to the indexing stage.
@@ -120,7 +120,7 @@ public sealed class LoadOrderMirrorReconcileScatteredTests
     }
 
     // Only Index is interesting here; DelegatingRecordIndex forwards the rest of the (wide)
-    // interface, which this class used to restate member for member.
+    // interface.
     private sealed class ThrowingOnIndexRepository(IRecordIndex inner, string poisonPlugin)
         : DelegatingRecordIndex(inner)
     {

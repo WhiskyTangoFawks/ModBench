@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #401: RecordFieldWriter.TryApply's own dispatch guards, exercised directly via
+/// RecordFieldWriter.TryApply's own dispatch guards, exercised directly via
 /// InternalsVisibleTo rather than through RecordEditService.EditField's full load order/tracked-mod
 /// machinery — these are pure dispatch-routing questions with no working-tree side effects to
 /// observe, so the lighter seam is the right one (per /tdd: test at the seam that matches what's
@@ -54,7 +54,7 @@ public sealed class RecordFieldWriterTests
         Assert.Equal(FieldApplyOutcome.NotFound, outcome);
     }
 
-    // #539: is_partial_form dispatched ahead of the reflected columns, same tier as editor_id —
+    // is_partial_form dispatches ahead of the reflected columns, same tier as editor_id —
     // BaseSkip excludes MajorRecordFlagsRaw from the reflected schema entirely, so NoSchemas here
     // proves the dispatch never needs a schema lookup to reach it.
     [Fact]
@@ -83,11 +83,11 @@ public sealed class RecordFieldWriterTests
         Assert.Equal(0, cell.MajorRecordFlagsRaw);
     }
 
-    // #539 correction 1's rival: the originally-briefed (superseded) design gated on Mutagen's own
+    // The rival design gates on Mutagen's own
     // static IsPartialFormable reflection instead of PartialFormFlag's container-type gate. FO4's
     // Cell is not wired up for that static property (PartialFormFlag.cs's own doc) — a reflection
-    // gate would wrongly refuse this. Guarded here by asserting success on exactly the type the
-    // ticket's own real-world case names (Sim Settlements 2's Partial Form Cell overrides).
+    // gate would wrongly refuse it. Guarded by asserting success on exactly the type the
+    // real-world case names (Sim Settlements 2's Partial Form Cell overrides).
     [Fact]
     public void TryApply_IsPartialForm_OnNonPartialFormableType_ReturnsNotFound()
     {

@@ -2,7 +2,7 @@ using MEditService.Core.Source;
 
 namespace MEditService.Tests.Source;
 
-/// <summary>#549 Slice 3: <see cref="SourceTreeMerge.MergeAdditively"/> — folds a scratch tree into an
+/// <summary><see cref="SourceTreeMerge.MergeAdditively"/> — folds a scratch tree into an
 /// existing destination tree without disturbing anything already there.</summary>
 public sealed class SourceTreeMergeTests : IDisposable
 {

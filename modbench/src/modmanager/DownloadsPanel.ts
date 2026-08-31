@@ -133,10 +133,10 @@ async function deleteArchive(instanceRoot: string, name: string, log: (msg: stri
     )) === 'Delete');
 }
 
-/** Delete action for the tree's multi-select command (#233): confirms ONCE for the WHOLE
+/** Delete action for the tree's multi-select command: confirms ONCE for the WHOLE
  *  selection, never once per file — an N-file selection must not stack N modal dialogs. A
- *  single-name selection reuses `deleteArchive` as-is (identical modal text to before #233).
- *  Cancel is a silent no-op for the whole batch, matching the single-file contract. */
+ *  single-name selection reuses `deleteArchive` as-is. Cancel is a silent no-op for the
+ *  whole batch, matching the single-file contract. */
 export async function deleteArchives(instanceRoot: string, names: string[], log: (msg: string) => void): Promise<void> {
   if (names.length === 1) {
     await deleteArchive(instanceRoot, names[0], log);
@@ -175,13 +175,10 @@ async function setArchiveHidden(instanceRoot: string, name: string, hidden: bool
   await writeFile(metaPath, setHiddenInText(metaText, hidden), 'utf8');
 }
 
-// #214: the row's right-click actions (Install/Visit on Nexus/Open File/Open Meta File/
-// Reveal in Explorer/Delete/Hide/Unhide) as directly-callable handlers, keyed the same way
-// buildMessageHandlers used to key them before their sole trigger — the hand-drawn row menu —
-// moved to a native `webview/context` menu. All the real work already lived here in the
-// extension host (never in the webview), so the native commands below call these directly;
-// no message round trip needed. Exported/testable the same fixture-in/behavior-out way
-// buildMessageHandlers was (DownloadsPanel.test.ts).
+// The row's right-click actions (Install/Visit on Nexus/Open File/Open Meta File/
+// Reveal in Explorer/Delete/Hide/Unhide) as directly-callable handlers — all the real
+// work lives in the extension host, so the native commands below call these directly.
+// Exported for fixture-in/behavior-out testing (DownloadsPanel.test.ts).
 export function buildRowActionHandlers(instanceRoot: string, log: (msg: string) => void): Record<string, (name: string) => void> {
   return {
     install: (name) => void installArchive(instanceRoot, name, log),
@@ -203,7 +200,7 @@ export function buildRowActionHandlers(instanceRoot: string, log: (msg: string) 
   };
 }
 
-// #233: one command id per native `view/item/context` menu entry on the modbench.downloads
+// One command id per native `view/item/context` menu entry on the modbench.downloads
 // TreeView (package.json's contributes.commands/menus), mapped to its buildRowActionHandlers
 // key. `keyof ReturnType<typeof buildRowActionHandlers>` (not a bare `string`) so a typo'd or
 // renamed key on either side of this table is a compile error, not a silent no-op at that one
@@ -216,7 +213,7 @@ const SINGLE_ROW_COMMANDS: Record<string, keyof ReturnType<typeof buildRowAction
 };
 
 /** Register Install / Visit on Nexus / Open File / Open Meta File — clicked row only, ignoring
- *  the rest of any multi-selection (#233): MO2 doesn't batch Install either, and batching the
+ *  the rest of any multi-selection: MO2 doesn't batch Install either, and batching the
  *  navigational actions is "open five browser tabs / five archives / five editors". VS Code
  *  invokes a contributed `view/item/context` command as `(clickedItem, selectedItems[])`; the
  *  selection argument is simply unused here. */
@@ -237,8 +234,8 @@ function selectionNames(clicked: DownloadNode | undefined, selected: DownloadNod
   return clicked ? [clicked.row.name] : [];
 }
 
-/** Register Delete / Hide / Unhide — act on the WHOLE selection, not just the clicked row
- *  (#233). Hide/Unhide are idempotent per row (buildRowActionHandlers' hide/unhide always
+/** Register Delete / Hide / Unhide — act on the WHOLE selection, not just the clicked
+ *  row. Hide/Unhide are idempotent per row (buildRowActionHandlers' hide/unhide always
  *  write `removed=true/false` regardless of prior state), so a mixed hidden/visible selection
  *  never errors — the `when` clause gating Hide vs Unhide can only inspect the clicked row, so
  *  a mixed selection applies whichever action that row's state offers to every selected row,
@@ -260,7 +257,7 @@ export function registerDownloadsMultiRowCommands(instanceRoot: string, log: (ms
   ];
 }
 
-// #238 slice 4: the view/title overflow (…) menu's Sort by… quick pick, plus the visible
+// The view/title overflow (…) menu's Sort by… quick pick, plus the visible
 // Show-hidden title-bar toggle. Both apply straight to DownloadsProvider (sortDownloadRows/
 // filterHiddenRows are already applied inside its load()) — no row-level work, unlike the
 // per-archive commands above, so these take the provider instead of instanceRoot/log.

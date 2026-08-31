@@ -69,7 +69,7 @@ describe('ApiPluginRepository.getPlugins', () => {
 
   it('throws on a non-OK response so the tree can surface an error instead of an empty list', async () => {
     // Querying /plugins before a load order is loaded returns 503 "No load order held";
-    // that must not be silently swallowed into [] (issue #75).
+    // that must not be silently swallowed into [].
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: undefined,
@@ -83,14 +83,12 @@ describe('ApiPluginRepository.getPlugins', () => {
     } as any;
     const repo = new ApiPluginRepository(client);
 
-    // Pin the exact message: it is the user-visible #75 ErrorNode text and must not
+    // Pin the exact message: it is the user-visible ErrorNode text and must not
     // drift (e.g. to a method-signature label) when the error path is refactored.
     await expect(repo.getPlugins()).rejects.toThrow(/GET \/plugins failed \(503\)/);
   });
 
   it('maps origin from the wire PluginResponse (#275 / ADR-0036) instead of dropping it', async () => {
-    // #272 review flagged this: PluginResponse.Origin has been on the wire since #269, but
-    // toPluginMetadata() never carried it into the frontend's PluginMetadata.
     const raw = [{ ...makePlugin(0), origin: 'SomeMod' }];
     const client = { GET: vi.fn().mockResolvedValue({ data: raw, response: { ok: true } }) } as any;
     const repo = new ApiPluginRepository(client);
@@ -100,7 +98,7 @@ describe('ApiPluginRepository.getPlugins', () => {
     expect(result[0].origin).toBe('SomeMod');
   });
 
-  // #277 / ADR-0037 AC1/AC4: this is what lets the composite decorate a row without a
+  // ADR-0037: this is what lets the composite decorate a row without a
   // second read — the classification is already attached to the plugin it describes.
   it('maps masterIssues from the wire PluginResponse, distinguishing direct from unloadable', async () => {
     const raw = [{
@@ -151,7 +149,7 @@ describe('ApiPluginRepository.getRecordTypes', () => {
   });
 
   it('falls back to the raw type when displayName is absent from the response', async () => {
-    // Issue #110: additive field — a stale/older backend response without displayName
+    // Additive field — a stale/older backend response without displayName
     // must not surface `undefined` as a tree label.
     const types = [{ type: 'WEAP', count: 42 }];
     const client = { GET: vi.fn().mockResolvedValue({ data: types, response: { ok: true } }) } as any;
@@ -174,7 +172,7 @@ describe('ApiPluginRepository.getRecordTypes', () => {
     await expect(repo.getRecordTypes('Plugin.esp')).rejects.toThrow(/500/);
   });
 
-  // #559: a hung backend must not leave the tree spinning forever with no error — see the
+  // A hung backend must not leave the tree spinning forever with no error — see the
   // matching test in each other tree-populating describe block below for the full set.
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
@@ -217,7 +215,7 @@ describe('ApiPluginRepository.getRecords', () => {
     await expect(repo.getRecords('Plugin.esp', 'WEAP', 0, 50)).rejects.toThrow(/500/);
   });
 
-  // #428: the generated schema mislabels WorkingTreeState as numeric (Swashbuckle isn't
+  // The generated schema mislabels WorkingTreeState as numeric (Swashbuckle isn't
   // JsonStringEnumConverter-aware — the same known mismatch toTrackPhase already works around),
   // but Program.cs registers that converter globally, so the real wire value is the string. Trust
   // the string, matching toTrackPhase's own posture, not the generated type.
@@ -241,7 +239,6 @@ describe('ApiPluginRepository.getRecords', () => {
     expect(result.items.map((r) => r.workingTreeState)).toEqual(['Modified', 'Added', 'None']);
   });
 
-  // #559
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -250,8 +247,8 @@ describe('ApiPluginRepository.getRecords', () => {
 });
 
 describe('ApiPluginRepository.searchRecords', () => {
-  // Issue #210: the FormKey picker moved into the extension host — it needs its own record
-  // search, mirroring the deleted webview-side RecordPanelClient.searchRecords: `type` is only
+  // The FormKey picker lives in the extension host — it needs its own record
+  // search: `type` is only
   // sent when the field allows exactly one record type, and results are capped at 20.
   it('calls GET /records with search + limit, and type when validTypes has exactly one entry', async () => {
     const records = [makeRecord(0), makeRecord(1)];
@@ -380,7 +377,7 @@ describe('ApiPluginRepository.getActiveFilter', () => {
   });
 });
 
-// #307 / ADR-0035: what the load order can honestly say about itself *while it is still loading* —
+// ADR-0035: what the load order can honestly say about itself *while it is still loading* —
 // polled alongside the in-flight load POST. `conflictsComputed` is read separately from `state`
 // on purpose (LoadOrderStatus.cs): the sweep is whole-set, so ADR-0035's live mutations will leave
 // a Ready load order with stale winners, and anything deciding whether to render conflict
@@ -420,7 +417,7 @@ describe('ApiPluginRepository.getLoadOrderStatus', () => {
   });
 });
 
-// #417: polled the same way getTrackStatus/getLoadOrderStatus are.
+// Polled the same way getTrackStatus/getLoadOrderStatus are.
 describe('ApiPluginRepository.getExternalChangeStatus', () => {
   it('calls GET /plugins/external-changes/status and maps every queued question', async () => {
     const client = {
@@ -445,11 +442,10 @@ describe('ApiPluginRepository.getExternalChangeStatus', () => {
   });
 });
 
-// Issue #211: the condition-function catalogue backing the extension-host QuickPick. Unlike most
-// PluginRepository reads (ensureOk-then-throw), this mirrors the deleted webview-side
-// RecordPanelClient.conditionFunctions()'s degrade-to-[] convention (closer precedent:
+// The condition-function catalogue backing the extension-host QuickPick. Unlike most
+// PluginRepository reads (ensureOk-then-throw), this degrades to [] (precedent:
 // setFilter/clearFilter's catch-and-log-no-throw above) — a failed fetch must never surface as a
-// raw error, per #211's AC3.
+// raw error.
 describe('ApiPluginRepository.getConditionFunctions', () => {
   it('calls GET /condition-functions and returns the catalog on success', async () => {
     const client = {
@@ -470,7 +466,7 @@ describe('ApiPluginRepository.getConditionFunctions', () => {
   });
 });
 
-// #427: the Renumber gesture's FormID input box's suggested default.
+// The Renumber gesture's FormID input box's suggested default.
 describe('ApiPluginRepository.peekNextFreeFormKey', () => {
   it('calls GET /plugins/{plugin}/records/next-form-key with the plugin/origin and returns the suggested FormKey', async () => {
     const client = {
@@ -492,7 +488,7 @@ describe('ApiPluginRepository.peekNextFreeFormKey', () => {
   });
 });
 
-// #494: the destination picker's "who already carries this FormKey" question — no dedicated
+// The destination picker's "who already carries this FormKey" question — no dedicated
 // backend endpoint, GET /records/{formKey}/compare's own Overrides[].Plugin already answers it.
 describe('ApiPluginRepository.getRecordOverridePlugins', () => {
   it('calls GET /records/{formKey}/compare and returns every override plugin name', async () => {
@@ -569,7 +565,7 @@ describe('ApiPluginRepository.getConflicts', () => {
       origin: 'Data',
       conflictAll: 'Conflict',
     }]);
-    // #559: also carries a per-call AbortSignal now, so a timeout genuinely cancels the
+    // Also carries a per-call AbortSignal, so a timeout genuinely cancels the
     // in-flight request rather than only rejecting the client-side promise.
     expect(client.GET).toHaveBeenCalledWith('/records/conflicts', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
@@ -584,7 +580,6 @@ describe('ApiPluginRepository.getConflicts', () => {
     await expect(new ApiPluginRepository(nonOkClient()).getConflicts()).rejects.toThrow(/500/);
   });
 
-  // #559: the Conflicts node's own fetch is the one this ticket's issue text names explicitly.
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -612,7 +607,6 @@ describe('ApiPluginRepository.getWorldspaces', () => {
     await expect(repo.getWorldspaces('Plugin.esp')).rejects.toThrow(/500/);
   });
 
-  // #559
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -666,7 +660,6 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     await expect(repo.getWorldspaceBlocks('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
   });
 
-  // #559
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -705,7 +698,6 @@ describe('ApiPluginRepository.getCellReferences', () => {
     await expect(repo.getCellReferences('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
   });
 
-  // #559
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -744,7 +736,6 @@ describe('ApiPluginRepository.getInteriorCells', () => {
     await expect(repo.getInteriorCells('Plugin.esp', 0, 50)).rejects.toThrow(/500/);
   });
 
-  // #559
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -786,7 +777,6 @@ describe('ApiPluginRepository.getContainerChildren', () => {
     await expect(repo.getContainerChildren('Plugin.esp', 'Fallout4.esm:00003C')).rejects.toThrow(/500/);
   });
 
-  // #559
   it('rejects with a timeout error rather than hanging forever when the backend never responds', async () => {
     const client = { GET: vi.fn().mockReturnValue(new Promise(() => {})) } as any;
     const repo = new ApiPluginRepository(client, undefined, 20);
@@ -795,7 +785,7 @@ describe('ApiPluginRepository.getContainerChildren', () => {
   }, 200);
 });
 
-// #34 / ADR-0036: a row that stands for a specific copy of a filename says which one; an ordinary
+// ADR-0036: a row that stands for a specific copy of a filename says which one; an ordinary
 // load-order row sends no origin at all and lets the backend resolve it.
 describe('ApiPluginRepository origin threading', () => {
   it('sends origin as a query param on getRecordTypes', async () => {
@@ -828,7 +818,7 @@ describe('ApiPluginRepository origin threading', () => {
     expect(client.GET.mock.calls[0][1].params.query).not.toHaveProperty('origin');
   });
 
-  // #305: the spatial routes get the same treatment the record routes already have — a tree row
+  // The spatial routes get the same treatment the record routes already have — a tree row
   // that knows which copy it stands for states it; an ordinary load-order row sends none.
   it('sends origin as a query param on getWorldspaces', async () => {
     const client = { GET: vi.fn().mockResolvedValue({ data: [], response: { ok: true } }) } as any;

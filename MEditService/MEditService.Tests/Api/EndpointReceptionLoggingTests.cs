@@ -10,21 +10,20 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Api;
 
-// #215: every Map*Endpoints handler logs an Info-level "command received" line before doing any
+// Every Map*Endpoints handler logs an Info-level "command received" line before doing any
 // work — every handler has this line as its literal first statement (verified by inspection, not
 // by these tests, which don't assert ordering directly). These tests call a representative handler
-// per endpoints file directly (bypassing HTTP/Serilog — see #215 plan: Serilog's
-// UseSerilog(writeToProviders: false) makes host-level log capture unreliable) and assert: (a) the
+// per endpoints file directly (bypassing HTTP/Serilog: UseSerilog(writeToProviders: false) makes
+// host-level log capture unreliable) and assert: (a) the
 // Info-level entry is present and carries the raw (pre-decode) request parameter, and (b) for
 // LoadOrderEndpoints.PutLoadOrder specifically, the entry still fires when the request fails
 // validation and returns early — proving the line isn't gated behind a success path. The remaining
 // handlers get the identical one-line addition without a dedicated test.
 //
-// #529 retired this pattern from PluginEndpoints specifically: its "Received ..." lines were
-// redundant with the per-request Serilog summary line (UseSerilogRequestLogging) and were deleted
-// rather than kept, taking this file's former PluginEndpoints.CreatePlugin coverage with them. The
-// #215 pattern (and this file's remaining tests) still stand for LoadOrderEndpoints,
-// WorldspaceEndpoints and RecordEndpoints, which #529 was scoped away from.
+// PluginEndpoints is exempt: its "Received ..." lines were redundant with the per-request Serilog
+// summary line (UseSerilogRequestLogging) and were deleted rather than kept. The pattern (and
+// this file's remaining tests) still stands for LoadOrderEndpoints, WorldspaceEndpoints and
+// RecordEndpoints.
 public sealed class EndpointReceptionLoggingTests
 {
     private static (ILoggerFactory factory, List<LogEntry> entries) CapturingLoggerFactory()
@@ -63,8 +62,8 @@ public sealed class EndpointReceptionLoggingTests
     [Fact]
     public void PutLoadOrder_GameDirectoryMissing_StillLogsReceived()
     {
-        // Acceptance criterion: the reception line fires on every call, including ones that go on to
-        // fail — this request fails validation (400) before LoadOrderMirror.Reconcile is called.
+        // The reception line fires on every call, including ones that go on to fail — this
+        // request fails validation (400) before LoadOrderMirror.Reconcile is called.
         var (loggerFactory, entries) = CapturingLoggerFactory();
         using var _ = loggerFactory;
         var mirror = new StubMirror();
@@ -114,7 +113,7 @@ public sealed class EndpointReceptionLoggingTests
         public ILoadOrder? LoadOrder => null;
         public IRecordReads? Reads => null;
         public IRecordIndex? Index => null;
-        // #274: these stubs never load, so they are always in the no-load order state.
+        // These stubs never load, so they are always in the no-load-order state.
         public LoadOrderStatus Status => LoadOrderStatus.None;
         public (ILoadOrder LoadOrder, IRecordReads Reads) RequireScope() => throw new NoLoadOrderException();
         public void Reconcile(

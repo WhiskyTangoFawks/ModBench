@@ -7,34 +7,32 @@ ship and work on that write path. Review, commit, and revert happen in VS Code's
 Control panel, one repo per tracked mod — see
 [Version control — Track, branch, compile](medit-version-control.md) for that surface; this
 document covers the grid and its gestures only.
-The **gesture model**: [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)
-was adopted after [an audit of xEdit](../research/xedit-ux-audit.md) showed mEdit had
-specified single-click-to-edit, which xEdit does not do. In the field grid, a single click focuses
+The **gesture model** is [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md),
+catalogued in [the xEdit UX audit](../research/xedit-ux-audit.md).
+In the field grid, a single click focuses
 the cell — the row highlights, the focused cell is outlined, focus survives a re-render, and no
-cell shows a `grab` cursor (#222). Editing is off single click: a second click on the focused
+cell shows a `grab` cursor. Editing is off single click: a second click on the focused
 cell, `F2`, or a double click opens a mutable cell's editor; double-clicking the label column
-expands/collapses that node; the editor selects its whole text on focus (#223). Every scalar type,
+expands/collapses that node; the editor selects its whole text on focus. Every scalar type,
 `string` included, agrees on this: second click, `F2` and double click all open the same inline
-editor, immediately, with no debounce (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)
-— no left-click gesture may relocate the user out of the record panel, which a `string` cell's
-double click used to do by opening a real editor tab). `Ctrl+C` copies
-the focused cell's model value in both column kinds (#224); `Ctrl+X`/`Ctrl+V` are the mutating half
+editor, immediately, with no debounce ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)
+— no left-click gesture may relocate the user out of the record panel). `Ctrl+C` copies
+the focused cell's model value in both column kinds; `Ctrl+X`/`Ctrl+V` are the mutating half
 of that same contract — clipboard read/write both round-trip through the extension host, and both
 commit through the ordinary onEdit path, coercing the pasted string the same way the typed-editor
-path does (#225). A pasted reference into a FormKey cell still goes through its QuickPick editor,
+path does. A pasted reference into a FormKey cell still goes through its QuickPick editor,
 not a closed-cell paste of its own — see the FormKey paste note below. Unsorted-array arity/order
 ops (Add/Remove/Move Up/Move Down) live on the right-click
-menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators, and the inline ▲▼✕/＋ buttons #142
-shipped before ADR-0034 are gone (#227). The read-only value surface the earlier click-to-edit model introduced is gone
-too (#226): an immutable cell opens nothing on plain click, second click, `F2`, or double click —
-**a `string` cell included, now** (#258/ADR-0039) — with Ctrl+C on the focused cell (#224) as every
+menu with `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` as accelerators; there are no inline ▲▼✕/＋
+buttons. There is no read-only value
+surface: an immutable cell opens nothing on plain click, second click, `F2`, or double click —
+**a `string` cell included** (ADR-0039) — with Ctrl+C on the focused cell as every
 immutable cell's copy path regardless, and the right-click menu's **Open in Editor…** entry (see
 *Editing* below) as a long immutable value's own read path, read-only. Everything in
 *Interaction model* below
-describes the target, not the build. VMAD and Conditions now render as ordinary rows in this same
-tree and inherit its focus model in full (#231 — see *VMAD and Conditions are ordinary rows in the
-one tree* below for the handful of still-open, explicitly scoped gaps). Known gaps beyond that:
-FormKey resolution (#141).
+describes the target, not the build. VMAD and Conditions render as ordinary rows in this same
+tree and inherit its focus model in full (see *VMAD and Conditions are ordinary rows in the
+one tree* below for the handful of still-open, explicitly scoped gaps).
 
 Editing context — operates on **records**, **FormKeys**, and **plugins**;
 the Mod-Management vocabulary ("mod", "loadout", "deploy") belongs to the sibling surfaces, not
@@ -87,9 +85,7 @@ in [medit-version-control.md](medit-version-control.md).
    read values without a lookup table.
 5. As a user, I want a FormKey field to render as a link to the referenced record, and
    `Ctrl+click` to open that record, so that I can follow references without copying IDs
-   around — the same gesture xEdit uses. *(The link is
-   labelled with the FormKey; labelling it with the referenced record's EditorID needs
-   resolution the compare response does not carry — #141.)*
+   around — the same gesture xEdit uses.
 6. As a user, I want structs and arrays shown collapsed with a summary and expandable to their
    sub-fields/elements, so that a complex record stays readable.
 7. As a user, I want to focus a field with a click and open its editor the way xEdit does — a
@@ -119,7 +115,7 @@ in [medit-version-control.md](medit-version-control.md).
 ### Interaction model
 
 **xEdit's model, ported** — the one compare grid, whose rows include VMAD and Condition data as
-ordinary rows (#231 — see below)
+ordinary rows (see below)
 ([ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md); the behaviour being matched is catalogued in
 [the xEdit UX audit](../research/xedit-ux-audit.md)). Every user of this panel arrives fluent in
 xEdit, so it is the reference, and divergence needs a platform limitation to justify it — not a
@@ -133,7 +129,7 @@ better idea.
   "click, then click again to rename" pattern, and xEdit's `toEditOnClick`.
 - **Double-click a value cell** — open the same inline editor a second click/`F2` on the
   already-focused cell would: numeric and flag types inline, `string` inline too
-  (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md) — no left-click gesture
+  ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md) — no left-click gesture
   may reach the extended editor, which used to be `string`'s own double-click target). A FormKey's
   double click stays on the native QuickPick, same as its second click/F2 — that QuickPick is
   already its richest editor (ADR-0034's divergence #1). **Double-click the label column** —
@@ -156,13 +152,13 @@ better idea.
   also the `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓` accelerators above — the menu is the canonical
   definition and the keys are shortcuts onto it, exactly as in xEdit, and there are **no inline
   ▲▼✕ controls**, per the no-second-route rule below. On a **`string` value cell**, right-click also
-  offers **Open in Editor…** (#258/ADR-0039) — the extended editor's only remaining trigger, on
+  offers **Open in Editor…** (ADR-0039) — the extended editor's only remaining trigger, on
   mutable and immutable columns alike; see *Editing* below for what opens. The column-header menu is VS Code's own
   native context menu (`contributes.menus["webview/context"]`, gated on a `data-vscode-context`
   attribute the header carries — [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)'s
-  native-first precedent applied inside the webview) rather than a rendered overlay. #335/ADR-0038:
-  Add Master… (and its own, deliberately-not-mutable-filtered QuickPick) is gone — masters is
-  lifecycle-derived now, never a direct user edit; the header record's masters field shows on this
+  native-first precedent applied inside the webview) rather than a rendered overlay. Per ADR-0038
+  there is no Add Master… — masters are
+  lifecycle-derived, never a direct user edit; the header record's masters field shows on this
   column header, read-only, derived from content at compile (Effective masters — the plugin's
   committed masters unioned with the origins of every currently uncommitted working-tree change,
   ADR-0038).
@@ -186,19 +182,19 @@ through DOM text selection, and they close when the clipboard carries the model 
 
 Focus on click · drag out · `Ctrl+C` copy · right-click menu · default arrow cursor. Every scalar
 type's second click, `F2` and double click now agree on the same (inline) editor —
-`string` included (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)) — so
+`string` included ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md)) — so
 there is no per-type exception left in this table at all.
 Drop in and all mutating operations (`Ctrl+V`, `Ctrl+X`, `F2`, `Insert`, `Delete`, `Ctrl+↑`/`↓`,
 editing of any kind) are **mutable columns only** — an immutable cell simply refuses, showing no
 distinct affordance beforehand, exactly as xEdit does. A `string` cell's right-click menu is the
 one exception offered on **both** column kinds — **Open in Editor…** opens the extended editor,
-read-only on an immutable/untracked/not-in-load-order column (#258/ADR-0039).
+read-only on an immutable/untracked/not-in-load-order column (ADR-0039).
 
 #### By cell
 
 | Cell | Second click / `F2` / double-click opens |
 | --- | --- |
-| `string` | text editor (right-click: **Open in Editor…**, the extended editor — #258) |
+| `string` | text editor (right-click: **Open in Editor…**, the extended editor) |
 | `int`, `float` | number editor (inline — matches xEdit's `dtInteger`/`dtFloat`) |
 | `bool` | checkbox |
 | `enum` | dropdown |
@@ -223,7 +219,7 @@ Neither survives. One function, `modelValue` (webview `modelValue.ts`), defines 
 field type and is the only place either the copy path or a leaf's own display/editor reads it from
 — string/int/float/bool/enum pass through unchanged from what the editor already showed; flags
 render their active names, comma-separated, never the bitmask; a FormKey renders the same
-`EditorID [FormKey]` composite the picker and `FormKeyLink` already use (#218).
+`EditorID [FormKey]` composite the picker and `FormKeyLink` already use.
 
 **Struct and array summary rows are the one exception to "the same string the editor shows"** —
 they have no editor to match, since a compound field is edited through its child rows, not as a
@@ -232,13 +228,13 @@ unit. Their model value is a **JSON serialization of the field's current value**
 `Element.Summary` equivalent needs per-record-type domain knowledge this codebase doesn't have
 anywhere yet — how to render a REFR's position, a condition's function call, an arbitrary nested
 struct — and would be its own open-ended design effort, not a sub-decision inside a copy-command
-ticket (#224). JSON needs no per-type knowledge, is honest about what a struct/array actually is
+ticket. JSON needs no per-type knowledge, is honest about what a struct/array actually is
 rather than a lossy gloss of it, and is genuinely round-trippable (`JSON.parse` recovers the same
 value) — a prose summary is neither. This is a deliberate, bounded divergence from xEdit's exact
 behavior for a content-generation question a UX-parity ticket shouldn't have to answer, not "an
 alternative that seems nicer" for a gesture ADR-0034 would otherwise forbid diverging on.
 
-#### Ctrl+X only actually clears some types (#225)
+#### Ctrl+X only actually clears some types
 
 `Ctrl+X` copies the focused cell's model value, then attempts to clear it by running `''` through
 the same coercion `Ctrl+V` uses for a pasted string — there is no separate, per-type "default
@@ -259,20 +255,20 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 - **Header**: record identity (`{RecordType} / {EditorID}`, or FormKey) and the FormKey
   (`{FormID}:{OriginPlugin}`). On a mutable record the FormID is a 6-hex-char input with a
   **Renumber** button (enabled only when the value changed); on an immutable one it is plain
-  text. Renumber writes a delete+create pair as an ordinary working-tree change (#427). An
+  text. Renumber writes a delete+create pair as an ordinary working-tree change. An
   in-use FormID surfaces an inline error; an immutable-reference block surfaces a notification
   naming the blocking plugins.
 - **Compare grid** (the primary view): one **row per field** (fields with no value in any
   plugin hidden by default); one **column per plugin** that contains the record's FormKey, in
   load order (left = master, right = winning override) — every column renders Effective state,
-  committed text with any uncommitted working-tree change overlaid (#413). Column headers show
+  committed text with any uncommitted working-tree change overlaid. Column headers show
   the plugin name as a chip, filename only — origin (the
   mod folder that provided this copy, or a reserved value) lives in the chip's tooltip always, and
-  renders inline in the label only when a second loaded copy shares this filename (ADR-0036;
-  #304). An immutable chip carries a `(read-only)` note beneath it, worded by *why*: a vanilla/
-  DLC/CC master reads `(read-only)`; a copy the effective load order does not name (#34, ADR-0035)
+  renders inline in the label only when a second loaded copy shares this filename (ADR-0036).
+  An immutable chip carries a `(read-only)` note beneath it, worded by *why*: a vanilla/
+  DLC/CC master reads `(read-only)`; a copy the effective load order does not name (ADR-0035)
   reads `(not loaded)` instead, and the whole column — header and every cell — renders dimmed, the
-  one cue distinguishing it from a participating column once scrolled past the header (#304). Both
+  one cue distinguishing it from a participating column once scrolled past the header. Both
   notes' tooltips name the reason. `(not loaded)`'s tooltip deliberately does not prescribe a
   single fix: `!InLoadOrder` covers two distinct causes the backend does not currently
   distinguish — a copy shadowed by another mod (a **file** conflict, decided by the Mod override
@@ -283,8 +279,7 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   collapses/expands a column (state persisted in load order). The grid's scroll region is bound to the
   panel's viewport, not to its own content height, so a horizontal scrollbar (for wide grids with
   many plugin columns) stays reachable at the bottom of the visible viewport regardless of
-  vertical scroll position, instead of only appearing at the bottom of a possibly very tall table
-  (#175).
+  vertical scroll position, instead of only appearing at the bottom of a possibly very tall table.
 
 ### Editing
 
@@ -311,13 +306,13 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   enums as their name via a `<select>`; flags as active flag names via a per-flag multi-select;
   FormKeys as a link — `Ctrl+click` follows it, and opening the cell on a mutable column (second
   click / `F2` / double click) opens a native
-  **QuickPick** (#210; the webview cannot call `vscode.window.createQuickPick` itself, so this
+  **QuickPick** (the webview cannot call `vscode.window.createQuickPick` itself, so this
   round-trips through the extension host), seeded with the current reference — as the same
-  `EditorID [FormKey]` composite the cell displays and the picker's own items use (#218), not the
+  `EditorID [FormKey]` composite the cell displays and the picker's own items use, not the
   bare FormKey, so the input does not contradict the list beneath it — and filtered by
   `validFormKeyTypes`. The seed goes through the same normalization a pasted composite does, so it
-  costs the search nothing. Typing searches records as you type (200ms debounce), matching EditorID or
-  — since #210 — a FormKey-shaped query directly, with the same "EditorID [FormKey]" item labels
+  costs the search nothing. Typing searches records as you type (200ms debounce), matching EditorID
+  or a FormKey-shaped query directly, with the same "EditorID [FormKey]" item labels
   the picker always used; Escape leaves the field unchanged. **This QuickPick is also the paste
   target for a FormKey cell** — it is a native input, so `Ctrl+V` into it needs nothing built. A
   query carrying a bracketed segment (i.e. a whole `EditorID [FormKey]` label pasted from a cell or
@@ -330,27 +325,24 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded *text* itself is visible but
   not selectable the way an `<input>`'s select-on-focus would be; `Ctrl+A` clears it to search
   fresh. A *mutable* FormKey cell's plain click is spent on the picker rather than an editor of its
-  own, but that costs it nothing: `Ctrl+C` on the focused cell (#224) copies its model value the
+  own, but that costs it nothing: `Ctrl+C` on the focused cell copies its model value the
   same as every other cell, independent of whether the picker is open. Seeding the picker with the
-  composite makes the reference fully *visible* there too; whether the QuickPick's own seeded
-  *text* is separately selectable from inside the picker UI itself is unverified (#218) — VS
-  Code's `QuickPick` has no `InputBox`-style `valueSelection`, so the seeded text is visible but
-  not proven selectable the way an `<input>`'s select-on-focus would be. The same picker backs the
+  composite makes the reference fully *visible* there too. The same picker backs the
   VMAD add-property dialog's Object-typed value and every VMAD object-property cell in the grid
   (`VmadObjectCell`, composing this same `FormKeyCell`). The link affordance appears on `Ctrl`-hover only when the
   reference resolves (rule 2 below); structs and arrays as a collapsed summary expandable to child rows,
   and are themselves drag sources for their whole value via that summary row, the same as a
-  scalar leaf, collapsed or expanded alike (#204).
-- **A declined write is always a refusal, never a silent no-op reported as success** (#532):
+  scalar leaf, collapsed or expanded alike.
+- **A declined write is always a refusal, never a silent no-op reported as success**:
   a scalar or FormLink cell edit that the backend can't honor — a converter rejecting the typed
   value, an unparseable FormKey string, a property absent from the record's own concrete
-  subclass — refuses naming the field, the same contract complex-field writes already had
-  (#503/#531). A declined member inside an otherwise-valid struct/array write fails the whole
+  subclass — refuses naming the field, the same contract complex-field writes already had.
+  A declined member inside an otherwise-valid struct/array write fails the whole
   write, not just that member; a member legitimately absent from a record's own subclass (the
   sparse leaf-union case, e.g. some OMOD property members) stays a silent no-op, since that's
   correct round-tripping, not a defect.
 - **A `string` cell's right-click menu opens the extended editor** — **Open in Editor…**
-  (#258/[ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); originally #230, ADR-0034
+  ([ADR-0039](../adr/0039-no-left-click-leaves-the-record-panel.md); ADR-0034
   divergence #2). xEdit's own answer for this surface is `TfrmViewElements`, a separate modeless
   window; a modeless Delphi form has no analogue worth reproducing in a webview (reproducing one
   would be exactly the chrome [ADR-0027](../adr/0027-mo2-surfaces-map-to-native-vscode-views.md)
@@ -358,13 +350,13 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   the grid stays visible, non-preview so it isn't silently replaced by the next single-click
   preview elsewhere. xEdit's window also shows the value across every compared record; the grid
   already does that (one row, one column per plugin), so that half of `TfrmViewElements` isn't
-  ported — the tab holds one plugin's value. That much is unchanged since #230; what changed is the
+  ported — the tab holds one plugin's value. The
   *trigger*, per ADR-0039: xEdit's own gesture for this (`EditTips`: *"Double click on text fields
   in the right pane to open multiline editor"*) opens its modeless form **over** the grid, leaving
   the tree and the user's place untouched — but the substituted vehicle is a VS Code tab, which
   **relocates** the user (the record panel loses focus, the active editor changes), an interaction
   xEdit itself never has. No amount of left-clicking may cost the user their place in the panel, so
-  the trigger is now right-click only, on mutable and immutable columns alike — a native
+  the trigger is right-click only, on mutable and immutable columns alike — a native
   `webview/context` contribution (`modbench.field.openExtended`, gated on the cell's own
   `stringValue` `data-vscode-context`, `recordUtils.ts`'s `stringValueContext`), the same mechanism
   every other row-level menu in this grid already uses.
@@ -385,46 +377,39 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
     keystroke (would write on every character typed) and never only on close (a user who saves
     twice while still editing expects both saves written, the same as re-editing any other cell
     twice). A string leaf nested inside a struct or array (any depth) commits through the same
-    whole-field reconstruction inline edits use (#503), not a bare value under the subtree root's
+    whole-field reconstruction inline edits use, not a bare value under the subtree root's
     path — the trigger carries the row's own path and the subtree root's field alongside the saved
-    text (#533). A top-level string field's commit is unaffected — the same value either way.
-  - **Trigger gesture**: right-click only (#258/ADR-0039). Before this, every `string` cell's
-    second click and `F2` opened the inline editor while its double click opened this tab instead —
-    the one type/gesture pair where second-click/F2's target and double-click's target genuinely
-    differed — which meant the second click's own "open inline" action had to run behind a short
-    debounce so a following native `dblclick` could still cancel it and redirect here. That debounce
-    (and the dblclick redirect itself) is gone: a `string` cell's second click, `F2` and double click
-    now all agree with every other scalar type on the inline editor, immediately, with no
-    disambiguation needed, because there is no longer a second left-click target to disambiguate
-    against.
+    text. A top-level string field's commit is unaffected — the same value either way.
+  - **Trigger gesture**: right-click only (ADR-0039). A `string` cell's second click, `F2` and
+    double click all agree with every other scalar type on the inline editor, immediately, with no
+    debounce — there is no second left-click target to disambiguate against.
   - **Scope**: every plugin column (`ScalarCell`/`DiffRow`). A plain `string`-typed row reaches the
-    extended editor regardless of whether it's an ordinary field or a VMAD property (#231 folds
-    both onto the same `ScalarCell`). A composite leaf's own inner string widget (a condition
+    extended editor regardless of whether it's an ordinary field or a VMAD property (both fold
+    onto the same `ScalarCell`). A composite leaf's own inner string widget (a condition
     parameter's Text category, `conditionParam`) doesn't yet — its outer `FieldMetadata.type` isn't
-    `'string'`, which is what this menu entry keys on (#231's own noted gap). A `string` cell that
+    `'string'`, which is what this menu entry keys on (a noted gap). A `string` cell that
     doesn't reach it keeps its inline editor on every left-click gesture, unchanged.
 - **Unsorted array fields have arity and order operations** — **Move Up** / **Move Down** (swap
   with the neighbour) and **Remove** on an element row, and **Add** on the parent array row,
-  appending a default-valued element (#142). They live in the **right-click menu**, with
+  appending a default-valued element. They live in the **right-click menu**, with
   `Ctrl+↑` / `Ctrl+↓` / `Delete` / `Insert` as accelerators onto the same menu items — xEdit's
   arrangement exactly, and required by the no-second-route rule: **there are no inline ▲▼✕
-  buttons.** (They shipped as inline buttons in #142, before ADR-0034; #227 converted them —
+  buttons.** (Mechanism:
   a native `webview/context` menu on the element/parent cell, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`
   as DOM keydown accelerators on the focused cell, no extension-host round trip needed for the
   keys since `onArrayEdit`/`onArrayAdd` are pure in-webview state.) Add is available regardless of
-  the array's expand state, matching xEdit — the retired "+" button's expanded-only visibility was
-  that button's own rendering choice, not a functional rule. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
+  the array's expand state, matching xEdit. Sorted (`wbArrayS`) arrays offer none of these — order is derived from the
   sort key, so the entries are absent, not merely disabled. All three ops write the **whole
   array** as a single field edit — the atomic complex-field write CONTEXT.md describes — and only
   on non-immutable columns. An element-**value** edit is offered on the same cell and shares this
   same reconstruction: the whole array (or struct-array element) is rebuilt before the write, so
-  it lands atomically rather than being silently lost (#503). The context-menu ops' wire payload
-  carries the element's full `path` + `rootField` (#533's addressing contract), so ops on an
+  it lands atomically rather than being silently lost. The context-menu ops' wire payload
+  carries the element's full `path` + `rootField` (the addressing contract), so ops on an
   array nested inside a struct or another array land at the element's real depth, and Add
-  resolves its default element from the nested array's own element type via `metaAtPath` — the
-  pre-#535 payload carried only a bare element index, which truncated both. There is no free
+  resolves its default element from the nested array's own element type via `metaAtPath` — a
+  bare element index would truncate both. There is no free
   drag-reorder and no auto-sort. A VMAD array-of-scalars
-  property reuses this exact same machinery with no VMAD-specific code (#231); VMAD's struct/
+  property reuses this exact same machinery with no VMAD-specific code; VMAD's struct/
   structList element ops and Conditions' own add/remove/reorder are described under *VMAD and
   Conditions are ordinary rows in the one tree* below.
 - **Editing writes working-tree source text directly** (ADR-0041) — there is no staged
@@ -443,11 +428,11 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 - There is **no per-plugin or per-record Save** on the panel — writing the binary is the separate
   Save & Compile gesture ([medit-version-control.md](medit-version-control.md)).
 
-### Progressive load ([#308](https://github.com/WhiskyTangoFawks/ModBench/issues/308), [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
+### Progressive load ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
 A plugin's records are browsable — and therefore this panel is openable — the moment that plugin
-is indexed, well before the winner sweep runs ([#307](https://github.com/WhiskyTangoFawks/ModBench/issues/307)
-gave the Plugins tree this same fact). Unlike the tree, this panel *does* render conflict
+is indexed, well before the winner sweep runs (the Plugins tree states the same fact,
+[plugins.md](plugins.md)). Unlike the tree, this panel *does* render conflict
 colouring today, which makes it the one surface where **an absent conflict badge is indistinguishable
 from "no conflict"** actively misleads rather than merely omits.
 
@@ -466,7 +451,7 @@ from "no conflict"** actively misleads rather than merely omits.
   `plugins.md`'s own progress indicator polls (`GET /load-order/status`) stops at essentially the same
   instant the backend sets `conflictsComputed`, so it cannot reliably observe the transition —
   reusing the load's own completion is the reliable choke point instead.
-- **Forward coupling ([#97](https://github.com/WhiskyTangoFawks/ModBench/issues/97)):** the
+- **Forward coupling:** the
   broadcast above fires only on the load-completing false→true transition. `conflictsComputed` is
   a separate field from load order state precisely because live mutation (reorder, enable, disable)
   will re-sweep a *Ready* load order and can leave it stale again — true→false, the opposite
@@ -481,7 +466,7 @@ The compare grid uses the two-axis model from
 deliberately — they are enum→visual encodings that prose would only make less precise.
 
 **Axis 1 — ConflictAll → row background.** `ConflictAll` is computed at two independent scopes
-(#114, [ADR-0016](../adr/0016-two-axis-conflict-model.md)'s 2026-08-11 update) — this table's
+([ADR-0016](../adr/0016-two-axis-conflict-model.md)) — this table's
 colors apply at both, only the *granularity of computation* differs:
 
 - **Record-wide** (one value per record, `CompareResult.ConflictAll`): drives the
@@ -509,8 +494,8 @@ colors apply at both, only the *granularity of computation* differs:
 
 No tint on `NoConflict`/`OnlyOne` is a **deliberate mEdit divergence** from xEdit's own default
 palette, which tints even its no-conflict row state — not an oversight. Reserving "has a
-background color" for "something here actually needs attention" is the signal #114's original
-report found muddied by the pre-#114 record-wide smear.
+background color" for "something here actually needs attention" is the signal a record-wide
+smear would muddy.
 
 **Axis 2 — ConflictThis → cell background + text color** (computed per-field, per-plugin — a
 plugin may be Override on one field and ConflictLoses on another):
@@ -527,12 +512,12 @@ Absent fields (a null value in a non-master plugin — the PartialForm absent-fi
 with no background and no text color. Column headers use the worst ConflictThis across that
 plugin's fields as a quick summary; individual cell colors are authoritative.
 
-The [Plugins tree](plugins.md)'s record-node conflict badge ([#364](https://github.com/WhiskyTangoFawks/ModBench/issues/364))
+The [Plugins tree](plugins.md)'s record-node conflict badge
 is driven by the same classification, at the record-wide scope specifically (Axis 1 above) —
 never the per-node scope the compare grid's own rows use. It renders on the
-[Conflicts node](plugins.md#conflicts-node-and-conflict-badge-364)'s own rows only (not on every
+[Conflicts node](plugins.md#conflicts-node-and-conflict-badge)'s own rows only (not on every
 ordinary record row wherever a plugin is browsed — a deliberate scope decision, see the Plugins
-tree spec), sharing `RecordDecorationProvider`'s existing M/A working-tree badge (#428) rather
+tree spec), sharing `RecordDecorationProvider`'s existing M/A working-tree badge rather
 than a second provider: a row has exactly one `FileDecoration`, so the two are reconciled by
 precedence, not painted independently.
 
@@ -546,20 +531,20 @@ precedence, not painted independently.
 | ConflictCritical | `!` | `problemsErrorIcon.foreground` (reused from the master-issue/load-failure row decorations) | Conflict (critical) |
 
 No new colours: every token above is already sanctioned elsewhere in this codebase, matching this
-section's own Axis 1/Axis 2 tables' "no new colors" rule (ADR-0016's 2026-08-11 update).
+section's own Axis 1/Axis 2 tables' "no new colors" rule (ADR-0016).
 
 **Precedence: the M/A working-tree badge always wins when present.** An uncommitted local edit
 (`Modified`/`Added`) is the more actionable, load order-local fact, so it takes the row's one
 `FileDecoration` slot; the conflict badge above shows only when the working-tree state lookup has
-nothing to say (`None`) for that row. Orchestrator-approved default at #364's plan gate — not
-dictated by ADR-0016, disclosed as a choice rather than buried.
+nothing to say (`None`) for that row. A chosen default — not
+dictated by ADR-0016; disclosed as a choice rather than buried.
 
-**Gated on `LoadOrderStatus.conflictsComputed`, per #307's invariant** (`PluginTreeProvider
+**Gated on `LoadOrderStatus.conflictsComputed`, per the progressive-load invariant** (`PluginTreeProvider
 .conflictAllOf`): renders nothing at all — never a neutral/placeholder badge — while conflicts
 are not yet computed, or for a record nothing has fetched a conflict state for yet. An absent
 badge must never be mistaken for "no conflict".
 
-### Partial Form overrides (#491)
+### Partial Form overrides
 
 **Partial Form** is record-header flag bit 14 (`0x4000`; CONTEXT.md's own glossary entry) on CELL,
 WRLD, DIAL and QUST: an override that exists only to carry children, whose own fields the game and
@@ -604,8 +589,8 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   here rather than a scope choice this ticket could diverge from, and EditorID is an ordinary,
   already-writable field rather than part of the header's own flag-write surface, so the exemption
   needed no header write path to exist first. The record header itself — including clearing the
-  flag, which restores full editability — is its own write surface (**#539**, below).
-- **Header write path clears the flag, restoring full editability (#539).** A synthetic field
+  flag, which restores full editability — is its own write surface (below).
+- **Header write path clears the flag, restoring full editability.** A synthetic field
   path, `is_partial_form`, dispatched in `RecordFieldWriter.TryApply` the same way `editor_id`
   already is — the one sanctioned door, no second write surface. Flips bit 14 only (a byte-diff
   assertion checks no other bit or field moves) and is exempt from `PartialFormFieldReadOnly` so
@@ -622,14 +607,14 @@ gesture — Sim Settlements 2 is a real-world example on Fallout 4.
   path that would move bit 14 as a side effect — a structural invariant, not a per-column name
   check, so it holds for any game's equivalent generic flags column without needing its own entry.
 - **Out of scope here:** setting the flag (a container an editing gesture auto-creates carries it
-  from creation — #440) and a lightbulb offering it on an identical-to-master container (a
-  separate ticket under #478).
+  from creation) and a lightbulb offering it on an identical-to-master container (separate
+  follow-up work).
 
 ### VMAD and Conditions are ordinary rows in the one tree
 
 VMAD (Papyrus script data) and Conditions (CTDA) are not a separate section, table body, row
 renderer, or cell renderer — they are ordinary rows in the same compare tree every other field
-uses (#231). Two pure frontend adapters, `vmadTreeAdapter.ts`/`conditionTreeAdapter.ts`, map the
+uses. Two pure frontend adapters, `vmadTreeAdapter.ts`/`conditionTreeAdapter.ts`, map the
 compare response's `vmad`/`conditions` payloads into the identical node shape ordinary reflected
 fields already carry (`FieldDiff`/`FieldMetadata`); RecordPanel merges the adapters' rows straight
 into its own `diffs`/`fieldMetaMap` before handing the whole thing to the same recursive builder
@@ -642,7 +627,7 @@ preserved end to end (verified by porting their prior test suites onto the unifi
 handful of deliberate, called-out differences below.
 
 **Each subrecord reaches the tree from exactly one of those three sources.** Schema reflection
-excludes both condition-shaped properties (#178) and the virtual-machine-adapter property (#260)
+excludes both condition-shaped properties and the virtual-machine-adapter property
 from a record type's reflected columns, because the `conditions`/`vmad` payloads already carry
 them in decoded form — reflecting them again would put the same subrecord in the grid twice, once
 decoded and once as an opaque blob. Both exclusions are keyed on the game's own types rather than
@@ -669,18 +654,18 @@ shape rather than a second shape:
   field, and VMAD's own scalar/object/array-of-scalar properties never set it, so this is invisible
   to everything that doesn't need it.
 
-**Synthesized metadata, the pattern the Condition section already proved (#228/#229) applied more
+**Synthesized metadata, the pattern the Condition section already proved applied more
 broadly:** five leaf types exist only in synthesized `FieldMetadata` (`vmadObject`,
 `conditionFunction`, `conditionRunOn`, `conditionComparison`, `conditionParam`) — the backend never
 emits them. Each is a genuine exception to the plain type→widget mapping, the same way `formKey`
 already is: a VMAD object property is a `(FormKey, alias)` pair (composes the shared `FormKeyCell`
-plus an alias input, #229's `VmadObjectEditor`, unchanged); a condition's Function opens a
+plus an alias input — `VmadObjectEditor`); a condition's Function opens a
 QuickPick over the function catalogue, never a text/dropdown editor; Run On, Comparison, and a
 parameter each pick their own widget from their own current value's shape (a `{target,
 reference}` pair; a plain number vs. a GLOB FormKey string, distinguished by JS type rather than a
 sibling Use-Global flag this row has no access to; a `{category, …}` tagged union) rather than a
 second per-plugin metadata branch `DiffRow` would otherwise need. Run On's own target enum is
-likewise a server catalog (#167: `GET /condition-run-on-targets`, `RecordPanelClient
+likewise a server catalog (`GET /condition-run-on-targets`, `RecordPanelClient
 .conditionRunOnTargets()`), fetched once by `RecordPanel` and threaded through
 `buildConditionRows`/`conditionTreeAdapter.ts` into the field's own `enumValues` — not a hardcoded
 frontend list, so a future game's differently-shaped `RunOnType` enum (Skyrim/Starfield both differ
@@ -704,7 +689,7 @@ Add/Remove/Move Up/Move Down, `Insert`/`Delete`/`Ctrl+↑`/`Ctrl+↓`) applies t
 (ArrayOfStruct) use `commitOverride` as described above, with structList's own instances exposed
 as array elements the same way (Remove/Move reuse the generic array machinery unmodified; instance
 **Add** is the one case still awaiting a follow-up, noted below). A **variable**-kind property is
-`readOnly` — it was never editable under the pre-#231 model either.
+`readOnly` — it has never been editable.
 
 **Conditions' shape**: one **`type: 'array'`** row per condition-owning field (not a struct
 container the way VMAD's script list is) — a condition list's add/remove/move already wrote
@@ -732,7 +717,7 @@ so a field commits independently of its condition and of every sibling field, un
 before. A parameter's input type (FormKey / number / string) is still resolved per-function from
 Mutagen's typed getters, and switching a condition's Function still reshapes its parameter
 storage at write time (`Fallout4ConditionCodec.ApplyFieldValue`) so no stale-shape value can
-silently persist. The function picker is still the native QuickPick described previously (#211),
+silently persist. The function picker is still the native QuickPick described previously,
 listing `GET /condition-functions`'s server-filtered catalogue.
 
 **Structural ops are right-click-menu commands**, consistent with every other structural op in
@@ -740,7 +725,7 @@ this grid (ADR-0034's no-second-route rule) — **Add Script**, **Remove Script*
 **Remove Property**, **Set Script Flags**, and **Set Property Flags** are native `webview/context`
 menu entries on the "Scripts (VMAD)" wrapper row, a script row, or a property row respectively
 (`vmadScripts`/`vmadScript`/`vmadProperty` sections, the same broadcast-and-self-filter shape as
-#227's array-op commands — the extension host has no live reference into the webview's React
+the array-op commands — the extension host has no live reference into the webview's React
 state, so each command broadcasts to every open panel and each self-filters on `formKey`). A row's
 `data-vscode-context` is not one exclusive slot: `combineVscodeContexts` (`recordUtils.ts`) merges
 every context object sharing a row into one space-separated `webviewSection` token string, and
@@ -750,19 +735,19 @@ every context object sharing a row into one space-separated `webviewSection` tok
 menus from the same cell, not whichever context happened to be built last. Set Script Flags seeds
 its QuickPick with the script's own current flags (moved to front of the choice list, no
 `activeItem` — the same "no default selection" convention the condition-function picker already
-uses); Set Property Flags has none, matching property flags' own pre-#231 set-only behaviour (a
-property's current flags were never surfaced for reading, only ever defaulted to `'Edited'` by Add
-Property). Add Script's own name collection is still the native input box (#212,
-`vscode.window.showInputBox`, now called directly by the command instead of round-tripping through
-the webview first); Add Property is still the one deliberate webview-rendered dialog
-(`ModalShell`/`AddPropertyDialog`, #229's own exception — three fields at once, a multi-step
+uses); Set Property Flags has none, matching property flags' set-only behaviour (a
+property's current flags are never surfaced for reading, only ever defaulted to `'Edited'` by Add
+Property). Add Script's own name collection is the native input box
+(`vscode.window.showInputBox`, called directly by the command);
+Add Property is the one deliberate webview-rendered dialog
+(`ModalShell`/`AddPropertyDialog` — a deliberate exception: three fields at once, a multi-step
 QuickPick chain would be worse UX) — the command only tells the webview which script/plugin to
 open it for. Condition add/remove/reorder need no new commands at all (above). Each
 condition-owning field is still keyed and written independently by its own field path
 (`ConditionOwner.FieldPath`/`ConditionGroupDiff.FieldPath`, `Fallout4ConditionCodec.Extract`
-reflecting over every top-level property shaped like a condition list — #154), and a
+reflecting over every top-level property shaped like a condition list), and a
 condition-owning field still renders **only** as a condition row, never also as a raw generic
-field (`SchemaReflector` excludes it from the generic reflection pass, #178).
+field (`SchemaReflector` excludes it from the generic reflection pass).
 
 **Known, deliberately scoped gaps** (not silently dropped — each is a bounded follow-up, not a
 design dead end): **Set Type** has no right-click entry yet (still reachable only by removing and
@@ -774,7 +759,7 @@ neither needs a default, and both go through `commitOverride`'s own whole-array 
 correctly); a **not-yet-compiled** `add_script`/`add_property` structural op has no synthetic-row
 visibility in the grid until it lands as real data (it's still fully valid to write and revert
 through the native Source Control panel in the meantime); and the extended editor (right-click,
-Open in Editor…, #258/ADR-0039) reaches every plain `string`-typed row (including VMAD's own plain
+Open in Editor…, ADR-0039) reaches every plain `string`-typed row (including VMAD's own plain
 String properties) but not yet a composite-typed leaf's own inner string widget (a condition
 parameter's Text category) — its outer `FieldMetadata.type` isn't `'string'`, which is what that
 menu entry keys on.
@@ -785,40 +770,38 @@ Condition lists nested one array level below the record (e.g. a magic Effect's o
 keyed by an indexed field path composing the enclosing array's own name and index with the nested
 list's own name (e.g. `Effects[2].Conditions`) — the existing `CTDA\<field path>\<index>\<subField>`
 wire path treats that whole composed string as one opaque field path, so no DDL or wire-shape
-change was needed (#181). A path through a **Child record** (a record type Mutagen enumerates as
+change was needed. A path through a **Child record** (a record type Mutagen enumerates as
 its own top-level row, e.g. Quest's `Scenes`/`DialogTopics`) is excluded, since that record already
 surfaces its own conditions through its own top-level field. Nested groups align across plugins
 positionally by the enclosing array's index and sort by that index numerically, not
-lexicographically. Pre-#231, a nested group defaulted collapsed while a flat top-level group
-rendered fully open, a bespoke per-group default; post-#231 every condition-owning field's row is
-an ordinary array row and defaults collapsed uniformly (rule 3 above), nested and flat alike — a
-small, deliberate simplification folding a special case into the one rule every other array/struct
-already follows, rather than preserving it as a second default only conditions had. Read-only for
+lexicographically. Every condition-owning field's row is
+an ordinary array row and defaults collapsed uniformly (rule 3 above), nested and flat alike —
+one rule, no bespoke per-group default. Read-only for
 now, on both ends: the frontend renders a nested group's rows display-only (no
 function/parameter/operator inputs, no add/move/remove controls), and `PluginWriter.IsReadOnly`
 rejects a nested (indexed) condition path at edit time as a second, independent gate. Editing at a
-nested path stays rejected until scalar editing lands (#182), add/remove/reorder inside
-a nested list until #183, and two levels of nesting (a Perk effect's own conditions, a Quest
-alias's/stage's own conditions) until #184.
+nested path stays rejected until scalar editing lands there; add/remove/reorder inside
+a nested list, and two levels of nesting (a Perk effect's own conditions, a Quest
+alias's/stage's own conditions), are further follow-ups.
 
 Codec support is FO4-only today, reflecting Mutagen's four structurally different per-game
 condition data shapes (no shared cross-game interface, unlike VMAD's `IHaveVirtualMachineAdapter`)
 — a per-game `IConditionCodec` strategy resolved by `GameCategory` (ADR-0032); other games are
-tracked separately (#164). FormKey-typed condition parameters, the Run On reference, and a
-Use-Global comparison target each resolve through the same backend signal VMAD uses (#166) — link
+tracked separately. FormKey-typed condition parameters, the Run On reference, and a
+Use-Global comparison target each resolve through the same backend signal VMAD uses — link
 label and affordance follow the real resolution, not a raw FormKey — and each is fed into
-`form_references` (#166), so a record referenced only by a condition now surfaces in Referenced By.
+`form_references`, so a record referenced only by a condition now surfaces in Referenced By.
 
 ### Field type rendering rules
 
 These apply everywhere a field value is rendered — the one compare grid and any future surface,
-VMAD/Condition rows included (#231) since they render through this exact code now:
+VMAD/Condition rows included since they render through this exact code now:
 
 1. **Never display raw integers for enums or flags** — always resolve to name(s).
 2. **FormKeys render as links**, labelled `EditorID [FormKey]` when the reference resolves and the
    bare FormKey when it doesn't — the same composite the picker's own items have always used, so
    the format a reference is *chosen* in and the format it is *read back* in are identical.
-   Labelling with the EditorID alone (as #157 shipped) is superseded: a FormKey is the identity and
+   Labelling with the EditorID alone is wrong: a FormKey is the identity and
    the EditorID is decoration, and a cell that does not display its own identity cannot hand it to
    the user by any mechanism. Where
    the composite is too wide for its column it is truncated with an ellipsis, which does not
@@ -829,11 +812,11 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    followable. This mirrors xEdit's `vstViewCheckHotTrack`, which gates hot-tracking on
    `Allow := Assigned(lLinksTo)` — a link you cannot follow must not look like one.
 
-   The **field grid** (ADR-0031, #157) sources both the label and the affordance from the
+   The **field grid** (ADR-0031) sources both the label and the affordance from the
    backend's per-FormKey resolution signal on `FieldDiff` — a tri-state (unresolved /
    resolved-wrong-type / resolved-valid-type) computed server-side against the global FormKey
    index, carried independently per leaf so a dangling struct/array member never suppresses the
-   affordance on the leaf next to it. One exemption to the index lookup (#613): a FormKey in the
+   affordance on the leaf next to it. One exemption to the index lookup: a FormKey in the
    engine-hardcoded range — ObjectID below the game's Mutagen `DefaultHighRangeFormID`, in an
    implicitly-always-loaded master — resolves valid *without* appearing in the index. Such a form
    (the Player, `00000007`, and friends) exists in no plugin's data, so a lookup miss on it can
@@ -842,35 +825,35 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    the link.
 
    A VMAD object property (`vmadObject`, `VmadObjectCell`) sources the same signal from
-   `VmadPropertyDiff.resolutions` (#158) — its link label and affordance follow the real
+   `VmadPropertyDiff.resolutions` — its link label and affordance follow the real
    resolution, not a well-formedness proxy, so a dangling reference (one pointing outside the
    index) no longer looks followable.
 3. **Structs and arrays are always collapsible**, default collapsed; expand state is
    per-load order, not persisted across restarts. Array **element values** offer the inline-edit
    gesture everywhere (plain and struct-element arrays alike); committing one reconstructs the
    array's (or struct-array element's) whole value before the write, per the reconstruction
-   CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture
-   (#503). Array **arity and order** are editable for **unsorted** arrays (add / remove /
+   CONTEXT.md's Complex-field entry's atomic-write model requires for a per-element gesture.
+   Array **arity and order** are editable for **unsorted** arrays (add / remove /
    move-up / move-down, swap-based, on non-immutable columns) and **absent** for sorted
-   (`wbArrayS`) arrays, whose order is sort-key-derived (#142) — these ops use the same
-   whole-array reconstruction. A VMAD array-of-scalars property reuses this exact machinery
-   (#231); VMAD's own struct/structList element ops are described under *VMAD and Conditions
+   (`wbArrayS`) arrays, whose order is sort-key-derived — these ops use the same
+   whole-array reconstruction. A VMAD array-of-scalars property reuses this exact machinery;
+   VMAD's own struct/structList element ops are described under *VMAD and Conditions
    are ordinary rows in the one tree* above. A list whose element's concrete type is
    polymorphic (OMOD `properties`' `AObjectModProperty<T>`, seven concrete leaves) resolves
    each element's own type from a `value_type` discriminator sub-field at write time; an
    element whose discriminator is missing or unrecognized refuses naming the field, rather
-   than guessing or crashing (#531; #360 landed the same polymorphism read-side).
+   than guessing or crashing — the same polymorphism applies read-side.
 
    Mutagen's own generated code has a second, more common shape for a polymorphic field: an
    abstract `A<Name>` base (`ANpcLevel`, `AQuestAlias`, ...) whose real per-subclass data lives on
-   concrete classes that *inherit from* the base, rather than #360's OMOD-only leaves (generic
+   concrete classes that *inherit from* the base, rather than the OMOD-only leaves (generic
    sibling interfaces the base never inherits from, each needing its own hand-verified value-type
-   table). #548 generalizes the same discriminator pattern reflectively — `SchemaReflector` finds
+   table). The same discriminator pattern generalizes reflectively — `SchemaReflector` finds
    every concrete subclass of an abstract base in the same Mutagen assembly, exposes each leaf's own
    members as a sparse union keyed by a synthesized `concrete_type` sub-field (the leaf's own class
    name, e.g. `"NpcLevel"`/`"PcLevelMult"`, `"QuestReferenceAlias"`/`"QuestLocationAlias"`/
    `"QuestCollectionAlias"`), and writes back by resolving `concrete_type` the same way OMOD's
-   `value_type` resolves — no per-type table, and #360's own `BuildObjectModPropertyLeafFields`
+   `value_type` resolves — no per-type table, and OMOD's own `BuildObjectModPropertyLeafFields`
    stays alongside it unmerged, since OMOD's leaf discovery is a genuinely different mechanism (a
    generic base with no reflectively-enumerable subclasses of its own), not a special case of this
    one. `Npc.Level` (a single struct field, xEdit's `ACBS\Level`/`Level Mult`) and `Quest.Aliases`
@@ -878,11 +861,11 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
    `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,
    `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target` — visible
-   in the schema now, write round-trip verification tracked separately (#611). Not every `A<Name>`
+   in the schema now, write round-trip verification tracked separately. Not every `A<Name>`
    type in the assembly qualifies: one (`ASceneActionType`) shares the naming convention without its
    generated class actually being `abstract`, so the mechanism correctly declines it (empty
    sub-schema, same as before) rather than guessing a discriminator scheme onto a type it cannot
-   safely tell apart from an ordinary one. Its real discriminator is now known (#612): a raw
+   safely tell apart from an ordinary one. Its real discriminator is now known: a raw
    `ANAM` `UInt16` tag read by hand-written custom binary code, `4` selecting `SceneActionStartScene`
    and every other value collapsing into `SceneActionTypicalType`. It stays declined on purpose —
    Mutagen's own `Scene.xml` deliberately omits `abstract="true"` here where `Npc.xml` sets it for
@@ -897,7 +880,7 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    `Queries/RecordDocumentCodecs`, operating on the document body — `MEditService/CLAUDE.md`); this
    mechanism could technically model them, and must not.
 4. **A cell always renders Effective state** — committed text with any uncommitted working-tree
-   change already overlaid (#413); there is no separate dirty visual treatment on this
+   change already overlaid; there is no separate dirty visual treatment on this
    panel. Revert is a git gesture in the native Source Control panel, not a cell-level control
    here ([medit-version-control.md](medit-version-control.md)).
 5. **Null / missing fields** render as an empty cell, never "null"/"undefined".
@@ -905,7 +888,7 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    click.
 7. **A signature backed by several concrete Mutagen subclasses that declare the same list/struct
    field with genuinely conflicting element shapes** gets one of two treatments, both replacing
-   "one column silently reads null for every subclass but the schema's discovery winner" (#339):
+   "one column silently reads null for every subclass but the schema's discovery winner":
    - **Structurally different shapes** (no field names in common) get **one column per shape** —
      e.g. `dmgt`'s `damage_types` (struct elements) and `actor_value_indices` (scalar elements) are
      two separate columns; a given record's row is populated in whichever one matches its own
@@ -919,19 +902,19 @@ VMAD/Condition rows included (#231) since they render through this exact code no
      trade-off, not a display bug: `FieldMetadata` is column-wide (see below), so widening the
      allowed-value list is the only way every subclass's own values validate against it.
 
-   Both differ from the *identical*-shape case (#263), where a member declared on a shared ancestor
+   Both differ from the *identical*-shape case, where a member declared on a shared ancestor
    already reads correctly off every sibling and needs no special handling at all. `FieldMetadata`
    itself stays column-wide in every case — there is no per-row element shape.
 
 ### Action logging
 
-Editor interactions emit a leveled line on the **Modbench** output channel (#198), so the
+Editor interactions emit a leveled line on the **Modbench** output channel, so the
 channel's native level filter controls volume. The webview has no channel of its own: it posts a
 `LOG` message over the existing webview→extension-host bridge and the router dispatches it to the
-channel at the carried level (#200).
+channel at the carried level.
 
 - **DEBUG** — the field-edit family: a committed disk-cell edit (VMAD/Condition leaves included,
-  #231 — the same `handleEdit`/`handleVmadStructOp` call sites, not a separate log site per
+  the same `handleEdit`/`handleVmadStructOp` call sites, not a separate log site per
   surface), a successful drag-copy between plugin columns, and array/VMAD-structural-op add /
   remove / move-up / move-down. These are high-frequency and fine-grained.
 - **INFO** — discrete lifecycle operations: Remove.
@@ -970,16 +953,15 @@ new value, so a large array or struct edit can't flood the panel.
 - **Referenced By** — a separate tree, [medit-referenced-by.md](medit-referenced-by.md).
 - **Array arity/order editing of *sorted* (`wbArrayS`) arrays** — deliberately absent: order is
   derived from the sort key, so add/remove/reorder controls do not render on them. Unsorted
-  (`wbArray`) arrays gained field-grid arity/order controls in #142 (arity changes write the
+  (`wbArray`) arrays have field-grid arity/order controls (arity changes write the
   whole array as one field edit).
 
 ## Further Notes
 
-- The rationale for removing edit mode (xEdit's `toEditOnClick` parity, and the fact that column
-  immutability already prevents accidental writes) is recorded in #111.
-- #111 also established that editability is per **column**, replacing a mode: before it, the
-  cells were never told which columns were immutable, so a read-only column rendered inputs
-  the backend then rejected with a 409.
+- There is no edit mode (xEdit's `toEditOnClick` parity; column
+  immutability already prevents accidental writes). Editability is per **column**, not a mode —
+  the cells must know which columns are immutable, or a read-only column renders inputs
+  the backend then rejects.
 - **Open question: does `Ctrl+click`-to-follow survive alongside a right-click "Go to Record"?**
   [ADR-0034](../adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md)'s gesture table lists
   `Ctrl+click` without resolving this. The tension: it's undiscoverable (no visible

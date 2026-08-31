@@ -57,7 +57,7 @@ export function sortDownloadRows(
   descending: boolean,
 ): DownloadRow[] {
   // Negate the comparator for descending, don't reverse the sorted array —
-  // reversing would also reverse tied rows, undoing the sort's stability (#325).
+  // reversing would also reverse tied rows, undoing the sort's stability.
   const dir = descending ? -1 : 1;
   return [...rows].sort((a, b) => {
     const av = a[column];
@@ -152,18 +152,17 @@ export function setHiddenInText(text: string, hidden: boolean): string {
 
 /** Filter hidden rows for rendering — a view concern, so it runs client-side on
  *  the already-built rows (like `sortDownloadRows`), not in row building. Off
- *  by default excludes hidden rows; on includes all, flags left intact so a
- *  future dimming decoration can distinguish them (#233 slice 4). Name filtering
- *  has no equivalent here — the modbench.downloads TreeView uses VS Code's native
- *  tree Find instead of a bespoke filter box (#233), so there is no filterRowsByName. */
+ *  by default excludes hidden rows; on includes all, flags left intact so the
+ *  dimming decoration can distinguish them. Name filtering has no equivalent
+ *  here — it is applied at the provider level (DownloadsProvider.setFilter),
+ *  so there is no filterRowsByName. */
 export function filterHiddenRows(rows: DownloadRow[], showHidden: boolean): DownloadRow[] {
   return showHidden ? rows : rows.filter((r) => !r.hidden);
 }
 
-// Issue #233: the row's right-click menu is a native `contributes.menus["view/item/context"]`
+// The row's right-click menu is a native `contributes.menus["view/item/context"]`
 // contribution on the `modbench.downloads` TreeView, gated by this space-separated `contextValue`
-// flag string and `viewItem =~ /\bflag\b/` `when` clauses — replacing #214's JSON
-// `data-vscode-context` (downloadRowContext), which only a webview row can carry. The base
+// flag string and `viewItem =~ /\bflag\b/` `when` clauses. The base
 // `'download'` token identifies the row kind (mirrors ModNode's plain `contextValue = 'mod'`);
 // `hasMeta`/`hasModID`/`hidden` are appended only when true, in that fixed order, so a `when`
 // clause testing any one of them via a word-boundary regex doesn't care about the others' order.

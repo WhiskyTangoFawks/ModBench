@@ -23,7 +23,7 @@ dotnet build -v minimal
 dotnet test -v minimal
 
 # from modbench/
-npm run lint              # binary: --max-warnings 0, so any warning fails it (#340). No baseline-diffing.
+npm run lint              # binary: --max-warnings 0, so any warning fails it. No baseline-diffing.
 npm run build             # type-check + bundle extension + webview
 npm run test:unit         # Vitest, no backend
 npm run test:integration  # real VS Code process (~10s), no backend; bundles extension.js first (pretest hook)
@@ -78,18 +78,18 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   because an alternative seems nicer — 25 years of refinement against this exact domain,
   and every user arrives already fluent in it, so familiarity outranks local improvement.
   Baseline, not ceiling: opt-in power-user additions xEdit never had are fine — default
-  stays xEdit's, no xEdit gesture redefined (ADR-0034 amendment)
+  stays xEdit's, no xEdit gesture redefined
   ([ADR-0034](docs/adr/0034-xedit-is-the-ux-reference-for-the-record-editor.md),
-  [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specifying from
-  memory of xEdit instead of from xEdit is what cost #201/#204/#218 — click focuses a cell
-  there, it does not edit. Does not apply to Mod Management, which follows MO2. Also does
+  [ADR-0019](docs/adr/0019-xedit-unified-tree-model-for-compare-grid.md)). Specify from
+  xEdit, never from memory of it — memory has repeatedly gotten the gestures wrong (click
+  focuses a cell there, it does not edit). Does not apply to Mod Management, which follows MO2. Also does
   not apply to tracking/compile/branch UX (review, revert, history, dirty indicators) —
   xEdit has no such model; the references there are the product's own git-native
   working-tree model (ADR-0041) and VS Code/git native idioms (Source Control panel,
   decorations, dirty markers).
 - **New or changed interactive UI ships as an inert stub before any logic wires it up.**
   Implement the UI only, demo it live, get signoff — a well-cited, xEdit-sourced shape can
-  still be rejected on sight once someone actually runs it (#363/#574). Triggered by the
+  still be rejected on sight once someone actually runs it. Triggered by the
   `needs-ux` label (`docs/agents/triage-labels.md`); protocol: `/ux-checkpoint`.
 - Native-first, webviews included: before designing any interaction, ask "which VS
   Code surface already does this?" and copy its answer — menus, pickers, confirms,

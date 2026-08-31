@@ -18,7 +18,7 @@ describe('OverwriteDecorationProvider (#83)', () => {
 
     expect(decoration).toBeDefined();
     expect(decoration!.color).toEqual({ id: 'gitDecoration.deletedResourceForeground' });
-    // No badge and no prefix — the spec scopes #83 to a label tint only.
+    // No badge and no prefix — the spec scopes this row to a label tint only.
     expect(decoration!.badge).toBeUndefined();
   });
 

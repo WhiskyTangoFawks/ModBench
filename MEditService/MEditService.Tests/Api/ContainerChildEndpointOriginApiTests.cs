@@ -6,7 +6,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Api;
 
-// #424 / #305 / ADR-0036: the wire-level guard rail for GetContainerChildren, mirroring
+// ADR-0036: the wire-level guard rail for GetContainerChildren, mirroring
 // SpatialRoutesOriginApiTests' real two-copy load path — a load order that actually holds two
 // physical files of one filename, so a route that resolved a Quest's children load-order-wide (or
 // through the wrong copy) is visible in the assertion, not just in the row count.

@@ -17,10 +17,10 @@ internal static class HeaderIndexer
     internal const string TableName = "header";
 
     /// <summary>
-    /// The header's masters column name (issue #86) — single source of truth shared by
+    /// The header's masters column name — single source of truth shared by
     /// <c>SchemaReflector</c> (column definition) and the write path (validation-time
-    /// rejection guard, ADR-0038/#335). No longer read by <c>PluginWriter</c> (#337): masters are
-    /// wholly content-derived at write time now, unconditionally, so there is nothing left to key
+    /// rejection guard, ADR-0038). Not read by <c>PluginWriter</c>: masters are
+    /// wholly content-derived at write time, unconditionally, so there is nothing to key
     /// a write-time override off of.
     /// </summary>
     internal const string MastersFieldName = "masters";

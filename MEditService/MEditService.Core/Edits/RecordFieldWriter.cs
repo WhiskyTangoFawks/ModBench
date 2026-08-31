@@ -12,10 +12,10 @@ internal enum FieldApplyOutcome
     Applied,
 
     /// <summary>The field exists but carries no write delegate — a read-only column (masters,
-    /// FormKey, the #263 widened text columns). Never a silent no-op: the caller refuses.</summary>
+    /// FormKey, the widened text columns). Never a silent no-op: the caller refuses.</summary>
     ReadOnly,
 
-    /// <summary>No field of this name on this record type schema, <i>or</i> (#532) the schema names
+    /// <summary>No field of this name on this record type schema, <i>or</i> the schema names
     /// one but this particular record's own runtime type doesn't declare the backing property — the
     /// sibling-merge case, e.g. GLOB's <c>output_char</c> column exists only on <c>GlobalFloat</c>
     /// among the four GLOB subclasses (<see cref="ColumnSpec.Apply"/> answering
@@ -23,17 +23,17 @@ internal enum FieldApplyOutcome
     /// has no such field.</summary>
     NotFound,
 
-    /// <summary>#503: the field is writable, but the value is not the shape it takes — an array field
+    /// <summary>The field is writable, but the value is not the shape it takes — an array field
     /// given something that is not a JSON array, or a struct field given something that is not a JSON
     /// object. That is the shape a per-element edit sends when nothing reconstructed the whole complex
-    /// value first, and it used to be indistinguishable from success: the applier returned without
-    /// writing and <see cref="TryApply"/> answered <see cref="Applied"/> anyway.
+    /// value first — never conflated with success: the applier must not return without writing while
+    /// <see cref="TryApply"/> answers <see cref="Applied"/>.
     ///
-    /// <para>#532: also covers a scalar or FormLink column whose <see cref="ColumnSpec.Apply"/>
+    /// <para>Also covers a scalar or FormLink column whose <see cref="ColumnSpec.Apply"/>
     /// answered <c>ApplyOutcome.ValueRejected</c> — a converter that threw or declined (an
     /// unrecognised enum member, a non-numeric string), a JSON <c>null</c> into a non-nullable
     /// column, or an unparseable/wrongly-shaped FormKey. Reused deliberately rather than given its
-    /// own <c>RecordEditRefusal</c> member: unlike #531's <c>ListElementTypeUnresolved</c> (whose fix
+    /// own <c>RecordEditRefusal</c> member: unlike <c>ListElementTypeUnresolved</c> (whose fix
     /// is a specific, different action — name a discriminator), there is no more specific actionable
     /// fix here beyond "send a value this field accepts", which is exactly what this outcome's
     /// existing generic message already says.</para>
@@ -41,25 +41,22 @@ internal enum FieldApplyOutcome
     ValueShapeMismatch,
 
     /// <summary>
-    /// #531/#532: mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.ListElementTypeUnresolved"/>
+    /// Mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.ListElementTypeUnresolved"/>
     /// one-for-one — an array field given an array, where at least one element's own concrete type is
     /// abstract and couldn't be determined from its own payload. Its own value rather than folded into
-    /// <see cref="ValueShapeMismatch"/> because <see cref="RecordEditService"/> used to infer this case
-    /// from "the outcome was a rejection and the value happens to be a genuine JSON array" — a
-    /// heuristic #532 broke, once a well-typed element's own declined sub-field value became a second
-    /// way to reach a rejection with a genuine JSON array. Answering the real outcome directly removes
-    /// the guess.
+    /// <see cref="ValueShapeMismatch"/>: inferring it from "the outcome was a rejection and the value
+    /// happens to be a genuine JSON array" cannot work — a well-typed element's own declined sub-field
+    /// value reaches a rejection with a genuine JSON array too, so only the applier's own answer can
+    /// tell them apart.
     /// </summary>
     ListElementTypeUnresolved,
 }
 
 /// <summary>
 /// Applies one field value to one live Mutagen record — the single dispatch point every write path
-/// goes through, restored for #415 from the write half #410 retired.
-/// What came back is only the dispatch: every codec it dispatches *to*
-/// (<see cref="ColumnSpec.Apply"/>, <see cref="VmadCodec"/>, <see cref="IConditionCodec"/>,
-/// <see cref="VmadPath"/>, <see cref="ConditionPath"/>) survived #410 untouched, so the field
-/// semantics here are the ones the suite has always pinned, not a second implementation of them.
+/// goes through. Only the dispatch lives here: the field semantics live in the codecs it dispatches
+/// *to* (<see cref="ColumnSpec.Apply"/>, <see cref="VmadCodec"/>, <see cref="IConditionCodec"/>,
+/// <see cref="VmadPath"/>, <see cref="ConditionPath"/>), not in a second implementation.
 ///
 /// <para>Complex fields (CONTEXT.md: array or struct) are applied as one atomic value, never
 /// per-element — <see cref="ColumnSpec.Apply"/> takes the whole field's JSON, which is exactly the
@@ -89,14 +86,14 @@ internal static class RecordFieldWriter
         if (ConditionPath.IsConditionPath(fieldPath))
             return ApplyConditionField(record, fieldPath, value, release);
 
-        // #154: dispatches on whichever of the record's actual condition-owning fields this is (not
+        // Dispatches on whichever of the record's actual condition-owning fields this is (not
         // just "Conditions") — an instance is in hand here, so the check reflects off record.GetType()
         // directly rather than going through the record-type string.
         var codec = ConditionCodecRegistry.For(release.ToCategory());
         if (codec != null && codec.IsConditionListField(record.GetType(), fieldPath))
             return ApplyConditionListField(record, fieldPath, value, release);
 
-        // #183/#184: a nested list's own whole-list write, where the composed path names an
+        // A nested list's own whole-list write, where the composed path names an
         // enclosing array and index before the condition field, routes the same way once it resolves
         // against this concrete record's element type. ApplyListValue itself walks the path at
         // whatever depth it composes, so this only decides whether to route there at all.
@@ -114,7 +111,7 @@ internal static class RecordFieldWriter
         if (col.Apply == null)
             return FieldApplyOutcome.ReadOnly;
 
-        // #503/#531/#532: the applier's own answer, not an assumption — each of these is a different
+        // The applier's own answer, not an assumption — each of these is a different
         // reason with a different fix (see FieldApplyOutcome's own docs), so each translates to its
         // own outcome rather than one undifferentiated refusal.
         return col.Apply(record, value) switch
@@ -130,7 +127,7 @@ internal static class RecordFieldWriter
     /// The field path an EditorID edit arrives under — the same snake_case spelling every reflected
     /// column uses, and the same one the read model already publishes the value under
     /// (<c>form_lookup.editor_id</c>, <c>RecordViewBuilder</c>'s own <c>editor_id</c>). Internal
-    /// rather than private so <see cref="RecordEditService"/>'s Partial Form guard (#491 review) can
+    /// rather than private so <see cref="RecordEditService"/>'s Partial Form guard can
     /// exempt exactly this literal rather than duplicating it.
     /// </summary>
     internal const string EditorIdFieldPath = "editor_id";
@@ -139,10 +136,7 @@ internal static class RecordFieldWriter
     /// EditorID, dispatched ahead of the reflected columns because it is not one of them:
     /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>BaseSkip</c> excludes it alongside
     /// <c>FormKey</c>, since both are the row's own identity columns carried separately rather than
-    /// record data. That exclusion is right for the schema and is left alone — but it also meant no
-    /// write path could reach EditorID at all, so <see cref="TryApply"/> answered
-    /// <see cref="FieldApplyOutcome.NotFound"/> for it and the edit refused before any file was
-    /// touched. #453's scope 3 needs the edit to exist before its rename can mean anything, so it is
+    /// record data. That exclusion is right for the schema and is left alone, so the edit is
     /// dispatched here rather than by widening the reflected schema.
     ///
     /// <para>Unlike <c>FormKey</c> — which is genuinely read-only here, because moving one is a
@@ -172,24 +166,24 @@ internal static class RecordFieldWriter
     }
 
     /// <summary>
-    /// The field path a Partial Form header-flag edit arrives under (#539) — snake_case, matching
+    /// The field path a Partial Form header-flag edit arrives under — snake_case, matching
     /// <see cref="EditorIdFieldPath"/>'s own convention. Internal so
-    /// <see cref="RecordEditService"/>'s Partial Form guard can exempt exactly this literal (#491's
-    /// own field is read-only while the flag is set, but this is the one write that must reach the
+    /// <see cref="RecordEditService"/>'s Partial Form guard can exempt exactly this literal (a
+    /// flagged record's own fields are read-only, but this is the one write that must reach the
     /// flag itself — clearing it is the only way out of that read-only state) and so its own
     /// bit-14-only write-surface guard can name it too.
     /// </summary>
     internal const string IsPartialFormFieldPath = "is_partial_form";
 
     /// <summary>
-    /// #539: the one sanctioned write to header flag bit 14 — dispatched ahead of the reflected
+    /// The one sanctioned write to header flag bit 14 — dispatched ahead of the reflected
     /// columns for the same reason <see cref="ApplyEditorId"/> is: <c>MajorRecordFlagsRaw</c> is in
     /// <see cref="MEditService.Core.Schema.SchemaReflector"/>'s <c>BaseSkip</c> (it is GRUP/header
     /// metadata, not record data), so nothing in the reflected schema could ever reach it.
     ///
     /// <para>Gated by <see cref="Schema.PartialFormFlag.IsPartialFormable"/> — the same container-type
-    /// gate the read half (<see cref="Schema.PartialFormFlag.IsSet"/>) already uses, per #539's own
-    /// correction: a record type that can never carry the flag refuses here as
+    /// gate the read half (<see cref="Schema.PartialFormFlag.IsSet"/>) already uses:
+    /// a record type that can never carry the flag refuses here as
     /// <see cref="FieldApplyOutcome.NotFound"/> (no silent no-op — matching every other refusal in
     /// this class), never silently flipping bit 14's unrelated meaning on that type. xEdit's own
     /// <c>SetIsPartialForm</c> (<c>wbImplementation.pas:14157</c>) instead silently coerces an
@@ -214,7 +208,7 @@ internal static class RecordFieldWriter
         return FieldApplyOutcome.Applied;
     }
 
-    // #426: a VMAD path carries either a plain scalar property value (the #415 shape, unchanged)
+    // A VMAD path carries either a plain scalar property value
     // or a structural op — add/remove script, set script flags, add/remove property, set type, set
     // property flags. The two are distinguished by shape, not by path: `value` doubles as
     // VmadCodec's own `op` parameter when it is a JSON object carrying an `"op"` string member,
@@ -278,7 +272,7 @@ internal static class RecordFieldWriter
             : FieldApplyOutcome.NotFound;
     }
 
-    // Whole-list write (#153): fieldPath is the bare owning field name (e.g. "Conditions") and the
+    // Whole-list write: fieldPath is the bare owning field name (e.g. "Conditions") and the
     // value is the full ParsedCondition-shaped JSON array — the atomic complex-field write again,
     // one level in.
     private static FieldApplyOutcome ApplyConditionListField(

@@ -6,24 +6,24 @@ import type { FieldMetadata } from './types';
 interface ScalarCellProps {
   value: unknown;
   meta: FieldMetadata;
-  // #415: whether this cell's column can be written. There is no edit mode — editability is a
+  // Whether this cell's column can be written. There is no edit mode — editability is a
   // property of the column (is the plugin mutable, is its mod tracked), never of a state the user
-  // toggles into (issue #111's original rule, unchanged by the move to text).
+  // toggles into.
   editable?: boolean;
-  // Issue #223 / ADR-0034: whether this is the panel's single focused cell. Gates the plain click,
+  // ADR-0034: whether this is the panel's single focused cell. Gates the plain click,
   // so a *second* click on an already-focused cell opens while a first click only focuses — this
   // handler runs before DiskCell's ancestor onFocusCell in the bubble order, so `isFocused` is
   // still the pre-click value here. Defaults true (open on any click) for callers outside the
   // field grid's focus model.
   isFocused?: boolean;
-  // #415: where an edited value goes. Absent is the ordinary state for every caller outside the
+  // Where an edited value goes. Absent is the ordinary state for every caller outside the
   // field grid (the Condition section's cells, for one) — there is nowhere to write, so the cell
   // renders as text, which is what those callers already had.
   onCommit?: (v: unknown) => void;
-  // Issue #205: an accessible name for the resting cell, so tests (and screen readers) can
+  // An accessible name for the resting cell, so tests (and screen readers) can
   // address one cell among many identical-looking ones.
   ariaLabel?: string;
-  // Issue #165: replaces the resting label alone — the value Ctrl+C copies is still the real
+  // Replaces the resting label alone — the value Ctrl+C copies is still the real
   // model value.
   displayOverride?: string;
 }
@@ -38,22 +38,17 @@ function ScalarText({ value, meta, displayOverride, ariaLabel }: {
 }
 
 /**
- * #415/ADR-0041: the record editor's one editing gesture, restored on the text-first write path.
+ * ADR-0041: the record editor's one editing gesture, on the text-first write path.
  *
  * The gesture is xEdit's, unchanged and non-negotiable (ADR-0034, root CLAUDE.md): a click
  * *focuses* a cell, it does not edit it. Editing opens on a second click on the already-focused
- * cell, on F2, or on a double click. Specifying this from memory rather than from xEdit is what
- * cost #201/#204/#218, so it is restored exactly as it stood before #410 rather than re-derived.
+ * cell, on F2, or on a double click.
  *
- * #258/ADR-0039: `string` is no longer a distinct branch here. It used to be the one type whose
- * double-click target (the extended editor, a real VS Code tab) differed from second-click/F2's
- * (the inline editor), which needed a debounce on the second click so a following genuine
- * `dblclick` could still redirect to the tab — see #426/#230 in this file's history if that
- * mechanism needs re-reading. ADR-0039 retired it: a VS Code tab *relocates* the user in a way
- * xEdit's own modeless multiline editor never did, so no left-click gesture may reach it any
- * more. Every type's second click, F2 and double click now agree on the inline editor, which is
- * exactly what made every *other* type need no debounce in the first place — string simply joins
- * them. The extended editor is reached only from the cell's right-click menu now (DiffRow's own
+ * ADR-0039: `string` is not a distinct branch here — every type's second click, F2 and double
+ * click agree on the inline editor, so no click needs a debounce to disambiguate from a
+ * following `dblclick`. A VS Code tab *relocates* the user in a way
+ * xEdit's own modeless multiline editor never did, so no left-click gesture may reach the
+ * extended editor. It is reached only from the cell's right-click menu (DiffRow's own
  * `stringValueContext` wiring), which needs no gesture handling here at all: a native
  * `webview/context` menu is driven entirely by the `data-vscode-context` attribute DiskCell
  * carries, never by a JS event handler on this component.
@@ -76,9 +71,9 @@ export function ScalarCell({
 
   // Checked ahead of `active`/`isFocused` because there is no state to gate: a plain click, a
   // second click, F2 and a double click all land here and do nothing. Ctrl+C on the focused,
-  // unopened cell still works (#224, DiskCell/DiffRow) — reading out of a read-only column is
-  // still a read. #258/ADR-0039: a `string` cell no longer carves out an exception here either —
-  // its own long-value-read path is the right-click menu now, wired at DiskCell/DiffRow, not a
+  // unopened cell still works (DiskCell/DiffRow) — reading out of a read-only column is
+  // still a read. ADR-0039: a `string` cell carves out no exception here either —
+  // its own long-value-read path is the right-click menu, wired at DiskCell/DiffRow, not a
   // gesture handled by this component.
   if (!editable || !onCommit) {
     return <ScalarText value={value} meta={meta} displayOverride={displayOverride} ariaLabel={ariaLabel} />;
@@ -87,7 +82,7 @@ export function ScalarCell({
   if (!active) {
     // `data-open-trigger` is F2's target: DiskCell dispatches a real `.click()` at it, so all three
     // xEdit triggers converge on one code path instead of three near-copies.
-    // Issue #204 / ADR-0034: no cursor override — the parent DiskCell's own cursor is the resting
+    // ADR-0034: no cursor override — the parent DiskCell's own cursor is the resting
     // affordance; a text caret would falsely imply editing is the only thing a click can start.
     return (
       <span
@@ -112,7 +107,7 @@ export function ScalarCell({
     boxSizing: 'border-box',
   };
 
-  // Issue #111, and more so now that a commit writes a file: click-to-activate puts every cell one
+  // A commit writes a file: click-to-activate puts every cell one
   // mis-click away from a working-tree change. A value equal to the one already there is not an
   // edit — committing it would rewrite the source file, produce a diff of nothing, and show the
   // record as dirty in the Source Control panel for a keystroke the user never made. Compared as
@@ -163,7 +158,7 @@ export function ScalarCell({
       type={meta.type === 'int' || meta.type === 'float' ? 'number' : 'text'}
       value={draft}
       onChange={e => setDraft(e.target.value)}
-      // Issue #201: autoFocus alone leaves the caret at the end, so Ctrl+V into a cell showing
+      // autoFocus alone leaves the caret at the end, so Ctrl+V into a cell showing
       // `100` appends rather than replaces. Selecting on focus makes paste replace, and gives
       // type-to-replace for free.
       onFocus={e => e.currentTarget.select()}

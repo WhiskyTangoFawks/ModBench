@@ -11,7 +11,7 @@ internal static class FormRefPathBuilder
 
     public static void Walk(ColumnSpec col, Func<ColumnSpec, object?> getValue, RefVisitor visitor)
     {
-        // #113: a column whose metadata tree holds no formKey leaf cannot yield a ref, so its value
+        // A column whose metadata tree holds no formKey leaf cannot yield a ref, so its value
         // is never even extracted — for an array/struct column that extraction is a JSON serialize
         // (SchemaReflector) the walk below would only parse straight back, per record. Decided once
         // per ColumnSpec: the metadata is a pure function of the schema, which is built at startup.

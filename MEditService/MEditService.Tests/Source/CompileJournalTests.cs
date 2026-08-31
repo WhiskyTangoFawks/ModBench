@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #416 S9: the reduced-form compile journal — multi-plugin compile is atomic under a crash injected
+/// The reduced-form compile journal — multi-plugin compile is atomic under a crash injected
 /// between writes, meaning the marker always tells a reader exactly which plugins landed and which
 /// didn't, never leaving a batch's outcome ambiguous.
 /// </summary>
@@ -33,7 +33,7 @@ public sealed class CompileJournalTests : IDisposable
         Assert.Null(CompileJournal.UnfinishedBatch(_modFolder));
     }
 
-    // The crash-injection scenario the AC names directly: a crash between two plugins' writes. Not
+    // The crash-injection scenario: a crash between two plugins' writes. Not
     // literally killing the process — the same observable state a real crash leaves (the marker
     // written before the batch, updated after the first plugin landed, never reaching the "delete"
     // step) is reproduced by a compileOne that throws for the second plugin, and the marker file is

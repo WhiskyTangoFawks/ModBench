@@ -1,4 +1,4 @@
-// Shared harness for the MO2 instance-fidelity corpus (#41): every composition-level
+// Shared harness for the MO2 instance-fidelity corpus: every composition-level
 // test in *Corpus.test.ts clones fixtures/mo2-instance-corpus/ into a fresh mkdtemp
 // copy, snapshots the whole tree before and after a real mutating operation, and
 // asserts that nothing outside the operation's own declared touch-set changed by so
@@ -12,14 +12,12 @@ import { join, relative, sep } from 'node:path';
 import { expect } from 'vitest';
 
 // Deliberately a NEW sibling fixture, not an in-place extension of the existing
-// fixtures/mo2-instance/ — despite the #41 brief addendum's "extend it rather than
-// starting fresh" wording. mo2-instance/ is read directly (not copied) by ~6
+// fixtures/mo2-instance/. mo2-instance/ is read directly (not copied) by ~6
 // existing tests (Mo2ModlistSource.test.ts, modlistText.test.ts, etc.) that hard-
 // assert its exact contents (exact readModlist()/listSeparators()/readPluginOrder()
 // arrays, exact listProfiles()); any addition to it — a new mod, a new profile line —
 // breaks one of those. This fixture starts as a copy of it and layers the corpus'
-// adversarial quirks on top, isolated from every currently-passing test. Approved
-// at plan-gate for #41.
+// adversarial quirks on top, isolated from those tests.
 export const CORPUS_FIXTURE = join(__dirname, 'fixtures', 'mo2-instance-corpus');
 
 /** profiles/Default/modlist.txt and plugins.txt — the active-profile paths every
@@ -65,7 +63,7 @@ export async function snapshotTree(root: string): Promise<Map<string, Buffer>> {
  *  divergence found (via `expect.soft`), not just the first, and names the offending
  *  path plus a readable reason — a byte offset for binary content, a full string diff
  *  (Vitest's own) for text — so a failing corpus test identifies which file diverged
- *  and how, per #41's acceptance criteria. The intended change itself is NOT verified
+ *  and how. The intended change itself is NOT verified
  *  here: each test asserts that independently, through the production read API, so
  *  this function's only job is "nothing else moved". */
 export function assertOnlyChanged(

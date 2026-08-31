@@ -10,40 +10,34 @@ using Noggog.WorkEngine;
 namespace MEditService.Core.Edits;
 
 /// <summary>
-/// ADR-0041's Save &amp; Compile, end to end (#416 pinned contract): serializes a plugin's source
+/// ADR-0041's Save &amp; Compile, end to end: serializes a plugin's source
 /// (working tree, or a named git ref) to its binary through the journaled write pipeline. Compile
 /// derives what the format forces (masters) and refuses only what it structurally cannot emit;
 /// everything else it can still write becomes a diagnostic, not a refusal.
 ///
 /// <para>The single write path's other half: <see cref="RecordEditService"/> is source text ←
 /// working tree; this is source text → binary. Both read the source's own bytes, never the DB index —
-/// the index and the source are not always structurally identical (#369's measured hole).</para>
+/// the index and the source are not always structurally identical.</para>
 ///
-/// <para><b>Containment is the path (#454, ADR-0041's #444 amendment).</b> This used to read every
-/// source file one at a time and hand the flat result to <c>ContainerAssembler</c>, which rebuilt the
-/// mod's real containment from the DB's own <c>placement</c>/<c>cell_location</c>/<c>container_child</c>
-/// rows. It no longer does, and the assembler is gone: the tree's own directory nesting
+/// <para><b>Containment is the path (ADR-0041).</b> The tree's own directory nesting
 /// (<c>Cells/&lt;b&gt;/&lt;sb&gt;/…</c>, <c>Worldspaces/&lt;ws&gt;/&lt;X, Y&gt;/&lt;X, Y&gt;/…</c>,
 /// <c>Quests/&lt;q&gt;/DialogTopics/…</c>) already <i>is</i> the containment, and the generated
-/// whole-mod reader walks it. The root <c>RecordData.json</c> comes with it, so the compiled binary
+/// whole-mod reader walks it — never the DB's own <c>placement</c>/<c>cell_location</c>/
+/// <c>container_child</c> rows. The root <c>RecordData.json</c> comes with it, so the compiled binary
 /// carries the source's own mod header rather than a freshly minted empty one.</para>
 ///
 /// <para><b>This is a designated door</b> for the generated whole-mod mixin, alongside
 /// <see cref="TrackService"/> (write) and <see cref="SourceIngest"/> (read) —
-/// <see cref="RecordTextCodecGeneratorSeed"/>'s AC2 whitelist, enforced by
+/// <see cref="RecordTextCodecGeneratorSeed"/>'s whitelist, enforced by
 /// <c>RecordTextCodecGeneratorSeedTests</c>. It shares <see cref="SourceIngest"/>'s reader rather than
 /// having one of its own: both go through the same gateway, over the same tree, with the same
 /// sequential dropoff, so there is no second reader to drift from the first.</para>
 ///
-/// <para><b>#459: child order is preserved now, and can be claimed.</b> This used to say the opposite
-/// — the layout carried no order carrier, so a compiled binary's folder-split children came back in
-/// filesystem order, not the original binary's GRUP order, and #454's scope item 4 accepted that as
-/// the gate compile→re-serialize offers (text stability, not byte identity with the pre-Track binary).
-/// <c>RecordTextCodecCustomization</c> now turns <c>Overall.EnforceRecordOrder</c> on, so every
+/// <para><b>Child order is preserved, and can be claimed.</b>
+/// <c>RecordTextCodecCustomization</c> turns <c>Overall.EnforceRecordOrder</c> on, so every
 /// folder-split sibling's file name carries its real GRUP position and a compile reproduces it —
 /// verified byte-for-byte on the committed fixture (<c>CompileRoundTripGateTests</c>,
-/// <c>DialogueOrderDamageTests</c>). For FO4 <c>DialogTopic.Responses</c>, the one relationship this
-/// mattered behaviourally for, that closes the semantic loss #459 was opened to fix.</para>
+/// <c>DialogueOrderDamageTests</c>).</para>
 /// </summary>
 public sealed class PluginCompileService(
     ILoadOrderMirror mirror,
@@ -75,8 +69,7 @@ public sealed class PluginCompileService(
 
         // Structurally impossible to emit: two source units both claiming one FormKey (a hand-edit, an
         // interrupted rename, a third-party tool's copy) can only become one binary record, silently
-        // discarding the other — refuse rather than pick a winner (#416 comment 2 on the issue: compile
-        // refuses states it cannot emit without changing FormKeys, naming the collision). Asked of the
+        // discarding the other — refuse rather than pick a winner, naming the collision. Asked of the
         // tree, not of `mod`: the reader's own FormKey-keyed group cache has already resolved a
         // same-folder collision by the time `mod` exists (SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit).
         var collidingFormKeys = SourceUnitResolver.FormKeysWithMoreThanOneSourceUnit(
@@ -100,15 +93,15 @@ public sealed class PluginCompileService(
             .Select(p => p.Name)
             .ToList();
 
-        // #416 S9 (review): every compile runs through the journal, batch of one — the marker names
+        // Every compile runs through the journal, batch of one — the marker names
         // this plugin before the binary write below begins, and is cleared only once the whole batch
         // (here, the one plugin) has landed. Everything above this point is pure computation/refusal
         // with nothing on disk for a crash to leave ambiguous; from here on, a crash mid-flight is
-        // exactly what the marker is for. compileOne is still not wrapped in a try/catch for that
-        // reason — an exception from the write propagates out of RunBatch (and out of this method)
+        // exactly what the marker is for. compileOne is deliberately not wrapped in a try/catch —
+        // an exception from the write propagates out of RunBatch (and out of this method)
         // with the marker left exactly as CompileJournal.WriteMarker last wrote it, the same
-        // observable state a real crash leaves, which is what UnfinishedBatch reads back for
-        // #381/#417 — except for #520's one named Kind A shape below, which CompileJournal's own
+        // observable state a real crash leaves, which is what UnfinishedBatch reads back —
+        // except for the one named Kind A shape below, which CompileJournal's own
         // doc comment already treats as a first-class outcome: compileOne returning false is
         // "indistinguishable [from a crash] to a reader" by design, so converting that one write
         // failure into a `false` return (captured as a refusal message in the closure below) uses
@@ -125,7 +118,7 @@ public sealed class PluginCompileService(
             }
             catch (Exception ex) when (PluginDiagnosis.HasUnmappableFormID(ex))
             {
-                // #520: same Kind A shape as TrackService.VerifyRoundTrip's own catch — a struct-
+                // Same Kind A shape as TrackService.VerifyRoundTrip's own catch — a struct-
                 // list script property's FormLink is invisible to Mutagen's EnumerateFormLinks
                 // (Mutagen-Modding/Mutagen#688), so the content-derived master pass (ADR-0038)
                 // prunes a master this write still needs. Every other write failure still
@@ -134,9 +127,9 @@ public sealed class PluginCompileService(
                 return false;
             }
 
-            // #416 S7/S8: the ref advances only after the binary write above has landed — never
-            // before, never on a refused compile. An AtRef compile parks too (go-ahead note 1):
-            // without this, #417's self-echo suppression breaks the moment a pristine restore runs —
+            // The parked snapshot advances only after the binary write above has landed — never
+            // before, never on a refused compile. An AtRef compile parks too:
+            // without this, the self-echo suppression breaks the moment a pristine restore runs —
             // the binary changes to the ref's bytes while the parked trailer still names the old
             // working-tree hash, so Modbench's own write would read as an external change.
             var binarySha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(metadata.Path)));
@@ -158,9 +151,6 @@ public sealed class PluginCompileService(
     /// <summary>
     /// The three checks that establish there is a source to compile at all: a load order, a tracked mod
     /// folder for <paramref name="plugin"/>, and that plugin's own metadata within the load order.
-    /// Extracted out of <see cref="Compile"/> alongside this ticket's own two refusal checks (S1541)
-    /// — this one predates #473, but the same flattening applies to it once <see cref="Compile"/>
-    /// had two more branches to make room for.
     /// </summary>
     private (ILoadOrder? LoadOrder, IRecordIndex? Index, string? ModFolder, PluginMetadata? Metadata, string? RefusalReason)
         ResolveCompileTarget(PluginKey plugin)
@@ -189,27 +179,20 @@ public sealed class PluginCompileService(
     /// per field (<c>DuckDbRecordIndex.GetDocument</c>), read here rather than re-derived, so "what
     /// the editor flags" and "what compile reports" can't drift.
     ///
-    /// <para>#454's scope said "diagnostics unchanged", and this one place they are not — flagged
-    /// here rather than left for a reader to notice the discrepancy on their own. The old loop walked
-    /// the source <i>files</i> it had just read, so a record with no file of its own could not be
-    /// diagnosed at all; this walks the mod, so embedded children (placed refs, navmeshes, landscape,
-    /// a worldspace's TopCell) now report too, against the container document that holds them. It is
-    /// a widening with nothing withdrawn — every record diagnosed before is still diagnosed, with the
-    /// same message from the same builder — and it falls out of reading the tree whole rather than
-    /// being sought; suppressing it back to the old set would mean re-deriving "does this record have
-    /// a file", which is exactly the path-shaped reasoning this ticket removed. Extracted out of
-    /// <see cref="Compile"/> alongside this ticket's own two refusal checks (S1541).</para>
+    /// <para>Walks the mod, not the source files, so embedded children (placed refs, navmeshes,
+    /// landscape, a worldspace's TopCell) — which have no file of their own — report too, against
+    /// the container document that holds them.</para>
     /// </summary>
     private static List<CompileDiagnostic> CollectDiagnostics(
         IMod mod, IRecordIndex index, PluginKey plugin, string resolverRoot, GameRelease gameRelease)
     {
         var diagnostics = new List<CompileDiagnostic>();
-        // #547: one bulk read where this loop used to point-read per record — two DuckDB queries
-        // each, 96.5% of Compile's wall clock on the real 3,940-record fixture. The loop still
+        // One bulk read rather than a point-read per record — two DuckDB queries each, most of
+        // Compile's wall clock on a real 3,940-record fixture. The loop still
         // walks the mod (not the fetched set) so diagnostic order stays the mod's own enumeration
-        // order, and a record the index doesn't hold still skips, exactly as the null check did.
+        // order, and a record the index doesn't hold still skips.
         var documents = index.GetDocuments(plugin).ToDictionary(d => d.FormKey);
-        // And one resolution cache for the pass: the actual 96% was never the document fetch but
+        // And one resolution cache for the pass: the dominant cost was never the document fetch but
         // SourceUnitResolver re-scanning the tree once per reporting record (see the cache's own doc).
         var resolutionCache = new SourceUnitResolutionCache();
         foreach (var record in mod.EnumerateMajorRecords())
@@ -223,7 +206,7 @@ public sealed class PluginCompileService(
                 .ToList();
             if (errors.Count == 0) continue;
 
-            // The record's own source unit, resolved the one way this codebase resolves one (#453) —
+            // The record's own source unit, resolved the one way this codebase resolves one —
             // a flat record's computed path, a container's own directory, or, for an embedded child,
             // the parent document that actually holds it. Only records that have something to report
             // pay for it, which is what keeps a container's subtree scan off the common path.
@@ -236,14 +219,12 @@ public sealed class PluginCompileService(
     }
 
     /// <summary>
-    /// #473, ADR-0042 amendment: whatever is wrong with the source — a hand edit that breaks the
+    /// ADR-0042: whatever is wrong with the source — a hand edit that breaks the
     /// JSON, external corruption, a codec change the tree predates — the remedy is always the same
     /// (re-Track), so the message is uniform regardless of which internal exception shape the
     /// deserializer happens to throw for a given kind of damage. Deliberately unfiltered, the same
-    /// way <see cref="RecordEditService"/>'s own cascade catch is (Q5(b)): the failure surface is
+    /// way <see cref="RecordEditService"/>'s own cascade catch is: the failure surface is
     /// "whatever the JSON/Mutagen layers throw for input they cannot read", not one exception type.
-    /// Extracted out of <see cref="Compile"/> to keep that method's branching flat as this ticket
-    /// adds a second, independent way to refuse the same deserialized source (S1541).
     /// </summary>
     private (IMod? Mod, string? RefusalReason) DeserializeSource(string treeRoot, string pluginName)
     {
@@ -258,7 +239,7 @@ public sealed class PluginCompileService(
         {
             logger.LogWarning(ex, "{Plugin} could not be read from its source", pluginName);
 
-            // #519: this seam's own exception vocabulary is not Track's — a JSON-tree deserialize
+            // This seam's own exception vocabulary is not Track's — a JSON-tree deserialize
             // never touches Mutagen's binary parser, so it never throws a RecordException at all
             // (confirmed live with a forged corrupt-FormKey-string fixture: the real exception is
             // Mutagen.Bethesda.Serialization.Exceptions.FilePathedException, whose only identity is
@@ -270,13 +251,13 @@ public sealed class PluginCompileService(
     }
 
     /// <summary>
-    /// #473, ADR-0042 amendment: does this source, once understood by the codec, faithfully
-    /// reproduce itself? Deserializing above can succeed while quietly losing data — the spike
-    /// behind this ticket confirmed the generated deserializer skips an unrecognized property and
-    /// leaves a missing-but-expected one at its default, neither ever throwing — so a successful
-    /// parse is not itself evidence the source was read correctly.
+    /// ADR-0042: does this source, once understood by the codec, faithfully
+    /// reproduce itself? Deserializing above can succeed while quietly losing data — the generated
+    /// deserializer skips an unrecognized property and
+    /// leaves a missing-but-expected one at its default, neither ever throwing (confirmed by spike)
+    /// — so a successful parse is not itself evidence the source was read correctly.
     ///
-    /// <para>Unlike <see cref="TrackService"/>'s own round-trip gate (#471, decision 2), there is no
+    /// <para>Unlike <see cref="TrackService"/>'s own round-trip gate, there is no
     /// independent "original" to check <paramref name="mod"/> against here — the source text is the
     /// only ground truth compile has, which is ADR-0042's own premise. So the check is
     /// self-consistency, not identity: regenerate canonical text from <paramref name="mod"/> and
@@ -288,24 +269,24 @@ public sealed class PluginCompileService(
     /// than a record via <c>Equals</c> — there is no independent object to compare against here
     /// either, only the regenerated text and the real text.</para>
     ///
-    /// <para><b>Unchanged by #489, deliberately.</b> A structural write's own group-folder
+    /// <para>A structural write's own group-folder
     /// renormalization (<see cref="SourceUnitResolver.RenormalizeGroupOrder"/>) is what keeps a
     /// gap-leaving delete/renumber from ever reaching this comparison mismatched — this method's own
-    /// byte-exact, per-path comparison stays exactly as it was. One case it still correctly refuses
+    /// comparison is byte-exact and per-path. One case it correctly refuses
     /// because of that: a crash mid-renormalization, which leaves a group folder half-renumbered —
     /// this gate catches that the same way it catches any other genuine divergence, pointing at
-    /// re-Track, with no new recovery machinery needed.</para>
+    /// re-Track, with no separate recovery machinery.</para>
     ///
-    /// <para><b>#514 gets no live gate here, deliberately — not an oversight.</b> #514's subrecord-
-    /// inventory check (<see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, wired into
+    /// <para><b>The subrecord-inventory check gets no live gate here, deliberately — not an
+    /// oversight.</b> That check (<see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, wired into
     /// <see cref="TrackService.VerifyRoundTrip"/>) needs the same "independent original" this method's
     /// own doc comment above says Compile doesn't have — every candidate "before" binary at Compile
     /// time (the plugin's current on-disk bytes, an older Track-time snapshot) is exactly as
     /// indistinguishable from a legitimate field-clear edit as this method's own text-level check
     /// would be, and picking an older baseline doesn't fix that, it just moves the same ambiguity back
-    /// one hop. That is also why Compile does not need one: the loss class #514 targets is introduced
-    /// only when an external binary is *deserialized* — Track's own parse, or a future read-time
-    /// diagnosis (#519) — never by Compile, which only ever writes from a source that already passed
+    /// one hop. That is also why Compile does not need one: that loss class is introduced
+    /// only when an external binary is *deserialized* — Track's own parse — never by Compile, which
+    /// only ever writes from a source that already passed
     /// this method's own self-consistency check. Once Track's gate refuses a plugin carrying that
     /// defect, no Compile downstream of a successful Track can encounter it — the source cannot hold
     /// what the model never captured. Compile's obligation is satisfied by sharing the one walker, not
@@ -335,9 +316,9 @@ public sealed class PluginCompileService(
 /// The directory <see cref="PluginCompileService"/> reads a plugin's source tree from, for either
 /// <see cref="CompileSource"/>.
 ///
-/// <para>The working tree is the plain files on disk under <c>source/&lt;plugin&gt;/</c> (#441) — no git
+/// <para>The working tree is the plain files on disk under <c>source/&lt;plugin&gt;/</c> — no git
 /// involved, the same way <see cref="RecordEditService"/> reads a single record's source file. A named
-/// ref (#416 S8) is that ref's blobs written into a scratch directory laid out identically, so the
+/// ref is that ref's blobs written into a scratch directory laid out identically, so the
 /// whole-mod reader — which takes a folder, not a byte stream — can read it without a checkout: HEAD,
 /// the current branch and the edit branch's own working tree all stay exactly where they were, which is
 /// what <c>PluginCompileServiceParkedRefTests</c> pins.</para>
@@ -349,7 +330,7 @@ internal sealed class SourceCheckout : IDisposable
     private SourceCheckout(string treeRoot, string resolverRoot, string description, string? scratchRoot) =>
         (TreeRoot, ResolverRoot, Description, _scratchRoot) = (treeRoot, resolverRoot, description, scratchRoot);
 
-    /// <summary>The <c>source/&lt;plugin&gt;/</c> directory itself (#441) — what the whole-mod reader takes.</summary>
+    /// <summary>The <c>source/&lt;plugin&gt;/</c> directory itself — what the whole-mod reader takes.</summary>
     internal string TreeRoot { get; }
 
     /// <summary>Its parent — the mod folder for a working-tree compile, the scratch root for a ref.

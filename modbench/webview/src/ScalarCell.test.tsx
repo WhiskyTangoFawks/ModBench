@@ -6,9 +6,8 @@ import { ScalarCell } from './ScalarCell';
 import type { FieldMetadata } from './types';
 
 /**
- * #415 AC1/AC4 at the cell: the record editor's one editing gesture is back, and it is xEdit's —
- * a click focuses, it does not edit (ADR-0034, root CLAUDE.md; specifying this from memory instead
- * of from xEdit is what cost #201/#204/#218). A column that cannot be written stays inert under
+ * The record editor's one editing gesture is xEdit's — a click focuses, it does not edit
+ * (ADR-0034, root CLAUDE.md). A column that cannot be written stays inert under
  * every one of the three open triggers, which is what "no silent dead UI" means at this level:
  * nothing opens that has nowhere to write.
  */
@@ -114,11 +113,10 @@ describe('ScalarCell — committing (#415 AC1)', () => {
   });
 });
 
-// #258 / ADR-0039 guard: a genuine mouse click (`detail: 1`, what a real click always carries) on
+// ADR-0039 guard: a genuine mouse click (`detail: 1`, what a real click always carries) on
 // an already-focused string cell must open the inline editor *synchronously*, with no
-// debounce delay of any kind. Named rival this is checked against: the pre-#258 debounced
-// implementation, which defers this behind STRING_OPEN_DEBOUNCE_MS so a following native
-// `dblclick` can still redirect it — that rival fails this test outright (the textbox does not
+// debounce delay of any kind. A debounced implementation that defers this so a following native
+// `dblclick` can still redirect it fails this test outright (the textbox does not
 // exist until the timer is advanced), which is the point: no left click may cost latency waiting
 // to see whether a second one is coming.
 describe('ScalarCell — string cell has no debounce (#258 / ADR-0039)', () => {
@@ -135,10 +133,10 @@ describe('ScalarCell — string cell has no debounce (#258 / ADR-0039)', () => {
   });
 });
 
-// #258 / ADR-0039: an immutable string cell is unaffected by any left-click gesture, exactly like
-// every other immutable type — its only remaining read path for a long value is the right-click
+// ADR-0039: an immutable string cell is unaffected by any left-click gesture, exactly like
+// every other immutable type — its only read path for a long value is the right-click
 // menu (DiffRow's own stringValueContext wiring, tested there), not anything ScalarCell itself
-// handles any more.
+// handles.
 describe('ScalarCell — immutable string cell (#258 / ADR-0039)', () => {
   it('opens nothing on double click', () => {
     render(<ScalarCell value="Dogmeat" meta={meta()} editable={false} isFocused={false} onCommit={vi.fn()} />);

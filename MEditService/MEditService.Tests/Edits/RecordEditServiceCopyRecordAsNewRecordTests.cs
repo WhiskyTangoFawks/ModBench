@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #436 (ADR-0041 restoration): xEdit's "Copy as New Record Into…" — a deep copy under a fresh
+/// ADR-0041 restoration: xEdit's "Copy as New Record Into…" — a deep copy under a fresh
 /// FormKey via Mutagen's own record-level <c>Duplicate</c>, reusing <see cref="RecordEditService.CreateRecord"/>'s
 /// own target-FormKey resolution rather than re-implementing its collision posture.
 /// </summary>
@@ -61,7 +61,7 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.Null(mod.Mirror.Index!.At(RecordRef.Head).GetDocument(result.NewFormKey!, mod.DestinationPlugin));
     }
 
-    // The issue's own acceptance criterion: "internal self-references follow the duplicate, not the
+    // "Internal self-references follow the duplicate, not the
     // original" — RemapLinks fired right after Duplicate, on a record whose own FormLink field can
     // validly target its own record type (a Faction related to itself).
     [Fact]
@@ -130,9 +130,8 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.Equal(RecordEditRefusal.FormKeySpaceExhausted, result.Refusal);
     }
 
-    // #440 Slice 8: a Cell is xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —
-    // refused forever, not "not yet built" — distinct from the Quest/DialogTopic/INFO family below,
-    // which #550 is what actually widens.
+    // A Cell is on xEdit's own permanent blacklist (CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI) —
+    // refused forever, not "not yet built" — distinct from the Quest/DialogTopic/INFO family below.
     [Fact]
     public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsACell_PermanentlyDisallowed()
     {
@@ -155,9 +154,9 @@ public sealed class RecordEditServiceCopyRecordAsNewRecordTests
         Assert.Equal(RecordEditRefusal.CopyAsNewRecordDisallowedForType, result.Refusal);
     }
 
-    // #440 Slice 8: a Quest is not on xEdit's permanent blacklist — DIAL/INFO/QUST allow a fresh
-    // FormKey per xEdit itself — but #550, not this ticket, is what actually builds that allowance, so
-    // it still refuses today. The distinct "not yet" flavor is the point of this test: a caller sees a
+    // A Quest is not on xEdit's permanent blacklist — DIAL/INFO/QUST allow a fresh
+    // FormKey per xEdit itself — but that allowance is not built yet, so it still refuses.
+    // The distinct "not yet" flavor is the point of this test: a caller sees a
     // different refusal here than for the permanently-disallowed types above.
     [Fact]
     public void CopyRecordAsNewRecord_Refuses_WhenTheSourceIsAQuest_NotYetSupported()

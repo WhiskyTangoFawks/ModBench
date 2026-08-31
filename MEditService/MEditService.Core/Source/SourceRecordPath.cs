@@ -5,7 +5,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Core.Source;
 
 /// <summary>A flat record's identity as recovered from its own source path — the inverse of
-/// <see cref="SourceRecordPath.For"/>. No <c>FormKey</c> field (#451 review): the whole-mod door's own
+/// <see cref="SourceRecordPath.For"/>. No <c>FormKey</c> field: the whole-mod door's own
 /// file name embeds EditorID ahead of the FormKey (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>),
 /// and an EditorID can itself legally contain <c>" - "</c>, which makes recovering a FormKey by
 /// splitting the filename alone ambiguous in the general case. Every caller either already holds the
@@ -18,18 +18,17 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// <summary>
 /// The source's own file layout policy for <b>flat</b> (single-file) records — one record, one file,
 /// under the whole-mod door's own group-folder naming — the source tree took over the whole-mod
-/// door's own file-per-record convention wholesale (ADR-0041's #444 amendment; #451 slice E).
+/// door's own file-per-record convention wholesale (ADR-0041 amendment).
 /// Relative to the mod folder:
 /// <c>source/&lt;pluginFileName&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>.
 ///
-/// <para><b>#441: one root <c>source/</c> folder per mod, not a per-plugin sibling tree.</b> A
-/// 2026-08-21 triage retired the prior <c>&lt;pluginFileName&gt;.source/</c> sibling-tree layout
-/// (ADR-0041 amendment) in favor of every plugin's tree nesting inside one plain root folder
+/// <para><b>One root <c>source/</c> folder per mod, not a per-plugin sibling tree</b> (ADR-0041
+/// amendment): every plugin's tree nests inside one plain root folder
 /// (<see cref="RootFor"/>). That lets the deployer/conflict-index exclusion collapse to two dumb,
 /// name-only rules (any dot-prefixed entry, at any depth; a root-level directory literally named
-/// <c>source</c>) — neither needs a sibling-plugin check to stay correct, unlike the old per-plugin
-/// suffix guard it replaces, which orphaned a tree the moment its plugin was renamed or deleted
-/// outside Modbench (#436, and #438's undetected <c>.git</c>). <see cref="RootFor"/> is the one place
+/// <c>source</c>) — neither needs a sibling-plugin check to stay correct, where a per-plugin
+/// suffix guard orphans a tree the moment its plugin is renamed or deleted
+/// outside Modbench. <see cref="RootFor"/> is the one place
 /// that builds a plugin's own root — every reader/writer goes through it or through <see cref="For"/>,
 /// never hand-rolls the segment.</para>
 ///
@@ -37,7 +36,7 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// <see cref="RecordTypeDispatch.FolderNameFor"/>'s own doc comment for why exactly these three) get
 /// their own directory (<c>&lt;GroupFolder&gt;/&lt;name&gt;/RecordData.json</c>, with block/sub-block or
 /// XY nesting ahead of it for Cell/Worldspace) instead of a flat file — reading and writing that
-/// structure is <see cref="SourceUnitResolver"/>'s job (#453), not this helper's.
+/// structure is <see cref="SourceUnitResolver"/>'s job, not this helper's.
 /// <see cref="For"/> refuses (a named exception, never a silently wrong flat path) for any record type
 /// that resolves to one of those three or to no top-level group at all; <see cref="TryParse"/> simply
 /// answers false for any path deeper or shallower than the flat shape.</para>
@@ -49,10 +48,10 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// file name segment mirrors <c>Mutagen.Bethesda.Core</c>'s own <c>FormKey.ToFilesafeString()</c>
 /// (<c>"{hex6}_{ModKeyFileName}"</c>) with an optional <c>"{EditorID} - "</c> prefix — exactly
 /// <c>SerializationHelper.RecordFileNameProvider</c>'s own scheme, verified against
-/// <c>references/mutagen-serialization</c> and <c>references/Mutagen</c> at implementation (#451), not
+/// <c>references/mutagen-serialization</c> and <c>references/Mutagen</c>, not
 /// reconstructed from memory.</para>
 ///
-/// <para><b>#459: a leading <c>"[N] "</c> ordering prefix ahead of everything above.</b> Once
+/// <para><b>A leading <c>"[N] "</c> ordering prefix ahead of everything above.</b> Once
 /// <c>RecordTextCodecCustomization</c> turns <c>Overall.EnforceRecordOrder</c> on, the whole-mod
 /// door's own writer numbers every folder-split sibling by its position in the mod's in-memory list —
 /// flat top-level groups included, not only the container-nested lists the original ordering bug was
@@ -75,11 +74,11 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 /// — never the plugin the record is written into, which is <paramref name="pluginFileName"/> and can
 /// legitimately differ, e.g. an override edited through a patch plugin) is exactly
 /// <see cref="FormKey.ToFilesafeString"/>'s own <c>ModKey.FileName</c>, so two records from different
-/// masters sharing a local ID never collide on one path (#370, restated for the new layout).</para>
+/// masters sharing a local ID never collide on one path.</para>
 /// </summary>
 internal static class SourceRecordPath
 {
-    /// <summary>The one root folder every plugin's source tree nests inside (#441) — plain, not
+    /// <summary>The one root folder every plugin's source tree nests inside — plain, not
     /// dot-prefixed: the plugin's source is first-class, not hidden metadata. Root-anchored deployer
     /// exclusion (Mod Management's <c>fileConflictIndex.ts</c>) matches this literal name at the mod
     /// folder's own root only; a nested directory that happens to share the name (Papyrus ships
@@ -103,7 +102,8 @@ internal static class SourceRecordPath
     /// <summary>The flat record's path under the source layout — see this class's own doc comment
     /// for the full shape.</summary>
     /// <param name="orderIndex">This sibling's position among the others in the same group folder —
-    /// see this class's own doc comment ("#459") for why it's required rather than optional.</param>
+    /// see this class's own doc comment (the <c>"[N] "</c> ordering prefix) for why it's required
+    /// rather than optional.</param>
     internal static string For(
         string pluginFileName, string recordType, string formKeyString, string? editorId, GameRelease gameRelease,
         int orderIndex)

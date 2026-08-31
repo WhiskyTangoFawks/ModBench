@@ -3,10 +3,10 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041 amendment (comment 3 on #414; coordinator ruling #6): Track initializes
+/// ADR-0041 amendment: Track initializes
 /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> to the pristine snapshot for every plugin the
-/// trailers name — the ref Save &amp; Compile (#416) will later re-park after every compile, and the
-/// reference external-change detection reads. Ruling #6: the ref points at the baseline commit's
+/// trailers name — the ref Save &amp; Compile re-parks after every compile, and the
+/// reference external-change detection reads. The ref points at the baseline commit's
 /// own SHA (no second commit object) since the tree is literally the same content at Track time.
 /// </summary>
 public sealed class SourceRepositoryTrackParkedRefTests

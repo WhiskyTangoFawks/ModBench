@@ -18,7 +18,7 @@ export type BackendStream = 'stdout' | 'stderr';
 const UNTAGGED: Record<BackendStream, keyof LeveledChannel> = { stdout: 'info', stderr: 'error' };
 
 /** Routes one line of backend console output to the matching leveled call on the
- *  Modbench channel (#199). The only backend→frontend coupling this introduces is
+ *  Modbench channel. The only backend→frontend coupling this introduces is
  *  Serilog's console template, and it is deliberately tolerant: an unrecognized
  *  line is still forwarded, never dropped or thrown on.
  *
@@ -44,12 +44,12 @@ export function makeBackendLogForwarder(channel: LeveledChannel): (line: string,
 /** `vscode.LogLevel`'s numeric ordinals (Off=0, Trace=1 .. Error=5), mapped to
  *  Serilog's level names. Untyped as `number` rather than `vscode.LogLevel` so
  *  this stays a plain value mapping — no runtime `vscode` import, so no VS Code
- *  test harness needed here (#205). */
+ *  test harness needed here. */
 const SERILOG_LEVEL_NAMES: Record<number, string> = {
   1: 'Verbose', 2: 'Debug', 3: 'Information', 4: 'Warning', 5: 'Error',
 };
 
-/** Backend spawn-argv fragment (issue #205) that makes Serilog's minimum level
+/** Backend spawn-argv fragment that makes Serilog's minimum level
  *  follow the Output channel's level for that process's lifetime — so raising
  *  the channel to Debug/Trace actually produces backend lines at that level for
  *  the console forwarder above to relay, not just louder frontend lines.

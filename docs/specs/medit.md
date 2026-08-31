@@ -22,8 +22,7 @@ that launches this one is specified in [mods.md](mods.md).
 **Vocabulary note:** navigation starts from the **Plugins tree** ([plugins.md](plugins.md)) — one
 merged surface, owned jointly by Mod Management (the rows: identity, Plugin load order, checkbox)
 and Editing (a row's children: record types, records, the spatial hierarchy, whenever a load order
-is running). [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) is the design;
-[#270](https://github.com/WhiskyTangoFawks/ModBench/issues/270) built it.
+is running). [ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) is the design.
 
 ## Problem Statement
 
@@ -50,10 +49,10 @@ load order over the active loadout:
 | **Version control (Track, branch, compile)** | Track gesture, native Source Control panel review & commit per tracked mod, Save & Compile, external-change handling | [medit-version-control.md](medit-version-control.md) |
 | **Status bar item** | Backend/load order state | This document |
 
-**Launch mEdit** (from the [Plugins view](plugins.md)'s title-bar overflow, #352) spawns the
+**Launch mEdit** (from the [Plugins view](plugins.md)'s title-bar overflow) spawns the
 backend and builds the load order from every line of the active profile's `plugins.txt` — disabled
-entries included, carrying their participation (#270 / ADR-0035) — plus vanilla masters
-(`load-explicit`); **Close mEdit** tears the load order down. The Plugins tree's rows gain chevrons
+entries included, carrying their participation (ADR-0035) — plus vanilla masters
+(the `PUT /load-order` snapshot, ADR-0044); **Close mEdit** tears the load order down. The Plugins tree's rows gain chevrons
 once the load order is ready — no other surface swap happens: the Loadout views (Mods, Plugins,
 Downloads) are always visible regardless of load order state, and Referenced By is
 always-present-and-following rather than gated on a mode.
@@ -68,7 +67,7 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
    the editor opens against exactly the plugins my active profile loads, with no separate
    load order-setup step.
 2. As a user, I want a status bar item that tells me whether the backend is running,
-   connecting, attached, or has a reconcileed (and for which game, with a plugin count), so
+   connecting, attached, or holds a load order (and for which game, with a plugin count), so
    that I always know the editor's state.
 3. As a user, I want clicking the status bar item when the backend isn't running to tell me how
    to start it, so that I'm not stuck guessing.
@@ -86,19 +85,19 @@ Surface-specific stories live in the surface specs above. These are the cross-cu
 - This document and the surface specs cover the **mEdit view's frontend surfaces** and the
   behavior they present. The backend endpoint contract that drives them is governed by
   `MEditService/CLAUDE.md` and the generated API client, not restated here.
-- Modbench is a single activity-bar container (`modbench`). There is no view mode
-  ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md) retired
-  `modbench.viewMode`, [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273)): every
+- Modbench is a single activity-bar container (`modbench`). There is no view mode and no
+  `modbench.viewMode` context key
+  ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md)): every
   Loadout and mEdit view is contributed unconditionally, and each surface that needs to hide
   does so on its own signal rather than a shared mode — the Plugins tree's rows gain chevrons
   once a load order exists (ADR-0035), and Referenced By is always present, following the active
   record editor ([medit-referenced-by.md](medit-referenced-by.md)). **Launch mEdit** spawns the
   backend and loads the active modlist as the load order; **Close mEdit** tears it down. Both are
-  reached from the **[Plugins view](plugins.md)'s title-bar overflow** ([#352](https://github.com/WhiskyTangoFawks/ModBench/issues/352))
+  reached from the **[Plugins view](plugins.md)'s title-bar overflow**
   — a two-command/context-key toggle (`modbench.backendRunning`) showing whichever direction
-  applies, gated on `modbench.workspaceIsMo2Instance` — superseding the original #247 placement
-  on the Loadout header's own mEdit row, which this ticket removed: the maintainer's ruling was
-  that mEdit is "an option on the plugins view", not a workspace action.
+  applies, gated on `modbench.workspaceIsMo2Instance`. Per the maintainer's ruling, mEdit is
+  "an option on the plugins view", not a workspace action
+  ([loadout-header.md](loadout-header.md)).
 - The mEdit view is composed of the five surfaces listed above. There is no toolbar or
   top-level menu bar — every action is reachable from a tree context menu, the command palette,
   or the record editor panel itself.

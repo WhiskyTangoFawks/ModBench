@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041 (comment 2 pinned decisions, orchestrator rulings 2/3): repo-local config Track
+/// ADR-0041: repo-local config Track
 /// pins at init. <c>core.autocrlf=false</c> is the byte-equality invariant dirty/ITM detection
 /// depends on; <c>commit.gpgsign=false</c> stops a global signing config from hanging a plumbing
 /// commit on a passphrase prompt; the identity fallback only fires when the effective (global)
@@ -54,7 +54,7 @@ public sealed class SourceRepositoryTrackConfigTests
             Environment.SetEnvironmentVariable("HOME", emptyHome);
             Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", Path.Combine(emptyHome, ".config"));
             Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", Path.Combine(emptyHome, "nonexistent-gitconfig"));
-            // #414 review F5: HOME/XDG/GIT_CONFIG_GLOBAL only scrub the *global* scope — a host
+            // HOME/XDG/GIT_CONFIG_GLOBAL only scrub the *global* scope — a host
             // /etc/gitconfig (system scope) could still leak a real user.name/user.email in and
             // silently make this "fresh machine" repro not one.
             Environment.SetEnvironmentVariable("GIT_CONFIG_NOSYSTEM", "1");

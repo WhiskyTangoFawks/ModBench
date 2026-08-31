@@ -6,7 +6,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #416 S4: a state compile structurally cannot emit is a typed refusal naming the reason, never an
+/// A state compile structurally cannot emit is a typed refusal naming the reason, never an
 /// exception and never a silently-corrupted binary.
 /// </summary>
 public sealed class PluginCompileServiceRefusalTests : IDisposable
@@ -21,9 +21,9 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     [Fact]
     public void Compile_WithTwoSourceFilesClaimingTheSameFormKey_RefusesNamingTheFormKey()
     {
-        // Two distinct source files, same FormKey — nothing this arc's edit path can produce (a
+        // Two distinct source files, same FormKey — nothing the edit path can produce (a
         // rename/hand-edit/third-party tool could), and there is no way to emit it as two binary
-        // records without changing one's FormKey (#416 comment 2 on the issue).
+        // records without changing one's FormKey.
         var npcSourceText = File.ReadAllText(_mod.NpcSourceFile);
         var collidingPath = _mod.SourceFileFor(_mod.Npc, "keyword", TrackedModFixture.NpcEditorId);
         Directory.CreateDirectory(Path.GetDirectoryName(collidingPath)!);
@@ -38,8 +38,8 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     /// <summary>
-    /// The same collision with both files in the <b>same group folder</b> — the case #454 had to keep
-    /// alive deliberately, because the compiled mod can no longer be asked about it.
+    /// The same collision with both files in the <b>same group folder</b> — kept
+    /// alive deliberately, because the compiled mod cannot be asked about it.
     ///
     /// <para>Since compile reads the tree through the whole-mod door, every group ends its read with
     /// <c>group.RecordCache.SetTo(x =&gt; x.FormKey, records)</c> — a FormKey-keyed cache. Two files in
@@ -52,7 +52,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     ///
     /// <para>Reachable without Modbench's help: another tool duplicating a file, a partially restored
     /// backup, or a user copying a record file to experiment (root CLAUDE.md's
-    /// never-assume-exclusive-ownership rule). #453 fixed Modbench's own half-completed rename; it did
+    /// never-assume-exclusive-ownership rule). Modbench's own half-completed rename is fixed; that did
     /// not make the state unreachable.</para>
     /// </summary>
     [Fact]
@@ -61,7 +61,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
         // Same group, same FormKey, a different EditorID in the file name — exactly what an interrupted
         // rename or a hand-copied file leaves behind.
         //
-        // #459: SourceFileFor now resolves the record's real *current* file (FormKey-suffix matched,
+        // SourceFileFor resolves the record's real *current* file (FormKey-suffix matched,
         // blind to the EditorID argument) — exactly wrong for this test, which needs a synthetic,
         // not-yet-existing second name for the same FormKey. Computed directly through
         // SourceRecordPath.For with an out-of-range order index instead, so it can never coincide with
@@ -82,7 +82,7 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     /// <summary>
-    /// #473, ADR-0042 amendment: source the codec cannot even parse — a hand edit that breaks the
+    /// ADR-0042 amendment: source the codec cannot even parse — a hand edit that breaks the
     /// JSON, external corruption, anything that leaves the text not valid input to the deserializer
     /// at all — is a typed refusal pointing at re-Track, the same as every other thing this method
     /// cannot compile, never an unhandled exception surfacing as a bare 500.
@@ -101,11 +101,11 @@ public sealed class PluginCompileServiceRefusalTests : IDisposable
     }
 
     /// <summary>
-    /// #473, ADR-0042 amendment, AC2: a breaking codec change with no migration, simulated without
-    /// waiting for a real one. The spike behind this ticket confirmed the generated deserializer is
-    /// lenient in both directions — an unrecognized property is silently skipped
+    /// ADR-0042 amendment: a breaking codec change with no migration, simulated without
+    /// waiting for a real one. The generated deserializer is confirmed lenient in both directions —
+    /// an unrecognized property is silently skipped
     /// (<c>kernel.Skip(reader)</c>) and a missing-but-expected one is silently left at its default —
-    /// so deserializing succeeds either way, and nothing before this ticket ever noticed. Renaming a
+    /// so deserializing succeeds either way, with nothing to notice the loss. Renaming a
     /// real field's key reproduces exactly that shape: the value is still on disk, but nothing reads
     /// it anymore, so it never survives being written back out.
     /// </summary>

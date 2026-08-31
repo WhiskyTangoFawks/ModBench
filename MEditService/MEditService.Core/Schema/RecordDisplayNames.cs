@@ -1,10 +1,10 @@
 namespace MEditService.Core.Schema;
 
-// Issue #110: xEdit shows a human-readable name per record type (the second argument of each
+// xEdit shows a human-readable name per record type (the second argument of each
 // `wbRecord(<SIG>, '<Display Name>', ...)` / `wbRefRecord(<SIG>, '<Display Name>', ...)` call in
-// references/TES5Edit/Core/wbDefinitionsFO4.pas); mEdit only ever surfaced the raw 4-char
-// signature. This table is a one-time hand-transcription of that reference (grep-only, never
-// modified) — not a runtime parser, since the mapping is static and the reference isn't shipped.
+// references/TES5Edit/Core/wbDefinitionsFO4.pas). This table is a one-time hand-transcription of
+// that reference (grep-only, never modified) — not a runtime parser, since the mapping is static
+// and the reference isn't shipped.
 // "npc_" and "header" aren't `wbRecord` matches by signature text (NPC_ / TES4) so are called out
 // separately below. Every table SchemaReflector currently discovers has an entry here (see
 // SchemaReflectorTests.GetSchemas_EveryDiscoveredTableHasADisplayName); a lookup miss falls back to

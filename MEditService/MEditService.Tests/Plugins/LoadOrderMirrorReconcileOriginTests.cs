@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// #269 / ADR-0036: the LoadOrderMirror-level Reconcile call that carries a caller-supplied
+// ADR-0036: the LoadOrderMirror-level Reconcile call that carries a caller-supplied
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
 public sealed class LoadOrderMirrorReconcileOriginTests
 {
@@ -35,9 +35,8 @@ public sealed class LoadOrderMirrorReconcileOriginTests
         Assert.Equal("SomeMod", plugin.Origin);
     }
 
-    // #271 / ADR-0036: PluginMetadata.Origin alone (asserted above, since #269) never reached the
-    // DuckDB index — LoadOrderMirror.IndexAndStore now threads it into Index(), so the indexed row
-    // itself carries the real origin rather than silently falling back to the reserved default.
+    // ADR-0036: PluginMetadata.Origin alone (asserted above) is not enough — the indexed row
+    // itself must carry the real origin rather than silently falling back to the reserved default.
     [Fact]
     public void Reconcile_WithOrigin_IndexedRecordCarriesRealOrigin()
     {

@@ -1,7 +1,7 @@
 namespace MEditService.Core.Plugins;
 
 /// <summary>
-/// Where the load order mirror is right now (#274 / ADR-0035, ADR-0044). Reconciling is a state a
+/// Where the load order mirror is right now (ADR-0035, ADR-0044). Reconciling is a state a
 /// caller can observe and act on, not an internal phase — a plugin's records are browsable the
 /// moment it is indexed, well before the reconcile finishes.
 /// </summary>
@@ -20,12 +20,12 @@ public enum LoadOrderState
 }
 
 /// <summary>One plugin copy the mirror has finished indexing or registering. Carries origin as well
-/// as filename because a copy is identified by <c>(origin, plugin)</c> together (#271 / #275) —
+/// as filename because a copy is identified by <c>(origin, plugin)</c> together —
 /// two copies of one filename can be held at once, and a bare name cannot say which one landed.</summary>
 public sealed record IndexedPlugin(string Name, string Origin);
 
 /// <summary>
-/// What the mirror can honestly say about itself right now (#274 / ADR-0035). Exists so that an
+/// What the mirror can honestly say about itself right now (ADR-0035). Exists so that an
 /// absent conflict badge is never mistakable for "no conflict": a caller reading
 /// <see cref="ConflictsComputed"/> false knows nothing has looked yet.
 /// </summary>

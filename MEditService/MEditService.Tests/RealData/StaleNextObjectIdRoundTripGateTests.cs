@@ -13,8 +13,8 @@ using Noggog.WorkEngine;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #506's permanent gate, in <see cref="BinaryRoundTripGateTests"/>' (#369) shape: three real,
-/// unrelated, override-heavy plugins whose stored <c>HEDR.NextObjectID</c> (and, it turned out,
+/// A permanent gate in <see cref="BinaryRoundTripGateTests"/>' shape: three real,
+/// unrelated, override-heavy plugins whose stored <c>HEDR.NextObjectID</c> (and
 /// <c>HEDR.NumRecords</c>) do <b>not</b> match what Mutagen's default write options
 /// (<c>NextFormIDOption.Iterate</c>, <c>RecordCountOption.Iterate</c>) recompute on write. Nothing
 /// in-game reads either field and authoring tools routinely leave them stale, so ADR-0042's
@@ -24,7 +24,7 @@ namespace MEditService.Tests.RealData;
 ///
 /// Each fixture recomputes <c>NextObjectID</c> through a different branch, which is why all three
 /// stay. Checked in under their real filenames, spaces included — the LitR Track theory therefore
-/// also exercises #433's ref-name encoding on a real mod name:
+/// also exercises ref-name encoding on a real mod name:
 /// <list type="bullet">
 /// <item><c>LitR - Settings Holotapes Sorting.esp</c> — 13 overrides, zero self-authored, flat GRUPs;
 /// stored 2, recompute falls to <c>GetDefaultInitialNextFormID</c> (0). NumRecords stored 16,
@@ -36,15 +36,13 @@ namespace MEditService.Tests.RealData;
 /// recompute 149.</item>
 /// </list>
 ///
-/// <para>All three now run the full Track and Compile theories (#513): the other two used to clear
-/// the header (proven by <see cref="Save_OfARealPluginWithAStaleHeader_PreservesNextObjectIdAndNumRecords"/>)
-/// and then hit #511 — a zlib-compressed NPC_ Mutagen re-deflates at its own level, and REFR rotations
-/// of <c>-0.0</c> Mutagen writes as <c>+0.0</c> — which used to refuse them outright under byte
-/// identity. ADR-0042 decision 2's 2026-08 amendment (#513) makes the round-trip verdict model
-/// identity: neither #511 difference changes any record's own content, so both fixtures now Track
-/// and Compile successfully, and <see cref="Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceBytes"/>
+/// <para>All three run the full Track and Compile theories. Two of them carry differences byte
+/// identity would refuse — a zlib-compressed NPC_ Mutagen re-deflates at its own level, and REFR
+/// rotations of <c>-0.0</c> Mutagen writes as <c>+0.0</c> — but ADR-0042 decision 2 makes the
+/// round-trip verdict model identity: neither difference changes any record's own content, so both
+/// fixtures Track and Compile successfully, and <see cref="Compile_OfARealPluginWithAStaleHeader_ReproducesTheSourceBytes"/>
 /// asserts model identity between the original and compiled binaries rather than raw byte identity —
-/// the compiled bytes are no longer expected to match the original's exactly for these two, only its
+/// the compiled bytes are not expected to match the original's exactly for these two, only its
 /// content.</para>
 /// </summary>
 public sealed class StaleNextObjectIdRoundTripGateTests
@@ -96,10 +94,10 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     /// <summary>
-    /// #513: model identity, not byte identity, is Compile's own success bar here too — reusing
+    /// Model identity, not byte identity, is Compile's own success bar here too — reusing
     /// <see cref="ModelIdentity"/>, the same shared checker <see cref="TrackService"/>'s gate calls.
     /// <c>LitR - Settings Holotapes Sorting.esp</c> still happens to compile back byte-for-byte (no
-    /// #511-shaped divergence in that fixture), so this is strictly a widening of what the theory
+    /// such divergence in that fixture), so this is strictly a widening of what the theory
     /// accepts, not a weakening of what it checks for the fixture it already covered.
     /// </summary>
     [Theory]
@@ -121,7 +119,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     }
 
     /// <summary>
-    /// #506 AC4: a record present in the recompiled output but absent from the original is named as
+    /// A record present in the recompiled output but absent from the original is named as
     /// such, instead of falling through to the header/container catch-all. Forged the way
     /// <c>TrackServiceTests.TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing</c>
     /// forges its divergence: a genuine deserialize of the tree Track just wrote, then one extra NPC.
@@ -156,7 +154,7 @@ public sealed class StaleNextObjectIdRoundTripGateTests
     /// <summary>One fixture copied into a scratch mod folder, loaded as a load order — the shape
     /// <see cref="CompileRoundTripGateTests"/>' constructor builds, plus an empty stub for each of the
     /// fixture's masters: compile orders the written master list from the load order's load order
-    /// (#337/ADR-0038), which needs those names present, not their content.</summary>
+    /// (ADR-0038), which needs those names present, not their content.</summary>
     private sealed class TrackedScratch : IDisposable
     {
         private readonly string _gameDirectory = Directory.CreateTempSubdirectory("medit-stale-header-game-").FullName;

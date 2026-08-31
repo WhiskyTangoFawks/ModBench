@@ -12,10 +12,10 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415 AC4 (backend half) and AC5's refusal: an untracked plugin is <b>hard</b> read-only, and the
+/// An untracked plugin is <b>hard</b> read-only, and the
 /// refusal names the way out. The friction is deliberate (ADR-0041 — in-place editing of someone
 /// else's plugin is the community's own anti-pattern), which is exactly why it must never be silent:
-/// a refusal that does not say what to do next is the dead UI this ticket exists to remove.
+/// a refusal that does not say what to do next is dead UI.
 ///
 /// <para>Two different refusals, because there are two different ways out. A plugin in a mod folder
 /// is one Track away from editable. A vanilla or DLC master resolved from the game's own Data
@@ -41,7 +41,7 @@ public sealed class UntrackedReadOnlyTests
         Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
         // The exact palette entry, not merely "contains Track": package.json contributes the title
         // "Track…" under category "Modbench", and a signpost naming a command that does not exist
-        // verbatim is the dead end AC4 exists to prevent. Asserted against the literal here rather
+        // verbatim is the dead end this refusal exists to prevent. Asserted against the literal here rather
         // than against RecordEditService's own constant, so this test disagrees with a bad rename
         // instead of moving with it.
         Assert.Contains("Modbench: Track\u2026", result.Message, StringComparison.Ordinal);
@@ -96,7 +96,7 @@ public sealed class UntrackedReadOnlyTests
     [Fact]
     public void TrackingTheSameModFolder_TurnsTheRefusalIntoAnAcceptedEdit()
     {
-        // The positive control for every refusal above, and the product claim AC4 makes: the escape
+        // The positive control for every refusal above, and the product claim: the escape
         // is one command, once, per mod. Same plugin, same record, same field — only .git differs.
         using var mod = TrackedModFixture.Tracked();
 

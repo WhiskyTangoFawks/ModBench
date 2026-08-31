@@ -70,8 +70,8 @@ public class ArrayChildDiffTests
     [Fact]
     public void SortedArray_UnionOrderIsFirstSeenAcrossPluginsInLoadOrder()
     {
-        // A=[KwdB,KwdA], B=[KwdC,KwdA] → first-seen order: KwdB, KwdA, KwdC
-        // (kills "sort lexicographically" mutant — alphabetical order would be KwdA,KwdB,KwdC)
+        // A=[KwdB,KwdA], B=[KwdC,KwdA] → first-seen order: KwdB, KwdA, KwdC —
+        // not alphabetical (KwdA,KwdB,KwdC), which is the rival ordering this pins against.
         var meta = SortedArrayMeta("Keywords");
         var arrayA = JsonSerializer.Deserialize<JsonElement>("[\"KwdB\",\"KwdA\"]");
         var arrayB = JsonSerializer.Deserialize<JsonElement>("[\"KwdC\",\"KwdA\"]");

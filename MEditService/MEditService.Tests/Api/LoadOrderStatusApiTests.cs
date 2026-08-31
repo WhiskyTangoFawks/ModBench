@@ -9,8 +9,8 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #274: <c>GET /load-order/status</c> is what the Plugins tree polls alongside the still-in-flight
-/// load (#307), so its no-load order answer matters as much as its loading one — a poller should not
+/// <c>GET /load-order/status</c> is what the Plugins tree polls alongside the still-in-flight
+/// load, so its no-load order answer matters as much as its loading one — a poller should not
 /// have to read an error to learn that nothing is happening.
 /// </summary>
 public sealed class LoadOrderStatusApiTests : IDisposable
@@ -57,8 +57,8 @@ public sealed class LoadOrderStatusApiTests : IDisposable
 
         var indexed = status.GetProperty("indexedPlugins").EnumerateArray().Single();
         Assert.Equal("A.esp", indexed.GetProperty("name").GetString());
-        // (origin, plugin) is the identity (#271 / #275) — a status contract shipping bare filenames
-        // would reintroduce what four tickets removed.
+        // (origin, plugin) is the identity (ADR-0036) — a status contract must not ship bare
+        // filenames.
         Assert.False(string.IsNullOrWhiteSpace(indexed.GetProperty("origin").GetString()));
         Assert.Empty(status.GetProperty("failures").EnumerateArray());
     }
@@ -79,7 +79,7 @@ public sealed class LoadOrderStatusApiTests : IDisposable
             gameRelease = "Fallout4",
         });
 
-        // #274 deliberately did not make loading asynchronous on the wire: the POST is still the
+        // Loading is deliberately not asynchronous on the wire: the POST is still the
         // completion signal, and /load-order/status reports progress *alongside* it. If this ever
         // returns before the sweep, every caller that treats a 200 as "the load order is ready" —
         // including every existing test — silently starts reading unswept winners.

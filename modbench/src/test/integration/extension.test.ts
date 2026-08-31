@@ -12,17 +12,17 @@ let ext: vscode.Extension<unknown> | undefined;
 
 // Mock backend state, controlled by the launch suite. Models the real backend:
 // GET /plugins fails with 503 "No load order held" until PUT /load-order
-// is received, then serves the loaded plugins (issue #75).
-// #270: the load order holds every plugins.txt line, so a disabled one is present and browsable —
+// is received, then serves the loaded plugins.
+// The load order holds every plugins.txt line, so a disabled one is present and browsable —
 // it just never participates in winner computation.
-// #295: an explicit type (rather than inferred from the literal below) so mockPluginsOverride
+// An explicit type (rather than inferred from the literal below) so mockPluginsOverride
 // can build a variant of one entry (e.g. its masterIssues resolved) without every other entry's
-// shape narrowing what's assignable — the literal below is otherwise deliberately loose per its
-// own #277 comment (some entries omit isImmutable/masterIssues entirely).
+// shape narrowing what's assignable — the literal below is otherwise deliberately loose
+// (some entries omit isImmutable/masterIssues entirely).
 type MockPlugin = {
   name: string; path: string; origin: string; participates: boolean;
   isImmutable?: boolean; masterIssues?: { masterName: string; kind: string }[];
-  // #278 / ADR-0035 amending ADR-0018: omitted everywhere below on purpose — every existing row
+  // ADR-0035 amending ADR-0018: omitted everywhere below on purpose — every existing row
   // exercises the wire's `?? true` default this way, the same convention masterIssues above
   // already uses for the "field entirely absent" case.
   hasMatchingRecords?: boolean;
@@ -31,11 +31,11 @@ const MOCK_PLUGINS: MockPlugin[] = [
   { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true },
   { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true },
   { name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false },
-  // #276: a plugins.txt line (not an implicit master) the backend reports read-only for editing
+  // A plugins.txt line (not an implicit master) the backend reports read-only for editing
   // (Editing's "Immutable plugin") — exercises the composite's tooltip decoration end-to-end,
   // distinct from ImplicitMasterNode's own (Mod-Management-only, no load order needed) lock icon.
   { name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true },
-  // #277 / ADR-0037: a plugin the backend flags with a directly-missing master — exercises the
+  // ADR-0037: a plugin the backend flags with a directly-missing master — exercises the
   // composite's error decoration end-to-end. Deliberately carries no `masterIssues` key on any
   // *other* MOCK_PLUGINS entry (e.g. TestMod.esp above) so those rows double as the "wire omits
   // the field entirely" case a hand-typed PluginMetadata fixture could never produce on its own.
@@ -45,21 +45,21 @@ const MOCK_PLUGINS: MockPlugin[] = [
   },
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
-// #364: GET /records/conflicts' answer — the Conflicts node's own listing. Empty until a test
+// GET /records/conflicts' answer — the Conflicts node's own listing. Empty until a test
 // says otherwise, mirroring mockPluginsOverride's "changeable per test, reset between them" shape.
 let mockConflicts: unknown[] = [];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
-// #295: lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
+// Lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
 // simulates a plugin's decoration-worthy state (a master issue, a load failure) changing between
 // one load and a reload of the same load order.
 let mockPluginsOverride: MockPlugin[] | null = null;
-// #295 AC4: makes the next PUT /load-order fail, the way a bad game directory or a
+// Makes the next PUT /load-order fail, the way a bad game directory or a
 // backend-side load error would — load order.md's own contract (LoadOrderManager.LoadExplicitCore
 // disposes the previous load order unconditionally first) means the mock must *not* set
 // loadOrderHeld on this path, matching the real backend leaving no load order behind either.
 let putLoadOrderShouldFail = false;
-// #307: GET /load-order/status' answer — what the load can honestly say about itself *right now*.
+// GET /load-order/status' answer — what the load can honestly say about itself *right now*.
 // Mutable per-test so a suite can script a load landing one plugin at a time and observe the tree
 // react to each, which is the whole subject of progressive load. `conflictsComputed` is separate
 // from any notion of state on purpose (LoadOrderStatus.cs) — the tree gates its incompleteness
@@ -73,12 +73,12 @@ type MockLoadOrderStatus = {
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
   { totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
-// #307: when set, PUT /load-order does not answer until the test calls it — the real
+// When set, PUT /load-order does not answer until the test calls it — the real
 // backend's load blocks for the whole indexing run, and every progressive-load assertion is about
 // what the tree does *during* that window. A mock that answers instantly cannot express it.
 let releasePutLoadOrder: (() => void) | null = null;
 let holdPutLoadOrder = false;
-// #307 AC7: the same trick one step earlier in the launch. `BackendManager.start()` gates on
+// The same trick one step earlier in the launch. `BackendManager.start()` gates on
 // GET /health, so holding it parks a launch in its *first* phase — before the load POST exists at
 // all — which is the window a mid-load close has to survive too. One-shot: releasing clears the
 // hold, so the connect loop's next attempt answers normally.
@@ -100,7 +100,7 @@ function resetMockBackend(): void {
   releaseHealth = null;
 }
 
-/** #307: report the load as having indexed `names` so far. `conflictsComputed` stays false until
+/** Report the load as having indexed `names` so far. `conflictsComputed` stays false until
  *  a test says otherwise — the winner sweep is the last thing a real load does. */
 function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): void {
   loadOrderStatus = {
@@ -134,8 +134,8 @@ function createMockBackend(): http.Server {
           res.end(JSON.stringify({ error: 'simulated load failure' }));
           return;
         }
-        // #307: the real load blocks for the whole indexing run. Held open so a test can observe
-        // the tree mid-load; answered immediately otherwise, as every pre-#307 test expects.
+        // The real load blocks for the whole indexing run. Held open so a test can observe
+        // the tree mid-load; answered immediately otherwise, as most suites expect.
         const answer = () => {
           loadOrderHeld = true;
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -150,7 +150,7 @@ function createMockBackend(): http.Server {
       });
       return;
     }
-    // #307 / #274: answers 200 in every state including "no load order" — reporting the absence of
+    // Answers 200 in every state including "no load order" — reporting the absence of
     // a load order is this endpoint's job, not a failure to do it (LoadOrderEndpoints.cs).
     if (url === '/load-order/status') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -172,13 +172,13 @@ function createMockBackend(): http.Server {
       res.end(JSON.stringify(mockPluginsOverride ?? MOCK_PLUGINS));
       return;
     }
-    // #270: a plugin row's children come from here once the backend is running.
+    // A plugin row's children come from here once the backend is running.
     if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
       res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
       return;
     }
-    // #364: the Conflicts node's own listing.
+    // The Conflicts node's own listing.
     if (url === '/records/conflicts') {
       res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(loadOrderHeld ? JSON.stringify(mockConflicts) : 'No load order has been received.');
@@ -229,19 +229,19 @@ describe('modbench activation', () => {
     assert.ok(ext?.isActive, 'expected the extension to auto-activate via onStartupFinished');
   });
 
-  // #554: NOT tested here. The bug (and the fix) live entirely in the window between the
-  // workspace opening and this activation completing — the Mods view's `viewsWelcome` is a
+  // The pre-activation welcome flash is NOT tested here. It lives entirely in the window between
+  // the workspace opening and this activation completing — the Mods view's `viewsWelcome` is a
   // static package.json contribution the workbench can render before any extension code runs,
-  // which is exactly how "not an MO2 instance" used to flash for a valid one. There is no
+  // which is exactly how "not an MO2 instance" can flash for a valid one. There is no
   // public API to read a context key's current value back, and no property on TreeView (or
   // anywhere else) exposing whether its `viewsWelcome` content is currently showing — so this
   // window can't be observed from extension test code, only from a human watching the real UI.
-  // Manual check (full procedure: issue #554): open a real MO2 instance as the workspace root
+  // Manual check: open a real MO2 instance as the workspace root
   // and watch the Mods view from the moment the window appears — a *brief flash* of "This
   // isn't an MO2 instance" counts as a fail, not just it staying up.
 });
 
-// ── Build integrity (#299) ─────────────────────────────────────────────────────
+// ── Build integrity ────────────────────────────────────────────────────────────
 // The harness loads out/extension.js, a bundle produced by a separate esbuild step —
 // nothing about running this suite forces that bundle to be current. Assert the property
 // from inside the process that actually loaded it, rather than trust the npm script that
@@ -290,7 +290,7 @@ describe('the loaded extension bundle is not older than its sources (#299)', () 
   });
 });
 
-// ── Output channel (#198) ───────────────────────────────────────────────────────
+// ── Output channel ──────────────────────────────────────────────────────────────
 
 describe('Modbench output channel (#198)', () => {
   it('is created as a leveled LogOutputChannel, not a plain text channel', () => {
@@ -313,33 +313,29 @@ describe('modbench command registration', () => {
     'modbench.openEditorBeside',
     'modbench.openCompare',
     'modbench.openHeader',
-    // #426 Track 4: the array-op right-click commands (record editor's field grid).
+    // The array-op right-click commands (record editor's field grid).
     'modbench.array.add',
     'modbench.array.remove',
     'modbench.array.moveUp',
     'modbench.array.moveDown',
-    // #426 Track 5: VMAD's structural-op right-click commands (record editor's field grid).
+    // VMAD's structural-op right-click commands (record editor's field grid).
     'modbench.vmad.addScript',
     'modbench.vmad.removeScript',
     'modbench.vmad.addProperty',
     'modbench.vmad.removeProperty',
     'modbench.vmad.setScriptFlags',
     'modbench.vmad.setPropertyFlags',
-    // #258 / ADR-0039: the string cell's own right-click command (record editor's field grid).
+    // ADR-0039: the string cell's own right-click command (record editor's field grid).
     'modbench.field.openExtended',
     'modbench.closeMedit',
-    // #247: one Refresh for every Mod-Management source, replacing modbench.refreshTree,
-    // modbench.modList.refresh and modbench.pluginListTree.refresh — same need, three ids.
+    // One Refresh for every Mod-Management source.
     'modbench.refresh',
     'modbench.newPlugin',
-    // #273 Slice D: modbench.filterPluginTree (issue #70) is gone — it duplicated
-    // modbench.pluginListTree.filter over the same rows once the merged tree made this
-    // command's own view (modbench.pluginTree) unreachable.
     'modbench.setFilter',
     'modbench.clearFilter',
     'modbench.setFilterFromDocument',
     'modbench.showReferencedBy',
-    // #282: the Referenced By view's own copy command — see packageJson.test.ts for its
+    // The Referenced By view's own copy command — see packageJson.test.ts for its
     // view/item/context and keybinding contributions (declarative, not exercised here).
     'modbench.referencedByTree.copy',
     'modbench.modList.filter',
@@ -362,11 +358,11 @@ describe('modbench command registration', () => {
     'modbench.modList.separator.addSeparatorBelow',
     'modbench.modList.separator.delete',
     'modbench.modList.overwrite.reveal',
-    // #233: the Downloads row's native `view/item/context` menu commands on the
+    // The Downloads row's native `view/item/context` menu commands on the
     // modbench.downloads TreeView — see package.json's contributes.menus["view/item/context"]
     // (regex `when` gating, not testable from this harness) and DownloadsProvider's
-    // contextValue wiring (unit-tested). modbench.downloads.open/.reveal are gone with the
-    // webview — VS Code auto-generates modbench.downloads.focus for the contributed view, and
+    // contextValue wiring (unit-tested). No .open/.reveal:
+    // VS Code auto-generates modbench.downloads.focus for the contributed view, and
     // the workspace-root Explorer already reveals downloads/.
     'modbench.downloads.install',
     'modbench.downloads.visitNexus',
@@ -375,43 +371,42 @@ describe('modbench command registration', () => {
     'modbench.downloads.delete',
     'modbench.downloads.hide',
     'modbench.downloads.unhide',
-    // #247: Downloads narrows by name through the same widget as every other list view,
-    // superseding #233's native-tree-Find call.
+    // Downloads narrows by name through the same widget as every other list view.
     'modbench.downloads.filter',
-    // #255: every name filter is durable, so every one of them has an explicit clear — the
+    // Every name filter is durable, so every one of them has an explicit clear — the
     // slot-1 clear variant, gated on that view's own filter-active context key.
     'modbench.downloads.clearFilter',
-    // #238: the view/title Sort by… overflow command and the Show-hidden title-bar toggle.
+    // The view/title Sort by… overflow command and the Show-hidden title-bar toggle.
     'modbench.downloads.sortBy',
     'modbench.downloads.showHidden',
     'modbench.downloads.hideHidden',
     'modbench.pluginListTree.filter',
     'modbench.pluginListTree.clearFilter',
     'modbench.pluginListTree.revealInExplorer',
-    // #414/ADR-0041: the Track gesture. Gated to `viewItem == plugin` in package.json and hidden
+    // ADR-0041: the Track gesture. Gated to `viewItem == plugin` in package.json and hidden
     // from the palette — it needs the clicked row's plugin name.
     'modbench.pluginListTree.track',
-    // #416: Save & Compile — reachable from the record editor's editor/title icon, the tree row's
+    // Save & Compile — reachable from the record editor's editor/title icon, the tree row's
     // context menu, and the palette (falls back to a QuickPick when invoked with no plugin in hand).
     'modbench.saveAndCompile',
-    // #416: compile-at-main behind its own confirmation. Gated to the clicked row and hidden from
+    // Compile-at-main behind its own confirmation. Gated to the clicked row and hidden from
     // the palette, same posture as Track — naming a ref to compile at with no plugin in hand isn't
     // a gesture the palette can support.
     'modbench.pluginListTree.compileAtMain',
-    // #417: Modbench: Rebase onto Updated Baseline — the offered rebase's re-runnable form. Gated
+    // Modbench: Rebase onto Updated Baseline — the offered rebase's re-runnable form. Gated
     // to the clicked row and hidden from the palette, same posture as Track/compileAtMain.
     'modbench.pluginListTree.rebase',
-    // #363: Filter to Selected Plugins — the ordinary record filter, pre-restricted to the
+    // Filter to Selected Plugins — the ordinary record filter, pre-restricted to the
     // clicked/selected plugin row(s). Gated to plugin-bearing rows and hidden from the palette,
     // same posture as Track/rebase — it needs the row selection, with no ambient fallback.
     'modbench.pluginListTree.filterToSelected',
-    // #427: the three lifecycle gestures — Add (recordType row), Remove/Change FormID… (record
+    // The three lifecycle gestures — Add (recordType row), Remove/Change FormID… (record
     // row). Gated to the clicked row and hidden from the palette, same posture as Track/rebase —
     // each needs the clicked row's own identity, with no ambient fallback.
     'modbench.record.create',
     'modbench.record.delete',
     'modbench.record.renumber',
-    // #436/#494: Copy as Override Into…/Copy as New Record Into… — restored on both the plugins-
+    // Copy as Override Into…/Copy as New Record Into… — on both the plugins-
     // tree record row and the record editor's own column header, sharing one implementation path.
     // Gated and hidden from the palette the same way, for the same reason.
     'modbench.record.copyAsOverride',
@@ -481,10 +476,10 @@ describe('modbench.openEditor', () => {
   });
 });
 
-// ── modbench.openEditorBeside (#284) ────────────────────────────────────────────
-// Reachable today from the Referenced By tree's group rows (plain {formKey,label} shape) and, as
-// of #284, from the Plugins tree's record/placed-reference rows too (RecordNode/PlacedNode
-// shapes, single or multi-selected) — none of this was under test before #284.
+// ── modbench.openEditorBeside ───────────────────────────────────────────────────
+// Reachable from the Referenced By tree's group rows (plain {formKey,label} shape) and
+// from the Plugins tree's record/placed-reference rows (RecordNode/PlacedNode
+// shapes, single or multi-selected).
 
 describe('modbench.openEditorBeside', () => {
   it('opens a plain {formKey,label}-shaped target as a genuinely new tab, never retargeting the singleton (#284)', async () => {
@@ -579,14 +574,12 @@ describe('modbench.openEditorBeside', () => {
   });
 });
 
-// ── modbench.openHeader reachable from every plugin-bearing row (#273 Slice E) ──
-// The gap this closes: the old modbench.pluginTree's Open Header reached both 'plugin' and
-// 'pluginImmutable' rows (medit's own read-only-master contextValue). The merged tree's rows
-// come from modmanager/PluginListProvider.ts instead, whose implicit-master row is a *different*
+// ── modbench.openHeader reachable from every plugin-bearing row ─────────────────
+// The merged tree's rows
+// come from modmanager/PluginListProvider.ts, whose implicit-master row is a *different*
 // class with a *different* contextValue ('pluginImplicit', not 'pluginImmutable') and no `.plugin`
-// field at all — so the handler's own node-shape assumption, not just the package.json `when`,
-// had to change for this row kind to keep working. Reconciling the two contextValues is #276's,
-// not this ticket's.
+// field at all — so the handler's own node-shape handling, not just the package.json `when`,
+// is what keeps this row kind working.
 import { PluginNode as PluginListPluginNode, ImplicitMasterNode } from '../../modmanager/PluginListProvider';
 
 describe('modbench.openHeader reachable from every plugin-bearing row of the merged tree (#273 Slice E)', () => {
@@ -607,7 +600,7 @@ describe('modbench.openHeader reachable from every plugin-bearing row of the mer
   });
 });
 
-// ── modbench.downloads tree (#233) ──────────────────────────────────────────
+// ── modbench.downloads tree ─────────────────────────────────────────────────
 
 interface DownloadsProviderLike {
   invalidate(): void;
@@ -619,9 +612,9 @@ describe('modbench.downloads tree (#233)', () => {
   const downloadsDir = root ? path.join(root, 'downloads') : '';
   const provider = () => (ext?.exports as { downloadsProvider?: DownloadsProviderLike } | undefined)?.downloadsProvider;
 
-  // The committed test workspace fixture (#192) has no downloads/ folder — created and
+  // The committed test workspace fixture has no downloads/ folder — created and
   // torn down here so the "no downloads/ folder" empty state stays exercisable against
-  // the same workspace elsewhere (mirrors the Overwrite suite's overwriteDir cleanup, #82).
+  // the same workspace elsewhere (mirrors the Overwrite suite's overwriteDir cleanup).
   after(() => {
     if (!root) return;
     fs.rmSync(downloadsDir, { recursive: true, force: true });
@@ -666,7 +659,7 @@ describe('modbench.downloads tree (#233)', () => {
   });
 });
 
-// ── Overwrite row (#82) ────────────────────────────────────────────────────────
+// ── Overwrite row ──────────────────────────────────────────────────────────────
 
 interface ModListLike {
   invalidate(): void;
@@ -679,7 +672,7 @@ describe('Overwrite row (#82)', () => {
   const provider = () => (ext?.exports as { modListProvider?: ModListLike } | undefined)?.modListProvider;
 
   // The pinned Overwrite row is appended only once the modlist loads (it sits
-  // after the mod roots). The committed test workspace fixture (#192) is
+  // after the mod roots). The committed test workspace fixture is
   // already a minimal valid MO2 instance — only the suite-scoped overwrite/
   // dir needs cleanup here.
   after(() => {
@@ -720,7 +713,7 @@ describe('Overwrite row (#82)', () => {
   });
 });
 
-// ── External-change poller lifecycle is gated on the backend, not activation (#432) ─────────────
+// ── External-change poller lifecycle is gated on the backend, not activation ────────────────────
 // Deliberately placed here, before any other describe below ever calls Launch mEdit — this suite
 // activates the extension exactly once (the file's own top-level before()), so "no poll before
 // Launch mEdit" is only provable at the one point in the run where that is still true.
@@ -754,7 +747,7 @@ describe('External-change poller starts/stops with the backend, never before Lau
     this.timeout(20000);
 
     // Wait past one full poll interval (EXTERNAL_CHANGE_POLL_INTERVAL_MS = 3000ms) with no Launch
-    // mEdit run — the pre-#432 wiring (unconditional start at activation) would already have
+    // mEdit run — an unconditional start-at-activation wiring would already have
     // ticked at least once by now.
     await new Promise((r) => setTimeout(r, 3500));
     assert.strictEqual(pollRequests(requestLog).length, 0,
@@ -773,7 +766,7 @@ describe('External-change poller starts/stops with the backend, never before Lau
   });
 });
 
-// ── Launch mEdit → editing plugin tree populated (#75) ──────────────────────────
+// ── Launch mEdit → editing plugin tree populated ────────────────────────────────
 
 interface TreeLike {
   getChildren(element?: unknown): Promise<Array<{ kind?: string; plugin?: { name?: string } }>>;
@@ -786,7 +779,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 
   // enterEditing needs a resolvable game directory and an enabled plugin in the
   // active profile to reach PUT /load-order. The committed test
-  // workspace fixture (#192) already supplies a valid MO2 instance (empty
+  // workspace fixture already supplies a valid MO2 instance (empty
   // plugins.txt) — only the suite-scoped plugins.txt content and game dir are
   // set up here.
   before(async () => {
@@ -820,17 +813,16 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 
     const load = duringLaunch.indexOf('PUT /load-order');
     assert.ok(load >= 0, 'launch should PUT /load-order');
-    // The #75 regression: the view revealed and fetched /plugins before the load order
+    // The pinned regression: the view revealed and fetched /plugins before the load order
     // was loaded. Any /plugins request the launch triggered must follow the load.
     const prematurePlugins = duringLaunch.slice(0, load).includes('GET /plugins');
     assert.ok(!prematurePlugins, 'GET /plugins must not fire before PUT /load-order');
 
-    // #273: the standalone editing tree's own root listing (what this assertion read before) is
-    // gone — nothing in production calls treeProvider.getChildren(undefined) any more. The merged
+    // Nothing in production calls treeProvider.getChildren(undefined). The merged
     // Plugins tree (modbench.pluginListTree / pluginsTree export) is what actually reflects a
-    // successful launch now: its TestMod.esp row only becomes expandable once
+    // successful launch: its TestMod.esp row only becomes expandable once
     // PluginsTreeComposite.setLoadOrder() has run, which only happens after the load order's own
-    // GET /plugins lands — so an expandable row here proves both halves of the #75 regression
+    // GET /plugins lands — so an expandable row here proves both halves of the regression
     // this test guards: the fetch happened, and it happened after load, not before.
     const pluginsTreeExport = (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
     assert.ok(pluginsTreeExport, 'activate() should return { pluginsTree } for the merged view');
@@ -844,14 +836,7 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
   });
 });
 
-// #273 AC6: the #109 runtime view-title swap ("mEdit plugin tree title reflects view mode") is
-// removed outright, not adapted — modbench.pluginTree (the view whose title it swapped) and
-// modbench.viewMode (the key it swapped on) are both gone, so there is no mode left to reflect
-// and nothing left to assert. This comment is the suite's own tombstone; the merged tree's own
-// identity is covered by the #270 suite below, and
-// packageJson.test.ts assertion (its declared name never changes at runtime).
-
-// ── Loadout stays visible through an editing backend (#268) ────────────────────
+// ── Loadout stays visible through an editing backend ───────────────────────────
 // The declarative view-mode gate itself is proven statically in packageJson.test.ts. These
 // prove the two user-observable consequences only a live host can show: durable Plugin
 // load order state survives a Launch mEdit / Close mEdit round trip untouched (AC5), and its
@@ -955,7 +940,7 @@ describe('Loadout stays visible through an editing backend (#268)', () => {
   });
 });
 
-// ── #270: the Plugin load-order rows expand into records ──────────────────────
+// ── The Plugin load-order rows expand into records ────────────────────────────
 // The merged Plugins tree, exercised through the same seam the view uses: the composite's own
 // getChildren/getTreeItem. Chevrons appearing across the tree are the whole "editing is available
 // now" signal (ADR-0035), so that transition is what these assert — with no backend running the rows are
@@ -1033,12 +1018,12 @@ describe('Plugin load-order rows expand into records (#270)', () => {
     await vscode.commands.executeCommand('modbench.modList.launchMedit');
 
     const after = await tree.getChildren();
-    // #364: an ordinary (non-held) load completes with conflicts already known (LoadOrderController
+    // An ordinary (non-held) load completes with conflicts already known (LoadOrderController
     // .reportReconciled's own doc comment — the load POST only answers after the winner sweep),
     // so the Conflicts node legitimately joins the root listing here too — filtered out (via
     // rowName's own undefined-for-non-plugin-rows behavior) before this test's own claim, which is
     // specifically about the *plugin* rows never being rebuilt or reordered, not about whether a
-    // new synthetic node the #270-era tree never had can now appear alongside them.
+    // synthetic node can appear alongside them.
     assert.deepStrictEqual(
       after.map(rowName).filter((n) => n !== undefined), before.map(rowName),
       'launching mEdit must not rebuild or reorder the plugin rows',
@@ -1088,9 +1073,9 @@ describe('Plugin load-order rows expand into records (#270)', () => {
   });
 });
 
-// #276 / ADR-0035: read-only-for-editing is a tooltip, never an icon, and only ever known once a
+// ADR-0035: read-only-for-editing is a tooltip, never an icon, and only ever known once a
 // load order says so — before launch (or after close) a plugin row carries no opinion about it at
-// all, matching AC4/AC5 and this wiring's own real seam (extension.ts's heldPluginFilesFrom →
+// all, matching this wiring's own real seam (extension.ts's heldPluginFilesFrom →
 // PluginsTreeComposite.setLoadOrder), not just the composite's own unit seam already covered by
 // PluginsTreeComposite.test.ts.
 describe('A read-only plugin\'s tooltip says so once the backend is running (#276)', () => {
@@ -1146,7 +1131,7 @@ describe('A read-only plugin\'s tooltip says so once the backend is running (#27
   });
 });
 
-// #277 / ADR-0037 AC1/AC2/AC4/AC7: a plugin the backend flags with a missing master is decorated
+// ADR-0037: a plugin the backend flags with a missing master is decorated
 // through the real wiring (extension.ts's heldPluginFilesFrom → PluginsTreeComposite.setLoadOrder),
 // not just the composite's own unit seam already covered by PluginsTreeComposite.test.ts. Also
 // covers the defensive-read requirement: MOCK_PLUGINS sends raw JSON no PluginMetadata-typed
@@ -1165,7 +1150,7 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     resetMockBackend();
     gameDir = fs.mkdtempSync(path.join(os.tmpdir(), 'medit-missingmaster-'));
     fs.mkdirSync(path.join(gameDir, 'Data'), { recursive: true });
-    // #279: the mock backend reports both of these with origin 'Data', so the Data folder has to
+    // The mock backend reports both of these with origin 'Data', so the Data folder has to
     // actually hold them — otherwise drift correctly concludes their names now resolve to nothing
     // and decorates every row accordingly. Production cannot reach that state (load-explicit
     // refuses a plugin whose file is missing), so a fixture that could is the thing out of step.
@@ -1195,10 +1180,10 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
 
     assert.ok(typeof item.tooltip === 'string' && item.tooltip.includes('Missing master: Ghost.esm'),
       `expected a missing-master tooltip, got: ${String(item.tooltip)}`);
-    // AC2: never deactivated, excluded or hidden — still expandable (in the load order) and checked.
+    // Never deactivated, excluded or hidden — still expandable (in the load order) and checked.
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
     assert.strictEqual((row as PluginListNodeLike).plugin?.enabled, true);
-    // AC3: the leading slot (checkbox) is untouched by this decoration — a real TreeItemCheckboxState
+    // The leading slot (checkbox) is untouched by this decoration — a real TreeItemCheckboxState
     // read, not just the underlying model's `enabled` flag, so a regression in the decoration
     // logic itself (not just in plugins.txt writing) would be caught here.
     assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
@@ -1214,7 +1199,7 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
   });
 });
 
-// ADR-0044 / #594: a loadout change through the real wiring — the plugins.txt watcher, the
+// ADR-0044: a loadout change through the real wiring — the plugins.txt watcher, the
 // load-order sync, `PUT /load-order`, and the tree hand-off that follows — not just the sync's own
 // unit seam (already covered directly in loadOrderSync.test.ts).
 describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => {
@@ -1279,8 +1264,8 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   // original before re-deciding what to layer back on (already covered in isolation by
   // PluginsTreeComposite.test.ts) — this proves the *real* reconcile wiring actually reaches it:
   // the same row object PluginListProvider handed out before must lose a decoration whose backend
-  // condition no longer holds, not merely gain a second copy of it. #276 shipped a bug of exactly
-  // this shape (stacked, not cleared); #277 had to generalise the fix.
+  // condition no longer holds, not merely gain a second copy of it. A bug of exactly
+  // this shape (stacked, not cleared) shipped once.
   it('clears a resolved master-issue decoration on the same row after the next reconcile, not just applies it', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'MissingMaster.esp');
@@ -1297,12 +1282,12 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
       'a resolved master issue must clear the tooltip, not leave the stale decoration stacked on top of the fresh one');
   });
 
-  // #278 review finding 1 (Standards): matchingPlugins used to be refreshed only by
-  // setFilter/clearFilter, so a plugin a filter suppressed the row of stayed suppressed through a
-  // reconcile that came up with no filter at all — the exact "map outlives the filter state it
-  // describes" bug this ticket exists to prevent, in mirror image. Fixed by routing GET /plugins'
-  // hasMatchingRecords through the same completion hand-off (applyLoadOrderToTree) every
-  // reconcile reaches downstream of syncFilterState. #396 / ADR-0035's dated §Filters amendment:
+  // If matchingPlugins were refreshed only by
+  // setFilter/clearFilter, a plugin a filter suppressed the row of would stay suppressed through a
+  // reconcile that came up with no filter at all — the "map outlives the filter state it
+  // describes" bug, in mirror image. Hence GET /plugins'
+  // hasMatchingRecords routes through the same completion hand-off (applyLoadOrderToTree) every
+  // reconcile reaches downstream of syncFilterState. ADR-0035's dated §Filters amendment:
   // a plugin with no matching records has its row omitted entirely, hence asserting absence/
   // presence of the row rather than its collapsibleState.
   it('hides a plugin a filter suppresses, and restores it once a reconcile comes up with no filter (#396 / #278 review)', async () => {
@@ -1325,8 +1310,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   });
 
   // ADR-0044: a failed PUT tears nothing down — the backend still holds what it held — so the
-  // tree keeps its chevrons rather than exiting to Loadout (the "exit on load failure" #295 AC4
-  // used to pin is gone with the load order).
+  // tree keeps its chevrons rather than exiting to Loadout.
   it('keeps the rows expandable, without throwing, when the reconcile itself fails', async () => {
     const tree = pluginsTree()!;
     const before = findRow(await tree.getChildren(), 'TestMod.esp');
@@ -1346,7 +1330,7 @@ describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => 
   });
 });
 
-// #255: the Plugins tree's description names both of its narrowing axes, and the record filter
+// The Plugins tree's description names both of its narrowing axes, and the record filter
 // is a fact about the *load order* — so it cannot outlive one. Same exitToLoadout path and the same
 // silent-wrong-state class as the decoration above: a readout describing a load order that is gone.
 // The name filter's half is deliberately untouched by a close — it narrows load-order rows,
@@ -1395,9 +1379,9 @@ describe('The record-filter readout does not outlive its load order (#255)', () 
   });
 });
 
-// #354: exitToLoadout used to clear only the readout above, directly — never the context key the
-// Clear title-bar action is gated on (`modbench.filterActive`), nor the code lens's own notion of
-// which SQL is active. Both now go through the record filter's single writer (makeSetFilterActive),
+// Close mEdit must clear not only the readout above but also the context key the
+// Clear title-bar action is gated on (`modbench.filterActive`) and the code lens's own notion of
+// which SQL is active. All go through the record filter's single writer (makeSetFilterActive),
 // the same one every in-load order filter change already goes through, so `modbench.filterActive`
 // stays written from exactly one place.
 //
@@ -1414,7 +1398,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
   // is resolved once at activate() (config, or ~/.medit/scripts) — not reconfigurable per test the
   // way mods.gameDirectory is elsewhere in this file. setupScripts already creates and writes into
   // this real directory on every activation; this file is additive to it, kept in its own
-  // mkdtempSync'd subdirectory (the file's own uniqueness idiom, used ten other places including
+  // mkdtempSync'd subdirectory (the file's own uniqueness idiom, used elsewhere including
   // gameDir just below — atomic, unlike a hand-rolled Date.now() name, which two runs against the
   // same $HOME could collide on) so a leaked artifact (a crash between write and cleanup) reads as
   // this test's own rather than a mystery in a real product-facing folder. The provider gates on a
@@ -1474,7 +1458,7 @@ describe('Close mEdit clears the record filter\'s code lens too, not just the re
   });
 });
 
-// #363: Filter to Selected Plugins — the ordinary record filter, pre-restricted to a plugin-name
+// Filter to Selected Plugins — the ordinary record filter, pre-restricted to a plugin-name
 // set drawn from the tree selection. The pure SQL builder's escaping/multi-plugin behavior is
 // unit-tested (filterSelectedPluginsSql.test.ts) and the selection-extractor's dedupe/drop
 // behavior is unit-tested (PluginListProvider.test.ts) without a VS Code harness; this suite
@@ -1532,7 +1516,7 @@ describe('modbench.pluginListTree.filterToSelected (#363)', () => {
   });
 });
 
-// #295 AC5: Refresh (#247's single Mod-Management refresh) must remain distinct and never
+// Refresh (the single Mod-Management refresh) must remain distinct and never
 // trigger a reload — a regression assertion, not new behavior; modbench.refresh's own body
 // never touches enterEditing/putLoadOrder.
 describe('Refresh never triggers a reconcile (#295 AC5)', () => {
@@ -1549,7 +1533,7 @@ describe('Refresh never triggers a reconcile (#295 AC5)', () => {
   });
 });
 
-// ── #307 / ADR-0035: progressive load that states its own incompleteness ───────
+// ── ADR-0035: progressive load that states its own incompleteness ──────────────
 // The trap this closes: an absent conflict badge is indistinguishable from "no conflict". If
 // browsing opens at second five and the sweep lands at second ninety, an unmarked record silently
 // claims to be conflict-free for eighty-five seconds when nothing has looked. So the load is not
@@ -1614,7 +1598,7 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     await vscode.commands.executeCommand('modbench.closeMedit');
   });
 
-  // AC1: rows gain chevrons as each plugin lands, not all at once at the end.
+  // Rows gain chevrons as each plugin lands, not all at once at the end.
   it('makes a plugin expandable as soon as it is indexed, while a later one is still a leaf', async () => {
     setIndexed(['TestMod.esp']);
     const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
@@ -1638,7 +1622,7 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     await launch;
   });
 
-  // AC3 + AC5: the view says, in as many words, that conflict information is not yet computed —
+  // The view says, in as many words, that conflict information is not yet computed —
   // and stops saying it the moment the sweep lands, with no user action. TreeView.message is the
   // native surface for exactly this (a view-scoped statement about the view's own contents), so
   // there is no banner row and no bespoke widget.
@@ -1665,7 +1649,7 @@ describe('Progressive load states its own incompleteness (#307)', () => {
       (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message === undefined ? true : undefined);
   });
 
-  // #364 inherits #307's own invariant: the Conflicts node is exactly as absent-until-computed as
+  // The Conflicts node is exactly as absent-until-computed as
   // the incompleteness message above — same conflictsComputed transition, a different surface.
   it('#364: the Conflicts node is absent from the root listing before conflictsComputed, prepended once it lands', async () => {
     setIndexed(['TestMod.esp']);
@@ -1701,7 +1685,7 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     );
   });
 
-  // AC6: a per-plugin failure surfaces when it occurs, not only at the end of the load.
+  // A per-plugin failure surfaces when it occurs, not only at the end of the load.
   it('decorates a plugin that failed to load the moment it is reported, not at the end', async () => {
     setIndexed(['TestMod.esp'], { failures: [{ name: 'Other.esp', reason: 'RACE parse' }] });
     const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
@@ -1718,7 +1702,7 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     await launch;
   });
 
-  // AC7: closing mEdit mid-load is a deliberate abandonment, not a failure. The polling
+  // Closing mEdit mid-load is a deliberate abandonment, not a failure. The polling
   // stops, the chevrons and the message go, and nothing is reported as broken — the user asked
   // for exactly this. (The "no error toast" half is asserted at the LoadOrderController seam, where
   // the reporter is injectable; here we assert the observable consequences in a live window.)
@@ -1752,9 +1736,9 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     );
   });
 
-  // AC7, the *earlier* window. A launch has two phases: bring the backend up and walk the mod
+  // The *earlier* window. A launch has two phases: bring the backend up and walk the mod
   // tree, then load. The test above closes during the second. This one closes during the first —
-  // before the load POST exists at all — because AC7 says "closing mEdit mid-load" with no
+  // before the load POST exists at all — because closing mEdit mid-load must be honoured with no
   // qualification by phase, and backend spawn plus a filesystem walk is a realistic window to
   // land in. Without the abort being armed before the first await, the stale launch runs on past
   // the close, finds the backend it just stopped, and reports "Backend failed to start" — an
@@ -1786,7 +1770,7 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     }
   });
 
-  // AC9: master issues are derived from the whole load order, so mid-load they would flag masters
+  // Master issues are derived from the whole load order, so mid-load they would flag masters
   // that simply have not been opened yet. The backend already suppresses them while loading
   // (RecordQueryService.GetPlugins gates Classify on LoadOrderState.Ready) and the frontend never
   // asks for them mid-load — this asserts the suppression is honoured end to end, and, just as
@@ -1816,11 +1800,11 @@ describe('Progressive load states its own incompleteness (#307)', () => {
     const immutable = await itemFor('Immutable.esm');
     assert.ok(typeof immutable.tooltip === 'string' && immutable.tooltip.includes('read-only'),
       `expected the read-only note once the load completed, got: ${String(immutable.tooltip)}`);
-    // #342: Immutable.esm never appeared in any progress tick's indexedPlugins — its chevron can
-    // only come from the completion hand-off's own `load order.files`. The tooltip check above proves
+    // Immutable.esm never appeared in any progress tick's indexedPlugins — its chevron can
+    // only come from the completion hand-off's own file set. The tooltip check above proves
     // the readOnly/masterIssues half of that payload landed; without this, a hand-off that applied
     // readOnly/masterIssues but silently dropped (or never reached) the chevron-bearing file set
-    // would pass this test while leaving the row exactly as #342 found it: no chevron, unexpandable.
+    // would pass this test while leaving the row with no chevron, unexpandable.
     assert.strictEqual(
       immutable.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed,
       'Immutable.esm was indexed but never named in a progress tick — its chevron must still come from the completion hand-off',
@@ -1828,18 +1812,18 @@ describe('Progressive load states its own incompleteness (#307)', () => {
   });
 });
 
-// #534: pickCopyDestination (behind both copy commands) opens with an unguarded
-// repository.getPlugins() — a rejection there escaped the command callback as VS Code's raw
+// pickCopyDestination (behind both copy commands) opens with an unguarded
+// repository.getPlugins() — a rejection there would escape the command callback as VS Code's raw
 // "fetch failed" toast rather than a Modbench-authored one. The real exposure window is the
 // backend dying *after* the copy surfaces (record row / record-header context menu) have
 // rendered — those are only reachable with a live load order, so the pre-launch repro this test
-// actually drives is not itself reachable through the UI (established by #530's triage). It
+// actually drives is not itself reachable through the UI. It
 // stands in for that real window on purpose: `resetMockBackend()` below leaves the mock
 // load order-less, so GET /plugins answers its existing 503 "No load order held" — a rejection out
 // of the exact same unguarded `pickCopyDestination` awaits a post-load backend death would
-// produce. The fix's catch is deliberately untargeted (any rejection out of the
+// produce. The catch is deliberately untargeted (any rejection out of the
 // destination-picking step, not just a transport failure), so this stand-in exercises the same
-// code path as the literal scenario without needing new mock machinery to simulate a while the backend runs
+// code path as the literal scenario without needing new mock machinery to simulate a mid-session
 // crash.
 describe('Copy destination picking degrades to a reported error, never an uncaught rejection (#534)', () => {
   // A record-editor column header's own data-vscode-context payload (ColumnHeaderContext) —

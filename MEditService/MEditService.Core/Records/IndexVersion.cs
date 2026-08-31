@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// What shape the rows in a persistent index file were written under (#585 / ADR-0001). Stored on
+/// What shape the rows in a persistent index file were written under (ADR-0001). Stored on
 /// every <c>mirror.files</c> row; a mismatch at open invalidates the <b>whole</b> file, which
 /// is then rebuilt from scratch, because a stale document shape must never be served and there is
 /// no partial answer to a schema change.

@@ -9,7 +9,7 @@ public interface ILoadOrder : IDisposable
 {
     string DataFolderPath { get; }
 
-    /// <summary>#592 / ADR-0001: the MO2 instance root this load order belongs to — the working
+    /// <summary>ADR-0001: the MO2 instance root this load order belongs to — the working
     /// directory holding <c>ModOrganizer.ini</c>, <c>mods/</c> and <c>profiles/</c>. It is what the
     /// index file is keyed on (<see cref="Records.IndexFile"/>), because <c>origin</c> is a mod
     /// folder name and so is only unique within one instance. Null for a load order with no instance
@@ -20,7 +20,7 @@ public interface ILoadOrder : IDisposable
     IReadOnlyList<PluginMetadata> Plugins { get; }
     IReadOnlyList<PluginLoadFailure> LoadFailures { get; }
     string? FilterSql { get; set; }
-    // #34 / ADR-0036: origin is required, not optional — the load order can hold two copies of one
-    // filename, so the filename alone no longer identifies which mod to return.
+    // ADR-0036: origin is required, not optional — the load order can hold two copies of one
+    // filename, so the filename alone does not identify which mod to return.
     IModGetter? GetMod(string pluginName, string origin);
 }

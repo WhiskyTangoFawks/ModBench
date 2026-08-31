@@ -53,7 +53,7 @@ const row = (extra: Partial<DownloadRow> = {}): DownloadRow => ({
   ...extra,
 });
 
-// ── DownloadNode field construction (slices 4-9) ────────────────────────────
+// ── DownloadNode field construction ─────────────────────────────────────────
 
 describe('DownloadNode', () => {
   it('label is the row displayName; id is pinned to the raw filename', () => {
@@ -155,7 +155,7 @@ describe('DownloadNode', () => {
   });
 });
 
-// ── DownloadsProvider.getChildren (slices 10-13) ────────────────────────────
+// ── DownloadsProvider.getChildren ───────────────────────────────────────────
 
 describe('DownloadsProvider', () => {
   let instanceRoots: string[] = [];
@@ -190,8 +190,8 @@ describe('DownloadsProvider', () => {
     expect(rowNames(children)).toEqual(['new.zip', 'old.zip']);
   });
 
-  // #247: Downloads narrows by name through the same widget as every other list view,
-  // replacing #233's native-tree-Find call — the filter is one UX or it is three.
+  // Downloads narrows by name through the same widget as every other list view —
+  // the filter is one UX or it is three.
   it('narrows to rows whose name contains the filter text, case-insensitively', async () => {
     const root = await makeInstanceRoot();
     await writeArchive(root, 'ArmorPack.zip');
@@ -215,7 +215,7 @@ describe('DownloadsProvider', () => {
     await provider.getChildren();
     // Deleted behind the provider's back: a filter keystroke narrows what is already
     // rendered and must never force a re-read, so the cached row survives (the
-    // render-vs-invalidate split PluginListProvider documents at #79).
+    // render-vs-invalidate split PluginListProvider documents).
     await rm(join(root, 'downloads', 'WeaponPack.zip'));
     provider.setFilter('');
 

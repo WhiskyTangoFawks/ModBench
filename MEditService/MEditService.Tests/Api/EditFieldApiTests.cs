@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #415 AC5: a script or agent editing through the HTTP API lands a working-tree change on the edit
+/// A script or agent editing through the HTTP API lands a working-tree change on the edit
 /// branch exactly as the UI does — same service, same single write path, no second door — and an
 /// edit against an untracked plugin gets a typed refusal mirroring the UI's.
 ///
@@ -135,9 +135,9 @@ public sealed class EditFieldApiTests(LoadedApiFixture<TestPluginFixture> loaded
         // a lock, a permissions change, a vanished mount — but this one needs no privileges and is
         // deterministic, so it is the one the suite can actually run.
         var records = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
-        // #451: routed through the production path helper (Spriggit-flat layout) rather than
+        // Routed through the production path helper (Spriggit-flat layout) rather than
         // hand-reconstructed — "ApiNpc" is BuildOneModOnePlugin's own literal EditorID above.
-        // #459: SourceUnitResolver rather than SourceRecordPath.For directly — For now needs an order
+        // SourceUnitResolver rather than SourceRecordPath.For directly — For needs an order
         // index this test has no reason to track.
         var sourcePath = SourceUnitResolver.FlatSourcePath(
             modFolder, Plugin, "npc_", formKey, "ApiNpc", GameRelease.Fallout4);

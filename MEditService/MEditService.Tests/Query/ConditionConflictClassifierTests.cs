@@ -17,8 +17,8 @@ public class ConditionConflictClassifierTests
     private static ConditionPluginInput InputWithOrigin(string plugin, string origin, int lo, params ParsedCondition[] conditions) =>
         new(plugin, lo, conditions.Length == 0 ? [] : [new ConditionOwner("Conditions", conditions)], origin);
 
-    // #272 / ADR-0036 (AC5): two columns sharing a filename, differing in origin — bare-plugin
-    // dictionary keys would collide here even though nothing loads such a pair yet (#34).
+    // ADR-0036: two columns sharing a filename, differing in origin — bare-plugin
+    // dictionary keys would collide here.
     [Fact]
     public void Classify_SameFilenameDifferentOrigin_DoesNotCollide()
     {
@@ -61,7 +61,7 @@ public class ConditionConflictClassifierTests
         Assert.Equal(ConflictAll.Override, result.ConflictContribution);
     }
 
-    // #267 / ADR-0035: a non-participating plugin's conditions are excluded before classification —
+    // ADR-0035: a non-participating plugin's conditions are excluded before classification —
     // a differing condition between an enabled master and a disabled override is not a conflict.
     [Fact]
     public void Classify_DisabledPluginDiffers_ExcludedFromClassification_ReturnsNoConflict()
@@ -130,7 +130,7 @@ public class ConditionConflictClassifierTests
         Assert.Equal("Override.esp", conditions[1].WinnerColumn);
     }
 
-    // ---- Nested-group ordering and alignment (#181) ----
+    // ---- Nested-group ordering and alignment ----
 
     // A nested group's field path composes the enclosing array's index into the string
     // ("Effects[2].Conditions") — plain lexicographic sort would put "Effects[10]..." before
@@ -155,7 +155,7 @@ public class ConditionConflictClassifierTests
     // array is longer than another's (e.g. an override adding a second magic effect). Confirms the
     // existing generic per-field-path grouping needs no special-casing for nesting: a plugin whose
     // Effects array is shorter simply has no owner at that composed path, so its per-plugin cell is
-    // null — "no cell for that group" per #181's AC.
+    // null — no cell for that group.
     [Fact]
     public void Classify_NestedGroup_ShorterEnclosingArrayHasNoCellForMissingIndex()
     {
@@ -177,7 +177,7 @@ public class ConditionConflictClassifierTests
         Assert.Equal("Override.esp", diff.WinnerColumn);
     }
 
-    // Confirmation, not a production change (#184): NaturalFieldPathComparer already splits the
+    // Confirmation, not a production change: NaturalFieldPathComparer already splits the
     // whole path into alternating digit/non-digit runs regardless of how many bracket pairs it
     // contains, so a two-level composed path ("Effects[2].Conditions[10].Conditions") should already
     // sort its second embedded index numerically against a single-digit one at the same position,
@@ -196,7 +196,7 @@ public class ConditionConflictClassifierTests
             result.Compare.Groups.Select(g => g.FieldPath).ToArray());
     }
 
-    // --- FieldResolutions (#166, ADR-0031's FormKeyResolution applied to condition FormKey slots) ---
+    // --- FieldResolutions (ADR-0031's FormKeyResolution applied to condition FormKey slots) ---
 
     [Fact]
     public void Classify_FormParameter_PopulatesFieldResolutionForParamKey()

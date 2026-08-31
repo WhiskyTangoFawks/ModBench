@@ -1,7 +1,7 @@
 namespace MEditService.Tests.Bridge;
 
 /// <summary>
-/// #417/B0: <c>MEditService.Bridge</c> exists so "knowing nothing of mirror or the DB" (ADR-0041)
+/// <c>MEditService.Bridge</c> exists so "knowing nothing of mirror or the DB" (ADR-0041)
 /// is a fact this test can catch, not a discipline a reviewer has to remember. Every mechanic the
 /// bridge needs (classification, plumbing commit, rebase, the deferral marker) lives in
 /// <c>MEditService.Core.Source</c> instead — already load order/DB-free by the same construction as

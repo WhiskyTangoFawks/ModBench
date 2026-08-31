@@ -2,18 +2,13 @@ import React from 'react';
 import { mono } from './gridStyles';
 
 // Shared modal chrome: a fixed dimmed overlay with a titled panel and a Cancel / confirm footer.
-// Extracted from VmadSection's add-property / add-script dialogs (issue #139) so the record
-// panel's revert-group confirmation could reuse the same chrome rather than duplicate it.
 //
-// Issue #212: the revert-group confirmation and the add-script dialog were both converted to
-// native VS Code prompts (a modal showWarningMessage and a showInputBox respectively — see
-// nativeBridge.ts's confirmRevertGroup/pickScriptName) and deleted from here. AddPropertyDialog
-// (VmadPropertyOps.tsx) is this shell's one remaining, deliberate user: it collects three fields
-// at once (name, type, value — the value control itself varying by type, including a FormKey
-// picker for Object-typed properties), and a multi-step QuickPick chain to gather them one at a
-// time would be worse UX than the single dialog it replaces, not better. Do not re-litigate this
-// by converting AddPropertyDialog too — if a future change wants that, it needs a fresh design
-// discussion, not a mechanical repeat of #212's pattern.
+// AddPropertyDialog (VmadPropertyOps.tsx) is this shell's one remaining, deliberate user — a
+// deliberate exception to the native-prompts-first rule: it collects three fields at once (name,
+// type, value — the value control itself varying by type, including a FormKey picker for
+// Object-typed properties), and a multi-step QuickPick chain to gather them one at a time would
+// be worse UX than the single dialog. Do not mechanically convert AddPropertyDialog to native
+// prompts — that needs a fresh design discussion.
 export function ModalShell({ title, confirmLabel = 'Add', confirmDisabled, onConfirm, onCancel, children }: Readonly<{
   title: string;
   confirmLabel?: string;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Issue #230: same "mock vscode, use real fs against a throwaway tmpdir" shape
+// Same "mock vscode, use real fs against a throwaway tmpdir" shape
 // DownloadsPanel.test.ts already established for a real-file-backed editor tab — more faithful
 // than mocking fs too (proves the actual chmod bits and content land on disk), and the tmpdir is
 // disposable so nothing leaks into the real OS temp dir beyond one test run.
@@ -83,7 +83,7 @@ describe('extendedEditorPath', () => {
     expect(a).toBe(b);
   });
 
-  // #304 / ADR-0036: origin folds into the path unconditionally (no "elide Data" branch) — the
+  // ADR-0036: origin folds into the path unconditionally (no "elide Data" branch) — the
   // directory is never what the user reads (the tab title is the filename alone, unchanged), so
   // there is nothing to keep quiet for the common single-origin case, and no collision-dependent
   // rule to get wrong.
@@ -92,7 +92,7 @@ describe('extendedEditorPath', () => {
     expect(path).toBe(join('/tmp/root', 'Deacon', 'ModA', 'Description [Shared.esp].txt'));
   });
 
-  // The regression this ticket exists to fix: two loaded columns sharing a filename (ADR-0036)
+  // Two loaded columns sharing a filename (ADR-0036)
   // must never resolve to the same temp file — origin is the only thing left that tells them
   // apart, since record+field+plugin+column are identical for both.
   it('two columns sharing a filename but differing in origin never collide', () => {
@@ -101,7 +101,7 @@ describe('extendedEditorPath', () => {
     expect(colA).not.toBe(colB);
   });
 
-  // #304 review: origin is a mod folder name, read off disk — an MO2 instance is user-controlled
+  // Origin is a mod folder name, read off disk — an MO2 instance is user-controlled
   // input, not a trusted literal, and this is the one component where getting sanitization wrong
   // writes outside tempRoot. sanitizeForPath's regex (`/[<>:"/\\|?*]/g`) already strips every path
   // separator, so `..` alone (no `/` or `\` around it) can never traverse — mirrors the coverage
@@ -154,7 +154,7 @@ describe('openExtendedFieldEditor', () => {
     expect(mode & 0o200).not.toBe(0); // owner-write bit set
   });
 
-  // AC5 / seam: immutable columns get a read-only tab, not an absent one — enforced by the OS
+  // Immutable columns get a read-only tab, not an absent one — enforced by the OS
   // permission bit, which is the same mechanism VS Code's own read-only file detection reads.
   it('marks an immutable (readOnly) temp file non-writable', async () => {
     const tempRoot = await makeTempRoot();
@@ -170,7 +170,7 @@ describe('openExtendedFieldEditor', () => {
     expect(mode & 0o200).toBe(0); // owner-write bit cleared
   });
 
-  // AC4: committing from it writes through the same path as any other edit — each save posts
+  // Committing from it writes through the same path as any other edit — each save posts
   // EXTENDED_EDITOR_COMMITTED with the saved content, correlated by requestId.
   it('replies with EXTENDED_EDITOR_COMMITTED carrying the saved content when the doc is saved', async () => {
     const tempRoot = await makeTempRoot();
@@ -208,7 +208,7 @@ describe('openExtendedFieldEditor', () => {
     expect(deps.reply).not.toHaveBeenCalled();
   });
 
-  // Seam addition (coordinator): closing must delete the temp file, dispose both listeners, and
+  // Closing must delete the temp file, dispose both listeners, and
   // notify the webview so nativeBridge can drop its own requestId -> onCommit bookkeeping —
   // a save-then-close-without-further-saves must not leak an entry per tab ever opened.
   it('on close: deletes the temp file, disposes both listeners, and replies EXTENDED_EDITOR_CLOSED', async () => {
@@ -236,7 +236,7 @@ describe('openExtendedFieldEditor', () => {
     await expect(stat(path)).rejects.toThrow();
   });
 
-  // Review fix (finding #2): the nativeBridge requestId -> onCommit map entry is registered
+  // The nativeBridge requestId -> onCommit map entry is registered
   // optimistically, before any reply exists — if the open itself fails, no tab (and so no
   // onDidCloseTextDocument) ever exists to send the cleanup signal the normal way. Without this,
   // that map entry would leak forever. Reusing EXTENDED_EDITOR_CLOSED (rather than a distinct
@@ -255,7 +255,7 @@ describe('openExtendedFieldEditor', () => {
     expect(deps.reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: 'r1' });
   });
 
-  // Review fix (finding #1): the path is deterministic, so double-clicking the same immutable
+  // The path is deterministic, so double-clicking the same immutable
   // cell twice (or re-double-clicking a cell whose tab is still open) reopens the *same* file —
   // one already chmod'ed 0o444 by the first open. Without forcing it writable before the second
   // open's own writeFile, that write throws EACCES, caught and swallowed into the generic error
@@ -279,11 +279,10 @@ describe('openExtendedFieldEditor', () => {
     expect(mode & 0o200).toBe(0); // still read-only after the second open
   });
 
-  // #304 / ADR-0036: the actual regression this ticket exists to fix, at the coordinator's own
-  // boundary — two loaded columns sharing a filename (ModA's Shared.esp and ModB's Shared.esp)
-  // used to resolve to one temp file, so the second open silently overwrote the first's content
+  // ADR-0036: two loaded columns sharing a filename (ModA's Shared.esp and ModB's Shared.esp)
+  // must not resolve to one temp file — a second open would silently overwrite the first's content
   // ("right target, wrong content" — the commit closure is still bound correctly per-column, only
-  // what the user *sees* while editing was wrong).
+  // what the user *sees* while editing would be wrong).
   it('two columns sharing a filename but differing in origin open independent temp files', async () => {
     const tempRoot = await makeTempRoot();
     const colAPath = extendedEditorPath(tempRoot, 'Deacon', 'Description', 'Shared.esp', 'ModA');
@@ -304,7 +303,7 @@ describe('openExtendedFieldEditor', () => {
     expect(await readFile(colBPath, 'utf8')).toBe('from ModB');
   });
 
-  // #304 review: origin is read off disk (a mod folder name), not a trusted literal — proves the
+  // Origin is read off disk (a mod folder name), not a trusted literal — proves the
   // real write, not just the computed string, stays under tempRoot for a hostile value.
   it('a hostile origin cannot make the write land outside tempRoot', async () => {
     const tempRoot = await makeTempRoot();
@@ -320,8 +319,8 @@ describe('openExtendedFieldEditor', () => {
     expect(await readFile(path, 'utf8')).toBe('x');
   });
 
-  // Review fix (finding #3): AC3's "multi-line string values can be read and edited in full"
-  // claim was untested — every other fixture in this suite is single-line. writeFile/getText are
+  // Multi-line string values must be readable and editable in full —
+  // every other fixture in this suite is single-line. writeFile/getText are
   // content-agnostic in principle, but VS Code's own EOL-normalization/insertFinalNewline on save
   // is exactly the kind of thing that could silently alter a value with embedded newlines, so
   // this exercises the full write -> save -> commit path with one and asserts the committed value

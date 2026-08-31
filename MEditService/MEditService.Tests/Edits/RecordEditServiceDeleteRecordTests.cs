@@ -8,10 +8,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #427: delete-record, the user-facing gesture over the null-Body mechanism #415 already landed and
+/// Delete-record, the user-facing gesture over the null-Body mechanism
 /// tested at the index layer (<c>WorkingTreeDeletionTests</c>). This suite is about the entry point's
 /// own contract — the source file, and the two refusals every gesture on this write path must
-/// inherit (#417's carried requirement) — not about winner/reference derivation, which is already
+/// inherit — not about winner/reference derivation, which is already
 /// covered where the mechanism itself lives.
 /// </summary>
 public sealed class RecordEditServiceDeleteRecordTests
@@ -33,12 +33,12 @@ public sealed class RecordEditServiceDeleteRecordTests
     }
 
     /// <summary>
-    /// #573: <see cref="RecordEditService.DeleteRecord"/> shares the exact
-    /// <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard renumber's stale-index bug lived in —
+    /// <see cref="RecordEditService.DeleteRecord"/> shares the
+    /// <c>DuckDbRecordIndex.ApplyOneWorkingTreeChange</c> guard —
     /// a record that never reached Head (still working-tree-only, straight off
-    /// <see cref="RecordEditService.CreateRecord"/>) was silently kept at Effective by a guard that
-    /// only ever checked Head for "does any ref know this record". The production fix (checking
-    /// Effective too) covers this sibling for free; this is the regression that would have caught it.
+    /// <see cref="RecordEditService.CreateRecord"/>) is silently kept at Effective by a guard that
+    /// only ever checks Head for "does any ref know this record"; the guard must check
+    /// Effective too. This is the regression test for that.
     /// </summary>
     [Fact]
     public void DeleteRecord_OnANeverCommittedRecord_ActuallyRemovesItFromTheIndex()

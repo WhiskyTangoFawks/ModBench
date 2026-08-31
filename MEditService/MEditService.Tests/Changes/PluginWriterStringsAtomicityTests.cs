@@ -8,11 +8,10 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Tests.Changes;
 
 /// <summary>
-/// #537: a Localized plugin's own <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c> files get the
+/// A Localized plugin's own <c>.STRINGS</c>/<c>.DLSTRINGS</c>/<c>.ILSTRINGS</c> files get the
 /// same temp-write-then-rename discipline <see cref="PreparedPluginSave"/> already gives the
-/// <c>.esp</c>/<c>.esm</c> itself (a gap #515 left open — see that ticket's own
-/// <c>PluginCompileServiceLocalizedTests</c>, which pins that <c>Commit()</c> lands the strings at
-/// all, not that it does so atomically). The fixture only registers content on two sources
+/// <c>.esp</c>/<c>.esm</c> itself (<c>PluginCompileServiceLocalizedTests</c> pins that
+/// <c>Commit()</c> lands the strings at all, not that it does so atomically). The fixture only registers content on two sources
 /// (<c>Book.Name</c> → Normal/.STRINGS, <c>Book.Description</c> → DL/.DLSTRINGS — FO4's only
 /// IL-sourced field, <c>DialogResponse.Text</c>, lives on a nested DialogTopic/DialogResponses group
 /// not worth building here), but Mutagen's own <c>StringsWriter.Dispose</c> writes a zero-entry

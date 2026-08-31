@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #427 mechanism slice: <see cref="IRecordIndex.CreateWorkingTreeRecord"/> materializes a record
+/// <see cref="IRecordIndex.CreateWorkingTreeRecord"/> materializes a record
 /// <see cref="IRecordIndex.ApplyWorkingTreeChanges"/> deliberately refuses to — one that exists at
 /// neither ref yet. The sharp questions mirror <see cref="WorkingTreeDeletionTests"/>'s own: does the
 /// new row answer everywhere a record is supposed to (Effective, winner, lookup, references) while
@@ -91,10 +91,9 @@ public sealed class WorkingTreeCreationTests : IDisposable
 
         index.CreateWorkingTreeRecord(BaseKey, formKey, "npc_", NewNpcBody(formKey, "NewNpc"));
 
-        // The rival: an implementation that inserts the row but skips (or forgets) the structural
+        // An implementation that inserts the row but skips the structural
         // UpdateWinners() resweep never gives the new FormKey a winners row at all, so it reads as
-        // losing forever — this is the test that catches it, watched failing against exactly that
-        // omission before being restored.
+        // losing forever — this is the test that catches that omission.
         Assert.True(index.GetDocument(formKey)!.IsWinner);
     }
 

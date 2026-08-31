@@ -9,7 +9,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
     private readonly HttpClient _client = loaded.Client;
     private readonly ImmutablePluginFixture _fixture = loaded.Plugin;
 
-    // #288: every test gets its own destination folder — the fixture (and its DB/load order) is
+    // Every test gets its own destination folder — the fixture (and its DB/load order) is
     // reused across the whole class (IClassFixture), so two tests sharing one destination would
     // make the second observe the first's Track side effect.
     private string ModFolder(string name) => Path.Combine(_fixture.DataFolder, name);
@@ -75,7 +75,7 @@ public sealed class ImmutablePluginApiTests(LoadedApiFixture<ImmutablePluginFixt
         Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
     }
 
-    // #288: creating into an untracked destination Tracks it as part of the same gesture — a
+    // Creating into an untracked destination Tracks it as part of the same gesture — a
     // created plugin must be editable immediately, and editing requires tracking (ADR-0041).
     [Fact]
     public async Task CreatePlugin_UntrackedDestination_TracksIt()

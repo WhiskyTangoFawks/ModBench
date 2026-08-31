@@ -5,7 +5,7 @@ describe('nexusSlugForGame', () => {
   it('maps a known MO2 game name to its Nexus slug', () => {
     expect(nexusSlugForGame('Fallout 4')).toBe('fallout4');
     expect(nexusSlugForGame('Skyrim Special Edition')).toBe('skyrimspecialedition');
-    // #317: every static mapping is independent real data — a wrong/blank slug
+    // Every static mapping is independent real data — a wrong/blank slug
     // breaks that game's "View on Nexus" link — so each earns its own assertion.
     expect(nexusSlugForGame('Fallout 3')).toBe('fallout3');
     expect(nexusSlugForGame('Fallout New Vegas')).toBe('newvegas');

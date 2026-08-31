@@ -20,8 +20,8 @@ function baseProps() {
     override: override(),
     isImmutable: false,
     inLoadOrder: true,
-    // #415: tracked by default, so every pre-existing case here keeps describing an editable
-    // column exactly as it did — the untracked cases opt in explicitly below.
+    // Tracked by default, so the base cases describe an editable
+    // column — the untracked cases opt in explicitly below.
     isTracked: true,
     showOriginInline: false,
     collapsed: false,
@@ -49,7 +49,7 @@ describe('PluginHeader', () => {
     expect(screen.queryByText('[1] ✓ winner')).not.toBeInTheDocument();
   });
 
-  // #304: a vanilla/DLC/CC master — immutable, still named by the load order — keeps the plain,
+  // A vanilla/DLC/CC master — immutable, still named by the load order — keeps the plain,
   // familiar "(read-only)" label; its tooltip names the reason, distinct from a shadowed copy's.
   it('shows "(read-only)" for an immutable, in-load-order column (a vanilla master)', () => {
     render(<PluginHeader {...baseProps()} isImmutable={true} inLoadOrder={true} />);
@@ -59,9 +59,9 @@ describe('PluginHeader', () => {
     );
   });
 
-  // #304 / ADR-0036: a copy the load order does not name reads differently on screen (not just
-  // in the tooltip) — same underlying fact (immutable) but a distinct cause, and AC2 asks for the
-  // distinction to be visible, not only discoverable on hover. "(not loaded)", not "(not in load
+  // ADR-0036: a copy the load order does not name reads differently on screen (not just
+  // in the tooltip) — same underlying fact (immutable) but a distinct cause, and the
+  // distinction must be visible, not only discoverable on hover. "(not loaded)", not "(not in load
   // order)" — a shadowed copy is a file conflict, decided by the Mod override order, not the
   // Plugin load order this label would otherwise (wrongly) imply (CONTEXT-MAP.md).
   it('shows a distinct label for an immutable column the load order does not name', () => {
@@ -70,7 +70,7 @@ describe('PluginHeader', () => {
     expect(screen.getByText('(not loaded)')).toBeInTheDocument();
   });
 
-  // #304 review: pins the *meaning*, not just the vocabulary — a prior draft avoided "mod" and
+  // Pins the *meaning*, not just the vocabulary — a wording can avoid "mod" and
   // "priority" while still asserting the wrong mechanism ("move it earlier in the load order",
   // which only ever fixes a Plugin-load-order-absent case, never a shadowed-file conflict, which
   // is decided by the Mod override order instead — CONTEXT-MAP.md, CONTEXT.md:37-49). An exact
@@ -97,7 +97,7 @@ describe('PluginHeader', () => {
     expect(title).not.toMatch(/priority/i);
   });
 
-  // #304 review: dimming is applied exactly once, by RecordPanel's own <th> — PluginHeader must
+  // Dimming is applied exactly once, by RecordPanel's own <th> — PluginHeader must
   // not also dim its own root, or the two compound (CSS opacity multiplies on nesting: 0.55 twice
   // renders at ~0.30). Renders the actual nesting (a <th> wrapping <PluginHeader>, mirroring
   // RecordPanel's real markup) so this can't silently return.
@@ -133,8 +133,8 @@ describe('PluginHeader', () => {
     expect(screen.getByText('MyMod.esp')).toHaveAttribute('title', expect.stringContaining('ModA'));
   });
 
-  // Issue #176/#494: the standalone button is retired in favor of "Copy as Override Into…"/"Copy
-  // as New Record Into…" on the header's own native right-click menu — there is no rendered
+  // "Copy as Override Into…"/"Copy
+  // as New Record Into…" live on the header's own native right-click menu — there is no rendered
   // button to assert on (ADR-0027/0033), so this pins the `data-vscode-context` payload
   // `contributes.menus["webview/context"]` gates those commands on instead.
   it('carries the header cell\'s data-vscode-context, naming the column\'s record identity for the native Copy menu', () => {
@@ -151,16 +151,15 @@ describe('PluginHeader', () => {
     expect(container.firstElementChild).not.toHaveAttribute('data-vscode-context');
   });
 
-  // Issue #209: Add Master… moved into the column header's native right-click menu (ADR-0034:
-  // no standalone control once an action is right-click-reachable) — PluginHeader no longer
-  // renders a button or its own candidate dropdown for it.
+  // ADR-0034: no standalone control once an action is right-click-reachable — PluginHeader
+  // renders no Add Master… button or candidate dropdown.
   it('does not render an Add Master… button', () => {
     render(<PluginHeader {...baseProps()} />);
     expect(screen.queryByText('Add Master…')).not.toBeInTheDocument();
   });
 });
 
-// #415 AC4 / ADR-0041 (User Story 2): "an untracked plugin is visibly read-only with the way out
+// ADR-0041: "an untracked plugin is visibly read-only with the way out
 // named". Visibly, i.e. before the user attempts an edit and is refused — which is why this lives
 // on the column header rather than only in the refusal the backend returns.
 describe('PluginHeader — untracked signposting (#415)', () => {
@@ -172,7 +171,7 @@ describe('PluginHeader — untracked signposting (#415)', () => {
 
   // Asserted as the exact palette entry, not as "contains Track": package.json contributes the
   // title "Track\u2026" under category "Modbench", and a signpost naming a command that does not
-  // exist verbatim is the dead end AC4 exists to prevent. A rename now breaks this test instead of
+  // exist verbatim is a dead end. A rename breaks this test instead of
   // the signpost.
   it('names the Track command exactly as the palette shows it', () => {
     render(<PluginHeader {...baseProps()} isTracked={false} />);
@@ -181,8 +180,8 @@ describe('PluginHeader — untracked signposting (#415)', () => {
   });
 
   it('signposts the patch-plugin path instead for a master that cannot be tracked at all', () => {
-    // The other half of AC4: Track does not apply to a vanilla or DLC master, so its signposting
-    // must not name it. Offering a command that cannot work here is the dead end the AC forbids.
+    // Track does not apply to a vanilla or DLC master, so its signposting
+    // must not name it. Offering a command that cannot work here is a dead end.
     render(<PluginHeader {...baseProps()} isImmutable isTracked={false} />);
 
     const title = screen.getByTitle(/patch/i);
@@ -199,7 +198,7 @@ describe('PluginHeader — untracked signposting (#415)', () => {
   });
 });
 
-// #539: the header-write half of #491's Partial Form work — a checkbox on a partial-formable
+// The Partial Form header write — a checkbox on a partial-formable
 // column's own header, reflecting isPartialForm and dispatching the sanctioned is_partial_form
 // write on toggle.
 describe('PluginHeader — Partial Form toggle (#539)', () => {

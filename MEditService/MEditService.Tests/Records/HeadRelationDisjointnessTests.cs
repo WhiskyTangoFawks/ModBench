@@ -18,7 +18,7 @@ namespace MEditService.Tests.Records;
 /// then answer for one <c>(form_key, plugin, origin)</c>, and the read either throws or silently serves
 /// one of two divergent bodies. <see cref="IRecordIndex.Index"/> clearing the snapshot table for the key
 /// is what prevents it, which is part of that method's own stated contract ("replacing whatever
-/// <c>key</c> previously held") rather than a new rule — it was simply unreachable until #452 gave
+/// <c>key</c> previously held") rather than a new rule — it only bites for
 /// <c>Index()</c> callers that also write <c>records_committed</c>.</para>
 /// </summary>
 public sealed class HeadRelationDisjointnessTests
@@ -54,7 +54,7 @@ public sealed class HeadRelationDisjointnessTests
 
     /// <summary>The same invariant for the inverse verb: <see cref="IRecordIndex.Unindex"/> promises to
     /// remove every trace of a key, and a surviving snapshot would keep answering at Head for a plugin
-    /// the load order no longer holds — the opposite of #34/ADR-0035's "hidden means absent".</summary>
+    /// the load order no longer holds — the opposite of ADR-0035's "hidden means absent".</summary>
     [Fact]
     public void UnindexingAPluginWithADirtyRecord_LeavesNothingAtHead()
     {

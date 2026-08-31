@@ -4,7 +4,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Schema;
 
 /// <summary>
-/// Record-header flag bit 14 (<c>0x4000</c>) — "Partial Form" (#491, CONTEXT.md's own glossary
+/// Record-header flag bit 14 (<c>0x4000</c>) — "Partial Form" (CONTEXT.md's own glossary
 /// entry). An override carrying this flag exists only to carry children; its own fields are ignored
 /// for conflict resolution (<see cref="MEditService.Core.Queries.ConflictClassifier"/>) and it is
 /// read-only except its header.
@@ -19,8 +19,8 @@ namespace MEditService.Core.Schema;
 /// the record type's own <c>StaticRegistration</c> property — and, checked against the pinned
 /// Mutagen build, is only wired up for FO4's <c>Quest</c>/<c>Location</c> and Starfield's
 /// <c>Cell</c>/<c>Quest</c>/<c>DialogTopic</c>. FO4's own <c>Cell</c> does not carry it — which would
-/// silently mask exactly the record type CONTEXT.md's glossary names and the real-world case the
-/// ticket cites (Sim Settlements 2's Partial Form Cell overrides), an upstream Mutagen gap rather
+/// silently mask exactly the record type CONTEXT.md's glossary names and the motivating real-world
+/// case (Sim Settlements 2's Partial Form Cell overrides), an upstream Mutagen gap rather
 /// than a fact about the format.</para>
 ///
 /// <para><b>So this gates on being a container record instead</b> —
@@ -34,17 +34,17 @@ namespace MEditService.Core.Schema;
 /// </summary>
 public static class PartialFormFlag
 {
-    /// <summary>Internal rather than private (#539): <see cref="MEditService.Core.Edits.RecordEditService"/>'s
+    /// <summary>Internal rather than private: <see cref="MEditService.Core.Edits.RecordEditService"/>'s
     /// own bit-14 write-surface guard needs the literal bit value to compare a field write's
     /// before/after <c>MajorRecordFlagsRaw</c> — reading it off here rather than re-declaring
     /// <c>0x4000</c> a second time keeps the one fact in the one place that already owns it.</summary>
     internal const int Bit = 0x0000_4000;
 
     /// <summary>Whether <paramref name="recordType"/> is a container record — the only kind that can
-    /// carry a Partial Form override at all (#539: split out of <see cref="IsSet"/> so the write path
+    /// carry a Partial Form override at all. Split out of <see cref="IsSet"/> so the write path
     /// can ask "is this type eligible" on its own, independent of whether the bit happens to be set
-    /// right now — setting the flag needs the same gate <see cref="IsSet"/> uses for reading it, per
-    /// #539's own correction: this is the one gate, not a second reflection-based one).</summary>
+    /// right now — setting the flag needs the same gate <see cref="IsSet"/> uses for reading it:
+    /// this is the one gate, not a second reflection-based one.</summary>
     internal static bool IsPartialFormable(Type recordType) =>
         ContainerChildFields.EnumerateChildFieldsFor(recordType) != null;
 
@@ -55,11 +55,10 @@ public static class PartialFormFlag
         IsPartialFormable(record.GetType()) && (record.MajorRecordFlagsRaw & Bit) != 0;
 
     /// <summary>
-    /// #539: the one sanctioned bit-14 write — sets or clears exactly this bit against
+    /// The one sanctioned bit-14 write — sets or clears exactly this bit against
     /// <paramref name="record"/>'s <em>current</em> <c>MajorRecordFlagsRaw</c>, never a full
     /// overwrite. A full overwrite (<c>MajorRecordFlagsRaw = value ? Bit : 0</c>) would silently drop
-    /// every other flag bit already set on the record (ESM, Deleted, …) — AC2's byte-diff assertion
-    /// is what catches that rival, but the contract is stated here too: only bit 14 may move.
+    /// every other flag bit already set on the record (ESM, Deleted, …) — only bit 14 may move.
     /// Callers (<see cref="MEditService.Core.Edits.RecordFieldWriter"/>) are expected to have already
     /// checked <see cref="IsPartialFormable"/> — this does not re-check it, since a caller reaching
     /// here has already decided the record type is eligible.

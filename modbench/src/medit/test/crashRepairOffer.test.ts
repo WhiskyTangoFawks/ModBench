@@ -15,7 +15,7 @@ describe('crashRepairOffer.messageFor', () => {
     expect(messageFor(offer()).message).toContain('A');
   });
 
-  // #381: the evidence shown, not hidden — same posture #417's own dialog took.
+  // The evidence shown, not hidden — same posture the external-change dialog took.
   it('states an interrupted compile distinctly from a missing/unreadable binary', () => {
     const interrupted = messageFor(offer({ reason: 'InterruptedCompile' })).detail;
     const missing = messageFor(offer({ reason: 'MissingOrUnreadableBinary' })).detail;

@@ -21,12 +21,11 @@ namespace MEditService.Core.Serialization;
 /// why the generator can produce those methods at all without this class ever touching a whole-mod
 /// API itself.
 ///
-/// #370: generalized from #367's Weapon-only proof of mechanism to any of the ~586 record types the
-/// generator seeded (<see cref="RecordTextCodecGeneratorSeed"/>'s doc comment called this out as its
-/// own follow-up design problem). Dispatch is by <b>reflection over the generated class name</b>,
+/// Handles any of the ~586 record types the
+/// generator seeded (<see cref="RecordTextCodecGeneratorSeed"/>). Dispatch is by <b>reflection over the generated class name</b>,
 /// not a hand-maintained switch: the generated <c>&lt;ConcreteTypeName&gt;_Serialization</c> class
 /// lives in this assembly (Mutagen.Bethesda.Fallout4 namespace, <c>internal</c> — reachable via
-/// reflection from inside this assembly, same as the direct call #367 used to make) for every
+/// reflection from inside this assembly) for every
 /// generated type, keyed purely by <c>record.GetType().Name</c>. A type with no such class throws
 /// <see cref="RecordTypeSerializationUnsupportedException"/> — named and actionable, never a bare
 /// <see cref="NullReferenceException"/> — rather than failing silently.
@@ -72,15 +71,15 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     public async Task SerializeAsync(IMajorRecordGetter record, string filePath, GameRelease gameRelease, CancellationToken cancel = default)
     {
         // No Directory.CreateDirectory here, deliberately: this codec's file-writing caller decides
-        // directory-creation policy with its own test (#370's original note; still true).
+        // directory-creation policy with its own test.
         var directory = Path.GetDirectoryName(filePath);
         var bytes = await SerializeCoreAsync(record, gameRelease, directory ?? string.Empty, cancel).ConfigureAwait(false);
 
         // Write-then-rename, not a direct write to filePath: File.Create truncates its target
         // immediately, before any new byte lands, so a direct write leaves a previously-valid
         // source record 0-byte or partial if cancellation or an IO failure lands in the window
-        // between that truncation and the write completing — exactly the state #413's byte-compare
-        // dirty/ITM detection, #414's commits, and #417's rebases would then all read as a
+        // between that truncation and the write completing — exactly the state byte-compare
+        // dirty/ITM detection, commits, and rebases would then all read as a
         // legitimate content change rather than damage (CLAUDE.md's never-assume-exclusive-
         // ownership rule, with Modbench itself as the corrupting writer here). tempPath sits beside
         // filePath (same volume), so File.Move is an atomic rename, not a copy — the destination
@@ -109,8 +108,8 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <summary>
     /// The one serialization path — both public entry points are this method plus a destination.
     ///
-    /// Buffered in memory rather than streamed, deliberately: AC4's identical-state-identical-bytes
-    /// promise is cross-platform (#414 pins the other half of this same invariant,
+    /// Buffered in memory rather than streamed, deliberately: the identical-state-identical-bytes
+    /// promise is cross-platform (the other half of this same invariant is
     /// core.autocrlf=false at repo init), but Newtonsoft's JsonTextWriter has no public NewLine of
     /// its own to pin — confirmed by reflection (JsonTextWriter declares no NewLine property at
     /// all) and by decompiling WriteIndent(), which reads `_writer.NewLine` off its own *private*,
@@ -129,7 +128,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         var metaData = new SerializationMetaData(
             gameRelease, null, NoRecordFolders.Instance, DiscardChildRecordStreams.Instance, cancel);
 
-        // The whole-mod door's own discriminator policy (#450 / ADR-0041's #444 amendment): a
+        // The whole-mod door's own discriminator policy (ADR-0041): a
         // path-ambiguous record dispatches through the game's *abstract* major-record serializer,
         // whose SerializeWithCheck writes the MutagenObjectType discriminator ahead of the fields.
         // Every other record dispatches its own concrete <Type>_Serialization.Serialize and carries
@@ -149,11 +148,11 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
         // normalizing whatever the platform's Environment.NewLine produced for the kernel's own
         // indentation down to bare \n (see the buffering note above).
         //
-        // Deliberately *no* trailing newline (#450, reversing #367's own addition): the kernel's
+        // Deliberately *no* trailing newline: the kernel's
         // Finalize writes the closing brace and nothing after it, and so does the source tree, so a
-        // trailing \n here was this codec's own divergence from the document shape it is supposed to
-        // share with the whole-mod door — one of exactly two the #444 spike found. Canonical form is
-        // now bare \n newlines with nothing after the closing brace, on every platform, and
+        // trailing \n here would be this codec's own divergence from the document shape it is
+        // supposed to share with the whole-mod door. Canonical form is
+        // bare \n newlines with nothing after the closing brace, on every platform, and
         // DocumentShapeParityTests holds both doors to it byte for byte.
         return [.. buffer.ToArray().Where(b => b != (byte)'\r')];
     }
@@ -187,7 +186,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// value is produced by exactly the same delegate whether it came from a plugin binary or from
     /// its own source text.
     ///
-    /// <para>Since #450 a document only names its own type when its <i>path</i> could not — so the
+    /// <para>A document only names its own type when its <i>path</i> could not — so the
     /// caller states the type it already knows, which at every call site is the index's
     /// <c>record_type</c> column (or, for compile, the record-type segment of the source path, which
     /// is the same string). Two spellings ride on that column and both are accepted:
@@ -277,16 +276,16 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <para>Without it those types could not be read back at all: the text alone cannot say whether
     /// a GLOB is a GlobalFloat or a GlobalBool, and guessing wrong throws (measured: deserializing a
     /// real GlobalFloat's document as the schema's discovery-winner GlobalBool fails with "Unable to
-    /// cast object of type 'System.Double' to type 'System.Boolean'"). #450 narrowed it from every
-    /// document to exactly those, which is what the whole-mod door does — a Weapon's file there has
-    /// no discriminator, and now neither does this codec's — but the guarantee for GLOB is untouched,
+    /// cast object of type 'System.Double' to type 'System.Boolean'"). The discriminator is written
+    /// for exactly those types and no others, matching the whole-mod door — a Weapon's file there has
+    /// no discriminator, and neither does this codec's — and the guarantee for GLOB is untouched,
     /// because the ambiguous types are precisely the ones that keep it.</para>
     ///
     /// <para>The kernel normalizes the runtime type for us: a <c>NpcBinaryOverlay</c> is written as
     /// <c>"Npc"</c>, so an overlay-read record and a deep-parsed one produce identical text.</para>
     ///
     /// <para>Keyed by game, and resolved from the game's own namespace rather than a named one, for
-    /// the same reason the concrete lookup is (#413 D5).</para>
+    /// the same reason the concrete lookup is.</para>
     /// </summary>
     private static MethodInfo ResolveCheckedSerializeMethod(GameRelease gameRelease) =>
         SerializeMethods.GetOrAdd(GameMajorRecordSerializationType(gameRelease), static t =>
@@ -341,11 +340,9 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // record types themselves come from — so the lookup is against typeof(RecordTextCodec).Assembly,
     // deliberately not recordType.Assembly.
     //
-    // Reader-agnostic by construction, not just by signature (#367 condition 2, re-broken and
-    // re-fixed during #370's generalization): the generator names its class after the concrete
-    // *setter* type only (e.g. "Weapon"), never a lazy overlay reader's own runtime type
-    // ("WeaponBinaryOverlay") — confirmed by RecordTextCodecRealDataTests going red the moment
-    // dispatch became type-name-only.
+    // Reader-agnostic by construction, not just by signature: the generator names its class after
+    // the concrete *setter* type only (e.g. "Weapon"), never a lazy overlay reader's own runtime
+    // type ("WeaponBinaryOverlay") — pinned by RecordTextCodecRealDataTests.
     //
     // A first attempt walked recordType's own implemented major-record getter interfaces
     // (I&lt;Type&gt;Getter) instead, on the theory that every reader shape for one record kind
@@ -385,7 +382,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// directories — and this codec's callers hand it no directory to spill into (ingest passes none
     /// at all, so the destination is the process's working directory).
     ///
-    /// <para><b>Which children this still applies to, since #450.</b> Spriggit embeds
+    /// <para><b>Which children this applies to.</b> Spriggit embeds
     /// <c>Cell.{Persistent,Temporary,Landscape,NavigationMeshes}</c> and <c>Worldspace.TopCell</c>
     /// (<see cref="CellEmbedCustomization"/>), and an embedded child is written inline into
     /// the parent's own stream — it never reaches a stream creator, so this class never sees it.
@@ -393,21 +390,14 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// <c>Quest.{DialogBranches,DialogTopics,Scenes}</c> and <c>DialogTopic.Responses</c>, which stay
     /// folder-split on both doors. Measured before this existed: one real Quest created 1,057
     /// directories, one per dialogue topic, and a load-order-wide index would do that for every
-    /// container it read. So this is <b>not</b> shallow-strip machinery and did not retire with it —
-    /// the issue's own scope note ("containers now serialize embedded, which is the point") holds
-    /// only for the five slots above.</para>
+    /// container it read. So this is <b>not</b> shallow-strip machinery — "containers serialize
+    /// embedded" holds only for the five slots above.</para>
     ///
     /// <para>Discarding is the correct outcome, not a workaround: a folder-split child is its own
     /// source unit and its own indexed row, so anything written here would duplicate a record handled
     /// in its own right — and it costs nothing at the byte level, because the parent's own stream is
     /// unaffected either way. <c>DocumentShapeParityTests</c> pins that directly, on a populated
     /// Quest: same bytes as the whole-mod door's file for it, with these suppressions active.</para>
-    ///
-    /// <para>Note the historical claim this comment used to carry — that suppressing child streams
-    /// does not stop the parent's own stream from inlining children, measured on three exterior Cells
-    /// at 58,419 / 59,070 / 63,281 B against 12,959 / 16,912 / 15,889 stripped. That was true and is
-    /// now beside the point: for a Cell, inlining the children is the intended output, and the strip
-    /// those numbers justified (#413 D8) is gone.</para>
     /// </summary>
     private sealed class DiscardChildRecordStreams : ICreateStream
     {
@@ -421,7 +411,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     /// through <c>SerializationMetaData.FileSystem.Directory.CreateDirectory</c> (see Mutagen
     /// Serialization's MajorRecordListParallelHelper / BlockParallelHelper / XYBlockParallelHelper),
     /// not through the stream creator above, so redirecting streams alone does not stop them. Same
-    /// scope as <see cref="DiscardChildRecordStreams"/> since #450 — the embedded slots never reach
+    /// scope as <see cref="DiscardChildRecordStreams"/> — the embedded slots never reach
     /// either of these, so what both are guarding is Quest/DialogTopic, which is exactly the Quest
     /// measurement that motivated this one.
     ///
@@ -470,7 +460,7 @@ public sealed class RecordTextCodec(ILogger<RecordTextCodec> logger)
     // The generated class shares the record type's own namespace (Mutagen.Bethesda.<Game>), and
     // lives in *this* assembly rather than the game assembly (see FindGeneratedSerializationType).
     // Taking the namespace from the record rather than naming a game is what keeps this mechanism
-    // game-generic (root CLAUDE.md): #413 makes this codec the ingest path for every record, so a
+    // game-generic (root CLAUDE.md): this codec is the ingest path for every record, so a
     // hardcoded game here would mean a Skyrim or Starfield load order indexing nothing at all. What
     // stays per-game is only which types the generator was seeded for — see
     // RecordTextCodecGeneratorSeed, which is one file and deliberately concrete.
@@ -507,7 +497,7 @@ public sealed class RecordTypeSerializationUnsupportedException : Exception
     }
 
     // The expected name is derived from the record type's own namespace, not a named game — the
-    // same derivation RecordTextCodec.LookupGeneratedType makes (#413 D5). Hardcoding "Fallout4"
+    // same derivation RecordTextCodec.LookupGeneratedType makes. Hardcoding "Fallout4"
     // here would have a Skyrim or Starfield record report a path the lookup never tried, which is
     // worse than no message at all: the reader would go looking for the wrong missing type.
     private static string BuildMessage(Type recordType, Type? generatedType, string? missingMethodName) =>

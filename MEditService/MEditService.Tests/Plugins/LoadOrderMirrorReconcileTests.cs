@@ -8,7 +8,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// ADR-0044 / #594: PUT /load-order's one verb, at the mirror seam. Every loadout gesture — reorder,
+// ADR-0044: PUT /load-order's one verb, at the mirror seam. Every loadout gesture — reorder,
 // enable, disable, reprioritise, uninstall, profile switch — is the same reconcile, and the index
 // tells the difference between a cheap one (SQL-only) and a cold one (an index) through the
 // counting factory below.
@@ -70,7 +70,6 @@ public sealed class LoadOrderMirrorReconcileTests
     private static IReadOnlyList<LoadOrderEntry> With(IReadOnlyList<LoadOrderEntry> plugins, string name, Func<LoadOrderEntry, LoadOrderEntry> change) =>
         plugins.Select(p => p.Name == name ? change(p) : p).ToList();
 
-    // AC4
     [Fact]
     public void IdenticalSnapshotTwice_SecondIsANoOp_NoSweepNoProgress()
     {
@@ -92,7 +91,6 @@ public sealed class LoadOrderMirrorReconcileTests
         Assert.True(mirror.Status.ConflictsComputed);
     }
 
-    // AC2: reorder = one SQL-only reconcile, and #97's live reorder — winners follow.
     [Fact]
     public void Reorder_IsSqlOnly_AndWinnersFollowTheNewOrder()
     {
@@ -113,7 +111,6 @@ public sealed class LoadOrderMirrorReconcileTests
         Assert.Equal(2, counts.Sweeps);
     }
 
-    // AC2: disable/enable = one SQL-only reconcile; the other provider becomes the sole winner.
     [Fact]
     public void Disable_IsSqlOnly_AndTheOtherProviderWins()
     {
@@ -138,8 +135,8 @@ public sealed class LoadOrderMirrorReconcileTests
         Assert.Equal("B.esp", WinnerOf(mirror, npc));
     }
 
-    // AC3, at the sweep: a losing copy and the winning copy of one filename are both held and both
-    // registered; only the winning one can win.
+    // A losing copy and the winning copy of one filename are both held and both registered
+    // (ADR-0044: the snapshot is every physical copy); only the winning one can win.
     [Fact]
     public void LosingCopy_IsRegisteredBesideTheWinner_AndNeverWins()
     {
@@ -205,8 +202,8 @@ public sealed class LoadOrderMirrorReconcileTests
         Assert.Equal("B.esp", WinnerOf(mirror, npc));
     }
 
-    // AC5: a restart followed by an identical snapshot indexes nothing; a restart followed by a
-    // different one corrects the registrations the file still carries, with no clear-on-open.
+    // No clear-on-open: after a restart the file still carries its registrations, and the next
+    // snapshot corrects them rather than re-indexing.
     [Fact]
     public void AfterRestart_IdenticalSnapshot_ReindexesNothing_AndADifferentOne_CorrectsTheRegistrations()
     {

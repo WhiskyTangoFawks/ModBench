@@ -31,9 +31,9 @@ public sealed record ResolvedPlugin(string Name, string Path, string Origin, boo
 /// </summary>
 public sealed class LoadOrder : ILoadOrder
 {
-    // #34 / ADR-0036: keyed by the compound (origin, filename) identity, not the filename alone —
+    // ADR-0036: keyed by the compound (origin, filename) identity, not the filename alone —
     // two physical copies of one filename are ordinarily held at once (ADR-0044), and a
-    // filename-keyed dictionary silently dropped the first. The key is a joined string rather than
+    // filename-keyed dictionary would silently drop one. The key is a joined string rather than
     // a tuple purely so one OrdinalIgnoreCase comparer covers both halves; NUL can't occur in
     // either, so the join is unambiguous.
     private readonly Dictionary<string, IModDisposeGetter> _modsByKey = new(StringComparer.OrdinalIgnoreCase);
@@ -44,7 +44,7 @@ public sealed class LoadOrder : ILoadOrder
     private static string KeyOf(string origin, string name) => $"{origin}\0{name}";
     private static string KeyOf(PluginKey key) => KeyOf(key.Origin!, key.Name);
 
-    // #274: the load order is read while it is being reconciled, so everything a reader touches is
+    // The load order is read while it is being reconciled, so everything a reader touches is
     // published as an immutable snapshot rather than as the live collection. Copy-on-write, not
     // copy-on-read: opening a plugin happens a few hundred times per cold reconcile, while
     // GetPlugins, PluginOriginResolver and BuildTypedLinkCache walk these lists on
@@ -75,7 +75,7 @@ public sealed class LoadOrder : ILoadOrder
     /// then every snapshot entry whose name is not forced, in snapshot order, with its slot offset
     /// past the forced block so a forced master always sorts before everything <c>plugins.txt</c>
     /// lists. Both forced sources dedupe the same way: a name either of them claims is forced on
-    /// regardless of what the snapshot says about it (#434) — a CC plugin Mod Management also sent
+    /// regardless of what the snapshot says about it — a CC plugin Mod Management also sent
     /// as an ordinary line is held exactly once, from the game directory.
     /// </summary>
     public static IReadOnlyList<ResolvedPlugin> Resolve(
@@ -111,7 +111,7 @@ public sealed class LoadOrder : ILoadOrder
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// #434: names cataloged in the game's own <c>[Category].ccc</c> — Creation Club content the
+    /// Names cataloged in the game's own <c>[Category].ccc</c> — Creation Club content the
     /// game loads independent of <c>plugins.txt</c>'s `*` toggles, the same way DLC `.esm`s always
     /// load. Mutagen's own reader already filters to entries whose file exists in
     /// <paramref name="folder"/>, so a stale or hand-edited catalog entry naming a file that isn't
@@ -151,7 +151,7 @@ public sealed class LoadOrder : ILoadOrder
     /// <summary>
     /// Opens one resolved copy's binary overlay and holds it. Opening is not free —
     /// <see cref="BuildPluginMetadata"/> counts the plugin's records — which is why the reconcile
-    /// interleaves it with indexing rather than opening everything first (#274 / ADR-0035).
+    /// interleaves it with indexing rather than opening everything first (ADR-0035).
     /// A copy that cannot be opened or parsed (an unparseable record, a missing file) must not abort
     /// the whole reconcile: it is recorded in <see cref="LoadFailures"/> and null is returned, and
     /// nothing is held for it. A success clears any earlier failure for the same copy.
@@ -174,7 +174,7 @@ public sealed class LoadOrder : ILoadOrder
         IModDisposeGetter? mod = null;
         try
         {
-            // #515: the binary path — the "binary is for untracked plugins" overlay (ADR-0041's #452
+            // The binary path — the "binary is for untracked plugins" overlay (ADR-0041
             // amendment) — needs the same explicit strings parameters Track does, or a Localized
             // untracked plugin throws instead of opening.
             var importTimer = Stopwatch.StartNew();
@@ -194,7 +194,7 @@ public sealed class LoadOrder : ILoadOrder
                 _logger.LogInformation("{FileName}: {RecordCount} records, masters: [{Masters}]",
                     plugin.Name, metadata.RecordCount, string.Join(", ", metadata.Masters));
             }
-            // #113: per-phase timing — the binary open is lazy, so the record count in
+            // Per-phase timing — the binary open is lazy, so the record count in
             // BuildPluginMetadata is where most of the parse cost actually lands.
             if (_logger.IsEnabled(LogLevel.Debug))
             {
@@ -290,13 +290,13 @@ public sealed class LoadOrder : ILoadOrder
     }
 
     /// <summary>
-    /// #288 / ADR-0041: the New Plugin gesture — opens a freshly written file whose destination is a
+    /// ADR-0041: the New Plugin gesture — opens a freshly written file whose destination is a
     /// mod folder (or MO2's overwrite/) that Mod Management resolved. A created plugin is a genuine
     /// load-order member from the moment it is held (winning, enabled, at the slot one past the
     /// highest in use) even though <c>plugins.txt</c> has not been appended yet: that append is the
     /// caller's job, and the next snapshot corrects the slot to the real line. One past the highest
-    /// slot, not <c>Plugins.Count</c>: a removal can shrink the list (#34), and a reused slot would
-    /// give two participating plugins the same load_order_idx — an ambiguous stack (#584).
+    /// slot, not <c>Plugins.Count</c>: a removal can shrink the list, and a reused slot would
+    /// give two participating plugins the same load_order_idx — an ambiguous stack.
     /// </summary>
     public PluginMetadata AddCreatedPlugin(string filePath, string origin)
     {

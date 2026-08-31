@@ -1,5 +1,4 @@
-// Sidebar tree over the instance's downloads/ folder (#233), replacing the editor-tab webview.
-// Row rendering only — sorting/filtering already lives in mo2/downloads.ts (buildDownloadRows,
+// Sidebar tree over the instance's downloads/ folder. Row rendering only — sorting/filtering already lives in mo2/downloads.ts (buildDownloadRows,
 // filterHiddenRows); this file's job is turning a DownloadRow into a vscode.TreeItem and scanning
 // downloads/ into rows, the same split ModListProvider makes for modlist.txt.
 
@@ -71,8 +70,7 @@ export class DownloadNode extends vscode.TreeItem {
     this.description = downloadDescription(row);
     this.tooltip = downloadTooltip(row);
     this.contextValue = downloadContextValue(row);
-    // Decoration hook only this slice (#233 slice 4) — the dimming FileDecorationProvider
-    // that reads it ships with the Show-hidden toggle in a later slice.
+    // Decoration hook — the dimming FileDecorationProvider keys off this URI.
     this.resourceUri = vscode.Uri.file(join(instanceRoot, 'downloads', row.name));
   }
 }
@@ -101,7 +99,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
 
   private cache?: DownloadsNode[];
 
-  // Transient view state (#238) — never persisted, matching the Mods tree's Sort Direction
+  // Transient view state — never persisted, matching the Mods tree's Sort Direction
   // toggle: a fresh activation always starts back at the spec's defaults (hidden excluded,
   // Filetime descending).
   private showHidden = false;
@@ -122,7 +120,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
     this._onDidChangeTreeData.fire(undefined);
   }
 
-  /** Show hidden toggle (#238): additive, not an exclusive filter — matches MO2's own
+  /** Show hidden toggle: additive, not an exclusive filter — matches MO2's own
    *  Show-hidden (downloadmanager.cpp:102). Re-renders via invalidate(), same as
    *  ModListProvider.toggleViewDirection(); the command handler owns setting the
    *  `modbench.downloads.showHidden` context key. */
@@ -131,7 +129,7 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
     this.invalidate();
   }
 
-  /** Sort by… quick pick (#238): re-orders the rendered rows by any of the four sortable
+  /** Sort by… quick pick: re-orders the rendered rows by any of the four sortable
    *  columns, either direction. Transient like showHidden above — resets to Filetime
    *  descending on the next activation, never persisted. */
   setSort(column: DownloadSortColumn, descending: boolean): void {
@@ -140,10 +138,10 @@ export class DownloadsProvider implements vscode.TreeDataProvider<DownloadsNode>
     this.invalidate();
   }
 
-  /** Set the title-bar name filter (empty string clears it) and re-render. #247: the same
-   *  transient-InputBox widget every other list view uses, replacing #233's native tree Find.
+  /** Set the title-bar name filter (empty string clears it) and re-render — the same
+   *  transient-InputBox widget every other list view uses.
    *  Render-only — a filter keystroke narrows already-built rows and never re-scans
-   *  downloads/, matching PluginListProvider.setFilter's render-vs-invalidate split (#79). */
+   *  downloads/, matching PluginListProvider.setFilter's render-vs-invalidate split. */
   setFilter(text: string): void {
     this.filterLower = text.toLowerCase();
     this._onDidChangeTreeData.fire(undefined);

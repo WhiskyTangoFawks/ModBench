@@ -44,8 +44,4 @@ export interface TreeDragAndDropController<T> {
 ```
 
 If a future VS Code release adds a customization hook for tree drag-over
-visuals or programmatic drag cancellation, this file should be revisited.
-
-## Prior requests
-
-- #265 — "Drag/drop reorder: target-row highlight looks like 'drop into' instead of 'insert at this position'; no way to cancel a drag"
+visuals or programmatic drag cancellation, revisit this file.

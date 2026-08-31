@@ -115,7 +115,7 @@ public sealed class LoadOrderApiTests(LoadedApiFixture<TestPluginFixture> loaded
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // #592 / ADR-0001: the instance root is what the index file is keyed on, so a load that cannot
+    // ADR-0001: the instance root is what the index file is keyed on, so a load that cannot
     // name a real one has nowhere to keep its rows — a bad request, not a load that degrades to
     // some other home.
     [Fact]

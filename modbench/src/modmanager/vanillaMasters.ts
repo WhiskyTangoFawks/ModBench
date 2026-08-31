@@ -23,7 +23,7 @@ export async function readVanillaMasters(
   }
 }
 
-/** Discovers the game's implicitly-loaded masters (issue #108) — vanilla/DLC
+/** Discovers the game's implicitly-loaded masters — vanilla/DLC
  *  plugins the game loads whether or not any mod declares them, so their
  *  absence from the Plugin List makes every mod plugin declaring one show a
  *  false "missing master". A plugin file in the resolved Data folder that is
@@ -82,8 +82,8 @@ async function filterNonHardlinked(
  *  a mod-provided plugin isn't a discovery-order edge.
  *
  *  `name` and its `masters` are read together and carried as one pair through
- *  `entries` — never split into a name list plus a side-map re-fetched by key
- *  (#318), so there is no lookup that could miss. */
+ *  `entries` — never split into a name list plus a side-map re-fetched by key,
+ *  so there is no lookup that could miss. */
 async function buildMasterDependencyGraph(
   dataFolder: string,
   vanilla: string[],
@@ -134,7 +134,7 @@ function topoSortImplicitMasters(
     inStack.add(name);
     // `?? []` here guards a lookup that is unreachable by construction: every
     // `dep` comes from `byLower`'s values, which are exactly `edges`'s own key
-    // set (#318 — traced, not asserted away with `!`; see buildMasterDependencyGraph).
+    // set (traced, not asserted away with `!`; see buildMasterDependencyGraph).
     for (const dep of edges.get(name) ?? []) {
       visit(dep);
       if (cyclic) break;

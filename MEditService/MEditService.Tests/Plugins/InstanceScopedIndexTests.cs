@@ -7,14 +7,14 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// #592 / ADR-0001: the index is one file per MO2 instance. `origin` is a mod folder name (ADR-0036)
+// ADR-0001: the index is one file per MO2 instance. `origin` is a mod folder name (ADR-0036)
 // and every mirror table is keyed (plugin, origin), so a mirror shared any wider than the instance
 // hands one instance the other's rows the moment two instances name a mod folder alike — which is
 // the ordinary case, not a contrived one: everyone's Unofficial Patch folder is called the same
 // thing.
 //
 // The two instances here deliberately share one game directory, because that is the shape the bug
-// lives in: keyed by the game's Data install (#585's original answer) both instances get one file;
+// lives in: keyed by the game's Data install both instances get one file;
 // keyed by the instance they never meet.
 public sealed class InstanceScopedIndexTests : IDisposable
 {
@@ -55,7 +55,7 @@ public sealed class InstanceScopedIndexTests : IDisposable
     private static IReadOnlyList<string?> EditorIdsIn(LoadOrderMirror manager) =>
         [.. manager.Index!.GetDocuments(Key).Select(d => d.EditorId)];
 
-    // AC2. Two instances, one game, the same mod folder name, different plugin bytes: neither ever
+    // Two instances, one game, the same mod folder name, different plugin bytes: neither ever
     // reads the other's records. Warm on both sides — the second load of each instance is the one
     // that would "register" the other's file_path if the mirror were shared.
     [Fact]
@@ -77,9 +77,8 @@ public sealed class InstanceScopedIndexTests : IDisposable
         Assert.Equal(["NpcFromA"], EditorIdsIn(warmA));
     }
 
-    // The instance is where the file lives, so a second launch on the same instance finds it — the
-    // per-instance restatement of #585's warm launch, and what makes profile switches within one
-    // instance cheap.
+    // The instance is where the file lives, so a second launch on the same instance finds it —
+    // what makes warm launches and profile switches within one instance cheap.
     [Fact]
     public void TheSameInstanceLoadedTwice_KeepsItsIndexBetweenLaunches()
     {

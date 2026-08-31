@@ -1,6 +1,6 @@
 // The instance's overwrite/ folder holds runtime outputs a purge sweeps out of
 // Data/ (F4SE logs, MCM INI writes) — files with no owning mod. This surfaces
-// that folder in the Loadout tree (issue #82). Pure, no vscode import: the
+// that folder in the Loadout tree. Pure, no vscode import: the
 // TreeDataProvider consumes the count; the reveal/watch wiring lives in vscode-
 // aware modules.
 

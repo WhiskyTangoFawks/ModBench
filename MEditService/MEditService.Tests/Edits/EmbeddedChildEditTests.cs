@@ -8,19 +8,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #453 slice 2: a field edit on a record that has <b>no source file of its own</b> — one of the five
+/// A field edit on a record that has <b>no source file of its own</b> — one of the five
 /// slots Spriggit embeds inline in its parent's document
 /// (<c>Cell.{Persistent,Temporary,Landscape,NavigationMeshes}</c>, <c>Worldspace.TopCell</c>). The edit
 /// reads the parent's file, applies the field to the child inside the parent's own object graph, and
 /// writes the parent back — so the child's bytes move without the parent's own fields being touched.
 ///
-/// <para>Runs against the shared <see cref="ContainerModFixture"/> (#466), which carries every one of
+/// <para>Runs against the shared <see cref="ContainerModFixture"/>, which carries every one of
 /// the five embedded slots at once plus the Worldspace/TopCell and Quest/DialogTopic shapes this suite
 /// exercises — so a resolver that handles placed references and quietly fails on a worldspace's top
-/// cell cannot pass. Its content is this suite's own original local fixture, carried forward
-/// unchanged: <see cref="ContainerModFixture.EmbedCell"/> is exactly the Cell this file used to build
-/// for itself, before #466 consolidated it with the local fixtures in
-/// <c>Source.ContainerRecordRegressionTests</c> and <c>Source.SourceIngestContainerTests</c>.</para>
+/// cell cannot pass.</para>
 ///
 /// <para><b>Only three of the five slots can be exercised through a field edit</b>, and the tests say
 /// which and why rather than quietly covering less than the fixture holds:
@@ -40,7 +37,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
     private static JsonElement Json(string raw) => JsonDocument.Parse(raw).RootElement;
 
-    // ---- AC1: the parent's untouched bytes are untouched ----
+    // ---- the parent's untouched bytes are untouched ----
 
     [Fact]
     public void EditingAnEmbeddedPlacedRefsField_RewritesOnlyThatFieldInTheOwningCellsFile()
@@ -57,7 +54,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.True(result.Applied, result.Message);
         Assert.NotEmpty(_fixture.GitStatus());
-        // AC1 in its strongest form: every byte outside the edited field's own text is identical.
+        // The strongest form: every byte outside the edited field's own text is identical.
         // The two placed refs carry distinct scales in the fixture precisely so this substitution
         // is unique — a shared value would make the assertion pass for an edit that hit both.
         Assert.Equal(before.Replace("\"Scale\": 1.0", "\"Scale\": 2.5", StringComparison.Ordinal), File.ReadAllText(file));
@@ -78,7 +75,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Contains($"\"EditorID\": \"{ContainerModFixture.EmbedCellEditorId}\"", after, StringComparison.Ordinal);
     }
 
-    // ---- AC4: both rows move, and the parent reads dirty ----
+    // ---- both rows move, and the parent reads dirty ----
 
     [Fact]
     public void AfterAnEmbeddedEdit_TheChildsOwnRowCarriesTheNewValue()
@@ -116,14 +113,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
     [Fact]
     public void APlacedRefsPosition_IsRefused_SoItsPlacementRowCannotGoStale()
     {
-        // #541: before this, Position (a P3Float) was one of the two properties SchemaReflector's
-        // GetColumnInfo mapped to no column at all, so `refr` had no `position` column and the write
-        // refused as FieldNotFound — dropped, not guarded. #541 gave the reflector a general
-        // P3Int16/P3Float mapping (needed for ObjectBounds and several other fields with no side-table
-        // mirror), which made `position` an ordinary writable column on every IPlacedGetter type for
-        // the first time. RefuseIfContainmentField now refuses it by name, the same way Grid is
-        // refused for cell_location above: Position is mirrored into `placement` (PlacementWalker),
-        // and nothing on this write path re-derives that row.
+        // The reflector's general P3Int16/P3Float mapping (needed for ObjectBounds and several other
+        // fields with no side-table mirror) makes `position` an ordinary writable column on every
+        // IPlacedGetter type, so RefuseIfContainmentField refuses it by name, the same way Grid is
+        // refused for cell_location: Position is mirrored into `placement` (PlacementWalker), and
+        // nothing on this write path re-derives that row.
         var index = _fixture.Mirror.Index!;
         Assert.Equal(11f, index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
 
@@ -134,23 +128,22 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
         Assert.Contains("placement", result.Message, StringComparison.Ordinal);
         Assert.Equal(11f, index.GetPlacement(_fixture.TemporaryRef.ToString(), _fixture.Plugin)!.Value.PosX);
-        // AC3 at the level the AC names: no working-tree dirt at all from a refused edit.
+        // No working-tree dirt at all from a refused edit.
         Assert.Empty(_fixture.GitStatus());
     }
 
     [Fact]
     public void ACellsChildSlots_AreRefused_SoContainerChildCannotGoStale()
     {
-        // Reflection makes these ordinary writable columns, and #453 is what first made a Cell
-        // reachable through EditField at all. Writing one would swap a container's child set through a
-        // JSON blob, leaving the replaced children with rows and parentage but no parent — silent index
-        // corruption, not an edit.
+        // Reflection makes these ordinary writable columns on a Cell reachable through EditField.
+        // Writing one would swap a container's child set through a JSON blob, leaving the replaced
+        // children with rows and parentage but no parent — silent index corruption, not an edit.
         var service = EditService();
 
         var navmeshes = service.EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "navigation_meshes", Json("[]"));
         Assert.False(navmeshes.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, navmeshes.Refusal);
-        Assert.Contains("461", navmeshes.Message, StringComparison.Ordinal);
+        Assert.Contains("structural gesture", navmeshes.Message, StringComparison.Ordinal);
 
         var landscape = service.EditField(_fixture.Plugin, _fixture.EmbedCell.ToString(), "landscape", Json("null"));
         Assert.False(landscape.Applied);
@@ -167,7 +160,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Equal(
             _fixture.EmbedCell.ToString(),
             _fixture.Mirror.Index!.GetContainerParent(_fixture.Plugin, _fixture.Landscape.ToString())!.Value.ParentFormKey);
-        // ...and AC3's own claim, at the level it names: three refusals, not one byte of tree dirt.
+        // ...and three refusals leave not one byte of tree dirt.
         Assert.Empty(_fixture.GitStatus());
     }
 
@@ -182,9 +175,8 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        // Asserted on the durable reason, not on a ticket number: #454 landed compile-from-tree and
-        // deliberately did not make anything *move* a record within that structure, so the refusal
-        // stands and the message no longer forward-references a ticket.
+        // Asserted on the durable reason, not on a ticket number: compile-from-tree deliberately
+        // gave nothing the power to *move* a record within that structure, so the refusal stands.
         Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
         Assert.Empty(_fixture.GitStatus());
     }
@@ -219,7 +211,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.Equal(worldspaceFile, _fixture.SourceFileContaining(ContainerModFixture.TopCellEditorId));
     }
 
-    // ---- Finding 2: containment nests deeper than one level inside a single document ----
+    // ---- containment nests deeper than one level inside a single document ----
 
     [Fact]
     public void APlacedRefInsideAWorldspacesTopCell_IsEditable_TwoEmbedLevelsDeepInOneFile()
@@ -263,7 +255,7 @@ public sealed class EmbeddedChildEditTests : IDisposable
             StringComparison.Ordinal);
     }
 
-    // ---- Finding 3: SourceUnitNotFound, both branches ----
+    // ---- SourceUnitNotFound, both branches ----
 
     [Fact]
     public void EditingARecordWhoseSourceDirectoryIsGone_RefusesAsSourceUnitNotFound()
@@ -296,11 +288,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.SourceUnitNotFound, result.Refusal);
         // The message states what is observed and does not assert an external change as the cause —
-        // it is a defect report as often as it is a stale read (#453 review finding 2).
+        // it is a defect report as often as it is a stale read.
         Assert.DoesNotContain("changed outside Modbench", result.Message, StringComparison.Ordinal);
     }
 
-    // ---- Finding 5: the fifth guarded slot ----
+    // ---- the fifth guarded slot ----
 
     [Fact]
     public void AWorldspacesSubCells_AreRefused_LikeItsTopCell()
@@ -311,11 +303,11 @@ public sealed class EmbeddedChildEditTests : IDisposable
 
         Assert.False(result.Applied);
         Assert.Equal(RecordEditRefusal.FieldReadOnly, result.Refusal);
-        Assert.Contains("461", result.Message, StringComparison.Ordinal);
+        Assert.Contains("structural gesture", result.Message, StringComparison.Ordinal);
         Assert.Empty(_fixture.GitStatus());
     }
 
-    // ---- Finding 6: the container rename covers every directory-per-record type ----
+    // ---- the container rename covers every directory-per-record type ----
 
     [Fact]
     public void EditingAWorldspacesEditorId_MovesItsSourceDirectory()

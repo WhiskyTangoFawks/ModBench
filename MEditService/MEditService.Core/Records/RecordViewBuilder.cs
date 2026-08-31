@@ -6,20 +6,20 @@ using MEditService.Core.Schema;
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// Emits one <c>json_extract</c> view per record type over the <c>records</c> documents table —
-/// what the reflector's per-type DDL became (ADR-0041 / #413 D2).
+/// Emits one <c>json_extract</c> view per record type over the <c>records</c> documents table
+/// (ADR-0041).
 ///
 /// <para>The views exist for <b>the SQL door only</b>: user filter SQL and <c>medit.query</c>
 /// scripts (invariant 8). Nothing in C# reads them — typed reads reconstitute from the document and
-/// run the same ColumnSpec extractors the wide tables were filled with. That separation is what lets
+/// run the same ColumnSpec extractors. That separation is what lets
 /// the two shapes differ honestly: the document is Mutagen's serializer shape, and it has no
 /// per-column correspondence to the reflected schema at all.</para>
 ///
 /// <para><b>Scalar leaves only, and the rule is mechanical.</b> A view carries primitives, plain
-/// enums, flags enums, FormLinks and translated strings; it omits arrays, structs and the #263
+/// enums, flags enums, FormLinks and translated strings; it omits arrays, structs and the
 /// widened columns. The omissions are not a curated field list — they fall out of
 /// <see cref="ColumnSpec.IsViewable"/>, which reads flags the reflector set from the CLR type. The
-/// principle is D2's: <i>no column rather than a column with broken semantics</i>. A nested array
+/// principle: <i>no column rather than a column with broken semantics</i>. A nested array
 /// has no faithful scalar rendering, and a widened column's JSON holds a number for one sibling
 /// subclass and a string for another, so a single cast could only be wrong for somebody.</para>
 ///
@@ -33,7 +33,7 @@ internal static class RecordViewBuilder
     {
         foreach (var (tableName, schema) in schemas)
         {
-            // The header has no document — it stays a real extracted index table (D8), so there is
+            // The header has no document — it stays a real extracted index table, so there is
             // nothing to project a view over.
             if (string.Equals(tableName, HeaderIndexer.TableName, StringComparison.OrdinalIgnoreCase)) continue;
 
@@ -64,7 +64,7 @@ internal static class RecordViewBuilder
         {
             // A [Flags] enum is written as an array of member names. Joining them keeps the column
             // text and keeps `LIKE '%SomeFlag%'` working, which is how record flags are actually
-            // filtered on. The old BIGINT bit value is gone by design (D2 as amended).
+            // filtered on. Deliberately no BIGINT bit value.
             raw = $"array_to_string(CAST(json_extract(body, {path}) AS VARCHAR[]), ', ')";
         }
         else if (col.DuckDbType == "VARCHAR")

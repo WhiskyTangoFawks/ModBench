@@ -5,19 +5,19 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 ## Invariants
 
 - **A tracked plugin's source tree is the source of truth; the binary is for untracked plugins**
-  (#452 / ADR-0041's #444 amendment). Reconcile ingests a tracked plugin by deserializing
-  `source/<plugin>/` whole (#441; `Source/SourceIngest`, a designated whole-mod door) — working tree →
-  Effective, git `HEAD` → Head — and never consults the binary for its *content*. Untracked plugins
-  keep the binary-overlay ingest unchanged; both paths end in the same `IRecordIndex.Index` over the
-  same `IModGetter`, so the read model never sees a dialect. The binary is still opened for a tracked
-  plugin's *metadata* (masters, record count) and for the save path — a bounded decision, stated at
-  `LoadOrderMirror.IndexOnePlugin`. An unreadable source tree degrades to the binary **and records a
-  visible `PluginLoadFailure`**; a silent fallback would let a user read pre-Track content believing
-  it was their source. DuckDB = indexed read model. Reads only via `IRecordReads`/`IRecordIndex`,
-  never Mutagen directly.
+  (ADR-0041). Reconcile ingests a tracked plugin by deserializing `source/<plugin>/` whole
+  (`Source/SourceIngest`, the designated whole-mod door) — working tree → Effective, git `HEAD` →
+  Head — and never consults the binary for its *content*. Untracked plugins use the binary-overlay
+  ingest; both paths end in the same `IRecordIndex.Index` over the same `IModGetter`, so the read
+  model never sees a dialect. The binary is still opened for a tracked plugin's *metadata* (masters,
+  record count) and for the save path — a bounded decision, stated at
+  `LoadOrderMirror.IndexOnePlugin`. An unreadable source tree degrades to the binary **and records
+  a visible `PluginLoadFailure`**; a silent fallback would let a user read pre-Track content
+  believing it was their source. DuckDB = indexed read model. Reads only via
+  `IRecordReads`/`IRecordIndex`, never Mutagen directly.
 - **Plugin identity is compound, everywhere** (ADR-0036 amends ADR-0006). The records table key is
   `(form_key, origin, plugin)`: `origin` is the mod folder that provided the file or a reserved
-  `PluginOrigin` value, and a bare filename is never an identity. `PluginKey(Name, Origin)` is the
+  `PluginOrigin` value; a bare filename is never an identity. `PluginKey(Name, Origin)` is the
   type on every seam member, wire DTO and cache key — `PluginResponse`/`RecordDetail`/
   `CompareOverride`/`PluginMetadata` all require `Origin`; the frontend's page/spatial caches key by
   `(origin, plugin)`. `LoadOrder` keys its held mods by `(origin, filename)`; two copies of one
@@ -25,7 +25,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   losing one is read-only and non-participating — `PluginMetadata.InLoadOrder`/`Participates` are
   derived from its `Registration(LoadOrderIndex, Enabled, Winning)`, never stored (a disabled
   `plugins.txt` line is still in the load order and still a legitimate write target; a losing copy
-  is not). **Registration is visibility** (#582 / ADR-0001): a plugin
+  is not). **Registration is visibility** (ADR-0001): a plugin
   answers a read iff it has a `registrations` row. The physical tables live in the `mirror`
   schema; every public relation (`records`, `records_head`, the extracted tables, every generated
   per-type view) is a view over its mirror table through the one registered-predicate
@@ -35,53 +35,52 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   and nothing else; `Unindex` is `Index`'s inverse and the **file-gone** verb (delete, uninstall,
   missing at validation), never the meaning of unload.
   - **The index is a persistent file per MO2 instance, and it validates itself on open**
-    (#585/#592 / ADR-0001). `IndexFile.For` puts it at `<instance>/modbench/index.duckdb`, so every
+    (ADR-0001). `IndexFile.For` puts it at `<instance>/modbench/index.duckdb`, so every
     profile in one instance shares it (a profile switch stays cheap) and no two instances can ever
     share one: `origin` is a mod folder *name*, unique only within an instance, and every mirror
     table is keyed `(plugin, origin)`. The instance root arrives on the load request and rides
     `ILoadOrder.InstanceRoot`; an index handed no instance is in-memory, which is what the suite's
     fixtures use. **`PUT /load-order` → `LoadOrderMirror.Reconcile` is the only way the load order
-    arrives** (ADR-0044) — the plain-Data-folder path is long deleted, and so are the bulk load and
-    the per-gesture patch verbs (`load-explicit`, `reread`, `participation`, `load`/`unload`):
-    Modbench manages an MO2-style instance and nothing else, and a snapshot that can name no mod
-    folders can key no index. A snapshot for a different instance replaces what is held; the same
-    instance reconciles in place — new `(name, origin)` opened and registered (indexed only if
-    never seen), absent unregistered, moved re-registered SQL-only, then one winner sweep; an
-    identical snapshot is a no-op.
+    arrives** (ADR-0044): Modbench manages an MO2-style instance and nothing else, and a snapshot
+    that can name no mod folders can key no index. A snapshot for a different instance replaces
+    what is held; the same instance reconciles in place — new `(name, origin)` opened and
+    registered (indexed only if never seen), absent unregistered, moved re-registered SQL-only,
+    then one winner sweep; an identical snapshot is a no-op.
     `registrations` is **the load order and nothing else** — the file facts live in `mirror.files`
     (`file_path`, `content_hash`, `index_version`), a separate table precisely so that
-    unregistering a plugin does not throw away what makes re-registering it cheap. Registrations are **not** cleared on open (ADR-0044): they are the last known load order,
-    and the first reconcile from Mod Management corrects them. `Initialize` rehashes every
+    unregistering a plugin does not throw away what makes re-registering it cheap. Registrations
+    are **not** cleared on open (ADR-0044): they are the last known load order, and the first
+    reconcile from Mod Management corrects them. `Initialize` rehashes every
     indexed file — **content, never `mtime`** — and `Unindex`es any plugin whose file is gone or
     whose bytes moved; a version mismatch (`IndexVersion`: hand-bumped format const + Mutagen
     assembly version + reflected-schema digest) or a file DuckDB cannot open rebuilds the whole
     file. **Bump `IndexVersion.FormatVersion` when you change `TableDdlBuilder`'s fixed tables or
     the codec's conventions** — `CREATE TABLE IF NOT EXISTS` will otherwise meet an old file's
-    column list in silence. **A file another process holds is never rebuilt over** (#588 / ADR-0001
+    column list in silence. **A file another process holds is never rebuilt over** (ADR-0001
     point 6): DuckDB's lock error (`IndexStore.IsAnotherWriter`) becomes
     `IndexHeldElsewhereException`, which `PUT /load-order` answers `423 Locked` and the mirror
     holds nothing — deleting a locked file succeeds on POSIX and would destroy the other window's
     live index. The lock is per *process* (DuckDB.NET shares one database per path in-process), so
-    the test for it holds the file from a second process (`TestSupport/ForeignIndexHolder`, `python3`
-    on PATH — a test prerequisite, not a runtime one; the two #588 tests skip without it).
-  - **Reconcile is registration** (#586 / ADR-0001). `LoadOrderMirror.Reconcile` indexes
+    the test for it holds the file from a second process (`TestSupport/ForeignIndexHolder`,
+    `python3` on PATH — a test prerequisite, not a runtime one; those tests skip without it).
+  - **Reconcile is registration** (ADR-0001). `LoadOrderMirror.Reconcile` indexes
     only what the file has never seen or whose bytes moved (validation already dropped those) and
-    `Register`s everything else at its `plugins.txt` position — a `registrations` row, no re-index. A
-    tracked plugin never takes that path however current its binary: its source tree is its truth
-    (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates the
-    decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones do, so
-    a warm launch's progress advances instead of sitting at zero.
-  - **The mirror keeps running while the load order does** (#587 / ADR-0001).
+    `Register`s everything else at its `plugins.txt` position — a `registrations` row, no re-index.
+    A tracked plugin never takes that path however current its binary: its source tree is its truth
+    (ADR-0041/0042), so `SourceIngest.TreeFor` is resolved once per plugin in the loop and gates
+    the decision. Registered plugins count toward `Status.IndexedPlugins` exactly as indexed ones
+    do, so a warm launch's progress advances instead of sitting at zero.
+  - **The mirror keeps running while the load order does** (ADR-0001).
     `ExternalChangeWatcher.WatchIndexed` covers every *indexed* binary the game's `Data/` included,
-    beside the classification watches it already kept for tracked ones; a settle re-hashes and raises
-    `IndexedBinaryChanged` only when the bytes actually moved (a touch costs nothing), and a deletion
-    is its own `IndexedBinaryChange.Deleted`. `MEditService.Api`'s `IndexMirror` turns those into
-    `ILoadOrderMirror.ReindexPlugin(PluginKey)` / `UnindexPlugin` — the composition root's job, since
-    the Bridge knows nothing of load orders or DuckDB. **Tracked plugins are deliberately not mirrored**:
-    their rows come from the source tree, so their binary changing stays the user's Absorb/Keep
-    question and re-reading it would overwrite the working tree with the compiled artifact.
-    `ExternalChangeLoadOrderHook.RunAfterReconcile` drops every mirror watch before re-registering, so no
-    watch outlives the load order that asked for it.
+    beside the classification watches for tracked ones; a settle re-hashes and raises
+    `IndexedBinaryChanged` only when the bytes actually moved (a touch costs nothing), and a
+    deletion is its own `IndexedBinaryChange.Deleted`. `MEditService.Api`'s `IndexMirror` turns
+    those into `ILoadOrderMirror.ReindexPlugin(PluginKey)` / `UnindexPlugin` — the composition
+    root's job, since the Bridge knows nothing of load orders or DuckDB. **Tracked plugins are
+    deliberately not mirrored**: their rows come from the source tree, so their binary changing
+    stays the user's Absorb/Keep question and re-reading it would overwrite the working tree with
+    the compiled artifact. `ExternalChangeLoadOrderHook.RunAfterReconcile` drops every mirror watch
+    before re-registering, so no watch outlives the load order that asked for it.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
     the `LoadOrderPlugin` extension method on `ILoadOrder`
     (`PluginOriginResolver.cs`, not an interface member): `plugins.txt` cannot list a
@@ -91,19 +90,18 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - Read routes (records, record types, the four spatial routes) take an optional `origin`,
     resolved server-side from the load order when the caller doesn't state one; `Search(RecordQuery)`
     takes a nullable `PluginKey` *filter* — browsing every plugin is legitimate.
-  - Still filename-only-keyed: #303 (`MasterResolution.Classify`, `GetPlugins`' filter path —
-    #303 itself closed as superseded by ADR-0044, but its own closing comment routed this
-    specific residue here for re-verification, and it's still true). #304 (`extendedFieldEditor.ts`
-    temp-file path) and #297 (webview `types.ts` hand-duplicating wire types) are both fixed —
-    both now carry `origin`.
-- The per-type views, editor field metadata and record codec are reflection-generated from Mutagen types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
-- **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
+  - Known residue, still filename-only-keyed: `MasterResolution.Classify` and `GetPlugins`' filter
+    path.
+- The per-type views, editor field metadata and record codec are reflection-generated from Mutagen
+  types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization
+  rule; FO4 in tests = fixture, not scope limit.
+- **The DB is an index over documents** (ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
   `ref`, `content_hash`); the extracted index tables (`form_lookup`,
-  `form_references`, `placement`, `cell_location`, `container_child`, `registrations`, `header`) are populated from it at
-  ingest. The reflected per-type wide tables are gone — each type's name is now a generated
-  `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
-  **Nothing load-order-derived is stored on a data row** (#583/#584 / ADR-0001): a record row carries
+  `form_references`, `placement`, `cell_location`, `container_child`, `registrations`, `header`)
+  are populated from it at ingest. Each record type's name is a generated `json_extract` **view**
+  over `records`, which is what keeps user filter SQL working unchanged.
+  **Nothing load-order-derived is stored on a data row** (ADR-0001): a record row carries
   file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
   on `registrations`; `is_winner` is a fact about the registered stack a FormKey sits in and lives
   solely in `winners` (`(record_ref, form_key) → (plugin, origin)`, rebuilt wholesale by
@@ -114,15 +112,15 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   `SeedCommittedOnly` call `UpdateWinners` even though Effective is untouched.
   - **Typed reads reconstitute; they never read the views.** `GetDocument`/`GetOverrideStack`
     deserialize the document through `RecordTextCodec` and run the same `ColumnSpec.Extract`
-    delegates the wide tables were filled with, so values are identical by construction. The
+    delegates the extracted tables were filled with, so values are identical by construction. The
     published relational schema is a contract for **the SQL door only** (user filters,
     `medit.query`), never for the C# surface — the document is Mutagen's serializer shape and has no
     per-column correspondence to the reflected schema.
-  - **Views carry scalar leaves only** — arrays, structs and the #263 widened columns are omitted
+  - **Views carry scalar leaves only** — arrays, structs and the widened text columns are omitted
     (`ColumnSpec.IsViewable`): no column beats a column with broken semantics. A view never carries
     an always-NULL column.
-  - **Documents name their own type exactly when their path can't** (#450, adopting the whole-mod
-    door's own policy). `RecordTypeDispatch` derives path-ambiguity by reflection over the game mod
+  - **Documents name their own type exactly when their path can't.**
+    `RecordTypeDispatch` derives path-ambiguity by reflection over the game mod
     type's group structure: a group whose element type is abstract (GLOB → GlobalFloat/GlobalBool/…)
     dispatches the abstract `<Game>MajorRecord_Serialization.SerializeWithCheck`, so the kernel
     writes its own `MutagenObjectType` discriminator; every other type dispatches its concrete
@@ -135,10 +133,8 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     CLR type name (`"landscape"`) for the handful `SchemaReflector` excludes. Embedded child records
     keep their discriminators regardless — that is the kernel's own abstract-*field* rule
     (`ExtendedList<IPlaced>`), nothing to do with this policy.
-  - **A container's document carries its embedded children** (#450 / ADR-0041's #444 amendment,
-    retiring #413 D8's deep-copy-and-strip and the `ContainerStripFields` posture with it). The
-    embed scope is kept on our own grounds (ADR-0042 — one document per cell is the tree a human
-    wants), in `CellEmbedCustomization`/`WorldspaceEmbedCustomization`
+  - **A container's document carries its embedded children** (ADR-0041, ADR-0042 — one document per
+    cell is the tree a human wants), in `CellEmbedCustomization`/`WorldspaceEmbedCustomization`
     (`Serialization/EmbedCustomizations.cs`):
     `Cell.{Persistent,Temporary,Landscape,NavigationMeshes}` and `Worldspace.TopCell` inline;
     `Quest.{DialogBranches,DialogTopics,Scenes}` and `DialogTopic.Responses` stay folder-split on
@@ -146,35 +142,28 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     them puts 1,057 directories per real Quest back in the process's working directory. Canonical
     document form is bare `\n` newlines with **nothing after the closing brace**: no trailing
     newline, on every platform. An embedded child is represented inline in its parent's document and
-    also as its own `records` row extracted from it; since #452 a tracked plugin has one parse, so
-    the two cannot drift apart. **Folder-split children carry real GRUP order, not #454-era tree
-    order** (**#459**, superseding the "stable, not canonical" claim this bullet used to make):
+    also as its own `records` row extracted from it; a tracked plugin has one parse, so
+    the two cannot drift apart. **Folder-split children carry real GRUP order**:
     `RecordTextCodecCustomization` turns `Overall.EnforceRecordOrder` on project-wide, so every
     folder-split sibling's file name carries a leading `[N] ` prefix — its actual GRUP position, not
     filesystem-read order — for flat top-level groups and container-nested lists
-    (`Quest.{DialogBranches,DialogTopics,Scenes}`, `DialogTopic.Responses`) alike. `container_child.SlotIndex`
-    is now that position, exact against the binary a tracked plugin came from. **Compile restores it
-    too**: a compiled binary's folder-split children come back in the tree's `[N] ` order, which is the
-    original GRUP order — verified byte-for-byte on the real #369 fixture by
-    `RealData/CompileRoundTripGateTests` and, independently of that byte check, by
-    `RealData/DialogueOrderDamageTests` (0 permuted parents / 0 moved slots, reproducing #464's own
-    harness against the tree Track actually writes). No longer allowlisted by
-    `SourceIngestParityTests` — that tolerance is gone, not widened. Point writes
+    (`Quest.{DialogBranches,DialogTopics,Scenes}`, `DialogTopic.Responses`) alike.
+    `container_child.SlotIndex` is that position, exact against the binary a tracked plugin came
+    from. **Compile restores it too**: a compiled binary's folder-split children come back in the
+    tree's `[N] ` order, which is the original GRUP order — verified byte-for-byte on a real fixture
+    by `RealData/CompileRoundTripGateTests` and, independently of that byte check, by
+    `RealData/DialogueOrderDamageTests` (0 permuted parents / 0 moved slots). Point writes
     (`Edits/RecordEditService` create/delete/renumber/rename) keep the prefix consistent: create,
-    delete and renumber all renormalize their touched group folder to contiguous `[0..k]` as their own
-    last file-system act (**#489** — survivors keep their relative order; no persistent gaps survive a
+    delete and renumber all renormalize their touched group folder to contiguous `[0..k]` as their
+    own last file-system act (survivors keep their relative order; no persistent gaps survive a
     write), and an EditorID rename carries its own old index forward unchanged.
   - The header is the one surviving per-type table: a `ModHeader` is not an `IMajorRecordGetter`, so
     it has no document to project a view over.
-- **Editing is a working-tree change to text, and there is exactly one write path** (#415 /
-  ADR-0041). `Edits/RecordEditService.EditField` reads the record's source file, applies the field,
+- **Editing is a working-tree change to text, and there is exactly one write path**
+  (ADR-0041). `Edits/RecordEditService.EditField` reads the record's source file, applies the field,
   writes the file back atomically, and tells the index what landed. It reads the **file**, not the
-  indexed body: ingest used to serialize from a plugin's binary overlay while the source held a deep
-  parse, and the two are not always structurally identical (#369's measured 1-in-3,940 hole, on
-  `GitBlobHash`), so editing the file's own bytes is what stops an edit rewriting a record's
-  untouched fields into the overlay's shape. #452 dissolved that hazard for tracked plugins (one
-  parse — and editing requires tracking), but reading the file stays the rule: it is the shortest
-  path to the bytes being edited and keeps the write path independent of index freshness. `POST /records/{formKey}/field` is the same service's
+  indexed body: the file is the bytes being edited, and reading it keeps the write path independent
+  of index freshness. `POST /records/{formKey}/field` is the same service's
   HTTP door — scripts and agents (ADR-0024) share the one path, they do not get a second.
   - **Refusals are typed and happen before any write** (`RecordEditRefusal`), so a refused edit
     leaves the working tree untouched. Two of them are the untracked signposting: `PluginNotTracked`
@@ -183,28 +172,28 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     each names a different way out; naming the wrong one is worse than naming none. Over HTTP they
     travel as a ProblemDetails `refusal` extension beside the detail, so an agent branches on a
     discriminator rather than on prose.
-  - **FormLinks validate at edit time**, against effective state (ADR-0041). The check is `CheckErrorBuilder` over the incoming value — the same builder the
-    read model renders check errors from — so "what the editor flags" and "what it refuses to
-    create" cannot drift. Scope is the reflected columns, matching the pre-#410 validator; #429
-    gave a top-level FormLink *column* the same `ApplyFormLinkJson` write delegate its struct/array
-    sub-field sibling already had (`SchemaReflector`'s `ProjectColumn`/`ProjectSubField`), so every
-    reflected FormLink shape — top-level column, struct/array sub-field — is writable through this
-    one door. VMAD Object properties and condition Form params still carry FormKeys outside the
-    reflected schema and are still not checked here; that stays its own, unwidened, change.
-  - **Reads validate source freshness** (`Source/SourceFreshness`, #413 D3 deferred here). Point
+  - **FormLinks validate at edit time**, against effective state (ADR-0041). The check is
+    `CheckErrorBuilder` over the incoming value — the same builder the read model renders check
+    errors from — so "what the editor flags" and "what it refuses to create" cannot drift. Scope is
+    the reflected columns: every reflected FormLink shape — top-level column, struct/array
+    sub-field — carries the `ApplyFormLinkJson` write delegate (`SchemaReflector`'s
+    `ProjectColumn`/`ProjectSubField`) and is writable through this one door. VMAD Object
+    properties and condition Form params carry FormKeys outside the reflected schema and are not
+    checked here; widening that is its own change.
+  - **Reads validate source freshness** (`Source/SourceFreshness`). Point
     reads re-check the source text before answering, catching `git restore`, checkout, rebase,
     terminal commits and hand edits — no watcher, because Modbench owns the `.git` folder and git
     never announces itself. **Both refs are re-derived**: after an external commit "committed"
     itself has moved, so a pass that refreshed only the working-tree side would leave Head serving
     bytes no ref holds. Cost is bounded by dirt, not by load order — git is consulted only for
     records the index already believes are dirty, so an unedited load order runs no git processes on
-    the read path. **Exception (#561):** that hash short-circuit answers nothing for an embedded
+    the read path. **Exception:** that hash short-circuit answers nothing for an embedded
     child (a placed reference, a landscape, a navmesh, a Worldspace's top cell) — it has no file of
     its own, so its committed blob is its *owner's* whole document, and an owner-blob hash can never
-    equal a hash of just the child's own bytes. Its rebaseline check skips the short-circuit outright
-    and reads the owner's committed text in full (`git cat-file`) every time it runs, where a
-    flat/own-file record's equivalent check is a cheap `git ls-tree` hash compare first.
-- **The ref dimension has two values** (#415). `records` still holds exactly **one row per record
+    equal a hash of just the child's own bytes. Its rebaseline check skips the short-circuit
+    outright and reads the owner's committed text in full (`git cat-file`) every time it runs, where
+    a flat/own-file record's equivalent check is a cheap `git ls-tree` hash compare first.
+- **The ref dimension has two values.** `records` holds exactly **one row per record
   copy**, and that row *is* `RecordRef.Effective`; the `ref` column says which state those bytes
   are, never which of several rows to pick. That is why every read and every generated
   `json_extract` view keeps answering Effective with no ref predicate anywhere, and why the SQL door
@@ -226,38 +215,56 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     and the header table answer identically at both refs, deliberately: those carry no ref
     dimension and track Effective, which is the answer their consumers want.
 - **`SourceRepository.CommittedSourceHashes`/`ReadCommittedSourceText` ask what `HEAD` holds** — not
-  what the working tree holds against the index, which is #417's `WorkingTreeStatus` (as are
+  what the working tree holds against the index, which is `WorkingTreeStatus` (as are
   `CommitPristineToMain` and the rebase verbs). The two diverge after exactly the events these
   exist for: an external commit, rebase or amend moves `HEAD` without touching a file. Hash values
   are directly comparable to `records.content_hash` with no conversion — both are git blob object
   names, which is why that column stores git's own hash.
-- **The record-index seam is `IRecordReads`/`IRecordIndex`** (#421), replacing `IRecordRepository`/
-  `IRecordReader`/`IRecordIndexer` and absorbing the query service's read-model pass-throughs
-  (`GetRecordForPlugin`/`GetRecordType`/`GetNativeFormKeys`/`GetPlacement`/`GetVmad`/`GetConditions` —
-  all endpoint-orphaned, deleted rather than kept as redundant forwarding; VMAD/condition
-  reconstitution survives at the query-service level, `Queries/RecordDocumentCodecs`, operating on
-  `RecordDocument.Body` — rejected from the seam itself, same as raw SQL). `PluginKey(Name, Origin)`
-  is the compound identity on every seam member, ingest included, replacing every bare
-  `(string plugin, string origin)` pair. `IRecordIndex.At(RecordRef)` repositions every read; #421
-  ships `RecordRef.Head` answering identically to the default `RecordRef.Effective` (both map onto
-  the single `SourceRef.Committed` value `records.ref` carries) — inert until #415 gives them
-  independent state. No `Connection` property and no SQL crosses this seam except `SetFilter`
-  (invariant 8) — the concrete `DuckDbRecordIndex` keeps one, for white-box tests only.
-- Every write backs up the target plugin first (timestamped `.bak`) — undo across relaunches depends on it; new write paths must not skip this. [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
-- Partial-success endpoints return a structured failures collection (named record, e.g. `LoadOrderResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors; frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
-- **The load order is readable while it is still being reconciled** (#274 / ADR-0035). `LoadOrderMirror` publishes the load order and index *before* the indexing loop, and `LoadOrder.Open` opens one arriving copy at a time, so each plugin's records become queryable the moment it is indexed. Three consequences bind new code:
-  - **Anything derived from the whole plugin set must gate on `ILoadOrderMirror.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load load order reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `LoadOrderState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready load order with stale winners.
-  - **Everything a reader touches on `LoadOrder` is an immutable snapshot** (copy-on-write under `_mutation`), because readers now walk those lists while the load appends to them. A plain `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin landing.
-  - **Never dispose the load order or index without draining the reconcile first.** `EnterExclusive()` cancels the in-flight reconcile *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Close`, `Dispose` and every reconcile go through it. A superseded reconcile leaves what it landed for its successor — nothing is torn down on cancel (ADR-0044).
-  `PUT /load-order` stays blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /load-order/status` reports progress alongside the in-flight PUT (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
-- **`ILoadOrderMirror.RequireScope()` is the one "no load order held" gate** (#605), replacing every
+- **The record-index seam is `IRecordReads`/`IRecordIndex`.** `PluginKey(Name, Origin)`
+  is the compound identity on every seam member, ingest included — never a bare
+  `(string plugin, string origin)` pair. `IRecordIndex.At(RecordRef)` repositions every read.
+  VMAD/condition reconstitution lives at the query-service level (`Queries/RecordDocumentCodecs`,
+  operating on `RecordDocument.Body`) — rejected from the seam itself, same as raw SQL. No
+  `Connection` property and no SQL crosses this seam except `SetFilter` — the concrete
+  `DuckDbRecordIndex` keeps one, for white-box tests only.
+- Every write backs up the target plugin first (timestamped `.bak`) — undo across relaunches depends
+  on it; new write paths must not skip this.
+  [ADR-0008](../docs/adr/0008-timestamped-binary-backups.md)
+- Partial-success endpoints return a structured failures collection (named record, e.g.
+  `LoadOrderResponse.Failures`) — never swallow a partial outcome or use stringly-typed errors;
+  frontend decides surfacing. [ADR-0026](../docs/adr/0026-error-surfacing-policy.md)
+- **The load order is readable while it is still being reconciled** (ADR-0035). `LoadOrderMirror`
+  publishes the load order and index *before* the indexing loop, and `LoadOrder.Open` opens one
+  arriving copy at a time, so each plugin's records become queryable the moment it is indexed.
+  Three consequences bind new code:
+  - **Anything derived from the whole plugin set must gate on `ILoadOrderMirror.Status`**, not
+    compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives
+    a *wrong* one — `MasterResolution.Classify` over a mid-load load order reports a master that
+    simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on
+    `LoadOrderState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it
+    is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable)
+    will leave a Ready load order with stale winners.
+  - **Everything a reader touches on `LoadOrder` is an immutable snapshot** (copy-on-write under
+    `_mutation`), because readers walk those lists while the load appends to them. A plain
+    `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin
+    landing.
+  - **Never dispose the load order or index without draining the reconcile first.**
+    `EnterExclusive()` cancels the in-flight reconcile *and waits for it to stop*; disposing a
+    DuckDB connection while the indexing loop still holds it is a native crash, not a catchable
+    exception. `Close`, `Dispose` and every reconcile go through it. A superseded reconcile leaves
+    what it landed for its successor — nothing is torn down on cancel (ADR-0044).
+  `PUT /load-order` stays blocking — still the completion signal, returning only after the winner
+  sweep; `GET /load-order/status` reports progress alongside the in-flight PUT (200 with state
+  `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded
+  or cancelled load answers 409, never 500.
+- **`ILoadOrderMirror.RequireScope()` is the one "no load order held" gate**, replacing every
   consumer's own null-check-and-throw against the nullable `LoadOrder`/`Reads`/`Index` properties —
   `WorldspaceQueryService`, `ContainerChildQueryService` and `RecordQueryService` all call it (via
-  their own thin `RequireReads`/`RequireLoadOrder` forwards) instead of re-writing the check, and so
-  does `LoadOrderMirror` itself internally (`CreatePlugin`, `ReindexPlugin(PluginKey)`,
-  `ApplyFilter`). Throws `NoLoadOrderException`, an `InvalidOperationException` subtype rather than
-  a replacement of it, so it flows through `WriteEndpointMapping.NoLoadOrder` (#604) and every
-  existing `catch (InvalidOperationException)` with no signature change.
+  their own thin `RequireReads`/`RequireLoadOrder` forwards), and so does `LoadOrderMirror` itself
+  internally (`CreatePlugin`, `ReindexPlugin(PluginKey)`, `ApplyFilter`). Throws
+  `NoLoadOrderException`, an `InvalidOperationException` subtype rather than a replacement of it,
+  so it flows through `WriteEndpointMapping.NoLoadOrder` and every existing
+  `catch (InvalidOperationException)` with no signature change.
 
 ## Folder structure
 
@@ -267,11 +274,11 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex` (orchestrates the internal `IndexStore` / `PluginIngest` / `WorkingTreeOverlay` collaborators; owns registration, the winner sweep, reads, container verbs and every transaction boundary), `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
-| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `SourceCheckout` |
+| `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `SourceCheckout` |
 | `Serialization/` | Per-record text source codec (ADR-0041) | `RecordTextCodec`, `RecordTextCodecCustomization` |
-| `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041, #414–#417) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
+| `Source/` | The repo-layer verb surface over a mod folder's own (non-hidden) git repo, the Track gesture that populates it, read-time freshness over its text, and external-change classification/absorption (ADR-0041) | `SourceRepository`, `TrackService`, `SourceFreshness`, `ModFolders`, `GitCli`, `PristineFile`, `ContainerChildFields`, `CompileJournal`, `ExternalChangeClassifier`, `ExternalChangeDeferral` |
 
-`MEditService.Bridge` is a separate thin assembly (#417): the live `FileSystemWatcher`
+`MEditService.Bridge` is a separate thin assembly: the live `FileSystemWatcher`
 lifecycle plus the unanswered-external-change queue, nothing else — it references only
 load order/DB-free Core surfaces, enforced by `BridgeKnowsNothingOfLoadOrdersTests`.
 
@@ -287,5 +294,5 @@ Every endpoint needs `.Produces<T>()` (success) + `.ProducesProblem(status)` (ea
 - Best-effort catches: `_logger.LogWarning`, no silent `catch {}` — except `SchemaReflector`'s per-call property-accessor lambdas (avoid log noise).
 - Structured properties: `_logger.LogInformation("Indexed {Count} records for {Plugin}", n, name)`.
 - `LogInformation` for state transitions, `LogTrace` for per-record/per-column trace.
-- Config loads from the binary's own directory (`ContentRootPath = AppContext.BaseDirectory` in `Program.cs`), not the launcher's cwd — the extension spawns us without one, and the default made `appsettings.json` silently not load at all (#343).
+- Config loads from the binary's own directory (`ContentRootPath = AppContext.BaseDirectory` in `Program.cs`), not the launcher's cwd — the extension spawns us without one, and the default makes `appsettings.json` silently not load at all.
 - Per-request logging is one summary line from `UseSerilogRequestLogging`, not ASP.NET Core's six-line pipeline (`Microsoft.AspNetCore: Warning` in `appsettings.json` silences that; the middleware writes under its own category, so the override doesn't reach it). Levels: Debug for success, Warning for 4xx, Error for 5xx/unhandled. Endpoint guards and the `RecordEditRefusal` → ProblemDetails mapping return 4xx **without logging anything themselves**, so this middleware is the only thing making a deliberate failure visible — don't drop or reflag it without replacing that.

@@ -27,10 +27,10 @@ public class RecordTextCodecTests
             },
         };
 
-    // No exclusion list: historically (#367 report, re-verified for JSON at #412), the now-deleted
-    // .OmitLastModifiedData()/.OmitTimestampData() calls (#470 removed them — see
-    // RecordTextCodecCustomization's own comment) were verified no-ops for a standalone Weapon — the
-    // serialized JSON was byte-identical with and without them, because both only ever targeted
+    // No exclusion list: the Omit customizations (.OmitLastModifiedData()/.OmitTimestampData(),
+    // unused — see
+    // RecordTextCodecCustomization's own comment) are verified no-ops for a standalone Weapon — the
+    // serialized JSON is byte-identical with and without them, because both only ever target
     // group/Cell/Worldspace fields Weapon doesn't have. VersionControl (the field that could
     // plausibly be "the timestamp" on a record) round-trips like everything else, which is why this
     // test asserts every field equal with no exceptions.
@@ -87,9 +87,9 @@ public class RecordTextCodecTests
         }
     }
 
-    // Spec review finding 3: #370's generalization of this codec (reflection dispatch by runtime
-    // type, replacing #367's hardcoded direct call) was verified behavior-preserving for Weapon by a
-    // one-time manual git-stash A/B with a matching sha256 — real, but it lived only in a commit
+    // The codec's reflection dispatch by runtime
+    // type was verified behavior-preserving for Weapon by a
+    // one-time manual A/B with a matching sha256 — real, but it lived only in a commit
     // message, so a future change to the dispatch mechanism could silently drift Weapon's output
     // with nothing going red. This is that check turned into a standing gate: the exact text
     // MakeWeapon() produced at that verification is checked in
@@ -98,7 +98,7 @@ public class RecordTextCodecTests
     // just *how* it's resolved — regenerate the golden file only after re-verifying that claim, the
     // same way (never by just accepting the new output).
     //
-    // #412: this is a *content* pin (key order, field shape, values) — it necessarily proves
+    // This is a *content* pin (key order, field shape, values) — it necessarily proves
     // nothing about whether that content is what the code will keep producing tomorrow, because the
     // golden itself was generated from this same code path. See
     // SerializeAsync_CalledTwiceOnTheSameRecord_ProducesByteIdenticalOutput below for the
@@ -124,12 +124,12 @@ public class RecordTextCodecTests
         }
     }
 
-    // AC4's "identical record state always serializes to identical bytes" claim, proven
+    // The "identical record state always serializes to identical bytes" claim, proven
     // independently of the golden fixture's own content being correct: a golden-text compare only
     // catches drift from one known-good snapshot, and is structurally blind to non-determinism that
     // reproduces the *same* wrong output on every run of the golden test itself (the exact
-    // "round-trip passes trivially when both directions share the same bug" shape flagged for this
-    // ticket). This test instead serializes the same in-memory record twice, straight to bytes, with
+    // "round-trip passes trivially when both directions share the same bug"
+    // shape). This test instead serializes the same in-memory record twice, straight to bytes, with
     // no golden fixture in the loop at all — a defect that made output depend on wall-clock time or
     // any other non-content-driven source would show up here even if the golden fixture happened to
     // be stale or wrong. (MakeWeapon() has no dictionary-backed field, so this does not exercise
@@ -164,18 +164,15 @@ public class RecordTextCodecTests
         }
     }
 
-    // AC4's cross-platform half: canonical formatting must not depend on which OS wrote the file
-    // (#414 pins the git side of the same invariant with core.autocrlf=false at repo init). The
+    // The cross-platform half: canonical formatting must not depend on which OS wrote the file
+    // (the git side of the same invariant is pinned by core.autocrlf=false at repo init). The
     // JSON kernel's own indentation newlines are sourced from its private inner TextWriter's
     // NewLine, which this codec cannot reach to configure (confirmed by reflection and by
     // decompiling JsonTextWriter.WriteIndent — see RecordTextCodec.SerializeAsync's own comment) —
     // so this codec normalizes after the fact instead. On this (Linux) platform,
     // Environment.NewLine is already "\n", so the normalization this test guards happens to be a
-    // no-op here today — but the guard itself is real: applying the rival by hand (temporarily
-    // reintroducing a raw "\r\n" into the write path) produced a genuine, observed failure
-    // (Assert.DoesNotContain found byte 13 in the output), not a pass-either-way assertion. This
-    // is the platform this codec's own normalization exists to protect against, demonstrated
-    // directly rather than inferred from the fact that it's currently a no-op.
+    // no-op here today — but the guard itself is real: a raw "\r\n" in the write path fails here
+    // (Assert.DoesNotContain finds byte 13 in the output), not a pass-either-way assertion.
     [Fact]
     public async Task SerializeAsync_NeverEmitsACarriageReturn()
     {
@@ -198,15 +195,15 @@ public class RecordTextCodecTests
 
     // Atomicity: a failure partway through the write must not destroy a previously-valid source
     // record. A pre-cancelled CancellationToken cannot reach this window and so cannot rival it —
-    // the generated Serialize call checks cancellation before any file is touched, in *both* the
-    // old direct-write implementation and the current write-then-rename one, so it throws (and
+    // the generated Serialize call checks cancellation before any file is touched, in both a
+    // direct-write implementation and the current write-then-rename one, so it throws (and
     // leaves the destination alone) identically either way; a test built on it would pass whether
-    // or not the atomicity fix existed, which is exactly the vacuous-guard shape this ticket is on
-    // watch for. This test instead injects a deterministic, non-timing-dependent failure squarely
+    // or not the atomicity fix existed — exactly the vacuous-guard shape to
+    // avoid. This test instead injects a deterministic, non-timing-dependent failure squarely
     // inside the one window that differs: /dev/full is a Linux device that always answers a write
     // with ENOSPC. Pre-creating this codec's own temp-file path (filePath + ".tmp") as a symlink to
     // it means File.Create opens the device successfully (the open itself doesn't write) and the
-    // very first WriteAsync then fails — deterministically, every run, no race. Under the old
+    // very first WriteAsync then fails — deterministically, every run, no race. Under a
     // direct-write implementation this same injection would have already truncated filePath itself
     // before failing; under write-then-rename, filePath is never opened for writing at all until
     // the (never-reached) final rename, so it survives untouched.

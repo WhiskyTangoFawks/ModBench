@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #585 / ADR-0001: the index is one persistent file per MO2 instance (#592), and it validates itself
+// ADR-0001: the index is one persistent file per MO2 instance, and it validates itself
 // against the disk every time it is opened — by content, never by clock. Everything here is proved
 // at the index seam alone: an index is built, disposed, and opened again on the same file, and what
 // survives is asserted through the seam's own reads. Persistence itself is never asserted by
@@ -81,7 +81,7 @@ public class PersistentIndexTests : IDisposable
         return Convert.ToInt64(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    // AC1. The whole point: rows the previous process indexed are still there, and the plugin
+    // The whole point: rows the previous process indexed are still there, and the plugin
     // answers reads again on nothing more than a Register — no Index call in this test's second half
     // at all, which is what "nothing re-indexed" means at this seam.
     [Fact]
@@ -119,7 +119,7 @@ public class PersistentIndexTests : IDisposable
         Assert.Empty(second.GetDocuments(KeyOf("Alpha.esp")));
     }
 
-    // AC2. Content, never clock: the changed plugin's rows are dropped so the next load re-indexes
+    // Content, never clock: the changed plugin's rows are dropped so the next load re-indexes
     // it, and its neighbour — untouched — keeps everything.
     [Fact]
     public void APluginWhoseBytesChangedBetweenOpens_IsTheOnlyOneDropped()
@@ -160,7 +160,7 @@ public class PersistentIndexTests : IDisposable
         Assert.True(RecordRowsFor(second, KeyOf("Alpha.esp")) > 0);
     }
 
-    // AC3. The index holds exactly what exists: a file that is gone takes its rows with it.
+    // The index holds exactly what exists: a file that is gone takes its rows with it.
     [Fact]
     public void APluginDeletedBetweenOpens_HasItsRowsRemoved()
     {
@@ -180,7 +180,7 @@ public class PersistentIndexTests : IDisposable
         Assert.Empty(second.GetDocuments(key));
     }
 
-    // AC4a. A codec or schema change invalidates the whole file, not the rows of one plugin: the
+    // A codec or schema change invalidates the whole file, not the rows of one plugin: the
     // stored documents are that version's output and there is no partial answer to give.
     [Fact]
     public void AFileWrittenUnderAnotherVersion_RebuildsFromScratch()
@@ -210,7 +210,7 @@ public class PersistentIndexTests : IDisposable
         Assert.NotNull(second.IndexedContentHash(KeyOf("Alpha.esp")));
     }
 
-    // AC4b. A file DuckDB cannot open at all — a storage-format change on upgrade, a truncated
+    // A file DuckDB cannot open at all — a storage-format change on upgrade, a truncated
     // write — is derived state worth exactly one cold load, so it is rebuilt rather than fatal.
     [Fact]
     public void AFileThatCannotBeOpened_RebuildsFromScratch()
@@ -229,8 +229,7 @@ public class PersistentIndexTests : IDisposable
     // ADR-0001 point 6: a second Modbench window on the same game contends for one file, and DuckDB
     // refuses the second open. That refusal must never be answered by rebuilding — deleting a file
     // another process holds open succeeds on POSIX and destroys that window's live index, which is
-    // the silent divergence the decision exists to rule out. Turning the throw into a structured
-    // load failure naming the other window is #588; refusing to destroy the file is this ticket's.
+    // the silent divergence the decision exists to rule out.
     //
     // The real contention is between processes and is not reachable from here: DuckDB's .NET binding
     // shares one database instance per path within a process, so a second index over the same file

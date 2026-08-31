@@ -13,7 +13,7 @@ vi.mock('./nativeBridge', () => ({
 import { ConditionFunctionCell, ConditionRunOnCell, ConditionComparisonCell, ConditionParamCell } from './ConditionCells';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
-// Issue #167: ConditionRunOnCell's dropdown options come from `meta.enumValues` (the server's Run
+// ConditionRunOnCell's dropdown options come from `meta.enumValues` (the server's Run
 // On target catalog) rather than a hardcoded FO4 member list — this fixture stands in for whatever
 // GET /condition-run-on-targets resolved to.
 function runOnMeta(enumValues: string[]): FieldMetadata {
@@ -55,7 +55,7 @@ describe('ConditionFunctionCell', () => {
 });
 
 describe('ConditionRunOnCell', () => {
-  // Issue #223 / ADR-0034: a scalar/enum leaf reads as text until clicked (isFocused defaults to
+  // ADR-0034: a scalar/enum leaf reads as text until clicked (isFocused defaults to
   // true for a caller outside the field grid's own focus model, matching ScalarCell's documented
   // "open-on-any-click" contract for exactly this kind of standalone usage) — click first, then
   // assert on the opened editor, the same convention VmadObjectEditor.test.tsx already uses.
@@ -70,7 +70,7 @@ describe('ConditionRunOnCell', () => {
     expect(screen.getByText('000010:Fallout4.esm')).toBeInTheDocument();
   });
 
-  // #166: the resolution prop reaches the inner FormKeyCell (same "EditorID [FormKey]" composite
+  // The resolution prop reaches the inner FormKeyCell (same "EditorID [FormKey]" composite
   // FormKeyCell.test.tsx already pins for the generic field path).
   it('labels the reference with its resolved EditorID when a resolution is supplied', () => {
     const resolution: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'npc_', editorId: 'SomeActor' };
@@ -93,7 +93,7 @@ describe('ConditionRunOnCell', () => {
     expect(onCommit).toHaveBeenCalledWith({ target: 'Reference', reference: null });
   });
 
-  // Issue #167: the actual regression test — the dropdown's options are whatever `meta.enumValues`
+  // The actual regression test — the dropdown's options are whatever `meta.enumValues`
   // says, not a hardcoded FO4 member list. A list with names foreign to FO4's RunOnType (and
   // missing several real FO4 members) still renders exactly as given, proving there's no fallback
   // list baked into this component.
@@ -144,7 +144,7 @@ describe('ConditionParamCell', () => {
     expect(screen.getByDisplayValue('5')).toBeInTheDocument();
   });
 
-  // Issue #165: matches xEdit's own wbConditionToStr, which renders an enum-backed parameter's
+  // Matches xEdit's own wbConditionToStr, which renders an enum-backed parameter's
   // `.Summary` alone (e.g. "Male") — no raw value and no separate type-name suffix once decoded.
   // The (TypeName) cue stays reserved for the undecoded case (Form-category test above).
   it('renders the decoded member name, not the raw number or a type cue, for a decoded Number parameter', () => {

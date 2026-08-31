@@ -1,7 +1,6 @@
 # mEdit Referenced By tree — Surface Specification
 
-**Status: Implemented.** #213 migrated this surface off a hand-rolled webview tree onto a native
-`TreeView`. #282 moved it off an invoked sidebar view onto a Panel view that follows the active
+**Status: Implemented.** A native `TreeView` in a Panel view that follows the active
 record editor, matching xEdit's own placement and lifecycle for this surface.
 
 Editing context — operates on **records**, **FormKeys**, and **plugins**; the Mod-Management
@@ -67,17 +66,15 @@ Code surface. Zero referrers renders the tree's own empty state instead.
 ## Implementation Decisions
 
 - A native `TreeView` (`modbench.referencedByTree`, declared name **"Plugins - Referenced By"** —
-  the `Plugins - …` prefix is [#273](https://github.com/WhiskyTangoFawks/ModBench/issues/273)'s
+  the `Plugins - …` prefix is the
   naming convention for a sub-functionality of the Plugins tree, since VS Code has no view
   nesting/grouping within a container to say so structurally; referred to here by its short name
   for readability), contributed to its own Panel-location `viewsContainers` entry
   (`modbenchReferencedBy`) rather than stacked under the `modbench` activity-bar container with
   the Plugins tree — a per-record relationship query is not the always-relevant load order state
   that tree is, and Panel placement is VS Code's own answer to "a tab beside the thing it
-  describes." **Carries no gate at all** — always present, exactly like Mods/Plugins/Downloads
-  (#273 retired `modbench.viewMode` and, with it, the old `'editing'`-only gate; there was never a
-  separate visibility context key before that — the old `modbench.referencedByShown`, set by the
-  first `modbench.showReferencedBy` invocation, was already gone by #282). The consequence is
+  describes." **Carries no gate at all** — always present, exactly like Mods/Plugins/Downloads;
+  there is no view mode and no visibility context key. The consequence is
   deliberate, not an oversight: with no backend running and no active record, the view still renders —
   its own empty state (`NoActiveRecordNode`, "Open a record to see what references it.") covers
   it, the same way it already covers "a record is active but has zero referrers." No fetch is
@@ -87,9 +84,9 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   a command argument. `openRecordPanel` (the record editor's own panel-open/reuse/retarget choke
   point) reports each panel's currently displayed FormKey and which panel is active; the tracker
   fires the *active* panel's FormKey on either change, and `ReferencedByTreeProvider.showFor`
-  subscribes to that once, in `activate()`. This is forward-compatible with #284's several
-  independent record editors — the tracker already resolves "whichever panel is active," not "the
-  one singleton panel" — without #282 needing to wait for that work. `showFor(undefined)` (no
+  subscribes to that once, in `activate()`. This is forward-compatible with several
+  independent record editors (planned) — the tracker already resolves "whichever panel is active," not "the
+  one singleton panel". `showFor(undefined)` (no
   record panel open, or the active one hasn't loaded a record yet) renders `NoActiveRecordNode`
   ("Open a record to see what references it.").
 - `modbench.showReferencedBy` **still exists but no longer retargets anything** — it degrades to a
@@ -111,7 +108,7 @@ Code surface. Zero referrers renders the tree's own empty state instead.
   row count. The title omits the count (bare `"Referenced By"`) whenever it isn't a known
   quantity — no active record, or a failed fetch — rather than ever showing a `(0)` that isn't
   actually a confirmed zero-referrer result.
-- **Multi-selection and copy** (#282, this surface's first tree-level clipboard command). The
+- **Multi-selection and copy.** The
   view is created with `canSelectMany: true`, same as the Plugins tree.
   `modbench.referencedByTree.copy` is reachable by a `Ctrl+C` keybinding (`focusedView ==
   modbench.referencedByTree`) *and* a `view/item/context` entry — both invoking the one command,
@@ -140,7 +137,7 @@ Code surface. Zero referrers renders the tree's own empty state instead.
 - Reference data comes from the backend (`GET /records/{formKey}/references`) through the
   generated `ApiClient`, never raw `fetch()`; this surface renders it and does not derive it.
 
-## Actionable-menu decision (was this ticket's open question; now settled)
+## Actionable-menu decision
 
 xEdit's own right-click menu on this surface (`pmuRefBy`) is fully mutating: Compare Selected,
 the whole Copy-as-override/Copy-as-new-record/Deep-copy family, Remove, Mark Modified, Visible
@@ -151,13 +148,14 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   (`canSelectMany`), Copy (a selected group's own label), Open, and Open to the Side. None of
   these mutate a record, so they don't trip the "tree navigates, it does not mutate" line below.
 - **The mutating family (the copy-as-override/copy-as-new-record group, Remove, Mark Modified,
-  Visible When Distant) is deferred to #281**, not rejected. #281 unifies one record context menu
+  Visible When Distant) is deferred to the planned unified record context menu**, not rejected.
+  That work unifies one record context menu
   across the record row, the placed-record row, and the record editor's column header — Referenced
   By rows are records too, so they become a fourth surface for that same shared menu. Building the
-  mutating family here first would mean building it a fourth time immediately before #281 removes
-  the duplication.
-- **Compare Selected is deferred to #23** (multi-record compare), which this surface would need
-  and does not yet have.
+  mutating family here first would mean building it a fourth time immediately before the
+  unification removes the duplication.
+- **Compare Selected is deferred until multi-record compare exists**, which this surface would
+  need and does not yet have.
 
 ## Testing Decisions
 
@@ -193,9 +191,9 @@ deferred**, and that narrowing is a recorded decision, not an omission:
 ## Out of Scope
 
 - **Mutating actions from xEdit's `pmuRefBy`** — the copy-as-override/copy-as-new-record family,
-  Remove, Mark Modified, Visible When Distant — deferred to #281 (see "Actionable-menu decision"
-  above), not rejected.
-- **Compare Selected** — needs multi-record compare (#23), unbuilt.
+  Remove, Mark Modified, Visible When Distant — deferred to the unified record context menu (see
+  "Actionable-menu decision" above), not rejected.
+- **Compare Selected** — needs multi-record compare, unbuilt.
 - **Multi-record referrer unions** — showing the union of referrers for a multi-record *source*
   selection (as opposed to multi-selecting *referrer* rows, which is in scope and shipped) needs a
   batch `GET /records/{formKeys}/references`-style endpoint; today's endpoint is single-FormKey,
@@ -206,11 +204,12 @@ deferred**, and that narrowing is a recorded decision, not an omission:
   here.
 - **A referrer whose only link lives inside a VMAD struct-list script property** — Mutagen's own
   `ScriptStructListProperty.EnumerateFormLinks` does not walk `Structs[*].Members`
-  (Mutagen-Modding/Mutagen#688), so this tree cannot list that referrer; the backend's own read
-  (`GetReferencedBy`) has the identical gap Track/Compile refuse on (#520,
-  `docs/specs/medit-repair.md`'s Kind A table). Blocked upstream, not patched here — hand-walking
+  (Mutagen-Modding/Mutagen upstream issue 688), so this tree cannot list that referrer; the backend's own read
+  (`GetReferencedBy`) has the identical gap Track/Compile refuse on
+  (`docs/specs/medit-repair.md`'s Kind A table). Blocked upstream, not patched here — hand-walking
   struct members to recover these links would be a second, divergent link enumerator alongside
-  whatever `EnumerateFormLinks` becomes once #688 lands, which is exactly the risk #520 rejected.
+  whatever `EnumerateFormLinks` becomes once the upstream fix lands, which is exactly the risk
+  that refusal rejected.
 - **Forward references** (what this record points at) — that is the compare grid's FormKey
   cells, [medit-record-editor.md](medit-record-editor.md).
 
@@ -219,8 +218,8 @@ deferred**, and that narrowing is a recorded decision, not an omission:
 - Grouping by referencing record, rather than by holding plugin, is what makes the tree answer
   "what breaks" rather than "how many rows are there". The plugin list is detail under the
   answer, not the answer.
-- **Always-present-and-following, not invoked-and-retargeted**, is the deliberate choice here
-  (reversed from this surface's original #213 design): xEdit users never look for a "show
+- **Always-present-and-following, not invoked-and-retargeted**, is the deliberate choice here:
+  xEdit users never look for a "show
   Referenced By" command because there isn't one — the pane is simply there, next to the record,
-  whenever it has something to say. #282 brought mEdit to that same shape once a native Panel
-  placement made "beside the record view" reachable without a webview.
+  whenever it has something to say. The native Panel
+  placement makes "beside the record view" reachable without a webview.

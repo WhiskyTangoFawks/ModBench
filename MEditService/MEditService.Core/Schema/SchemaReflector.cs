@@ -20,11 +20,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Stryker disable once NullCoalescing: logger init; only usage is a defensive LogTrace in catch — unreachable from tests without artificial exception injection
     private readonly ILogger _logger = logger ?? NullLogger<SchemaReflector>.Instance;
 
-    // Issue #110: these two sets were one undifferentiated list, mixing two unrelated rules.
-    // Split so each is documented on its own terms; `pfo2` (formerly in this list) was dead —
-    // it's a PACK sub-record struct field (wbStruct(PFO2, 'Data', ...) in wbDefinitionsFO4.pas),
-    // never a top-level Mutagen record type, so it could never have been discovered here anyway.
-
     // Deliberate product filter: not standard editable refs (placed refr/achr are
     // indexed as normal records so the worldspace tree, record editor, and agent queries are
     // uniform DuckDB reads; their cell parentage lives in the `placement` side table — land/
@@ -50,7 +45,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private readonly ConcurrentDictionary<GameCategory, GameSchemaCache> _cache = new();
 
-    // #445: keyed by category (not release) because the assembly is category-wide — a `null` entry
+    // Keyed by category (not release) because the assembly is category-wide — a `null` entry
     // means that category's assembly was probed once and found unreferenced, cached so a repeated
     // ask never re-attempts the load or re-logs the warning below.
     private readonly ConcurrentDictionary<GameCategory, Assembly?> _assemblyByCategory = new();
@@ -65,7 +60,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     /// <summary>
     /// Reports whether <paramref name="release"/>'s backing Mutagen record-type assembly is
-    /// referenced by this build — never throws (#445). Discovery walking multiple installs should
+    /// referenced by this build — never throws. Discovery walking multiple installs should
     /// call this before <see cref="GetSchemas"/> to decide whether a release is offered at all.
     /// </summary>
     public bool IsSupported(GameRelease release) => ResolveAssembly(release, release.ToCategory()) is not null;
@@ -107,16 +102,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var majorRecordGetterType =
             assembly.GetType($"Mutagen.Bethesda.{category}.I{category}MajorRecordGetter")!;
 
-        // #263: a GRUP signature can be backed by several concrete Mutagen subclasses sharing one
+        // A GRUP signature can be backed by several concrete Mutagen subclasses sharing one
         // abstract base — GameSettingInt/Float/String/Bool/UInt are all GMST, GlobalInt/Float/
         // Short/Bool are all GLOB, DamageType/DamageTypeIndexed are both DMGT — because the type
         // discriminant lives on the record itself (an EditorID prefix, a subrecord, ...), never on
         // the table. `discovered`/`seenTables` still record one winner per table (RecordType stays
-        // bound to it, deliberately unchanged by this fix — see BuildSchema), but `siblingsByTable`
-        // keeps every concrete type sharing a signature so BuildSchema can union their columns
-        // instead of the loser's shape being silently dropped (issue #263: that drop is why a
-        // GameSetting's Data column only ever worked for whichever subclass reflection happened to
-        // enumerate first).
+        // bound to it, deliberately — see BuildSchema), but `siblingsByTable`
+        // keeps every concrete type sharing a signature so BuildSchema can union their columns —
+        // silently dropping the loser's shape would make a GameSetting's Data column only ever
+        // work for whichever subclass reflection happened to enumerate first.
         var seenTables = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var discovered = new List<(string tableName, Type getterType)>();
         var siblingsByTable = new Dictionary<string, List<Type>>(StringComparer.OrdinalIgnoreCase);
@@ -145,21 +139,21 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             discovered.Add((tableName, getterInterface));
         }
 
-        // Bundled fix (issue #263): every sibling getter type now resolves to its table, not just
-        // the winner — before this, a FormLink<IGameSettingFloatGetter> anywhere in the schema
-        // failed to resolve ValidFormKeyTypes to ["gmst"] whenever Float wasn't that run's winner
+        // Every sibling getter type resolves to its table, not just the winner — otherwise a
+        // FormLink<IGameSettingFloatGetter> anywhere in the schema fails to resolve
+        // ValidFormKeyTypes to ["gmst"] whenever Float isn't that run's winner
         // (GetFormLinkValidTypes below looks types up in this same dictionary).
         var getterTypeToTable = siblingsByTable
             .SelectMany(kv => kv.Value.Select(t => (Type: t, Table: kv.Key)))
             .ToDictionary(x => x.Type, x => x.Table);
 
-        // #178: resolved once per category (condition codecs are stateless per-call factories,
+        // Resolved once per category (condition codecs are stateless per-call factories,
         // and the codec itself doesn't vary per table) — passed into BuildSchema so it can skip
         // condition-shaped properties the same way baseSkip skips other fields, keeping the
         // Conditions section (Fallout4ConditionCodec.Extract) as the one place they're surfaced.
         var conditionCodec = ConditionCodecRegistry.For(category);
 
-        // #179: resolved once per category, game-neutral like everything else here — each game
+        // Resolved once per category, game-neutral like everything else here — each game
         // assembly declares its own IHaveVirtualMachineAdapterGetter in its flat
         // Mutagen.Bethesda.{category} namespace (no shared cross-game interface exists), the same
         // one Records/DuckDbRecordIndex.IndexVmad keys off for a given game's compiled type.
@@ -188,7 +182,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             schemas["header"] = headerSchema;
     }
 
-    // ── Header schema (Issue #1 slice A1) ──────────────────────────────────────
+    // ── Header schema ──────────────────────────────────────────────────────────
     // A mod header is not a major record in Mutagen (no FormKey/EditorID) — it can't be
     // discovered by the major-record-getter scan above, so it gets one hand-assembled schema
     // entry instead. Author/Flags come from a second small reflection pass over the per-game
@@ -239,7 +233,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             // member means ESL", independent of what the UI displays.
             eslFlagValue = FindEslFlagValue(flagsLeaf.EnumValues, flagsLeaf.EnumBitValues);
 
-            // Issue #118: only the header's flags column gets xEdit's display names — every other
+            // Only the header's flags column gets xEdit's display names — every other
             // bitmask enum in the schema (npc_, race, ...) keeps its raw Mutagen member names, so
             // this maps flagsLeaf.EnumValues here rather than inside ClassifyEnumLeaf.
             var displayNames = flagsLeaf.EnumValues.Select(MapToXEditFlagName).ToArray();
@@ -258,7 +252,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, "MasterReferences", "VARCHAR", _ => null, "array",
             Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
-        applies.Add(HeaderMastersApply()); // Issue #86: add-only master list; validation is the caller's
+        applies.Add(HeaderMastersApply()); // validation is the caller's
 
         return new RecordTableSchema
         {
@@ -276,8 +270,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // Write counterpart to the masters extract: MasterReferences lives directly on IMod (not under
     // ModHeader, unlike author/flags), so this doesn't go through HeaderPropertyApply's
     // modHeaderProp.GetValue indirection — it rebuilds mod.MasterReferences in place from the
-    // incoming JSON array of plugin filenames. Validating that array is the caller's job
-    // (issue #86) — this apply trusts whatever it is handed.
+    // incoming JSON array of plugin filenames. Validating that array is the caller's job —
+    // this apply trusts whatever it is handed.
     private static Action<IMod, JsonElement> HeaderMastersApply() => (mod, json) =>
     {
         if (json.ValueKind != JsonValueKind.Array) return;
@@ -308,7 +302,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static readonly HashSet<string> LightMasterFlagNames =
         new(StringComparer.OrdinalIgnoreCase) { "Small", "LightMaster", "Light" };
 
-    // Issue #118: xEdit's display names for the plugin header's flags, keyed off the Mutagen
+    // xEdit's display names for the plugin header's flags, keyed off the Mutagen
     // member name (never a bit position — bit positions differ across games; see
     // wbDefinitionsFO4.pas for the source vocabulary: ESM/Localized/ESL/Update). Applies only to
     // the header's flags column (see BuildHeaderSchema); every other bitmask enum in the schema
@@ -334,27 +328,24 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return null;
     }
 
-    // #413: the three GRUP-timestamp properties join this list for the same reason
-    // MajorRecordFlagsRaw and FormVersion are already on it — they are not record data. A timestamp
+    // The three GRUP-timestamp properties are on this list for the same reason
+    // MajorRecordFlagsRaw and FormVersion are — they are not record data. A timestamp
     // here belongs to the GRUP that contains the record, not to the record, so it stays out of the
     // queryable schema on that ground alone (ADR-0042's own file/view-layer split: the source
     // document is the lossless side, this reflected schema is the queryable-projection side, and the
-    // two are allowed to diverge here on purpose).
-    //
-    // #470 correction: this comment used to also justify the skip by "the per-record serializer
-    // accordingly never emits one". That premise is gone — RecordTextCodecCustomization no longer
-    // omits Cell.PersistentTimestamp/TemporaryTimestamp or Worldspace.SubCellsTimestamp from the
-    // *file* (ADR-0042 decision 3 now has no exception), so <Type>_Serialization does write these
-    // properties today. The skip itself is unaffected: GrupTimestamps_AreAbsentFromSchemaAndViewsAlike
-    // still holds, and still should, on the GRUP-ownership argument above — a reflected column and a
-    // source-document field are different promises, and only the file's is required to be lossless.
+    // two are allowed to diverge here on purpose). Note the *serializer* does write these
+    // properties to the file (RecordTextCodecCustomization does not omit
+    // Cell.PersistentTimestamp/TemporaryTimestamp or Worldspace.SubCellsTimestamp — ADR-0042
+    // decision 3 has no exception): a reflected column and a source-document field are different
+    // promises, and only the file's is required to be lossless
+    // (GrupTimestamps_AreAbsentFromSchemaAndViewsAlike).
     //
     // CAVEAT for whoever hits this next: the skip is BY PROPERTY NAME ACROSS EVERY RECORD TYPE. If a
     // future game has a record type where Timestamp/TemporaryTimestamp/PersistentTimestamp is
     // genuine per-record data rather than GRUP metadata, this list would wrongly drop it. The rule to
     // re-verify is whether the field is conceptually the record's own data or its containing GRUP's
-    // — not "extend the list because a new name looks similar", and no longer "does the serializer
-    // emit it", since #470 means that question no longer distinguishes the two cases.
+    // — not "extend the list because a new name looks similar", and not "does the serializer emit
+    // it", since that question doesn't distinguish the two cases.
     private static readonly HashSet<string> BaseSkip = new(StringComparer.OrdinalIgnoreCase)
     {
         "FormKey", "EditorID", "IsCompressed", "FormVersion", "VersionControl",
@@ -362,14 +353,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         "Timestamp", "TemporaryTimestamp", "PersistentTimestamp"
     };
 
-    // #263: RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) stays bound to
+    // RecordType (used for enumeration in DuckDbRecordIndex.IndexRecordTable) stays bound to
     // the discovery winner, deliberately, even though RecordColumns below is unioned across every
     // sibling. Enumeration already returns every sibling's records no matter which one's getter
     // interface is named — Mutagen's own EnumerateMajorRecords falls back through
     // InheritingInterfaceMapping to the abstract group base (e.g. IGameSettingGetter) and the group
-    // enumerator returns every element once the requested type is assignable to it. Rows were never
-    // dropped; only the Data column's extraction was broken. So RecordType has nothing to gain from
-    // pointing at the abstract base.
+    // enumerator returns every element once the requested type is assignable to it. So RecordType
+    // has nothing to gain from pointing at the abstract base.
     private static RecordTableSchema BuildSchema(
         string tableName, Type getterType, List<Type> siblingGetterTypes,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger,
@@ -377,7 +367,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var columns = ReflectColumns(getterType, conditionCodec, vmadInterfaceType, getterTypeToTable, logger);
 
-        // #263: union in every other concrete subclass sharing this signature (siblingGetterTypes
+        // Union in every other concrete subclass sharing this signature (siblingGetterTypes
         // is just [getterType] for the overwhelming majority of tables, so this loop is a no-op
         // there). The rule is expressed purely in terms of a column's *shape*, never a table or
         // signature name, so a hypothetical third subclass of an existing signature — or a
@@ -406,26 +396,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         };
     }
 
-    // #178: condition-shaped properties (e.g. Perk.Conditions, Quest.DialogConditions/
+    // Condition-shaped properties (e.g. Perk.Conditions, Quest.DialogConditions/
     // UnusedConditions) are already surfaced by the game's IConditionCodec into the record
     // editor's dedicated Conditions section — reflecting them again here would duplicate
     // them as plain array columns. Game-generic: the shape test lives behind the codec
     // (IsConditionListField), not a hardcoded field-name list, so a game with no registered
     // codec (conditionCodec == null) simply skips no extra fields here.
     //
-    // #260: same rule for the virtual-machine-adapter property — it's already surfaced by
-    // the dedicated Scripts (VMAD) section (HasVmad, set in BuildSchema above since #263 split
-    // this filtering out into its own ReflectColumns; RecordQueryService.GetVmad), so
+    // Same rule for the virtual-machine-adapter property — it's already surfaced by the
+    // dedicated Scripts (VMAD) section (HasVmad, set in BuildSchema above, and
+    // RecordQueryService.GetVmad), so
     // reflecting it again here would duplicate it as an opaque struct column. Type-scoped to
     // match the section it defers to: HasVmad only renders for a getterType the interface is
     // assignable to, so the exclusion only fires there too — a type that doesn't implement
     // the interface must lose nothing. No hardcoded property name: the property is whatever
     // vmadInterfaceType itself declares, so a game category with no such interface
     // (vmadInterfaceType == null) skips nothing.
-    //
-    // #263: extracted so BuildSchema can call it once per sibling getter type sharing a signature,
-    // not just the discovery winner — identical logic and output to what BuildSchema used to do
-    // inline for a single getterType.
     private static List<ColumnSpec> ReflectColumns(
         Type getterType, IConditionCodec? conditionCodec, Type? vmadInterfaceType,
         IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
@@ -470,10 +456,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // (BuildListColumn / BuildStructColumn); everything else GetColumnInfo can return is scalar.
     private static readonly HashSet<string> NonScalarApiTypes = new(StringComparer.Ordinal) { "array", "struct" };
 
-    // #339: distinguishes OMOD's Properties (mergeable — every sibling's element is the same
-    // struct{property: enum, step: float, plus #360's sparse union of the seven leaf types' own
+    // Distinguishes OMOD's Properties (mergeable — every sibling's element is the same
+    // struct{property: enum, step: float, plus the sparse union of the seven leaf types' own
     // value/value2/record/function_type/enum_int_value}, only the enum's own member-name domain
-    // differs per sibling — #360's own union is independent of T, so it's identical across every
+    // differs per sibling — that union is independent of T, so it's identical across every
     // sibling too) from DMGT's DamageTypes (not mergeable — DamageType's element is a struct of two
     // formlinks, DamageTypeIndexed's is a bare uint, no field names in common at all). Two enum
     // leaves are always considered compatible here — their domains get unioned by the caller, not
@@ -514,9 +500,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             a.ToFieldMetadata() with { AllowsNull = false },
             b.ToFieldMetadata() with { AllowsNull = false });
 
-    // #263: folds one sibling's version of a column into the accumulating union. The rule is
+    // Folds one sibling's version of a column into the accumulating union. The rule is
     // shape-based, never keyed by table or signature name — see BuildSchema's caller comment for
-    // why that matters (AC: a hypothetical third subclass, or another game's own signature, must
+    // why that matters (a hypothetical third subclass, or another game's own signature, must
     // be handled with no code change here).
     //
     //   - not present yet on any sibling seen so far: add it as-is, but nullable — not every
@@ -536,7 +522,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     //     try/catch swallow every non-winning subclass's value to null.
     //   - present already, conflicting NON-scalar shape, structurally identical except which enum
     //     member names the shared "which property" leaf allows (OMOD's Properties — every sibling's
-    //     element is the same struct, #360's own seven-leaf sparse union included, only the "which
+    //     element is the same struct, the seven-leaf sparse union included, only the "which
     //     property" enum's own domain differs): merge into one column, keeping the typed shape and
     //     dispatching Extract to whichever sibling's own (already-correct) reflected Extract
     //     matches the record's runtime type — never a foreign one. See MergeNonScalarByEnumDomain.
@@ -606,7 +592,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 return;
             }
 
-            // #339: not the same shape at all (e.g. DMGT's DamageTypes: DamageType's struct-of-
+            // Not the same shape at all (e.g. DMGT's DamageTypes: DamageType's struct-of-
             // formlinks vs DamageTypeIndexed's bare uint) — no field names in common, so there is
             // nothing for a domain union to reconcile. Split into two columns, one per shape.
             SplitNonScalarByShape(columns, existingIndex, winnerGetterType, siblingGetterType, siblingSpec);
@@ -636,12 +622,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             DuckDbType = "VARCHAR",
             ApiType = "string",
             Extract = WidenedExtract,
-            // #413: the marker generated views key off, set at the one rung that creates this shape
+            // The marker generated views key off, set at the one rung that creates this shape
             // rather than re-derived later from a heuristic over the resulting column.
             IsWidened = true,
             ViewDefaultLiteral = null,
             IsFlagsEnum = false,
-            Apply = null, // editing a widened value is out of scope (#263) — read-only falls out of
+            Apply = null, // editing a widened value is out of scope — read-only falls out of
                           // PluginWriter.IsFieldPathReadOnly already treating a null Apply as such
             IsArray = false,
             ElementType = null,
@@ -654,15 +640,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         };
     }
 
-    // #339: OMOD's Properties rung — every sibling's element is the exact same struct shape
-    // (IsSameShapeExceptEnumDomain already confirmed this, #360's own union included — see that
+    // OMOD's Properties rung — every sibling's element is the exact same struct shape
+    // (IsSameShapeExceptEnumDomain already confirmed this, the leaf union included — see that
     // method's own comment), so unlike the scalar-widen rung above there is no need to give up the
     // typed shape at all.
     // Each sibling's own ReflectColumns call already built a fully self-consistent, correctly-typed
     // Extract for *that* sibling's own runtime type (BuildSchema calls ReflectColumns once per
-    // sibling independently) — the defect was only ever that the merged schema kept calling the
+    // sibling independently) — the hazard is only ever the merged schema calling the
     // *winner's* Extract against a foreign instance. Dispatching by runtime type to the matching
-    // sibling's own pre-built Extract, exactly like WidenedExtract above, fixes that without any
+    // sibling's own pre-built Extract, exactly like WidenedExtract above, avoids that without any
     // per-element reflection: the raw JSON each sibling's Extract already produces is correctly
     // shaped for its own element type, so nothing here needs to touch it beyond picking the right
     // one to call.
@@ -734,7 +720,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return a;
     }
 
-    // #339: a small, hand-curated disambiguation for a split column's name — the same convention
+    // A small, hand-curated disambiguation for a split column's name — the same convention
     // RecordDisplayNames already uses for xEdit-sourced display labels, not a merge-decision rule
     // (the decision to split at all is shape-based, made above; only the resulting *label* is
     // curated here, same as RecordDisplayNames/MapToXEditFlagName already do elsewhere in this
@@ -759,7 +745,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static string QualifiedSplitName(string baseName, ColumnSpec scalarShapeSpec) =>
         SplitColumnNames.TryGetValue(baseName, out var name)
             ? name
-            // Shape-derived fallback for an unmapped future conflict (AC: no code change needed) —
+            // Shape-derived fallback for an unmapped future conflict (no code change needed) —
             // not pretty, but deterministic and never a table/signature name.
             : $"{baseName}_{scalarShapeSpec.ElementType?.Type ?? scalarShapeSpec.ApiType}";
 
@@ -779,7 +765,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return name;
     }
 
-    // #339: the struct/richer shape always keeps the property's own name; the plain-scalar shape
+    // The struct/richer shape always keeps the property's own name; the plain-scalar shape
     // always gets the disambiguated name. This holds regardless of which subclass wins schema
     // discovery (see BuildForCategory's own comment: that race is a reflection-order artifact,
     // never something callers may rely on) — but only for the one-scalar-one-struct pairing DMGT
@@ -793,12 +779,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     //
     // Scoped to two siblings — DMGT's only real case today. A hypothetical third sibling sharing
     // one of these two shapes would need to re-resolve which of the two split columns to extend,
-    // which this does not attempt (no real data exercises it; #263 left an equivalent gap
-    // undocumented in its own lifecycle-delegate carve-out, this one is called out explicitly).
+    // which this does not attempt (no real data exercises it; a documented gap).
     //
-    // Both resulting columns get a type-checked Extract (AC3's "impossible by construction", not a
-    // foreign read swallowed by the pre-existing catch-all) — both are new paths this rung adds,
-    // the winner's own column included, since it may be the one getting renamed here. Both are also
+    // Both resulting columns get a type-checked Extract (a foreign read is impossible by
+    // construction, not merely swallowed by the pre-existing catch-all) — both are new paths this
+    // rung adds, the winner's own column included, since it may be the one getting renamed here. Both are also
     // AllowsNull: true — becoming dispatch-guarded means every row of the *other* shape now
     // legitimately reads null through each column, on both sides of the split, not just the newly
     // appended one.
@@ -839,7 +824,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
     }
 
-    // #339: the fast-path counterpart to SplitNonScalarByShape, for a sibling that turned out not
+    // The fast-path counterpart to SplitNonScalarByShape, for a sibling that turned out not
     // to share an *already-merged* column's shape (see the nonScalarMergeDispatch branch above) —
     // the merged column is left untouched (it is already correct for every sibling folded into it),
     // so this only ever adds the mismatched sibling as its own column, guarded the same way.
@@ -906,9 +891,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         bool IsBitmask = false,
         string[]? EnumBitValues = null)
     {
-        // #541: used to hardcode false — dead until BuildListSubField gave this record its first
-        // list-shaped instance (a struct/array-element sub-field, e.g. Destructible.Resistances/
-        // Stages). Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
+        // Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
         // "array"`) rather than adding a redundant constructor flag that could disagree with ApiType.
         public FieldMetadata ToFieldMetadata() =>
             new(Name, ApiType, ApiType == "array", ValidFormKeyTypes, EnumValues,
@@ -965,8 +948,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         !IsFormLink(type) &&
         type.GetProperty("StaticRegistration", BindingFlags.Public | BindingFlags.Static) != null;
 
-    // #541 (P3Int16, P3Float) widened by #546 to the rest of Noggog's small value-vector struct
-    // family — plain structs (not Loqui interfaces: no StaticRegistration), each with two or three
+    // Noggog's small value-vector struct family
+    // — plain structs (not Loqui interfaces: no StaticRegistration), each with two or three
     // scalar members named X, Y, and optionally Z. Real FO4 examples of each, found by grepping
     // references/Mutagen/Mutagen.Bethesda.Fallout4 rather than assumed: ObjectBounds.First/Second
     // (P3Int16), several top-level fields such as Placed*.Position and IslandData.Min/Max plus
@@ -1015,8 +998,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // lives on 7 separate leaf getter interfaces (IObjectModIntPropertyGetter<T>,
     // IObjectModFloatPropertyGetter<T>, ...), each implementing IAObjectModPropertyGetter<T>
     // rather than the other way around, so none of their own members are ever reached by this
-    // walk alone. #360 closes that gap for OMOD specifically — see BuildObjectModPropertyLeafFields.
-    // #548 generalizes the same shape for every other Mutagen "A<Name>" abstract Loqui union
+    // walk alone. BuildObjectModPropertyLeafFields closes that gap for OMOD specifically, and
+    // the same shape is generalized for every other Mutagen "A<Name>" abstract Loqui union
     // (ANpcLevel, AQuestAlias, ...) — see BuildAbstractUnionLeafFields for why OMOD's own leaves
     // still need their own hand-picked table (a generic base type with no reflectively-discoverable
     // ClassType of its own) while everything else can be discovered by reflection alone.
@@ -1051,23 +1034,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return result;
     }
 
-    // ── #360: OMOD's Properties element's seven leaf getter interfaces ─────────────────────────
+    // ── OMOD's Properties element's seven leaf getter interfaces ───────────────────────────────
     // Hardcoded to these seven names, not discovered by scanning the assembly for anything else
     // shaped like this: IAObjectModPropertyGetter<T> is, today, the only base Getter interface in
     // the schema whose real per-element payload lives entirely on named sibling leaves it never
     // inherits from (confirmed against the real ObjectMod*Property_Generated.cs sources — the one
     // other generic Getter interface in the Fallout4 assembly, IObjectTemplateGetter<T>, has no
     // such siblings at all). Building a general "discover a base's leaf siblings" mechanism here
-    // would be machinery for a second consumer that doesn't exist yet; if one turns up, that
-    // ticket can lift a general version out then, against two real call sites instead of one
+    // would be machinery for a second consumer that doesn't exist yet; if one turns up, a general
+    // version can be lifted out then, against two real call sites instead of one
     // imagined one.
     //
-    // #531 pairs each leaf with Mutagen's own ObjectModProperty.ValueType member name (verified
+    // Each leaf is paired with Mutagen's own ObjectModProperty.ValueType member name (verified
     // against Mutagen.Bethesda.Fallout4/Records/Common Subrecords/ObjectModProperty.cs — Int=0,
     // Float=1, Bool=2, String=3, FormIdInt=4, Enum=5, FormIdFloat=6, reordered here to line up
     // with the getter-interface list rather than the enum's own ordinal order) — the write-side
-    // discriminator (see ResolveObjectModPropertyConcreteType below), spelled the same way #360's
-    // own read side is extended to expose it (BuildObjectModPropertyLeafFields' `value_type`), not
+    // discriminator (see ResolveObjectModPropertyConcreteType below), spelled the same way the
+    // read side exposes it (BuildObjectModPropertyLeafFields' `value_type`), not
     // a second scheme. Bare strings, not a reference to one game's enum type, for the same reason
     // the interface names are strings: this stays game-generic (Starfield's own ValueType enum
     // carries the same seven members under its own namespace).
@@ -1101,26 +1084,22 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // works whichever category's Mutagen assembly is actually loaded (Starfield ships the exact
     // same seven type names under its own namespace).
     //
-    // Decision (2026-08-27 triage): group the leaves' own declared members by name. A name every
+    // The leaves' own declared members are grouped by name. A name every
     // declaring leaf agrees on the CLR type for becomes one typed, sparse sub-field (null on a
     // leaf that lacks it) — `record` (FormLink, FormLinkInt/FormLinkFloat only) and
     // `enum_int_value` (uint, Enum only). A name whose declaring leaves disagree on type becomes
-    // one text field via the same FormatWidenedValue the #263 scalar-widen rung already uses —
+    // one text field via the same FormatWidenedValue the scalar-widen rung already uses —
     // `value` (uint/float/bool/string across six leaves), `value2` (uint/float/bool across
-    // three), `function_type` (four distinct FunctionType CLR types across all seven — the
-    // triage's own prose counted three; doesn't change the outcome, still collides, still text).
+    // three), `function_type` (four distinct FunctionType CLR types across all seven).
     //
-    // #531: every result here now carries a real Apply. BuildTypedLeafUnionField reuses the
-    // ordinary per-field write routing #429 already gives every other sub-field. Its widened
+    // Every result here carries a real Apply. BuildTypedLeafUnionField reuses the
+    // ordinary per-field write routing every other sub-field gets. Its widened
     // sibling gets a dedicated applier that resolves the already-constructed concrete object's own
-    // declared property type at write time rather than assuming one — the thing #360's read side
-    // structurally could not do, since nothing has committed to a concrete type yet there.
-    // Read-only was never an end in itself: it was true only because the write
-    // path for this element threw regardless (Activator.CreateInstance on the abstract
-    // AObjectModProperty<T>), which ApplyListJson's new discriminator-driven resolution now fixes.
+    // declared property type at write time rather than assuming one — the read side structurally
+    // cannot, since nothing has committed to a concrete type yet there.
     // A plain `result.Add` below also gives the element a `value_type` discriminator sub-field —
-    // synthesized here, not one of the seven leaves' own declared members — which is what that
-    // resolution reads.
+    // synthesized here, not one of the seven leaves' own declared members — which is what
+    // ApplyListJson's discriminator-driven concrete-type resolution reads.
     private static List<SubFieldSpec> BuildObjectModPropertyLeafFields(
         Type baseGetterInterface, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
@@ -1174,7 +1153,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private const string ObjectModValueTypeDiscriminator = "value_type";
 
-    // #531: the write-side discriminator — which of the seven leaves a Properties element's own
+    // The write-side discriminator — which of the seven leaves a Properties element's own
     // JSON should construct. Read: classifies the object's already-concrete runtime type the exact
     // same way every Extract above does (`leafType.IsInstanceOfType`); nothing new is derived here,
     // only exposed. Apply: null, deliberately — this cannot be applied to an *already-constructed*
@@ -1215,10 +1194,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return null;
         }
 
-        // #531: the same MakeApplier/ApplyFormLinkJson routing ProjectSubField gives every other
-        // sub-field (#429) — it resolves the property off the target's own runtime type and answers
+        // The same MakeApplier/ApplyFormLinkJson routing ProjectSubField gives every other
+        // sub-field — it resolves the property off the target's own runtime type and answers
         // ApplyOutcome.PropertyNotFound when that type doesn't declare it, which ApplySubFields
-        // treats as a silent no-op, exactly what a leaf that lacks this member needs (#532).
+        // treats as a silent no-op, exactly what a leaf that lacks this member needs.
         Func<object, JsonElement, ApplyOutcome>? apply = rep.Convert switch
         {
             { } c => MakeApplier(pName, nullable: true, c, logger),
@@ -1244,8 +1223,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return null;
         }
 
-        // #531: unlike the typed union above, these members disagree on CLR type across leaves —
-        // that disagreement is why #360 widened them to text on read in the first place. Apply
+        // Unlike the typed union above, these members disagree on CLR type across leaves —
+        // that disagreement is why they are widened to text on read in the first place. Apply
         // therefore cannot share one converter the way MakeApplier's callers normally do; instead
         // it resolves the target property's own declared type at write time, off whichever
         // concrete leaf ApplyListJson already constructed, and converts into *that*.
@@ -1253,7 +1232,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     /// <summary>
-    /// #531/#532: applies one of the widened OMOD leaf union fields (<c>value</c>, <c>value2</c>,
+    /// Applies one of the widened OMOD leaf union fields (<c>value</c>, <c>value2</c>,
     /// <c>function_type</c>) onto whichever concrete leaf <c>ApplyListJson</c> already resolved.
     ///
     /// <para><see cref="ApplyOutcome.PropertyNotFound"/> when the target object's runtime type
@@ -1263,9 +1242,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// means "this leaf's own Extract had nothing to read back for this member", not a value to
     /// reject.</para>
     ///
-    /// <para><see cref="ApplyOutcome.ValueRejected"/> — #532, no longer a silent no-op — when the
+    /// <para><see cref="ApplyOutcome.ValueRejected"/> — never a silent no-op — when the
     /// property *does* exist but the incoming JSON can't be converted into whatever type it actually
-    /// is: <c>ApplySubFields</c> now folds that into a refusal of the whole element/struct write
+    /// is: <c>ApplySubFields</c> folds that into a refusal of the whole element/struct write
     /// rather than constructing the right concrete type and then silently dropping a value onto
     /// it.</para>
     /// </summary>
@@ -1288,7 +1267,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // own lowercase, JS-idiomatic spelling), an enum leaf's is one of its member names, and every
     // other leaf's is an InvariantCulture-formatted number — so parsing back is exactly as
     // straightforward as formatting was, no heuristics needed, because the property's actual
-    // declared type is already known by the time this runs (unlike #360's own read side, nothing
+    // declared type is already known by the time this runs (unlike the read side, nothing
     // here is guessing which leaf it might be — ApplyListJson resolved that before constructing the
     // object this is now applying onto). A freshly-added element with no prior GET to round-trip
     // may instead send a raw JSON number/bool rather than pre-formatted text; both are accepted.
@@ -1327,11 +1306,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
     }
 
-    // ── #548: general abstract Loqui union ("A<Name>") leaves ──────────────────────────────────
+    // ── General abstract Loqui union ("A<Name>") leaves ────────────────────────────────────────
     // Mutagen's "A<Name>" convention: an abstract base (e.g. ANpcLevel, AQuestAlias) whose real
     // per-subclass data lives entirely on concrete classes that inherit *from* it (NpcLevel/
     // PcLevelMult; QuestReferenceAlias/QuestLocationAlias/QuestCollectionAlias) — the same "a plain
-    // interface walk from the base alone never reaches it" shape #360 solved narrowly for OMOD's
+    // interface walk from the base alone never reaches it" shape solved narrowly above for OMOD's
     // Properties element. Unlike OMOD's own leaves (generic-closed sibling interfaces reachable
     // only via a hand-picked table, because IAObjectModPropertyGetter<T> has no reflectively
     // enumerable closed ClassType of its own — see IsObjectModPropertyBase's own comment), every
@@ -1339,19 +1318,19 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // non-generic abstract *class* (ANpcLevel_Registration.ClassType, FieldCount == 0), so its
     // concrete leaves are discoverable the same way BuildForCategory's own top-level loop already
     // discovers every schema type: scanning assembly.GetTypes() for what is, and is not, abstract.
-    // No per-type interface-name table — the ticket's own instruction to prefer this over a second
-    // #360-style table. OMOD's own path stays untouched and alongside this one, rather than forced
+    // No per-type interface-name table — reflection discovery is preferred over a second
+    // OMOD-style table. OMOD's own path stays untouched and alongside this one, rather than forced
     // into one shared abstraction for two genuinely different discovery mechanisms.
     //
     // Each leaf's own member set is built with GetSubFieldInfo — the same per-property dispatch
     // every ordinary (non-union) sub-field already goes through (nested Loqui structs, lists,
     // vector structs, and every scalar/enum/formlink/string shape), not the narrower 4-shape
-    // ClassifyLeaf set #360's own OMOD leaves needed (OMOD's 7 leaves are all scalar/enum/formlink/
+    // ClassifyLeaf set OMOD's own leaves needed (OMOD's 7 leaves are all scalar/enum/formlink/
     // string; AQuestAlias's own leaves are not — QuestReferenceAlias's "Fill Type" is itself
     // several nested Loqui structs, and two of AQuestAlias's three leaves share a list-typed
     // Conditions member). A member whose declaring leaves disagree on shape is omitted — logged,
-    // not guessed or crashed on — the same "expose nothing rather than something wrong" rule #263's
-    // DamageType/DamageTypeIndexed merge already established for a differently-shaped same-named
+    // not guessed or crashed on — the same "expose nothing rather than something wrong" rule the
+    // DamageType/DamageTypeIndexed merge already follows for a differently-shaped same-named
     // column (ADR-0026: a confident wrong value is worse than an absent one).
 
     // Mirrors GetSetterType: reads GetterType off a *concrete* Loqui class's own StaticRegistration,
@@ -1381,10 +1360,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return leaves;
     }
 
-    // #548 review (Finding 1): Condition/ConditionData (CTDA) and AVirtualMachineAdapter (VMAD) are
+    // Condition/ConditionData (CTDA) and AVirtualMachineAdapter (VMAD) are
     // both `public abstract partial class` — structurally identical to ANpcLevel/AQuestAlias — but
     // permanently outside the reflected schema by documented architectural boundary
-    // (MEditService/CLAUDE.md:232-235: "VMAD/condition reconstitution survives at the query-service
+    // (MEditService/CLAUDE.md: "VMAD/condition reconstitution survives at the query-service
     // level, Queries/RecordDocumentCodecs, operating on RecordDocument.Body — rejected from the seam
     // itself, same as raw SQL"). The existing exclusion mechanisms (IConditionCodec.
     // IsConditionListField, BuildSchema's own vmadInterfaceType check) gate a *named top-level
@@ -1394,7 +1373,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // "Data" member specifically: never itself excluded by IsConditionListField, since that check
     // only ever names the *list* fields like Perk.Conditions/Quest.DialogConditions, not a nested
     // struct member two levels beyond one). No existing mechanism reaches this call site, so this
-    // is a new, narrow, named exclusion — checked by the resolved concrete Setter type's own name
+    // is a narrow, named exclusion — checked by the resolved concrete Setter type's own name
     // against exactly the two documented boundary types, not a heuristic on the "A<Name>" prefix.
     private static readonly HashSet<string> AbstractUnionExcludedTypeNames =
         new(StringComparer.Ordinal) { "Condition", "ConditionData", "AVirtualMachineAdapter" };
@@ -1462,7 +1441,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 result.Add(field);
         }
 
-        // #548 review (Finding 4): defensive, not live — no Mutagen leaf across any game assembly
+        // Defensive, not live — no Mutagen leaf across any game assembly
         // declares a member that snake-cases to "concrete_type" today (checked). But this
         // discriminator is appended unconditionally after every real leaf member into what becomes
         // a last-write-wins Dictionary<string, object?> downstream (ExtractSubObject) — a future
@@ -1525,7 +1504,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         // (MakeApplier/ApplyFormLinkJson/the struct- and list-column appliers all do), so it is
         // already safe to reuse unmodified against whichever concrete leaf ApplyListJson/
         // BuildStructColumn's own discriminator resolution already constructed — the same guarantee
-        // #531's own OMOD typed-union apply already relies on.
+        // the OMOD typed-union apply already relies on.
         return rep with { Name = colName, Extract = Extract, AllowsNull = true };
     }
 
@@ -1557,9 +1536,9 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // refuse rather than guess — the same contract ResolveObjectModPropertyConcreteType already
     // gives ApplyListJson, extended to BuildStructColumn's own single-object case too.
     //
-    // #548 review (Finding 3): this used to re-run FindAbstractUnionLeaves's own full
-    // assembly.GetTypes() scan (12,914 types for Mutagen.Bethesda.Fallout4.dll) on every call —
-    // fine on the read side, where it runs once per abstract type behind GetSchemas' own cache, but
+    // Deliberately not a FindAbstractUnionLeaves-style full assembly.GetTypes() scan (12,914 types
+    // for Mutagen.Bethesda.Fallout4.dll) —
+    // fine on the read side, where that runs once per abstract type behind GetSchemas' own cache, but
     // this is the write path, called once per array element (ApplyListJson/ApplyListSubFieldJson)
     // with no cache of its own. A leaf's own class always shares its abstract base's namespace (the
     // same fact ResolveObjectModPropertyConcreteType's own `asm.GetType($"{ns}.{interfaceName}")`
@@ -1606,11 +1585,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 Fields: [.. sub.Select(s => s.ToFieldMetadata())]);
         }
 
-        // #541/#546: a list of vector-struct elements (e.g. IslandData.Vertices, a list of P3Float,
+        // A list of vector-struct elements (e.g. IslandData.Vertices, a list of P3Float,
         // or LocationCoordinate.Coordinates, a list of P2Int16). Without this arm, elemMeta below
         // falls through to null (none of these types match the scalar cases in the switch), which
-        // makes BuildListColumn drop the whole field the same way ObjectBounds used to drop before
-        // #541's other arms — and, worse, BuildListItems's own scalar-element fallback
+        // makes BuildListColumn drop the whole field
+        // — and, worse, BuildListItems's own scalar-element fallback
         // (`result.Add(item)`) would hand a raw boxed vector struct straight to JsonSerializer, which
         // would recurse forever over several of these types' own self-referencing `Point` property.
         if (IsVectorStructType(core))
@@ -1700,7 +1679,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // The neutral facts a leaf field carries, independent of whether it becomes a top-level
     // column or a struct/array sub-field. Get reads the raw value from any instance; Convert
     // turns a JSON token into the value to write — null means "no generic applier" (a form-link
-    // instead gets ApplyFormLinkJson, #429: identically for a top-level column and a sub-field).
+    // instead gets ApplyFormLinkJson, identically for a top-level column and a sub-field).
     private sealed record LeafSpec(
         string ApiType,
         string DuckDbType,
@@ -1721,7 +1700,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         if (TryMapPrimitive(core, out var duckDb, out var apiType, out var conv))
         {
-            // #413: a value-type primitive is omitted from the document exactly when it equals its
+            // A value-type primitive is omitted from the document exactly when it equals its
             // CLR default, so a view has to put that default back or the column reads NULL where the
             // wide table held 0/false. A string has no such default — null is the honest answer, and
             // the wide column stored NULL for it too.
@@ -1762,7 +1741,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var g = SubGetter(prop);
         var (names, bits) = GetEnumMeta(core);
 
-        // #413: whether the serializer writes this enum as an array of member names, which is a
+        // Whether the serializer writes this enum as an array of member names, which is a
         // question about the CLR type's [Flags] attribute and nothing else. IsBitmask below answers
         // a different, narrower question (does it have power-of-two members) and gets it wrong for
         // this purpose — a [Flags] enum with no such members still serializes as an array.
@@ -1789,7 +1768,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             IsFlagsEnum: isFlags, ViewDefaultLiteral: defaultLiteral);
     }
 
-    // #531: shared by MakeApplier and MakeWidenedApplier — an applier's target *type* varies per
+    // Shared by MakeApplier and MakeWidenedApplier — an applier's target *type* varies per
     // call (a struct/array sub-field's own object can be any of several concrete runtime types,
     // OMOD's seven leaves included), while the property *name* it looks for is fixed for the life
     // of the closure, so the cache is keyed on the former and captured once per the latter.
@@ -1803,12 +1782,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // property. Operates on `object`; the column path adapts the IMajorRecord receiver via
     // MakeColumnApplier.
     //
-    // #532: used to be an Action that swallowed every way this can fail to write — no such property
-    // on the runtime type, a JSON null into a non-nullable column, a converter that threw or (the
-    // dead branch this replaces) declined by returning null — and both its column and sub-field
-    // callers reported success regardless. Now answers ApplyOutcome so each caller can tell a real
+    // Answers ApplyOutcome rather than being a void Action so each caller can tell a real
     // refusal (ValueRejected, PropertyNotFound at the top-level-column layer) from the sub-field
-    // layer's own expected silent no-op (PropertyNotFound there — see ApplySubFields).
+    // layer's own expected silent no-op (PropertyNotFound there — see ApplySubFields); a void
+    // return would swallow every way this can fail to write (no such property on the runtime type,
+    // a JSON null into a non-nullable column, a converter that threw or declined).
     private static Func<object, JsonElement, ApplyOutcome> MakeApplier(
         string pName, bool nullable, Func<JsonElement, object?> conv, ILogger logger)
     {
@@ -1829,12 +1807,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             {
                 v = conv(val);
             }
-            // #532 finding: none of PrimitiveMap's or ClassifyEnumLeaf's converters ever return null
+            // None of PrimitiveMap's or ClassifyEnumLeaf's converters ever return null
             // on invalid input — GetInt32/GetBoolean/GetString throw InvalidOperationException for
             // the wrong JSON token kind, Enum.Parse throws ArgumentException for an unrecognised
-            // member, and the bitmask branch's long.Parse throws FormatException — so the previous
-            // null-return guard below was dead: every declining converter threw straight out of
-            // RecordEditService.EditField uncaught instead of triggering it. Same catch list
+            // member, and the bitmask branch's long.Parse throws FormatException — so this catch,
+            // not the null-return guard below, is what turns a declining converter into a
+            // ValueRejected instead of an uncaught throw. Same catch list
             // ConvertWidenedJson already uses, widened with ArgumentException/InvalidOperationException
             // for the two dispatch shapes that method doesn't need to cover.
             catch (Exception ex) when (ex is FormatException or OverflowException or InvalidCastException
@@ -1850,7 +1828,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         };
     }
 
-    // #532: no longer answers `true` unconditionally — MakeApplier's own ApplyOutcome carries
+    // MakeApplier's own ApplyOutcome carries
     // straight through to the column, since a top-level scalar column's failure modes (no such
     // property on the runtime type, a converter that threw or declined) are real refusals at this
     // layer, not the sub-field layer's "shared leaf-union member absent on this concrete leaf"
@@ -1863,8 +1841,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return (record, val) => applier(record, val);
     }
 
-    // #532: no longer answers `true` unconditionally — a FormLink column's own failure modes (an
-    // unparseable FormKey, a missing property) now surface as ApplyOutcome.ValueRejected /
+    // A FormLink column's own failure modes (an
+    // unparseable FormKey, a missing property) surface as ApplyOutcome.ValueRejected /
     // .PropertyNotFound the same way MakeColumnApplier's scalar siblings do.
     private static Func<IMajorRecord, JsonElement, ApplyOutcome> FormLinkColumnApplier(string pName, ILogger logger) =>
         (record, val) => ApplyFormLinkJson(record, val, pName, logger);
@@ -1897,7 +1875,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     // Projects a shared LeafSpec into a sub-field. Generic leaves (primitive / enum / translated-
     // string) use the shared applier; a form-link (its Convert is null) gets ApplyFormLinkJson —
-    // the same routing ProjectColumn gives a top-level FormLink column (#429).
+    // the same routing ProjectColumn gives a top-level FormLink column.
     private static SubFieldSpec ProjectSubField(
         PropertyInfo prop, string colName, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
@@ -1916,12 +1894,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     private static Func<object, object?> SubGetter(PropertyInfo prop) =>
         obj => { try { return prop.GetValue(obj); } catch { return null; } };
 
-    // #532: used to be void, silently discarding every one of its own failure modes (a missing
-    // property, an unparseable FormKey string, a JSON value that wasn't even a string) behind a
-    // blanket try/catch — both its callers (FormLinkColumnApplier, ProjectSubField) then reported
-    // success unconditionally. Now answers ApplyOutcome the same way MakeApplier does, so a top-level
-    // FormLink column's own malformed-value write is a real refusal rather than a silent no-op that
-    // still re-serializes the record unchanged and calls it applied.
+    // Answers ApplyOutcome the same way MakeApplier does, so a top-level
+    // FormLink column's own malformed-value write (a missing property, an unparseable FormKey
+    // string, a JSON value that isn't even a string) is a real refusal rather than a silent no-op
+    // that still re-serializes the record unchanged and calls it applied.
     private static ApplyOutcome ApplyFormLinkJson(object obj, JsonElement val, string pName, ILogger logger)
     {
         try
@@ -1965,7 +1941,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             SubFields: sub);
     }
 
-    // ── #541/#546: Noggog's small value-vector struct family (see IsVectorStructType) ───────────
+    // ── Noggog's small value-vector struct family (see IsVectorStructType) ─────────────────────
 
     private static readonly string[] VectorComponentNames = ["X", "Y", "Z"];
 
@@ -2027,8 +2003,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     // A list nested one level inside a struct (e.g. Destructible.Resistances/Stages) — GetColumnInfo
-    // has handled this shape at the top level (BuildListColumn) since the file's beginning; this is
-    // its GetSubFieldInfo-side twin, absent until #541 (issue's gap #2). Reuses BuildListColumn's own
+    // handles this shape at the top level (BuildListColumn); this is
+    // its GetSubFieldInfo-side twin. Reuses BuildListColumn's own
     // element-type dispatch (form-link / Loqui-struct / vector) and ApplyListJson for writing, and
     // BuildListItems (not SerializeListItems — see that method's own doc comment for why a sub-field's
     // Extract must stay unserialized) for extraction, so a struct's own list member behaves
@@ -2141,13 +2117,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // *sub-field* (BuildListSubField) is not that caller — its own Extract composes under the
     // enclosing struct's single JsonSerializer.Serialize (ExtractSubObject's own dictionary), the
     // same way a struct or vector sub-field's Extract already returns a raw Dictionary rather than a
-    // pre-serialized string. #541 review finding: BuildListSubField used to call SerializeListItems
-    // directly and return its string, which the enclosing struct's own serialize pass then re-encoded as an
+    // pre-serialized string. If BuildListSubField returned a pre-serialized string, the enclosing
+    // struct's own serialize pass would re-encode it as an
     // escaped JSON *string* value instead of a nested array — a round-trip break (ApplyListSubFieldJson
-    // requires JsonValueKind.Array, so submitting back exactly what Extract just served was itself
+    // requires JsonValueKind.Array, so submitting back exactly what Extract just served would be
     // refused) and a silent compare-grid diff failure (ConflictClassifier.BuildArrayChildren no-ops
-    // on a non-Array JsonElement.Kind) for every struct-nested list, including #541's own two named
-    // fields (Destructible.Resistances/Stages) and the real-data case (ActivateParents.Parents).
+    // on a non-Array JsonElement.Kind) for every struct-nested list
+    // (e.g. Destructible.Resistances/Stages, ActivateParents.Parents).
     private static List<object?> BuildListItems(
         IEnumerable items, Type elementType, IReadOnlyList<SubFieldSpec>? subFields)
     {
@@ -2188,8 +2164,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     // Projects a shared LeafSpec into a top-level column. A form-link leaf (Convert null) gets
-    // ApplyFormLinkJson (#429) — the same routing ProjectSubField gives its sub-field sibling, so a
-    // top-level column is no longer the one FormLink shape without a write path.
+    // ApplyFormLinkJson — the same routing ProjectSubField gives its sub-field sibling, so every
+    // reflected FormLink shape has the same write path.
     private static ColumnInfoResult ProjectColumn(PropertyInfo prop, Type core, bool nullable, LeafSpec leaf, ILogger logger)
     {
         var pName = prop.Name;
@@ -2215,7 +2191,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var isFl = IsFormLink(elementType);
         var isLoqui = !isFl && IsLoquiInterface(elementType);
-        // #541/#546: a list of vector-struct elements (IslandData.Vertices, a list of P3Float, or
+        // A list of vector-struct elements (IslandData.Vertices, a list of P3Float, or
         // LocationCoordinate.Coordinates, a list of P2Int16) — same three-cases-share-one-shape
         // pattern as GetColumnInfo/GetSubFieldInfo/BuildElementMeta above.
         var isVector = !isFl && !isLoqui && IsVectorStructType(elementType);
@@ -2246,14 +2222,14 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     }
 
     /// <summary>
-    /// Replaces an array field's whole value. #503: answers <see cref="ApplyOutcome.ValueRejected"/>
-    /// for anything that is not array-shaped — typically the bare value of a single element, which is
-    /// what the record editor used to send for a per-element edit. An array field is written as one
+    /// Replaces an array field's whole value. Answers <see cref="ApplyOutcome.ValueRejected"/>
+    /// for anything that is not array-shaped — typically the bare value of a single element.
+    /// An array field is written as one
     /// atomic value (CONTEXT.md), so there is no sensible merge to perform here and no way to guess
     /// where a lone element belongs; the caller refuses instead, which is the difference between
-    /// "your edit was rejected" and #503's original "your edit reported success and vanished".
+    /// "your edit was rejected" and "your edit reported success and vanished".
     ///
-    /// <para>#531: the same refusal-not-silent-drop rule extends one level in, to an individual
+    /// <para>The same refusal-not-silent-drop rule extends one level in, to an individual
     /// element, when the list's own element type is abstract (OMOD's <c>AObjectModProperty&lt;T&gt;</c>
     /// today — <see cref="IsListType"/>'s Getter-side element type is never abstract itself, only the
     /// mutable Setter list's own generic argument can be). Which concrete leaf an element is depends
@@ -2264,18 +2240,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// immediately, before <c>newList</c> is ever attached to <paramref name="record"/>, so a
     /// partially-abstract array can never leave one element applied and the rest silently missing.
     /// Its own outcome value rather than <c>ValueRejected</c> because the fix is different (name a
-    /// discriminator, not resend a differently-shaped value) and, since #532, because the two are no
-    /// longer reliably tellable apart from the value's shape alone — see the next paragraph.</para>
+    /// discriminator, not resend a differently-shaped value) and because the two are not
+    /// reliably tellable apart from the value's shape alone — see the next paragraph.</para>
     ///
-    /// <para>#532: the same "before <c>newList</c> is ever attached" guarantee now also covers a
+    /// <para>The same "before <c>newList</c> is ever attached" guarantee also covers a
     /// well-formed element whose own sub-field value was declined (<see cref="ApplySubFields"/>'s
     /// <c>ValueRejected</c> fold, as opposed to a sub-field simply not applying to this element's own
     /// concrete leaf, which stays silent) — a struct-array write with one bad member refuses the whole
     /// array rather than landing every other element and dropping the bad one. This is exactly why
-    /// <see cref="ApplyOutcome.ListElementTypeUnresolved"/> had to become its own outcome rather than
-    /// staying inferred from "a rejection, and the value happens to be a genuine JSON array"
-    /// (<c>RecordEditService.RefuseFieldOutcome</c>'s old heuristic): once a well-typed element could
-    /// also fail this way, that inference started misclassifying a declined sub-field value as an
+    /// <see cref="ApplyOutcome.ListElementTypeUnresolved"/> is its own outcome rather than
+    /// inferred from "a rejection, and the value happens to be a genuine JSON array":
+    /// since a well-typed element can
+    /// also fail this way, that inference would misclassify a declined sub-field value as an
     /// unresolved element type.</para>
     /// </summary>
     private static ApplyOutcome ApplyListJson(
@@ -2316,13 +2292,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ApplyOutcome.Applied;
     }
 
-    // #531: OMOD's own Properties element has its own discriminator scheme
+    // OMOD's own Properties element has its own discriminator scheme
     // (ResolveObjectModPropertyConcreteType, off AObjectModProperty<T>'s generic-closed shape) —
-    // checked first and kept as its own case, the same posture #360's own IsObjectModPropertyBase
+    // checked first and kept as its own case, the same posture IsObjectModPropertyBase
     // takes, rather than folded into the general lookup below (OMOD's leaves are not reflectively
     // discoverable off their own generic base the way every other abstract union's are).
     //
-    // #548: every other abstract list-element type (AQuestAlias, ...) resolves generally, off the
+    // Every other abstract list-element type (AQuestAlias, ...) resolves generally, off the
     // same concrete_type discriminator BuildAbstractUnionDiscriminatorField exposes on read. Either
     // way, an abstract-element field with no scheme that resolves — a missing/unrecognized
     // discriminator, or a genuinely unknown shape — falls straight through to null, which
@@ -2382,11 +2358,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// Applies every sub-field's own value onto <paramref name="target"/>, folding each member's
     /// <see cref="ApplyOutcome"/> into one whole-object result for the struct/array-element caller.
     ///
-    /// <para>#531: a sub-field can be genuinely read-only (e.g. OMOD's own <c>value_type</c>
+    /// <para>A sub-field can be genuinely read-only (e.g. OMOD's own <c>value_type</c>
     /// discriminator, which decides the object's concrete type rather than being set on it) or absent
     /// from the incoming JSON — both skipped, not applied at all.</para>
     ///
-    /// <para>#532: of the members that <i>are</i> applied, <see cref="ApplyOutcome.PropertyNotFound"/>
+    /// <para>Of the members that <i>are</i> applied, <see cref="ApplyOutcome.PropertyNotFound"/>
     /// stays a silent no-op here — a sub-field shared across several concrete sibling leaf types that
     /// don't all declare it (OMOD's own sparse leaf-union: <c>value</c>, <c>value2</c>, <c>record</c>,
     /// <c>enum_int_value</c>, <c>function_type</c>) is *expected* to miss on some of them, by design,
@@ -2430,16 +2406,16 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = null;
         if (setterType != null)
         {
-            // #503: the struct half of ApplyListJson's own shape guard — a struct field is written as
-            // one atomic value, so a bare member value (what a per-member edit used to send) is
-            // refused rather than silently returning while the write path reported success.
+            // The struct half of ApplyListJson's own shape guard — a struct field is written as
+            // one atomic value, so a bare member value is
+            // refused rather than silently dropped while the write path reports success.
             //
-            // #532: the same refusal now also covers a well-formed object whose own member value was
+            // The same refusal also covers a well-formed object whose own member value was
             // declined (ApplySubFields' ValueRejected fold) — SetValue is skipped in that case too, so
             // a struct write with one bad member never attaches its partially-built value to the
             // record, matching ApplyListJson's own "before newList is attached" guarantee.
             //
-            // #548: setterType is abstract for an abstract Loqui union (ANpcLevel, ...) —
+            // setterType is abstract for an abstract Loqui union (ANpcLevel, ...) —
             // Activator.CreateInstance would throw MissingMethodException on it directly, so the
             // concrete type is resolved off the incoming JSON's own discriminator first, refusing
             // (ValueRejected) rather than crashing when it can't be. Only reused when the record's
@@ -2478,11 +2454,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // concrete vector struct on both sides, so this can always construct and write one,
     // unconditionally.
     //
-    // #541: making Position reachable here for the *Placed family specifically re-opens a hazard
+    // Making Position reachable here for the *Placed family specifically re-opens a hazard
     // RecordEditService.RefuseIfContainmentField's own doc comment names explicitly — placement's
     // Position is mirrored into the `placement` side table (PlacementWalker) with no write-time
-    // re-derivation. That refusal is extended in the same change that lands this method; see its own
-    // doc comment for the guard.
+    // re-derivation. That refusal covers this path; see its own doc comment for the guard.
     private static ColumnInfoResult? BuildVectorColumn(
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
     {
@@ -2527,8 +2502,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
 /// <summary>
 /// Thrown by <see cref="SchemaReflector.GetSchemas"/> when a game release's backing Mutagen
-/// record-type assembly is not referenced by this build (#445) — e.g. requesting Skyrim before
-/// #423 adds <c>Mutagen.Bethesda.Skyrim</c>. Distinguishes "this release isn't compiled in" from
+/// record-type assembly is not referenced by this build — e.g. requesting Skyrim while
+/// <c>Mutagen.Bethesda.Skyrim</c> isn't referenced. Distinguishes "this release isn't compiled in" from
 /// Mutagen's own <see cref="FileNotFoundException"/>, which is not an actionable message for a
 /// caller. <see cref="SchemaReflector.IsSupported"/> is the non-throwing check discovery should
 /// use instead of catching this.

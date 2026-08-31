@@ -3,7 +3,7 @@ namespace MEditService.Core.Records;
 /// <summary>
 /// Which state of a record's text a read answers from — <see cref="Effective"/> is the record's
 /// current bytes, <see cref="Head"/> is the last committed state, and the two diverge for any
-/// record a working-tree edit has touched (#415; <see cref="Source.SourceRef"/> is the
+/// record a working-tree edit has touched (<see cref="Source.SourceRef"/> is the
 /// <c>records.ref</c> column-value counterpart this maps onto). <see cref="IRecordIndex.At"/>
 /// repositions a read between them.
 /// </summary>
@@ -15,14 +15,14 @@ public enum RecordRef
     /// <see cref="IRecordIndex.SetFilter"/> when a filter is active.</summary>
     Effective,
 
-    /// <summary>The last committed state, ignoring any working-tree edit (#415): the committed
+    /// <summary>The last committed state, ignoring any working-tree edit: the committed
     /// baseline for a record that has diverged, and the same bytes as <see cref="Effective"/> for
     /// one that never has.</summary>
     Head,
 }
 
 /// <summary>
-/// The reserved values for the <c>winners.record_ref</c> column (#584 / ADR-0001) — which
+/// The reserved values for the <c>winners.record_ref</c> column (ADR-0001) — which
 /// ref's stack a winner row is the answer for.
 ///
 /// <para>Spelled out rather than taken from <c>RecordRef.ToString()</c> for the same reason

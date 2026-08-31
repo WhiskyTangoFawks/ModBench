@@ -31,7 +31,7 @@ Classify changed files → run matching gate (never review non-compiling code):
 | both | `… --backend --frontend --api-drift` |
 | config/docs only | skip |
 
-`--api-drift` (#245) boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
+`--api-drift` boots a fresh backend and fails if `modbench/src/medit/generated/api.ts`
 has drifted from the live OpenAPI spec — any endpoint/DTO annotation change can
 silently invalidate it, so it rides along with `--backend`, not `--frontend`.
 

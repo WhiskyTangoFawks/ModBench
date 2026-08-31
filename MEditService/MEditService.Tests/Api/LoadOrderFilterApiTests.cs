@@ -85,13 +85,10 @@ public sealed class FilterApiTests(LoadedApiFixture<TestPluginFixture> loaded) :
 
     // --- filter affects GET /plugins ---
 
-    // Renamed from PostFilter_MatchingNoRecords_HidesPluginFromGetPlugins (#278 / ADR-0035
-    // amending ADR-0018): that name pinned the old rule this issue exists to overturn — a plugin
-    // the filter matched none of this plugin's records used to vanish from /plugins entirely
-    // (Assert.Empty(pluginsAfter)). The rule changes: a record filter prunes records and record
-    // types, never a plugin row, because this tree is also the load order and hiding a plugin
-    // mid-filter would make it unreorderable. The plugin now stays on the wire;
-    // hasMatchingRecords is the additive fact a caller reads instead.
+    // ADR-0035 (amending ADR-0018): a record filter prunes records and record types, never a
+    // plugin row, because this tree is also the load order and hiding a plugin mid-filter would
+    // make it unreorderable. The plugin stays on the wire; hasMatchingRecords is the additive
+    // fact a caller reads instead.
     [Fact]
     public async Task PostFilter_MatchingNoRecords_KeepsPluginInGetPluginsButFlagsNoMatch()
     {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildSelectedPluginsFilterSql } from './filterSelectedPluginsSql';
 
-// #363: the ordinary record filter, pre-restricted to the plugin(s) the tree selection names —
+// The ordinary record filter, pre-restricted to the plugin(s) the tree selection names —
 // `records` is the base documents table (form_key, plugin, ... — TableDdlBuilder.cs), so one
 // query against it covers every record type a selected plugin owns, with no need for the
 // per-type UNION ALL ADR-0018 explicitly deferred for cross-type queries.

@@ -12,12 +12,9 @@ namespace MEditService.Tests.Source;
 /// A working-tree-only create must survive a backend restart before the record is ever compiled: it
 /// answers at Effective, and at Head it answers nothing at all, because no commit holds it yet.
 ///
-/// <para><b>Kept deliberately when #452 deleted the class it was written for</b> (#427 Epic B′'s
-/// <c>WorkingTreeCreateRediscovery</c>). AC4 deletes the reconciliation sweep, not the behaviour it
-/// was reconciling toward — and a deletion slice that also deletes its own safety net proves nothing.
-/// These two assertions are exactly what tells "ingest-from-source produces this state on its own"
-/// apart from "the state stopped being produced"; the second of them (Head answers nothing) is what
-/// went red the moment ingest started seeding both refs from one whole-tree read, and what
+/// <para>These two assertions are exactly what tells "ingest-from-source produces this state on its
+/// own" apart from "the state stopped being produced"; the second of them (Head answers nothing)
+/// goes red the moment ingest seeds both refs from one whole-tree read, and is what
 /// <c>IRecordIndex.MarkWorkingTreeOnly</c> exists to put right.</para>
 ///
 /// <para>Reloads the same mod folder in a brand-new <see cref="LoadOrderMirror"/> — the honest way to
@@ -40,7 +37,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        // #459 regression guard: a silently-failed source ingest degrades to the binary (which never
+        // Regression guard: a silently-failed source ingest degrades to the binary (which never
         // held this uncompiled create), so the assertions below would pass for the wrong reason —
         // "the record isn't found" reads identically whether ingest never ran or genuinely excluded
         // it. This caught a real one: git show HEAD:<path> glob-matches a missing bracketed "[N] "
@@ -67,7 +64,7 @@ public sealed class WorkingTreeCreateSurvivesRestartTests
             [new LoadOrderEntry(TrackedModFixture.PluginName, Path.Combine(mod.ModFolder, TrackedModFixture.PluginName), TrackedModFixture.ModFolderOrigin, Slot: 0, Enabled: true, Winning: true)],
             GameRelease.Fallout4);
 
-        // #459 regression guard, same reasoning as the sibling test above.
+        // Regression guard, same reasoning as the sibling test above.
         Assert.Empty(((ILoadOrderMirror)reloaded).LoadOrder!.LoadFailures);
         // The rival: a sweep that inserts the row but forgets winner resweep (or runs before the
         // whole-load-order UpdateWinners() at the end of the load loop) leaves it_winner false.

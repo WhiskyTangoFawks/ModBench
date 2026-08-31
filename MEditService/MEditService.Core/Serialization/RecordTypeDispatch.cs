@@ -9,8 +9,7 @@ namespace MEditService.Core.Serialization;
 /// <summary>
 /// Which record types a document's <i>path</i> cannot identify, and how to get from the index's
 /// <c>record_type</c> string back to a concrete CLR type — the two facts
-/// <see cref="RecordTextCodec"/>'s discriminator policy is built on (#450 / ADR-0041's #444
-/// amendment).
+/// <see cref="RecordTextCodec"/>'s discriminator policy is built on (ADR-0041).
 ///
 /// <para><b>The rule, derived not tabulated.</b> The whole-mod folder-split path writes a top-level
 /// <c>MutagenObjectType</c> exactly when the group it is writing has an <b>abstract element type</b>
@@ -44,16 +43,16 @@ internal sealed class RecordTypeDispatch
 {
     private static readonly ConcurrentDictionary<GameCategory, RecordTypeDispatch> Models = new();
 
-    // #451: the record types the #444 erratum names as staying folder-split (Cell, Worldspace — their
+    // The record types that stay folder-split (Cell, Worldspace — their
     // embedded slots) or directory-per-record (Quest — DialogTopics/Scenes/DialogBranches) even though
     // each has an ordinary top-level Group<T> a reflection walk would otherwise map to a flat
     // "<Folder>/<name>.json". Each of these gets its own "<Folder>/<name>/RecordData.json" directory
-    // instead, which SourceRecordPath's flat layout does not cover — SourceUnitResolver (#453) finds
-    // one on disk, and compile reads the whole tree at once (#454). Named explicitly, not inferred
+    // instead, which SourceRecordPath's flat layout does not cover — SourceUnitResolver finds
+    // one on disk, and compile reads the whole tree at once. Named explicitly, not inferred
     // structurally: inferring it would silently start covering a fourth type the day Mutagen's
     // generator picks a directory for one, with nothing here to notice.
     //
-    // #453: now valued by the top-level group folder each one's directory sits under, because
+    // Valued by the top-level group folder each one's directory sits under, because
     // SourceUnitResolver has to know *where to look* for a container even though there is no flat
     // path to compute. Reflection could supply two of the three (Worldspace/Quest do have an
     // ordinary Group<T>) but not Cell — a mod's `Cells` is a list group of `CellBlock`, which is not
@@ -115,7 +114,7 @@ internal sealed class RecordTypeDispatch
     /// verbatim as the directory a record's file sits in (traced to
     /// <c>FolderPerRecordGroupFieldGenerator</c>/<c>GroupParallelHelper</c> in
     /// <c>references/mutagen-serialization</c>). Null for three reasons a caller must treat alike —
-    /// "this flat helper cannot answer, ask SourceUnitResolver (#453) instead": the type has
+    /// "this flat helper cannot answer, ask SourceUnitResolver instead": the type has
     /// no top-level group at all (a placed ref, a landscape — the same set <see cref="IsPathAmbiguous"/>'s
     /// doc comment already names), the type is one of <see cref="DirectoryPerRecordFolders"/> (its
     /// own directory holds a <c>RecordData.json</c>, not a flat file), or <paramref name="recordType"/>
@@ -139,7 +138,7 @@ internal sealed class RecordTypeDispatch
     /// container whose block/sub-block nesting lives in the tree rather than in the index. A wrong
     /// answer here costs a miss (a typed refusal), never a wrong write — which is what makes narrowing
     /// the scan safe: measured 0.02 s (<c>Cells</c>) / 0.06 s (<c>Worldspaces</c>) against 0.39 s
-    /// unnarrowed on a tree the size of the #444 spike's mega-plugin.</para>
+    /// unnarrowed on a mega-plugin-sized tree.</para>
     /// </summary>
     internal string? GroupFolderNameFor(string recordType) =>
         FolderNameFor(recordType)
@@ -189,13 +188,12 @@ internal sealed class RecordTypeDispatch
         // documents this codec has to read back.
         var byName = new Dictionary<string, Type?>(StringComparer.OrdinalIgnoreCase);
         var folderByType = new Dictionary<Type, string>();
-        // #451 review: keyed by folder, valued by the *schema table name* spelling (the lowercased
+        // Keyed by folder, valued by the *schema table name* spelling (the lowercased
         // GRUP signature — matching SchemaReflector.cs's own `recordType.Type.ToLowerInvariant()`),
         // never the bare CLR type name. DuckDbRecordIndex's own record-type dictionary is keyed by
-        // that schema spelling only, case-sensitively — the #427 rediscovery sweep handing it "Npc"
-        // instead of "npc_" threw KeyNotFoundException, caught running the suite. (That sweep is gone
-        // as of #452, but the constraint it exposed is not: SourceIngest.ReconcileHead is the caller
-        // that relies on this spelling now.) The codec's own
+        // that schema spelling only, case-sensitively — handing it "Npc"
+        // instead of "npc_" throws KeyNotFoundException (SourceIngest.ReconcileHead is the caller
+        // that relies on this spelling). The codec's own
         // dispatch (RecordTextCodec) tolerates either spelling (ConcreteFor's dual keys), so this
         // narrower, correct spelling costs that caller nothing.
         var typesByFolder = new Dictionary<string, List<string>>(StringComparer.Ordinal);
@@ -222,7 +220,7 @@ internal sealed class RecordTypeDispatch
                 byName[signature] = type;
             }
 
-            // #451: the folder half, keyed off the same discovery pass — every concrete major-record
+            // The folder half, keyed off the same discovery pass — every concrete major-record
             // type gets mapped to its owning top-level group property's own name, unless it is one of
             // the directory-per-record types (see DirectoryPerRecordFolders) or has no top-level
             // group at all (a placed ref, a landscape — FolderNameFor's own doc comment).

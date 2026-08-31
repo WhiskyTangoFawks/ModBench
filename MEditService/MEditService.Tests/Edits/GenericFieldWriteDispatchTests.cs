@@ -12,18 +12,15 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #426 Track 0.4: proving tests for write mechanisms that were already generic before this ticket
-/// — <see cref="RecordEditService.EditField"/> reaches them with zero production changes, so each
-/// test here is green on arrival. A passing assertion alone proves nothing (standing rule: a guard
-/// test is vacuous until watched fail), so the implementation report for this ticket names, per
-/// mechanism, the rival that was applied and the observed failure.
+/// Proving tests for <see cref="RecordEditService.EditField"/>'s generic write mechanisms. A passing
+/// assertion alone proves nothing (standing rule: a guard test is vacuous until watched fail), so
+/// each mechanism's rival implementation was applied and the failure observed.
 ///
-/// <para>Two of the four generic mechanisms in #426's archaeology already had this proof before this
-/// ticket: whole-array write and struct/array-nested FormKey write are both exercised by
-/// <c>FormLinkValidationTests.PointingAFormLinkAtARecordOfTheRightType_IsAccepted</c> (#415), which
+/// <para>Whole-array write and struct/array-nested FormKey write are both exercised by
+/// <c>FormLinkValidationTests.PointingAFormLinkAtARecordOfTheRightType_IsAccepted</c>, which
 /// sets the NPC's <c>keywords</c> array (a FormLink array — array-write and nested-FormKey-write are
 /// literally the same field there) through this exact door and asserts it lands as working-tree
-/// dirt. That test is not duplicated here. This file covers the two mechanisms #415 never
+/// dirt. That test is not duplicated here. This file covers the two mechanisms it never
 /// exercised: a top-level bitmask enum column, and a condition-owning field's whole-list write.</para>
 /// </summary>
 public sealed class GenericFieldWriteDispatchTests : IDisposable

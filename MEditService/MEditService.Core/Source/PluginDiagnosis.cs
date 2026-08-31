@@ -4,12 +4,12 @@ using Mutagen.Bethesda.Serialization.Exceptions;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// #519's diagnosis floor: when Track or Compile refuses a plugin because Mutagen itself threw
-/// (rather than the model-identity/subrecord-loss checks #513/#514 already wired), the refusal
+/// The diagnosis floor: when Track or Compile refuses a plugin because Mutagen itself threw
+/// (rather than the model-identity/subrecord-loss checks), the refusal
 /// names whatever the failing exception actually reported instead of surfacing that exception's own
-/// unlocated <c>Message</c> — real defect classes (subrecord order, fixed-length/fixed-count,
-/// counter/entries, PERK entry-point shape) are #569's table; this ticket only owns the uniform
-/// shape and the <see cref="UnknownClass"/> fallback every one of them defaults to until #569 lands.
+/// unlocated <c>Message</c> — per-defect detectors (subrecord order, fixed-length/fixed-count,
+/// counter/entries, PERK entry-point shape) are future work; this owns only the uniform
+/// shape and the <see cref="UnknownClass"/> fallback every one of them defaults to.
 ///
 /// <para><b>Three call sites, three exception vocabularies — proven live, not assumed.</b> Track's
 /// deep-parse (<c>ModFactory.ImportSetter</c>, a real binary parse) can throw Mutagen's own
@@ -21,13 +21,13 @@ namespace MEditService.Core.Source;
 /// fixture confirmed it throws <see cref="FilePathedException"/> wrapping a plain
 /// <see cref="ArgumentException"/> instead, whose only identity is the source file path. The binary
 /// *write* both Track's round-trip gate and Compile's own save run through
-/// (<c>PluginWriter</c>'s <c>MastersListContentOption.Iterate</c>, ADR-0038) throws a third shape
-/// (#520): Mutagen's own <c>WriteMajorRecord</c> enriches a <see cref="RecordException"/> exactly as
+/// (<c>PluginWriter</c>'s <c>MastersListContentOption.Iterate</c>, ADR-0038) throws a third
+/// shape: Mutagen's own <c>WriteMajorRecord</c> enriches a <see cref="RecordException"/> exactly as
 /// the deep-parse path does, but wraps <see cref="UnmappableFormIDException"/> instead of a
 /// <c>SubrecordException</c> — confirmed live against the real <c>SpaDia_AMR.esp</c> fixture (Quest
 /// <c>DiaQ_LLInjector_SpadeyAMR</c>, whose VMAD struct-list script property references
 /// <c>DLCNukaWorld.esm</c> in a way Mutagen's own <c>ScriptStructListProperty.EnumerateFormLinks</c>
-/// never walks — Mutagen-Modding/Mutagen#688 — so the content-derived master pass prunes a master
+/// never walks — Mutagen-Modding/Mutagen upstream issue 688 — so the content-derived master pass prunes a master
 /// the write still needs). The three factories below anchor to whichever vocabulary that seam's own
 /// exceptions actually offer, rather than forcing one shape onto all.</para>
 ///
@@ -52,7 +52,7 @@ namespace MEditService.Core.Source;
 /// </summary>
 public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string? Tail, string Message)
 {
-    /// <summary>The class every diagnosis defaults to until a per-defect detector (#569) can name
+    /// <summary>The class every diagnosis defaults to until a per-defect detector can name
     /// the actual defect from the plugin's own bytes.</summary>
     public const string UnknownClass = "unknown";
 
@@ -63,14 +63,14 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// text.
     ///
     /// <para><c>Clipboards to the BOS.esp</c>'s <c>MaterialSwap</c> throws exactly the first message
-    /// below when its <c>FNAM</c> strings disagree (found live against the LitR corpus while
-    /// planning #519); that message is unique to this one defect, so its tail is unhedged. The
-    /// second entry (#520) is different in kind: Mutagen's own "Could not map FormKey to a master
+    /// below when its <c>FNAM</c> strings disagree (found live against the LitR
+    /// corpus); that message is unique to this one defect, so its tail is unhedged. The
+    /// second entry is different in kind: Mutagen's own "Could not map FormKey to a master
     /// index" is <see cref="UnmappableFormIDException"/>'s generic message for *any* unresolvable
-    /// master, not only the struct-list-property gap #688 names — every occurrence seen so far
+    /// master, not only the struct-list-property gap upstream issue 688 names — every occurrence seen so far
     /// (<c>SpaDia_AMR.esp</c>'s <c>DiaQ_LLInjector_SpadeyAMR</c>, checked in as
     /// <c>TestData</c>) is that gap, but the message alone cannot prove it is *this* occurrence's
-    /// cause, so the tail says "likely" rather than asserting it (#520 review).</para>
+    /// cause, so the tail says "likely" rather than asserting it.</para>
     /// </summary>
     private static readonly (string MessageContains, string Tail)[] KindATable =
     [
@@ -107,7 +107,7 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         return new PluginDiagnosis(anchor, UnknownClass, TailFor(message), message);
     }
 
-    /// <summary>The write seam both Track's round-trip gate and Compile's own save share (#520):
+    /// <summary>The write seam both Track's round-trip gate and Compile's own save share:
     /// anchors on the deepest <see cref="RecordException"/> exactly as <see cref="FromParseException"/>
     /// does (Mutagen's <c>WriteMajorRecord</c> enriches one the same way its binary parser does), and
     /// separately walks for the deepest <see cref="UnmappableFormIDException"/> — a different type,
@@ -116,8 +116,8 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
     /// <see cref="FromParseException"/> as-is: <see cref="RecordException.Message"/> here is only ever
     /// Mutagen's generic "Could not map FormKey to a master index", which never says which master, so
     /// the message this composes states only what the exception genuinely proves — the record and the
-    /// pruned master — and leaves any causal claim to the hedged #688 tail above, never asserted
-    /// here.</summary>
+    /// pruned master — and leaves any causal claim to the hedged upstream-issue tail above, never
+    /// asserted here.</summary>
     public static PluginDiagnosis FromWriteException(Exception ex)
     {
         var deepestRecord = FindDeepest<RecordException>(ex);
@@ -129,12 +129,12 @@ public sealed record PluginDiagnosis(string? Anchor, string DefectClass, string?
         return new PluginDiagnosis(DescribeRecord(deepestRecord), UnknownClass, TailFor(rawMessage), message);
     }
 
-    /// <summary>The narrow catch-filter test for #520's one Kind A write shape: is
+    /// <summary>The narrow catch-filter test for the one Kind A write shape: is
     /// <see cref="UnmappableFormIDException"/> anywhere in <paramref name="ex"/>'s own exception
     /// tree. A caller uses this to decide whether to divert to <see cref="FromWriteException"/> at
-    /// all — every other write failure must propagate exactly as it did before this ticket, never
-    /// falling back to a silent <c>NoCheck</c> (#516's decision) and never widening to a second Kind
-    /// A row (out of scope for #520).</summary>
+    /// all — every other write failure must propagate untouched, never
+    /// falling back to a silent <c>NoCheck</c> and never widening to a second Kind
+    /// A row.</summary>
     public static bool HasUnmappableFormID(Exception ex) => FindDeepest<UnmappableFormIDException>(ex) != null;
 
     /// <summary>

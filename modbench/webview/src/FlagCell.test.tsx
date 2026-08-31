@@ -16,7 +16,7 @@ const flagMeta: FieldMetadata = {
   isBitmask: true,
 };
 
-// Issue #111: an editable flag cell reads as text until it is clicked. Tests about the
+// An editable flag cell reads as text until it is clicked. Tests about the
 // multi-select itself click through that first, rather than restating it each time.
 function renderActivated(ui: React.ReactElement) {
   const utils = render(ui);
@@ -52,9 +52,9 @@ describe('FlagCell — read-only column', () => {
   });
 });
 
-// Issue #226 / ADR-0034: the read-only value surface is retired. An immutable flag cell opens
-// nothing, however it is clicked — copy is Ctrl+C on the focused, unopened cell (#224), reading
-// the rendered names (not the bitmask) via modelValue, so there is nothing left for a click here
+// ADR-0034: an immutable flag cell opens
+// nothing, however it is clicked — copy is Ctrl+C on the focused, unopened cell, reading
+// the rendered names (not the bitmask) via modelValue, so there is nothing for a click here
 // to activate.
 describe('FlagCell — immutable column opens nothing', () => {
   it('a plain click opens no checkboxes or input', () => {
@@ -87,7 +87,7 @@ describe('FlagCell — immutable column opens nothing', () => {
   });
 });
 
-// Issue #111: like every other cell, a flag cell reads as text until clicked — a grid of
+// Like every other cell, a flag cell reads as text until clicked — a grid of
 // always-live flag multi-selects would bury the values it exists to show.
 describe('FlagCell — editable column renders text until clicked', () => {
   it('renders active flag names as text, not checkboxes, before it is clicked', () => {
@@ -96,10 +96,9 @@ describe('FlagCell — editable column renders text until clicked', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  // Issue #201 / #204 / ADR-0034: the same defect #204 fixed in ScalarCell and #218 fixed in
-  // FormKeyLink, in the leaf both of them missed. A flag cell sits inside DiskCell and is a drag
-  // source the whole time it is at rest; an inline `cursor: 'pointer'` here paints over the
-  // parent's `grab` and so advertises only the click. The test DOM has no cascade, so this proves
+  // ADR-0034: a flag cell sits inside DiskCell and is a drag
+  // source the whole time it is at rest; an inline `cursor: 'pointer'` here would paint over the
+  // parent's `grab` and so advertise only the click. The test DOM has no cascade, so this proves
   // the mask is gone, not which cursor paints.
   it('does not mask the parent drag cursor with its own cursor style before being clicked', () => {
     render(<FlagCell value={0b0101} meta={flagMeta} editable={true} isFocused={true} onCommit={vi.fn()} />);
@@ -124,7 +123,7 @@ describe('FlagCell — editable column renders text until clicked', () => {
   });
 });
 
-// Issue #223 / ADR-0034: same open-gate as ScalarCell — second click on the already-focused
+// ADR-0034: same open-gate as ScalarCell — second click on the already-focused
 // cell, F2 (via DiskCell's data-open-trigger dispatch), or a double click.
 describe('FlagCell — mutable column gates opening on the focus check (#223)', () => {
   it('a click while not the focused cell does not open the multi-select', () => {

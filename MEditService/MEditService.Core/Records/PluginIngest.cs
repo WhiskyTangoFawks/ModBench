@@ -13,21 +13,21 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// #606 stage 2: the prepare/append/collectors collaborator extracted out of
+/// The prepare/append/collectors collaborator of
 /// <see cref="DuckDbRecordIndex"/> — everything <see cref="IRecordIndex.Index"/>/
 /// <see cref="IRecordIndex.Unindex"/> do to a plugin's own rows across every ingest-owned table
 /// (<c>records</c>/<c>records_committed</c>/<c>header</c>/<c>form_lookup</c>/<c>form_references</c>/
 /// <c>placement</c>/<c>cell_location</c>/<c>container_child</c>), plus the record-level collectors
 /// (<see cref="CollectFormRefs"/>/<see cref="CollectVmadRefsForRecord"/>/
 /// <see cref="CollectConditionRefsForRecord"/>) and append primitives <see cref="WorkingTreeOverlay"/>
-/// reuses for per-record rederivation — that reuse is deliberate (#488/#415): an edit's derived rows
+/// reuses for per-record rederivation — that reuse is deliberate: an edit's derived rows
 /// must come from the identical code a fresh ingest would produce them with, or the two could drift
 /// apart. Internal, private to the <c>Records</c> module — not part of any public seam.
 ///
 /// <para><b>Does not own registration or the transaction/commit boundary.</b>
-/// <see cref="DuckDbRecordIndex.Index"/> still owns the whole-reindex transaction and the
-/// <c>records</c>-table appender's lifetime (so its disposal keeps the exact same ordering relative
-/// to <c>tx.Commit()</c> the pre-split code had), calling <see cref="IndexPlugin"/> for everything in
+/// <see cref="DuckDbRecordIndex.Index"/> owns the whole-reindex transaction and the
+/// <c>records</c>-table appender's lifetime (so its disposal keeps the required ordering relative
+/// to <c>tx.Commit()</c>), calling <see cref="IndexPlugin"/> for everything in
 /// between. <see cref="DuckDbRecordIndex.Unindex"/> likewise owns the transaction, calling
 /// <see cref="DeleteAllRowsFor"/> for the ingest-owned half and handling the file stamp
 /// (<see cref="IndexStore"/>) and the registration row itself.</para>
@@ -51,17 +51,16 @@ internal sealed class PluginIngest
         _conditionCodec = conditionCodec;
     }
 
-    /// <summary>The per-plugin phase timings <see cref="DuckDbRecordIndex.Index"/> logs, unchanged
-    /// from the pre-split single-method shape — only where the numbers are assembled moved.</summary>
+    /// <summary>The per-plugin phase timings <see cref="DuckDbRecordIndex.Index"/> logs.</summary>
     internal readonly record struct IndexTiming(long DocumentsMs, long PrepareMs, long AppendMs, long ExtractedMs);
 
-    // #416 S1b: Cell.Persistent/Temporary and Worldspace.TopCell/SubCells are already fully covered
+    // Cell.Persistent/Temporary and Worldspace.TopCell/SubCells are already fully covered
     // by IndexPlacement (placement/cell_location) — this skip-list keeps container_child additive to
     // those tables rather than a second, competing copy of the same relationship. Keyed by
     // ContainerChildFields.NormalizedTypeName so it can never drift from what EnumerateChildren
     // itself walks (both read the same ByTypeName table). Internal: WorkingTreeOverlay's own
     // per-record rederivation walks the identical skip-list (Overlay depends on Ingest, never the
-    // reverse — #606 stage 2 design review).
+    // reverse).
     internal static readonly HashSet<(string ParentType, string Slot)> CoveredByPlacementTables =
     [
         ("Cell", "Persistent"), ("Cell", "Temporary"),
@@ -69,7 +68,7 @@ internal sealed class PluginIngest
     ];
 
     /// <summary>Everything about one record that the index derives from the record itself, computed
-    /// off the appender thread (#113): the document bytes and their git-blob hash, the extracted
+    /// off the appender thread: the document bytes and their git-blob hash, the extracted
     /// form/VMAD/condition refs, and the container-child slots. Only writing it is sequential.</summary>
     private sealed record PreparedRecord(
         IMajorRecordGetter Record, byte[] Body, string ContentHash, List<FormRef> Refs,
@@ -83,40 +82,38 @@ internal sealed class PluginIngest
         public long AppendMs;
     }
 
-    // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
+    // ADR-0041: this plugin's documents go first, for the same reason every other table's
     // delete does — a re-index replaces its own rows rather than accumulating a second copy.
     // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
-    // so it has no codec document at all, and stays a purely extracted index table (D8).
+    // so it has no codec document at all, and stays a purely extracted index table.
     //
     // Its own method, called by DuckDbRecordIndex.Index *before* it creates the `records` appender
-    // and calls IndexPlugin below — #606 stage 2 review: the pre-split single method deleted these
-    // two tables before creating the appender, and this keeps that exact ordering rather than
+    // and calls IndexPlugin below — the deletes must precede the appender's creation rather than
     // resting on an unverified assumption about how DuckDB's appender behaves relative to a delete
     // issued after it exists.
     public void DeletePriorDocuments(string plugin, string origin)
     {
         DeleteExistingForOrigin("records", plugin, origin);
-        // #452: and the Head snapshots with them. `records_head` is records_committed UNION ALL the
+        // And the Head snapshots with them. `records_head` is records_committed UNION ALL the
         // still-clean `records` rows, and those halves must stay disjoint (TableDdlBuilder says so "by
         // construction" and its UNION ALL — not UNION — depends on it exactly). Re-seeding `records`
         // while leaving a snapshot behind puts two rows under one (form_key, plugin, origin) at Head.
         //
-        // This is a genuine part of Index()'s own stated contract — "replacing whatever `key`
-        // previously held" — that was simply never reachable before: nothing used to call Index() and
-        // write records_committed for the same key in one operation, with a failure path that calls
-        // Index() on that key again. SourceIngest.Ingest is the first (its binary fallback), and
-        // LoadOrderMirror.ReindexPlugin re-reading a binary under a dirty tracked plugin is a second.
-        // Fixing it here rather than at either call site is what makes every present and future caller
-        // inherit it. Never removes a *correct* snapshot: after a full re-index from one source, a
-        // prior divergence describes bytes that no longer relate to what was just ingested.
+        // Part of Index()'s own stated contract — "replacing whatever `key` previously held".
+        // SourceIngest.Ingest (its binary fallback) and LoadOrderMirror.ReindexPlugin re-reading a
+        // binary under a dirty tracked plugin both call Index() and write records_committed for the
+        // same key; deleting here rather than at either call site is what makes every present and
+        // future caller inherit it. Never removes a *correct* snapshot: after a full re-index from
+        // one source, a prior divergence describes bytes that no longer relate to what was just
+        // ingested.
         DeleteExistingForOrigin("records_committed", plugin, origin);
     }
 
-    // ADR-0041 / #413: one document per major record, written from the same enumeration that fills
+    // ADR-0041: one document per major record, written from the same enumeration that fills
     // the record's own row — never a second pass over the plugin. The appender is opened once per
     // Index() call (by DuckDbRecordIndex, which owns its lifetime — see this class's own doc
     // comment) and threaded through the per-type loop below, because `records` is one table
-    // spanning every type where the wide tables were one appender each. Callers must run
+    // spanning every type. Callers must run
     // DeletePriorDocuments above first — this method does not repeat those two deletes.
     public IndexTiming IndexPlugin(
         IModGetter pluginMod, string plugin, string origin,
@@ -146,31 +143,21 @@ internal sealed class PluginIngest
         }
         var documentsMs = phaseTimer.ElapsedMilliseconds;
 
-        // #217: same summary texts/levels as before (RecordIndexingLoggingTests pins them), now
-        // counted from the one pass above rather than from two further walks of the plugin.
+        // RecordIndexingLoggingTests pins these summary texts/levels; the counts come from the one
+        // pass above.
         if (_logger.IsEnabled(LogLevel.Debug))
         {
             _logger.LogDebug("Indexed VMAD for {Count} records in {Plugin}", counters.Vmad, plugin);
             _logger.LogDebug("Indexed conditions for {Count} records in {Plugin}", counters.Conditions, plugin);
         }
 
-        // Walk VMAD after the per-type loop so both generic and VMAD Object refs land in `refs`
-        // before the single form_references flush below.
-        // #272 / ADR-0036: VMAD/conditions/form_lookup/header now all carry origin too, scoped the
-        // same way as every other table above — closes the gap #271 left open. Header's own delete
-        // step is in IndexHeader below; its write side already carried origin since #271.
-        //
-        // #420: VMAD and conditions no longer have their own side tables to delete-then-append —
-        // both collect straight into the shared `refs` list below, walking the live object (already
-        // in hand here) rather than round-tripping through the document this same pass just wrote.
-        // GetVmad/GetConditions read the document instead, on demand (#413 D1's pattern).
-        // #113: VMAD and condition refs are collected inside IndexRecordTable's one pass now. The
-        // two whole-plugin walks that used to run here (a typed VMAD enumeration, then a second
-        // EnumerateMajorRecords() with a linear type scan per record) were 29% of a full load
-        // order's index time. What that pass does not see is exactly what has no schema
-        // (SchemaReflector.ExcludedTables — the placed projectile types): those records have no
-        // document and no row, and now contribute no VMAD/condition refs either, where before they
-        // contributed refs from a record the index could not otherwise show.
+        // VMAD and condition refs are collected inside IndexRecordTable's one pass, walking the live
+        // object rather than round-tripping through the document that pass just wrote, so both the
+        // generic and the VMAD Object refs land in the shared list before the single form_references
+        // flush below, while GetVmad and GetConditions read the document on demand. What that pass
+        // does not see is exactly what has no schema (SchemaReflector.ExcludedTables — the placed
+        // projectile types): those records have no document and no row, and contribute no
+        // VMAD/condition refs either. Header's own delete step is in IndexHeader below.
 
         phaseTimer.Restart();
         IndexPlacement(pluginMod, plugin, origin);
@@ -207,7 +194,7 @@ internal sealed class PluginIngest
             }
         }
 
-        // #416 S1b: same pattern as form_lookup just above — one delete-then-append per re-index,
+        // Same pattern as form_lookup just above — one delete-then-append per re-index,
         // populated from the same per-type pass rather than a second walk over the plugin.
         DeleteExistingForOrigin("container_child", plugin, origin);
         if (containerChildRows.Count > 0)
@@ -228,14 +215,13 @@ internal sealed class PluginIngest
     // (IndexStore) and the registration row itself — see this class's own doc comment.
     public void DeleteAllRowsFor(string plugin, string origin)
     {
-        // #413: one delete where this used to walk every reflected table — the record rows are all
-        // in `records` now, and the only surviving per-type table is the header, deleted just below.
-        // #420: VMAD and conditions have no side tables of their own any more — deleting this
-        // plugin's `records` rows above already removes the one thing GetVmad/GetConditions read.
+        // The record rows are all in `records`; the only surviving per-type table is the header,
+        // deleted just below. Deleting this plugin's `records` rows also removes the one thing
+        // GetVmad/GetConditions read.
         DeleteExistingForOrigin("records", plugin, origin);
-        // #452: "removes every trace of key" has to include the Head side. A leftover snapshot would
+        // "Removes every trace of key" has to include the Head side. A leftover snapshot would
         // keep answering at Head for a plugin the load order no longer holds — the exact opposite of
-        // #34/ADR-0035's "hidden means absent".
+        // ADR-0035's "hidden means absent".
         DeleteExistingForOrigin("records_committed", plugin, origin);
         DeleteExistingForOrigin("header", plugin, origin);
         DeleteExistingForOrigin("form_lookup", plugin, origin);
@@ -253,7 +239,7 @@ internal sealed class PluginIngest
     private PreparedRecord PrepareRecord(
         IMajorRecordGetter record, string recordType, RecordTableSchema schema, GameRelease gameRelease)
     {
-        // #416 S1b: a container's children get a recorded parent slot, for the relationships
+        // A container's children get a recorded parent slot, for the relationships
         // placement/cell_location don't already carry. Read off the same record about to be
         // serialized, so what is remembered and what is stored cannot describe different graphs.
         var childRows = new List<ContainerChildRow>();
@@ -287,18 +273,13 @@ internal sealed class PluginIngest
         }
         var hasConditions = CollectConditionRefsForRecord(record, recordType, refs);
 
-        // #450 retires #413 D8's deep-copy-and-strip: every record is serialized straight from the
-        // getter ingest already holds, container or not. A container's document now carries the
-        // children Spriggit embeds, because that is what its source file holds — the whole point of
-        // one document shape (ADR-0041's #444 amendment). The deep copy that made stripping possible
-        // was the only per-container cost on this path (~5% of a real corpus) and goes with it.
-        //
-        // The divergence window this used to warn about is closed. #452 made a tracked plugin ingest
-        // from its source tree, where an embedded child has no separate file to diverge from, and #454
-        // retired ContainerAssembler along with the last consumer that could have read a stale inline
-        // copy — compile now deserializes the tree whole, so a container's children come from the one
-        // document that holds them. Do not reopen it with a reconciliation pass; that is the shape
-        // ADR-0041's amendment exists to delete.
+        // Every record is serialized straight from the getter ingest already holds, container or
+        // not: a container's document carries its embedded children, because that is what its
+        // source file holds — the whole point of one document shape (ADR-0041). A tracked plugin
+        // ingests from its source tree, where an embedded child has no separate file to diverge
+        // from, and compile deserializes the tree whole, so a container's children come from the
+        // one document that holds them. Do not add a reconciliation pass between inline copies and
+        // separate child files; that is the shape ADR-0041's amendment exists to delete.
         var body = _codec.SerializeToBytesAsync(record, gameRelease).GetAwaiter().GetResult();
         // Hashed from the codec's own bytes rather than from a string: identical for the valid
         // UTF-8 the codec emits, but this keeps the hash defined by what the source file would
@@ -351,13 +332,13 @@ internal sealed class PluginIngest
             _logger.LogDebug("Appending {Count} {RecordType} records from {Plugin}", records.Count, tableName, plugin);
         }
 
-        // ADR-0041 / #413: no per-type table to delete from or append to any more. This loop's whole
-        // output is now one document per record plus the extracted index rows derived from it — the
+        // ADR-0041: this loop's whole
+        // output is one document per record plus the extracted index rows derived from it — the
         // per-type enumeration survives only because it is how a record's type is known.
         //
-        // #113: the per-record work is CPU-bound and independent record to record — serialize,
-        // hash, the form-ref walk, container children, VMAD and condition refs — and was 98% of a
-        // full load order's load on one core of eight. It runs in parallel here; only the appender
+        // The per-record work is CPU-bound and independent record to record — serialize,
+        // hash, the form-ref walk, container children, VMAD and condition refs — measured at 98% of
+        // a full load order's load on one core of eight. It runs in parallel here; only the appender
         // writes stay sequential, in enumeration order (AsOrdered), so a re-index lands rows in the
         // same order it always did. The codec and the collectors hold no per-call mutable state
         // (RecordTextCodec's caches are ConcurrentDictionaries; Mutagen's binary overlays are
@@ -410,7 +391,7 @@ internal sealed class PluginIngest
                 if (p.HasConditions) counters.Conditions++;
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
-                    // #217: same per-record trace texts as before (RecordIndexingLoggingTests pins them).
+                    // RecordIndexingLoggingTests pins these per-record trace texts.
                     _logger.LogTrace("Appended {RecordType} record {FormKey} ({EditorID}) from {Plugin}",
                         tableName, record.FormKey, record.EditorID, plugin);
                     if (p.HasVmad)
@@ -429,7 +410,7 @@ internal sealed class PluginIngest
         }
     }
 
-    /// <summary>Records prepared in parallel ahead of the appender at a time (#113). Large enough
+    /// <summary>Records prepared in parallel ahead of the appender at a time. Large enough
     /// to keep eight cores busy on cheap records; small enough that a batch of the largest cell
     /// documents stays well inside a few hundred MB.</summary>
     private const int PrepareBatchSize = 2048;
@@ -494,13 +475,11 @@ internal sealed class PluginIngest
             });
     }
 
-    // Issue #1 slice A1: header rows never flow through IndexRecordTable (see IndexPlugin's skip
+    // Header rows never flow through IndexRecordTable (see IndexPlugin's skip
     // above), so they need their own delete-then-append step, matching every other side table.
-    // #271/#272 / ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
-    // every reflected schema, so it carries the `origin` column too — HeaderIndexer.Index has
-    // appended it since #271; the delete step below was #272's last remaining filename-only gap
-    // (VMAD/conditions/form_lookup were migrated to DeleteExistingForOrigin earlier in this same
-    // ticket) and is now scoped to (plugin, origin) here too.
+    // ADR-0036: the header table's DDL comes from the same generic CreateRecordTable as
+    // every reflected schema, so it carries the `origin` column too, and the delete below is
+    // scoped to (plugin, origin) like every other.
     private void IndexHeader(
         IModGetter pluginMod, string plugin, string origin,
         IReadOnlyDictionary<string, RecordTableSchema> schemas)
@@ -512,7 +491,7 @@ internal sealed class PluginIngest
         HeaderIndexer.Index(pluginMod, plugin, origin, headerSchema, appender);
     }
 
-    // One record's condition refs — the body of the loop above, extracted so #415's per-record
+    // One record's condition refs — the body of the loop above, extracted so per-record
     // re-derivation walks conditions through the identical code rather than a second copy of it.
     // Returns whether this record owns any conditions at all, which is what the caller's own
     // "indexed conditions for N records" count has always meant. Internal: WorkingTreeOverlay's own
@@ -535,11 +514,10 @@ internal sealed class PluginIngest
         return true;
     }
 
-    // Mirrors the deleted ConditionIndexer.CollectConditionRefs: a condition's three FormKey-bearing
+    // A condition's three FormKey-bearing
     // slots (a Form-category parameter, the Run-On reference, the Use-Global comparison target).
-    // FieldPath format matches Edits/ConditionPath.Build/BuildParameter exactly (see that type and
-    // the deleted ConditionIndexer's own comment for why this reproduces rather than imports it —
-    // Records/ doesn't reference Edits/).
+    // FieldPath format matches Edits/ConditionPath.Build/BuildParameter exactly — reproduced rather
+    // than imported because Records/ doesn't reference Edits/.
     private static void CollectConditionRefsForOne(
         string formKey, string recordType, string fieldPath, int index, ParsedCondition c, List<FormRef> refs)
     {
@@ -562,7 +540,7 @@ internal sealed class PluginIngest
         $@"CTDA\{fieldPath}\{index}\{subField}";
 
     // Internal: WorkingTreeOverlay's own per-record rederivation calls this through its PluginIngest
-    // reference (Overlay depends on Ingest, never the reverse — #606 stage 2 design review).
+    // reference (Overlay depends on Ingest, never the reverse).
     internal static void CollectFormRefs(
         List<FormRef> refs,
         IMajorRecordGetter record,
@@ -578,13 +556,13 @@ internal sealed class PluginIngest
         }
     }
 
-    // One record's VMAD Object-property refs — the body of the loop above, extracted so #415's
+    // One record's VMAD Object-property refs — the body of the loop above, extracted so
     // per-record re-derivation walks VMAD through the identical code rather than a second copy of it.
     // The parameter is IMajorRecordGetter rather than the VMAD aspect interface because the
     // re-derivation path holds a record reconstituted from its document, and would otherwise have to
     // repeat the aspect test at its own call site. A record with no VMAD contributes nothing.
     // Internal: WorkingTreeOverlay's own per-record rederivation calls this through its PluginIngest
-    // reference (Overlay depends on Ingest, never the reverse — #606 stage 2 design review).
+    // reference (Overlay depends on Ingest, never the reverse).
     internal static void CollectVmadRefsForRecord(
         IMajorRecordGetter record, string recordType, List<FormRef> refs)
     {
@@ -603,7 +581,7 @@ internal sealed class PluginIngest
         }
     }
 
-    // #415: one form_references row, appended the same way whether it came from a whole-plugin ingest
+    // One form_references row, appended the same way whether it came from a whole-plugin ingest
     // or from a single record's working-tree change — extracted so the two paths cannot append
     // different column orders into the same table. Internal: WorkingTreeOverlay's own per-record
     // rederivation calls this through its PluginIngest reference.
@@ -627,14 +605,13 @@ internal sealed class PluginIngest
         DuckDbSql.ExecuteFor(_connection,
             "DELETE FROM mirror.form_references WHERE source_plugin = $1 AND source_origin = $2", plugin, origin);
 
-    // #271/#272 / ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin
-    // must never delete another origin's rows for the same filename. Every reindexed table now
-    // goes through this (the filename-only `DeleteExisting` predecessor was deleted once header,
-    // #272's last holdout, moved to this method too — see IndexHeader above).
+    // ADR-0036: scoped to (plugin, origin) together — reindexing one origin's plugin
+    // must never delete another origin's rows for the same filename. Every reindexed table
+    // goes through this.
     private void DeleteExistingForOrigin(string tableName, string plugin, string origin) =>
         DuckDbSql.ExecuteFor(_connection, $"DELETE FROM mirror.\"{tableName}\" WHERE plugin = $1 AND origin = $2", plugin, origin);
 
-    // #606 stage 2 (approved as proposed): these three append primitives are used by both
+    // These three append primitives are used by both
     // WorkingTreeOverlay's per-record rederivation and DuckDbRecordIndex's own container-verb tail
     // (ReplaceContainerChildSlot/CreateCellLocation), which stays outside the three named
     // collaborators — "append" primitives belong with PluginIngest either way.

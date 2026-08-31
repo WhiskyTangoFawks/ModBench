@@ -8,10 +8,9 @@ vi.mock('./nativeBridge', () => ({ pickFormKey: (...args: unknown[]) => pickForm
 
 import { VmadObjectCell } from './VmadObjectCell';
 
-// Issue #231: the `renderCell` dispatch target for `meta.type === 'vmadObject'` — a thin adapter
-// from the unified tree's plain (value, editable, onCommit, onOpen) leaf contract onto #229's
-// VmadObjectEditor, building the same compact "FormKeyLink + [alias]" read view VmadSection's own
-// leafContent used to render.
+// The `renderCell` dispatch target for `meta.type === 'vmadObject'` — a thin adapter from the
+// unified tree's plain (value, editable, onCommit, onOpen) leaf contract onto VmadObjectEditor,
+// building the compact "FormKeyLink + [alias]" read view.
 describe('VmadObjectCell', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
@@ -43,8 +42,8 @@ describe('VmadObjectCell', () => {
     expect(screen.queryByLabelText('Alias')).not.toBeInTheDocument();
   });
 
-  // #426 Track 5: an immutable column (editable absent/false) gets no editor at all — matches
-  // every other leaf's "presence of somewhere to write is the editability signal" contract.
+  // An immutable column (editable absent/false) gets no editor at all — matches every other
+  // leaf's "presence of somewhere to write is the editability signal" contract.
   it('a plain click does nothing on an immutable column (editable absent)', () => {
     render(<VmadObjectCell value="000123:Foo.esp [2]" onCommit={vi.fn()} onOpen={vi.fn()} />);
     fireEvent.click(screen.getByText('000123:Foo.esp'));

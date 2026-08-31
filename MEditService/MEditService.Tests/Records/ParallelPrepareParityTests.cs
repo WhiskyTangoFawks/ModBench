@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #113: Index() prepares records in parallel (serialize, hash, refs) and appends sequentially. The
+// Index() prepares records in parallel (serialize, hash, refs) and appends sequentially. The
 // document the index stores for a record must be the codec's own sequential output, byte for
 // byte — this is the committed form of the "verified byte-identical" check the parallel path
 // leans on, so a future change to the parallel section cannot silently drift from the codec.

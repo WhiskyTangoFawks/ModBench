@@ -11,7 +11,7 @@ using Noggog;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #497: an exterior cell's FULL name has exactly one real-world source of truth — the record's
+/// An exterior cell's FULL name has exactly one real-world source of truth — the record's
 /// own <c>Name</c> subrecord as Mutagen actually serializes it (<c>ICellGetter.Name?.String</c>,
 /// backed by the <c>FULL</c> subrecord) — so this indexes a real <see cref="Cell"/> through the
 /// real <see cref="DuckDbRecordIndex"/> pipeline (binary round trip included) rather than stubbing

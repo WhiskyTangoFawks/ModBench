@@ -4,7 +4,7 @@ using MEditService.Bridge;
 namespace MEditService.Tests.Bridge;
 
 /// <summary>
-/// #587 / ADR-0001: the runtime mirror. The external-change watcher covers every <i>indexed</i>
+/// ADR-0001: the runtime mirror. The external-change watcher covers every <i>indexed</i>
 /// binary, the game's own <c>Data/</c> included — not just the tracked ones — and says what actually
 /// happened to it so the index can follow. Real filesystem, real debounce timing, no mocked
 /// <see cref="FileSystemWatcher"/>, matching this file's sibling suite.
@@ -50,8 +50,8 @@ public sealed class IndexedBinaryWatchTests
         lock (events) return events.Count;
     }
 
-    // AC1. An untracked plugin — no mod folder, no source tree, no question to ask the user — is
-    // simply re-read. This is the plugin kind the watcher never covered before #587.
+    // An untracked plugin — no mod folder, no source tree, no question to ask the user — is
+    // simply re-read.
     [Fact]
     public void AnIndexedBinaryWhoseBytesChange_IsReportedAsModified()
     {
@@ -76,7 +76,7 @@ public sealed class IndexedBinaryWatchTests
         }
     }
 
-    // AC3. Content, never events: a rewrite landing the identical bytes — a touch, a mod manager
+    // Content, never events: a rewrite landing the identical bytes — a touch, a mod manager
     // re-linking a file, a re-extract of the same archive — costs no re-index at all.
     [Fact]
     public void AnIndexedBinaryRewrittenWithIdenticalBytes_ReportsNothing()
@@ -100,7 +100,7 @@ public sealed class IndexedBinaryWatchTests
         }
     }
 
-    // AC2. A deletion is its own verb, never a modification: the index must forget the plugin, not
+    // A deletion is its own verb, never a modification: the index must forget the plugin, not
     // re-read a file that is not there.
     [Fact]
     public void AnIndexedBinaryThatIsDeleted_IsReportedAsDeleted_Once()

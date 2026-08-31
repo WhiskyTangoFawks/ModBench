@@ -7,7 +7,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #573 AC1/AC2 at the actual wire: after renumbering a record, <c>GET /records?plugin=...</c> must
+/// At the actual wire: after renumbering a record, <c>GET /records?plugin=...</c> must
 /// no longer list the old FormKey and <c>GET /records/{oldFormKey}</c> must 404 rather than keep
 /// serving a fully-populated, stale record. <see cref="RecordEditServiceRenumberRecordTests"/> pins
 /// the same fact at the <c>IRecordReads</c> layer (the seam <c>RecordQueryService</c> sits on); this
@@ -15,9 +15,9 @@ namespace MEditService.Tests.Api;
 /// harness <c>EditFieldApiTests</c> already uses.
 ///
 /// <para>Renumbers a record fresh off <c>CreateRecord</c> (never committed, still working-tree-only
-/// <c>Added</c>) rather than one of the fixture's own pre-committed NPCs — that shape is what
-/// reproduced #573 (the original report's own <c>workingTreeState: "Added"</c> old FormKey);
-/// renumbering an already-committed record wouldn't have exercised the bug at all.</para>
+/// <c>Added</c>) rather than one of the fixture's own pre-committed NPCs — a
+/// <c>workingTreeState: "Added"</c> old FormKey is the shape that reproduces the stale-record bug;
+/// renumbering an already-committed record wouldn't exercise it at all.</para>
 /// </summary>
 public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
@@ -69,11 +69,11 @@ public sealed class RenumberApiTests(LoadedApiFixture<TestPluginFixture> loaded)
         renumbered.EnsureSuccessStatusCode();
         var newFormKey = (await renumbered.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("newFormKey").GetString()!;
 
-        // AC2: the old FormKey's point-read refuses rather than serving stale data.
+        // The old FormKey's point-read refuses rather than serving stale data.
         var oldRead = await _client.GetAsync($"/records/{Uri.EscapeDataString(oldFormKey)}");
         Assert.Equal(HttpStatusCode.NotFound, oldRead.StatusCode);
 
-        // AC1: the old FormKey is gone from the plugin's listing, and the new one is present.
+        // The old FormKey is gone from the plugin's listing, and the new one is present.
         var listing = await _client.GetFromJsonAsync<JsonElement>($"/records?plugin={Plugin}&type=npc_");
         var formKeys = listing.GetProperty("items").EnumerateArray()
             .Select(i => i.GetProperty("formKey").GetString()).ToList();

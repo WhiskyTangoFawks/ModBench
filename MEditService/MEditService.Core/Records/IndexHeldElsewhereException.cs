@@ -1,7 +1,7 @@
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// #588 / ADR-0001 point 6: the instance's index file is open in another process — a second
+/// ADR-0001 point 6: the instance's index file is open in another process — a second
 /// Modbench window on the same MO2 instance. A DuckDB file admits one writer and Modbench runs one
 /// service per VS Code window, so the second load is refused by name: no read-only mode (a second
 /// mode every index-writing path would have to detect), no waiting (a hang with no signal), never

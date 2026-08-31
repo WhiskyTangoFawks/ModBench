@@ -4,7 +4,7 @@ using Serilog;
 namespace MEditService.Core.Source;
 
 /// <summary>
-/// Thin process wrapper over the real git CLI — the source's one execution boundary (ADR-0041/#370).
+/// Thin process wrapper over the real git CLI — the source's one execution boundary (ADR-0041).
 /// No interface, no fake implementation: there is exactly one way to run git, and every call states
 /// its own gitdir/worktree explicitly (via <c>GIT_DIR</c>/<c>GIT_WORK_TREE</c>), which is the whole
 /// seam tests need — pointing at scratch directories, never a mocked git. Internal: callers go
@@ -16,7 +16,7 @@ internal static class GitCli
 {
     // Checked once, early, by every entry point about to run git for the first time in a call
     // (SourceRepository.Track) — a missing git-on-PATH must surface as one named, actionable
-    // failure, never as a raw exception cascade (comment 1, #414 / ADR-0026). `Process.Start` throws
+    // failure, never as a raw exception cascade (ADR-0026). `Process.Start` throws
     // Win32Exception ("No such file or directory") when the executable can't be found on PATH; that
     // is the one expected failure mode this wraps — anything else (git present but broken) still
     // surfaces here rather than at a random later `Run` call, since the check runs before any of
@@ -54,7 +54,7 @@ internal static class GitCli
 
     /// <summary>
     /// <see cref="Run"/> against a scratch index file instead of the repo's own <c>$GIT_DIR/index</c>
-    /// — #417's <c>SourceRepository.CommitPristineToMain</c> needs to build a tree object (<c>add</c>,
+    /// — <c>SourceRepository.CommitPristineToMain</c> needs to build a tree object (<c>add</c>,
     /// <c>write-tree</c>) without disturbing whatever the edit branch's real index currently holds
     /// (which may itself carry the user's own staged dirt). <paramref name="workTree"/> is a scratch
     /// directory too in that caller, never the mod folder — plumbing that touches neither the mod
@@ -68,7 +68,7 @@ internal static class GitCli
     }
 
     /// <summary>
-    /// #405: the thrown message names only the subcommand (<c>args[0]</c>), exit code and stderr —
+    /// The thrown message names only the subcommand (<c>args[0]</c>), exit code and stderr —
     /// never the full argument vector, which can carry absolute scratch/spill paths (e.g. a
     /// commit message or a hash-object target) straight onto the wire via the endpoint convention's
     /// <c>Results.Problem(ex.Message)</c>. The full vector is not lost, only moved: it goes to the

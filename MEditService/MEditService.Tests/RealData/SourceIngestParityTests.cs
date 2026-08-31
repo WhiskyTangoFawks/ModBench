@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #452 AC3, and the strongest claim in the ticket: <b>a tracked and an untracked copy of the same
+/// The strongest parity claim: <b>a tracked and an untracked copy of the same
 /// plugin produce identical extracted rows.</b>
 ///
 /// <para><b>The seam that makes it true is that both paths call the same
@@ -20,11 +20,11 @@ namespace MEditService.Tests.RealData;
 /// <see cref="CutDownPluginFixture"/>: 3,940 authentic records with a populated worldspace, interior
 /// and exterior cells, placements, navigation meshes, landscapes, and four VMAD-scripted quests
 /// carrying 860 dialogue topics and 2,873 responses. <c>TrackedModFixture</c> — Npc/Race/Keyword only
-/// — structurally cannot exercise any of that, which is exactly how #451 shipped a container
-/// regression no test could see.</para>
+/// — structurally cannot exercise any of that, which is exactly how a container
+/// regression once shipped with no test able to see it.</para>
 ///
-/// <para><b>This is also where the round-trip byte-stability premise gets pinned.</b> ADR-0041's #444
-/// amendment asserts the whole-mod door "round trips byte-stable"; the document/hash comparison below
+/// <para><b>This is also where the round-trip byte-stability premise gets pinned.</b> ADR-0041
+/// asserts the whole-mod door "round trips byte-stable"; the document/hash comparison below
 /// is what turns that into a checked fact, since <c>records.content_hash</c> is the hash of the
 /// codec's canonical serialization and the whole design of <c>SourceIngest.ReconcileHead</c> depends
 /// on parse-then-reserialize being an identity.</para>
@@ -108,7 +108,7 @@ public sealed class SourceIngestParityTests : IDisposable
     }
 
     /// <summary>
-    /// AC3's embedded-child requirement, stated as a property of the whole corpus rather than sampled:
+    /// The embedded-child requirement, stated as a property of the whole corpus rather than sampled:
     /// every placed reference, navmesh, landscape and <c>Worldspace.TopCell</c> the binary path
     /// extracts as its own record is extracted as its own record from the source tree too — even
     /// though in the source those live <i>inline</i> in their parent's document and have no file of
@@ -152,26 +152,26 @@ public sealed class SourceIngestParityTests : IDisposable
         mirror.Index!.GetRecordTypeCounts(_plugin).FirstOrDefault(c => c.Type == recordType)?.Count ?? 0;
 
     /// <summary>
-    /// The document itself, byte for byte, for every record — AC3's strongest assertion, and also the
+    /// The document itself, byte for byte, for every record — the strongest assertion here, and also the
     /// check that <b>parse-then-reserialize is an identity</b> for the whole-mod door. That premise
     /// holds: 2,576 of 2,577 documents are byte-identical, so <c>records.content_hash</c> and the git
     /// blob hash of the same record's source file do not diverge.
     ///
-    /// <para><b>Allowlisted divergence: exactly one, and it is #369, not this ticket.</b> A single Cell
+    /// <para><b>Allowlisted divergence: exactly one.</b> A single Cell
     /// differs on <c>Lighting.Versioning</c> — the binary <i>overlay</i> reader yields
-    /// <c>["Break0","Break1","Break2"]</c> where the <i>deep parser</i> yields <c>["Break0"]</c>. Three
-    /// things were checked before concluding that (#452 implementation): the Track-written file on disk
+    /// <c>["Break0","Break1","Break2"]</c> where the <i>deep parser</i> yields <c>["Break0"]</c>. The
+    /// Track-written file on disk
     /// already holds only <c>Break0</c> (no file in the whole tree contains <c>Break2</c>), and the
     /// <i>per-record</i> codec run over a deep parse also yields <c>["Break0"]</c> — identical to the
-    /// whole-mod door. So both doors agree, #450's document-shape parity is intact, and what is left is
-    /// exactly #369's pinned decompile-vs-parse structural mismatch landing on a Mutagen binary-layout
+    /// whole-mod door. So both doors agree, document-shape parity is intact, and what is left is
+    /// exactly the known decompile-vs-parse structural mismatch landing on a Mutagen binary-layout
     /// versioning field.</para>
     ///
     /// <para>It cannot occur in production for a tracked plugin: ingest-from-source does exactly one
-    /// parse (ADR-0041's #444 amendment point 2, and #452's scope item 5). This suite is the one place
+    /// parse (ADR-0041). This suite is the one place
     /// it can still show, because it deliberately compares an overlay ingest against a deep-parse one.</para>
     ///
-    /// <para><b>The divergence is asserted present, not merely tolerated</b> (#455's allowlist design):
+    /// <para><b>The divergence is asserted present, not merely tolerated</b>:
     /// if an upstream fix ever makes the two readers agree, this goes red and we find out rather than
     /// carrying a stale exemption. Same for the count and the field.</para>
     /// </summary>
@@ -245,14 +245,12 @@ public sealed class SourceIngestParityTests : IDisposable
     /// FormKey resolution and the reference graph. Both are pure derivations of the documents above,
     /// so this is the check that the derivation ran identically, not just that the documents matched.
     ///
-    /// <para><b>#459: the array-ordinal allowlist is gone, not widened.</b> This used to tolerate 319
-    /// targets whose <c>FieldPath</c> array ordinal (the <c>[N]</c> inside a FieldPath like
-    /// <c>Responses[3]</c>) differed between the two ingests — <c>DialogTopic.Responses</c> and kin
-    /// carried no on-disk order carrier, so the ordinal reflected filesystem order, not GRUP order.
-    /// Turning <c>Overall.EnforceRecordOrder</c> on (<see cref="Serialization.RecordTextCodecCustomization"/>)
-    /// makes every folder-split sibling's file name carry its real GRUP position, so the two ingests'
-    /// array ordinals now agree exactly — asserted here as plain equality, no deindexing, no
-    /// allowlist.</para>
+    /// <para><b>No array-ordinal allowlist.</b> With <c>Overall.EnforceRecordOrder</c> on
+    /// (<see cref="Serialization.RecordTextCodecCustomization"/>) every folder-split sibling's file
+    /// name carries its real GRUP position — without it, <c>DialogTopic.Responses</c> and kin have no
+    /// on-disk order carrier and their <c>FieldPath</c> array ordinals (the <c>[N]</c> inside
+    /// <c>Responses[3]</c>) reflect filesystem order, not GRUP order. The two ingests' ordinals agree
+    /// exactly — asserted here as plain equality, no deindexing, no allowlist.</para>
     /// </summary>
     [Fact]
     public void FormLookupAndReferenceRows_AreIdentical_TrackedAndUntracked()
@@ -278,18 +276,12 @@ public sealed class SourceIngestParityTests : IDisposable
     }
 
     /// <summary>
-    /// <c>container_child</c>, the slot table #416 added for the containment relationships placement
+    /// <c>container_child</c>, the slot table for the containment relationships placement
     /// and cell_location do not already carry — Quest's dialogue branches and topics, and DialogTopic's
     /// responses, which stay folder-split in the source tree rather than embedded.
     ///
-    /// <para><b>#459: no more allowlisted slot-order divergence.</b> This used to tolerate 233 parents
-    /// whose <c>SlotIndex</c> values differed between the two ingests, because the pre-#459 layout
-    /// carried no folder-split ordering at all (this doc comment's own #452-era trace of
-    /// <c>Directory.GetFiles(...).OrderBy(TryGetNumber(...))</c> landing on an all-null key, hence
-    /// filesystem order rather than GRUP order — see <c>git log -p</c> on this file for the full
-    /// account, since the tolerance itself is gone here, not restated). Turning
-    /// <c>Overall.EnforceRecordOrder</c> on retires the reason that allowlist existed: every
-    /// folder-split sibling's file name now carries its real GRUP position, so a tracked plugin's
+    /// <para><b>No allowlisted slot-order divergence.</b> <c>Overall.EnforceRecordOrder</c> puts
+    /// every folder-split sibling's real GRUP position in its file name, so a tracked plugin's
     /// <c>container_child</c> rows agree with the binary's exactly, slot order included.</para>
     /// </summary>
     [Fact]

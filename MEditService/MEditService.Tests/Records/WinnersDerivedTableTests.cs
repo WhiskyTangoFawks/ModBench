@@ -10,10 +10,10 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #584 / ADR-0001: winning is a function of the registered load order, so it lives in a
+/// ADR-0001: winning is a function of the registered load order, so it lives in a
 /// load order-owned derived table — <c>winners</c>, one row per (ref, FormKey) naming the plugin
 /// whose copy wins — and never as a column on a data row. These tests read that table directly,
-/// because "where the answer is stored" is the whole point of the ticket: the behavioural half
+/// because "where the answer is stored" is the whole point here: the behavioural half
 /// (a promotion after a delete, a reorder flipping the stack) is already pinned by
 /// <see cref="WorkingTreeDeletionTests"/>, <see cref="LoadOrderViaRegistrationTests"/> and
 /// <see cref="RegistrationScopingTests"/>, and those keep passing through the new shape.

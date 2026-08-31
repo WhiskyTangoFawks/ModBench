@@ -9,11 +9,8 @@ public sealed record PristineFile(string RelativePath, byte[] Content);
 
 /// <summary>
 /// The one way a list of <see cref="PristineFile"/>s becomes real files under some base directory —
-/// <c>Path.Combine(baseDirectory, file.RelativePath)</c>, create the parent, write the bytes.
-/// Extracted (#471 review) after a third call site (<c>TrackService.VerifyRoundTrip</c>'s scratch
-/// write, materializing a plugin's just-serialized tree to recompile it) made three independent
-/// copies of the same three lines — <see cref="SourceRepository.Track"/>'s pristine-baseline write
-/// and <see cref="SourceRepository.CommitPristineToMain"/>'s scratch write were already two. Both a
+/// <c>Path.Combine(baseDirectory, file.RelativePath)</c>, create the parent, write the bytes —
+/// shared so the call sites cannot drift. Both a
 /// sync and an async form, rather than forcing one shape on every caller: the two
 /// <see cref="SourceRepository"/> call sites are synchronous git-mechanics methods with no
 /// <c>async</c> context of their own to extend, while the round-trip gate is already deep inside an

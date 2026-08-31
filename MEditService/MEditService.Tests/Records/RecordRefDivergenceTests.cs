@@ -12,11 +12,9 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #415: <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) is a genuinely different
-/// relation now, not the same instance — so the two properties #421 pinned here as <i>identity</i>
-/// become the more dangerous question of whether they <i>survived</i> the split. This file is the
-/// sanctioned rewrite of <c>RecordRefIdentityTests</c>, which #421 built to fail the moment this
-/// ticket landed.
+/// <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) is a genuinely different
+/// relation, not the same instance — so identical answers on unchanged records are a property to
+/// prove, not a given.
 ///
 /// <para>The first two cases use records with <b>no</b> working-tree change, where the two relations
 /// hold the same row by construction and identical answers are still the correct ones — a broken
@@ -75,7 +73,7 @@ public sealed class RecordRefDivergenceTests : IDisposable
         return repo;
     }
 
-    // #603: the same "KeepMe" override deleted in the working tree, reused by every one of the five
+    // The same "KeepMe" override deleted in the working tree, reused by every one of the five
     // extracted/aggregate reads below — one crafted divergence, five distinct At(Head) observers, the
     // same shape RecordRefDivergenceTests already uses for GetOverrideStack/Search above. Deletion is
     // structural, so ApplyWorkingTreeChanges' own UpdateWinners() resweep already covers it — no
@@ -175,13 +173,12 @@ public sealed class RecordRefDivergenceTests : IDisposable
             repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
     }
 
-    // #603 characterization: the 8 relation-parameterized twins below (GetRecordTypeCounts,
-    // GetContestedFormKeys, GetPluginsWithMatchingRecords, GetNativeFormKeys, GetEffectiveMasters,
-    // GetWorldspaceCells, GetInteriorCells, GetCellReferences) had zero test coverage of their
-    // At(RecordRef.Head) path anywhere in the suite before this ticket — every existing call site
-    // exercises them at Effective only. These five (plus three cell/placement-table ones in
-    // RecordRefDivergenceCellReadsTests) close that gap ahead of the stage-1 collapse, so a relation
-    // plumbed wrong during the move has something to fail against instead of passing by construction.
+    // Only these tests exercise the At(RecordRef.Head) path of the 8 relation-parameterized twins
+    // (GetRecordTypeCounts, GetContestedFormKeys, GetPluginsWithMatchingRecords, GetNativeFormKeys,
+    // GetEffectiveMasters, GetWorldspaceCells, GetInteriorCells, GetCellReferences) — everything
+    // else in the suite exercises them at Effective only. Five are covered below and three
+    // cell/placement-table ones in RecordRefDivergenceCellReadsTests, so a relation plumbed wrong
+    // has something to fail against instead of passing by construction.
 
     [Fact]
     public void AtHead_GetContestedFormKeys_StillCountsAnEffectivelyDeletedOverride()

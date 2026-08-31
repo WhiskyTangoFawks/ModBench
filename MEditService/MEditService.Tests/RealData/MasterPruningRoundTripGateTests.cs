@@ -14,9 +14,9 @@ using Noggog.WorkEngine;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #563's and #567's real fixtures, in <see cref="SubrecordInventoryRoundTripGateTests"/>' (#514)
-/// shape: real, unrelated plugins whose own bytes trip
-/// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>' pre-#563 false positive, not forged ones.
+/// Real, unrelated plugins whose own bytes trip
+/// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>' master-pruning false positive, not forged
+/// ones — <see cref="SubrecordInventoryRoundTripGateTests"/>' shape.
 ///
 /// <para><b>The shared mechanism.</b> ADR-0038 makes a plugin's masters wholly content-derived:
 /// Mutagen's default <c>MastersListContentOption.Iterate</c> (the same default <c>PluginWriter</c> and
@@ -25,19 +25,19 @@ namespace MEditService.Tests.RealData;
 /// — "Clean is inherent to every compile", never a separate operation. Track's own round-trip
 /// verification write is no exception, so any plugin declaring an unused master differs from its own
 /// rewrite by exactly a <c>TES4 MAST</c>+<c>DATA</c> pair. That is sanctioned pruning, not a dropped
-/// subrecord, and pre-#563 <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/> could not tell the two
-/// apart — it refused every such plugin (72% of all real Track refusals across the #513 LitR-instance
-/// survey's 684 plugins: <c>RoundTripSurvey</c>, <c>MEDIT_SURVEY_MODS=/home/wayne/Games/FO4/LitR/mods</c>).
-/// Both fixtures below are recovered from that survey and both must Track.</para>
+/// subrecord; a walk that cannot tell the two apart refuses every such plugin (72% of all real Track
+/// refusals across the LitR-instance survey's 684 plugins: <c>RoundTripSurvey</c>,
+/// <c>MEDIT_SURVEY_MODS=/home/wayne/Games/FO4/LitR/mods</c>).
+/// The first two fixtures below are recovered from that survey and both must Track.</para>
 ///
-/// <para><b>#563 — <c>LitR - FaceGen/FaceGen Output.esp</c>, the total prune.</b> 82 bytes: one
+/// <para><b><c>LitR - FaceGen/FaceGen Output.esp</c>, the total prune.</b> 82 bytes: one
 /// <c>TES4</c> header record declaring <c>Fallout4.esm</c> as a master (<c>MAST</c>+<c>DATA</c>) but
 /// carrying zero records (<c>HEDR.NumRecords</c> = 0), so nothing in the file ever references that
 /// master and the rewrite prunes the list to empty (1 → 0). The smallest real fixture the survey
 /// produced that isolates exactly one difference — a single pruned, wholly-unused master, nothing else
 /// divergent in the file.</para>
 ///
-/// <para><b>#567 — <c>Legendaries They Can Use/LegendariesTheyCanUse.esp</c>, the partial prune.</b>
+/// <para><b><c>Legendaries They Can Use/LegendariesTheyCanUse.esp</c>, the partial prune.</b>
 /// 68KB, 71 records, ESL-flagged (<c>TES4</c> flags <c>0x200</c> =
 /// <see cref="Fallout4ModHeader.HeaderFlag.Small"/>), declaring four masters —
 /// <c>Fallout4.esm</c>, <c>DLCRobot.esm</c>, <c>DLCCoast.esm</c>, <c>DLCNukaWorld.esm</c> — of which
@@ -46,44 +46,30 @@ namespace MEditService.Tests.RealData;
 /// remaining FormID's local master index around the hole (<c>DLCCoast</c> 2 → 1, <c>DLCNukaWorld</c>
 /// 3 → 2). That renumbering is invisible to <see cref="ModelIdentity"/>, which compares by
 /// <c>FormKey</c> (ModKey-based, not index-based), so the round trip is model-identical and Track must
-/// accept it. This is a materially different case from #563's: a prune *within* a populated list
-/// rather than the collapse of a one-entry one, on a file with real content to renumber. It is also a
-/// real-world instance of the exact pattern ADR-0038 named and decided against (#283 — declaring an
+/// accept it. This is a materially different case from the total prune: a prune *within* a populated
+/// list rather than the collapse of a one-entry one, on a file with real content to renumber. It is
+/// also a real-world instance of the exact pattern ADR-0038 named and decided against (declaring an
 /// otherwise-unused plugin as a master purely to pin load order, which this codebase does not support;
 /// the prune is the decision, not a defect).</para>
 ///
-/// <para><b>#567 was a stale repro.</b> The ticket reported this plugin refused with the message
-/// below and hypothesised a parse-time drop in either Mutagen's binary reader or
-/// <c>Mutagen.Bethesda.Serialization</c>. Both were refuted by isolated repro:
-/// <c>ModFactory.ImportSetter</c> alone keeps all four masters, and so does the serialize/deserialize
-/// round trip — the difference is introduced by the *write*, exactly as #563 already established. The
-/// <c>/manual-test</c> that filed it ran the same day #563 merged, against a build that predated it.
-/// <see cref="DeepParse_OfTheRealLegendariesFixture_KeepsEveryDeclaredMasterIncludingTheUnreferencedOne"/>
-/// and <see cref="SourceRoundTrip_OfTheRealLegendariesFixture_KeepsEveryDeclaredMaster"/> are the two
-/// halves of that isolated repro made permanent, so the distinction survives without re-running the
-/// investigation.</para>
+/// <para><b>Suite placement.</b> <see cref="SubrecordInventoryRoundTripGateTests"/> exists to prove
+/// Track <i>refuses</i> a genuine parse-time subrecord drop; this suite exists to prove Track
+/// <i>accepts</i> ADR-0038's sanctioned master pruning. The two suites assert opposite polarities,
+/// and the partial-prune fixture belongs beside the total-prune fixture it is the direct counterpart
+/// to.</para>
 ///
-/// <para><b>Deliberate deviation on suite placement.</b> #567's own AC names
-/// <see cref="SubrecordInventoryRoundTripGateTests"/> (#514) as the home for its fixture; it lives here
-/// instead, with #563's, because the two suites assert opposite polarities and this fixture belongs to
-/// the second. #514's suite exists to prove Track <i>refuses</i> a genuine parse-time subrecord drop;
-/// this one exists to prove Track <i>accepts</i> ADR-0038's sanctioned master pruning — which is what
-/// #567 turned out to be, once the parse-time drop it alleged was refuted. Filing it under #514 would
-/// have put an "accepts" fixture in a suite whose every other member refuses, and separated it from the
-/// total-prune fixture it is the direct counterpart to.</para>
-///
-/// <para><b>#520 — <c>SpaDia_AMR.esp</c> (Rat Runners Arsenal), the shape none of the above can
+/// <para><b><c>SpaDia_AMR.esp</c> (Rat Runners Arsenal), the shape none of the above can
 /// accept.</b> Its Quest <c>DiaQ_LLInjector_SpadeyAMR</c> (<c>0000DD</c>) references
 /// <c>DLCNukaWorld.esm</c> only from inside a VMAD <c>ScriptStructListProperty</c>
 /// (<c>DLC04:DLCLegendaryLLManagerScript</c>'s <c>LeveledListData</c>) — the FormLink lives on a
 /// struct member (<c>ListToUpdate</c>/<c>FormToAdd</c>, both <c>ScriptObjectProperty</c>) that
 /// Mutagen's own <c>ScriptStructListProperty.EnumerateFormLinks</c> never walks
 /// (Mutagen-Modding/Mutagen#688; <see cref="ScriptStructListPropertyLinkGapTests"/> pins the
-/// mechanism). Unlike #563/#567, this is not sanctioned pruning: the master really is used, Mutagen
-/// simply cannot see the use, so the content-derived write prunes it anyway and then cannot write the
-/// property's own FormID (<c>UnmappableFormIDException</c>). Refused, not accepted — the shape #516
-/// decided Kind A defects get (<c>PluginDiagnosis.KindATable</c>'s #688 row), never a silent
-/// <c>NoCheck</c> fallback.</para>
+/// mechanism). Unlike the two prune fixtures, this is not sanctioned pruning: the master really is
+/// used, Mutagen simply cannot see the use, so the content-derived write prunes it anyway and then
+/// cannot write the property's own FormID (<c>UnmappableFormIDException</c>). Refused, not accepted —
+/// the shape Kind A defects get (<c>PluginDiagnosis.KindATable</c>'s Mutagen-#688 row), never a
+/// silent <c>NoCheck</c> fallback.</para>
 /// </summary>
 public sealed class MasterPruningRoundTripGateTests
 {
@@ -103,13 +89,11 @@ public sealed class MasterPruningRoundTripGateTests
     private static string PathTo(string fixtureFileName) =>
         Path.Combine(AppContext.BaseDirectory, "TestData", fixtureFileName);
 
-    /// <summary>AC: Track accepts this real plugin despite the pruned, unused master — the false
-    /// positive #563 exists to fix. Verified failing against the pre-#563 rival (no TES4 exemption):
-    /// rerunning this exact test threw <c>SourceRoundTripFailedException: FaceGen Output.esp does not
-    /// round-trip through its own tracked source: TES4 00000000 is missing MAST, DATA present in the
-    /// original — dropped during parsing, before Track ever wrote its source.</c> — matching the
-    /// survey's own CSV row for this exact fixture (<c>refuse:subrecord-loss:TES4:MAST+DATA</c>).
-    /// Reverted; the shipped implementation (this test asserts) tracks it instead.</summary>
+    /// <summary>Track accepts this real plugin despite the pruned, unused master. Without the TES4
+    /// exemption in <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, this throws
+    /// <c>SourceRoundTripFailedException: FaceGen Output.esp does not round-trip through its own
+    /// tracked source: TES4 00000000 is missing MAST, DATA present in the original — dropped during
+    /// parsing, before Track ever wrote its source.</c></summary>
     [Fact]
     public async Task TrackAsync_OfTheRealFaceGenOutputFixture_AcceptsDespiteThePrunedUnusedMaster()
     {
@@ -120,14 +104,13 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.True(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    /// <summary>#567 AC3, the partial-prune counterpart to the fixture above: Track accepts this real
+    /// <summary>The partial-prune counterpart to the fixture above: Track accepts this real
     /// plugin even though the rewrite prunes one master from the middle of a four-entry list and
-    /// renumbers the survivors' FormID master indices around it. Verified failing against the same
-    /// pre-#563 rival (the two-line TES4 <c>MAST</c>/<c>DATA</c> exemption deleted from
-    /// <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>), which reproduces #567's reported message
-    /// verbatim: <c>SourceRoundTripFailedException: LegendariesTheyCanUse.esp does not round-trip
+    /// renumbers the survivors' FormID master indices around it. With the TES4 <c>MAST</c>/<c>DATA</c>
+    /// exemption deleted from <see cref="PluginBinaryWalk.FindFirstSubrecordLoss"/>, this fails:
+    /// <c>SourceRoundTripFailedException: LegendariesTheyCanUse.esp does not round-trip
     /// through its own tracked source: TES4 00000000 is missing MAST, DATA present in the original —
-    /// dropped during parsing, before Track ever wrote its source.</c> Reverted.</summary>
+    /// dropped during parsing, before Track ever wrote its source.</c></summary>
     [Fact]
     public async Task TrackAsync_OfTheRealLegendariesFixture_AcceptsDespiteThePrunedUnusedMaster()
     {
@@ -138,10 +121,10 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.True(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    /// <summary>#520's own AC: unlike the two tests above, Track refuses this real plugin — the
-    /// master really is referenced (Mutagen just can't see it, #688), so pruning it is not sanctioned
-    /// and the write cannot complete. The diagnosis names the record, the pruned master, and cites
-    /// #688 as the known cause of this shape; no exception escapes to a 500 (a bare
+    /// <summary>Unlike the two tests above, Track refuses this real plugin — the
+    /// master really is referenced (Mutagen just can't see it, Mutagen #688), so pruning it is not
+    /// sanctioned and the write cannot complete. The diagnosis names the record, the pruned master,
+    /// and cites Mutagen #688 as the known cause of this shape; no exception escapes to a 500 (a bare
     /// <see cref="SourceRoundTripFailedException"/>, never <c>UnmappableFormIDException</c> itself).</summary>
     [Fact]
     public async Task TrackAsync_OfTheRealSpaDiaAMRFixture_RefusesNamingTheQuestAndThePrunedMaster()
@@ -156,7 +139,7 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.False(SourceRepository.IsTracked(scratch.ModFolder));
     }
 
-    /// <summary>#567 AC1, permanently pinned: the deep parse Track actually uses
+    /// <summary>The deep parse Track actually uses
     /// (<c>ModFactory.ImportSetter</c>, <c>TrackService</c>'s own reader) keeps all four declared
     /// masters, including the one no record references — so the <c>MAST</c>/<c>DATA</c> difference the
     /// gate sees downstream is introduced by the *write*, never lost on the way in. This is the single
@@ -184,9 +167,9 @@ public sealed class MasterPruningRoundTripGateTests
         Assert.Contains(ModKey.FromFileName("DLCNukaWorld.esm"), referenced);
     }
 
-    /// <summary>#567 AC1's other half, and the counterpart to the test above: the whole-mod
+    /// <summary>The counterpart to the test above: the whole-mod
     /// serialize/deserialize round trip through <c>Mutagen.Bethesda.Serialization</c> — a different
-    /// package from the binary reader, and #567's second candidate for where the master went — keeps all
+    /// package from the binary reader — keeps all
     /// four declared masters too. Together the two tests place the <c>MAST</c>/<c>DATA</c> difference
     /// squarely at the write and nowhere earlier, which is the whole finding. Asserted on the model
     /// straight out of <c>DeserializeWholeMod</c>, before any binary write touches it, for the same
@@ -206,7 +189,7 @@ public sealed class MasterPruningRoundTripGateTests
         finally { Directory.Delete(scratchDir, recursive: true); }
     }
 
-    /// <summary>#567 AC2's mechanism, asserted rather than merely described: it is the *write* that
+    /// <summary>The mechanism, asserted rather than merely described: it is the *write* that
     /// prunes, and it prunes exactly <c>DLCRobot.esm</c> — the one master no record references — leaving
     /// the other three in their original relative order. The two Track tests above can only report a
     /// bool; this names what actually happens to the header, so a future change that pruned the wrong

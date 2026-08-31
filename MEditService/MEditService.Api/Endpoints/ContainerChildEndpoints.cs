@@ -3,7 +3,7 @@ using MEditService.Core.Queries;
 namespace MEditService.Api.Endpoints;
 
 /// <summary>
-/// The container-child read (#424) — deliberately its own file rather than folded into
+/// The container-child read — deliberately its own file rather than folded into
 /// <see cref="WorldspaceEndpoints"/>: that file is named for a different domain concept
 /// (spatial/cell containment), while <see cref="ContainerChildQueryService"/> is container-type-
 /// agnostic even though only Quest/DialogTopic rows call it today.

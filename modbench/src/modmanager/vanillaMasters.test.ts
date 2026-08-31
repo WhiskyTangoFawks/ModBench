@@ -68,7 +68,7 @@ describe('readVanillaMasters', () => {
   });
 });
 
-// Discovers the game's implicitly-loaded masters (issue #108): a plugin file in
+// Discovers the game's implicitly-loaded masters: a plugin file in
 // the resolved Data folder that is NOT a hardlink (nlink === 1) is vanilla; a
 // hardlinked file (nlink >= 2) is a deployed mod plugin, not vanilla. Ordering
 // is derived via topological sort over each implicit master's own declared
@@ -172,7 +172,7 @@ describe('discoverImplicitMasters', () => {
     await writeFile(join(dataFolder, 'Fallout4.esm'), buildTes4Buffer([]));
     // readdir() lists a broken symlink; stat() (which follows links) throws
     // ENOENT on its missing target — deterministic, no chmod/root flakiness
-    // (#317's lesson: chmod-based permission denial is bypassed as root).
+    // (chmod-based permission denial is bypassed as root).
     await symlink(join(dataFolder, 'DoesNotExist.esm'), join(dataFolder, 'Broken.esm'));
 
     const logs: string[] = [];

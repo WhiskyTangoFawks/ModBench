@@ -3,10 +3,10 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #489: <see cref="SourceUnitResolver.RenormalizeGroupOrder"/> in isolation — the algorithm a
+/// <see cref="SourceUnitResolver.RenormalizeGroupOrder"/> in isolation — the algorithm a
 /// structural write (<c>RecordEditService.DeleteRecord</c>/<c>RenumberRecord</c>/<c>CreateRecord</c>)
 /// calls as its own last file-system act to close whatever <c>"[N]"</c> gap it left, so
-/// <c>PluginCompileService</c>'s byte-exact round-trip gate (#473) never again refuses a plugin whose
+/// <c>PluginCompileService</c>'s byte-exact round-trip gate never refuses a plugin whose
 /// only sin is a benign numbering gap.
 ///
 /// <para>Tested directly against a synthetic directory rather than only through the full
@@ -49,7 +49,7 @@ public sealed class SourceUnitResolverRenormalizeGroupOrderTests : IDisposable
     [Fact]
     public void AGap_ClosesToContiguous_PreservingRelativeOrderAndContent()
     {
-        // [0],[2],[5] — two gaps (1 and 3-4), the shape a delete leaves behind under the old doctrine.
+        // [0],[2],[5] — two gaps (1 and 3-4), the shape a delete leaves behind.
         WriteFile("[0] Alpha - 000001_Fixture.esp.json");
         WriteFile("[2] Beta - 000002_Fixture.esp.json");
         WriteFile("[5] Gamma - 000003_Fixture.esp.json");

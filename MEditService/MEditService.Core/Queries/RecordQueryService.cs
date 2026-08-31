@@ -21,7 +21,7 @@ public sealed class RecordQueryService(
     private readonly ConflictClassifier _conflictClassifier = conflictClassifier;
     private readonly ILogger _logger = (ILogger?)logger ?? NullLogger.Instance;
 
-    // #415 / #413 D3: the two point reads below are the record editor's and compare grid's own
+    // The two point reads below are the record editor's and compare grid's own
     // answers, so they are where source text is re-checked against what the index stored. Optional
     // only so the many read-shape tests that construct this service directly keep compiling; the
     // default is the real validator, never a no-op, so production wiring cannot silently lose it.
@@ -32,10 +32,10 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginResponse> GetPlugins()
     {
         var s = RequireLoadOrder();
-        // #277 / ADR-0037: one whole-load-order classification per call, not per plugin — Classify
+        // ADR-0037: one whole-load-order classification per call, not per plugin — Classify
         // is already a single pass over every plugin's Masters list.
         //
-        // #274: only once the load is complete. Classify answers "is this master anywhere in the
+        // Only once the load is complete. Classify answers "is this master anywhere in the
         // load order", which a partial load order cannot answer — a master that is present on disk and
         // merely not opened yet is indistinguishable from one that is genuinely absent, and the
         // wrong answer is the alarming one. Reported as "no issues" while loading rather than as a
@@ -51,14 +51,14 @@ public sealed class RecordQueryService(
         if (s.FilterSql is null)
             return [.. s.Plugins.Select(p => ToResponse(p, hasMatchingRecords: true))];
 
-        // #278 / ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
+        // ADR-0035 amending ADR-0018: a record filter prunes records and record types, never
         // a plugin row — every plugin is still returned, and HasMatchingRecords is the additive fact
         // a caller (the composite's chevron) decides expandability from, not row presence.
         var matchingPlugins = RequireReads().GetPluginsWithMatchingRecords(RequireSchemas().Keys);
         return [.. s.Plugins.Select(p => ToResponse(p, matchingPlugins.Contains(p.Name)))];
     }
 
-    // The header isn't a browsable record type (User Story 7's "expand a plugin -> record types"
+    // The header isn't a browsable record type (the "expand a plugin -> record types"
     // listing, or an unscoped "all types" search) — it's reached only via "Open Header" on the
     // plugin node. It stays a real schemas.Keys entry so GetRecord/GetCompare (a direct FormKey
     // lookup) can still resolve it; only these two browse-all-types paths exclude it.
@@ -71,16 +71,16 @@ public sealed class RecordQueryService(
     {
         var reads = RequireReads();
         var schemas = RequireSchemas();
-        // #34: the caller states which copy when it knows (a tree row does; it was built from one).
-        // Otherwise the #296 behaviour stands — resolve server-side from the load order, since a
-        // bare filename is all most callers have. Null when plugin itself is null (nothing to resolve).
+        // The caller states which copy when it knows (a tree row does — it was built from one).
+        // Otherwise resolve server-side from the load order, since a bare filename is all most
+        // callers have. Null when plugin itself is null (nothing to resolve).
         origin ??= plugin == null ? null : PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
 
         if (type != null && !schemas.ContainsKey(type))
             return new PagedResult<RecordSummary>([], 0);
 
         IReadOnlyList<string> recordTypes = type != null ? [type] : [.. schemas.Keys.Where(t => t != HeaderTableName)];
-        // #421: written as an if rather than `plugin == null ? null : new PluginKey(plugin, origin)`
+        // Written as an if rather than `plugin == null ? null : new PluginKey(plugin, origin)`
         // — PluginKey's implicit string conversion makes that ternary's common-type inference reach
         // for the null literal via `string`, tripping CS8625 on PluginKey.Name.
         PluginKey? pluginKey = null;
@@ -107,34 +107,21 @@ public sealed class RecordQueryService(
         var stack = reads.GetOverrideStack(formKey);
         if (stack == null) return null;
 
-        // #421: GetOverrideStack already resolved which record type this FormKey belongs to (the
-        // loop this replaced tried every schema table in turn until one had overrides) — one call
-        // where this used to be a scan.
         var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
 
         var heldPlugins = RequireLoadOrder().Plugins;
-        // #34 / ADR-0036: keyed by the compound column identity, like everything else here
-        // since #272. These two were the last filename-keyed structures in this method, safe
-        // only while a load order could hold at most one plugin per filename — with a second copy
+        // ADR-0036: keyed by the compound column identity — with a second copy of one filename
         // loaded, a filename key is ambiguous, and ToDictionary throws outright.
         var pluginMasters = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
-        // #267 / ADR-0035: a non-participating plugin's override is indexed and browsable but
+        // ADR-0035: a non-participating plugin's override is indexed and browsable but
         // never contributes to conflict classification.
         var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
         var (classification, conflictAll, vmad, conditions) =
             ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
-        // #272 / ADR-0036: two live bugs fixed together here, both invisible on the
-        // pre-#272 suite because every fixture used the elided Data origin.
-        // (1) o.Origin was omitted from the CompareOverride constructor call entirely, so
-        //     every override silently defaulted to PluginOrigin.DataDirectory regardless of
-        //     its real origin — the wire's own `overrides[].origin` field was never correct
-        //     for a non-Data-origin plugin.
-        // (2) classification.PluginStates is keyed by ColumnKey.Of(o.Plugin, o.Origin) since
-        //     B3, but this looked it up by bare o.Plugin — a miss for any non-Data-origin
-        //     column, silently defaulting ConflictThis to OnlyOne. Elision only spares
-        //     Data-origin plugins, and #269 records the providing mod folder as origin for
-        //     nearly every plugin in a real load order, so this was live for essentially every
-        //     conflicted record, not just a hypothetical two-origin case.
+        // ADR-0036: Origin must be passed through explicitly (never left to default to
+        // PluginOrigin.DataDirectory), and classification.PluginStates is keyed by
+        // ColumnKey.Of(o.Plugin, o.Origin) — a bare-plugin lookup misses for any non-Data-origin
+        // column, silently defaulting ConflictThis to OnlyOne.
         var annotated = committedOverrides
             .ConvertAll(o => new CompareOverride(
                 o.FormKey, o.Plugin, o.LoadOrderIndex, o.IsWinner, o.EditorId, o.Fields,
@@ -146,8 +133,8 @@ public sealed class RecordQueryService(
         return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
     }
 
-    /// <summary>#364: every contested FormKey (<see cref="IRecordReads.GetContestedFormKeys"/> —
-    /// already filter-narrowed the same way <c>GetRecordTypeCounts</c>/<c>Search</c> are, #278's
+    /// <summary>Every contested FormKey (<see cref="IRecordReads.GetContestedFormKeys"/> —
+    /// already filter-narrowed the same way <c>GetRecordTypeCounts</c>/<c>Search</c> are, one
     /// mechanism, not a second one) whose record-wide <see cref="Queries.ConflictAll"/> is not
     /// OnlyOne/NoConflict — the Conflicts node's own listing. Computed through the exact same
     /// <see cref="ClassifyStack"/> helper <see cref="GetCompare"/> uses, so "is this record
@@ -195,7 +182,7 @@ public sealed class RecordQueryService(
     /// <summary>The record-wide classification both <see cref="GetCompare"/> and
     /// <see cref="GetConflicts"/> need — one definition of "what is this record's ConflictAll",
     /// so the two can never disagree. VMAD/conditions are outside the generic reflection pipeline
-    /// (#421: reconstituted here from each entry's own document body via
+    /// (reconstituted here from each entry's own document body via
     /// <c>RecordDocumentCodecs</c>), so each is classified separately and its contribution folded
     /// into the generic result via <see cref="ConflictRules.Escalate"/> — mirroring the pattern for
     /// both. [ADR-0032]</summary>
@@ -245,14 +232,13 @@ public sealed class RecordQueryService(
     public IReadOnlyList<PluginRecordTypeCount> GetPluginRecordTypes(string plugin, string? origin = null)
     {
         var reads = RequireReads();
-        // #34: stated by the caller when it knows which copy it is browsing (a tree row does),
-        // else resolved server-side from the load order as it has been since #296.
+        // Stated by the caller when it knows which copy it is browsing (a tree row does),
+        // else resolved server-side from the load order.
         origin ??= PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
         var schemas = RequireSchemas();
 
-        // #421: one grouped query (GetRecordTypeCounts) replaces the per-type CountRecordsForPlugin
-        // loop — the header is never in `records` (D8), so it is already absent from the result
-        // without an explicit exclusion.
+        // The header is never in `records`, so it is already absent from the result without an
+        // explicit exclusion.
         return [.. reads.GetRecordTypeCounts(new PluginKey(plugin, origin))
             .Where(c => schemas.ContainsKey(c.Type))
             .Select(c => new PluginRecordTypeCount(c.Type, c.Count, schemas.DisplayNameFor(c.Type)))

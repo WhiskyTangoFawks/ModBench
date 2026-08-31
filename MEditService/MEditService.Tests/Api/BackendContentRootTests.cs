@@ -5,11 +5,11 @@ using System.Net.Sockets;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #343: the extension spawns the backend without setting a working directory
-/// (<c>modbench/src/extension.ts</c>'s <c>cp.spawn</c>), so the process's content root used to be
-/// whatever directory launched it rather than the directory the binary itself lives in — meaning
-/// the committed <c>appsettings.json</c> next to the binary, and the
-/// <c>Microsoft.AspNetCore: Warning</c> override in it, never loaded. These tests spawn the real,
+/// The extension spawns the backend without setting a working directory
+/// (<c>modbench/src/extension.ts</c>'s <c>cp.spawn</c>), so an unanchored content root would be
+/// whatever directory launched the process rather than the directory the binary itself lives in —
+/// meaning the committed <c>appsettings.json</c> next to the binary, and the
+/// <c>Microsoft.AspNetCore: Warning</c> override in it, would never load. These tests spawn the real,
 /// already-built <c>MEditService.Api.dll</c> through the <c>dotnet</c> muxer, as an actual child
 /// process launched from an unrelated working directory (the extension itself launches the
 /// published native executable directly, but <see cref="AppContext.BaseDirectory"/> — what the
@@ -26,7 +26,7 @@ public sealed class BackendContentRootTests
     {
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();
-        // #343 review: a fixed port (e.g. the committed appsettings.json one) collides with a
+        // A fixed port (e.g. the committed appsettings.json one) collides with a
         // developer's own running backend — an ephemeral port (127.0.0.1:0; Kestrel refuses dynamic
         // binding on the bare "localhost" host name) can't collide with anything, and the content
         // root — not the port — is what this test witnesses.
@@ -55,7 +55,7 @@ public sealed class BackendContentRootTests
     [Fact]
     public async Task SpawnedFromArbitraryCwd_WithExtensionArgv_SuppressesRequestPipelineLogsButKeepsAppInfo()
     {
-        // #205's argv, at Debug — the harder case: Default=Debug must not resurrect the
+        // The extension's argv, at Debug — the harder case: Default=Debug must not resurrect the
         // Microsoft.AspNetCore override, since it's a different config key. An arbitrary free port
         // (not the committed 5172) so a concurrent run or leftover listener can't collide.
         var port = GetFreeTcpPort();
@@ -80,7 +80,7 @@ public sealed class BackendContentRootTests
             await Task.Delay(TimeSpan.FromMilliseconds(500));
             var snapshot = Snapshot(lines);
 
-            // The six-line ASP.NET Core pipeline log this ticket kills. Distinct from — and
+            // The six-line ASP.NET Core pipeline log that must stay suppressed. Distinct from — and
             // unaffected by — UseSerilogRequestLogging's own one-line-per-request summary (pinned
             // separately below), which writes under a different category entirely.
             Assert.DoesNotContain(snapshot, l =>
@@ -99,8 +99,8 @@ public sealed class BackendContentRootTests
     [Fact]
     public async Task SpawnedFromArbitraryCwd_RequestLogging_ShowsFailuresButNotSuccessesAtDefaultLevel()
     {
-        // No --Serilog:MinimumLevel:Default here: the default (Information) is exactly the "without
-        // enabling debug" case the issue's third acceptance criterion names.
+        // No --Serilog:MinimumLevel:Default here: the default (Information) is exactly the
+        // "without enabling debug" case.
         var port = GetFreeTcpPort();
         var workingDirectory = Directory.CreateTempSubdirectory("medit-contentroot-").FullName;
         var lines = new List<string>();

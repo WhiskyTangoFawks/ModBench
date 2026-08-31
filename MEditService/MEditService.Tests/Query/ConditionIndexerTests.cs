@@ -12,16 +12,13 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Query;
 
 // Round-trips a record's conditions through the index (Index -> the record's own document ->
-// GetConditions's reconstitute-and-re-Extract, #420 — previously through the now-deleted
-// conditions/condition_parameters relational rows), covering the ingest/hydration wiring the
-// codec's own unit tests don't. A COBJ is the fixture because its Conditions field is the slice-1
-// target (ADR-0032).
+// GetConditions's reconstitute-and-re-Extract), covering the ingest/hydration wiring the
+// codec's own unit tests don't. A COBJ is the fixture because its Conditions field is the
+// representative target (ADR-0032).
 //
-// #421: GetConditions is rejected from IRecordReads/IRecordIndex outright — condition
-// reconstitution moved to Queries/RecordDocumentCodecs, operating on RecordDocument.Body. This
-// suite's own reader-level coverage is preserved by calling that relocated logic through the local
-// GetConditions helper below (same fixtures, same assertions) rather than the deleted repository
-// method directly.
+// GetConditions is rejected from IRecordReads/IRecordIndex outright — condition
+// reconstitution lives in Queries/RecordDocumentCodecs, operating on RecordDocument.Body, so this
+// suite's reader-level coverage calls that logic through the local GetConditions helper below.
 public sealed class ConditionIndexerTests : IDisposable
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;
@@ -71,7 +68,7 @@ public sealed class ConditionIndexerTests : IDisposable
                     Data = data,
                 });
 
-                // #166: a Run-On target of Reference and a Use-Global comparison are the other two
+                // A Run-On target of Reference and a Use-Global comparison are the other two
                 // FormKey-bearing condition slots (alongside a Form parameter, covered by `cobj`
                 // above) that must feed form_references — each gets its own record fixture below so
                 // GetReferences can prove the referencing record surfaces in Referenced-By.
@@ -106,7 +103,7 @@ public sealed class ConditionIndexerTests : IDisposable
                 globalCondition.ComparisonValue.SetTo(global.FormKey);
                 globalCobj.Conditions.Add(globalCondition);
 
-                // #154: Quest has two flat, top-level condition-carrying fields
+                // Quest has two flat, top-level condition-carrying fields
                 // (DialogConditions, UnusedConditions) — the multi-owner fixture. Both are
                 // populated here so GetConditions must key them independently by field path.
                 var multiListQuest = mod.Quests.AddNew("MultiConditionListQuest");
@@ -126,7 +123,7 @@ public sealed class ConditionIndexerTests : IDisposable
                     },
                 ];
 
-                // #165: a Number-category parameter with a known enum table (Sex) — the read path
+                // A Number-category parameter with a known enum table (Sex) — the read path
                 // (GetConditions) must attach the decoded member name alongside the raw value.
                 var sexCobj = mod.ConstructibleObjects.AddNew("SexTestRecipe");
                 sexCobjFk = sexCobj.FormKey;
@@ -167,9 +164,8 @@ public sealed class ConditionIndexerTests : IDisposable
         return repo;
     }
 
-    // #272 / ADR-0036: two origins loading the same physical file — conditions/condition_parameters
-    // had no origin column at all before this ticket; GetConditions's read side must not collide
-    // once they do.
+    // ADR-0036: two origins loading the same physical file — GetConditions's read side must
+    // scope to origin, not collide the copies.
     [Fact]
     public void GetConditions_SameFilenameDifferentOrigin_ScopesToOrigin()
     {
@@ -221,9 +217,9 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Empty(GetConditions(repo, _questFormKey.ToString(), "CtdaTest.esp", origin: "Data"));
     }
 
-    // Invariant 7 (missing data reads as empty, never a throw): distinct from the case above, where
+    // Missing data reads as empty, never a throw: distinct from the case above, where
     // a `records` row exists but carries no conditions. Here no row exists at all — the synthetic
-    // header FormKey is the real production example (D8: a ModHeader is never an IMajorRecordGetter,
+    // header FormKey is the real production example (a ModHeader is never an IMajorRecordGetter,
     // so it never had a document to begin with) — exercising ReadRecordBody's "no row" branch.
     [Fact]
     public void GetConditions_ReturnsEmpty_WhenRecordDoesNotExist()
@@ -234,7 +230,7 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Empty(GetConditions(repo, headerFormKey, "CtdaTest.esp", origin: "Data"));
     }
 
-    // #154: a record with more than one condition-carrying field (Quest.DialogConditions and
+    // A record with more than one condition-carrying field (Quest.DialogConditions and
     // Quest.UnusedConditions are both flat top-level Condition lists) must surface one owner per
     // field, each keyed by its own FieldPath, never merged or collided.
     [Fact]
@@ -257,7 +253,7 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Equal(2.0f, unusedCondition.ComparisonFloat);
     }
 
-    // #165: DecodeParamValue is wired through the read path — GetConditions attaches the decoded
+    // DecodeParamValue is wired through the read path — GetConditions attaches the decoded
     // enum member name to a Number-category parameter whose TypeName has a known static table,
     // alongside the raw value it was decoded from (never replacing it in storage).
     [Fact]
@@ -275,8 +271,8 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Equal("Male", param.DecodedValue);
     }
 
-    // --- form_references (#166): a condition's FormKey-bearing slots feed the same shared refs
-    // list CollectVmadRefs already feeds (#420), so a record referenced only by a condition
+    // --- form_references: a condition's FormKey-bearing slots feed the same shared refs
+    // list CollectVmadRefs already feeds, so a record referenced only by a condition
     // surfaces in Referenced-By. Mirrors VmadIndexerTests.VmadObjectProperty_RegistersFormReference. ---
 
     [Fact]
@@ -337,7 +333,7 @@ public sealed class ConditionIndexerTests : IDisposable
         Assert.Equal(_globalFormKey.ToString(), reader.GetString(1));
     }
 
-    // The actual issue-described behavior, one level above the raw table checks above: a record
+    // One level above the raw table checks above: a record
     // referenced only by a condition (never by an ordinary field or VMAD) must appear in
     // GetReferences' result — i.e. show up in the Referenced-By tab.
     [Fact]

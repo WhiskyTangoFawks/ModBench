@@ -6,10 +6,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #417 B6 / exit path 3: an unanswered external-change question refuses every gesture on the single
-/// write path (ADR-0041/#415) — checked once, ahead of both doors that path has: the source file
-/// write, and <c>index.ApplyWorkingTreeChanges</c> telling the DB. #426/#427 add more edit gestures
-/// through <see cref="RecordEditService"/> later and must inherit this refusal without adding their
+/// An unanswered external-change question refuses every gesture on the single
+/// write path (ADR-0041) — checked once, ahead of both doors that path has: the source file
+/// write, and <c>index.ApplyWorkingTreeChanges</c> telling the DB. New edit gestures
+/// through <see cref="RecordEditService"/> must inherit this refusal without adding their
 /// own check.
 /// </summary>
 public sealed class RecordEditServiceExternalChangeDeferralTests : IDisposable

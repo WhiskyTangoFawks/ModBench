@@ -43,7 +43,7 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, 400);
     }
 
-    // #445: a syntactically valid GameRelease this build has no Mutagen assembly for (SkyrimSE,
+    // A syntactically valid GameRelease this build has no Mutagen assembly for (SkyrimSE,
     // genuinely unreferenced — see SchemaReflectorAvailabilityTests) is a client error, not a
     // server fault: 400 with the typed, actionable message, not a 500 wrapping an assembly-load
     // exception. Game directory/instance root are the fixture's real (FO4) paths, never actually read —
@@ -87,10 +87,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
         AssertIsProblemDetails(resp, expectedStatus);
     }
 
-    // #288: a name that collides with an already-created plugin at the same destination — the
+    // A name that collides with an already-created plugin at the same destination — the
     // fixture's own already-listed plugin lives in the Data directory, not a mod folder, so this
-    // creates the destination's first plugin, then collides with it, rather than reusing
-    // TestPluginFixture.PluginName the way the old single-arg endpoint could.
+    // creates the destination's first plugin, then collides with it.
     [Fact]
     public async Task CreatePlugin_DuplicateAtSameDestination_ReturnsProblemDetails409()
     {
@@ -113,15 +112,9 @@ public sealed class ProblemDetailsApiTests(LoadedApiFixture<TestPluginFixture> l
     [InlineData("conditionRunOnTargets", 503)]
     [InlineData("getFilter", 503)]
     [InlineData("track", 503)]
-    // #310: LoadUnlistedPlugin/UnloadUnlistedPlugin's own "no load order" guards — the path/plugin
-    // check on each request body passes (real values below), so the request reaches
-    // LoadOrderMirror's `_mirror is null` branch and the 503 these routes declare via
-    // .ProducesProblem(503). The load case needs a path that actually exists on disk (File.Exists
-    // runs before the load order check), hence the fixture's own already-written plugin file rather
-    // than a made-up one.
-    // #605: getFilter/track are LoadOrderEndpoints.GetFilter's and PluginEndpoints.Track's own
-    // hand-written 503s — characterized here, before RequireScope() replaces them, so the refactor
-    // has an HTTP-level rival to answer to (neither had one before this).
+    // Each route's own "no load order" guard: the request body's validation passes (real values
+    // below), so the request reaches the no-load-order branch and the 503 these routes declare
+    // via .ProducesProblem(503).
     public async Task Endpoint_NoLoadOrder_ReturnsProblemDetails(string op, int expectedStatus)
     {
         await using var app = new WebApplicationFactory<Program>();

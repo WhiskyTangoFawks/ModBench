@@ -9,10 +9,10 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #217: the per-plugin VMAD/conditions summary lines duplicate the per-plugin progress milestone
-// LoadOrderMirror already logs at Info (#216), so they move to Debug here. Individual record
-// processing during indexing (append, VMAD, conditions) gets new Trace coverage — the "per-record
-// trace" gap the original #205/#215 audit called out. Indexing *behavior* (rows land correctly,
+// The per-plugin VMAD/conditions summary lines duplicate the per-plugin progress milestone
+// LoadOrderMirror already logs at Info, so they log at Debug here. Individual record
+// processing during indexing (append, VMAD, conditions) logs at Trace.
+// Indexing *behavior* (rows land correctly,
 // VMAD/conditions round-trip) is already covered by DuckDbRecordIndexTests, VmadIndexerTests
 // and ConditionIndexerTests, which remain the safety net for this reclassification; this file only
 // asserts on log level/content, which none of those do.

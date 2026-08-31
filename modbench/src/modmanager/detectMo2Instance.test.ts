@@ -61,7 +61,7 @@ describe('isMo2Instance', () => {
 });
 
 
-// #554: the welcome's viewsWelcome `when` clause needs a second key
+// The welcome's viewsWelcome `when` clause needs a second key
 // (modbench.workspaceMo2CheckDone) to tell "checked, and it's not an instance" apart from
 // "never checked" — an unset context key reads identically to `false` under a plain `!key`
 // negation, so workspaceIsMo2Instance alone can't carry that distinction. This is the one

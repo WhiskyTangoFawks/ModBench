@@ -18,17 +18,14 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Core.Records;
 
-// #421: the record index — the single DuckDB implementation of IRecordIndex/IRecordReads.
-// IRecordRepository/IRecordReader/IRecordIndexer (the pre-#421 seam this class also implemented
-// during the migration) are demolished; several former interface members below survive as private
-// helpers because a PluginKey-keyed public method still delegates to them.
+// The record index — the single DuckDB implementation of IRecordIndex/IRecordReads.
 //
-// #606 stage 2: internally split into three collaborators, each private to this module — IndexStore
+// Internally split into three collaborators, each private to this module — IndexStore
 // (connection/DDL/validate/rebuild), PluginIngest (prepare/append/collectors) and WorkingTreeOverlay
 // (ApplyWorkingTreeChanges/SetCommittedBaseline/Seed+Mark/rederivation). This class remains the one
-// public IRecordIndex/IRecordReads implementation and now also its orchestrator: it owns every
-// transaction boundary and the registration/winner-sweep/reads/container-verb/SQL-door responsibilities
-// the issue left unextracted, calling into the three collaborators for the rest.
+// public IRecordIndex/IRecordReads implementation and their orchestrator: it owns every transaction
+// boundary and the registration/winner-sweep/reads/container-verb/SQL-door responsibilities, calling
+// into the three collaborators for the rest.
 public sealed class DuckDbRecordIndex : IRecordIndex
 {
     private readonly SchemaReflector _schemaReflector;
@@ -38,7 +35,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private static readonly string[] PlacedTableNames = ["refr", "achr"];
     private bool _filterActive;
 
-    // ADR-0041 / #413: the per-record source codec, which is now the ingest path for every record —
+    // ADR-0041: the per-record source codec, the ingest path for every record —
     // each document body is exactly the bytes the record's source file holds. Constructed here
     // rather than injected: it is stateless apart from its own reflection caches (which are static),
     // and every existing construction site of this repository would otherwise have to learn about a
@@ -46,20 +43,20 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // other place a document is serialized or deserialized.
     private readonly RecordTextCodec _codec = new(NullLogger<RecordTextCodec>.Instance);
 
-    // #606 stage 2: the connection/DDL/validate/rebuild collaborator — see IndexStore's own doc
+    // The connection/DDL/validate/rebuild collaborator — see IndexStore's own doc
     // comment. Connection forwards to it rather than being held here, so a rebuild that reassigns
     // IndexStore's own Connection field is transparent to every existing `.Connection` reader
     // (production and the white-box test surface alike) with no change on their side.
     private readonly IndexStore _indexStore;
 
-    // #606 stage 2: the prepare/append/collectors collaborator — see PluginIngest's own doc comment.
+    // The prepare/append/collectors collaborator — see PluginIngest's own doc comment.
     // Constructed at the end of Initialize (below), once Connection is stable for the rest of this
     // object's lifetime (IndexStore never rebuilds again after Initialize returns) and schemas /
     // the condition codec / the release are all resolved — every one of PluginIngest's dependencies
     // is captured once rather than chased through a mutable back-reference.
     private PluginIngest _pluginIngest = null!;
 
-    // #606 stage 2: the working-tree overlay collaborator — see WorkingTreeOverlay's own doc comment.
+    // The working-tree overlay collaborator — see WorkingTreeOverlay's own doc comment.
     // Constructed alongside _pluginIngest, at the end of Initialize, for the identical reason (every
     // dependency captured once rather than chased through a mutable back-reference) — and after it,
     // since it depends on PluginIngest one-directionally.
@@ -78,9 +75,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore = new IndexStore(ddlBuilder, logger, databasePath);
     }
 
-    // Retained for the reconstitution path (#413 D1): reading a record back out of its document
-    // needs the release it was written under, and this repository is one game for its whole
-    // lifetime — the same reasoning that already resolves the condition codec once, here.
+    // Reading a record back out of its document needs the release it was written under, and this
+    // repository is one game for its whole lifetime — the same reasoning that already resolves the
+    // condition codec once, here.
     private GameRelease _release;
 
     public void Initialize(GameRelease release)
@@ -92,7 +89,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore.Initialize(release, indexVersion);
 
         _schemas = _schemaReflector.GetSchemas(release);
-        // #165: resolved once here (this repository is one game/load order for its whole lifetime),
+        // Resolved once here (this repository is one game/load order for its whole lifetime),
         // handed to PluginIngest below rather than kept as a field of this class — CollectConditionRefsForRecord's
         // only other caller (WorkingTreeOverlay's own rederivation) reaches it through the same
         // PluginIngest instance. Null for a game with no condition codec — same "fails to nothing,
@@ -104,7 +101,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _workingTreeOverlay = new WorkingTreeOverlay(
             Connection, _logger, _codec, _placementWalker, _pluginIngest, release, _schemas);
 
-        // IndexStore only ever computes and reports the stale set (#606 stage 2 design review) — it
+        // IndexStore only ever computes and reports the stale set — it
         // is never the one to act on it. Unindex is this class's own cross-cutting verb (registration
         // + every ingest-owned table), so acting on the answer stays here.
         foreach (var key in _indexStore.ValidateAgainstDisk())
@@ -119,12 +116,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.IndexedContentHash"/>.</summary>
     public string? IndexedContentHash(PluginKey key) => _indexStore.IndexedContentHash(key);
 
-    // origin (#271 / ADR-0036): the mod folder that provided this physical file, or a reserved
-    // PluginOrigin value. Required (#275) — threaded into every per-plugin delete/upsert/append
+    // origin (ADR-0036): the mod folder that provided this physical file, or a reserved
+    // PluginOrigin value. Required — threaded into every per-plugin delete/upsert/append
     // below so a plugin is identified by (origin, plugin) together, not filename alone: two
-    // plugins sharing a filename but differing in origin no longer collide.
-    //
-    // #421: private — Index(PluginKey) above is the public seam member and delegates here.
+    // plugins sharing a filename but differing in origin never collide.
     private void Index(IModGetter pluginMod, Registration registration, string origin, string? filePath)
     {
         var schemas = RequireSchemas();
@@ -135,26 +130,26 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // transaction, so deletes and appender flushes roll back together on Dispose-without-Commit.
         using var tx = Connection.BeginTransaction();
 
-        // #267: one `registrations` row per indexed plugin — UpdateWinners() joins against it so a
+        // One `registrations` row per indexed plugin — UpdateWinners() joins against it so a
         // non-participating copy's rows never win regardless of load_order_idx.
         UpsertRegistration(plugin, origin, registration);
-        // #585: and the disk claim these rows are about, replaced with them rather than beside them.
+        // And the disk claim these rows are about, replaced with them rather than beside them.
         _indexStore.StampIndexedFile(plugin, origin, filePath);
 
-        // #606 stage 2 review: run before the appender is created, matching the pre-split single
-        // method's own ordering exactly — see PluginIngest.DeletePriorDocuments's own doc comment.
+        // Must run before the appender is created — see PluginIngest.DeletePriorDocuments's own
+        // doc comment.
         _pluginIngest.DeletePriorDocuments(plugin, origin);
 
-        // #606 stage 2: the appender's `using` scope stays here rather than moving into PluginIngest,
-        // so its disposal keeps the exact same ordering relative to tx.Commit() below that the
-        // pre-split single method had (tx declared first, documentAppender second — both dispose,
-        // LIFO, after every statement in this method, including the commit and the log).
+        // The appender's `using` scope stays here rather than moving into PluginIngest, so its
+        // disposal keeps the required ordering relative to tx.Commit() below (tx declared first,
+        // documentAppender second — both dispose, LIFO, after every statement in this method,
+        // including the commit and the log).
         using var documentAppender = Connection.CreateAppender("mirror", "records");
         var timing = _pluginIngest.IndexPlugin(pluginMod, plugin, origin, schemas, documentAppender);
 
         var commitTimer = Stopwatch.StartNew();
         tx.Commit();
-        // #113: per-phase load timing — "documents" spans record enumeration plus every per-record
+        // Per-phase load timing — "documents" spans record enumeration plus every per-record
         // cost (serialize, hash, form/VMAD/condition refs, container children, append); "extracted"
         // spans placement/header and the form_references/form_lookup/container_child flushes.
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -172,8 +167,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     // indexed table cannot be added to one side without the other noticing (they are the same
     // calls). The `registrations` row is dropped last: it is the row UpdateWinners joins against, and while
     // it exists this (origin, plugin) is still a known member of the read model.
-    //
-    // #421: private — Unindex(PluginKey) above is the public seam member and delegates here.
     private void Unindex(string plugin, string origin)
     {
         if (_logger.IsEnabled(LogLevel.Information))
@@ -182,12 +175,12 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         }
         using var tx = Connection.BeginTransaction();
 
-        // #413/#606 stage 2: PluginIngest.DeleteAllRowsFor is the ingest-owned half — every table a
+        // PluginIngest.DeleteAllRowsFor is the ingest-owned half — every table a
         // fresh Index() populates, table for table (deliberately built from the same per-plugin
         // delete helper Index itself calls, so a new indexed table cannot be added to one side
         // without the other noticing — they are the same calls).
         _pluginIngest.DeleteAllRowsFor(plugin, origin);
-        // #585: the file claim goes with the rows it describes — Unindex is the file-gone verb, so
+        // The file claim goes with the rows it describes — Unindex is the file-gone verb, so
         // leaving it behind would leave the mirror asserting rows the index no longer holds.
         _indexStore.DeleteIndexedFile(plugin, origin);
         DeleteRegistration(plugin, origin);
@@ -195,7 +188,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         tx.Commit();
     }
 
-    // #267 / ADR-0035: one row per registered copy, upserted by every Index() and Register() call.
+    // ADR-0035: one row per registered copy, upserted by every Index() and Register() call.
     // UpdateWinners() joins `records` against it rather than carrying a participates column per row
     // — and since ADR-0044 not even this row carries one: participation is derived from the three
     // facts stored here (TableDdlBuilder.ParticipatesPredicate).
@@ -212,7 +205,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         cmd.ExecuteNonQuery();
     }
 
-    // #582 / ADR-0001: registration is visibility. The `registrations` row is the whole of a
+    // ADR-0001: registration is visibility. The `registrations` row is the whole of a
     // copy's membership in the load order — every public relation (`records`, the extracted tables,
     // every generated per-type view) is a view over its `mirror.` table joined to this row (see
     // TableDdlBuilder.CreateRegisteredViews for the one predicate they all share), so writing or
@@ -255,35 +248,34 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// <summary>See <see cref="IRecordIndex.UpdateWinners"/>.</summary>
     ///
     /// <remarks>
-    /// #584 / ADR-0001: winning is a function of the registered load order alone, so it lives in
+    /// ADR-0001: winning is a function of the registered load order alone, so it lives in
     /// <c>winners</c> — one row per (ref, FormKey) naming the plugin whose copy wins — and is
     /// rebuilt wholesale here rather than UPDATEd onto a column of three separate data tables. The
     /// readers never name this table: the registered views and <c>records_head</c> join it to project
     /// <c>is_winner</c>, so the projection is written once (<c>TableDdlBuilder</c>) and the rule once
     /// (here), instead of once per relation in each place.
     ///
-    /// <para>#271 / ADR-0036: partitioned on (plugin, origin) together — two plugins sharing a
+    /// <para>ADR-0036: partitioned on (plugin, origin) together — two plugins sharing a
     /// filename but differing in origin are distinct participants, each judged on its own
-    /// load_order_idx and participation, not folded into one bucket by filename alone. #583 /
+    /// load_order_idx and participation, not folded into one bucket by filename alone.
     /// ADR-0001: that load_order_idx is read from the <c>registrations</c> row the participation
     /// join already needs, never from the record row. ADR-0044: participation itself is derived
     /// there too (<see cref="TableDdlBuilder.ParticipatesPredicate"/>) — a losing copy and a
     /// disabled line are both registered and both excluded here by the same predicate.</para>
     ///
     /// <para>Wholesale rather than incremental because there is no smaller correct unit: registering
-    /// a plugin at a new index can move the winner of every FormKey it holds. #427 measured the
-    /// whole-load-order sweep over a 48,000-record, 60-plugin fixture — larger than the overwhelming
-    /// majority of real load orders — and #584 re-measured the same shape at parity with the
-    /// three-table UPDATE it replaces (~75ms for both refs against ~37ms per fat table swept), with
-    /// the winner-filtered reads unchanged: the registered view's <c>registrations</c> join already
-    /// dominates them, and joining <c>winners</c> beside it costs nothing measurable.</para>
+    /// a plugin at a new index can move the winner of every FormKey it holds. Measured over a
+    /// 48,000-record, 60-plugin fixture — larger than the overwhelming majority of real load
+    /// orders — at ~75ms for both refs, with the winner-filtered reads unchanged: the registered
+    /// view's <c>registrations</c> join already dominates them, and joining <c>winners</c> beside
+    /// it costs nothing measurable.</para>
     /// </remarks>
     public void UpdateWinners()
     {
         Execute($"DELETE FROM {TableDdlBuilder.WinnersRelation}");
 
         // Effective. The header table is swept in the same statement rather than in one of its own:
-        // it is the only surviving per-type table (D8, #413) and would otherwise never have a winner
+        // it is the only surviving per-type table and would otherwise never have a winner
         // at all — which reads as "no header exists" through every winnerOnly lookup, Open Header
         // included — and its FormKeys cannot collide with a record's, since HeaderIndexer.FormKeyFor
         // mints them at FormID 000000, the null form, which no major record can occupy.
@@ -323,7 +315,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 ORDER BY p.load_order_idx DESC, r.plugin, r.origin) = 1
             """);
 
-    // --- Working-tree changes (#415) ---
+    // --- Working-tree changes ---
 
     /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. One transaction for the whole
     /// batch, matching <see cref="Index"/>'s own discipline: a throw partway leaves the prior read
@@ -339,9 +331,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         // FormKeys because UpdateWinners is the one definition of winning in this class, and a
         // second, scoped copy of that SQL is precisely how the two would come to disagree.
         //
-        // #427 measured this once create/delete/renumber gave structural changes an actual user
-        // gesture (each is single-FormKey, but every one now pays this cost on every call, unlike a
-        // field edit): a throwaway fixture of 48,000 records across 60 participating plugins —
+        // Measured: a throwaway fixture of 48,000 records across 60 participating plugins —
         // larger than the overwhelming majority of real load orders — put one whole-load-order
         // UpdateWinners() call at 18ms. That is not a hot path by any interactive-latency bar, so
         // this stays whole-load-order rather than FormKey-scoped; re-measure if a real load order's shape
@@ -387,7 +377,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _workingTreeOverlay.MarkWorkingTreeOnly(key, formKeys);
         // Effective is untouched — nothing was added to or removed from it — but Head just lost a row
         // per FormKey, which can promote the next plugin down at that ref. Head's winners are swept,
-        // not derived per read (#584 / ADR-0001), so the sweep has to run: whole-load-order, because
+        // not derived per read (ADR-0001), so the sweep has to run: whole-load-order, because
         // UpdateWinners is the one definition of winning in this class and a scoped copy of that SQL
         // is precisely how the two would come to disagree.
         UpdateWinners();
@@ -412,7 +402,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     // --- Queries ---
 
-    // #415: the two relations the ref dimension resolves to. `records` holds one row per record copy
+    // The two relations the ref dimension resolves to. `records` holds one row per record copy
     // and that row *is* Effective, so every read below reaches its ref by naming a relation of the
     // same shape — no read carries a ref predicate, and none of them changed shape to gain a ref.
     // `records_head` is the UNION of the committed snapshots of diverged records with the rows that
@@ -426,20 +416,20 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private IRecordReads? _headReads;
 
     /// <summary>
-    /// #415: Head and Effective now genuinely diverge — a record carrying a working-tree change
+    /// Head and Effective genuinely diverge — a record carrying a working-tree change
     /// serves the edited bytes at <see cref="RecordRef.Effective"/> and the committed ones at
     /// <see cref="RecordRef.Head"/>. For a record with no working-tree change the two relations hold
     /// the same row by construction, so the answers stay identical, which is what
-    /// <c>RecordRefDivergenceTests</c> still pins for the unedited case.
+    /// <c>RecordRefDivergenceTests</c> pins for the unedited case.
     ///
     /// <para>The reads that answer from the <i>extracted</i> index tables rather than from documents
     /// — <see cref="Resolve"/>, <see cref="GetReferencedBy"/>, <see cref="GetPlacement"/> — answer
     /// identically at both refs, deliberately: those tables carry no ref dimension, they track
     /// Effective (a FormKey should resolve to what the link points at *now*), and the committed
-    /// question every consumer in this ticket actually asks is a document question, answered from
+    /// question consumers actually ask is a document question, answered from
     /// <see cref="RecordOverrides"/>'s own Head bodies.</para>
     ///
-    /// <para>#603: <see cref="RelationReads"/> is the one implementation for every member of
+    /// <para><see cref="RelationReads"/> is the one implementation for every member of
     /// <see cref="IRecordReads"/> — this instance's own public surface (below) is nothing but
     /// <c>At(RecordRef.Effective)</c>, so a read cannot behave differently reached the two ways.</para>
     /// </summary>
@@ -455,13 +445,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     /// <summary>
-    /// #603: the one implementation of every <see cref="IRecordReads"/> member, parameterized by
+    /// The one implementation of every <see cref="IRecordReads"/> member, parameterized by
     /// which relation its SQL names — both <see cref="At"/>(<see cref="RecordRef.Effective"/>) and
     /// <see cref="At"/>(<see cref="RecordRef.Head"/>) are an instance of this class and nothing else,
-    /// so a read cannot be ref-aware on one path and not the other. Replaces the pre-#603 shape (a
-    /// public Effective-only method, a private <c>records</c>-parameterized twin, and a Head-only
-    /// forwarder here stating the same read a third time) with exactly one body per read, reached
-    /// through exactly one door.
+    /// so a read cannot be ref-aware on one path and not the other: exactly one body per read,
+    /// reached through exactly one door.
     /// </summary>
     private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
     {
@@ -479,11 +467,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return tableName == null ? null : owner.ReadDocument(records, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
         }
 
-        // #547: one query where GetDocument(string, PluginKey)'s callers used to loop two point
-        // queries per record (FindRecordType + ReadDocument — ~7,880 round trips for one compile of
-        // the real 3,940-record fixture). Rows are materialized before any reconstitution: resolving a
-        // referenced FormKey opens its own command on this same connection, and doing that under a
-        // live reader would interleave two readers (GetOverrideStack's #415 note).
+        // One query rather than two point queries per record (FindRecordType + ReadDocument would
+        // be ~7,880 round trips for one compile of a real 3,940-record fixture). Rows are
+        // materialized before any reconstitution: resolving a referenced FormKey opens its own
+        // command on this same connection, and doing that under a live reader would interleave two
+        // readers (see GetOverrideStack).
         public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin)
         {
             var schemas = owner.RequireSchemas();
@@ -569,7 +557,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 return resolved;
             }
 
-            // #415: read the whole stack out before resolving any Head counterpart — ReadDocument opens
+            // Read the whole stack out before resolving any Head counterpart — ReadDocument opens
             // its own command on this same connection, and doing that while this reader is still open
             // would interleave two readers on one DuckDB connection.
             var rows = new List<(RecordDocument Document, bool IsDirty)>();
@@ -589,11 +577,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             var entries = new List<OverrideStackEntry>();
             foreach (var (doc, isDirty) in rows)
             {
-                // #415: a clean entry keeps Head and Effective as the same instance — not merely equal
+                // A clean entry keeps Head and Effective as the same instance — not merely equal
                 // values — so "did this change" stays answerable by identity on the hot, overwhelmingly
                 // common path. A dirty one resolves its committed counterpart from the Head relation.
                 //
-                // #603: deliberately `HeadRelation`, never this instance's own `records` field — a
+                // Deliberately `HeadRelation`, never this instance's own `records` field — a
                 // dirty entry's committed counterpart lives at records_head regardless of which ref
                 // *this* GetOverrideStack call is itself scoped to (Effective or Head), because Head
                 // never has its own dirt to resolve a further Head-of-Head from. Do not "fix" this to
@@ -614,7 +602,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         {
             var (where, paramValues) = BuildWhere(
                 query.Plugin?.Name, query.Search, owner._filterActive, query.Plugin?.Origin, query.RecordTypes);
-            // #428: "ref" plus a records_committed existence check is exactly the pair
+            // "ref" plus a records_committed existence check is exactly the pair
             // RecordSummaryWorkingTreeStateTests pins — Modified is ref='working-tree' with a committed
             // snapshot on record; Added is the same ref with no snapshot at all (CreateWorkingTreeRecord's
             // own doc comment: a create writes nothing into records_committed). The `r` alias is needed
@@ -633,7 +621,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             AddParams(countCmd, paramValues);
             var total = (long)countCmd.ExecuteScalar()!;
 
-            // #458: editor_id alone is not unique — blank/duplicate EditorIDs are ordinary, and overrides
+            // editor_id alone is not unique — blank/duplicate EditorIDs are ordinary, and overrides
             // of one record across plugins share one by definition — so LIMIT/OFFSET paging over it with
             // no tiebreak lets DuckDB place tied rows on either side of a page boundary differently
             // across calls, silently skipping some and repeating others. (form_key, plugin, origin) is
@@ -672,7 +660,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return counts;
         }
 
-        // #364: same filter-narrowing invariant as GetRecordTypeCounts above — routed through the same
+        // Same filter-narrowing invariant as GetRecordTypeCounts above — routed through the same
         // BuildWhere, so a filter that prunes a FormKey out of Search/counts prunes it out of the
         // Conflicts node's candidate population too, with nothing bespoke to drift out of sync.
         public IReadOnlyList<string> GetContestedFormKeys()
@@ -763,7 +751,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             if (types.Count == 0 || !owner._filterActive)
                 return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // #413: third union shape collapsed — see Search.
             var (where, paramValues) = BuildWhere(null, null, filterActive: true, origin: null, recordTypes: types);
 
             using var cmd = owner.Connection.CreateCommand();
@@ -779,8 +766,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
         public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin)
         {
-            // #413: fourth union shape collapsed. The header exclusion the union expressed by omitting a
-            // table is now implicit — a ModHeader is not a major record, so it has no document at all.
+            // The header is excluded implicitly — a ModHeader is not a major record, so it has no
+            // document at all.
             using var cmd = owner.Connection.CreateCommand();
             cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
             cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
@@ -802,7 +789,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey)
         {
             using var cmd = owner.Connection.CreateCommand();
-            // #497: full_name is read straight out of the joined row's own JSON body rather than a
+            // full_name is read straight out of the joined row's own JSON body rather than a
             // stored column the way editor_id is — this is the only consumer today, c.body is already
             // in scope on every relation {records} resolves to, and promoting it to a stored column
             // (mirroring editor_id's INSERT/UPDATE plumbing across every working-tree write path) is
@@ -849,7 +836,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             countCmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
             var total = (long)countCmd.ExecuteScalar()!;
 
-            // #458: same non-unique-ordering shape as Search's above — c.editor_id alone gives DuckDB no
+            // Same non-unique-ordering shape as Search's above — c.editor_id alone gives DuckDB no
             // tiebreak for LIMIT/OFFSET paging, so ties can land on either side of a page boundary
             // differently across calls. The WHERE clause already scopes this query to one plugin+origin,
             // so cl.cell_form_key alone (cell_location's own identity within that scope) is a sufficient
@@ -887,11 +874,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             if (placedTypes.Count == 0)
                 return new CellReferences([], []);
 
-            // ADR-0041 / #413: one single-table query where this used to UNION a wide table per placed
-            // type — the record_type column is what the union was standing in for. The placed ref's base
-            // form comes out of the document rather than a `base` column; json_extract_string unquotes
-            // the stored FormLink text, and a placed ref with no base at all reads NULL exactly as the
-            // wide column did (RealDataReadGoldenTests.SpatialReads_MatchGolden pins both shapes).
+            // ADR-0041: the placed ref's base form comes out of the document rather than a `base`
+            // column; json_extract_string unquotes the stored FormLink text, and a placed ref with
+            // no base at all reads NULL (RealDataReadGoldenTests.SpatialReads_MatchGolden pins this).
             var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
 
             using var cmd = owner.Connection.CreateCommand();
@@ -934,14 +919,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
             owner.GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
 
-        // #603: moved from the outer class — used only from within this class now that every
-        // read reaches its SQL through here, and SonarAnalyzer (S3398) flags a private method used
-        // by exactly one nested class as belonging inside it.
-        // #428: column 6 is "ref" (SourceRef.Committed/WorkingTree), column 7 is the correlated
+        // Column 6 is "ref" (SourceRef.Committed/WorkingTree), column 7 is the correlated
         // records_committed EXISTS Search's SELECT list adds. None for the overwhelming majority (ref is
-        // committed); Added/Modified only ever come from a row this ticket's own dirty-listing tests
-        // produce. Kept out of ReadSummary's constructor call so the ref/snapshot→enum decision stays in
-        // C#, not duplicated as SQL string literals ('modified'/'added') the reader would otherwise parse.
+        // committed); Added/Modified come only from working-tree rows. Kept out of ReadSummary's
+        // constructor call so the ref/snapshot→enum decision stays in C#, not duplicated as SQL
+        // string literals ('modified'/'added') the reader would otherwise parse.
         private static WorkingTreeState ReadWorkingTreeState(DuckDBDataReader reader)
         {
             if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
@@ -959,13 +941,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
                 ReadWorkingTreeState(reader));
 
-        // origin (#296 / ADR-0036): nullable and independent of plugin — a *filter*, not an identity
-        // field. Defaults to "no
-        // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
-        // before this parameter existed.
-        // recordTypes (#413): the single-table read model's replacement for "which table am I querying" —
-        // an empty/null list means every type, one entry is what a per-type listing used to get from the
-        // table name, and several is what SearchRecords used to get from a UNION ALL across tables.
+        // origin (ADR-0036): nullable and independent of plugin — a *filter*, not an identity
+        // field. Defaults to "no constraint" so a plugin-only or filter-less call returns every
+        // origin's rows.
+        // recordTypes: empty/null means every type; one entry scopes a per-type listing; several a
+        // multi-type search.
         private static (string where, List<string> paramValues) BuildWhere(
             string? plugin, string? search, bool filterActive = false, string? origin = null,
             IReadOnlyList<string>? recordTypes = null)
@@ -992,8 +972,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             }
             if (search != null)
             {
-                // Issue #210: a FormKey-shaped query (e.g. seeded by the picker from the record's own
-                // reference, or pasted per #201) resolves directly against the exact stored form_key
+                // A FormKey-shaped query (e.g. seeded by the picker from the record's own
+                // reference, or pasted) resolves directly against the exact stored form_key
                 // rather than an EditorID substring match — form_key values are always stored via
                 // Mutagen's own FormKey.ToString(), so round-tripping the query through
                 // FormKey.TryFactory/.ToString() canonicalizes case/format to match. A query that merely
@@ -1120,8 +1100,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     /// <summary>Reads a record's document row into a <see cref="RecordDocument"/>, reconstituted
     /// through <see cref="RecordTextCodec"/> and extracted via <see cref="ExtractFields"/> — see
-    /// that method's own doc comment for why the values are identical to the pre-#413 wide-table
-    /// path by construction.</summary>
+    /// that method's own doc comment for why the values match the SQL door's by
+    /// construction.</summary>
     private RecordDocument ReadDocumentFromBody(
         DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey) =>
         DocumentFromBody(
@@ -1129,7 +1109,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             reader.GetBoolean(4), reader.IsDBNull(5) ? null : reader.GetString(5),
             reader.GetString(6), schema, resolveFormKey);
 
-    // #547: the construction half of ReadDocumentFromBody, split out so the bulk read can build
+    // The construction half of ReadDocumentFromBody, split out so the bulk read can build
     // documents from rows it materialized before reconstituting any of them.
     private RecordDocument DocumentFromBody(
         string formKey, string plugin, string origin, int loadOrderIndex, bool isWinner,
@@ -1146,8 +1126,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             PartialFormFlag.IsPartialFormable(record.GetType()));
     }
 
-    /// <summary>The header's own reader (D8: no document) — reads straight off the header table's
-    /// real per-field columns. <see cref="RecordDocument.Body"/> is null.</summary>
+    /// <summary>The header's own reader (a ModHeader has no document) — reads straight off the
+    /// header table's real per-field columns. <see cref="RecordDocument.Body"/> is null.</summary>
     private static RecordDocument ReadDocumentFromColumns(
         DuckDBDataReader reader, RecordTableSchema schema, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
     {
@@ -1179,24 +1159,23 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     }
 
     /// <summary>
-    /// The ColumnSpec.Extract walk every reconstitution path shares (#413 D1) — extracts a record's
+    /// The ColumnSpec.Extract walk every reconstitution path shares — extracts a record's
     /// typed fields from its live Mutagen object, the shape both <see cref="ReadDocumentFromBody"/>
     /// and (via <c>RecordQueryService.ToRecordDetail</c>-adjacent callers) the rest of the read
     /// model build on.
     ///
     /// <para>The record is reconstituted through <see cref="RecordTextCodec"/> and then read by the
-    /// <b>same <see cref="ColumnSpec.Extract"/> delegates</b> that the wide tables were filled with,
-    /// pre-#413. That is what makes the values identical by construction rather than by a second
-    /// implementation agreeing with the first — and it is why the published relational schema can be
-    /// the SQL door's contract without also being the C# surface's (invariant 8): the document body
-    /// is Mutagen's serializer shape, which has no per-column correspondence to the reflected schema
-    /// at all (defaults omitted, translated strings as objects, flags as name arrays, and the
-    /// #263/#339 widened and split columns with no JSON path whatsoever).</para>
+    /// <b>same <see cref="ColumnSpec.Extract"/> delegates</b> that fill the generated views. That is
+    /// what makes the values identical by construction rather than by a second implementation
+    /// agreeing with the first — and it is why the published relational schema can be the SQL door's
+    /// contract without also being the C# surface's (invariant 8): the document body is Mutagen's
+    /// serializer shape, which has no per-column correspondence to the reflected schema at all
+    /// (defaults omitted, translated strings as objects, flags as name arrays, and the widened and
+    /// split columns with no JSON path whatsoever).</para>
     ///
-    /// <para>Each extracted value then passes through the same two normalizations the wide path
-    /// applied on the way in and out, so a field's JSON is byte-for-byte what it was: coerced to the
-    /// column's declared DuckDB type (<see cref="CoerceToColumnType"/>, mirroring
-    /// <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
+    /// <para>Each extracted value then passes through two normalizations, so a field's JSON keeps a
+    /// stable shape: coerced to the column's declared DuckDB type (<see cref="CoerceToColumnType"/>,
+    /// mirroring <see cref="AppendTyped"/>), and bitmasks rendered as decimal strings.</para>
     /// </summary>
     private static List<FieldValue> ExtractFields(
         RecordTableSchema schema, IMajorRecord record, Func<string, RecordLookupEntry?> resolveFormKey, GameRelease release)
@@ -1223,22 +1202,11 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         return fields;
     }
 
-    // end #421 new-seam block
-
-    // #421: GetVmad/GetConditions and their reconstitution helpers (ReadRecordBody,
-    // DecodeParamValue, the VMAD Map* tree) moved to Queries/RecordDocumentCodecs, which operates
-    // on RecordDocument.Body instead of re-querying `records` — see that file.
-
-    // #413: one indexed lookup where this used to scan every per-type table in turn until one
-    // matched — the record's type is a column now, so there is nothing to search for.
+    // The header needs its own second lookup for the same reason it keeps its own read path:
+    // it has no document, so it is absent from `records` entirely. Covering it here is deliberate
+    // behaviour — Open Header resolves a plugin's synthetic 000000:<plugin> FormKey through this.
     //
-    // The header keeps its own second lookup for the same reason it keeps its own read path (D8):
-    // it has no document, so it is absent from `records` entirely. The old per-table scan covered it
-    // only because "header" happened to be one of the schema keys it walked; that coverage is
-    // deliberate behaviour (Open Header resolves a plugin's synthetic 000000:<plugin> FormKey
-    // through here), so it is expressed explicitly rather than lost with the scan.
-    //
-    // #421: private now — table-name dispatch is explicitly rejected from the seam; GetDocument and
+    // Private — table-name dispatch is explicitly rejected from the seam; GetDocument and
     // GetOverrideStack resolve a FormKey's type themselves rather than being told it.
     private string? FindRecordType(string records, string formKey)
     {
@@ -1253,8 +1221,7 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         return headerCmd.ExecuteScalar() != null ? HeaderIndexer.TableName : null;
     }
 
-    // #421: private — Resolve(formKey) is the public seam member; kept under its old name since
-    // ReadDocument/GetOverrideStack's own local Resolve closures already call it by this name.
+    // Private — Resolve(formKey) is the public seam member and delegates here.
     private RecordLookupEntry? ResolveFormKey(string formKey)
     {
         using var cmd = Connection.CreateCommand();
@@ -1274,10 +1241,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private static int LoadOrderSortKey(DuckDBDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? int.MaxValue : reader.GetInt32(ordinal);
 
-    // The read-side mirror of AppendTyped: a column declared INTEGER read back an int no matter
-    // whether its extractor produced a byte, ushort or uint, because the wide table's column type
-    // did the narrowing. Reconstitution has no column to do it, so the same conversion is applied
-    // here — without it a field's JSON would silently change numeric shape for every sub-int type.
+    // The read-side mirror of AppendTyped: a column declared INTEGER must read back an int no
+    // matter whether its extractor produced a byte, ushort or uint. Reconstitution has no column
+    // type to do the narrowing, so the same conversion is applied here — without it a field's JSON
+    // would silently change numeric shape for every sub-int type.
     private static object? CoerceToColumnType(object? value, string duckDbType)
     {
         if (value == null) return null;
@@ -1341,13 +1308,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private IReadOnlyDictionary<string, RecordTableSchema> RequireSchemas() =>
         _schemas ?? throw new InvalidOperationException("Call Initialize before using the repository.");
 
-    // #421: private — GetReferencedBy(string) above is the public seam member and delegates here.
     private List<ReferenceResult> GetReferences(string targetFormKey)
     {
-        // ADR-0041: committed references only. The read overlay this query used to carry
-        // (subtracting references an uncommitted edit had superseded, then unioning that edit's own
-        // references back in) is retired — a reference is what the indexed
-        // plugin actually declares.
+        // ADR-0041: a reference is what the indexed plugin actually declares — no working-tree
+        // overlay is applied here.
         const string sql = """
             SELECT fr.source_form_key, fr.source_plugin, fr.field_path, fr.record_type, fr.editor_id, fr.source_origin
             FROM form_references fr

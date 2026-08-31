@@ -3,7 +3,7 @@ using MEditService.Core.Plugins;
 
 namespace MEditService.Core.Queries;
 
-// #277 / ADR-0037: a plugin with an unresolvable master is indexed and flagged, never deactivated.
+// ADR-0037: a plugin with an unresolvable master is indexed and flagged, never deactivated.
 // Distinguishes a directly-missing master (never attempted at all — absent from both the loaded
 // set and the failed set) from a master that is itself unloadable (attempted, recorded in
 // LoadOrder.LoadFailures) so a cascade of failures doesn't read as one undifferentiated error.

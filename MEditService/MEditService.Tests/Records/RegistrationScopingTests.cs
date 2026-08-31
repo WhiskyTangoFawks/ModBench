@@ -10,11 +10,11 @@ using Noggog;
 
 namespace MEditService.Tests.Records;
 
-// #582 / ADR-0001: registration is visibility. An unregistered plugin's rows stay in the index
+// ADR-0001: registration is visibility. An unregistered plugin's rows stay in the index
 // (physically, in the `mirror` schema) and answer nothing on any path — every IRecordReads member,
 // both refs, and the SQL door (the generated per-type views, `records`, the extracted tables).
-// Re-registering makes the same rows answer again with no re-index. This is the gate test the
-// ticket names; each read is asserted individually so a regression names the path that leaked.
+// Re-registering makes the same rows answer again with no re-index. This is the gate test;
+// each read is asserted individually so a regression names the path that leaked.
 public class RegistrationScopingTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

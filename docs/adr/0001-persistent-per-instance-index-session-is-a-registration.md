@@ -4,17 +4,9 @@ status: accepted
 
 # The index is a persistent per-instance database; a load order is a registration over it
 
-Decided 2026-08-29 and revised in place 2026-08-30 (#592, point 1: the file lives in the MO2
-instance, not under local app data keyed by the game's Data install), itself rewriting the
-2026-05-31 decision in place (that one — "no cross-load order
-cache, in-memory DuckDB, rebuild on every load" — named its own expiry: *"if persistent DuckDB is
-ever introduced, an mtime or hash strategy can be revisited then"*; this is that revisit). The
-incremental-mutation half of the original decision (`AddPlugin`/`CreatePlugin` mutate the live
-load order, no teardown) stands unchanged and is now the model for everything.
-
 ## Context
 
-Profiled on a real 72-plugin / 2.29 M-record load order (#113, The Midnight Ride): a full load order
+Profiled on a real 72-plugin / 2.29 M-record load order (The Midnight Ride): a full load order
 load is 285 s after the per-record pipeline was parallelized (566 s before), and **82% of it is the
 vanilla masters and DLCs — files that never change — re-serialized from scratch on every launch**
 because the index lives in `DataSource=:memory:` and dies with the process. The first plugin in
@@ -35,7 +27,7 @@ index itself outliving the process.
    (`<instance>/modbench/index.duckdb`). Every profile in that instance shares it, which is what
    keeps a profile switch cheap.
 
-   The instance is the only scope it can live at (#592, revising this point in place). Every mirror
+   The instance is the only scope it can live at. Every mirror
    table is keyed `(plugin, origin)` and `origin` is a mod folder *name*
    ([ADR-0036](0036-plugin-identity-is-origin-plus-filename.md)), not a path — unique only within
    one instance. Two instances on the same game that both have a mod folder called
@@ -68,8 +60,8 @@ index itself outliving the process.
 
    The `registrations` table is the load order and nothing else: a row means "this plugin, from this
    origin, is in the current load order, at this `load_order_idx`, participating or not" — it carries
-   no fact about the file the rows came from, which is point 4's `mirror.files`. Since
-   [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md) (2026-08-30) the table is kept true by
+   no fact about the file the rows came from, which is point 4's `mirror.files`. Per
+   [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md) the table is kept true by
    one reconcile verb over the whole Plugin load order, every physical copy is registered, and
    participation is derived from `enabled`/`winning`/listed rather than stored; every loadout
    gesture is a `registrations`-row change plus the winner sweep. `records` rows for plugins not registered in the
@@ -99,11 +91,11 @@ index itself outliving the process.
    maintained materialized views, so "materialized view" here concretely means that derived
    table.) It is keyed by ref, not by FormKey alone, because Effective and Head genuinely
    disagree: a record the working tree deleted promotes the next plugin down at Effective while
-   Head still holds the original — which is what #415 found a single stored flag getting wrong.
+   Head still holds the original — which a single stored flag gets wrong.
    `records_head` therefore joins the same table at its own ref rather than deriving a second
    answer of its own. **The cost of that consolidation is an invalidation obligation, and it is
-   part of the decision, not an implementation detail:** Head's winners were previously a live
-   derivation and so self-correcting, whereas a swept table is only as fresh as its last sweep —
+   part of the decision, not an implementation detail:** a live
+   derivation is self-correcting, whereas a swept table is only as fresh as its last sweep —
    so every writer that moves a row into or out of *either* ref's stack must resweep, including
    the ones that leave Effective untouched. If the query side ever needs
    more — per-plugin winner counts, contested-FormKey sets — it is added as further derived
@@ -116,12 +108,12 @@ index itself outliving the process.
    enable and reorder, while these change only when a *file* does. Putting the hash on the
    registration row would throw it away at the first unregister — which is exactly a profile
    switch, the case this decision exists to make cheap. The index is opened, then validated: every
-   file it holds rows for is hashed (a few seconds for 2.3 GB — never `mtime`, the trap the 2026-05
-   cache fell into), a mismatch or a missing file `Unindex`es that plugin so the load re-indexes it
+   file it holds rows for is hashed (a few seconds for 2.3 GB — never `mtime`, which other tools'
+   writes can fool), a mismatch or a missing file `Unindex`es that plugin so the load re-indexes it
    in place, and a codec or reflector version change invalidates the whole file. Registrations are
-   **not** cleared on open (amended by ADR-0044, 2026-08-30): they are the last known load order,
+   **not** cleared on open (ADR-0044): they are the last known load order,
    and the first reconcile from Mod Management corrects them. At runtime,
-   `ExternalChangeWatcher` (#417) is extended from tracked binaries to every indexed binary, the
+   `ExternalChangeWatcher` watches every indexed binary, the
    game's `Data/` included: a debounced change re-hashes and re-indexes through `ReindexPlugin`.
    This is root CLAUDE.md's never-assume-exclusive-ownership rule applied to the index: MO2,
    xEdit, Steam and the user all write these files, and the index detects it rather than trusts
@@ -135,11 +127,11 @@ index itself outliving the process.
 6. **One writer; a second load order on the same instance is refused.** A DuckDB file admits one
    writing process, and Modbench runs one service per VS Code window, so two windows on the same
    instance (a second profile, the same folder twice) contend for one file. Two windows on two
-   *different* instances of one game no longer contend at all — that is the other half of #592.
+   *different* instances of one game do not contend at all.
    The second load fails by name: DuckDB's own lock error is the trigger, surfaced honestly as
    `IndexHeldElsewhereException` ("this instance's index is open in another Modbench window") and
    answered by `PUT /load-order` as `423 Locked` — distinct from a failed reconcile (500) and a
-   superseded snapshot (409), so the client can tell the three apart (#588). No read-only mode (a second mode every index-writing path would have to
+   superseded snapshot (409), so the client can tell the three apart. No read-only mode (a second mode every index-writing path would have to
    detect, for a window that could not edit), no waiting (a hang with no signal), never a second
    file (silent divergence). Concurrent editing of one game from two windows is not a workflow
    the git-native model supports anyway. A file that cannot be opened (DuckDB
@@ -162,7 +154,7 @@ index itself outliving the process.
   its rows — at the watcher's delete event while running, at validation on the next open
   otherwise.
 - The load-time profile harness (`RealData/LoadOrderProfile`) measures both numbers — cold
-  index and warm register — in one run (#589): a cold reconcile against a freshly deleted index
+  index and warm register — in one run: a cold reconcile against a freshly deleted index
   file, then, dispose and reconcile the identical order again over the file the cold run left.
 
 ## Alternatives rejected
@@ -175,8 +167,8 @@ index itself outliving the process.
   Conflates two events — a load order no longer wanting a plugin and the plugin ceasing to exist —
   and makes a profile switch or a re-enable cost a full re-index of the plugin, the exact cost
   this decision exists to remove, for no correctness gain the join does not also give.
-- **`mtime`-based validity** (the 2026-05 `LoadOrderCache`). Wrong against files other tools write;
+- **`mtime`-based validity.** Wrong against files other tools write;
   content hash is cheap enough and is the only check that cannot be fooled by a preserved
   timestamp.
-- **Rebuild on every load, optimized** (#91's parallelism, #113's ref-collection fold — both
+- **Rebuild on every load, optimized** (per-record parallelism, the ref-collection fold — both
   landed). Halved the load; cannot reach the target, because the floor is the work itself.

@@ -10,7 +10,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 {
     private readonly string _prefix = prefix;
     private readonly List<(string Name, bool Listed, bool Enabled, Action<Fallout4Mod, IReadOnlyList<Fallout4Mod>>? Configure, BinaryWriteParameters? WriteParams, string Origin)> _plugins = [];
-    // #434: names for a fixture Fallout4.ccc, in the order given — a Creation Club catalog entry,
+    // Names for a fixture Fallout4.ccc, in the order given — a Creation Club catalog entry,
     // not a plugins.txt line. Kept separate from _plugins' Listed flag: BuildScattered ignores
     // Listed entirely (it has no plugins.txt), so a test controls "also *-listed" by hand-appending
     // an LoadOrderEntry, the same way its sibling missing/unparseable-plugin tests already do.
@@ -28,7 +28,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
         return this;
     }
 
-    /// <summary>Fixture Fallout4.ccc catalog (#434): written into the data folder (<see cref="Build"/>)
+    /// <summary>Fixture Fallout4.ccc catalog: written into the data folder (<see cref="Build"/>)
     /// or the game directory (<see cref="BuildScattered"/>) alongside whatever plugins <c>WithPlugin</c>
     /// declared. Names are written in the given order — catalog order is part of what the fix under
     /// test must preserve.</summary>
@@ -40,7 +40,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 
     public PluginFixtureData Build()
     {
-        // #434: Fallout4.ccc lives one directory *above* the Data folder in a real install —
+        // Fallout4.ccc lives one directory *above* the Data folder in a real install —
         // Mutagen's own CreationClubListings.GetListingsPath resolves it that way — so the fixture
         // needs a root above dataFolder to hold it, the same shape BuildScattered's root/gameDir
         // already has. Root is unique per fixture instance (never the shared OS temp directory
@@ -59,7 +59,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             builtMods.Add(mod);
         }
 
-        // #592: there is no plugins.txt load path left to write one for — the ordered snapshot *is*
+        // There is no plugins.txt load path left to write one for — the ordered snapshot *is*
         // the load order, exactly as it is on the scattered path. `Listed` is what puts a plugin in
         // it (a file on disk that no line names is not in the snapshot at all here) and `Enabled` is
         // the `*` prefix; every fixture copy is the winning one (ADR-0044) unless a test says otherwise.
@@ -80,14 +80,14 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
     /// <c>{Name, Path, Origin, Participates}</c> list (non-implicit plugins, in declared order)
     /// for <c>Reconcile</c>. <c>WithPlugin(enabled: false)</c> — the same flag that writes a
     /// prefix-less plugins.txt line in <see cref="Build"/> — becomes <c>Participates: false</c>
-    /// here, since the explicit list is what carries the `*` prefix on this path (#270).
+    /// here, since the explicit list is what carries the `*` prefix on this path.
     /// </summary>
     public ScatteredFixtureData BuildScattered()
     {
         var implicitNames = Implicits.Get(GameRelease.Fallout4).Listings
             .Select(l => l.FileName.ToString())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        // #434: a cataloged CC plugin's file lives in the game directory too — never a mod
+        // A cataloged CC plugin's file lives in the game directory too — never a mod
         // folder — the same as an implicit master. A test that also wants it to arrive via the
         // explicit list (simulating a plugins.txt `*` line pointing at the Data-folder copy) adds
         // that LoadOrderEntry by hand afterwards, same convention this method already uses for
@@ -124,7 +124,7 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
             i++;
         }
 
-        // #434: same one-level-above-Data placement as Build() — gameDir is what Reconcile
+        // Same one-level-above-Data placement as Build() — gameDir is what Reconcile
         // treats as the Data path, so the catalog belongs in its parent, root.
         WriteCreationClubCatalog(root);
 
@@ -141,12 +141,12 @@ public sealed class PluginFixtureBuilder(string prefix = "medit")
 /// <summary>
 /// A fixture whose plugins all live in one folder — the game's own <c>Data</c>, which is where
 /// implicit masters, DLC and Creation Club content really do sit. <see cref="Plugins"/> is the
-/// ordered load order to hand <c>Reconcile</c>, the one load there is (#592).
+/// ordered load order to hand <c>Reconcile</c>, the one load there is.
 /// </summary>
 public sealed record PluginFixtureData(
     string DataFolder, IReadOnlyList<LoadOrderEntry> Plugins, string CleanupRoot) : IDisposable
 {
-    /// <summary>The MO2 instance root this fixture stands in for (#592 / ADR-0001) — the temp
+    /// <summary>The MO2 instance root this fixture stands in for (ADR-0001) — the temp
     /// directory the Data folder sits under, never the Data folder itself. Every load over HTTP
     /// names one (the endpoint rejects a request that can't), so the API suite runs against a real
     /// on-disk index under this root, torn down with the fixture. An in-process load may omit it,
@@ -174,7 +174,7 @@ public interface IApiPluginFixture<TSelf> : IDisposable where TSelf : IApiPlugin
 public sealed record ScatteredFixtureData(
     string Root, string GameDirectory, IReadOnlyList<LoadOrderEntry> Plugins) : IDisposable
 {
-    /// <summary>The MO2 instance root this fixture stands in for (#592 / ADR-0001) — the directory
+    /// <summary>The MO2 instance root this fixture stands in for (ADR-0001) — the directory
     /// the scattered mod folders sit under. Named for what a load asks for, since
     /// <see cref="Root"/> is also the fixture's own cleanup root.</summary>
     public string InstanceRoot => Root;

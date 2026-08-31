@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Plugins;
 
-// #586 / ADR-0001: loading a load order the index has already seen *registers* its plugins rather than
+// ADR-0001: loading a load order the index has already seen *registers* its plugins rather than
 // indexing them. Every test here loads twice over one persistent index — the second manager stands
 // in for the next launch — and asserts what the second load did through the load order's own status
 // and its existing per-plugin log lines, never by looking inside the index file.
@@ -40,7 +40,7 @@ public sealed class WarmReconcileTests
     private static int Registered(List<LogEntry> entries, string plugin) =>
         entries.Count(e => e.Message.StartsWith($"Registering {plugin} ", StringComparison.Ordinal));
 
-    // AC1. The whole ticket: a warm launch pays for no indexing at all, and still arrives at a fully
+    // A warm launch pays for no indexing at all, and still arrives at a fully
     // loaded load order — Ready, winners swept, records answering.
     [Fact]
     public void ASecondLoadOfTheSameOrder_IndexesNothing_AndIsStillReadyWithWinners()
@@ -66,10 +66,9 @@ public sealed class WarmReconcileTests
         Assert.NotEmpty(warm.Index!.GetDocuments(new PluginKey("A.esp", PluginOrigin.DataDirectory)));
     }
 
-    // AC4, the "during" half: progress is observed from inside the load loop itself, once per
+    // The "during" half of progress: observed from inside the load loop itself, once per
     // plugin as it is registered. A load that only published its count at the end would satisfy the
-    // final-state assertion below and still leave a warm launch sitting at zero — which is the exact
-    // thing the ticket says must not happen.
+    // final-state assertion below and still leave a warm launch sitting at zero.
     [Fact]
     public void AWarmLoad_AdvancesProgressAsEachPluginIsRegistered()
     {
@@ -111,7 +110,7 @@ public sealed class WarmReconcileTests
         }
     }
 
-    // AC4. The registered plugins are counted exactly as indexed ones are, so a warm launch's
+    // The registered plugins are counted exactly as indexed ones are, so a warm launch's
     // progress reaches the whole load order rather than only the plugins it had to index.
     [Fact]
     public void AWarmLoad_CountsEveryRegisteredPluginAsProgress()
@@ -130,7 +129,7 @@ public sealed class WarmReconcileTests
             warm.Status.IndexedPlugins.Select(p => p.Name).ToArray());
     }
 
-    // AC2. Validity is by content: the one plugin whose bytes moved is re-indexed, and its
+    // Validity is by content: the one plugin whose bytes moved is re-indexed, and its
     // neighbours are registered untouched.
     [Fact]
     public void APluginChangedBetweenLoads_IsTheOnlyOneReindexed()
@@ -185,7 +184,7 @@ public sealed class WarmReconcileTests
         Assert.Equal(LoadOrderState.Ready, warm.Status.State);
     }
 
-    // AC3. A tracked plugin's truth is its source tree (ADR-0041/0042), so it is re-ingested on
+    // A tracked plugin's truth is its source tree (ADR-0041/0042), so it is re-ingested on
     // every load however current its binary — persistence must never override the working tree.
     [Fact]
     public async Task ATrackedPlugin_IsReingestedFromSourceOnEveryLoad()

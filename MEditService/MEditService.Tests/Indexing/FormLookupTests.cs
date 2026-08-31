@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Indexing;
 
-// ADR-0031: form_lookup population — mirrors FormReferencesTests.cs, the AC's named prior art.
+// ADR-0031: form_lookup population — mirrors FormReferencesTests.cs.
 public class FormLookupTests
 {
     private static readonly SchemaReflector Reflector = SharedSchemaReflector.Instance;

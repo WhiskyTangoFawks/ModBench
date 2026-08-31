@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041 AC: deleting <c>.git</c> makes the mod read as untracked again — with no residue,
+/// ADR-0041: deleting <c>.git</c> makes the mod read as untracked again — with no residue,
 /// no registry, no sweep. Source text is ordinary working-tree content once <c>.git</c> is gone;
 /// nothing in this module is notified of, or reacts to, the deletion (never-assume-exclusive-
 /// ownership).

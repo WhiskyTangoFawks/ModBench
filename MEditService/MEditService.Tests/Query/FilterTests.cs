@@ -126,7 +126,7 @@ public class FilterTests(TestPluginFixture fixture)
         Assert.Equal(1, count);
     }
 
-    // --- SetFilter: filter injection into GetContestedFormKeys (#364) ---
+    // --- SetFilter: filter injection into GetContestedFormKeys ---
 
     [Fact]
     public void GetContestedFormKeys_WithActiveFilter_ExcludesUnmatchedContestedFormKey()

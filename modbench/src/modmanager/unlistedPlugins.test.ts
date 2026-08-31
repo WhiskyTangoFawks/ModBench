@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FileConflictLookup, type FileConflictIndex } from './fileConflictIndex';
 import { findUnlistedPlugins } from './unlistedPlugins';
 
-// #34 / ADR-0035: the plugin files the effective load order does not point at — a copy shadowed by
+// ADR-0035: the plugin files the effective load order does not point at — a copy shadowed by
 // a winning mod, and a file plugins.txt never names at all. Pure over the index Mod Management
 // already builds, so no filesystem walk of its own.
 

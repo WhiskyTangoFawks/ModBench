@@ -1,4 +1,4 @@
-// The plugin files the effective load order does not point at (#34 / ADR-0035): a copy shadowed by
+// The plugin files the effective load order does not point at (ADR-0035): a copy shadowed by
 // a winning mod, and a file plugins.txt never names at all. Pure over the FileConflictIndex Mod
 // Management already builds for the Mods tree, so discovery costs no extra filesystem walk.
 //

@@ -27,7 +27,7 @@ public sealed class RealInstallSmokeTests
         GameRelease.Starfield,
     ];
 
-    // #445: which of the candidates above are actually usable is decided here, never by editing
+    // Which of the candidates above are actually usable is decided here, never by editing
     // this list — a release whose Mutagen record-type assembly isn't referenced (true for every
     // entry above except Fallout4 in this build) is not offered, not loaded, and not counted
     // towards `tested` below. SchemaReflector.IsSupported logs the skip warning itself.
@@ -54,7 +54,7 @@ public sealed class RealInstallSmokeTests
 
         foreach (var release in CandidateGames)
         {
-            // Skip gracefully (#445): an unsupported release is not offered, never a crash — this
+            // Skip gracefully: an unsupported release is not offered, never a crash — this
             // is discovery's own guard, checked before even looking for an install of it.
             if (!SchemaReflector.IsSupported(release))
                 continue;
@@ -64,7 +64,7 @@ public sealed class RealInstallSmokeTests
 
             // LoadOrder loads the implicit base masters present in the game directory, so an
             // empty explicit list is enough to exercise a real vanilla load without guessing load
-            // order. #592: the index needs an instance to live in — a temp one, since a real
+            // order. The index needs an instance to live in — a temp one, since a real
             // install is not an MO2 instance and this test must not write into one.
             var instanceRoot = Path.Combine(Path.GetTempPath(), $"medit-smoke-{Guid.NewGuid():N}");
             Directory.CreateDirectory(instanceRoot);

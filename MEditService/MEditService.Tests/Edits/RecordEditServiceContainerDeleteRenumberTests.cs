@@ -14,9 +14,9 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #461: Delete and Renumber widened off the blanket <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/>
-/// refusal onto <see cref="SourceUnitResolver"/>, the same record→source-unit resolution #453 gave
-/// <see cref="RecordEditService.EditField"/>. Two shapes, per the issue's own split:
+/// Delete and Renumber resolve containers through <see cref="SourceUnitResolver"/> — the same
+/// record→source-unit resolution <see cref="RecordEditService.EditField"/> uses, not a blanket
+/// <see cref="RecordEditRefusal.ContainerRecordNotYetSupported"/> refusal. Two shapes:
 ///
 /// <list type="bullet">
 /// <item><description>A container's own record (Cell/Worldspace/Quest, or a nested folder-split child
@@ -28,9 +28,8 @@ namespace MEditService.Tests.Edits;
 /// FormKey in place inside the owner's object graph, no file move.</description></item>
 /// </list>
 ///
-/// <see cref="Source.ContainerRecordRegressionTests"/> carries the read-path (#453/#454) and
-/// EditorID-rename (#453 scope 3) coverage this suite is a sibling of, plus the two refusal tests
-/// this ticket flipped to success.
+/// <see cref="Source.ContainerRecordRegressionTests"/> carries the read-path and
+/// EditorID-rename coverage this suite is a sibling of.
 /// </summary>
 public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 {
@@ -43,7 +42,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
 
     private IRecordIndex Index => _fixture.Mirror.Index!;
 
-    // ---- AC1: a container's own record ----
+    // ---- a container's own record ----
 
     [Fact]
     public void DeletingAContainersOwnRecord_RemovesItsDirectory_AndCascadesEveryEmbeddedDescendantsIndexRow()
@@ -80,15 +79,15 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     }
 
     /// <summary>
-    /// #496: <c>EnumerateDescendantFormKeys</c> picked the worldspace's TopCell via
-    /// <c>FirstOrDefault(c => c.BlockX == null)</c> — the same shape #251 fixed in
-    /// <see cref="Queries.WorldspaceQueryService.GetWorldspaceBlocks"/>, and the same blind spot: a
-    /// second block-less cell-location row (anomalous, but the data can't rule it out — see #251's
-    /// own doc comment on why it only warns rather than refuses) never reached the cascade at all.
-    /// Real Mutagen can't produce this shape itself (<c>Worldspace.TopCell</c> is a single-valued
-    /// slot), so the second row is injected at the <see cref="IRecordReads"/> seam exactly the way
-    /// #251's own regression test fabricated it — appended <b>after</b> the real TopCell row, so the
-    /// pre-fix <c>FirstOrDefault</c> still finds the real TopCell (proving the existing single-row
+    /// <c>EnumerateDescendantFormKeys</c> must not pick the worldspace's TopCell via
+    /// <c>FirstOrDefault(c => c.BlockX == null)</c> — the same blind spot
+    /// <see cref="Queries.WorldspaceQueryService.GetWorldspaceBlocks"/> guards against: a
+    /// second block-less cell-location row (anomalous, but the data can't rule it out — see that
+    /// method's own doc comment on why it only warns rather than refuses) never reaches the cascade
+    /// at all. Real Mutagen can't produce this shape itself (<c>Worldspace.TopCell</c> is a single-valued
+    /// slot), so the second row is injected at the <see cref="IRecordReads"/> seam —
+    /// appended <b>after</b> the real TopCell row, so a <c>FirstOrDefault</c> implementation
+    /// still finds the real TopCell (proving the existing single-row
     /// case is untouched) and the injected row's own descendants are exactly what the bug drops.
     /// <see cref="ContainerModFixture.EmbedCell"/> stands in for the injected row's FormKey because it
     /// already carries real indexed descendants of its own (<see cref="ContainerModFixture.TemporaryRef"/>,
@@ -117,14 +116,14 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         // existing single-block-less-row behavior is unchanged.
         Assert.Null(Index.GetDocument(_fixture.TopCell.ToString(), _fixture.Plugin));
         Assert.Null(Index.GetDocument(_fixture.TopCellRef.ToString(), _fixture.Plugin));
-        // The injected second block-less row's own descendants — this is what the pre-#496
-        // FirstOrDefault dropped, since it stopped at the first (real) row above.
+        // The injected second block-less row's own descendants — exactly what a FirstOrDefault
+        // implementation drops, since it stops at the first (real) row above.
         Assert.Null(Index.GetDocument(_fixture.EmbedCell.ToString(), _fixture.Plugin));
         Assert.Null(Index.GetDocument(_fixture.TemporaryRef.ToString(), _fixture.Plugin));
         Assert.Null(Index.GetDocument(_fixture.PersistentRef.ToString(), _fixture.Plugin));
     }
 
-    /// <summary>#496: intercepts only <see cref="IRecordIndex.GetWorldspaceCells"/> — everything else
+    /// <summary>Intercepts only <see cref="IRecordIndex.GetWorldspaceCells"/> — everything else
     /// stays the real DuckDB-backed behavior, per <see cref="DelegatingRecordIndex"/>'s own posture of
     /// "one seam intercepted, not a fake database".</summary>
     private sealed class WorldspaceCellInjectingIndex(
@@ -135,7 +134,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
             worldspaceFormKeyArg == worldspaceFormKey ? rows : base.GetWorldspaceCells(plugin, worldspaceFormKeyArg);
     }
 
-    /// <summary>#496: forwards every <see cref="ILoadOrderMirror"/> member to a real load order except
+    /// <summary>Forwards every <see cref="ILoadOrderMirror"/> member to a real load order except
     /// <see cref="Index"/>, which <see cref="RecordEditService"/> reads its <see cref="IRecordIndex"/>
     /// from — the only way to hand it an intercepted index, since <see cref="MEditService.Core.Plugins.LoadOrderMirror"/>'s
     /// own <c>Index</c> getter has no setter a test can reach.</summary>
@@ -159,7 +158,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         public void ReapplyFilter() => inner.ReapplyFilter();
     }
 
-    // ---- AC2: an embedded child ----
+    // ---- an embedded child ----
 
     [Fact]
     public void DeletingAnEmbeddedListChild_RemovesItFromTheOwnersInlineList_AndRewritesTheOwnersDocument_LeavingSiblingsIntact()
@@ -188,7 +187,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     }
 
     /// <summary>
-    /// Q4: the single-value-slot half of the same mechanism — <c>Worldspace.TopCell</c> is not a list,
+    /// The single-value-slot half of the same mechanism — <c>Worldspace.TopCell</c> is not a list,
     /// so removal is "set the property to null", a distinct branch from the list splice above with
     /// zero coverage otherwise.
     ///
@@ -221,7 +220,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.NotNull(Index.GetDocument(_fixture.Worldspace.ToString(), _fixture.Plugin));
     }
 
-    // ---- AC3a: renumber a container's own record ----
+    // ---- renumber a container's own record ----
 
     [Fact]
     public void RenumberingAContainersOwnRecord_MovesItsDirectoryToTheNewFormKey_AtTheSameParent()
@@ -243,7 +242,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Equal(parent, Path.GetDirectoryName(Path.GetDirectoryName(newFile)));
     }
 
-    // ---- AC3b: renumber an embedded child ----
+    // ---- renumber an embedded child ----
 
     [Fact]
     public void RenumberingAnEmbeddedChild_ChangesItsFormKeyInPlace_NoFileMoves_SameOwnerFile()
@@ -264,7 +263,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.NotNull(Index.GetDocument(result.NewFormKey!, _fixture.Plugin));
     }
 
-    // ---- AC4: renumbering a record a container references ----
+    // ---- renumbering a record a container references ----
 
     [Fact]
     public void RenumberingARecordReferencedByAContainer_RewritesTheContainersOwnFileCleanly()
@@ -334,27 +333,23 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         new TrackService(NullLogger<TrackService>.Instance)
             .TrackAsync(mirror.LoadOrder!, origin, SourcePreset.Edits).GetAwaiter().GetResult();
 
-    // ---- AC5: order preservation ----
+    // ---- order preservation ----
 
     /// <summary>
-    /// #459's own AC dropped this exact scenario ("delete/create a mid-list embedded child ... assert
-    /// surviving GRUP order") because the capability didn't exist yet — this is that scenario, on a
+    /// "Delete/create a mid-list embedded child ... assert surviving GRUP order", on a
     /// container-nested folder-split list (<c>Quest.DialogTopics</c>) rather than a flat top-level one.
-    /// Renumber <i>is</i> "delete the old file, create the new one" for the same child (the ticket's
-    /// own framing), so renumbering the middle of three DialogTopics exercises exactly "delete then
+    /// Renumber <i>is</i> "delete the old file, create the new one" for the same child,
+    /// so renumbering the middle of three DialogTopics exercises exactly "delete then
     /// create a mid-list embedded child" in one gesture.
     ///
-    /// <para><b>#489 (filed alongside this ticket, now fixed):</b> this test originally asserted the
-    /// untouched survivors kept their <i>original</i> slots (a permanent gap at the renumbered record's
-    /// old slot) and could only be verified against the tracked source tree's own <c>"[N] "</c>-prefixed
-    /// names directly, never by compiling — a gap-leaving delete or renumber, on any record type,
-    /// container or not, made <see cref="PluginCompileService"/>'s round-trip gate (#473) refuse to
-    /// compile, because that gate regenerates canonical names by contiguous in-memory list position and
-    /// a gap is by design not contiguous. #489 retired the gap: every structural write renormalizes its
+    /// <para>A gap-leaving delete or renumber, on any record type, container or not, makes
+    /// <see cref="PluginCompileService"/>'s round-trip gate refuse to compile, because that gate
+    /// regenerates canonical names by contiguous in-memory list position and a gap is by design not
+    /// contiguous. So every structural write renormalizes its
     /// own touched group folder to contiguous <c>[0..k]</c> as its own last file-system act. This test
-    /// now asserts <i>both</i> halves of that — the tree's own renumbered slots directly (what the old
-    /// assertion checked, updated to the new contiguous outcome) <i>and</i> that a compile of the result
-    /// now succeeds and reproduces the survivors' relative order in the binary (what a successful
+    /// asserts <i>both</i> halves of that — the tree's own renumbered slots directly
+    /// <i>and</i> that a compile of the result
+    /// succeeds and reproduces the survivors' relative order in the binary (what a successful
     /// compile does not, by itself, prove about the literal on-disk slot numbers).</para>
     /// </summary>
     [Fact]
@@ -387,7 +382,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
         Assert.Contains(ContainerModFixture.DialogTopic2EditorId, slots[2].Name, StringComparison.Ordinal);
         Assert.Contains(result.NewFormKey!.Split(':')[0], slots[2].Name, StringComparison.OrdinalIgnoreCase);
 
-        // #489's own promise: this now compiles (it refused before the fix), and the compiled binary's
+        // Renormalization's promise: this compiles, and the compiled binary's
         // DialogTopics preserve the survivors' relative order.
         var compileResult = new PluginCompileService(
                 _fixture.Mirror, new PluginWriter(NullLogger<PluginWriter>.Instance), NullLogger<PluginCompileService>.Instance)
@@ -404,7 +399,7 @@ public sealed class RecordEditServiceContainerDeleteRenumberTests : IDisposable
     }
 
     /// <summary>
-    /// AC5's guard half: a plausible wrong generalization is reaching for
+    /// The guard half: a plausible wrong generalization is reaching for
     /// <see cref="SourceUnitResolver.NextOrderIndexFor"/> — the existing top-level-only helper
     /// <see cref="RecordEditService.CreateRecord"/> already uses — instead of the lower-level
     /// <see cref="SourceUnitResolver.NextOrderIndex"/> over the child's <i>own</i> parent directory.

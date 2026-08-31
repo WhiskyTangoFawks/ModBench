@@ -43,7 +43,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(TestPluginFixture.RecordCount, plugins[0].RecordCount);
     }
 
-    // #277 / ADR-0037: a plugin whose master is absent from the whole load order is flagged on the
+    // ADR-0037: a plugin whose master is absent from the whole load order is flagged on the
     // wire, not just detected in-memory — this is what lets the tree render it.
     [Fact]
     public void GetPlugins_PluginWithMissingMaster_ReportsItAsDirectlyMissing()
@@ -68,7 +68,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(MasterIssueKind.DirectlyMissing, issue.Kind);
     }
 
-    // #277 / ADR-0037 AC6: pinning, not new behavior — ADR-0037 states this already works
+    // ADR-0037: pinning, not new behavior — the ADR states this already works
     // (Mutagen builds FormKeys from a plugin's own header, so reading never requires a master to
     // exist, and a FormLink into an absent one already resolves to nothing and already falls back
     // to the raw FormKey). This is the true end-to-end version of that claim: a whole load order
@@ -141,7 +141,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetConditionFunctions_Fallout4LoadOrder_ReturnsMutagenResolvedFunctionNames()
     {
-        // Filtered to what Mutagen actually resolves for the loaded load order's game (#152) — not a
+        // Filtered to what Mutagen actually resolves for the loaded load order's game — not a
         // hardcoded list. GetIsID and GetDistance are ordinary FO4 condition functions; a name from
         // a different game's Function enum (e.g. Skyrim-only) must not appear.
         var functions = _svc.GetConditionFunctions();
@@ -156,7 +156,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetConditionRunOnTargets_Fallout4LoadOrder_ReturnsMutagenResolvedRunOnTypeNames()
     {
-        // Filtered to what Mutagen actually resolves for the loaded load order's game (#167) — not a
+        // Filtered to what Mutagen actually resolves for the loaded load order's game — not a
         // hardcoded frontend array. PlayerShip is a Starfield-only RunOnType member; it must not
         // appear for an FO4 load order, proving this isn't a hand-maintained cross-game list.
         var targets = _svc.GetConditionRunOnTargets();
@@ -188,9 +188,9 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal("TestNPC01", result.Items[0].EditorId);
     }
 
-    // Issue #210: the FormKey picker seeds its QuickPick with the record's own FormKey, which
-    // is only coherent if searching by that FormKey resolves it — the backend previously matched
-    // `search` against EditorID only, so a seeded FormKey (or a pasted one, #201) matched nothing.
+    // The FormKey picker seeds its QuickPick with the record's own FormKey, which
+    // is only coherent if searching by that FormKey resolves it — a backend that matches
+    // `search` against EditorID only makes a seeded (or pasted) FormKey match nothing.
     [Fact]
     public void GetRecords_SearchByFormKey_ResolvesRecord()
     {
@@ -205,7 +205,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     }
 
     // A FormKey-shaped query is matched case-insensitively against the canonical stored form —
-    // the picker seeds from whatever casing a resolved link displays, and #201's "paste a FormKey"
+    // the picker seeds from whatever casing a resolved link displays, and the paste-a-FormKey
     // path can't assume the user typed the exact stored case.
     [Fact]
     public void GetRecords_SearchByFormKey_IsCaseInsensitive()
@@ -297,7 +297,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Null(detail);
     }
 
-    // Issue #3: "Copy as New Record" needs the record's schema table name up front (CreateRecord
+    // "Copy as New Record" needs the record's schema table name up front (CreateRecord
     // validates RecordType before it even reads TemplateFormKey), so RecordDetail must carry it.
     [Fact]
     public void GetRecord_ReturnsRecordType()
@@ -323,7 +323,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.NotEmpty(compare.Diffs);
     }
 
-    // #267 / ADR-0035: a FormKey present in one enabled and one disabled plugin is not a conflict —
+    // ADR-0035: a FormKey present in one enabled and one disabled plugin is not a conflict —
     // the disabled override is indexed and browsable, but excluded from conflict classification.
     [Fact]
     public void GetCompare_FormKeyInEnabledAndDisabledPlugin_ReturnsOnlyOne_NotConflict()
@@ -349,11 +349,11 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    // #267 / ADR-0035: VMAD's own conflict contribution (folded into ConflictAll alongside the
+    // ADR-0035: VMAD's own conflict contribution (folded into ConflictAll alongside the
     // generic field path) must be participation-aware too. Base and Mid agree on everything
     // (generic fields + VMAD) so the record-level classification isn't the OnlyOne shortcut — Mid
     // makes it a real 2-participant NoConflict — and only the disabled, last-in-order plugin
-    // differs on VMAD. Pre-fix, VMAD's own unfiltered winner/cell-state pass would pick the
+    // differs on VMAD. An unfiltered VMAD winner/cell-state pass would pick the
     // disabled plugin as winner and escalate this to Override.
     [Fact]
     public void GetCompare_VmadDiffersOnlyInDisabledPlugin_ReturnsNoConflict()
@@ -402,7 +402,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetCompare_CmpoRecord_HasVmadIsFalse()
     {
-        // Issue #179: CMPO ("Component") categorically cannot carry VMAD — the capability flag
+        // CMPO ("Component") categorically cannot carry VMAD — the capability flag
         // must be false even though this specific record obviously has no VMAD data either way,
         // distinguishing "this type can never have scripts" from "this record has none yet".
         FormKey componentKey = default;
@@ -657,8 +657,8 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
-    // #166: GetCompare built its own memoized resolveFormKey (ADR-0031) for generic fields and VMAD
-    // but never threaded it into the condition path — this proves the wiring at the actual call
+    // GetCompare's memoized resolveFormKey (ADR-0031) must also be threaded into the condition
+    // path — this proves the wiring at the actual call
     // site, not just that the classifier accepts a resolver (ConditionConflictClassifierTests
     // already covers the classifier's own behavior in isolation).
     [Fact]
@@ -695,7 +695,7 @@ public sealed class RecordQueryServiceTests : IDisposable
             });
     }
 
-    // --- GetConflicts (#364: the Conflicts node's own listing) ---
+    // --- GetConflicts (the Conflicts node's own listing) ---
 
     [Fact]
     public void GetConflicts_SinglePluginLoadOrder_ReturnsEmpty()
@@ -731,9 +731,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     {
         // Aggression (a real schema-reflected field), not EditorID — EditorID is compiler-only
         // metadata, excluded from ConflictClassifier's own field comparison entirely, so setting
-        // only it would leave the record NoConflict, not Override (learned the hard way: this test
-        // originally used EditorID and failed empty until switched to a field the classifier
-        // actually looks at).
+        // only it would leave the record NoConflict, not Override.
         FormKey npcKey = default;
         var data = new PluginFixtureBuilder("rqs-conflicts-override")
             .WithPlugin("Base.esp", mod => npcKey = mod.Npcs.AddNew("SharedNpc").FormKey)
@@ -842,7 +840,7 @@ public sealed class RecordQueryServiceTests : IDisposable
     [Fact]
     public void GetPluginRecordTypes_DisplayName_MatchesXEdit()
     {
-        // Issue #110: the signature ("npc_") stays the key; DisplayName is additive, sourced
+        // The signature ("npc_") stays the key; DisplayName is additive, sourced
         // from the same xEdit-parity lookup SchemaReflector uses.
         var result = _svc.GetPluginRecordTypes(TestPluginFixture.PluginName);
 
@@ -883,13 +881,6 @@ public sealed class RecordQueryServiceTests : IDisposable
         Assert.Equal(0, result.Total);
         Assert.Empty(result.Items);
     }
-
-    // #421: GetRecordForPlugin and GetRecordType are gone — endpoint-orphaned pass-throughs, dead
-    // with the absorption (see IRecordQueryService's own note). GetRecordForPlugin's reader-level
-    // capability survives as IRecordReads.GetDocument(formKey, PluginKey), covered in
-    // DuckDbRecordIndexTests; GetRecordType's FindRecordType is rejected from the seam outright
-    // (explicitly, not relocated) — its resolution behaviour is exercised indirectly by every
-    // GetDocument/GetOverrideStack test that resolves a FormKey without a stated type.
 
     // --- No-load order guard clauses ---
 
@@ -935,10 +926,9 @@ public sealed class RecordQueryServiceTests : IDisposable
         }
     }
 
-    // --- Issue #1 slice A1: plugin header reachable through the existing generic FormKey
-    // lookup/compare path, with no new endpoint. These are expected to pass with zero new
-    // production code beyond slices 1-3 — a red result here would signal a gap in the
-    // schema/indexer design, not a missing endpoint.
+    // --- Plugin header reachable through the existing generic FormKey lookup/compare path,
+    // with no new endpoint — a red result here signals a gap in the schema/indexer design,
+    // not a missing endpoint.
 
     [Fact]
     public void GetRecord_PluginHeaderFormKey_ReturnsAuthorFlagsMasters()
@@ -1011,15 +1001,7 @@ public sealed class RecordQueryServiceTests : IDisposable
         return new RecordQueryService(manager, reflector, new ConflictClassifier());
     }
 
-    // #421: the SpyRecordReader-based "uses FindRecordType, not a table scan" / "passes
-    // winnerOnly" tests that used to live here are gone with the mechanism they asserted on —
-    // GetRecord/GetRecordForPlugin used to be two calls (FindRecordType, then GetRecord with a
-    // winnerOnly flag) a decorator could count; IRecordReads.GetDocument(formKey) /
-    // GetDocument(formKey, PluginKey) collapse both into one call apiece, so there is no longer a
-    // table-scan path or a runtime winnerOnly flag to assert on — which overload is called *is* the
-    // winner/specific-plugin choice, checked by DuckDbRecordIndexTests' own GetDocument coverage.
-
-    // --- GetPlugins: HasMatchingRecords, never row pruning (#278 / ADR-0035 amending ADR-0018) ---
+    // --- GetPlugins: HasMatchingRecords, never row pruning (ADR-0035 amending ADR-0018) ---
 
     [Fact]
     public void GetPlugins_WithFilterMatchingRecords_ReturnsPlugin()
@@ -1034,12 +1016,9 @@ public sealed class RecordQueryServiceTests : IDisposable
         finally { _manager.ClearFilter(); }
     }
 
-    // Renamed from GetPlugins_WithFilterMatchingNoRecords_HidesPlugin (#278 / ADR-0035 amending
-    // ADR-0018): that name pinned the old rule this issue exists to overturn — a plugin the active
-    // filter matched none of this plugin's records used to be dropped from the list entirely
-    // (Assert.Empty(plugins)). The rule changes: a record filter prunes records and record types,
+    // ADR-0035 (amending ADR-0018): a record filter prunes records and record types,
     // never a plugin row, because this tree is also the load order and hiding a plugin mid-filter
-    // would make it unreorderable. The plugin now stays in the list; HasMatchingRecords is the
+    // would make it unreorderable. The plugin stays in the list; HasMatchingRecords is the
     // additive fact a caller (the tree's chevron) reads instead.
     [Fact]
     public void GetPlugins_WithFilterMatchingNoRecords_KeepsPluginVisibleButFlagsNoMatch()

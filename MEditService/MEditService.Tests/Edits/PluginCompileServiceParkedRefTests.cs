@@ -9,7 +9,7 @@ using Mutagen.Bethesda;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #416 S7/S8: every compile re-parks <c>refs/medit/last-compile/&lt;plugin&gt;</c> — the trailer
+/// Every compile re-parks <c>refs/medit/last-compile/&lt;plugin&gt;</c> — the trailer
 /// naming the compiled binary's own hash — only after the binary write lands, including a compile at
 /// a named ref (<c>AtRef</c>), which touches neither the edit branch's working tree nor its HEAD.
 /// </summary>

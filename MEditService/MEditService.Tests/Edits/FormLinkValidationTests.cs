@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #415 AC3: creating a Dangling or Type-Mismatched FormLink (CONTEXT.md — both always data errors)
+/// Creating a Dangling or Type-Mismatched FormLink (CONTEXT.md — both always data errors)
 /// is still blocked at edit time, and the check reads <b>effective</b> state. ADR-0041: the check
 /// runs at the working-tree write, and existence and type are
 /// still checked before anything is persisted.
@@ -27,8 +27,8 @@ public sealed class FormLinkValidationTests : IDisposable
 
     // `keywords` rather than a bare FormLink column, because an array of FormLinks is also the
     // atomic complex-field write CONTEXT.md describes: the whole field, never one element. A
-    // top-level scalar FormLink column (#429, e.g. an NPC's Race) carries its own end-to-end
-    // coverage in TopLevelFormLinkColumnEditTests — both shapes now write through ApplyFormLinkJson
+    // top-level scalar FormLink column (e.g. an NPC's Race) carries its own end-to-end
+    // coverage in TopLevelFormLinkColumnEditTests — both shapes write through ApplyFormLinkJson
     // (SchemaReflector), so neither stands in for the other's proof.
     private RecordEditResult SetKeywords(params string[] formKeys) =>
         Service().EditField(_mod.Plugin, _mod.Npc.ToString(), "keywords", Json(JsonSerializer.Serialize(formKeys)));
@@ -70,8 +70,8 @@ public sealed class FormLinkValidationTests : IDisposable
     public void ARecordDeletedInTheWorkingTree_IsAlreadyGoneForValidationPurposes()
     {
         // The record still exists at Head — it is in the last commit, and `git show` would print it.
-        // What it no longer is, is somewhere a link can point: this is exactly the divergence AC3
-        // means by "checks read effective state".
+        // What it no longer is, is somewhere a link can point: exactly the divergence
+        // "checks read effective state" means.
         File.Delete(_mod.SourceFileFor(_mod.Keyword, "kywd", TrackedModFixture.KeywordEditorId));
         _mod.Mirror.Index!.ApplyWorkingTreeChanges(_mod.Plugin, [(_mod.Keyword.ToString(), null)]);
 

@@ -7,10 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// ADR-0041 / #413: what a loaded load order's database actually holds. The reflected per-type wide
-/// tables, the VMAD tables and the condition tables are all gone — each type's name now belongs to
-/// a <c>json_extract</c> view over <c>records</c>, which is what keeps user filter SQL reading the
-/// same across the swap.
+/// ADR-0041: what a loaded load order's database actually holds. The reflected per-type wide
+/// tables, the VMAD tables and the condition tables are all gone — each type's name belongs to
+/// a <c>json_extract</c> view over <c>records</c>, which is what keeps user filter SQL working
+/// unchanged.
 ///
 /// Asserted against a real backend host (<see cref="LoadedApiFixture{TPlugin}"/>) rather than a
 /// hand-built LoadOrderMirror, so the shape under test is the one the production DI graph builds.
@@ -25,8 +25,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     private static IReadOnlyList<string> TableNamesOf(DuckDBConnection connection) =>
         NamesOf(connection, "SELECT table_name FROM information_schema.tables");
 
-    // #413: information_schema.tables lists views alongside base tables, so "npc_ is present" says
-    // nothing about whether it is still a real table. These two ask the question that now matters.
+    // information_schema.tables lists views alongside base tables, so "npc_ is present" says
+    // nothing about whether it is still a real table. These two ask the question that matters.
     private static IReadOnlyList<string> BaseTableNamesOf(DuckDBConnection connection) =>
         NamesOf(connection, "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'");
 
@@ -47,9 +47,8 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         ((DuckDbRecordIndex)loaded.Services.GetRequiredService<ILoadOrderMirror>().Reads!).Connection;
 
     /// <summary>
-    /// #413 / AC1: the reflected per-type wide tables are gone, and each type's name now belongs to
-    /// a generated view over <c>records</c> — which is what keeps user filter SQL working across the
-    /// swap.
+    /// The reflected per-type wide tables are gone, and each type's name belongs to
+    /// a generated view over <c>records</c> — which is what keeps user filter SQL working.
     ///
     /// Stated as a pair, because "npc_ is not a base table" alone would be satisfied by npc_ not
     /// existing at all: the same name must be absent from the base tables AND present in the views,
@@ -68,7 +67,7 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
         Assert.Contains("records", baseTables);
         Assert.Contains("form_lookup", baseTables);
         Assert.Contains("placement", baseTables);
-        // The header is the one surviving per-type table (D8) — a ModHeader has no document.
+        // The header is the one surviving per-type table — a ModHeader has no document.
         Assert.Contains("header", baseTables);
 
         foreach (var type in (string[])["npc_", "weap", "armo", "cell", "glob"])
@@ -79,10 +78,10 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     }
 
     /// <summary>
-    /// #420: VMAD's three side tables are gone — <c>GetVmad</c> reconstitutes from the record's own
+    /// VMAD's three side tables are gone — <c>GetVmad</c> reconstitutes from the record's own
     /// document instead. <c>form_references</c> is the positive control, same reasoning as the two
-    /// tests above: it is still fed (VMAD-borne refs move to ingest-time collection off the live
-    /// object, #420 AC4), so its presence proves the listing is real rather than empty.
+    /// tests above: it is still fed (VMAD-borne refs are collected at ingest off the live
+    /// object), so its presence proves the listing is real rather than empty.
     /// </summary>
     [Fact]
     public void AHeldLoadOrder_HasNoVmadTables()
@@ -97,7 +96,7 @@ public sealed class LoadOrderDatabaseTablesTests(LoadedApiFixture<TestPluginFixt
     }
 
     /// <summary>
-    /// #420: conditions' two side tables are gone — <c>GetConditions</c> reconstitutes from the
+    /// Conditions' two side tables are gone — <c>GetConditions</c> reconstitutes from the
     /// record's own document via <c>IConditionCodec.Extract</c> instead. Same positive control as
     /// <see cref="AHeldLoadOrder_HasNoVmadTables"/>, for the same reason.
     /// </summary>

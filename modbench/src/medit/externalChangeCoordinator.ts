@@ -4,7 +4,7 @@ import type { ExternalChangeDialogAnswer, ShowExternalChangeDialog } from './ext
 import { runExternalChangeDialogs } from './externalChangeDialog';
 import type { UnansweredExternalChange, RebaseResult } from './ApiClient';
 
-/** #417: Absorb Upstream Update's own follow-up — a separate, non-modal notification, never folded
+/** Absorb Upstream Update's own follow-up — a separate, non-modal notification, never folded
  *  into the dialog itself (the pinned contract's own words: "then the rebase offer as a separate,
  *  non-modal notification"). */
 export const REBASE_NOW_BUTTON = 'Rebase Now';
@@ -86,14 +86,14 @@ export interface ExternalChangePollerGateDeps {
 }
 
 /**
- * #432: couples the external-change poller to the backend's actual process lifecycle instead of
+ * Couples the external-change poller to the backend's actual process lifecycle instead of
  * extension activation — a backend that doesn't exist yet can never answer
  * `GET /plugins/external-changes/status`, so polling before one exists is pure noise (a permanent
  * `poll failed: fetch failed` line every tick, ADR-0026 background tier, but a call that can never
  * succeed).
  *
- * Gated on the backend's health signal alone, deliberately never on reconcile (the triage
- * comment's own binding call on #432): a backend that is up with no backend running loaded still answers
+ * Gated on the backend's health signal alone, deliberately never on reconcile: a backend
+ * that is up with no load order held still answers
  * the endpoint normally, so the poller has no reason to wait for one. Starts on the first healthy
  * transition, never double-starts on a repeated one (e.g. a crash-restart's own second "attached"),
  * stops on any not-healthy transition (deliberate Close mEdit, a lost connection, or a restart

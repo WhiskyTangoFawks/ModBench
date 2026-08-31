@@ -1,4 +1,4 @@
-// #41 corpus — single-file modlist.txt mutations against the committed
+// Corpus test: single-file modlist.txt mutations against the committed
 // mo2-instance-corpus fixture. Each test drives the real Mo2ModlistSource write
 // path and asserts, over the WHOLE instance tree, that only modlist.txt changed —
 // not any mod's meta.ini, not the other profile, not plugins.txt, not the mods/
@@ -87,7 +87,7 @@ describe('modlist.txt corpus — every entry mutation touches modlist.txt and no
     expect(await src.listSeparators()).not.toContain('Radfall - All-In-One Survival Overhaul');
   });
 
-  // A separator's section is the mods that PRECEDE it (mo2/modlistText.ts #107) —
+  // A separator's section is the mods that PRECEDE it (mo2/modlistText.ts) —
   // moving a mod "into" a separator's group means it becomes the last entry
   // immediately above that separator's own line, not below it.
   it('moveModToSeparator regroups a mod, touching only modlist.txt', async () => {

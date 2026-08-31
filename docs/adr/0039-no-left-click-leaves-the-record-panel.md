@@ -21,14 +21,14 @@ grid — the tree, the focused cell and the user's place all survive it. A VS Co
 the user: the record panel loses focus, the active editor changes, and getting back is its own
 navigation. Adopting xEdit's gesture verbatim on the substituted vehicle produces an interaction
 xEdit itself doesn't have: a plain left-click sequence that throws you out of the surface you were
-working in (#258).
+working in.
 
 It also carried a mechanical tax. `string` was the only scalar type whose second-click/`F2` target
 (the inline editor) differed from its double-click target (the extended editor), so the inline
 editor sat behind a debounce window purely so that a following `dblclick` could cancel it — every
 inline string edit paid latency to disambiguate a gesture no other type needed disambiguated.
 
-Maintainer ruling (#258): **no amount of left-clicking should relocate the user to another panel.**
+Maintainer ruling: **no amount of left-clicking should relocate the user to another panel.**
 This is a place where xEdit's UX is bad and mEdit improves on it — deliberately, and recorded here
 rather than applied silently.
 
@@ -49,7 +49,7 @@ divergence #2's vehicle substitution stands. Only the gesture that reaches it ch
 ## Consequences
 
 - The `string` branch's debounce constant, its timer, and its double-click-to-extended-editor
-  binding are deleted; the branch collapses into the generic scalar branch (#258).
+  binding are deleted; the branch collapses into the generic scalar branch.
 - The record editor's right-click menus grow an extended-editor entry on string value cells,
   mutable and immutable.
 - ADR-0034's gesture table (double-click row) and divergence #2 state this behaviour.

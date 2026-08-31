@@ -13,20 +13,20 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
   for (const panel of recordPanels) void panel.webview.postMessage(msg);
 }
 
-/** #428: builds the `onRecordEdited` callback — pulled into its own file (#449 review) so the
+/** Builds the `onRecordEdited` callback — its own file so the
  *  wiring a real field edit drives is directly unit-testable without importing the whole of
- *  `extension.ts`, the same reason `compileTarget.ts`/`load orderProgress.ts`/`crashRepairOffer.ts`/
+ *  `extension.ts`, the same reason `compileTarget.ts`/`loadOrderProgress.ts`/`crashRepairOffer.ts`/
  *  `copyTargetPlugins.ts`/`trackProgress.ts` are each their own file rather than inline there.
- *  Scoped, not `refresh()` (Q1, orchestrator gate ruling): patches the one cached record
+ *  Scoped, not `refresh()`: patches the one cached record
  *  `PluginTreeProvider` already holds and refreshes only that record's own decoration, so a
  *  committed cell edit never pays a page-cache invalidation + repository refetch. Hardcodes
  *  `'Modified'`: the edit response carries no resulting `WorkingTreeState`, so the one case this
- *  can't see is an edit that converges back to the committed bytes (#413's own revert-by-typing
+ *  can't see is an edit that converges back to the committed bytes (revert-by-typing
  *  convergence) — that row shows a stale M until an unrelated refresh corrects it, no worse than
- *  every other fact this cache already tolerates going stale between refreshes (Q2's own
+ *  every other fact this cache already tolerates going stale between refreshes (the same
  *  no-watcher posture).
  *
- *  `refreshCompileStale` (#449): injected rather than calling `extension.ts`'s own
+ *  `refreshCompileStale`: injected rather than calling `extension.ts`'s own
  *  module-private `refreshMatchingPlugins` directly — the same shape
  *  `LoadOrderControllerDeps.refreshMatchingPlugins` already uses, and what keeps this file free of
  *  any dependency on `extension.ts`'s module-level state, which is what makes it importable in
@@ -35,7 +35,7 @@ export function broadcastToRecordPanels(recordPanels: Set<vscode.WebviewPanel>, 
  *  decoration needs the same re-derive regardless of whether the record-row cache had this
  *  FormKey.
  *
- *  `refreshSourceControl` (#557): same injected-callback shape as `refreshCompilePending`, for the
+ *  `refreshSourceControl`: same injected-callback shape as `refreshCompileStale`, for the
  *  same reason — this is what makes VS Code's native Source Control panel pick up the resulting
  *  working-tree change without a manual Refresh click. Also called unconditionally: the edit
  *  landed server-side regardless of whether this record-row cache had a hit, so the SCM refresh
@@ -53,7 +53,7 @@ export function makeOnRecordEdited(
   return (formKey, plugin, origin) => {
     broadcastToRecordPanels(recordPanels, { type: EXTENSION_TO_WEBVIEW.RECORD_EDITED, formKey });
     if (treeProvider.markWorkingTreeState(plugin, origin, formKey, 'Modified')) {
-      // #364 review finding: the M/A badge is location-independent (a local edit is a fact about
+      // The M/A badge is location-independent (a local edit is a fact about
       // the record, not about where it's viewed), but the badge-scoping fix gave the Conflicts
       // node's own row a distinct resourceUri from the ordinary one — refresh both, so a record
       // visible in both places at once gets its M/A badge updated in both.

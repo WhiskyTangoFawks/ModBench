@@ -6,7 +6,7 @@ namespace MEditService.Core.Source;
 /// <summary>
 /// The git blob hash of a byte sequence: <c>SHA-1("blob " + length + "\0" + content)</c>, git's own
 /// object-name format. Not a hash of our own choosing — <c>documents.content_hash</c> exists to be
-/// <i>the same identifier git uses</i> (ADR-0041/#413 D3), so that the document body stored in the
+/// <i>the same identifier git uses</i> (ADR-0041), so that the document body stored in the
 /// index and the source file sitting in a tracked mod folder are provably the same object without
 /// either side re-reading the other.
 ///
@@ -15,27 +15,22 @@ namespace MEditService.Core.Source;
 /// byte-identical things about that record — the plugins-tree agreement badge, and the NoConflict /
 /// ITM fast paths, without materializing or comparing a single field.</para>
 ///
-/// <para><b>The semantics are one-directional, deliberately (#413 D3, gated).</b> Hash equality
+/// <para><b>The semantics are one-directional, deliberately.</b> Hash equality
 /// implies the bytes are identical. Hash <i>in</i>equality does <b>not</b> imply a user edit, and
 /// must never be reported as one: a consumer that sees a mismatch falls back to a byte compare (or
-/// re-reads the source text) before concluding anything. The reason is measured, not theoretical.
-/// Ingest hashes bytes serialized from a plugin's <i>binary overlay</i>; Track wrote the source file
-/// from a <i>deep parse</i> of the same plugin, and the two readers are not always structurally
-/// faithful to each other (#369, which is why Mutagen stays pinned until #385). Serializing all
+/// re-reads the source text) before concluding anything. The reason is measured, not theoretical:
+/// bytes serialized from a plugin's <i>binary overlay</i> and a source file written from a
+/// <i>deep parse</i> of the same plugin are not always structurally
+/// faithful to each other (which is why Mutagen stays pinned). Serializing all
 /// 3,940 records of the committed cut-down plugin both ways found 4 divergences — three populated
-/// exterior Cells inlining children (handled separately by the ingest-side container strip, #413 D8)
+/// exterior Cells inlining children (handled separately by the ingest-side container strip)
 /// and one genuine reader-fidelity difference, Cell <c>092A18:Fallout4.esm</c>, whose overlay emits
 /// <c>Lighting.Versioning: ["Break0","Break1",…]</c> where the deep parse emits
 /// <c>["Break0"]</c> — 1,201 B against 1,169 B. That is roughly 1 record in 3,940, and a deep
 /// <i>copy</i> does not close it (it copies the overlay's own divergent values); only deep-parsing
-/// at ingest would, at a cost AC5 will not pay.</para>
-///
-/// <para>Neither named consumer was harmed by that hole while it existed. The agreement aggregate
-/// compares ingest-side hashes against each other, so it stayed internally consistent regardless of
-/// how either side differed from the source; and a freshness check that mismatched simply refreshed,
-/// which self-healed. #452 has since closed the hole structurally: a tracked plugin now ingests from
-/// its source text rather than its binary, so both sides of the comparison come from the same parse
-/// and can no longer diverge for the reason measured above.</para>
+/// at ingest would, at a cost the ingest path will not pay. For a tracked plugin the hazard is
+/// closed structurally — it ingests from its source text rather than its binary, so both sides of
+/// the comparison come from the same parse.</para>
 /// </summary>
 internal static class GitBlobHash
 {

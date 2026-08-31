@@ -8,16 +8,16 @@ using Noggog;
 
 namespace MEditService.Tests.Api;
 
-// #305 / ADR-0036: the wire-level guard rail for the four spatial routes
+// ADR-0036: the wire-level guard rail for the four spatial routes
 // (GetWorldspaces/GetWorldspaceBlocks/GetCellReferences/GetInteriorCells), mirroring
 // DuplicateFilenameLoadOrderApiTests' real two-copy load path — a load order that actually holds two
-// physical files of one filename, rather than a hand-built pair below LoadOrder. Before this
-// ticket these routes had zero test coverage of their own at any layer; WorldspaceQueryServiceTests
-// covers the origin-threading logic in isolation, this proves it survives the route binding too.
+// physical files of one filename, rather than a hand-built pair below LoadOrder.
+// WorldspaceQueryServiceTests covers the origin-threading logic in isolation; this proves it
+// survives the route binding too.
 //
 // Both copies carry real mod-folder origins (never the reserved PluginOrigin.DataDirectory) —
 // ColumnKey.Of elides that reserved value, so a fixture where either copy defaulted to it would
-// pass whether or not the routes honoured the `origin` parameter (#300 hit exactly this).
+// pass whether or not the routes honoured the `origin` parameter.
 public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixture> loaded)
     : IClassFixture<LoadedApiFixture<TestPluginFixture>>
 {
@@ -99,8 +99,8 @@ public sealed class SpatialRoutesOriginApiTests(LoadedApiFixture<TestPluginFixtu
         var modB = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces?origin=ModB");
         Assert.Equal(["WorldModB"], modB.EnumerateArray().Select(w => w.GetProperty("editorId").GetString()!).ToArray());
 
-        // AC1: omitted origin still resolves via the load order — the winning copy (ModA) — exactly
-        // as it did before this ticket, since that is the path every current caller takes.
+        // Omitted origin still resolves via the load order — the winning copy (ModA) — since
+        // that is the path every current caller takes.
         var omitted = await _client.GetFromJsonAsync<JsonElement>("/plugins/Shared.esp/worldspaces");
         Assert.Equal(["WorldModA"], omitted.EnumerateArray().Select(w => w.GetProperty("editorId").GetString()!).ToArray());
     }

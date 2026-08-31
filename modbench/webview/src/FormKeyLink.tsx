@@ -2,8 +2,8 @@ import React, { useState, useSyncExternalStore } from 'react';
 import { mono } from './gridStyles';
 import type { FormKeyResolution } from './types';
 
-// Safe default when a caller has no resolution to offer yet (VMAD/overlay wiring land in #158/
-// #159) — behaves exactly like a genuinely unresolved reference: raw FormKey label, no affordance.
+// Safe default when a caller has no resolution to offer —
+// behaves exactly like a genuinely unresolved reference: raw FormKey label, no affordance.
 const UNRESOLVED: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
 // Whether Ctrl/Cmd is currently held. Window-level because the affordance has to appear on a
@@ -52,10 +52,10 @@ function useCtrlHeld(): boolean {
   return useSyncExternalStore(subscribe, getCtrlHeld, getCtrlHeld);
 }
 
-// Issue #157/#218: the text a FormKey reads as — "EditorID [FormKey]" when the reference
+// The text a FormKey reads as — "EditorID [FormKey]" when the reference
 // resolves, the bare FormKey when it doesn't. Exported because FormKeyCell's Ctrl+C copy path
-// (#224) must produce exactly what the link displays: a cell that showed one string and handed
-// over another would be #218's defect in the other direction.
+// must produce exactly what the link displays — a cell must never show one string and hand
+// over another.
 export function formKeyLabel(value: string, resolution?: FormKeyResolution): string {
   return resolution?.editorId ? `${resolution.editorId} [${value}]` : value;
 }
@@ -63,11 +63,11 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 // A FormKey rendered as its link affordance. Shared by FormKeyCell (generic fields) and
 // VmadSection (VMAD object properties).
 //
-// Issue #111: the click gesture is split here so it stays uniform across every cell in the
+// The click gesture is split here so it stays uniform across every cell in the
 // grid — Ctrl+click follows the reference (xEdit's vstViewClick likewise requires VK_CONTROL),
 // which leaves plain click free to mean "edit this cell". Plain click is the caller's to
 // define: FormKeyCell opens the picker with it on a mutable column; on an immutable column
-// (#226) `onPlainClick` is a no-op, so plain click there does nothing.
+// `onPlainClick` is a no-op, so plain click there does nothing.
 //
 // The link *affordance* — underline and pointer — appears only while Ctrl is held and the
 // pointer is over the cell, and only when the reference resolves (ADR-0031: Unresolved withholds
@@ -75,22 +75,20 @@ export function formKeyLabel(value: string, resolution?: FormKeyResolution): str
 // reference of the wrong type). This mirrors xEdit's vstViewCheckHotTrack, which gates
 // hot-tracking on `Allow := Assigned(lLinksTo)`: a link you cannot follow must not look like one.
 //
-// Issue #157/#218: the button's label is "EditorID [FormKey]" when the reference resolves, falling
-// back to the bare FormKey string when it doesn't (or when the caller has no resolution to offer
-// yet — VMAD/overlay wiring land in #158/#159). The composite supersedes #157's bare EditorID: a
+// The button's label is "EditorID [FormKey]" when the reference resolves, falling
+// back to the bare FormKey string when it doesn't (or when the caller has no resolution to
+// offer). The composite, never the bare EditorID: a
 // FormKey is the identity and the EditorID is decoration, so labelling with the decoration alone
-// left the cell unable to hand the user its own value — which under the pre-ADR-0034 cursor contract was
-// the whole of copy. It is also the format the picker's own items have always used
-// (`toFormKeyQuickPickItem`), so a reference now reads back exactly as it was chosen.
+// would leave the cell unable to hand the user its own value. It is also the format the picker's
+// own items use (`toFormKeyQuickPickItem`), so a reference reads back exactly as it was chosen.
 export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTrigger, resolution = UNRESOLVED }: Readonly<{
   value: string;
   onOpen: (fk: string) => void;
   onPlainClick?: () => void;
-  // Issue #223 / ADR-0034: both optional, and both used by exactly one caller — FormKeyCell's
+  // ADR-0034: both optional, and both used by exactly one caller — FormKeyCell's
   // mutable branch, which wires them to the same `openPicker` gated the way ScalarCell/FlagCell
-  // gate their own mutable open triggers. VmadSection (out of scope for #223) doesn't pass
-  // either, so its rendering is unaffected — no `data-open-trigger` attribute, no double-click
-  // behavior, exactly as before this ticket.
+  // gate their own mutable open triggers. VmadSection doesn't pass
+  // either — no `data-open-trigger` attribute, no double-click behavior.
   onDoubleClick?: () => void;
   openTrigger?: boolean;
   resolution?: FormKeyResolution;
@@ -115,7 +113,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         background: 'none',
         border: 'none',
         color: 'var(--vscode-textLink-foreground, #3794ff)',
-        // Issue #218 / ADR-0034 (and #204's rule, applied to the leaf it missed): no resting
+        // ADR-0034: no resting
         // cursor override — the parent DiskCell's `grab` is this cell's resting affordance, since
         // it is a drag source the whole time. `pointer` is asserted only while the reference is
         // hot-tracked, where it is the navigation gesture's own affordance, not a mask.
@@ -125,7 +123,7 @@ export function FormKeyLink({ value, onOpen, onPlainClick, onDoubleClick, openTr
         padding: 0,
         textDecoration: hot ? 'underline' : 'none',
         textAlign: 'left',
-        // Issue #218: the composite is wider than the bare EditorID it replaces, so the link
+        // The composite is long, so the link
         // truncates itself. gridStyles' baseCell already ellipsises the <td>, but text-overflow
         // clips at the boundary of an atomic inline box — it never reaches inside a <button>'s
         // own text — so relying on the cell would hard-clip mid-character instead. Truncating

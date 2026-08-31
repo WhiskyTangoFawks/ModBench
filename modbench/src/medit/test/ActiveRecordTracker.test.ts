@@ -10,7 +10,7 @@ vi.mock('vscode', () => ({
 
 import { ActiveRecordTracker } from '../ActiveRecordTracker';
 
-// #282: panel identity is an opaque token here — the tracker never touches WebviewPanel-specific
+// Panel identity is an opaque token here — the tracker never touches WebviewPanel-specific
 // members (`.active`, `.onDidChangeViewState`), so tests use plain objects, no VS Code harness.
 function panel(): object {
   return {};

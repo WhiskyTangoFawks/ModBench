@@ -8,19 +8,19 @@ using Mutagen.Bethesda.Fallout4;
 
 namespace MEditService.Tests.Query;
 
-// #446: fixture-verifies the *file-level* resolution-stack case (CONTEXT.md "Resolution stack") —
+// Fixture-verifies the *file-level* resolution-stack case (CONTEXT.md "Resolution stack") —
 // two mod folders providing the same plugin filename, exactly ADR-0036's "shadowed copies": "MO2
 // priority picks one and the other is discarded before the load order is built" — through the
-// GetCompare/read-model seam #446 names, distinct from the record-level (within-load-order)
-// shadowing #304 exercised (which has no backend footprint at all: #304 is entirely
+// GetCompare/read-model seam, distinct from the record-level (within-load-order)
+// shadowing, which has no backend footprint at all (it is entirely
 // PluginHeader/RecordPanel/DiffRow/extendedFieldEditor rendering).
 //
 // This is deliberately *not* a duplicate of DuplicateFilenameLoadOrderApiTests
 // (ShadowedCopyLoadedOnDemand_IsItsOwnCompareColumn), which already builds the identical two-mod
 // fixture and proves the same claim — but does so as a full HTTP round trip through the API host.
-// This test calls RecordQueryService.GetCompare directly, in-process, which is the narrower seam
-// #446's own wording ("the GetCompare/read-model seam") asks for and the one that would fail first
-// if a regression landed inside GetCompare's own annotation step rather than in JSON translation.
+// This test calls RecordQueryService.GetCompare directly, in-process — the narrower seam, the one
+// that would fail first if a regression landed inside GetCompare's own annotation step rather
+// than in JSON translation.
 public sealed class FileOverrideCompareColumnTests
 {
     [Fact]
@@ -58,7 +58,7 @@ public sealed class FileOverrideCompareColumnTests
         Assert.Equal("FromModB", byOrigin["ModB"].EditorId);
         Assert.True(byOrigin["ModA"].IsWinner);
         Assert.False(byOrigin["ModB"].IsWinner);
-        // #267 / ADR-0035: the shadowed copy never participates, so this stays exactly as
+        // ADR-0035: the shadowed copy never participates, so this stays exactly as
         // unconflicted as a single-origin record — not a new conflict between the two copies.
         Assert.Equal(ConflictAll.OnlyOne, compare.ConflictAll);
     }

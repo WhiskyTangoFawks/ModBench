@@ -19,5 +19,4 @@ truth, never a second truth ([ADR-0042](0042-plugin-is-the-source-of-truth-lossl
 - **The index (SQLite/DuckDB) as source of truth** — a database that can be deleted and rebuilt
   from the plugins in seconds is a cache, not a source of truth. Treating it as authoritative
   inverts the dependency.
-- **Text as the source of truth, binary as compiled artifact** — held for three days in 2026-08;
-  see ADR-0042.
+- **Text as the source of truth, binary as compiled artifact** — see ADR-0042.

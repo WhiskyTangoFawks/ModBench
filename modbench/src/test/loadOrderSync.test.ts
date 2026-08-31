@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createLoadOrderSync } from '../loadOrderSync';
 
-// ADR-0044 / #594: every loadout gesture becomes "recompute the snapshot, PUT it", and bursts
+// ADR-0044: every loadout gesture becomes "recompute the snapshot, PUT it", and bursts
 // coalesce — one PUT per settled change, never a race of two.
 describe('createLoadOrderSync', () => {
   beforeEach(() => { vi.useFakeTimers(); });

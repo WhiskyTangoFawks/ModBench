@@ -7,9 +7,9 @@ namespace MEditService.Core.Queries;
 
 public interface IWorldspaceQueryService
 {
-    // #305 / ADR-0036: origin — stated by a caller that knows which copy of `plugin` it's
-    // browsing (a tree row does; it was built from one), else resolved from the load order as
-    // before. Mirrors GetRecords/GetPluginRecordTypes (#34).
+    // ADR-0036: origin — stated by a caller that knows which copy of `plugin` it's
+    // browsing (a tree row does; it was built from one), else resolved from the load order.
+    // Mirrors GetRecords/GetPluginRecordTypes.
     IReadOnlyList<WorldspaceSummary> GetWorldspaces(string plugin, string? origin = null);
     WorldspaceBlocks GetWorldspaceBlocks(string plugin, string worldspaceFormKey, string? origin = null);
     CellReferences GetCellReferences(string plugin, string cellFormKey, string? origin = null);
@@ -33,8 +33,8 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
     {
         origin ??= ResolveOrigin(plugin);
         var repo = RequireReads();
-        // #296: same class of bug as the other worldspace-tree reads — without an origin filter, two
-        // same-filename plugins' worldspace lists silently merged into one under this plugin name.
+        // Without an origin filter, two same-filename plugins' worldspace lists silently merge
+        // into one under this plugin name.
         var query = new RecordQuery(RecordTypes: ["wrld"], Plugin: new PluginKey(plugin, origin), Limit: WorldspaceListLimit, Offset: 0);
         return [.. repo.Search(query)
             .Items.Select(r => new WorldspaceSummary(r.FormKey, r.EditorId))];
@@ -46,10 +46,10 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
         var cells = RequireReads().GetWorldspaceCells(new PluginKey(plugin, origin), worldspaceFormKey);
 
         // A worldspace's TopCell (persistent interior cell) has no block/sub-block coordinates.
-        // #251: normally there is exactly one such row — the worldspace's own TopCell slot — but
+        // Normally there is exactly one such row — the worldspace's own TopCell slot — but
         // every block-less row is surfaced rather than keeping only the first and discarding the
-        // rest. The data can't say which of several is the "real" TopCell, so the first (existing
-        // deterministic order) is the one treated as the persistent cell; anything past it is
+        // rest. The data can't say which of several is the "real" TopCell, so the first
+        // (deterministic order) is the one treated as the persistent cell; anything past it is
         // still shown, just not labeled as persistent, and is genuinely anomalous — worth a warning.
         var topCellRows = cells.Where(c => c.BlockX == null).ToList();
         if (topCellRows.Count > 1)
@@ -91,9 +91,9 @@ public sealed class WorldspaceQueryService(ILoadOrderMirror loadOrder, ILogger<W
 
     private IRecordReads RequireReads() => _mirror.RequireScope().Reads;
 
-    // #296 / #305: wire-facing (WorldspaceEndpoints) — an ordinary load-order row has no origin to
-    // give, so this stays the fallback. #34/#305 gave the callers that *do* know (a tree row built
-    // from a specific copy) an explicit origin parameter on every method above instead.
+    // Wire-facing (WorldspaceEndpoints) — an ordinary load-order row has no origin to give, so
+    // this stays the fallback; callers that *do* know (a tree row built from a specific copy)
+    // pass an explicit origin parameter on every method above instead.
     private string ResolveOrigin(string plugin) =>
         PluginOriginResolver.Resolve(_mirror.LoadOrder, plugin);
 }

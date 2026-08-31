@@ -2,12 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { modelValue, toBigInt, coerceModelValue } from './modelValue';
 import type { FieldMetadata, FormKeyResolution } from './types';
 
-// Issue #224 / ADR-0034: modelValue is the single definition of "the string a cell's editor
+// ADR-0034: modelValue is the single definition of "the string a cell's editor
 // shows" for every field type (xEdit's Element.EditValue) — DiffRow's Ctrl+C copy reads straight
 // off it, and ScalarCell/FlagCell source their own display/draft text from it too (see their own
 // test files), so this suite is the independent source of truth for what each type's string
-// looks like, checked against the Decided table in the issue rather than against the leaf
-// components' own logic.
+// looks like, checked independently of the leaf components' own logic.
 
 const strMeta: FieldMetadata = { name: 'Name', type: 'string', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
@@ -138,7 +137,7 @@ describe('modelValue — struct/array summary rows (#224 decision: JSON, not a p
   });
 });
 
-// Issue #225 / ADR-0034: coerceModelValue is modelValue's inverse — the single place Ctrl+V's
+// ADR-0034: coerceModelValue is modelValue's inverse — the single place Ctrl+V's
 // pasted string (and Ctrl+X's own '' clear) is turned back into a value, so paste/cut commit
 // through the exact rule the typed-editor path already uses instead of a second implementation
 // that merely happens to agree. `{ ok: false }` is "cannot coerce" — DiffRow's handlers don't

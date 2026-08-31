@@ -56,7 +56,7 @@ function manifestPath(instanceRoot: string): string {
   return join(instanceRoot, 'mods', MANIFEST_NAME);
 }
 
-/** #247: is there a live deployment? The manifest's presence is already the answer purge
+/** Is there a live deployment? The manifest's presence is already the answer purge
  *  relies on, so the Loadout header's deployment readout asks the same question rather than
  *  keeping a second notion of deployed-ness that could disagree with it. A corrupt manifest
  *  reads as deployed — there is state out there needing a purge, which is exactly what the
@@ -72,7 +72,7 @@ export async function isDeployed(instanceRoot: string): Promise<boolean> {
 
 /** Link one winner into Data/. Skips (returns 'skipped') when a vanilla/foreign
  *  file already occupies the target; leaves an unchanged prior link untouched;
- *  relinks only when the winner's inode changed. Returns 'cross-volume' (#322)
+ *  relinks only when the winner's inode changed. Returns 'cross-volume'
  *  when the link itself fails with EXDEV — a winner resolved through a symlink can
  *  now live outside mods/ entirely (a shared asset folder on another disk, the
  *  motivating scenario), so `onSameVolume`'s coarse mods/-vs-Data/ precheck no
@@ -225,8 +225,7 @@ function toFoldedLinkMap(links: string[]): Map<string, string> {
  *  different mod, shipping a different-case variant of the same logical file,
  *  win), the old-cased target is a stale file at a path distinct from the new
  *  one on ext4 and must be removed before the new-cased link is created, or it
- *  would be orphaned in Data/ forever (the #128 bug, reproduced via a
- *  different trigger if this weren't handled). */
+ *  would be orphaned in Data/ forever. */
 async function linkWinners(
   index: FileConflictIndex,
   dataFolder: string,
@@ -241,7 +240,7 @@ async function linkWinners(
     // MO2 Root-Builder: a mod's root/ contents map to the game root, not Data/.
     // Deploying them into Data/root/ would be wrong; skip (deferred — see modbench-4).
     // Folder only, deliberately — a mod file literally named `root` (no slash) is not
-    // this convention and deploys normally (#324). Checked references/modorganizer/:
+    // this convention and deploys normally. Checked references/modorganizer/:
     // Root Builder itself isn't vendored there (it's a third-party plugin, not part of
     // the ModOrganizer2 org's own repos per its readme's repo list), and the core VFS/
     // directory-entry code that is vendored (directoryentry.cpp, fileentry.cpp, etc.)

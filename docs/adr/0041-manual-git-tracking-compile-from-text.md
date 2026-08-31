@@ -4,7 +4,7 @@ status: accepted
 
 # Tracking is manual, the repo lives in the mod folder, and Save & Compile writes the binary from source
 
-Decided 2026-08-19 and refined through the "5 — Git-native editing" milestone. Together with
+Together with
 [ADR-0042](0042-plugin-is-the-source-of-truth-lossless-source.md) (what the source *is*) and
 [ADR-0005](0005-reflection-driven-schema.md) (how the index is built from it), this is the
 git-native editing model. Vocabulary: [CONTEXT.md](../../CONTEXT.md) § Load order & index.
@@ -88,8 +88,8 @@ ingest, typed reads and point writes, byte-identical to the whole-mod door by te
 path-computation grammar would be a second copy of the serializer's own directory-naming policy
 and could only drift from it; `SourceUnitResolver` reads the disk (one group subtree per
 lookup) — the one source that cannot drift. Head/Effective reconciliation of a container
-likewise diffs two whole-mod deserializations structurally. Proposed and declined twice (#453,
-#454); this paragraph is the standing answer.
+likewise diffs two whole-mod deserializations structurally. Proposed and declined twice;
+this paragraph is the standing answer.
 
 **External change flows through one dialog.** A bridge assembly hosted in the backend process
 (watch / deserialize / compile; knows nothing of load orders or the DB) plus the load-time hash
@@ -135,14 +135,14 @@ JSON, extracted index tables, generated `json_extract` views for filter SQL: ADR
 
 ## Alternatives rejected
 
-- **The staged pending-change model (2026-07 → 2026-08-19).** A `pending_changes` table with
+- **The staged pending-change model.** A `pending_changes` table with
   per-field staged edits, validated at stage time, overlaid onto reads through generated views,
   grouped into derived dependency closures ("change groups") that gated commit, and shown in a
   bespoke Pending Changes tree; revert per field. Every piece was a home-grown reimplementation
   of a working tree, a diff and a commit, with its own storage, wire surface and UI to keep
   honest. Retired in full; the surviving fragment is compile-internal masters/renumber
   derivation, and edit-time FormLink validation as Problems-panel diagnostics.
-- **Git-native *pending changes* (2026-08-15 → 2026-08-19).** Git adopted as the pending-change
+- **Git-native *pending changes*, kept invisible.** Git adopted as the pending-change
   store but kept invisible: hidden external gitdirs keyed by hashed folder paths, automatic
   vendor-on-first-touch with lazy per-record baselines, a per-record truth partition, drift
   classification and provenance payloads crossing the context boundary, automatic rebase,

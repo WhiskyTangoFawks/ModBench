@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B7: <see cref="SourceRepository.CommitPristineToMain"/> — Absorb Upstream Update's plumbing
+/// <see cref="SourceRepository.CommitPristineToMain"/> — Absorb Upstream Update's plumbing
 /// commit. The load-bearing claim is "no checkout at all": the edit branch's working tree, index and
 /// HEAD must come out byte-identical to how they went in, dirt included.
 /// </summary>

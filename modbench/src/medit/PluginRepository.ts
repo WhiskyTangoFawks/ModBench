@@ -7,7 +7,7 @@ import type {
 import { errorText } from './ApiClient';
 
 /**
- * #415: what one field edit came to. A refusal is a first-class outcome here, not an exception —
+ * What one field edit came to. A refusal is a first-class outcome here, not an exception —
  * `refusal` is the backend's RecordEditRefusal name, which is what lets the caller act differently
  * for an untracked mod (offer Track) than for a base-game master (name the patch-plugin path).
  */
@@ -24,7 +24,7 @@ function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
   return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
 }
 
-// #414 review F2: the generated TrackPhase type is a numeric union (0|1|2|3) — Swashbuckle's
+// The generated TrackPhase type is a numeric union (0|1|2|3) — Swashbuckle's
 // schema generation doesn't pick up the global JsonStringEnumConverter for every enum (LoadOrderState
 // above has the identical, already-accepted mismatch), but the wire bytes are the real string
 // values ("Idle", "Parsing", ...), confirmed against the live endpoint. Cast through `unknown`
@@ -34,21 +34,20 @@ function toTrackPhase(phase: unknown): TrackPhase {
   return typeof phase === 'string' ? (phase as TrackPhase) : 'Idle';
 }
 
-// #275 / ADR-0036: the backend always populates PluginResponse.Origin with a real, non-empty
+// ADR-0036: the backend always populates PluginResponse.Origin with a real, non-empty
 // value — the generated type still shows `origin?: string | null` only because this backend's
-// OpenAPI schema generator isn't NRT-aware for any property (#297), not because origin is ever
-// actually optional on the wire. Fabricating a fallback (the reserved Data-directory value some
-// previous code used) would silently mislabel a real backend regression as "this plugin came
-// from the Data directory" — exactly the silent-wrong-state class of bug this epic exists to
-// stop (ADR-0026). Fail loudly instead.
+// OpenAPI schema generator isn't NRT-aware for any property, not because origin is ever
+// actually optional on the wire. Fabricating a fallback (a reserved Data-directory value)
+// would silently mislabel a real backend regression as "this plugin came
+// from the Data directory" — exactly the silent-wrong-state class of bug ADR-0026 exists to
+// stop. Fail loudly instead.
 function requireOrigin(r: PluginResponse): string {
   if (!r.origin) throw new Error(`mEdit: backend returned a plugin without an origin (${r.name ?? '<unknown>'})`);
   return r.origin;
 }
 
-// #278 / ADR-0035 amending ADR-0018: the backend has always emitted this since
-// RecordQueryService gained it, but the generated type is `boolean | undefined` for the same
-// reason origin is `string | undefined | null` above (#297) — the OpenAPI generator isn't
+// ADR-0035 amending ADR-0018: the generated type is `boolean | undefined` for the same
+// reason origin is `string | undefined | null` above — the OpenAPI generator isn't
 // NRT-aware. `?? true` degrades to "matches" rather than "doesn't", the safe direction: it never
 // suppresses a chevron a stale/older backend never meant to suppress. Its own function (rather
 // than inline in toPluginMetadata) keeps that one under its complexity budget.
@@ -56,8 +55,8 @@ function hasMatchingRecords(r: PluginResponse): boolean {
   return r.hasMatchingRecords ?? true;
 }
 
-// #449: the generated type is `boolean | undefined`/`string | null | undefined` for the same
-// NRT-unawareness (#297) every other optional-looking field on this wire shape already degrades
+// The generated type is `boolean | undefined`/`string | null | undefined` for the same
+// NRT-unawareness every other optional-looking field on this wire shape already degrades
 // around — a backend predating this field reports "not stale", never a spurious true. Its own
 // function, same reason hasMatchingRecords above is one: keeps toPluginMetadata under its
 // complexity budget.
@@ -66,7 +65,7 @@ function compileFreshnessOf(r: PluginResponse): { compileStale: boolean; lastCom
 }
 
 // ADR-0044: the three-fact registration and its two derived verdicts. A backend that omits them
-// (the generated wire type is NRT-unaware, #297) reads as an ordinary winning listed copy — the
+// (the generated wire type is NRT-unaware) reads as an ordinary winning listed copy — the
 // shape every row had before losing copies were registered at all. Its own function for the same
 // reason hasMatchingRecords above is one: keeps toPluginMetadata under its complexity budget.
 function registrationOf(r: PluginResponse): Pick<PluginMetadata, 'enabled' | 'winning' | 'participates' | 'inLoadOrder'> {
@@ -96,7 +95,7 @@ function toPluginMetadata(r: PluginResponse): PluginMetadata {
   };
 }
 
-// #428: the generated WorkingTreeState is numeric (0|1|2) for the same reason toTrackPhase's own
+// The generated WorkingTreeState is numeric (0|1|2) for the same reason toTrackPhase's own
 // comment already gives — Swashbuckle isn't JsonStringEnumConverter-aware — but Program.cs
 // registers that converter globally, so the real wire value is the string. Trust the string.
 function toWorkingTreeState(state: unknown): WorkingTreeState {
@@ -114,14 +113,14 @@ function toRecordSummary(r: GeneratedRecordSummary): RecordSummary {
   };
 }
 
-// #364: same "generated enum is a plain union, trust the wire string" posture as
+// Same "generated enum is a plain union, trust the wire string" posture as
 // toWorkingTreeState — ConflictAll is JsonStringEnumConverter'd the same way, and the generator
 // already produces the string-literal union type here (no numeric-enum mismatch to work around,
 // unlike toTrackPhase's own note elsewhere in this file).
 function toConflictingRecord(c: GeneratedConflictRecord): ConflictingRecord {
   return {
     record: toRecordSummary(c.record ?? {}),
-    // ConflictRecord.record.origin (#278/ADR-0036: RecordSummary's own wire shape carries it,
+    // ConflictRecord.record.origin (ADR-0036: RecordSummary's own wire shape carries it,
     // this frontend's typed RecordSummary just never does — every other caller of
     // toRecordSummary already knows origin from its own node's scope, but a Conflicts-node entry
     // can be from any plugin at any origin, so it's threaded through separately here instead).
@@ -186,64 +185,61 @@ export interface CellPage {
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
-  // #307 / ADR-0035: the reconcile's own progress, polled alongside the in-flight PUT. Separate
+  // ADR-0035: the reconcile's own progress, polled alongside the in-flight PUT. Separate
   // from getPlugins() rather than folded into it: this one answers while the load order is still
   // incomplete, and it is the only read that can distinguish "not looked yet" from "no conflict".
   getLoadOrderStatus(): Promise<LoadOrderStatus>;
-  // #414 review F2: the Track gesture's own progress, polled alongside the in-flight track POST —
+  // The Track gesture's own progress, polled alongside the in-flight track POST —
   // same idiom as getLoadOrderStatus above.
   getTrackStatus(): Promise<TrackStatus>;
-  // #417: every plugin currently holding an unanswered external-change question — polled the same
+  // Every plugin currently holding an unanswered external-change question — polled the same
   // way, no load-order dependency of its own (the queue lives on the backend's singleton watcher).
   getExternalChangeStatus(): Promise<UnansweredExternalChange[]>;
-  // origin (#34 / ADR-0036): which copy of `plugin` to read, when the load order holds two files of
+  // origin (ADR-0036): which copy of `plugin` to read, when the load order holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
   getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
-  // #364: the Conflicts node's own listing — every contested record whose record-wide ConflictAll
-  // isn't OnlyOne/NoConflict, already filter-narrowed by the backend (#278's mechanism). Throws on
+  // The Conflicts node's own listing — every contested record whose record-wide ConflictAll
+  // isn't OnlyOne/NoConflict, already filter-narrowed by the backend. Throws on
   // a genuine fetch failure rather than degrading to [] — an empty Conflicts node has to mean
-  // "nothing conflicts", never "the fetch failed", the same #307 invariant getRecords/
+  // "nothing conflicts", never "the fetch failed", the same invariant getRecords/
   // getRecordTypes already honour by throwing instead of hiding a failure as emptiness.
   getConflicts(): Promise<ConflictingRecord[]>;
-  // Issue #210: the FormKey picker's own search — free-text `query` matched against EditorID or
-  // (as of #210) a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
-  // (an unscoped/multi-type field searches across every record type, same as the deleted
-  // webview-side RecordPanelClient.searchRecords this replaces). Capped at 20 results, matching
-  // the old picker's page size.
+  // The FormKey picker's own search — free-text `query` matched against EditorID or
+  // a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
+  // (an unscoped/multi-type field searches across every record type). Capped at 20 results.
   searchRecords(query: string, validTypes: string[]): Promise<RecordPage>;
-  // #416 review: which plugin (+ origin) a FormKey's *winning* override belongs to — the record
+  // Which plugin (+ origin) a FormKey's *winning* override belongs to — the record
   // editor's Save & Compile icon resolves its active record's owning plugin through this, rather
   // than falling through to an unfiltered QuickPick that can compile the wrong plugin in a
   // multi-mod load order. undefined for an unknown FormKey (404) — never thrown, since "the actively
   // open record just isn't resolvable" is the caller's own fallback path, not a failure to report.
   getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined>;
-  // #494: the Copy as Override destination picker's own exclusion data — every plugin already
+  // The Copy as Override destination picker's own exclusion data — every plugin already
   // holding an override (or the native/winning copy) of this FormKey, straight off GET
   // /records/{formKey}/compare's existing Overrides list; no dedicated endpoint needed. Empty for
   // an unknown FormKey (404), the same "not a fault" posture getRecordOwner's own 404 case uses.
   getRecordOverridePlugins(formKey: string): Promise<string[]>;
-  // #427: the Renumber gesture's FormID input box's suggested default — the same both-refs
+  // The Renumber gesture's FormID input box's suggested default — the same both-refs
   // allocator create/renumber use internally, exposed read-only (xEdit's own "New FormID
   // generated" flow). Never throws on the ordinary case; a genuine fault propagates like every
   // other read here.
   peekNextFreeFormKey(plugin: string, origin: string): Promise<string>;
-  // Issue #211: the condition-function picker's catalog — every function name Mutagen resolves
+  // The condition-function picker's catalog — every function name Mutagen resolves
   // for the held load order's game, backing the extension-host QuickPick. Degrades to [] on a
   // failed fetch (mirrors setFilter/clearFilter's catch-and-log-no-throw below, not the
   // ensureOk-then-throw convention most reads here use) — a failed catalogue fetch must never
-  // surface as a raw error, same as the deleted webview-side RecordPanelClient
-  // .conditionFunctions() it replaces.
+  // surface as a raw error.
   getConditionFunctions(): Promise<string[]>;
   setFilter(sql: string): Promise<string | null>; // returns error message or null on success
   clearFilter(): Promise<void>;
   getActiveFilter(): Promise<string | null>;
 
-  // Per-plugin worldspace tree. origin (#305 / ADR-0036): same optional shape as
+  // Per-plugin worldspace tree. origin (ADR-0036): same optional shape as
   // getRecordTypes/getRecords above — a row that stands for a specific copy states it.
   /**
-   * #415/ADR-0041: one field edit through the single write path. Never throws on a refusal — a
+   * ADR-0041: one field edit through the single write path. Never throws on a refusal — a
    * refused edit is an ordinary, expected answer (the plugin is untracked, the link would dangle),
    * not a failure to report as one, so it comes back as a typed result the caller surfaces. Only a
    * genuine transport failure rejects.
@@ -256,21 +252,21 @@ export interface PluginRepository {
   getWorldspaceBlocks(plugin: string, worldspaceFormKey: string, origin?: string): Promise<WorldspaceBlocks>;
   getCellReferences(plugin: string, cellFormKey: string, origin?: string): Promise<CellReferences>;
   getInteriorCells(plugin: string, offset: number, limit: number, origin?: string): Promise<CellPage>;
-  // #424: a container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
+  // A container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
   // Topic's responses), in xEdit's own presentation order — same optional-origin shape as the
   // worldspace-tree reads above. Cells/worldspaces are unaffected: this reads Quest/DialogTopic
   // containment only, never Cell.NavigationMeshes/Landscape or Worldspace.TopCell/SubCells.
   getContainerChildren(plugin: string, parentFormKey: string, origin?: string): Promise<ContainerChildSummary[]>;
 }
 
-// #559 / ADR-0026: how long a tree-populating fetch (see `withTimeout` below) is given before it
+// ADR-0026: how long a tree-populating fetch (see `withTimeout` below) is given before it
 // is treated as hung rather than merely slow. No existing convention to anchor this to (checked
 // ADR-0026 and docs/specs/plugins.md) — 30s is a generous, ordinary HTTP-client default.
-// Deliberately not trying to distinguish "still working" from "actually stuck": #558's own
-// multi-minute Conflicts fetch is exactly the case this is meant to also catch — a
-// slow-but-eventually-resolving call and a genuinely hung one must look the same to the tree,
-// which has no way to tell them apart either (that indistinguishability is #559's whole
-// complaint). Constructor-overridable so a test can inject a tiny value instead of faking timers.
+// Deliberately not trying to distinguish "still working" from "actually stuck": a
+// multi-minute Conflicts fetch is exactly the case this must also catch — a
+// slow-but-eventually-resolving call and a genuinely hung one look the same to the tree,
+// which has no way to tell them apart. Constructor-overridable so a test can inject a tiny
+// value instead of faking timers.
 export const DEFAULT_FETCH_TIMEOUT_MS = 30_000;
 
 export class ApiPluginRepository implements PluginRepository {
@@ -286,8 +282,8 @@ export class ApiPluginRepository implements PluginRepository {
 
   // Don't swallow read failures into []/empty: a 503 "No load order has been received", a 500,
   // or a network error must reach the tree so it renders an ErrorNode rather than
-  // a silent empty list indistinguishable from genuinely empty data (issues #75,
-  // #129, ADR-0026). A 200 with an empty/absent body is a legitimate empty result.
+  // a silent empty list indistinguishable from genuinely empty data (ADR-0026).
+  // A 200 with an empty/absent body is a legitimate empty result.
   // Genuine network-level throws propagate as-is. Mirrors the getPlugins convention.
   private ensureOk(what: string, response: Response, error?: unknown): void {
     if (response.ok) return;
@@ -298,13 +294,13 @@ export class ApiPluginRepository implements PluginRepository {
     throw new Error(msg);
   }
 
-  // #559: races `fn` (handed its own single-use AbortSignal) against a timeoutMs deadline, rather
+  // Races `fn` (handed its own single-use AbortSignal) against a timeoutMs deadline, rather
   // than trusting the underlying fetch to honor that signal on its own — a hung backend and a
   // non-cooperative test double behave identically either way, and racing is what makes both
   // still cause the returned promise to settle. `fn`'s own signal is aborted on timeout too, so a
   // fetch implementation that *does* honor it (the real one, via undici) gets genuine
-  // cancellation of the in-flight request, not just a client-side rejection — #559's "ideally
-  // cancellation" half of the fix direction. Reuses `what` as the timeout message's own label,
+  // cancellation of the in-flight request, not just a client-side rejection.
+  // Reuses `what` as the timeout message's own label,
   // matching ensureOk's failure-message vocabulary so the two read as the same family of error.
   private async withTimeout<T>(what: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const controller = new AbortController();
@@ -328,7 +324,7 @@ export class ApiPluginRepository implements PluginRepository {
     return (data ?? []).map(toPluginMetadata);
   }
 
-  // #307: the endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs),
+  // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs),
   // so a non-ok is a genuine fault and gets the same ensureOk treatment as every other read here.
   // Degrading it to an empty status would be indistinguishable from a reconcile making no progress.
   async getLoadOrderStatus(): Promise<LoadOrderStatus> {
@@ -344,7 +340,7 @@ export class ApiPluginRepository implements PluginRepository {
     };
   }
 
-  // #414 review F2: same "always 200, never degrade a fault into a fake idle" posture as
+  // Same "always 200, never degrade a fault into a fake idle" posture as
   // getLoadOrderStatus above.
   async getTrackStatus(): Promise<TrackStatus> {
     const { data, error, response } = await this.client.GET('/plugins/track/status', {});
@@ -356,7 +352,7 @@ export class ApiPluginRepository implements PluginRepository {
     };
   }
 
-  // #417: same "always 200, never degrade a fault into a fake empty queue" posture as
+  // Same "always 200, never degrade a fault into a fake empty queue" posture as
   // getLoadOrderStatus/getTrackStatus above.
   async getExternalChangeStatus(): Promise<UnansweredExternalChange[]> {
     const { data, error, response } = await this.client.GET('/plugins/external-changes/status', {});
@@ -427,7 +423,7 @@ export class ApiPluginRepository implements PluginRepository {
     return data?.plugin && data.origin ? { plugin: data.plugin, origin: data.origin } : undefined;
   }
 
-  // #494: see the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
+  // See the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
   // yet", not a fault, same posture as getRecordOwner's own 404 case above.
   async getRecordOverridePlugins(formKey: string): Promise<string[]> {
     const { data, error, response } = await this.client.GET('/records/{formKey}/compare', {

@@ -7,8 +7,8 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #416: the mechanical sweep <see cref="ContainerChildFields"/>' own doc comment claims was already
-/// done (#370 Q5) — and which <c>Quest.Scenes</c> proved wasn't exhaustive. Verified here by
+/// The mechanical sweep <see cref="ContainerChildFields"/>' own doc comment claims —
+/// which <c>Quest.Scenes</c> once proved wasn't exhaustive. Verified here by
 /// enumeration rather than trusted by assertion: every schema-registered major record type's own
 /// direct properties are walked for a reference (single or list) to another major record type that
 /// has no top-level group of its own (the generic "child-major" rule the original investigation used
@@ -17,10 +17,9 @@ namespace MEditService.Tests.Source;
 ///
 /// <para>Permanent, not a one-off probe: this is the standing defence against the <i>next</i> Scenes
 /// — a future Mutagen bump or new game module introducing a child-major field nobody added to the
-/// hand-maintained table. It is also the <i>only</i> standing defence since #454: compile used to
-/// carry a second one (<c>ContainerAssembler</c> refused a record it could place nowhere), but compile
-/// no longer places anything — the deserializer reads a record from wherever the tree already puts it,
-/// so "unplaceable" is not a reachable state. A gap here now costs an index row, not a record missing
+/// hand-maintained table. It is also the <i>only</i> standing defence: compile
+/// places nothing — the deserializer reads a record from wherever the tree already puts it,
+/// so "unplaceable" is not a reachable state. A gap here costs an index row, not a record missing
 /// from a compiled binary, which makes this red-at-review-time test the whole of the defence.</para>
 /// </summary>
 public sealed class ContainerChildFieldsCompletenessTests

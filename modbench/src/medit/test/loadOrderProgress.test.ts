@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { loadOrderProgressMessage, makeReconcileProgressHandler, recordPanelIncompleteMessage } from '../loadOrderProgress';
 
-// #307 / ADR-0035 AC3/AC5. The trap: an absent conflict badge is indistinguishable from "no
+// ADR-0035. The trap: an absent conflict badge is indistinguishable from "no
 // conflict", so while the winner sweep is outstanding the view has to *say* so in as many words.
 // It is gated on `conflictsComputed` alone — never on whether a load happens to be running —
 // because the sweep is whole-set, and ADR-0035's live mutations will leave a finished load order
@@ -31,7 +31,7 @@ describe('loadOrderProgressMessage', () => {
     expect(message).toContain('12 of 200');
   });
 
-  // #342: totalPlugins is known (unlike the omitted-count case below) but nothing has landed yet
+  // totalPlugins is known (unlike the omitted-count case below) but nothing has landed yet
   // — IndexProgressively opens and indexes one plugin at a time, and a large first master can hold
   // the count at zero for a real while. A bare "0 of 200" is indistinguishable from a stalled
   // load, so this phase has to say work is under way rather than leave a static count to imply
@@ -56,7 +56,7 @@ describe('loadOrderProgressMessage', () => {
   });
 });
 
-// #308 / ADR-0035: the record panel's own statement — same trap as loadOrderProgressMessage above
+// ADR-0035: the record panel's own statement — same trap as loadOrderProgressMessage above
 // (an absent conflict badge is indistinguishable from "no conflict"), but this surface *does*
 // render conflict colouring today, so the statement has to name both facts: the comparison itself
 // is incomplete, and the colouring it renders is not final because of that. Gated on
@@ -69,7 +69,7 @@ describe('recordPanelIncompleteMessage', () => {
     expect(message).toMatch(/colouring.*not final/i);
   });
 
-  // #304's lesson: an exact-string test, not just a substring/vocabulary check, so a future
+  // An exact-string test, not just a substring/vocabulary check, so a future
   // reword is a deliberate, reviewed choice rather than a silent drift.
   it('is exactly the reviewed wording', () => {
     expect(recordPanelIncompleteMessage(false)).toBe(
@@ -89,7 +89,7 @@ describe('recordPanelIncompleteMessage', () => {
   });
 });
 
-// #307: one poll tick, translated into what the tree and the view should do about it. The guard
+// One poll tick, translated into what the tree and the view should do about it. The guard
 // this pins is not cosmetic: applying a tick re-renders the whole tree, and
 // PluginTreeProvider.getPluginChildren is uncached, so re-applying an unchanged tick every 500ms
 // would re-fetch record types for every expanded row — a request storm on a deep tree, for no
@@ -122,7 +122,7 @@ describe('makeReconcileProgressHandler', () => {
     expect(applyLoadOrder).toHaveBeenCalledTimes(1);
   });
 
-  // AC6: a failure can arrive without the indexed set growing at all — a plugin that failed to
+  // A failure can arrive without the indexed set growing at all — a plugin that failed to
   // index is never added to it. Counting only plugins would leave that row undecorated until the
   // next plugin happened to land, or until the load finished.
   it('applies a tick that landed a failure even though no new plugin was indexed', () => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# #245 — fails if modbench/src/medit/generated/api.ts has drifted from the live
+# Fails if modbench/src/medit/generated/api.ts has drifted from the live
 # OpenAPI spec. Boots a fresh backend, then uses openapi-typescript's own
 # --check flag (a pure read/compare — it never writes to the destination file,
 # verified empirically) against the committed api.ts in place. No temp file,

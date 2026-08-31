@@ -16,7 +16,7 @@ using Mutagen.Bethesda.Plugins.Utility;
 namespace MEditService.Core.Edits;
 
 /// <summary>
-/// The single write path (ADR-0041 / #415): a field edit on a tracked plugin becomes a working-tree
+/// The single write path (ADR-0041): a field edit on a tracked plugin becomes a working-tree
 /// change to that record's source JSON, and nothing else. There is no second path — no direct binary
 /// write, no staged intermediate state — which is why an untracked plugin is refused here rather than
 /// quietly served by some other mechanism.
@@ -24,16 +24,16 @@ namespace MEditService.Core.Edits;
 /// <para><b>The source text is the source, not the index.</b> Each edit reads the record's source
 /// file, applies the field to the record that text deserializes to, and writes the file back; the
 /// index is then told what landed. Reading the file rather than the indexed body is deliberate and
-/// measured: ingest used to serialize from a plugin's <i>binary overlay</i> while the source held a
-/// <i>deep parse</i>, and the two are not always structurally identical (#369's 1-in-3,940 hole,
+/// measured: a plugin's <i>binary overlay</i> and a <i>deep parse</i> of its source are not always
+/// structurally identical (a measured 1-in-3,940 hole,
 /// documented on <see cref="GitBlobHash"/>). Editing the file's own bytes means an edit can never
-/// silently rewrite a record's unrelated fields into the overlay's shape.
+/// silently rewrite a record's unrelated fields into the overlay's shape.</para>
 ///
-/// <para>#452 dissolved that specific hazard for a <b>tracked</b> plugin — which is every plugin this
-/// class will edit, since editing requires tracking. Its index rows are now seeded from the same
+/// <para>That specific hazard cannot arise for a <b>tracked</b> plugin — which is every plugin this
+/// class will edit, since editing requires tracking. Its index rows are seeded from the same
 /// source tree this reads, so there is exactly one parse and the two cannot disagree
 /// (<c>SourceIngestParityTests</c> measures the residue: 2,576 of 2,577 real documents byte-identical,
-/// the one exception being #369 itself, which can only appear on the untracked binary path). Reading
+/// the one exception only reachable on the untracked binary path). Reading
 /// the file nonetheless stays correct and stays the rule: it is the shortest path to the bytes being
 /// edited, and it keeps this class independent of how fresh the index happens to be.</para>
 ///
@@ -74,7 +74,7 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
 
-        // #453 scope 1: which file holds this record. A flat record's own, a container's
+        // Which file holds this record. A flat record's own, a container's
         // RecordData.json, or — for an embedded child (a placed ref, a landscape, a navmesh, a
         // worldspace's top cell) — its parent container's, since the child has no file of its own.
         if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
@@ -102,11 +102,10 @@ public sealed class RecordEditService(
             {
                 return RecordEditResult.Refused(
                     RecordEditRefusal.SourceUnitNotFound,
-                    // Deliberately does not blame an external change (#453 review finding 2: it used
-                    // to, and that was a false diagnosis for the one shape that actually reached it —
-                    // a ref two levels inside a worldspace's document, which the search simply did not
-                    // descend to. A wrong explanation is worse than none: it sends the user hunting a
-                    // problem that is not there.) States only what is observed.
+                    // Deliberately does not blame an external change — a defect here (a child the
+                    // search failed to descend to) reads identically, and a wrong explanation is
+                    // worse than none: it sends the user hunting a problem that is not there.
+                    // States only what is observed.
                     $"{unit.RelativePath} is indexed as holding {formKey}, but its own text does not " +
                     "carry it. If nothing outside Modbench changed that file, this is a defect — please " +
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
@@ -117,16 +116,14 @@ public sealed class RecordEditService(
         if (RefuseIfContainmentField(document.RecordType, fieldPath, schemas, release) is { } containmentRefusal)
             return containmentRefusal;
 
-        // #491: a Partial Form override's own fields are read-only — checked against `target`, not
+        // A Partial Form override's own fields are read-only — checked against `target`, not
         // `record`, so an embedded child (a REFR the override introduces) is unaffected: it is never
         // itself a container type, so PartialFormFlag.IsSet is false for it regardless of its
         // parent's own flag (CONTEXT.md's Partial Form entry: "children are unaffected — they are
-        // separate records"). EditorID is exempt (#491 review): xEdit's own CanAssignInternal
+        // separate records"). EditorID is exempt: xEdit's own CanAssignInternal
         // (wbImplementation.pas:9905-9914) explicitly allows EDID assignment on a Partial Form
-        // record — ADR-0034 makes xEdit's answer binding here, and #539 owning the *header* write
-        // path is a sequencing choice, not a platform limitation, so it cannot justify refusing an
-        // ordinary, already-writable field xEdit itself never blocks. is_partial_form is exempt too
-        // (#539): it is the one write that must reach the flag while it is set — clearing it is the
+        // record, and ADR-0034 makes xEdit's answer binding here. is_partial_form is exempt too:
+        // it is the one write that must reach the flag while it is set — clearing it is the
         // only way out of this very refusal.
         if (PartialFormFlag.IsSet(target)
             && !fieldPath.Equals(RecordFieldWriter.EditorIdFieldPath, StringComparison.Ordinal)
@@ -142,7 +139,7 @@ public sealed class RecordEditService(
         if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value, release) is { } linkError)
             return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
 
-        // #539 correction 2: two reflected columns (major_flags, fallout4_major_record_flags — and,
+        // Two reflected columns (major_flags, fallout4_major_record_flags — and,
         // structurally, any other column Mutagen's own MajorRecordFlags-passthrough convention
         // generates on some other game's record type) read and write the very same MajorRecordFlagsRaw
         // int bit 14 lives in. is_partial_form is meant to be the one sanctioned door onto that bit,
@@ -170,18 +167,18 @@ public sealed class RecordEditService(
                 "'is_partial_form' — nothing was written.");
         }
 
-        // #453 scope 3: the file name carries the EditorID, so an EditorID edit is a rename as well as
+        // The file name carries the EditorID, so an EditorID edit is a rename as well as
         // a content change. Done before the write, deliberately — see RenameSourceUnit.
         var sourcePath = RenameSourceUnit(unit, target, document);
 
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
 
-        // #412: the codec's own file write is atomic (temp file, then rename), which matters more
+        // The codec's own file write is atomic (temp file, then rename), which matters more
         // here than at Track — this file is inside a live git working tree that the SCM panel, and
         // git itself, may read at any moment.
         _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
 
-        // #453 scope 4: an embedded edit dirties *two* rows — the parent source unit, whose bytes
+        // An embedded edit dirties *two* rows — the parent source unit, whose bytes
         // moved, and the child, whose own document is what the read model serves for it. Both go
         // through the one ApplyWorkingTreeChanges call, so they land in a single transaction.
         var deltas = new List<(string FormKey, string? Body)>
@@ -195,7 +192,7 @@ public sealed class RecordEditService(
         }
         index.ApplyWorkingTreeChanges(plugin, deltas);
 
-        // #422: the new value can flip filter membership either way.
+        // The new value can flip filter membership either way.
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -209,39 +206,35 @@ public sealed class RecordEditService(
 
     /// <summary>
     /// Refuses the handful of fields on a container whose truth does <b>not</b> live in the document
-    /// alone — #453's own containment guard, and the reason no index side table can go stale through
+    /// alone — the containment guard, and the reason no index side table can go stale through
     /// a field edit.
     ///
     /// <para>Reflection makes a container's child slots ordinary writable columns:
     /// <c>Cell.{Landscape,NavigationMeshes}</c> and <c>Worldspace.{TopCell,SubCells}</c> all reflect as
-    /// struct/array columns with an <c>Apply</c>. Before #453 that was unreachable, because
-    /// <see cref="EditField"/> refused every container outright. It is reachable now, and writing one
+    /// struct/array columns with an <c>Apply</c>. Writing one
     /// would replace a container's <i>child set</i> through a JSON blob: the replaced children keep
     /// their own <c>records</c> rows and their <c>container_child</c> parentage while no longer being
     /// in any parent, which is silent index corruption rather than an edit. Changing which records a
-    /// container holds is a structural gesture (<b>#461</b>), not a field write, and "containment is
-    /// the path" is ADR-0041's #444 amendment talking — so the path, not a field, is what expresses
+    /// container holds is a structural gesture, not a field write, and "containment is
+    /// the path" is ADR-0041 talking — so the path, not a field, is what expresses
     /// it.</para>
     ///
     /// <para><c>Cell.Grid</c> is refused for the neighbouring reason: an exterior cell's grid
     /// coordinates <i>are</i> its directory (<c>Worldspaces/&lt;ws&gt;/&lt;X, Y&gt;/&lt;X, Y&gt;/…</c>),
     /// so moving it is a tree restructure and not a rewrite of one file, and the same two numbers are
-    /// mirrored in <c>cell_location</c>, which nothing on this path re-derives. #454 made compile
-    /// <i>read</i> that structure and deliberately did not make anything <i>move</i> a record within it,
-    /// so this stays a refusal and gives the same structural-gesture reason as the slot columns above,
-    /// rather than naming a ticket that has since landed without changing the answer.</para>
+    /// mirrored in <c>cell_location</c>, which nothing on this path re-derives. Compile
+    /// <i>reads</i> that structure; nothing <i>moves</i> a record within it —
+    /// the same structural-gesture reason as the slot columns above.</para>
     ///
     /// <para><b>This is what closes the side-table question, and it closes it completely rather than
     /// per-table.</b> <c>cell_location</c>'s only non-containment columns are the grid, refused here.
     /// <c>container_child</c> is containment and slot order throughout, and the slots that could
     /// change it are refused here too. <c>placement</c>'s only non-containment column is
-    /// <c>Position</c> (a <c>P3Float</c>) — also refused here (#541), since #541 gave the schema
-    /// reflector a general <c>P3Int16</c>/<c>P3Float</c> mapping (needed for <c>ObjectBounds</c> and
-    /// several other fields with no side-table mirror), which made <c>Position</c> an ordinary
-    /// writable column on every <c>IPlacedGetter</c> type for the first time — this file used to rely
-    /// on the reflector never mapping <c>P3Float</c> at all, verified rather than assumed at the time,
-    /// but that verification is what #541 changed; the guard below is what keeps the conclusion true
-    /// now that the premise no longer holds on its own. So after this guard, every side table is
+    /// <c>Position</c> (a <c>P3Float</c>) — also refused here: the schema
+    /// reflector's general <c>P3Int16</c>/<c>P3Float</c> mapping (needed for <c>ObjectBounds</c> and
+    /// several other fields with no side-table mirror) makes <c>Position</c> an ordinary
+    /// writable column on every <c>IPlacedGetter</c> type, so
+    /// the guard below is what keeps the conclusion true. After this guard, every side table is
     /// unreachable from <see cref="EditField"/> by construction — which is a stronger statement than
     /// re-deriving them would have been, and it is the reason this method exists instead of a
     /// <c>SetPlacement</c>-style write-back.</para>
@@ -262,7 +255,7 @@ public sealed class RecordEditService(
                 RecordEditRefusal.FieldReadOnly,
                 $"'{fieldPath}' holds {recordType}'s child records, and containment is expressed by the " +
                 "source tree's own structure rather than by a field (ADR-0041). Adding, removing or " +
-                "reordering a container's children is a structural gesture (#461), not a field edit.");
+                "reordering a container's children is a structural gesture, not a field edit.");
         }
 
         if (column.PropertyName.Equals("Grid", StringComparison.Ordinal)
@@ -275,7 +268,7 @@ public sealed class RecordEditService(
                 "file. That is a structural gesture, not a field edit.");
         }
 
-        // #541: Position is mirrored into the `placement` side table (PlacementWalker), with no
+        // Position is mirrored into the `placement` side table (PlacementWalker), with no
         // write-time re-derivation — the same hazard Grid guards against for cell_location. Resolved
         // through the game's own IPlacedGetter marker interface (same namespace/assembly as `concrete`
         // — the per-game-generic lookup this file already uses via RecordTypeDispatch, rather than a
@@ -297,7 +290,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// Moves the source unit when the edit changed the EditorID its own name carries (#453 scope 3),
+    /// Moves the source unit when the edit changed the EditorID its own name carries,
     /// and answers the path to write to either way.
     ///
     /// <para><b>Move first, then write</b> — deliberately, and please do not tidy this into the other
@@ -308,9 +301,8 @@ public sealed class RecordEditService(
     /// two files claiming one FormKey for the duration of the window, which is the corrupt-tree state
     /// <see cref="AmbiguousSourceUnitException"/> exists to refuse.</para>
     ///
-    /// <para><b>That "still findable" is load-bearing, and it was not true when this first shipped</b>
-    /// (#453 review finding 1). Resolution computed the flat path from the indexed EditorID and stopped
-    /// there, so a name/content divergence read as an absent file and marked a live record deleted. The
+    /// <para><b>That "still findable" is load-bearing.</b> Without the fallback, a name/content
+    /// divergence reads as an absent file and marks a live record deleted. The
     /// fallback is what makes this ordering recoverable — and it is not only about crashes: the same
     /// divergence arrives whenever anything edits <c>EditorID</c> inside a source file directly, which
     /// is the ordinary never-assume-exclusive-ownership case rather than an exotic one.</para>
@@ -321,7 +313,7 @@ public sealed class RecordEditService(
     ///
     /// <para>Nothing here tells git that a rename happened, because git has no rename tracking to
     /// tell: it infers renames from content similarity at diff time. What that actually produces is
-    /// measured in the AC2 tests rather than assumed here.</para>
+    /// measured in tests rather than assumed here.</para>
     /// </summary>
     private string RenameSourceUnit(SourceUnit unit, IMajorRecord edited, RecordDocument document)
     {
@@ -333,7 +325,7 @@ public sealed class RecordEditService(
         var isDirectoryPerRecord = unit.IsDirectoryPerRecord;
         var oldLeafPath = isDirectoryPerRecord ? Path.GetDirectoryName(unit.FullPath)! : unit.FullPath;
 
-        // #459: an EditorID-only rename must not silently drop the record back to the front of its
+        // An EditorID-only rename must not silently drop the record back to the front of its
         // siblings (LeafNameFor's own name never carries a prefix) — the old leaf's own "[N] ", if it
         // has one, rides forward onto the new name unchanged. No siblings need touching: this record's
         // slot number is exactly what it was before the rename, just spelled with a new EditorID.
@@ -368,20 +360,19 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #427: deletes one plugin's copy of <paramref name="formKey"/> as a working-tree change — the
+    /// Deletes one plugin's copy of <paramref name="formKey"/> as a working-tree change — the
     /// source file goes away, and <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>'s null-Body case
-    /// (the mechanism #415 landed and tested in both flip directions) takes it from there: gone at
+    /// takes it from there: gone at
     /// Effective, still served at Head until this is committed and compiled. No reference cascade —
     /// a FormLink elsewhere pointing at the deleted record goes dangling and surfaces as an ordinary
     /// compile diagnostic, exactly like any other dangling link (ADR-0041).
     ///
-    /// <para><b>#461 widened this off the flat-only path onto <see cref="SourceUnitResolver"/></b>,
-    /// the same resolution <see cref="EditField"/> already uses, so a container's own record (its
-    /// directory, cascading every embedded/folder-split descendant's index row) and an embedded
-    /// child (spliced out of its owner's inline slot, the owner rewritten) both delete through this
-    /// one method instead of refusing outright. A flat record resolves exactly as it always did —
-    /// <see cref="SourceUnitResolver.Resolve"/>'s own flat branch <i>is</i>
-    /// <see cref="SourceUnitResolver.FlatSourcePath"/> — so nothing about that case changed.</para>
+    /// <para>Resolution is <see cref="SourceUnitResolver"/>,
+    /// the same as <see cref="EditField"/>, so a container's own record (its
+    /// directory, cascading every embedded/folder-split descendant's index row), an embedded
+    /// child (spliced out of its owner's inline slot, the owner rewritten) and a flat record
+    /// (<see cref="SourceUnitResolver.Resolve"/>'s own flat branch <i>is</i>
+    /// <see cref="SourceUnitResolver.FlatSourcePath"/>) all delete through this one method.</para>
     /// </summary>
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
@@ -434,8 +425,8 @@ public sealed class RecordEditService(
         }
         else
         {
-            // #488: a folder-split child's container_child.SlotIndex mirrors its own "[N]" file-name
-            // prefix (#459) — captured before anything moves, so the survivors' new positions can be
+            // A folder-split child's container_child.SlotIndex mirrors its own "[N]" file-name
+            // prefix — captured before anything moves, so the survivors' new positions can be
             // computed the same way RenormalizeGroupOrder computes them on disk below (sort by old
             // rank ascending, assign 0..k-1). Null for a top-level container/flat record, which is
             // nobody's folder-split child.
@@ -459,13 +450,13 @@ public sealed class RecordEditService(
                 File.Delete(unit.FullPath);
             }
 
-            // #489: the delete's own last file-system act — closes whatever "[N]" gap it just left in
+            // The delete's own last file-system act — closes whatever "[N]" gap it just left in
             // the touched group directory, so the source tree's own working invariant (every group
             // directory contiguous, SourceUnitResolver's own doc comment) holds again before this
             // returns, rather than merely being restorable by a later re-Track.
             SourceUnitResolver.RenormalizeGroupOrder(groupDirectory);
 
-            // #488: container_child's own copy of that same renumbering — the deleted child's row
+            // container_child's own copy of that same renumbering — the deleted child's row
             // disappears for free (it is simply not among the survivors passed in), and every
             // surviving sibling's SlotIndex lands exactly where a fresh ingest of the renormalized
             // tree would put it.
@@ -491,7 +482,7 @@ public sealed class RecordEditService(
             deltas.Add((descendant, null));
 
         index.ApplyWorkingTreeChanges(plugin, deltas);
-        // #422: a deleted row can no longer match an active filter.
+        // A deleted row can no longer match an active filter.
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -504,9 +495,9 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #461: every descendant <paramref name="formKey"/> holds, recursively — a Cell's placed refs
+    /// Every descendant <paramref name="formKey"/> holds, recursively — a Cell's placed refs
     /// (<see cref="IRecordReads.GetCellReferences"/>), a Worldspace's TopCell
-    /// (<see cref="IRecordReads.GetWorldspaceCells"/>, every row with no block coordinates — #496:
+    /// (<see cref="IRecordReads.GetWorldspaceCells"/>, every row with no block coordinates —
     /// normally exactly one, but the cascade can't assume that, the same reason
     /// <see cref="Queries.WorldspaceQueryService.GetWorldspaceBlocks"/> can't either) and
     /// whatever <see cref="IRecordReads.GetContainerChildren"/> names (navmesh/landscape, a Quest's
@@ -527,8 +518,8 @@ public sealed class RecordEditService(
         var placedDescendants = refs.Persistent.Concat(refs.Temporary)
             .SelectMany(placed => WithDescendants(reads, plugin, placed.FormKey));
 
-        // #496: every block-less cell-location row, not just the first — the same fix #251 made in
-        // WorldspaceQueryService.GetWorldspaceBlocks for the identical FirstOrDefault shape. A
+        // Every block-less cell-location row, not just the first — the same shape
+        // WorldspaceQueryService.GetWorldspaceBlocks guards against. A
         // worldspace is only ever supposed to carry one such row (its TopCell), but the data can't
         // rule out a second, and a delete cascade that silently stops at the first would orphan the
         // second row's own descendants rather than merely mislabeling them.
@@ -550,7 +541,7 @@ public sealed class RecordEditService(
         new[] { formKey }.Concat(EnumerateDescendantFormKeys(reads, plugin, formKey));
 
     /// <summary>
-    /// #427: mints a brand-new record — the create half of a lifecycle gesture. The FormKey is either
+    /// Mints a brand-new record — the create half of a lifecycle gesture. The FormKey is either
     /// <paramref name="requestedFormKey"/> (xEdit's typed-FormID path) or, when null, the next free
     /// local FormID under the plugin's own ModKey, collision-checked against both
     /// <see cref="RecordRef.Effective"/> and <see cref="RecordRef.Head"/> so an uncompiled prior
@@ -582,7 +573,7 @@ public sealed class RecordEditService(
         var record = MajorRecordInstantiator.Activator(FormKey.Factory(targetFormKey), release, schema.RecordType);
         if (!string.IsNullOrWhiteSpace(editorId)) record.EditorID = editorId;
 
-        // #459: a brand-new sibling goes at the end of its group folder, one past whatever "[N] " is
+        // A brand-new sibling goes at the end of its group folder, one past whatever "[N] " is
         // already the highest there (0 for a plugin's first record of this type).
         // RefuseIfContainerType above already guarantees FolderNameFor is non-null for recordType.
         var orderIndex = SourceUnitResolver.NextOrderIndexFor(modFolder, plugin.Name, recordType, release);
@@ -599,14 +590,14 @@ public sealed class RecordEditService(
         var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
         _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
 
-        // #489: defensive, not merely a repeat of the invariant NextOrderIndexFor above already
+        // Defensive, not merely a repeat of the invariant NextOrderIndexFor above already
         // upholds — never-assume-exclusive-ownership means this group folder can already hold a gap
         // nothing here caused (a hand-deleted sibling, another tool's edit), and this closes it as part
         // of the same write rather than leaving it for the next structural write to trip over.
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
         index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
-        // #422: a brand-new row can newly match an active filter.
+        // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -619,7 +610,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #436 (ADR-0041 restoration): xEdit's "Copy as Override Into…" — <paramref name="formKey"/>'s
+    /// xEdit's "Copy as Override Into…" (ADR-0041) — <paramref name="formKey"/>'s
     /// bytes, landing under the <b>same</b> FormKey in <paramref name="destinationPlugin"/>'s own
     /// working tree. Needs no Mutagen deserialization at all: <see cref="RecordDocument.Body"/> is
     /// byte-identical to the source file (its own doc-comment guarantee), so the seed text goes
@@ -651,11 +642,11 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
 
-        // #440 Slices 6/7: a placed reference (a Cell's Persistent/Temporary child) has its own,
+        // A placed reference (a Cell's Persistent/Temporary child) has its own,
         // parent-chain-aware handling — it never reaches RefuseIfCopySourceHasNoContainerOfItsOwn's
         // blanket refusal below at all. GetPlacement answering is exactly what distinguishes "a placed
         // reference" from every other embedded/folder-split type that predicate still refuses
-        // (Landscape, NavigationMesh, DialogTopic, Scene — out of this ticket's scope).
+        // (Landscape, NavigationMesh, DialogTopic, Scene).
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
             && index.GetPlacement(formKey, sourcePlugin) is { } placement)
         {
@@ -672,15 +663,15 @@ public sealed class RecordEditService(
                 $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
         }
 
-        // #440 review (Spec 3): IsInterior does double duty here — it is false both for a genuine
+        // IsInterior does double duty here — it is false both for a genuine
         // exterior SubCells cell (real block/sub/grid coordinates once placed) and for a Worldspace's
         // own TopCell (PlacementWalker.WalkWorldspace hardcodes isInterior: false for it, even though
         // TopCell carries no block/sub/grid either — the same "no coordinates to compute" property that
-        // justifies interior auto-create). #549 Arc B only widens the genuine-SubCells-cell case (it has
+        // justifies interior auto-create). Only the genuine-SubCells-cell case mints (it has
         // a real CellLocationRow with block/sub/grid to mint from); a TopCell's own cell_location row
-        // carries none of those (WalkWorldspace's own hardcoded nulls), so it still falls through to the
-        // refusal below exactly as before — TopCell's own spatial placement is Arc B's own WRLD-scale
-        // follow-up (#596), not this AC.
+        // carries none of those (WalkWorldspace's own hardcoded nulls), so it falls through to the
+        // refusal below — TopCell's own spatial placement is a WRLD-scale follow-up, tracked
+        // separately.
         var isCell = RecordTypeDispatch.For(release).ConcreteFor(document.RecordType)?.Name == "Cell";
         var cellLocation = isCell ? index.GetCellLocation(sourcePlugin, formKey) : null;
         if (isCell && cellLocation?.IsInterior == false && cellLocation.Value.BlockX != null)
@@ -700,7 +691,7 @@ public sealed class RecordEditService(
 
         var body = ReadCopySourceBody(sourcePlugin, formKey, document, release);
 
-        // #440: a flat type keeps CreateRecord's own shape (next order index in the destination's own
+        // A flat type keeps CreateRecord's own shape (next order index in the destination's own
         // group folder, a brand-new file there). A directory-per-record container's own top-level
         // record needs its own RecordData.json directory instead — an interior Cell nests two GRUP
         // levels deeper than Worldspace/Quest do (InteriorCellDestinationPath's own doc comment), which
@@ -714,7 +705,7 @@ public sealed class RecordEditService(
         }
         else
         {
-            // #440 AC3: a plain Copy as Override is own-fields-only for every record type — for a
+            // A plain Copy as Override is own-fields-only for every record type — for a
             // container whose document embeds its own children inline (Cell, Worldspace) that means
             // stripping them here, rather than the verbatim-bytes fast path a flat record keeps. A
             // no-op in practice for Quest (its folder-split children were never inlined to begin with).
@@ -731,7 +722,7 @@ public sealed class RecordEditService(
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
         index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, body);
-        // #422: a brand-new row can newly match an active filter.
+        // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -748,17 +739,14 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #440 Slices 6/7 (AC2): Copy as Override for a placed reference — appends
+    /// Copy as Override for a placed reference — appends
     /// <paramref name="formKey"/> into the destination's existing override of its own Cell
     /// (<paramref name="placement"/>'s <see cref="PlacementRow.ParentCell"/>) when one already exists,
     /// touching nothing else about that Cell (not even its Partial Form flag). When the destination has
     /// no override of that Cell yet and the Cell is interior, one is auto-created first — bare fields,
     /// Partial Form flagged. Bare fields are genuine xEdit parity; Partial Form is a deliberate
     /// mEdit-specific divergence from what xEdit itself does — <see cref="CreateInteriorCellParent"/>'s
-    /// own doc comment has the full trace and argument, not repeated here. An exterior Cell with no
-    /// destination override refuses before this method is even reached
-    /// (<see cref="CopyRecordAsOverride"/>'s own <c>ContainerParentMissingInDestination</c> check runs
-    /// first): #549's own scope, not this one's.
+    /// own doc comment has the full trace and argument, not repeated here.
     /// </summary>
     private RecordEditResult CopyPlacedReferenceAsOverride(
         PluginKey sourcePlugin, string formKey, RecordDocument document, PlacementRow placement,
@@ -776,8 +764,8 @@ public sealed class RecordEditService(
         if (cellDocument == null)
         {
             // IsInterior's own double-duty note lives on CopyRecordAsOverride's identical check —
-            // #549 Arc B only widens the genuine-SubCells case (a real BlockX to mint from); a
-            // TopCell ref's own cell_location row carries none, so it still falls to the refusal below.
+            // only the genuine-SubCells case mints (a real BlockX to mint from); a
+            // TopCell ref's own cell_location row carries none, so it falls to the refusal below.
             var sourceCellLocation = index.GetCellLocation(sourcePlugin, cellFormKey);
             if (sourceCellLocation?.IsInterior == false && sourceCellLocation.Value.BlockX != null)
             {
@@ -825,7 +813,7 @@ public sealed class RecordEditService(
         }
         catch (Exception ex)
         {
-            // #440 review (Standards 3): the Cell's file on disk already carries formKey's new bytes
+            // The Cell's file on disk already carries formKey's new bytes
             // (WriteBodyAtomic-equivalent SerializeAsync above already landed) — a should-never-happen
             // guard in one of these two calls must not surface as a bare, unhandled exception that says
             // nothing about that. RecordEditRefusal's own doc comment has the full argument.
@@ -852,20 +840,19 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #549 Arc B (AC1): mints <paramref name="cellLocation"/>'s exterior CELL
+    /// Mints <paramref name="cellLocation"/>'s exterior CELL
     /// (<paramref name="cellRecord"/> — already the right shape, either the real requested copy with
     /// its embedded children stripped, or a bare auto-created ancestor holding just a copied REFR) at
     /// its exact worldspace block/sub-block, auto-creating a bare, Partial-Form WRLD ancestor first
-    /// when the destination has none (Q2, the same idiom <see cref="CreateInteriorCellParent"/> already
+    /// when the destination has none (the same idiom <see cref="CreateInteriorCellParent"/> already
     /// uses one level up — bare fields, no EditorID, <see cref="PartialFormFlag.Set"/> before
     /// serializing). Shared by <see cref="CopyRecordAsOverride"/>'s own exterior-Cell branch and
-    /// <see cref="CopyPlacedReferenceAsOverride"/>'s own exterior branch — the two places #440 left an
-    /// explicit "spatial placement not computed yet" refusal for #549 to widen.
+    /// <see cref="CopyPlacedReferenceAsOverride"/>'s own exterior branch.
     ///
     /// <para>Never mints into a worldspace the destination already overrides: a second mint into an
     /// already-existing WRLD directory risks a colliding sibling folder for the same FormKey rather
-    /// than landing inside the one that already exists there — genuinely out of AC1's scope ("no
-    /// CELL/WRLD override" in the destination to start with), refused rather than silently routed
+    /// than landing inside the one that already exists there — the supported case is a destination
+    /// with no CELL/WRLD override to start with, refused rather than silently routed
     /// around or half-implemented.</para>
     ///
     /// <para>Writes the worldspace's and cell's own index rows from the exact bytes
@@ -897,7 +884,7 @@ public sealed class RecordEditService(
             return RecordEditResult.Refused(
                 RecordEditRefusal.ContainerParentMissingInDestination,
                 $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey}, but not cell {cellFormKey} — " +
-                "placing a new cell inside an existing worldspace override is not supported yet (#597); " +
+                "placing a new cell inside an existing worldspace override is not supported yet; " +
                 "only a destination with neither the worldspace nor the cell can be copied into.");
         }
 
@@ -922,9 +909,9 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #549 Arc B: <see cref="CopyPlacedReferenceAsOverride"/>'s exterior half — the copied REFR's own
+    /// <see cref="CopyPlacedReferenceAsOverride"/>'s exterior half — the copied REFR's own
     /// Cell does not exist in the destination and is a genuine SubCells cell, so the Cell is auto-created
-    /// bare and Partial Form (Q2, exactly as <see cref="CreateInteriorCellParent"/> does one level up)
+    /// bare and Partial Form (exactly as <see cref="CreateInteriorCellParent"/> does one level up)
     /// with the REFR already in its source slot (<see cref="SlotNameFor"/>), and the pair is minted
     /// through <see cref="MintExteriorCell"/>. The REFR's own row is written afterwards — the cell's
     /// minted body already carries it inline either way.
@@ -964,7 +951,7 @@ public sealed class RecordEditService(
     private static string SlotNameFor(PlacementRow placement) =>
         placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
 
-    /// <summary>Q2's auto-created ancestor: bare, default-constructed fields, no EditorID, Partial Form
+    /// <summary>The auto-created ancestor: bare, default-constructed fields, no EditorID, Partial Form
     /// set before it is ever serialized — the one recipe <see cref="CreateInteriorCellParent"/>,
     /// <see cref="MintExteriorCell"/> and <see cref="MintExteriorCellAroundPlacedReference"/> share.
     /// <paramref name="schemaKey"/> is the schema table name (<c>"cell"</c>, <c>"wrld"</c>).</summary>
@@ -977,8 +964,8 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #440 Slice 7: silently creates <paramref name="cellFormKey"/> as an override in
-    /// <paramref name="destinationPlugin"/> — the parent-chain auto-create AC1/AC2's sibling shapes
+    /// Silently creates <paramref name="cellFormKey"/> as an override in
+    /// <paramref name="destinationPlugin"/> — the parent-chain auto-create the copy gestures
     /// need when a copied child's own Cell has no destination override yet. Bare, default-constructed
     /// fields, no EditorID (<see cref="MajorRecordInstantiator.Activator"/>, the same factory
     /// <see cref="CreateRecord"/> uses, with no <c>record.EditorID = ...</c> follow-up) — xEdit's own
@@ -987,18 +974,18 @@ public sealed class RecordEditService(
     /// runs inside an <c>if aDeepCopy then</c> branch that is hardcoded <c>False</c> for every
     /// auto-created ancestor), so this half is genuine ADR-0034 parity, not an approximation of it.
     ///
-    /// <para><b>Partial Form is not xEdit parity, and is not claimed as such — #440 review correction
-    /// (2026-08-28 grilling load order, Q2 revisited).</b> The same ancestor-walk trace that confirms the
+    /// <para><b>Partial Form is not xEdit parity, and is not claimed as such.</b> The same
+    /// ancestor-walk trace that confirms the
     /// bare-fields parity above also shows real xEdit's own <c>IsPartialForm := True</c> line sits
     /// inside that same <c>if aDeepCopy then</c> branch — so xEdit itself leaves an auto-created
     /// ancestor Cell unflagged, not Partial Form. Setting it here is a deliberate mEdit-specific
-    /// divergence, argued rather than assumed: Partial Form's whole purpose in this codebase (#491/
-    /// #539, already shipped) is excluding a record's own fields from mEdit's git-native conflict-diff
+    /// divergence, argued rather than assumed: Partial Form's whole purpose in this codebase
+    /// is excluding a record's own fields from mEdit's git-native conflict-diff
     /// engine, which has no xEdit analog at all (root CLAUDE.md's own carve-out — tracking/compile/
     /// branch UX is scored against this product's own model, not xEdit's live in-memory comparison). A
     /// structurally-stub auto-created ancestor, whose fields were never meant to mean anything, is
-    /// exactly the record that mechanism exists to exclude. <see cref="PartialFormFlag.Set"/> is #539's
-    /// own write surface, called directly here since there is no source file yet for
+    /// exactly the record that mechanism exists to exclude. <see cref="PartialFormFlag.Set"/> is the
+    /// flag's own write surface, called directly here since there is no source file yet for
     /// <see cref="RecordEditService.EditField"/>'s own <c>is_partial_form</c> door to reach.</para>
     /// </summary>
     private RecordDocument CreateInteriorCellParent(
@@ -1037,7 +1024,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #436 (ADR-0041 restoration): xEdit's "Copy as New Record Into…" — a deep copy of
+    /// xEdit's "Copy as New Record Into…" (ADR-0041) — a deep copy of
     /// <paramref name="formKey"/> under a fresh FormKey in <paramref name="destinationPlugin"/>'s own
     /// working tree, via Mutagen's own record-level <c>Duplicate</c> (no mod object — nothing in this
     /// feature constructs a Mutagen plugin). <paramref name="requestedFormKey"/> and the auto-allocated
@@ -1091,7 +1078,7 @@ public sealed class RecordEditService(
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
         index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
-        // #422: a brand-new row can newly match an active filter.
+        // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
         if (logger.IsEnabled(LogLevel.Information))
@@ -1105,7 +1092,7 @@ public sealed class RecordEditService(
         return RecordEditResult.Success(targetFormKey);
     }
 
-    /// <summary>Copy as Override's own seed read (#436): the record's source text, verbatim — no
+    /// <summary>Copy as Override's own seed read: the record's source text, verbatim — no
     /// Mutagen deserialization, since <see cref="RecordDocument.Body"/> is already byte-identical to
     /// the source file. Mirrors <see cref="EditField"/>'s read posture for a tracked plugin (the
     /// file's current bytes, not a stale index snapshot) and falls back to the indexed body for an
@@ -1118,9 +1105,9 @@ public sealed class RecordEditService(
                 sourceModFolder, sourcePlugin.Name, document.RecordType, formKey, document.EditorId, release);
             if (File.Exists(fullPath)) return File.ReadAllText(fullPath);
 
-            // #453's own never-assume-exclusive-ownership diagnostic (ReadRecordFromSource), for the
-            // same case here: a tracked source whose file went missing outside Modbench between the
-            // reconcileing and this copy running — worth knowing about, unlike the untracked
+            // The same never-assume-exclusive-ownership diagnostic ReadRecordFromSource gives, for
+            // the same case here: a tracked source whose file went missing outside Modbench between
+            // the last reconcile and this copy running — worth knowing about, unlike the untracked
             // fallback below, which is the expected, silent case.
             logger.LogWarning(
                 "Source file {SourcePath} is missing; copying from the indexed document instead", fullPath);
@@ -1128,7 +1115,7 @@ public sealed class RecordEditService(
         return document.Body!;
     }
 
-    /// <summary>Copy as New Record's own seed read (#436): the same posture as
+    /// <summary>Copy as New Record's own seed read: the same posture as
     /// <see cref="ReadCopySourceBody"/>, but deserialized to a Mutagen record — <c>Duplicate</c> needs
     /// an object to copy, unlike the override path.</summary>
     private IMajorRecord ReadCopySourceRecord(PluginKey sourcePlugin, string formKey, RecordDocument document, GameRelease release)
@@ -1150,7 +1137,7 @@ public sealed class RecordEditService(
             .GetAwaiter().GetResult();
     }
 
-    /// <summary>The same write-then-rename <see cref="RecordTextCodec.SerializeAsync"/> uses (#412) —
+    /// <summary>The same write-then-rename <see cref="RecordTextCodec.SerializeAsync"/> uses —
     /// needed here too, since Copy as Override writes text directly rather than through the codec (no
     /// Mutagen deserialization is the whole point of that path).</summary>
     private static void WriteBodyAtomic(string filePath, string body)
@@ -1169,7 +1156,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #427: a renumber is a delete+create pair in source terms (the source path embeds the FormKey)
+    /// A renumber is a delete+create pair in source terms (the source path embeds the FormKey)
     /// plus a reference cascade — every other tracked plugin's FormLink to <paramref name="formKey"/>
     /// has to move with it, or it goes dangling the moment the old path disappears.
     ///
@@ -1207,8 +1194,8 @@ public sealed class RecordEditService(
 
         var release = mirror.LoadOrder!.GameRelease;
 
-        // #461: the same record→source-unit resolution EditField/DeleteRecord use, replacing the old
-        // blanket container refusal — a container's own directory, an embedded child, or a flat
+        // The same record→source-unit resolution EditField/DeleteRecord use
+        // — a container's own directory, an embedded child, or a flat
         // record's file all answer here; only "nothing on disk holds this, and the index names no
         // container that would" still refuses.
         if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
@@ -1271,7 +1258,7 @@ public sealed class RecordEditService(
         }
         catch (Exception ex)
         {
-            // Q5(b): names exactly which repos already carry working-tree dirt from this partial
+            // Names exactly which repos already carry working-tree dirt from this partial
             // cascade — every one of them is independently reviewable and revertable in the Source
             // Control panel, which is the whole reason write order (referencers first, target last)
             // matters: nothing here is a half-renumbered *target* record, only whichever referencers
@@ -1292,7 +1279,7 @@ public sealed class RecordEditService(
         }
         finally
         {
-            // #422: on both outcomes, not just success — a mid-cascade failure still leaves whatever
+            // On both outcomes, not just success — a mid-cascade failure still leaves whatever
             // referencer rewrites already landed (writtenRepos) durably on disk before the throw above,
             // and _filter must not stay stale for those just because the record's own rewrite is what
             // failed. Re-applied once rather than per write — cheaper and no less correct, since
@@ -1315,10 +1302,10 @@ public sealed class RecordEditService(
     /// VMAD Object properties and condition Form parameters (never checked by the reflected-column
     /// <see cref="ValidateFormLinks"/> path, but just as real a reference here).
     ///
-    /// <para><b>#461</b>: widened off the flat-only <see cref="SourceUnitResolver.FlatSourcePath"/>
-    /// assumption onto full <see cref="SourceUnitResolver.Resolve"/>, so a referencer that is itself a
-    /// container or an embedded child (a placed ref's own <c>Base</c> FormLink, say) rewrites cleanly
-    /// instead of the whole renumber refusing outright. The string replace still lands on whichever
+    /// <para>Resolution is full <see cref="SourceUnitResolver.Resolve"/>, never a flat-path
+    /// assumption, so a referencer that is itself a
+    /// container or an embedded child (a placed ref's own <c>Base</c> FormLink, say) rewrites
+    /// cleanly. The string replace lands on whichever
     /// file actually carries the text — the referencer's own file when it isn't embedded, its owner's
     /// file when it is, since an embedded record's fields live inside the owner's document. An embedded
     /// referencer additionally re-derives its own extracted row from the mutated owner, the same
@@ -1367,7 +1354,7 @@ public sealed class RecordEditService(
 
     /// <summary>The delete+create pair itself — re-reads the source fresh (rather than trusting the
     /// caller's earlier snapshot) so a self-reference <see cref="RewriteReferenceField"/> already
-    /// rewrote above is reflected in the body this reserializes under the new FormKey. #461: dispatches
+    /// rewrote above is reflected in the body this reserializes under the new FormKey. Dispatches
     /// on the target's own source unit shape, resolved fresh for the same reason.</summary>
     private void RenumberTheRecordItself(
         IRecordIndex index, PluginKey plugin, string modFolder, string oldFormKey, string newFormKey, GameRelease release)
@@ -1397,11 +1384,10 @@ public sealed class RecordEditService(
         var parentDirectory = Path.GetDirectoryName(oldLeafPath)!;
 
         // EditorID does not change across a renumber — only the FormKey half of the leaf name does.
-        // #459: doc-commented as "a delete+create pair in source terms" — taken literally, the new
+        // "A delete+create pair in source terms", taken literally: the new
         // FormKey's leaf goes at the end of the same parent directory (a fresh next index), the same
-        // as an ordinary CreateRecord. #489: the old slot's number is only ever a momentary gap now —
-        // the renormalize pass below closes it as this method's own last file-system act, rather than
-        // leaving it unfilled.
+        // as an ordinary CreateRecord. The old slot's number is only ever a momentary gap —
+        // the renormalize pass below closes it as this method's own last file-system act.
         var newOrderIndex = SourceUnitResolver.NextOrderIndex(parentDirectory);
         var newLeafName = $"[{newOrderIndex}] " +
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
@@ -1427,11 +1413,11 @@ public sealed class RecordEditService(
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
 
-        // #489: this method's own last file-system act — closes the gap the old slot just left (and
+        // This method's own last file-system act — closes the gap the old slot just left (and
         // any pre-existing one besides) so the group directory is contiguous again before this returns.
         SourceUnitResolver.RenormalizeGroupOrder(parentDirectory);
 
-        // #488 review: a folder-split container's own children (a renumbered Quest's DialogTopics, a
+        // A folder-split container's own children (a renumbered Quest's DialogTopics, a
         // renumbered DialogTopic's Responses) keep their own FormKeys and their own files untouched —
         // only this record's own directory name changed, moved whole above — so nothing re-derives
         // their container_child rows from a reserialized document the way an embedded child's would
@@ -1440,7 +1426,8 @@ public sealed class RecordEditService(
         // children of its own (every other renumbered type).
         index.RepointContainerChildParent(plugin, oldFormKey, newFormKey);
 
-        // #493: the mirror gap #488 declined — a renumbered Worldspace's *exterior* cells
+        // The one mirror gap RepointContainerChildParent leaves — a renumbered Worldspace's
+        // *exterior* cells
         // (cell_location.parent_worldspace), which CreateWorkingTreeRecord's own re-derivation above
         // can never reach (ContainerChildFields cannot walk into Worldspace.SubCells at all; it only
         // ever recurses into TopCell). Positioned the same as RepointContainerChildParent, before the
@@ -1456,7 +1443,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #461: the embedded half of a renumber — the child's own <c>FormKey</c> field changes in place
+    /// The embedded half of a renumber — the child's own <c>FormKey</c> field changes in place
     /// inside its owner's object graph (no file moves: an embedded record has no leaf name of its own
     /// to carry a new identity), the owner is reserialized over its existing file, and the child's own
     /// extracted row is replaced (old FormKey's row nulled, new FormKey's row created from the child
@@ -1487,7 +1474,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #427's both-refs collision-safety: <paramref name="formKey"/> must be held at neither
+    /// Both-refs collision-safety: <paramref name="formKey"/> must be held at neither
     /// <see cref="RecordRef.Effective"/> nor <see cref="RecordRef.Head"/> — the same rule
     /// <see cref="IRecordIndex.CreateWorkingTreeRecord"/> itself enforces (it throws rather than
     /// silently overwrite), checked here first so a collision reads as a typed refusal instead of an
@@ -1497,7 +1484,7 @@ public sealed class RecordEditService(
         index.GetDocument(formKey, plugin) == null && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
 
     /// <summary>
-    /// #427: the target-FormKey resolution <see cref="CreateRecord"/> and <see cref="RenumberRecord"/>
+    /// The target-FormKey resolution <see cref="CreateRecord"/> and <see cref="RenumberRecord"/>
     /// both need — a caller-typed target (xEdit's own typed-FormID path: validated native to
     /// <paramref name="plugin"/>, then collision-checked at both refs) when
     /// <paramref name="requestedFormKey"/> is given, else the both-refs next-free auto-allocation.
@@ -1545,7 +1532,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #427: a caller-typed target FormKey (xEdit's own typed-FormID path, on both create and
+    /// A caller-typed target FormKey (xEdit's own typed-FormID path, on both create and
     /// renumber) must belong to <paramref name="plugin"/>'s own ModKey — the source path a native
     /// record's FormKey embeds is exactly <paramref name="plugin"/>'s own directory, so a foreign
     /// ModKey would land a record physically inside this plugin's source tree while claiming to
@@ -1555,7 +1542,7 @@ public sealed class RecordEditService(
     /// Reuses <see cref="RecordEditRefusal.NotNativeRecord"/>: both cases are "this operation only
     /// ever touches this plugin's own native FormKey space."
     ///
-    /// <para>#501: once a typed target is confirmed native, it must also fit
+    /// <para>Once a typed target is confirmed native, it must also fit
     /// <paramref name="plugin"/>'s own addressable range — the full <c>0xFFFFFF</c> native space, or
     /// only <c>0x000</c>-<c>0xFFF</c> when <paramref name="mod"/> is ESL-flagged
     /// (<see cref="PluginFlagPredicates.IsLight"/>). Checked after ownership, not before: a FormKey
@@ -1586,7 +1573,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #501: the shared ESL-flagged predicate (<see cref="PluginFlagPredicates.IsLight"/>) both the
+    /// The shared ESL-flagged predicate (<see cref="PluginFlagPredicates.IsLight"/>) both the
     /// typed-target range check and <see cref="NextFreeNativeFormId"/>'s cap need, bridged for the
     /// nullable <paramref name="mod"/> both callers may hold (a load order can resolve a
     /// <see cref="PluginKey"/> whose <see cref="IModGetter"/> is not loaded) — falls back to the plain
@@ -1610,11 +1597,11 @@ public sealed class RecordEditService(
     ///
     /// <para>Null means the plugin's FormKey space is exhausted — every local ID up to
     /// <c>0xFFFFFF</c> already in use, or, for a plugin <see cref="IsLightPlugin"/> reports as
-    /// ESL-flagged (#501), up to <c>0xFFF</c>: the engine cannot address a higher local ID from a
+    /// ESL-flagged, up to <c>0xFFF</c>: the engine cannot address a higher local ID from a
     /// light plugin's load-order slot, so this allocator can never hand one out regardless of native
     /// space still free above it. A typed refusal at both call sites
     /// (<see cref="RecordEditRefusal.FormKeySpaceExhausted"/>), not an exception: a full plugin
-    /// refusing a new record is an ordinary, expected outcome (review finding #1), the same doctrine
+    /// refusing a new record is an ordinary, expected outcome, the same doctrine
     /// as every other refusal on this write path, not a fault for the caller's generic exception
     /// handling to (mis)classify as "no usable load order."</para>
     /// </summary>
@@ -1642,16 +1629,15 @@ public sealed class RecordEditService(
         uint.Parse(formKey[..formKey.IndexOf(':')], NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// #427: the same both-refs allocator <see cref="CreateRecord"/>/<see cref="RenumberRecord"/> use
+    /// The same both-refs allocator <see cref="CreateRecord"/>/<see cref="RenumberRecord"/> use
     /// internally, exposed read-only so the Renumber gesture's FormID input box can prefill a
     /// suggested value the way xEdit's own "New FormID generated" flow does — never a write, and no
     /// tracked/untracked gate: it is pure arithmetic over already-indexed state, harmless to ask for
     /// a plugin nobody can edit yet.
     ///
     /// <para>Returns the same typed <see cref="RecordEditResult"/> shape every other entry point on
-    /// this write path does (review finding #2: brought to the same standard as
-    /// <see cref="CreateRecord"/>/<see cref="RenumberRecord"/>, rather than a bespoke nullable-string
-    /// contract) — <see cref="RecordEditRefusal.RecordNotFound"/> when no load order is loaded (matching
+    /// this write path does, rather than a bespoke nullable-string
+    /// contract — <see cref="RecordEditRefusal.RecordNotFound"/> when no load order is loaded (matching
     /// every sibling method's own "No load order is loaded." refusal here) and
     /// <see cref="RecordEditRefusal.FormKeySpaceExhausted"/> when the plugin's FormKey space is full;
     /// <see cref="RecordEditResult.NewFormKey"/> carries the suggestion on success.</para>
@@ -1671,10 +1657,10 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// AC3 / ADR-0041: Dangling and Type-Mismatched FormLinks are blocked at edit
+    /// ADR-0041: Dangling and Type-Mismatched FormLinks are blocked at edit
     /// time, before anything is written. Returns the diagnostic, or null when the value is clean.
     ///
-    /// <para><b>Effective state is what this resolves against</b>, which is what AC3 requires: a
+    /// <para><b>Effective state is what this resolves against</b>: a
     /// record the working tree deleted still exists at Head, and a check reading committed state
     /// would let the user point a link at something that will not be there when this compiles.
     /// Worth being precise about the mechanism, because it is not this call site's choice —
@@ -1686,14 +1672,14 @@ public sealed class RecordEditService(
     /// answer, and the test that would catch a regression is the one that deletes a record's lookup
     /// row.</para>
     ///
-    /// <para>The whole field is validated, not only the part that changed — the same scope
-    /// <c>ReferenceValidator</c> had before #410, and the only coherent one for a complex field that
+    /// <para>The whole field is validated, not only the part that changed — the only coherent scope
+    /// for a complex field that
     /// is written atomically. This walks the <i>incoming</i> value rather than the applied record so
     /// that what is checked is exactly what the caller asked to create.</para>
     ///
-    /// <para>Scope is the reflected columns, matching the pre-#410 validator exactly. VMAD Object
-    /// properties and condition Form parameters carry FormKeys too and are not checked here; they
-    /// were not checked before either, and widening that is its own change with its own evidence.</para>
+    /// <para>Scope is the reflected columns. VMAD Object
+    /// properties and condition Form parameters carry FormKeys too and are deliberately not checked
+    /// here; widening that is its own change with its own evidence.</para>
     /// </summary>
     private static string? ValidateFormLinks(
         IRecordIndex index,
@@ -1720,7 +1706,7 @@ public sealed class RecordEditService(
 
     /// <summary>
     /// The two refusals every entry point on this single write path must inherit, in order \u2014
-    /// untracked (AC4), then #417 exit path 3's external-change deferral \u2014 checked here once so
+    /// untracked, then the external-change deferral \u2014 checked here once so
     /// <see cref="EditField"/>, <see cref="DeleteRecord"/> and <see cref="CreateRecord"/> cannot
     /// drift on either. Null means neither refusal applies, and <paramref name="modFolder"/> is the
     /// mod folder every caller needs next.
@@ -1740,7 +1726,7 @@ public sealed class RecordEditService(
         }
         modFolder = folder;
 
-        // #417 exit path 3: a same-plugin external-change question left unanswered refuses every
+        // A same-plugin external-change question left unanswered refuses every
         // gesture on the single write path \u2014 checked before anything else, so neither of the write
         // path's two doors fires: the source file is never touched, and the index call that would
         // tell the DB about it is never reached.
@@ -1749,8 +1735,8 @@ public sealed class RecordEditService(
             : null;
     }
 
-    // AC4: two refusals, because there are two different ways out and a message that named neither
-    // would be the "silent dead UI" this ticket exists to avoid.
+    // Two refusals, because there are two different ways out and a message that named neither
+    // would be silent dead UI.
     private RecordEditResult RefuseUntracked(PluginKey plugin) =>
         ModFolders.Of(mirror.LoadOrder, plugin) is null
             ? RecordEditResult.Refused(
@@ -1762,7 +1748,7 @@ public sealed class RecordEditService(
                 $"{plugin.Name} is not tracked, so it is read-only. " +
                 // The palette entry verbatim: package.json contributes title "Track…" under
                 // category "Modbench", which VS Code renders as "Modbench: Track…". Naming a
-                // command that does not exist is the same dead end AC4 exists to prevent, so the
+                // command that does not exist is its own dead end, so the
                 // tests assert this string exactly rather than merely containing "Track".
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
 
@@ -1773,10 +1759,10 @@ public sealed class RecordEditService(
         if (outcome == FieldApplyOutcome.ReadOnly)
             return RecordEditResult.Refused(RecordEditRefusal.FieldReadOnly, $"'{fieldPath}' is read-only.");
 
-        // #531 named this its own outcome; #532 made answering it directly (rather than inferring it
-        // one layer up from "a rejection whose value happens to be a genuine JSON array") load-bearing
-        // — a well-typed element's own declined sub-field value is now a second way to reach exactly
-        // that shape, which the old heuristic could not tell apart from an unresolved element type.
+        // Answered directly from the applier rather than inferred one layer up from "a rejection
+        // whose value happens to be a genuine JSON array" — a well-typed element's own declined
+        // sub-field value reaches exactly that shape too, which a heuristic could not tell apart
+        // from an unresolved element type.
         if (outcome == FieldApplyOutcome.ListElementTypeUnresolved)
         {
             return RecordEditResult.Refused(
@@ -1800,7 +1786,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #503: names the field and the JSON shape it takes. A complex field is written as one atomic
+    /// Names the field and the JSON shape it takes. A complex field is written as one atomic
     /// value (CONTEXT.md), so the way out of this refusal is always the same — send the whole array or
     /// the whole struct with the one element/member changed, which is what the record editor now does
     /// for a per-element edit exactly as it always did for add/remove/move.
@@ -1819,19 +1805,19 @@ public sealed class RecordEditService(
     /// structural gesture that still cannot place it — refuses. Checked before any write, at the one
     /// entry point that reaches <c>SourceRecordPath.For</c> unconditionally.
     ///
-    /// <para><b>#461: <see cref="DeleteRecord"/> and <see cref="RenumberRecord"/> are no longer among
-    /// them.</b> Both now resolve through <see cref="SourceUnitResolver"/> instead — the same
-    /// resolution <see cref="EditField"/> already used (#453) — because deleting or renumbering a
+    /// <para><b><see cref="DeleteRecord"/> and <see cref="RenumberRecord"/> are not among
+    /// them.</b> Both resolve through <see cref="SourceUnitResolver"/> instead — the same
+    /// resolution <see cref="EditField"/> uses — because deleting or renumbering a
     /// container's own record, or an embedded child, is mechanical (move/remove a known file, or splice
     /// a known slot) the moment the record→source-unit question has an answer. Only
-    /// <see cref="CreateRecord"/> is left refusing this shape: a brand-new record has no containment
-    /// for anything to resolve <i>to</i> yet, and choosing one is a UX decision (#462), not a mechanical
+    /// <see cref="CreateRecord"/> refuses this shape: a brand-new record has no containment
+    /// for anything to resolve <i>to</i> yet, and choosing one is a UX decision, not a mechanical
     /// one.</para>
     ///
-    /// <para>Note the condition is wider than "Cell, Worldspace or Quest", which is what this message
-    /// used to claim (#453 finding): <see cref="RecordTypeDispatch.FolderNameFor"/> is also null for
+    /// <para>Note the condition is wider than "Cell, Worldspace or Quest":
+    /// <see cref="RecordTypeDispatch.FolderNameFor"/> is also null for
     /// every record with no top-level group of its own — placed references, landscapes, navmeshes,
-    /// dialog topics, scenes. The message now names what actually triggers it.</para>
+    /// dialog topics, scenes. The message names what actually triggers it.</para>
     /// </summary>
     private static RecordEditResult? RefuseIfContainerType(string recordType, GameRelease release)
     {
@@ -1842,12 +1828,12 @@ public sealed class RecordEditService(
             $"'{recordType}' has no source file of its own — it is a container record (Cell, Worldspace, " +
             "Quest) or a record embedded in one (a placed reference, landscape, navmesh, dialog topic, " +
             "scene). Editing its fields works, and so do deleting and renumbering it; creating one from " +
-            "scratch does not yet (#462) — a brand-new record has no containment for anything to place " +
+            "scratch does not yet — a brand-new record has no containment for anything to place " +
             "it into.");
     }
 
     /// <summary>
-    /// #440 Slice 8: <see cref="CopyRecordAsNewRecord"/>'s own permanent blacklist — xEdit itself
+    /// <see cref="CopyRecordAsNewRecord"/>'s own permanent blacklist — xEdit itself
     /// refuses Copy as New Record for CELL/WRLD/LAND/NAVM/PGRD/ROAD/NAVI, in both its UI and its
     /// engine, because a fresh FormKey would leave the copy structurally homeless: a container's
     /// children only exist in a plugin that also carries the container, and duplicating the container
@@ -1869,7 +1855,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #440: <see cref="CopyRecordAsOverride"/>'s own container gate — narrower than
+    /// <see cref="CopyRecordAsOverride"/>'s own container gate — narrower than
     /// <see cref="RefuseIfContainerType"/>, which <see cref="CreateRecord"/> keeps unchanged. A
     /// container's own top-level record (Cell, Worldspace, Quest) has somewhere to land — its own
     /// directory, minted the same way any other structural write's group folder is — so only a record
@@ -1877,7 +1863,7 @@ public sealed class RecordEditService(
     /// placed reference, a landscape, a navmesh) or a folder-split child with no independent top-level
     /// existence (a dialog topic, a scene, a response). That is a different question from
     /// <see cref="CreateRecord"/>'s own reason to refuse every container type — a brand-new record has
-    /// no containment for anything to resolve to yet (#462) — which is why the two gestures use
+    /// no containment for anything to resolve to yet — which is why the two gestures use
     /// different predicates rather than sharing this one.
     /// </summary>
     private static RecordEditResult? RefuseIfCopySourceHasNoContainerOfItsOwn(string recordType, GameRelease release)
@@ -1892,11 +1878,11 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #440: the destination path for a directory-per-record container's own top-level record —
+    /// The destination path for a directory-per-record container's own top-level record —
     /// Worldspace or Quest, whose directory sits directly under its own group folder with no further
     /// nesting (verified against a real Track output: <c>Worldspaces/[0] &lt;name&gt;/RecordData.json</c>).
     /// Cell is deliberately not handled here: its directory nests under an interior block/sub-block
-    /// path (or an exterior worldspace one, #549's own scope), which this simple "next index in one
+    /// path (or an exterior worldspace one), which this simple "next index in one
     /// flat group folder" scheme does not compute.
     /// </summary>
     private static string ContainerOwnDirectoryPath(
@@ -1917,7 +1903,7 @@ public sealed class RecordEditService(
     private const string RecordDataFileName = "RecordData.json";
 
     /// <summary>
-    /// #440 Slices 2/7: the destination path for an interior Cell — the one directory-per-record type
+    /// The destination path for an interior Cell — the one directory-per-record type
     /// <see cref="ContainerOwnDirectoryPath"/> does not handle, since its own directory nests two GRUP
     /// levels deep (<c>Cells/&lt;block&gt;/&lt;sub-block&gt;/&lt;name&gt;/RecordData.json</c>, verified
     /// against a real Track output) rather than sitting directly under its group folder. Interior
@@ -1964,9 +1950,9 @@ public sealed class RecordEditService(
         return directory;
     }
 
-    // #440 review (Standards 2): matches Track's own JsonSerializer.SerializeToUtf8Bytes shape
-    // (WriteIndented) — the one setting that matters for this method's own byte-exact-match contract,
-    // see its doc comment.
+    // Matches Track's own JsonSerializer.SerializeToUtf8Bytes shape
+    // (WriteIndented) — the one setting that matters for WriteMinimalGroupRecordDataIfMissing's
+    // byte-exact-match contract, see its doc comment.
     private static readonly JsonSerializerOptions GroupRecordDataOptions = new() { WriteIndented = true };
 
     /// <summary>
@@ -1977,10 +1963,10 @@ public sealed class RecordEditService(
     /// group this method mints is numbered <c>0</c>, and a real Track output omits a
     /// <c>BlockNumber</c> of exactly <c>0</c> rather than writing the literal.
     ///
-    /// <para>#440 review (Standards 2): a real Track output pretty-prints this file (2-space indent,
-    /// multi-line) through <c>System.Text.Json</c>'s own default writer, not the single-line JSON this
-    /// method used to hand-write — two block folders in the same tree ending up differently formatted
-    /// is exactly what trips up byte-compare tooling (#475's own parked fixed-point-check concern).
+    /// <para>A real Track output pretty-prints this file (2-space indent,
+    /// multi-line) through <c>System.Text.Json</c>'s own default writer — two block folders in the
+    /// same tree ending up differently formatted
+    /// is exactly what trips up byte-compare tooling.
     /// <see cref="GroupRecordDataOptions"/>'s <c>WriteIndented</c> is verified byte-for-byte identical
     /// to a real Track output for every shape this method actually writes (both the two-property and
     /// the empty-object case), not merely visually similar.</para>
@@ -1996,7 +1982,7 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// #440 AC3: deserializes <paramref name="body"/>, clears every child-major slot
+    /// Deserializes <paramref name="body"/>, clears every child-major slot
     /// (<see cref="ContainerChildFields.ClearAllChildSlots"/>) and reserializes — the one place a
     /// plain Copy as Override deserializes at all, since every other record type's own fields-only
     /// copy is already the verbatim bytes (nothing embedded to strip).
@@ -2017,7 +2003,7 @@ public sealed class RecordEditService(
     /// </summary>
     private IMajorRecord ReadRecordFromSource(string sourcePath, RecordDocument document, GameRelease release)
     {
-        // #450: both reads state the record's type rather than relying on the document to name it —
+        // Both reads state the record's type rather than relying on the document to name it —
         // the same document either way, so the same record_type identifies it either way.
         if (File.Exists(sourcePath))
             return _codec.DeserializeAsync(sourcePath, release, document.RecordType).GetAwaiter().GetResult();

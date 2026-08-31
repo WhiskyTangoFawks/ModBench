@@ -26,13 +26,13 @@ public static class SourceRepository
     /// <c>.gitignore</c> written directly into <paramref name="modFolder"/>, and the
     /// <c>pristineFiles</c> tree already written under the one root <c>source/</c> folder, since
     /// all three land in <paramref name="modFolder"/> before the commit that is meant to make them
-    /// real (#508 — the original cleanup deleted only <c>.git</c>).
+    /// real.
     /// <see cref="SourceRecordPath"/>/<see cref="Serialization.RecordTextCodec"/> already
     /// did the serialization this method just commits, so it never invents record content, and it
-    /// never invents provenance content either (comment 1, #414) — <paramref name="trailers"/> is
+    /// never invents provenance content either — <paramref name="trailers"/> is
     /// an input, not computed here.
     ///
-    /// Uniform by construction (ADR-0041 amendment, comment 2 on #414): always serializes, always
+    /// Uniform by construction (ADR-0041 amendment): always serializes, always
     /// commits to <c>main</c>, always creates and checks out the edit branch. There is no
     /// Authored/Modified parameter — that distinction is a workflow the user chooses after Track,
     /// never a Track-time mode.
@@ -54,10 +54,9 @@ public static class SourceRepository
             GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
             GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
             GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-            // #451: the source tree's flat layout has file names that routinely carry a space
+            // The source tree's flat layout has file names that routinely carry a space
             // ("<EditorID> - <hex6>_<ModKeyFileName>.json") — git's default quotePath=true C-quotes any
-            // path with a space (or non-ASCII byte) in porcelain output, which the pre-#451 flat
-            // <recordType>/<originModKey>/<hex6>.json layout never triggered (hex-only path segments).
+            // path with a space (or non-ASCII byte) in porcelain output.
             // Every porcelain reader in this codebase (WorkingTreeStatus's own -z NUL-separated parse,
             // and every caller of plain `git status --porcelain`) expects the raw path back, not a
             // quoted-and-escaped one — set once, repo-local, at the one place every tracked repo is
@@ -79,10 +78,10 @@ public static class SourceRepository
         }
         catch
         {
-            // One transaction from the caller's view (comment 1, #414): a failure anywhere above
+            // One transaction from the caller's view: a failure anywhere above
             // must not leave a half-initialized repo behind for IsTracked to wrongly report as
-            // tracked, or for a later Track retry to collide with. #508: `.git` was the only thing
-            // ever cleaned up here, orphaning the `.gitignore` written above and any of
+            // tracked, or for a later Track retry to collide with. Cleaning up `.git` alone would
+            // orphan the `.gitignore` written above and any of
             // `pristineFiles`' tree already written under the one root `source/` folder — both land
             // directly in modFolder *before* the commit that is supposed to make them real. Uniform
             // by construction: one catch block covers every step above (init through checkout), so
@@ -102,8 +101,8 @@ public static class SourceRepository
     /// typed answer, never a throw: a repo can be destroyed between one read and the next). A path
     /// absent from the result simply isn't in the commit.
     ///
-    /// <para><b>This is not working-tree status.</b> It asks what the last commit holds; #417 owns
-    /// the question of what the working tree holds against the index (<c>WorkingTreeStatus</c>),
+    /// <para><b>This is not working-tree status.</b> It asks what the last commit holds; what the
+    /// working tree holds against the index is <c>WorkingTreeStatus</c>'s question,
     /// along with <c>CommitPristineToMain</c> and the rebase verbs. The distinction is load-bearing,
     /// not naming hygiene: the two answers diverge after exactly the events this verb exists for — an
     /// external commit, rebase or amend moves <c>HEAD</c> without touching a single file.</para>
@@ -142,7 +141,7 @@ public static class SourceRepository
     /// <see cref="CommittedSourceHashes"/> reported. Null when the folder isn't tracked or the path
     /// isn't in the commit (a record created since, or one never committed).
     ///
-    /// <para><b>#459: <c>cat-file -p</c>, deliberately not <c>git show</c>.</b> <c>git show
+    /// <para><b><c>cat-file -p</c>, deliberately not <c>git show</c>.</b> <c>git show
     /// &lt;rev&gt;:&lt;path&gt;</c> treats a <b>missing</b> path as a pathspec and applies glob magic to
     /// it — verified empirically against git 2.43: for a path containing <c>[</c>/<c>]</c> (exactly
     /// what a folder-split child's <c>"[N] "</c> ordering prefix puts there) that does not exist at
@@ -167,7 +166,7 @@ public static class SourceRepository
 
     /// <summary>
     /// Every source record's text under <c>source/&lt;pluginName&gt;/**</c> as <paramref name="gitRef"/>
-    /// has it — no checkout, so a compile at <c>main</c> (#416 S8/<see cref="Edits.CompileSource.AtRef"/>)
+    /// has it — no checkout, so a compile at <c>main</c> (<see cref="Edits.CompileSource.AtRef"/>)
     /// never touches the edit branch's own working tree or index, exactly like
     /// <see cref="ReadCommittedSourceText"/>'s no-checkout read but for a whole plugin's tree at any
     /// ref rather than one path at <c>HEAD</c>. Empty (not null) when the folder isn't tracked, the
@@ -194,7 +193,7 @@ public static class SourceRepository
             if (fields.Length < 3 || fields[1] != "blob") continue;
             var relativePath = entry[(tab + 1)..];
 
-            // #459: cat-file -p, not show — see ReadCommittedSourceText's own doc comment (this path
+            // cat-file -p, not show — see ReadCommittedSourceText's own doc comment (this path
             // came from ls-tree so it always exists, but there is no reason to keep the one git
             // subcommand that mishandles a bracketed "[N] "-prefixed path when a safe one is right
             // there).
@@ -209,7 +208,7 @@ public static class SourceRepository
     /// <paramref name="source"/> just compiled from — no HEAD, branch, or index movement (the
     /// <c>git stash create</c> idiom, ADR-0041's 2026-08-19 amendment), message carrying a
     /// <c>Binary-SHA256</c> trailer for the binary the caller just finished writing. Track already
-    /// initializes this ref to the pristine baseline (#414); every compile after that re-points it
+    /// initializes this ref to the pristine baseline; every compile after that re-points it
     /// here, and only after the caller confirms the binary write landed — this method never runs
     /// before that, by construction of who calls it (<c>Edits.PluginCompileService</c>).
     ///
@@ -244,7 +243,7 @@ public static class SourceRepository
     }
 
     /// <summary>
-    /// #449: whether <paramref name="plugin"/>'s source has moved past what
+    /// Whether <paramref name="plugin"/>'s source has moved past what
     /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> parked — "the game can't see your edits yet" —
     /// plus that ref's own commit timestamp for the tooltip that names it. Cheap and bounded by dirt
     /// (the freshness philosophy, <see cref="SourceFreshness"/>): two git calls, both scoped to this
@@ -258,11 +257,11 @@ public static class SourceRepository
     /// <c>RecordEditService</c>'s create path writes straight to disk, no staging.
     ///
     /// <para>Never stale for an untracked folder or a plugin with no parked ref at all — a plugin
-    /// Track never covered (#288's New-Plugin-into-an-already-tracked-folder gap) degrades safely to
+    /// Track never covered (the New-Plugin-into-an-already-tracked-folder gap) degrades safely to
     /// "nothing to compare against" rather than a false positive; the first compile is what parks the
     /// ref and gives this something to answer from then on.</para>
     ///
-    /// <para><c>:(literal)</c> pathspec magic on both calls, deliberately — #459's own lesson: a real
+    /// <para><c>:(literal)</c> pathspec magic on both calls, deliberately — a real
     /// plugin filename routinely carries <c>[</c>/<c>]</c>, which git's pathspec glob matching would
     /// otherwise silently misinterpret rather than match literally.</para>
     /// </summary>
@@ -310,7 +309,7 @@ public static class SourceRepository
             : null;
     }
 
-    // #459: ":(literal)" pathspec magic disables fnmatch glob interpretation of the path that
+    // ":(literal)" pathspec magic disables fnmatch glob interpretation of the path that
     // follows — without it, a plugin filename carrying '[' or ']' (routine in real FO4 mod names)
     // would be silently misread as a glob character class rather than matched literally.
     private static string LiteralPathspec(string path) => $":(literal){path}";
@@ -327,7 +326,7 @@ public static class SourceRepository
     }
 
     /// <summary>
-    /// #417's Absorb Upstream Update: commits <paramref name="pristineFiles"/> onto <c>main</c> as a
+    /// Absorb Upstream Update's git mechanics: commits <paramref name="pristineFiles"/> onto <c>main</c> as a
     /// new baseline — by plumbing, exactly like <see cref="Track"/>'s own baseline commit, but with
     /// <b>no checkout at all</b>: the edit branch stays checked out throughout, its working tree, its
     /// index and its <c>HEAD</c> all untouched. Fresh <paramref name="trailers"/> replace whatever
@@ -386,7 +385,7 @@ public static class SourceRepository
     }
 
     /// <summary>
-    /// #417's offered rebase — the edit branch replayed onto <c>main</c>'s new tip, offered as a
+    /// The offered rebase — the edit branch replayed onto <c>main</c>'s new tip, offered as a
     /// separate, non-modal step after Absorb Upstream Update lands a baseline, and re-runnable later
     /// via <c>Modbench: Rebase onto Updated Baseline</c>. Refuses over any working-tree dirt (git's
     /// own refusal posture, ADR-0041 amendment: "refuse, and the user fixes it") before ever touching
@@ -451,7 +450,7 @@ public static class SourceRepository
 
     /// <summary>
     /// Every relative path <c>git status</c> considers dirty in <paramref name="modFolder"/>'s
-    /// working tree — staged or not, matching the file, not the index alone (#417's refuse-over-dirt
+    /// working tree — staged or not, matching the file, not the index alone (the refuse-over-dirt
     /// checks: rebase-over-dirt and Keep-as-My-Edit's same-record collision both need "does the
     /// user have any uncommitted change here", which a bare index compare would miss for a plain
     /// unstaged edit). Empty when the folder isn't tracked or nothing is dirty — never a failure;
@@ -483,15 +482,15 @@ public static class SourceRepository
 
     /// <summary>
     /// The <c>Binary-SHA256</c> trailer off <c>refs/medit/last-compile/&lt;plugin&gt;</c>'s own
-    /// commit message — "the binary as Modbench last wrote it" (#417's self-echo tell: a freshly
+    /// commit message — "the binary as Modbench last wrote it" (the self-echo tell: a freshly
     /// observed binary whose hash matches this one is Save &amp; Compile's own write, not an
     /// external change). Null when the folder isn't tracked, the ref doesn't exist, or the ref's
     /// commit carries no such trailer — a missing or orphaned ref degrades to asking the dialog's
-    /// question, never a throw (comment 1, #417 pinned decisions).
+    /// question, never a throw.
     ///
     /// <para><b>Two trailer shapes share this key, and this method reads both.</b> Before any
     /// compile has ever run, Track already parked this exact ref straight at the shared baseline
-    /// commit (#414), whose message carries one <c>Binary-SHA256: &lt;plugin&gt;=&lt;hash&gt;</c>
+    /// commit, whose message carries one <c>Binary-SHA256: &lt;plugin&gt;=&lt;hash&gt;</c>
     /// line <i>per plugin the mod folder holds</i> (<see cref="CommitWithTrailers"/>'s multi-plugin
     /// format). Every compile after that re-parks the ref at its own floating snapshot instead
     /// (<see cref="ParkCompileSnapshot"/>), whose message carries a bare
@@ -570,15 +569,15 @@ public static class SourceRepository
     private static string ToGitPath(string relativePath) => relativePath.Replace('\\', '/');
 
     /// <summary>
-    /// #433: the one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built — every call site
+    /// The one place <c>refs/medit/last-compile/&lt;plugin&gt;</c> is built — every call site
     /// that reads or writes this ref family goes through here, never a second inline interpolation of
     /// the raw filename. Almost every real Fallout 4 plugin name is ref-unsafe by git's own rules
     /// (spaces, <c>[</c>/<c>]</c>, and more are forbidden — <c>git check-ref-format</c>), so
     /// <see cref="EncodeRefComponent"/> percent-encodes the plugin filename before it ever reaches
     /// git.
     ///
-    /// <para><b>The encoding is stable and injective, deliberately not reversible</b> (triage decision
-    /// on #433): two distinct plugin filenames must never collapse onto the same ref, but nothing in
+    /// <para><b>The encoding is stable and injective, deliberately not
+    /// reversible</b>: two distinct plugin filenames must never collapse onto the same ref, but nothing in
     /// this codebase enumerates <c>refs/medit/last-compile/*</c> (no <c>for-each-ref</c>/<c>show-ref</c>
     /// caller exists) — every site starts from a known plugin name and encodes forward. A future
     /// caller that needs to go the other way must not assume this ref suffix decodes back to a literal
@@ -628,11 +627,11 @@ public static class SourceRepository
     /// <summary>
     /// Commits whatever is currently staged, with <paramref name="trailers"/> rendered as commit
     /// trailers via <c>git commit --trailer</c> (porcelain) — the one place that trailer *formatting*
-    /// lives for a real checkout-and-commit. #417's <see cref="CommitPristineToMain"/> needed a
+    /// lives for a real checkout-and-commit. <see cref="CommitPristineToMain"/> needs a
     /// checkout-free, plumbing-only <c>commit-tree</c>, which has no <c>--trailer</c> flag of its
     /// own, so it hand-writes the identical "Key: Value" shape itself (<c>FormatTrailers</c>) rather
-    /// than reusing this method. Still an internal implementation detail (comment 1 ruling #4 on
-    /// #414: no public surface without a caller) — <see cref="Track"/> remains this method's only
+    /// than reusing this method. An internal implementation detail (no public surface without a
+    /// caller) — <see cref="Track"/> is this method's only
     /// caller.
     /// </summary>
     private static void CommitWithTrailers(string gitDir, string workTree, string message, TrackProvenance trailers)
@@ -664,8 +663,8 @@ public static class SourceRepository
             GitCli.Run(gitDir, workTree, "config", "user.email", "modbench@localhost");
     }
 
-    // Every source path lives under one root "source/" folder (SourceRecordPath.RootFolderName,
-    // #441 — replacing the old per-plugin "<plugin>.source/" sibling trees); the Edits preset ignores
+    // Every source path lives under one root "source/" folder
+    // (SourceRecordPath.RootFolderName); the Edits preset ignores
     // everything except that one folder, Everything additionally un-ignores assets. meta.ini is
     // excluded in both — it is never tracked content (ADR-0041 amendment: "never track a file that
     // changes for non-content reasons") — and plugin binaries (the compiled artifact, never written
@@ -703,7 +702,7 @@ public static class SourceRepository
 public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
 
 /// <summary><see cref="SourceRepository.CompileFreshnessOf"/>'s answer — <see cref="Stale"/> is
-/// #449's own signal ("source ahead of binary"), <see cref="LastCompiledAt"/> the parked ref's own
+/// the "source ahead of binary" signal, <see cref="LastCompiledAt"/> the parked ref's own
 /// commit timestamp for the tooltip that names it. Both null/false together for an untracked folder
 /// or a plugin Track never parked a ref for.</summary>
 public sealed record CompileFreshness(bool Stale, DateTimeOffset? LastCompiledAt);

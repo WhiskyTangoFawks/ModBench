@@ -73,7 +73,7 @@ describe('setPluginEnabledInText — byte-faithful surgical edit', () => {
   });
 });
 
-// #288: the New Plugin gesture's own append — a created plugin's line, always enabled, always at
+// The New Plugin gesture's own append — a created plugin's line, always enabled, always at
 // the bottom (the winning end: "bottom wins record overrides", per this file's own header comment
 // — the natural default for a plugin the user is actively authoring).
 describe('appendPluginInText — byte-faithful append at the winning end', () => {

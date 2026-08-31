@@ -62,8 +62,7 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
         Inner.GetPluginsWithMatchingRecords(tableNames);
     public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => Inner.GetNativeFormKeys(plugin);
     public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => Inner.GetEffectiveMasters(plugin);
-    // #496: virtual — the first read-path member intercepted on this class (every other override so
-    // far is write-path) — so a test can inject an anomalous second block-less cell-location row
+    // Virtual so a test can inject an anomalous second block-less cell-location row
     // without reimplementing the rest of the wide IRecordIndex surface.
     public virtual IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
         Inner.GetWorldspaceCells(plugin, worldspaceFormKey);

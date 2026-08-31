@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041: tracked *is* the presence of `.git` in the mod folder — stateless by
+/// ADR-0041: tracked *is* the presence of `.git` in the mod folder — stateless by
 /// construction, no registry. <see cref="SourceRepository.IsTracked"/> is the one place that
 /// claim gets checked, so it has to check exactly that and nothing broader (a folder that merely
 /// exists is not tracked).

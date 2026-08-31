@@ -374,7 +374,7 @@ describe('moveModToSeparatorEndInText', () => {
     ).toThrow(/No Such Sep/);
   });
 
-  // #107 acceptance criterion: a *-prefixed foreign/unmanaged line after the last
+  // A *-prefixed foreign/unmanaged line after the last
   // separator is never surfaced as a ModlistEntry (parseModlist ignores it — it's
   // not a +/- entry line at all), so it can never be swept into the last
   // separator's section. Moving a mod to ungrouped must land it as the last real
@@ -593,7 +593,7 @@ const hasLitr = existsSync(litrModlist);
 describe.skipIf(!hasLitr)('full LitR round-trip (opt-in)', () => {
   it('toggling a real mod off then on reproduces the original bytes exactly', () => {
     const input = readFileSync(litrModlist, 'utf8');
-    // Don't assume any particular mod's live enabled/disabled state (#403) — read
+    // Don't assume any particular mod's live enabled/disabled state — read
     // it out of the file and toggle away from whatever it actually is.
     const firstMod = parseModlist(input).find((e) => e.kind === 'mod');
     if (!firstMod) throw new Error('LitR modlist.txt has no mod entries — fixture assumption broken');
@@ -603,7 +603,7 @@ describe.skipIf(!hasLitr)('full LitR round-trip (opt-in)', () => {
 
     // Prove a real toggle happened, not a vacuous no-op: re-read the mod's state
     // back out of the result and require it to have actually flipped. A no-op
-    // implementation (the exact failure this issue reports) cannot satisfy this.
+    // implementation cannot satisfy this.
     expect(toggled).not.toBe(input);
     const toggledMod = parseModlist(toggled).find((e) => e.kind === 'mod' && e.name === name);
     expect(toggledMod?.enabled).toBe(!enabled);

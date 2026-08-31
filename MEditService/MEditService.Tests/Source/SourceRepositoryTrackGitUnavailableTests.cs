@@ -3,7 +3,7 @@ using MEditService.Core.Source;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414/ADR-0041 (comment 1): git-on-PATH missing surfaces one typed failure, checked once, early —
+/// ADR-0041: git-on-PATH missing surfaces one typed failure, checked once, early —
 /// never an exception cascade (a raw <c>Win32Exception</c> from the first <c>Process.Start</c> that
 /// happens to hit it), per ADR-0026 and <c>MEditService/CLAUDE.md</c>'s "never <c>ex.ToString()</c>"
 /// rule, both of which depend on the caller being able to catch one named type.
@@ -21,7 +21,7 @@ public sealed class SourceRepositoryTrackGitUnavailableTests
             // Scrub PATH for this process (and the child processes it spawns) so "git" genuinely
             // cannot be found — a real repro of the missing-git-on-PATH environment, not a mock.
             Environment.SetEnvironmentVariable("PATH", string.Empty);
-            // #414 review F5: belt-and-braces alongside PATH — a host /etc/gitconfig plays no part
+            // Belt-and-braces alongside PATH — a host /etc/gitconfig plays no part
             // in this scenario (git never launches at all), but scrubbing it keeps this test's
             // environment-scrubbing posture consistent with SourceRepositoryTrackConfigTests'
             // identity-fallback test, which does depend on it.

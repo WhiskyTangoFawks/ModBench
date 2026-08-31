@@ -10,10 +10,10 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #450 S4 (ADR-0041's #444 amendment), inverting #413 D8: a container record's document holds its
+/// ADR-0041: a container record's document holds its
 /// <b>embedded children</b>, because that is what the whole-mod folder-split path — Spriggit's own
-/// output — puts in that record's file. The deep-copy-and-strip step D8 introduced is gone with the
-/// posture that needed it: the parent's file is the child's source unit now, and the index's
+/// output — puts in that record's file. There is no
+/// deep-copy-and-strip step: the parent's file is the child's source unit, and the index's
 /// container_child/placement rows are extracted <i>from</i> the parent rather than replacing it.
 ///
 /// The scope of "embedded" is Spriggit's, not ours: <c>Cell.{Persistent,Temporary,Landscape,
@@ -40,10 +40,10 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     }
 
     /// <summary>
-    /// The case that used to make the strip load-bearing, now read the other way round: a cell whose
+    /// A cell whose
     /// codec bytes carry child records must have exactly those bytes stored against it. Anything that
-    /// re-introduced a strip — at ingest, or by reviving the child-stream suppression for the
-    /// embedded slots — puts the index back out of step with the source file and fails here.
+    /// introduced a strip — at ingest, or via the child-stream suppression for the
+    /// embedded slots — puts the index out of step with the source file and fails here.
     /// </summary>
     [Fact]
     public async Task Index_ForACellWithChildren_StoresThemEmbeddedInTheCellsOwnDocument()
@@ -98,7 +98,7 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
         var quest = setterMod.EnumerateMajorRecords<IQuest>().First(q => q.DialogTopics.Count > 0);
         var formKey = quest.FormKey.ToString();
 
-        // Exactly what TrackService does to write a source file — which since #450 is nothing but
+        // Exactly what TrackService does to write a source file — which is nothing but
         // the codec call itself.
         var sourceBytes = await codec.SerializeToBytesAsync(quest, GameRelease.Fallout4);
 
@@ -109,8 +109,8 @@ public sealed class ContainerDocumentTests(CutDownPluginFixture fixture) : IClas
     }
 
     /// <summary>
-    /// And the same for the ~95% that were never containers, which #413 D8's deep copy already
-    /// skipped: the stored body is the codec's own bytes, with nothing interposed.
+    /// And the same for the ~95% that are not containers:
+    /// the stored body is the codec's own bytes, with nothing interposed.
     /// </summary>
     [Fact]
     public async Task Index_ForANonContainer_StoresTheCodecsBytesUnchanged()

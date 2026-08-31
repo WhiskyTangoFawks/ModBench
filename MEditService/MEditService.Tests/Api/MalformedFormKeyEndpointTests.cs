@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Tests.Api;
 
 /// <summary>
-/// #502: a malformed caller-typed FormKey (xEdit's own typed-FormID path, #427) on any of the three
+/// A malformed caller-typed FormKey (xEdit's own typed-FormID path) on any of the three
 /// gestures that route it through <c>RecordEditService.RefuseIfNotNativeTarget</c> —
 /// <see cref="RecordEditService.CreateRecord"/>, <see cref="RecordEditService.RenumberRecord"/> and
 /// <see cref="RecordEditService.CopyRecordAsNewRecord"/> — must come back as a graceful 400

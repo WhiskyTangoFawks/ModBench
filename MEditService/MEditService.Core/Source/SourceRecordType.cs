@@ -7,9 +7,8 @@ namespace MEditService.Core.Source;
 /// A record's source record-type folder name — the same resolution
 /// <c>DuckDbRecordIndex.ResolveRecordType</c> uses (schema table name by type match, else the CLR
 /// type name lowercased). Shared by every caller that deep-parses a plugin binary straight to
-/// pristine source text: <see cref="TrackService"/> (Track) and #417's Absorb Upstream Update, which
-/// is exactly the same operation — a fresh baseline serialized from a binary — for a different
-/// reason.
+/// pristine source text: <see cref="TrackService"/> (Track) and Absorb Upstream Update, which is
+/// exactly the same operation — a fresh baseline serialized from a binary — for a different reason.
 /// </summary>
 internal static class SourceRecordType
 {

@@ -90,7 +90,7 @@ describe('makeBackendLogForwarder', () => {
   });
 });
 
-// #205: backendLogLevelArgs maps the Output channel's level (vscode.LogLevel's
+// backendLogLevelArgs maps the Output channel's level (vscode.LogLevel's
 // numeric ordinals — Off=0, Trace=1, Debug=2, Info=3, Warning=4, Error=5) to a
 // Serilog minimum-level override for the backend's spawn argv.
 describe('backendLogLevelArgs', () => {

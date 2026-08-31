@@ -20,8 +20,8 @@ describe('createApiClient', () => {
 });
 
 // The backend answers every failure as RFC 7807 ProblemDetails; the toast wants the sentence
-// written for the user, not the envelope around it (#588 made this visible: "open in another
-// Modbench window" was arriving inside a JSON blob).
+// written for the user, not the envelope around it ("open in another
+// Modbench window" would otherwise arrive inside a JSON blob).
 describe('errorText', () => {
   it('passes a string body through', () => {
     expect(errorText('bad dir')).toBe('bad dir');

@@ -40,8 +40,8 @@ public enum VmadApplyResult
     NotFound,
 }
 
-// VMAD's Mutagen edge: the property-type taxonomy, the editability policy, and (in later
-// slices) parse and apply. VMAD sits outside the reflection-driven schema pipeline
+// VMAD's Mutagen edge: the property-type taxonomy, the editability policy, and
+// parse and apply. VMAD sits outside the reflection-driven schema pipeline
 // (ADR-0005, ADR-0019), so this is its ColumnSpec equivalent — the one place a new or
 // changed VMAD property type is described. Does no I/O: no SQL, no disk.
 public static class VmadCodec
@@ -92,7 +92,7 @@ public static class VmadCodec
     public static ScriptProperty? CreateDefault(string type) =>
         DefaultPropertyFactories.TryGetValue(type, out var make) ? make() : null;
 
-    // Applies a value (per-type payload shape from 13.4/13.6/13.7) into an existing property.
+    // Applies a value (payload shape varies per property type) into an existing property.
     public static VmadApplyResult ApplyValue(ScriptProperty prop, JsonElement value)
     {
         switch (prop)
@@ -519,8 +519,8 @@ public static class VmadCodec
 
     // Same FormKeys as ValueFormKeys, paired with a sub-path within value ("" for a scalar Object,
     // "[i]" for an ArrayOfObject element, "\Member"/"[i]\Member" for a Struct/ArrayOfStruct member)
-    // so callers can key a per-leaf signal independently (ADR-0031). #160:
-    // there's no type/kind parameter here — Object vs ArrayOfObject vs Struct vs ArrayOfStruct is
+    // so callers can key a per-leaf signal independently (ADR-0031).
+    // There's no type/kind parameter here — Object vs ArrayOfObject vs Struct vs ArrayOfStruct is
     // told apart purely by JSON shape, same trick the original Object/ArrayOfObject split already
     // used (scalar vs array). A Struct's NewValue is a bare array of member-node objects (no
     // wrapping "members" key — that shape lives one level up, on the read side's struct_json); an

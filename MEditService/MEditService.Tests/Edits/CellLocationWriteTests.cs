@@ -3,8 +3,8 @@ using MEditService.Core.Records;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #549 Slice 1: <see cref="IRecordIndex.CreateCellLocation"/> — the missing copy-in write for a
-/// cell's own <c>cell_location</c> row. Every existing writer of this table
+/// <see cref="IRecordIndex.CreateCellLocation"/> — the copy-in write for a
+/// cell's own <c>cell_location</c> row. Every other writer of this table
 /// (<c>DuckDbRecordIndex.RederiveContainmentForRecord</c>) only ever re-derives a
 /// <c>Worldspace.TopCell</c>'s row from its parent's freshly-reserialized document; a genuine
 /// exterior cell reached through <c>SubCells</c> is never that document's embedded child, so nothing

@@ -3,8 +3,8 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-// Issue #210: FormKeyCell no longer renders an inline picker — a plain click on an editable
-// cell now calls pickFormKey (the native-QuickPick bridge) instead. Mocked here so these tests
+// FormKeyCell renders no inline picker — a plain click on an editable
+// cell calls pickFormKey (the native-QuickPick bridge). Mocked here so these tests
 // assert the call (seed/validTypes), not any rendered picker DOM.
 const pickFormKey = vi.fn().mockResolvedValue(null);
 vi.mock('./nativeBridge', () => ({ pickFormKey: (...args: unknown[]) => pickFormKey(...args) }));
@@ -16,14 +16,13 @@ const fkMeta: FieldMetadata = {
   name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [],
 };
 
-// Issue #157: navigation now requires the leaf's own resolution to say the reference is
+// Navigation requires the leaf's own resolution to say the reference is
 // followable — a resolved (valid or wrong type) fixture stands in for what DiffRow always
 // supplies from `diff.resolutions[plugin]` in real usage.
 const resolvedFixture: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: null };
 
-// Issue #111: one gesture split, uniform across the grid — plain click edits (opens the
-// picker), Ctrl+click follows the reference. This is the collision the mode was silently
-// resolving: click used to mean "navigate" in view mode and "open picker" in edit mode.
+// One gesture split, uniform across the grid — plain click edits (opens the
+// picker), Ctrl+click follows the reference.
 describe('FormKeyCell — read-only column', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
@@ -44,7 +43,7 @@ describe('FormKeyCell — read-only column', () => {
     expect(onOpen).toHaveBeenCalledWith('000019:Fallout4.esm');
   });
 
-  // Issue #226: plain click opens nothing on an immutable column — see the describe below for
+  // Plain click opens nothing on an immutable column — see the describe below for
   // the full "opens nothing" coverage; what this asserts is narrower, that it also never
   // navigates or opens the picker.
   it('plain click neither navigates nor opens the picker', () => {
@@ -56,11 +55,11 @@ describe('FormKeyCell — read-only column', () => {
   });
 });
 
-// Issue #226 / ADR-0034: the read-only value surface is retired. On a mutable column nothing was
-// owed to begin with — plain click opens the native QuickPick, a real input, so selection and
+// ADR-0034: on a mutable column
+// plain click opens the native QuickPick, a real input, so selection and
 // Ctrl+V are already the platform's there. On an immutable column, click, second click, and
-// double click now all open nothing at all; copy is Ctrl+C on the focused, unopened cell (#224),
-// reading the same `EditorID [FormKey]` composite this cell displays (#218) via modelValue.
+// double click all open nothing at all; copy is Ctrl+C on the focused, unopened cell,
+// reading the same `EditorID [FormKey]` composite this cell displays via modelValue.
 describe('FormKeyCell — immutable column opens nothing', () => {
   afterEach(() => { pickFormKey.mockClear(); });
 
@@ -94,8 +93,8 @@ describe('FormKeyCell — immutable column opens nothing', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  // Issue #201 / #204: the empty cell asserted `cursor: 'pointer'` on a mutable column, painting
-  // over the parent DiskCell's `grab` — the same mask #204 removed from ScalarCell. An empty cell
+  // A `cursor: 'pointer'` on the empty cell would paint
+  // over the parent DiskCell's `grab`. An empty cell
   // is still a drag *target*, and on a mutable column still opens the picker; neither is a reason
   // for the leaf to claim the cursor.
   it('does not mask the parent drag cursor on an empty cell', () => {
@@ -136,17 +135,16 @@ describe('FormKeyCell — editable column', () => {
     expect(screen.getByText('000019:Fallout4.esm')).toBeInTheDocument();
   });
 
-  // Issue #210: the picker itself moved to a native QuickPick (extension host) — a plain click
-  // now hands off to pickFormKey with an empty seed (no current reference) and the field's
-  // valid record types, same filter the old inline picker applied.
+  // The picker is a native QuickPick (extension host) — a plain click
+  // hands off to pickFormKey with an empty seed (no current reference) and the field's
+  // valid record types.
   it('plain click on an empty cell opens the picker with an empty seed', () => {
     render(<FormKeyCell value={null} meta={fkMeta} editable={true} isFocused={true} onOpen={vi.fn()} onCommit={vi.fn()} />);
     fireEvent.click(screen.getByText('—'));
     expect(pickFormKey).toHaveBeenCalledWith('', ['race']);
   });
 
-  // Issue #210: seeded with the current reference — the picker needs to know what it's
-  // replacing (the old inline picker's empty-query defect this migration fixes).
+  // Seeded with the current reference — the picker needs to know what it's replacing.
   it('plain click on a cell with a value opens the picker, not navigation', () => {
     const onOpen = vi.fn();
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={true} isFocused={true} onOpen={onOpen} onCommit={vi.fn()} />);
@@ -155,7 +153,7 @@ describe('FormKeyCell — editable column', () => {
     expect(onOpen).not.toHaveBeenCalled();
   });
 
-  // Issue #210: selecting a record commits the same field-write path every other cell's own
+  // Selecting a record commits the same field-write path every other cell's own
   // onCommit does — here, that means onCommit is called with whatever pickFormKey resolves to.
   it('commits the picked FormKey when pickFormKey resolves with a selection', async () => {
     const onCommit = vi.fn();
@@ -165,7 +163,7 @@ describe('FormKeyCell — editable column', () => {
     await vi.waitFor(() => expect(onCommit).toHaveBeenCalledWith('00001A:Fallout4.esm'));
   });
 
-  // Issue #210: Escape/blur (pickFormKey resolving null) leaves the field unchanged — onCommit
+  // Escape/blur (pickFormKey resolving null) leaves the field unchanged — onCommit
   // must not fire.
   it('leaves the field unchanged when pickFormKey resolves null (Escape/blur)', async () => {
     const onCommit = vi.fn();
@@ -176,11 +174,11 @@ describe('FormKeyCell — editable column', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
-  // Issue #218 AC 3, the mutable half. A mutable column has no read-only surface — plain click
+  // The mutable half. A mutable column has no read-only surface — plain click
   // opens the QuickPick — so the picker's own native input is where a user selects and copies this
-  // cell's value. Seeding it with the bare FormKey meant the one column kind that *can* edit a
-  // reference was the one that could not hand over what it displayed. The picker normalizes a
-  // composite back to its reference before searching (#218), so this costs the search nothing, and
+  // cell's value. Seeding it with the bare FormKey would mean the one column kind that *can* edit
+  // a reference could not hand over what it displays. The picker normalizes a
+  // composite back to its reference before searching, so this costs the search nothing, and
   // it also stops the input contradicting the list beneath it, where every item is a composite.
   it('seeds the picker with the composite label the cell displays', () => {
     const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
@@ -198,7 +196,7 @@ describe('FormKeyCell — editable column', () => {
   });
 });
 
-// Issue #223 / ADR-0034: same open-gate as ScalarCell/FlagCell — second click on the
+// ADR-0034: same open-gate as ScalarCell/FlagCell — second click on the
 // already-focused cell, F2 (via DiskCell's data-open-trigger dispatch), or a double click.
 describe('FormKeyCell — mutable column gates opening on the focus check (#223)', () => {
   afterEach(() => { pickFormKey.mockClear(); });
@@ -238,13 +236,13 @@ describe('FormKeyCell — mutable column gates opening on the focus check (#223)
   });
 });
 
-// Issue #111: the link affordance appears on Ctrl-hover only, and only where the reference
+// The link affordance appears on Ctrl-hover only, and only where the reference
 // actually goes somewhere — without the guard the gesture is invisible, and with it advertised
 // on a dangling reference it lies. Mirrors xEdit's vstViewCheckHotTrack, which sets
 // Allow := Assigned(lLinksTo) and requires VK_CONTROL.
 //
-// Issue #157 / ADR-0031: the resolve guard is now the real per-leaf resolution signal (`resolution`
-// prop), not the checkError proxy — see the "resolution-driven" describe block below for the
+// ADR-0031: the resolve guard is the real per-leaf resolution signal (`resolution`
+// prop), not a checkError proxy — see the "resolution-driven" describe block below for the
 // checkError-independence cases and medit-record-editor.md rule 2.
 describe('FormKeyCell — Ctrl-hover link affordance', () => {
   afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
@@ -294,10 +292,10 @@ describe('FormKeyCell — Ctrl-hover link affordance', () => {
   });
 });
 
-// Issue #157 / ADR-0031: the affordance and label now key off the leaf's own resolution signal,
-// independent of checkError — checkError still drives the ⚠ icon (see below) but no longer gates
-// the link. This decouples the two divergences the spec's #141 note flagged: a resolved-but-
-// wrong-type reference (still carries a checkError) now shows the affordance anyway, and a cell
+// ADR-0031: the affordance and label key off the leaf's own resolution signal,
+// independent of checkError — checkError drives the ⚠ icon (see below) but never gates
+// the link. A resolved-but-
+// wrong-type reference (still carries a checkError) shows the affordance anyway, and a cell
 // with a checkError for an unrelated reason doesn't falsely suppress a resolved link.
 describe('FormKeyCell — resolution-driven label and affordance', () => {
   afterEach(() => { fireEvent.keyUp(window, { key: 'Control' }); });
@@ -306,7 +304,7 @@ describe('FormKeyCell — resolution-driven label and affordance', () => {
   const validType: FormKeyResolution = { state: 'ResolvedValidType', recordType: 'race', editorId: 'DogmeatRace' };
   const unresolved: FormKeyResolution = { state: 'Unresolved', recordType: null, editorId: null };
 
-  // Issue #218: the composite, not the bare EditorID — asserted here as well as at the FormKeyLink
+  // The composite, not the bare EditorID — asserted here as well as at the FormKeyLink
   // seam because this is the path the compare grid's generic FormKey fields actually take.
   it('labels the link with the resolved EditorID [FormKey] composite', () => {
     render(<FormKeyCell value="000019:Fallout4.esm" meta={fkMeta} editable={false} isFocused={false} onOpen={vi.fn()} onCommit={vi.fn()} resolution={validType} />);

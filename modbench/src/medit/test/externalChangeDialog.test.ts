@@ -33,7 +33,7 @@ describe('groupByOrigin', () => {
   });
 });
 
-// #417 orchestrator addition 1 + review fix 1: button ORDER carries the default, one default per
+// Button ORDER carries the default, one default per
 // REPO (not per plugin) — a test asserts the exact button arrays for both classifier outcomes.
 describe('buttonsInDefaultOrder', () => {
   it('leads with Absorb Upstream Update when the meta tell fired', () => {

@@ -30,7 +30,7 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsSet(cell));
     }
 
-    // #491: bit 14 is reused for unrelated meanings on a record type that never declares a
+    // Bit 14 is reused for unrelated meanings on a record type that never declares a
     // 'Partial Form' header flag — a type without static IsPartialFormable => true must not have the
     // same bit misread as Partial Form. Npc is not partial-formable in Fallout4's definitions.
     [Fact]
@@ -43,7 +43,7 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsSet(npc));
     }
 
-    // #539: IsPartialFormable is the same container-type gate IsSet already uses, split out so the
+    // IsPartialFormable is the same container-type gate IsSet already uses, split out so the
     // write path can ask "is this type eligible" independent of the bit's current state.
     [Fact]
     public void IsPartialFormable_Cell_ReturnsTrue()
@@ -57,7 +57,7 @@ public class PartialFormFlagTests
         Assert.False(PartialFormFlag.IsPartialFormable(typeof(Npc)));
     }
 
-    // #539 AC2's rival, at the unit level: a full-overwrite implementation of Set
+    // The rival, at the unit level: a full-overwrite implementation of Set
     // (`MajorRecordFlagsRaw = value ? Bit : 0`) would silently drop this pre-existing, unrelated bit
     // (Persistent, 0x0400) — the correct implementation only ever touches bit 14.
     [Fact]

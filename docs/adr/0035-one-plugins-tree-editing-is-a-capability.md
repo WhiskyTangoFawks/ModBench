@@ -4,7 +4,7 @@ status: accepted
 
 # One Plugins tree: the Plugin load order is the surface, editing is a capability of it
 
-Amends [ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md) (which originally kept two
+Amends [ADR-0027](0027-mo2-surfaces-map-to-native-vscode-views.md) (which kept two
 Plugins trees) and [ADR-0018](0018-sql-file-based-record-filter.md) (whose pruning rule changes).
 
 ## Context
@@ -17,7 +17,7 @@ lost sight of the loadout you were patching against.
 ADR-0027 rejected folding them together on two grounds: it conflates two bounded contexts, and it
 would tie load-order editing to backend lifecycle. Both are answered below, and the reason they
 are answerable is a change in the loading model rather than a change of mind about the boundary.
-The investigation on #241 found that the expensive operation is *reload*, not *mutation*:
+Investigation found that the expensive operation is *reload*, not *mutation*:
 `load_order_idx` is a plain column and `UpdateWinners()` is a `MAX(load_order_idx) per form_key`
 sweep, so a reorder is an `UPDATE` plus a sweep — no Mutagen re-read, no re-parse.
 
@@ -28,7 +28,7 @@ Plugin load order, and a running backend adds record browsing to its rows. There
 
 ### The loading model
 
-Rewritten 2026-08-30 by [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md). **Every
+Per [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md): **every
 physical plugin copy in the instance is registered** — the copies `plugins.txt` names, enabled
 and disabled alike, the copies losing the Mod override order, and files no line names. There is
 no lazy, on-demand path: a copy is in the index because it exists, and whether it competes is a
@@ -55,10 +55,10 @@ not a choice a user makes; participation is three choices they already made in L
   but **not displayed in the Plugins tree**: a copy losing the Mod override order, or one no
   `plugins.txt` line names, has no row, and a plugin more than one enabled mod provides renders
   exactly like any other row. (The compare grid still lists a losing copy as a dimmed non-winner
-  column — #446's never-hide-data posture; whether that survives is part of the same open design.)
+  column — a never-hide-data posture; whether that survives is part of the same open design.)
   A non-participating copy **never influences winners or conflicts**. How such copies surface — per-reason show/hide
-  toggles, dimming, origin labelling — is an open UX design (#576); the earlier always-on Stack
-  node and file-override badge were reviewed live, rejected and removed (#595).
+  toggles, dimming, origin labelling — is an open UX design; an always-on Stack
+  node and file-override badge were reviewed live and rejected.
 
 ### Filters
 
@@ -73,7 +73,7 @@ ordinary record filter invoked against the tree selection, not a mode.
 
 ### Live mutation
 
-Rewritten 2026-08-30 by [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md). Every loadout
+Per [ADR-0044](0044-the-load-order-is-mirrored-not-loaded.md): every loadout
 gesture — reorder, enable, disable, install, uninstall, reprioritise, profile switch — reaches
 Editing the same way: Mod Management sends the whole Plugin load order as one idempotent snapshot
 (`PUT /load-order`) and Editing reconciles it against its registration table. All of them are
@@ -108,8 +108,8 @@ ADR-0027's conflation objection is met structurally, not by assertion.
 
 - A participation predicate in `UpdateWinners()` and in `ConflictClassifier`'s load-order-index
   comparison is the correctness centre of the design.
-- Startup cost grows — the eager set gains every disabled entry — which puts pressure on
-  what was then ADR-0001's no-cache position (since rewritten, 2026-08-29: the index is a persistent per-game file and a load order is a registration over it, which is what removes this pressure).
+- Startup cost grows — the eager set gains every disabled entry. ADR-0001's persistent index
+  absorbs it: the index is a per-instance file and a load order is a registration over it.
 - `CONTEXT.md` names the three narrowing axes explicitly (plugin-name filter, record filter,
   non-participating visibility) so a fourth term does not get invented. "Focus" is deliberately
   **not** a term.
@@ -124,9 +124,9 @@ ADR-0027's conflation objection is met structurally, not by assertion.
   contexts cleanly, but xEdit navigates plugin → record in one tree and every user arrives fluent
   in that ([ADR-0034](0034-xedit-is-the-ux-reference-for-the-record-editor.md)). Two panes is a
   real divergence with no platform limitation forcing it.
-- **Index every plugin file on disk eagerly** — rejected here because ADR-0001 then had no
-  persistent index, so the cost was paid on every launch. ADR-0001's 2026-08-29 rewrite removed
-  that cost and ADR-0044 adopted exactly this: every copy is registered, once, ever.
+- **Index every plugin file on disk eagerly, without a persistent index** — pays the full cost
+  on every launch. ADR-0001's persistent index removed that cost, and ADR-0044 adopts eager
+  registration itself: every copy is registered, once, ever.
 - **Index only enabled plugins** — makes enabling a plugin an indexing stall rather than a SQL
   update, forfeiting the live mutation that is the point of the merge.
 - **Flag mod-level changes as "drift" and offer a manual re-read** — its rationale only covered

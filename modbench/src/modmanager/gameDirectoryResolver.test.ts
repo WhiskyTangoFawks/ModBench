@@ -79,11 +79,9 @@ describe('createGameDirectoryResolver', () => {
   });
 });
 
-/** #357 AC5 review: the old code logged a resolution failure exactly once for the life of the
- *  window (a single `.then()/.catch()` at activation). `dataFolderFrom` degrades a resolver's
- *  failure to `undefined` for views the same way — this suite pins that the fold's log side
- *  effect happens once per *resolver generation*, not once per read, even though
- *  `ImplicitMasterDecorationProvider` reads it once per visible file. */
+/** `dataFolderFrom` degrades a resolver's failure to `undefined` for views — this suite
+ *  pins that the fold's log side effect happens once per *resolver generation*, not once
+ *  per read, even though `ImplicitMasterDecorationProvider` reads it once per visible file. */
 describe('dataFolderFrom', () => {
   /** A resolver double whose `resolve()` returns whatever `current` currently points at — set to
    *  a new rejected promise between calls to simulate the resolver moving to a new generation

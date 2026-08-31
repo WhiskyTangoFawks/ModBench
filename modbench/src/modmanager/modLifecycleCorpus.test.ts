@@ -1,4 +1,4 @@
-// #41 corpus — mod lifecycle (install/uninstall) against the committed
+// Corpus test: mod lifecycle (install/uninstall) against the committed
 // mo2-instance-corpus fixture. These are the multi-file writers: install copies a
 // source tree AND writes meta.ini AND inserts a modlist line; uninstall deletes a
 // folder AND removes a modlist line AND writes back to an unrelated download's

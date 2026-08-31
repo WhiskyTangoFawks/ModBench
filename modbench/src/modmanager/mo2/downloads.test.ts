@@ -79,7 +79,7 @@ describe('parseDownloadMeta', () => {
 
   // Open Meta File (docs/specs/downloads.md:84) is a documented hand-edit affordance —
   // the one of the three QSettings::IniFormat files (.meta / meta.ini / ModOrganizer.ini)
-  // with a supported UX path to produce padding a writer never would (#326).
+  // with a supported UX path to produce padding a writer never would.
   it('parses a hand-edited .meta with padded key=value spacing the same as the tight form', () => {
     const tight = parseDownloadMeta('[General]\r\ninstalled=true\r\n');
     const padded = parseDownloadMeta('[General]\r\ninstalled = true\r\n');
@@ -252,9 +252,9 @@ describe('setUninstalledInText', () => {
   });
 });
 
-// Issue #233: the row's right-click menu is a native `view/item/context` contribution now,
+// The row's right-click menu is a native `view/item/context` contribution,
 // gated by this space-separated `contextValue` flag string and `viewItem =~ /\bflag\b/` `when`
-// clauses (replacing #214's JSON `data-vscode-context`, which only a webview can carry).
+// clauses.
 describe('downloadContextValue', () => {
   const plain: DownloadRow = { name: 'foo.zip', displayName: 'foo.zip', status: 'Downloaded', size: 1, mtimeMs: 1, hasMeta: false, hidden: false };
 

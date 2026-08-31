@@ -4,8 +4,8 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
-// Per-plugin conditions for one record, ordered by load order (master = first). Origin (#272 /
-// ADR-0036) is required since #275 — every input must say which origin, not fall back to one.
+// Per-plugin conditions for one record, ordered by load order (master = first). Origin (ADR-0036)
+// is required — every input must say which origin, not fall back to one.
 public sealed record ConditionPluginInput(
     string Plugin, int LoadOrderIndex, IReadOnlyList<ConditionOwner> Owners, string Origin);
 
@@ -18,13 +18,12 @@ public sealed record ConditionClassifyResult(ConditionCompare Compare, ConflictA
 public static class ConditionConflictClassifier
 {
     // resolveFormKey: ADR-0031's O(1) lookup, batched once per Classify call (mirrors
-    // VmadConflictClassifier's identical parameter) — #166 closes the gap where GetCompare built
-    // this resolver but never threaded it into the condition path at all.
-    // pluginParticipates (#267 / ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
-    // plugin, origin) since #34 — a filename alone can name two loaded copies. A
+    // VmadConflictClassifier's identical parameter).
+    // pluginParticipates (ADR-0035): the plugins.txt `*` prefix, keyed by ColumnKey.Of(
+    // plugin, origin) — a filename alone can name two loaded copies. A
     // non-participating plugin's conditions are excluded before any diff/winner/cell-state
     // computation — mirrors ConflictClassifier.Classify's identical filter. Null (the default)
-    // means every plugin in inputs participates, preserving prior behavior for existing callers.
+    // means every plugin in inputs participates.
     public static ConditionClassifyResult Classify(
         IReadOnlyList<ConditionPluginInput> inputs,
         GameRelease release,
@@ -37,7 +36,7 @@ public static class ConditionConflictClassifier
         if (present.Count == 0)
             return new ConditionClassifyResult(new ConditionCompare([]), ConflictAll.NoConflict);
 
-        // #272 / ADR-0036: keyed by the compound column identity — two inputs sharing a filename but
+        // ADR-0036: keyed by the compound column identity — two inputs sharing a filename but
         // differing in origin must land as two independent entries, not collide.
         var masterColumn = ColumnKey.Of(inputs[0].Plugin, inputs[0].Origin);
         var columnOrder = inputs.Select(i => (ColumnKey.Of(i.Plugin, i.Origin), i.LoadOrderIndex)).ToList();
@@ -131,7 +130,7 @@ public static class ConditionConflictClassifier
         return states;
     }
 
-    // FormKey→EditorID resolution (#166, ADR-0031) for a condition's three FormKey-bearing slots,
+    // FormKey→EditorID resolution (ADR-0031) for a condition's three FormKey-bearing slots,
     // keyed the same way FieldCellStates already keys its per-field states — "runOn" (only when
     // RunOnTarget == Reference), "comparison" (only when UseGlobal), "param:{i}" for each
     // Form-category parameter. null when no resolver was passed, mirroring
@@ -192,8 +191,8 @@ public static class ConditionConflictClassifier
     }
 
     // Orders field paths so a nested group's embedded array index sorts numerically rather than
-    // character-by-character (#181) — a flat path like "Conditions" has no digit run and sorts by
-    // plain ordinal comparison same as before; a nested path like "Effects[2].Conditions" must sort
+    // character-by-character — a flat path like "Conditions" has no digit run and sorts by
+    // plain ordinal comparison; a nested path like "Effects[2].Conditions" must sort
     // before "Effects[10].Conditions", which plain StringComparer.Ordinal gets backwards (the
     // character '1' < '2'). Splits each path into alternating digit/non-digit runs and compares
     // digit runs as integers, non-digit runs ordinally — the general "natural sort" algorithm, not a

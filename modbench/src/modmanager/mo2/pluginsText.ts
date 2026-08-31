@@ -80,7 +80,7 @@ function detectEol(text: string): string {
   return '\n';
 }
 
-/** #288: the New Plugin gesture's own write — appends a new, always-enabled entry line at the
+/** The New Plugin gesture's own write — appends a new, always-enabled entry line at the
  *  winning end (bottom: "bottom wins record overrides", this file's own header comment), landing
  *  before any trailing comment/blank lines rather than after them, the same "before the tail"
  *  placement `movePluginsInText`'s own end-of-file case uses. Byte-faithful: every existing byte

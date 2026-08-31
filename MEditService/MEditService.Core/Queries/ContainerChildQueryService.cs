@@ -6,10 +6,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace MEditService.Core.Queries;
 
 /// <summary>
-/// Per-plugin container-child read (#424) — a Quest's dialog topics/branches/scenes, a Dialog
+/// Per-plugin container-child read — a Quest's dialog topics/branches/scenes, a Dialog
 /// Topic's responses, as first-class record rows the Plugins tree expands a Quest/DialogTopic row
 /// into. Reads the <c>container_child</c> side table (<see cref="IRecordReads.GetContainerChildren"/>,
-/// built by #416/#450/#488 for a different consumer — <c>RecordEditService</c>'s delete/renumber
+/// built for a different consumer — <c>RecordEditService</c>'s delete/renumber
 /// containment guard) and hydrates each row through the ordinary <see cref="IRecordReads.Search"/>
 /// path, so IsWinner/WorkingTreeState/LoadOrderIndex/EditorId are derived exactly the way every
 /// other record listing already derives them — no second, competing derivation to keep in step.
@@ -45,7 +45,7 @@ public sealed class ContainerChildQueryService(ILoadOrderMirror loadOrder, ILogg
         ["Responses"] = (0, "info"),
     };
 
-    // #305 / ADR-0036: origin — a caller that already knows which copy of `plugin` it's browsing
+    // ADR-0036: origin — a caller that already knows which copy of `plugin` it's browsing
     // (a tree row built from one) states it explicitly, else it's resolved from the load order.
     // Mirrors IWorldspaceQueryService's own shape.
     public IReadOnlyList<ContainerChildSummary> GetChildren(string plugin, string parentFormKey, string? origin = null)

@@ -8,21 +8,20 @@ using Mutagen.Bethesda.Strings;
 namespace MEditService.Tests.Plugins;
 
 /// <summary>
-/// #515 AC3: load order ingest's binary path (<see cref="LoadOrder.OpenAll"/> — the "binary is for
-/// untracked plugins" overlay, ADR-0041's #452 amendment) shows a Localized plugin's real strings
+/// Load order ingest's binary path (<see cref="LoadOrder.OpenAll"/> — the "binary is for
+/// untracked plugins" overlay, ADR-0041) shows a Localized plugin's real strings
 /// rather than throwing or reading empty ones. A Data-directory-origin plugin, deliberately: this is
 /// the one case with no mod folder at all, where <see cref="Source.LocalizedStrings.ForRead"/> must
 /// fall back to the game Data folder rather than a mod folder that does not exist.
 /// </summary>
 public sealed class LoadOrderLocalizedTests
 {
-    // Rival observed by hand before this fix (not committed): with LoadOrder's three
-    // ModFactory.ImportGetter call sites reverted to pass no BinaryReadParameters, this test fails on
-    // the LoadFailures assertion below, not the string-content one — LoadOrder.OpenAll never lets a
-    // single plugin's open failure escape (it records a PluginLoadFailure and skips the plugin
-    // instead), so the raw exception never reaches this test directly. The recorded reason is
-    // "RecordException: Could not determine plugin listings path for Fallout4...", the same defect
-    // #515 reports, now surfacing as a silently-skipped plugin instead of a thrown exception.
+    // With LoadOrder's three ModFactory.ImportGetter call sites passing no BinaryReadParameters,
+    // this test fails on the LoadFailures assertion below, not the string-content one —
+    // LoadOrder.OpenAll never lets a single plugin's open failure escape (it records a
+    // PluginLoadFailure and skips the plugin instead), so the defect ("RecordException: Could not
+    // determine plugin listings path for Fallout4...") surfaces as a silently-skipped plugin, not
+    // a thrown exception.
     [Fact]
     public void Load_ALocalizedPlugin_IndexesItsRealStringInsteadOfThrowingOrReadingEmpty()
     {
@@ -48,12 +47,8 @@ public sealed class LoadOrderLocalizedTests
             using var manager = new LoadOrderMirror(new DuckDbRecordIndexFactory(reflector, new TableDdlBuilder(reflector)));
             manager.Reconcile(data.DataFolder, data.Plugins, GameRelease.Fallout4);
 
-            // LoadOrder.OpenAll never lets one plugin's open failure escape — it records it as a
-            // PluginLoadFailure and skips the plugin instead. Asserted directly, not just implied by
-            // GetDocument coming back null below: a skipped plugin is the actual, precise shape the
-            // pre-fix defect takes here (confirmed by hand: reverting LoadOrder's own strings
-            // parameters reports "RecordException: Could not determine plugin listings path for
-            // Fallout4...").
+            // Asserted directly, not just implied by GetDocument coming back null below: a
+            // silently-skipped plugin is the precise shape the defect takes here.
             Assert.Empty(manager.LoadOrder!.LoadFailures);
 
             var detail = manager.Reads!.GetDocument(doorFormKey.ToString(), new PluginKey("Fixture.esp", "Data"))!;

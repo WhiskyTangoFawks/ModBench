@@ -4,9 +4,9 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Plugins;
 
-// #34 / ADR-0036: PluginOriginResolver answers "which origin does this bare filename mean?" for
+// ADR-0036: PluginOriginResolver answers "which origin does this bare filename mean?" for
 // every call site that only has a filename to work with, and
-// the read routes #296 left resolving server-side. Once a load order can hold two copies of one
+// the read routes that resolve origin server-side. Once a load order can hold two copies of one
 // filename, that question has two candidate answers and only one correct one: the copy the game
 // actually loads.
 //
@@ -48,14 +48,14 @@ public sealed class PluginOriginResolverTests
     public void Resolve_DisabledLoadOrderPlugin_ResolvesNormally()
     {
         // Participation is not membership: a disabled plugins.txt line is still in the load order
-        // and is still a legitimate write target (#270 / ADR-0035).
+        // and is still a legitimate write target (ADR-0035).
         var disabled = Plugin("Disabled.esp", "SomeMod", inLoadOrder: true) with { Enabled = false };
         var loadOrder = LoadOrderWith(disabled);
 
         Assert.Equal("SomeMod", PluginOriginResolver.Resolve(loadOrder, "Disabled.esp"));
     }
 
-    // #306: LoadOrderPlugin is Resolve's own building block, exposed directly for the six write-path
+    // LoadOrderPlugin is Resolve's own building block, exposed directly for the six write-path
     // guards that need the metadata itself (IsImmutable), not just the origin string. Same scoping,
     // same reason: a plain first-match happens to return the right plugin today only because
     // unlisted copies are appended after the load order is built, never because of any invariant.
@@ -74,7 +74,7 @@ public sealed class PluginOriginResolverTests
     }
 
     // Null is the answer for "no load-order member of this name" — callers must read it as a
-    // refusal, not as "not immutable" (that misreading is the bug #306 exists to remove).
+    // refusal, not as "not immutable".
     [Fact]
     public void LoadOrderPlugin_OnlyCopyIsOutsideTheLoadOrder_ReturnsNull()
     {

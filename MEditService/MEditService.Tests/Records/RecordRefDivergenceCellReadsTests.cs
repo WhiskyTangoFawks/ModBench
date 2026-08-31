@@ -4,10 +4,10 @@ using MEditService.Tests.Edits;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #603 characterization: the three placement/cell-table-backed twins (<c>GetWorldspaceCells</c>,
-/// <c>GetInteriorCells</c>, <c>GetCellReferences</c>) had zero test coverage of their
-/// <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) path anywhere in the suite before this
-/// ticket — every existing call site (<c>RegistrationScopingTests</c>,
+/// The three placement/cell-table-backed twins (<c>GetWorldspaceCells</c>,
+/// <c>GetInteriorCells</c>, <c>GetCellReferences</c>) at their
+/// <see cref="IRecordIndex.At"/>(<see cref="RecordRef.Head"/>) path
+/// — every other call site (<c>RegistrationScopingTests</c>,
 /// <c>RecordEditServiceContainerDeleteRenumberTests</c>) exercises them at Effective only. Sibling of
 /// <see cref="RecordRefDivergenceTests"/>'s own five aggregate-read cases, split into its own file
 /// because these three need <see cref="ContainerModFixture"/>'s cell/worldspace/placed-ref shapes

@@ -22,23 +22,23 @@ export interface PluginMetadata {
   winning: boolean;
   participates: boolean;
   inLoadOrder: boolean;
-  // #275 / ADR-0036: the mod folder (or reserved PluginOrigin value) this plugin was resolved
-  // from — on the wire since #269 (PluginResponse.Origin) but dropped here until now.
+  // ADR-0036: the mod folder (or reserved PluginOrigin value) this plugin was resolved
+  // from (PluginResponse.Origin).
   origin: string;
-  // #277 / ADR-0037: this plugin's own declared masters that don't resolve in the load order —
+  // ADR-0037: this plugin's own declared masters that don't resolve in the load order —
   // never a transitive fact about a master's own masters. Empty for a plugin with none.
   masterIssues: MasterIssue[];
-  // #278 / ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
+  // ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
   // owns at least one record the filter matches — GetPlugins() itself never drops a plugin for
-  // having none. #396 / ADR-0035's dated §Filters amendment is what PluginsTreeComposite does
+  // having none. ADR-0035's dated §Filters amendment is what PluginsTreeComposite does
   // with a `false`: omits the row entirely rather than only suppressing its chevron.
   hasMatchingRecords: boolean;
-  // #449: whether this plugin's tracked source has moved past what
+  // Whether this plugin's tracked source has moved past what
   // refs/medit/last-compile/<plugin> parked — "the game can't see your edits yet". False for an
   // untracked plugin or one Track never parked a ref for (PluginResponse.FromMetadata's own
   // degrade-safe answer).
   compileStale: boolean;
-  // #449: the parked ref's own commit timestamp (ISO-8601), for the tooltip that names it. Null
+  // The parked ref's own commit timestamp (ISO-8601), for the tooltip that names it. Null
   // exactly when compileStale's own backing answer had nothing to compare against.
   lastCompiledAt: string | null;
 }
@@ -48,7 +48,7 @@ export interface MasterIssue {
   kind: 'DirectlyMissing' | 'Unloadable';
 }
 
-/** #307 / ADR-0035: what the load order can say about itself *while a reconcile is still running*
+/** ADR-0035: what the load order can say about itself *while a reconcile is still running*
  *  — `GET /load-order/status`, polled alongside the in-flight `PUT /load-order`.
  *
  *  `indexedPlugins` is deliberately flattened to filenames: it is consumed by
@@ -76,7 +76,7 @@ export interface LoadOrderStatus {
   failures: { name: string; reason: string }[];
 }
 
-/** #414 review F2: what `TrackService` can say about a Track in flight right now —
+/** What `TrackService` can say about a Track in flight right now —
  *  `GET /plugins/track/status`, polled alongside the in-flight `POST /plugins/track`, the same
  *  idiom `LoadOrderStatus`/`GET /load-order/status` above already established. `'Idle'` means nothing
  *  is running (the poll's own rest state, and what the endpoint answers before any Track and
@@ -85,13 +85,13 @@ export type TrackPhase = 'Idle' | 'Parsing' | 'Serializing' | 'Committing';
 
 export interface TrackStatus {
   phase: TrackPhase;
-  /** #451 review: plugin counts, not record counts, since Track's own #451 slice A rewrite — renamed
-   *  from `recordsDone` so the wire contract can't lie about its own granularity again. */
+  /** Plugin counts, not record counts — the name states the granularity so the wire contract
+   *  can't lie about it. */
   pluginsDone: number;
   pluginsTotal: number;
 }
 
-/** #416: Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
+/** Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
  *  successful (HTTP 200) answer (`succeeded: false, refusalReason: string`), never an HTTP error —
  *  the pinned contract's "refusal is a typed result, not an exception" carried through the wire. */
 export interface CompileResult {
@@ -107,7 +107,7 @@ export interface CompileDiagnostic {
   message: string;
 }
 
-/** #417: one queued external-change question — `GET /plugins/external-changes/status`, polled the
+/** One queued external-change question — `GET /plugins/external-changes/status`, polled the
  *  same way `TrackStatus`/`LoadOrderStatus` are. `metaChanged` is the dialog's default-button tell
  *  (trailers inform the default, never act — ADR-0041 amendment); `oldVersion`/`newVersion` are the
  *  evidence the pinned UX contract says must be shown when the tell fired, not hidden. */
@@ -119,13 +119,13 @@ export interface UnansweredExternalChange {
   newVersion: string | null;
 }
 
-/** #381: the two ways a tracked plugin's binary can turn up stale relative to what Modbench itself
+/** The two ways a tracked plugin's binary can turn up stale relative to what Modbench itself
  *  last knows — an interrupted compile (an unfinished journal marker) or a binary that could not be
  *  read at all. Mirrors the backend's CrashRepairReason enum name exactly (no re-wording on the
  *  wire boundary, same posture WorkingTreeState above already established). */
 export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
 
-/** #381: one plugin's crash-repair offer, riding `PUT /load-order`'s own response the same way
+/** One plugin's crash-repair offer, riding `PUT /load-order`'s own response the same way
  *  `failures` already does (ADR-0026) — there is no separate poller or endpoint for this: the only
  *  way either reason can newly arise is a compile this same process drives, or a process restart,
  *  and every reconcile already observes both. */
@@ -135,7 +135,7 @@ export interface CrashRepairOffer {
   reason: CrashRepairReason;
 }
 
-/** #417: Absorb Upstream Update / Keep as My Edit's shared result shape — a refusal (e.g. Keep's
+/** Absorb Upstream Update / Keep as My Edit's shared result shape — a refusal (e.g. Keep's
  *  same-record collision) is a typed, successful (HTTP 200) answer, the same posture
  *  {@link CompileResult} already established. */
 export interface ExternalChangeActionResult {
@@ -143,7 +143,7 @@ export interface ExternalChangeActionResult {
   refusalReason: string | null;
 }
 
-/** #417: the offered rebase's three outcomes. `conflictedPaths` is the extension's cue to open
+/** The offered rebase's three outcomes. `conflictedPaths` is the extension's cue to open
  *  each path in VS Code's native merge editor. */
 export type RebaseOutcome = 'Clean' | 'Refused' | 'Conflicted';
 
@@ -153,12 +153,11 @@ export interface RebaseResult {
   conflictedPaths: string[];
 }
 
-// #428: the Plugins tree's own working-tree fact for a listed record — 'None' for the
+// The Plugins tree's own working-tree fact for a listed record — 'None' for the
 // overwhelming majority. Mirrors the backend's WorkingTreeState enum name exactly (no
 // re-wording on the wire boundary). Deliberately not a boolean pair (an "Added implies dirty"
 // invariant every consumer would have to remember) and leaves room for a future 'Deleted'
-// value without a wire reshape (#428 orchestrator ruling; Deleted itself is out of this
-// ticket's scope — see RecordDecorationProvider's own doc comment for why).
+// value without a wire reshape (see RecordDecorationProvider's own doc comment).
 export type WorkingTreeState = 'None' | 'Modified' | 'Added';
 
 export interface RecordSummary {
@@ -175,7 +174,7 @@ export interface PluginRecordTypeCount {
   count: number;
 }
 
-// #424: a container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
+// A container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
 // Topic's responses) — a flattened RecordSummary plus recordType, the same "carry the type so the
 // tree can tell a nested-expandable child (a DIAL under a Quest) apart from a leaf" reason
 // PlacedSummary already carries one. plugin/origin are always the parent's own — a container's
@@ -193,14 +192,14 @@ export interface ContainerChildSummary {
   recordType: string;
 }
 
-// #364 / ADR-0016: the record-wide axis only (Axis 1 — "the record's override stack as a
+// ADR-0016: the record-wide axis only (Axis 1 — "the record's override stack as a
 // whole"). Per-cell ConflictThis (Axis 2) is the compare grid's own concern, never the Plugins
 // tree's — see medit-record-editor.md's "Conflict color coding". Mirrors the backend's
 // ConflictAll enum name exactly, same no-re-wording-at-the-wire-boundary convention
 // WorkingTreeState above already established.
 export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';
 
-/** #364: one entry in the Conflicts node's own listing — a `RecordSummary` (the same shape an
+/** One entry in the Conflicts node's own listing — a `RecordSummary` (the same shape an
  *  ordinary record-type browse already hands the tree) paired with the two facts that shape
  *  omits: `origin` (RecordSummary itself never carries it — every other RecordSummary consumer
  *  gets it from its own node's scope instead, but a Conflicts-node entry can be from any plugin
@@ -224,12 +223,12 @@ export interface CellSummary {
   editorId: string | null;
   cellX: number | null;
   cellY: number | null;
-  // #251: xEdit's "<Persistent Worldspace Cell>" — the tree provider's label logic reads this
+  // xEdit's "<Persistent Worldspace Cell>" — the tree provider's label logic reads this
   // instead of inferring it from which field of WorldspaceBlocks a cell arrived in. Required, like
   // its siblings above: the backend always emits it (toCellSummary normalizes the generated
   // schema's own optional field to a concrete boolean at the repository boundary).
   isPersistentWorldspaceCell: boolean;
-  // #497: the CELL record's own FULL name, independent of isPersistentWorldspaceCell — xEdit's
+  // The CELL record's own FULL name, independent of isPersistentWorldspaceCell — xEdit's
   // TwbMainRecord.GetDisplayName checks FULL name first, unconditionally, before even the
   // persistent-cell placeholder, so the tree provider needs both facts separately rather than one
   // pre-resolved label. null when the cell has no FULL name set.
@@ -262,7 +261,7 @@ export interface WorldspaceBlock {
 
 export interface WorldspaceBlocks {
   blocks: WorldspaceBlock[];
-  // #251: a list, not a single nullable cell — a worldspace is only ever supposed to have one
+  // A list, not a single nullable cell — a worldspace is only ever supposed to have one
   // block-less cell row (its TopCell), but the backend surfaces every one it finds rather than
   // discarding anything past the first.
   topCells: CellSummary[];
@@ -280,8 +279,8 @@ export function errorText(error: unknown): string {
   if (typeof error === 'string') return error;
   if (error === undefined || error === null) return '';
   // Every backend failure is RFC 7807 ProblemDetails (Results.Problem), whose `detail` is the
-  // sentence written for the user — "this instance's index is open in another Modbench window"
-  // (#588), "Game directory not found: …". A toast that stringifies the whole object buries that
+  // sentence written for the user — "this instance's index is open in another Modbench window",
+  // "Game directory not found: …". A toast that stringifies the whole object buries that
   // sentence in `{"type":…,"status":…}`; the problem's own text is the message.
   if (typeof error === 'object') {
     const problem = error as { detail?: unknown; title?: unknown };

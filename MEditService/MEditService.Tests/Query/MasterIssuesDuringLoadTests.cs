@@ -11,13 +11,13 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Query;
 
 /// <summary>
-/// #274: master issues are derived from the whole loaded set, so mid-load they are not merely
+/// Master issues are derived from the whole loaded set, so mid-load they are not merely
 /// incomplete — they are wrong. A plugin whose master is real, present on disk and simply not opened
 /// yet classifies as <c>DirectlyMissing</c> against a partial load order, which would put a red "missing
 /// master" decoration on a healthy plugin for as long as the load takes.
 ///
-/// The same class of error as an absent conflict badge reading as "no conflict", and ADR-0035 names
-/// only the latter — this is the one the code review of that ADR did not catch.
+/// The same class of error as an absent conflict badge reading as "no conflict" (which is the case
+/// ADR-0035 names).
 /// </summary>
 public sealed class MasterIssuesDuringLoadTests
 {

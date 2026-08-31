@@ -7,7 +7,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #417 B8 (Absorb Upstream Update): a real xEdit-style external binary change lands as a new
+/// Absorb Upstream Update: a real xEdit-style external binary change lands as a new
 /// pristine baseline on <c>main</c>, by plumbing, with the edit branch left exactly as it was.
 /// </summary>
 public sealed class ExternalChangeAbsorberTests : IDisposable
@@ -77,18 +77,18 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
     }
 
     /// <summary>
-    /// Absorb's baseline is a <b>complete</b> source tree, not just the record files — the invariant
-    /// that had quietly lapsed since #451 and that #454 turned into a crash.
+    /// Absorb's baseline is a <b>complete</b> source tree, not just the record files — an invariant
+    /// whose quiet lapse once became a shipping crash.
     ///
     /// <para>Absorb rebuilds the whole tree and <c>CommitPristineToMain</c> writes only what it is
     /// handed, with no merge against the previous tree, so anything Absorb forgets is <i>deleted</i>
-    /// from the baseline. It used to be built one record at a time and so forgot the one non-record
-    /// file: the root <c>RecordData.json</c> that is the mod header's own source file (ADR-0041's #444
-    /// amendment, point 1). A tree with no root document cannot be read back
+    /// from the baseline. A tree built one record at a time forgets the one non-record file: the
+    /// root <c>RecordData.json</c> that is the mod header's own source file (ADR-0041 amendment,
+    /// point 1). A tree with no root document cannot be read back
     /// at all — the whole-mod door's <c>ExtractMeta</c> takes ModKey and GameRelease from it — which
     /// breaks compile <i>and</i> ingest-from-source the moment that baseline reaches a working tree.</para>
     ///
-    /// <para>Fixed at the root by sharing Track's own serialization
+    /// <para>Absorb therefore shares Track's own serialization
     /// (<c>TrackService.SerializeToPristineFiles</c>) instead of hand-rolling a second one. This
     /// asserts the property directly, so the next hand-rolled tree writer fails here rather than three
     /// operations downstream.</para>

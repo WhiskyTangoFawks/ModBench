@@ -1,14 +1,14 @@
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// Where an index lives on disk (#592 / ADR-0001): <b>one DuckDB file per MO2 instance</b>, inside
+/// Where an index lives on disk (ADR-0001): <b>one DuckDB file per MO2 instance</b>, inside
 /// the instance root.
 ///
 /// <para>The instance is the only scope an index can honestly live at. Every mirror table is keyed
 /// <c>(plugin, origin)</c>, and <c>origin</c> is a <i>mod folder name</i> (ADR-0036), not a path —
 /// unique only within one instance. Two instances on the same game that both have a mod folder
 /// called <c>Unofficial Patch</c> holding different builds of <c>UFO4P.esp</c> collide on that key,
-/// so an index keyed by the game's Data install (#585's original answer) would hand one instance the
+/// so an index keyed by the game's Data install would hand one instance the
 /// other's records. The trade is that the vanilla masters are indexed once per instance rather than
 /// once per game: instances are rare, profiles are common, and profiles within an instance share
 /// this file, which is what keeps a profile switch cheap.</para>

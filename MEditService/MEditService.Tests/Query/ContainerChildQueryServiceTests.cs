@@ -89,7 +89,7 @@ public class ContainerChildQueryServiceTests
         public void Dispose() { }
     }
 
-    // Slice 1: mixed DialogTopics/DialogBranches/Scenes rows come back Topics, then Branches, then
+    // Mixed DialogTopics/DialogBranches/Scenes rows come back Topics, then Branches, then
     // Scenes (xEdit's own DIAL, DLBR, SCEN order) — never the raw table's alphabetical
     // "DialogBranches, DialogTopics, Scenes" ORDER BY. A naive pass-through of
     // IRecordReads.GetContainerChildren's own row order would fail this: it would put the branch
@@ -124,7 +124,7 @@ public class ContainerChildQueryServiceTests
         Assert.Equal(["dial", "dial", "dlbr", "scen"], result.Select(r => r.RecordType).ToArray());
     }
 
-    // Slice 2: a Dialog Topic's Responses come back in SlotIndex order, tagged "info".
+    // A Dialog Topic's Responses come back in SlotIndex order, tagged "info".
     [Fact]
     public void GetChildren_DialogTopic_ReturnsResponsesInSlotOrder_TaggedInfo()
     {
@@ -149,8 +149,8 @@ public class ContainerChildQueryServiceTests
         Assert.All(result, r => Assert.Equal("info", r.RecordType));
     }
 
-    // Slice 3: explicit origin overrides load-order resolution, the same shape every other
-    // spatial-tree read already has (#305 / ADR-0036).
+    // Explicit origin overrides load-order resolution, the same shape every other
+    // spatial-tree read already has (ADR-0036).
     [Fact]
     public void GetChildren_ExplicitOrigin_OverridesResolvedOrigin()
     {
@@ -165,7 +165,7 @@ public class ContainerChildQueryServiceTests
         Assert.Equal("ModB", reader.LastGetContainerChildrenOrigin);
     }
 
-    // Slice 4: a container_child row naming a child FormKey Search doesn't return is an index
+    // A container_child row naming a child FormKey Search doesn't return is an index
     // inconsistency between two tables written from the same ingest pass — never expected in
     // practice, but GetChildren degrades by omission (skips just that row, keeps the survivors)
     // rather than throwing, and logs a warning naming every identifying fact. Rival: an
@@ -201,7 +201,7 @@ public class ContainerChildQueryServiceTests
             warning.Message);
     }
 
-    // Slice 5: no rows at all (a Quest with no topics/branches/scenes) is an empty list, not an
+    // No rows at all (a Quest with no topics/branches/scenes) is an empty list, not an
     // error, and issues no Search calls.
     [Fact]
     public void GetChildren_NoContainerChildRows_ReturnsEmpty_WithoutSearching()

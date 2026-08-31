@@ -11,30 +11,25 @@ using Xunit.Abstractions;
 namespace MEditService.Tests.RealData;
 
 /// <summary>
-/// #367, condition 2 (reader-agnosticism) and AC4 (measured cost), run together against real data
+/// Reader-agnosticism and measured cost, run together against real data
 /// so both use the exact production reader shapes.
 ///
 /// <see cref="RecordTextCodec"/> is reader-agnostic by signature (<c>IWeaponGetter</c> is satisfied
 /// by both the overlay and the deep parse) but not by construction — it faithfully serializes
 /// whatever object graph it is handed, including any reader-specific defect in that graph. This
 /// test proves the two production readers agree on a real weapon <b>today</b>, at the 0.53.1 pin,
-/// rather than assuming it — the same shape as #369's
+/// rather than assuming it — the same shape as the
 /// <see cref="BinaryRoundTripGateTests.LazyOverlayReloadAndRewrite_ProducesByteIdenticalOutput"/>
 /// gate, which pins the write side of the same defect. The record chosen
 /// (<c>VRWorkshopShared_AlienBlaster_NonPlayable</c>, FormID 24A3B0) is one of the four weapons in
 /// <see cref="CutDownPluginFixture"/> confirmed carrying the ObjectTemplate shape the 0.54.0 overlay
-/// regression corrupts (#369's pin comment); an unaffected weapon would prove nothing here. Verified
+/// regression corrupts; an unaffected weapon would prove nothing here. Verified
 /// manually (not asserted — asserting it would require taking the 0.54.0 dependency this repo
 /// cannot take) that flipping the Mutagen.Bethesda.Fallout4 pin to 0.54.0 makes this test fail: the
 /// overlay-read weapon's ObjectTemplates split from 2 to 3 entries while the deep-parsed weapon
-/// stays at 2, and the two serialized texts diverge starting inside the ObjectTemplates block. The
-/// verbatim divergent snippet recorded in the #367 report is YAML text (this test predates #412's
-/// swap to the JSON kernel) — the mechanism it demonstrates (a lazy-overlay read producing a
-/// structurally different object graph than a deep parse, which this codec then faithfully
-/// serializes either way) is format-independent and re-checked by this test's own assertions below
-/// on every run; the literal snippet itself was never re-derived under JSON, since doing so would
-/// require the same disallowed 0.54.0 dependency. See the #367 report for the original verbatim
-/// failure output.
+/// stays at 2, and the two serialized texts diverge starting inside the ObjectTemplates block —
+/// a lazy-overlay read producing a structurally different object graph than a deep parse, which
+/// this codec then faithfully serializes either way.
 ///
 /// The round-trip fidelity assertion applies the same <c>GetEqualsMask</c> technique
 /// <c>RecordTextCodecTests</c> uses on a synthetic weapon, but here against this real, dense fixture
@@ -67,8 +62,8 @@ public class RecordTextCodecRealDataTests(ITestOutputHelper output)
 
             // The sanity condition, asserted rather than only logged: at the 0.53.1 pin both
             // readers agree (that IS the property this test protects), and the count is non-zero
-            // (proving this weapon genuinely carries ObjectTemplates content — the shape #369's
-            // pin comment says the 0.54.0 regression corrupts — rather than being an accidental
+            // (proving this weapon genuinely carries ObjectTemplates content — the shape the
+            // 0.54.0 overlay regression corrupts — rather than being an accidental
             // vacuous pass). A print here would be a sanity condition nobody is watching: a
             // fixture change that stopped exercising the regression shape would leave this test
             // green for the wrong reason.

@@ -86,7 +86,7 @@ class FakeSource implements IModlistSource {
 
 describe('ModListProvider', () => {
   it('builds root children: count node, then separators, then ungrouped mods (losing-at-top default)', async () => {
-    // A separator's members are the entries PRECEDING it (#107) — Alpha/Beta
+    // A separator's members are the entries PRECEDING it — Alpha/Beta
     // here. Gamma/Delta trail the last separator and are ungrouped. The default
     // losing-at-top view pushes ungrouped mods below the separators and reverses
     // each sibling list.
@@ -111,7 +111,7 @@ describe('ModListProvider', () => {
   });
 
   it('returns a separator’s mods as ModNodes with checkbox, version, tooltip', async () => {
-    // The separator's members are the entries preceding it (#107).
+    // The separator's members are the entries preceding it.
     const source = new FakeSource([
       mod('UFO4P', true, { version: 'v2.1.5', nexusId: '4598', archiveFilename: 'UFO4P.7z' }),
       mod('Disabled Mod', false),
@@ -146,7 +146,7 @@ describe('ModListProvider', () => {
     expect(fired).toBe(true);
   });
 
-  // Issue #79 asymmetry test: unlike setFilter (render-only), a mutation must
+  // Asymmetry test: unlike setFilter (render-only), a mutation must
   // invalidate — the next getChildren() has to re-read the source, since the
   // mutation may have changed what's on disk.
   it('setModEnabled invalidates: a subsequent getChildren() re-reads the source', async () => {
@@ -187,7 +187,7 @@ describe('ModListProvider', () => {
   });
 
   describe('setFilter — grouping on (default)', () => {
-    // #107: Group A's real members are the entries preceding it (Zeta, Alpha
+    // Group A's real members are the entries preceding it (Zeta, Alpha
     // Child); Group B's are the entries preceding it back to Group A (Gamma).
     // Alpha/Beta trail the last separator and are ungrouped.
     const source = () => new FakeSource([
@@ -243,7 +243,7 @@ describe('ModListProvider', () => {
       expect(fired).toBe(true);
     });
 
-    // Issue #79: a filter keystroke must re-render already-built rows, never
+    // A filter keystroke must re-render already-built rows, never
     // re-walk the source. Only setFilter is render-only; every other call site
     // still invalidates (see the asymmetry test in the drag-and-drop section).
     it('setFilter does not re-read the source (render-only, not invalidate)', async () => {
@@ -289,7 +289,7 @@ describe('ModListProvider', () => {
     const item = (value: unknown): DragItem => ({ value });
     const token = { isCancellationRequested: false };
 
-    // #107: a separator wraps the entries that PRECEDE it. So Group A's real
+    // A separator wraps the entries that PRECEDE it. So Group A's real
     // member is Alpha (the only entry before it); Group B's real members are
     // Beta and Gamma (everything back to Group A); Delta trails the last
     // separator and is ungrouped.
@@ -315,8 +315,8 @@ describe('ModListProvider', () => {
     }
 
     // Serialise entries to a real modlist.txt so a drop can be observed by its
-    // resulting order, not just the pre-removal index argument (issue #76: the
-    // suite asserted the argument and so missed the down-drag off-by-one).
+    // resulting order, not just the pre-removal index argument (asserting only
+    // the argument once missed a down-drag off-by-one).
     const toModlistText = (entries: ModlistEntry[]): string =>
       entries
         .map((e) => `${e.enabled ? '+' : '-'}${e.name}${e.kind === 'separator' ? '_separator' : ''}`)
@@ -354,7 +354,7 @@ describe('ModListProvider', () => {
 
     it('handleDrag serialises the dragged mod into dataTransfer', async () => {
       const { provider } = makeProvider();
-      // Alpha is Group A's member (the entry preceding it — #107), not a root.
+      // Alpha is Group A's member (the entry preceding it), not a root.
       const alphaNode = (await childrenOf(provider, 'Group A')).find((n) => n.label === 'Alpha')!;
       const dt = new FakeDataTransfer();
       provider.handleDrag([alphaNode], dt as any, token as any);
@@ -373,15 +373,14 @@ describe('ModListProvider', () => {
     });
 
     // These four characterize the file-space "insert before the target" math in
-    // the WINNING-AT-TOP view (view == file order), including the #76 down-drag
-    // off-by-one fix. The reversed default view is covered by "honors the view
+    // the WINNING-AT-TOP view (view == file order), including the down-drag
+    // off-by-one case. The reversed default view is covered by "honors the view
     // direction" below.
 
-    // #76 characterization: dragging a mod DOWNWARD (Alpha, above the target,
-    // onto Gamma) must land Alpha immediately before Gamma. The old code passed
-    // the pre-removal target index, so Alpha landed one slot too low.
-    // Gamma is Group B's member under #107's corrected rule (it precedes
-    // Group B's line), not Group A's.
+    // Down-drag: dragging a mod DOWNWARD (Alpha, above the target,
+    // onto Gamma) must land Alpha immediately before Gamma — passing the
+    // pre-removal target index would land Alpha one slot too low.
+    // Gamma is Group B's member (it precedes Group B's line), not Group A's.
     it('winning-at-top down-drag: drop mod onto a lower mod lands it before that mod', async () => {
       const { provider, source } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
@@ -392,7 +391,7 @@ describe('ModListProvider', () => {
 
     // Regression: up-drags were never affected (nothing moved sits above the
     // target, so no shift) — must stay correct.
-    // Beta is Group B's member under #107's corrected rule, not Group A's.
+    // Beta is Group B's member (it precedes Group B's line), not Group A's.
     it('winning-at-top up-drag: drop mod onto a higher mod lands it before that mod', async () => {
       const { provider, source } = makeApplyingProvider();
       provider.toggleViewDirection(); // -> winning-at-top (view == file order)
@@ -409,8 +408,8 @@ describe('ModListProvider', () => {
       expect(source.order()).toEqual(['Group A', 'Beta', 'Gamma', 'Group B', 'Delta', 'Alpha']);
     });
 
-    // #76 for separator blocks: the whole block (separator + its real, preceding
-    // members — #107) is removed before toIndex is counted, so every block
+    // Same for separator blocks: the whole block (separator + its real, preceding
+    // members) is removed before toIndex is counted, so every block
     // member above the target shifts it — dragging Group A's block (Alpha +
     // itself) down onto Delta must land the block before Delta, not fling it to
     // the bottom. Delta trails the last separator, so it's a root ungrouped mod.
@@ -423,7 +422,7 @@ describe('ModListProvider', () => {
       expect(source.order()).toEqual(['Beta', 'Gamma', 'Group B', 'Alpha', 'Group A', 'Delta']);
     });
 
-    // #82: the pinned Overwrite fixture is not a modlist.txt position — a drop
+    // The pinned Overwrite fixture is not a modlist.txt position — a drop
     // onto it must be a no-op, never falling through to "move to end".
     it('drop onto the Overwrite node is a no-op', async () => {
       const { provider, source } = makeApplyingProvider();
@@ -470,7 +469,7 @@ describe('ModListProvider', () => {
 
       it('default (losing-at-top): dropping a separator block onto a row lands the block just above it in the view', async () => {
         // dndEntries file order: [Alpha, Group A{Alpha}, Beta, Gamma, Group B{Beta,Gamma},
-        // Delta(ungrouped)] (#107: a separator's real members are the entries preceding
+        // Delta(ungrouped)] (a separator's real members are the entries preceding
         // it). Delta is the losing-most row in the default view; dropping Group A's block
         // onto Delta puts the block just above Delta in the view = just after Delta in the file.
         const { provider, source } = makeApplyingProvider();
@@ -482,7 +481,7 @@ describe('ModListProvider', () => {
     });
   });
 
-  // #130: a failed drop must report on ADR-0026's "explicit action failed" tier
+  // A failed drop must report on ADR-0026's "explicit action failed" tier
   // (error notification + log) via the injected reporter, and the tree must
   // resync against disk rather than show a phantom move — mirrors
   // PluginListProvider.handleDrop's failure handling exactly.
@@ -497,7 +496,7 @@ describe('ModListProvider', () => {
     const token = { isCancellationRequested: false };
 
     // Same shape as the drag-and-drop fixture above: Group A wraps Alpha,
-    // Group B wraps Beta/Gamma (#107 — a separator's real members precede it),
+    // Group B wraps Beta/Gamma (a separator's real members precede it),
     // Delta trails the last separator and is ungrouped.
     const dndEntries: ModlistEntry[] = [
       mod('Alpha'),
@@ -627,7 +626,7 @@ describe('ModListProvider', () => {
     });
 
     it('toggled to winning-at-top: ungrouped first, then separators, all in file order', async () => {
-      // #107: Section 1's real members are Alpha/Beta (preceding it); Section 2's
+      // Section 1's real members are Alpha/Beta (preceding it); Section 2's
       // are Gamma (preceding it, back to Section 1). Solo A/B trail the last
       // separator and are the truly ungrouped ones.
       const source = new FakeSource([
@@ -655,7 +654,7 @@ describe('ModListProvider', () => {
     });
 
     it('toggled to winning-at-top: mods within a separator are in file order', async () => {
-      // The separator's members are the entries preceding it (#107).
+      // The separator's members are the entries preceding it.
       const source = new FakeSource([
         mod('First'),
         mod('Second'),
@@ -672,7 +671,7 @@ describe('ModListProvider', () => {
     });
 
     it('toggle applies to flatFilteredRoots (grouping off)', async () => {
-      // Group A's real member is Alpha (preceding it — #107); Alpha Child/Alpha
+      // Group A's real member is Alpha (preceding it); Alpha Child/Alpha
       // Other trail the last separator and are ungrouped.
       const entries = [
         mod('Alpha'),
@@ -690,7 +689,7 @@ describe('ModListProvider', () => {
     });
 
     it('toggle applies to groupedFilteredRoots (grouping on)', async () => {
-      // Group A's real members are Alpha Child/Alpha Other (preceding it — #107);
+      // Group A's real members are Alpha Child/Alpha Other (preceding it);
       // Alpha trails the last separator and is ungrouped.
       const entries = [
         mod('Alpha Child'),
@@ -731,7 +730,7 @@ describe('ModListProvider', () => {
       expect(modB.tooltip).toContain('textures/shared/foo.dds');
     });
 
-    // Issue #79: the filter only narrows which already-built rows render — it
+    // The filter only narrows which already-built rows render — it
     // must never change a row's badge, since badges are computed against the
     // full order (a filtered-out master still counts toward a visible row's
     // order-aware verdict).
@@ -756,7 +755,7 @@ describe('ModListProvider', () => {
       expect(source.readModlistCalls).toBe(callsAfterFirstRead);
     });
 
-    // #84: view order (winningAtTop, presentation-only) and override order (who wins a file
+    // View order (winningAtTop, presentation-only) and override order (who wins a file
     // conflict) are provably independent — flipping the view never changes the winner.
     it('flipping view direction (toggleViewDirection) never changes a conflict\'s winner', async () => {
       const source = new FakeSource([mod('ModA'), mod('ModB')]);
@@ -805,7 +804,7 @@ describe('ModListProvider', () => {
     });
   });
 
-  // #82: a pinned Overwrite leaf, last row of the tree, outside separator
+  // A pinned Overwrite leaf, last row of the tree, outside separator
   // grouping, over the instance's overwrite/ folder (a purge sink for runtime
   // outputs). Read-only fixture — no modlist.txt entry, no mod actions.
   describe('Overwrite row (#82)', () => {
@@ -878,7 +877,7 @@ describe('ModListProvider', () => {
   });
 });
 
-// The consolidation (#78) threads the game's resolved Data folder from the
+// The game's resolved Data folder is threaded from the
 // composition root instead of ModListProvider re-reading the ini. This exercises
 // that seam end-to-end over a real temp instance: a mod plugin masters a vanilla
 // master that lives only in the injected Data folder, so the missing-master badge

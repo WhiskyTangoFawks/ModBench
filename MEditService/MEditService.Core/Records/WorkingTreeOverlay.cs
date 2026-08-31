@@ -10,7 +10,7 @@ using Mutagen.Bethesda.Plugins.Records;
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// #606 stage 2: the working-tree overlay collaborator extracted out of <see cref="DuckDbRecordIndex"/>
+/// The working-tree overlay collaborator of <see cref="DuckDbRecordIndex"/>
 /// — <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>/<see cref="IRecordIndex.SetCommittedBaseline"/>/
 /// <see cref="IRecordIndex.MarkWorkingTreeOnly"/>/<see cref="IRecordIndex.SeedCommittedOnly"/>/
 /// <see cref="IRecordIndex.CreateWorkingTreeRecord"/> and the per-record rederivation
@@ -18,11 +18,11 @@ namespace MEditService.Core.Records;
 /// every one of them drives. Internal, private to the <c>Records</c> module — not part of any public
 /// seam.
 ///
-/// <para><b>Depends on <see cref="PluginIngest"/>, one-directionally</b> (#606 stage 2 design review):
+/// <para><b>Depends on <see cref="PluginIngest"/>, one-directionally</b>:
 /// rederivation reuses ingest's own collectors (<see cref="PluginIngest.CollectFormRefs"/>/
 /// <see cref="PluginIngest.CollectVmadRefsForRecord"/>/<see cref="PluginIngest.CollectConditionRefsForRecord"/>)
 /// and append primitives, deliberately — an edit's derived rows must come from the identical code a
-/// fresh ingest would produce them with, or the two could drift apart (#488/#415). PluginIngest never
+/// fresh ingest would produce them with, or the two could drift apart. PluginIngest never
 /// references this class back.</para>
 ///
 /// <para><b>Does not own the winner sweep or the transaction/commit boundary.</b> Every public method
@@ -32,7 +32,7 @@ namespace MEditService.Core.Records;
 /// <see cref="IndexStore.ValidateAgainstDisk"/> uses for the identical reason: a callback back into
 /// the caller is a seam whose only job is breaking a cycle nobody needed to create.
 /// <see cref="DuckDbRecordIndex"/> owns every transaction and the early "nothing to do" guards
-/// (matching the pre-split single methods' own ordering, including <see cref="RowExistsAtEffective"/>/
+/// (including <see cref="RowExistsAtEffective"/>/
 /// <see cref="RowExistsAtHead"/> running before any transaction opens for
 /// <see cref="IRecordIndex.CreateWorkingTreeRecord"/>'s refusal).</para>
 /// </summary>
@@ -69,7 +69,7 @@ internal sealed class WorkingTreeOverlay
 
     /// <summary>See <see cref="IRecordIndex.ApplyWorkingTreeChanges"/>. Returns whether any delta in
     /// the batch added or removed an Effective row — <see cref="DuckDbRecordIndex.ApplyWorkingTreeChanges"/>
-    /// resweeps winners on that answer, the identical trigger the pre-split single method used.</summary>
+    /// resweeps winners on that answer.</summary>
     public bool ApplyWorkingTreeChanges(PluginKey key, IReadOnlyList<(string FormKey, string? Body)> deltas)
     {
         var structural = false;
@@ -89,12 +89,11 @@ internal sealed class WorkingTreeOverlay
             $"SELECT body FROM {HeadRelation} WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!);
 
-        // #573: computed ahead of the guard below (rather than only after it, as before) because the
+        // Computed ahead of the guard below because the
         // guard itself must consult Effective too — a record that never reached Head at all (still
         // working-tree-only, e.g. straight off CreateWorkingTreeRecord) is exactly as real to this
-        // method as one that has, and both a delete (renumber's own "delete old FormKey" half) and an
-        // edit of such a record were being silently dropped here on the mistaken assumption that no
-        // Head answer meant no ref answered at all.
+        // method as one that has; assuming "no Head answer" means "no ref answers" would silently
+        // drop both a delete (renumber's own "delete old FormKey" half) and an edit of such a record.
         var existedBefore = RowExistsAtEffective(key, formKey);
 
         if (committedBody == null && !existedBefore)
@@ -126,7 +125,7 @@ internal sealed class WorkingTreeOverlay
 
         if (string.Equals(body, committedBody, StringComparison.Ordinal))
         {
-            // Convergence, not a change (#413: byte compare is the detection). The record goes clean
+            // Convergence, not a change (byte compare is the detection). The record goes clean
             // again — including the case where it was *deleted* in the working tree and the file came
             // back, which is why this restores the row from the snapshot rather than assuming one is
             // still there to update.
@@ -145,8 +144,7 @@ internal sealed class WorkingTreeOverlay
 
     /// <summary>Whether <paramref name="key"/> holds <paramref name="formKey"/> at Effective. Internal:
     /// <see cref="DuckDbRecordIndex.CreateWorkingTreeRecord"/> calls this (with <see cref="RowExistsAtHead"/>)
-    /// for its refusal check <b>before</b> opening a transaction — the same ordering the pre-split
-    /// single method had.</summary>
+    /// for its refusal check <b>before</b> opening a transaction.</summary>
     internal bool RowExistsAtEffective(PluginKey key, string formKey) =>
         DuckDbSql.ScalarString(_connection, "SELECT form_key FROM records WHERE form_key = $1 AND plugin = $2 AND origin = $3",
             formKey, key.Name, key.Origin!) != null;
@@ -171,9 +169,9 @@ internal sealed class WorkingTreeOverlay
     // answer nothing for this FormKey without the view itself needing to know about creation at all.
     private void InsertNewWorkingTreeRow(PluginKey key, string formKey, string recordType, string body)
     {
-        // #583 / ADR-0001: no load_order_idx to carry into the row any more — this check now exists
-        // purely to keep the same refusal for a plugin the registration doesn't know, which
-        // InsertNewWorkingTreeRow's callers (CreateWorkingTreeRecord) still rely on.
+        // ADR-0001: no load_order_idx to carry into the row — this check exists
+        // purely to refuse a plugin the registration doesn't know, which
+        // InsertNewWorkingTreeRow's callers (CreateWorkingTreeRecord) rely on.
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
@@ -270,8 +268,7 @@ internal sealed class WorkingTreeOverlay
     {
         if (RowExistsAtEffective(key, formKey) || RowExistsAtHead(key, formKey)) return;
 
-        // #583 / ADR-0001: same refusal as InsertNewWorkingTreeRow's, now for its own sake rather
-        // than as a side effect of fetching a load_order_idx this row no longer carries.
+        // ADR-0001: same refusal as InsertNewWorkingTreeRow's.
         if (!IsRegisteredPlugin(key))
             throw new InvalidOperationException($"{key.Name} ({key.Origin}) is not an indexed plugin.");
 
@@ -337,7 +334,7 @@ internal sealed class WorkingTreeOverlay
         // row whose identity column disagrees with its own body is a read model contradicting itself
         // — a renamed record would keep listing and resolving under its old EditorID everywhere
         // form_key isn't the lookup key. record_type is deliberately not re-derived: a record cannot
-        // change type. Load order and winning are not on this row at all any more (#583/#584) — they
+        // change type. Load order and winning are not on this row at all (ADR-0001) — they
         // are facts about the plugin and the stack, not about these bytes.
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = $"""
@@ -387,7 +384,7 @@ internal sealed class WorkingTreeOverlay
             .GetAwaiter().GetResult();
 
         var refs = new List<FormRef>();
-        // #606 stage 2: through PluginIngest — Overlay depends on Ingest for the collectors so a
+        // Through PluginIngest — Overlay depends on Ingest for the collectors so a
         // per-record rederivation cannot describe a different graph than a fresh ingest would.
         PluginIngest.CollectFormRefs(refs, record, recordType, schema);
         PluginIngest.CollectVmadRefsForRecord(record, recordType, refs);
@@ -401,14 +398,14 @@ internal sealed class WorkingTreeOverlay
                 PluginIngest.AppendFormReference(refAppender, r, key.Name, key.Origin!);
         }
 
-        // #488: placement/cell_location/container_child now track Effective the same way
-        // form_lookup/form_references already did — rebuilt from this same deserialized record,
+        // placement/cell_location/container_child track Effective the same way
+        // form_lookup/form_references do — rebuilt from this same deserialized record,
         // through the same collectors ingest's own AppendDocument/IndexPlacement use.
         RederiveContainmentForRecord(key, formKey, recordType, record);
     }
 
     /// <summary>
-    /// #488: rebuilds <c>container_child</c>/<c>placement</c>/<c>cell_location</c> for whatever
+    /// Rebuilds <c>container_child</c>/<c>placement</c>/<c>cell_location</c> for whatever
     /// <paramref name="record"/>'s own document embeds — a container's child <i>set</i> and slot
     /// order live entirely in the parent's own body (<see cref="ContainerChildFields.EnumerateChildren"/>
     /// re-reads current positions on every call), so a delete or a renumber that spliced/mutated that
@@ -518,7 +515,7 @@ internal sealed class WorkingTreeOverlay
             formKey, key.Name, key.Origin!);
 
     /// <summary>
-    /// #488: the three side tables' rows for a record that just stopped existing at Effective — its
+    /// The three side tables' rows for a record that just stopped existing at Effective — its
     /// own facts (a placed ref's <c>placement</c> row, a cell's <c>cell_location</c> row, a
     /// folder-split child's <c>container_child</c> row), plus, defensively, whatever names it as a
     /// parent. The defensive half is a backstop, not the primary mechanism: <c>DeleteRecord</c>'s own

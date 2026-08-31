@@ -11,7 +11,7 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Records;
 
 /// <summary>
-/// #428: <see cref="RecordSummary.WorkingTreeState"/> is the Plugins-tree listing's own
+/// <see cref="RecordSummary.WorkingTreeState"/> is the Plugins-tree listing's own
 /// working-tree fact — <see cref="IRecordReads.Search"/> is the only real producer of a non-None
 /// value (every other construction site defaults it). None/Modified/Added read off the same
 /// <c>"ref"</c> plus <c>records_committed</c>-presence facts <see cref="WorkingTreeChangeTests"/> and
@@ -95,10 +95,10 @@ public sealed class RecordSummaryWorkingTreeStateTests : IDisposable
         Assert.Equal(WorkingTreeState.Added, SummaryFor(page, created).WorkingTreeState);
     }
 
-    // The rival: a ref-scoped Search that forwards the same SQL/reader logic without HeadRelation's
+    // A ref-scoped Search that forwards the same SQL/reader logic without HeadRelation's
     // own "ref" column being uniformly 'committed' would leak Effective's Modified/Added values into
-    // the Head answer — Head never has dirt (#428 orchestrator ruling: Search() is Effective-only for
-    // this ticket, but the Head-scoped surface still exists and must not lie about it).
+    // the Head answer — Head never has dirt (Search() is Effective-only,
+    // but the Head-scoped surface still exists and must not lie about it).
     [Fact]
     public void Search_AtHead_AlwaysReportsNone_EvenForARecordDirtyAtEffective()
     {

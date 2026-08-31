@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// #255. The name filter is one behavior shared by every Modbench list view, so it is tested
+// The name filter is one behavior shared by every Modbench list view, so it is tested
 // once, here, in neither bounded context's vocabulary: a "row" is whatever the wired provider
 // hands out. The fakes below stand in for the two things the widget talks to — VS Code's
 // InputBox (the entry mechanism) and a TreeView (the readout surface) — and nothing else.
@@ -236,7 +236,7 @@ describe('a term that matches nothing says so (#255)', () => {
   });
 
   // The Plugins view has one message surface and two things that can want it: the load order
-  // load's own statement (#307) and this. The load wins while it is running; `refresh` is how
+  // load's own statement and this. The load wins while it is running; `refresh` is how
   // the filter gets its statement back once the load stops talking.
   it('restates its message on refresh, after something else has taken the view message surface', async () => {
     const { view, filter } = setup({ hasRows: () => Promise.resolve(false) });

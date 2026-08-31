@@ -27,8 +27,8 @@ export type DetectWinePrefix = () => Promise<string | null>;
 
 /** MO2 running under Proton/Wine stores gamePath as a Wine drive-mapped, backslash path (e.g.
  *  `Z:\home\user\...` or `C:\Program Files\...`). `Z:` is Wine's fixed mapping of the filesystem
- *  root; `C:` is Wine's fixed mapping of the prefix's own `drive_c` — a real, distinct location
- *  (#187), not the same drive under a different name. Any other drive letter is a user-defined
+ *  root; `C:` is Wine's fixed mapping of the prefix's own `drive_c` — a real, distinct
+ *  location, not the same drive under a different name. Any other drive letter is a user-defined
  *  Wine mapping (`dosdevices/<letter>`) that can point anywhere on the host; there's no reliable
  *  rule to translate it, so it's surfaced as an error rather than guessed at, same as an
  *  undeterminable prefix. On Windows the native path is left untouched. Takes `platform`
@@ -72,7 +72,7 @@ async function hasDataFolder(root: string): Promise<boolean> {
  *  2. MO2's ModOrganizer.ini gamePath (normalized from a Wine/Windows path)
  *  3. GamePathDetector autodetect
  *  Returns null when nothing resolves — the caller then prompts. A `normalizeGamePath` translation
- *  failure (#187: a C: path whose Proton prefix can't be determined, or an unsupported drive
+ *  failure (a C: path whose Proton prefix can't be determined, or an unsupported drive
  *  letter) propagates as a rejection rather than falling through to autodetect — same treatment as
  *  the explicit-setting misconfiguration above, because guessing a different game directory
  *  entirely would hide the real problem instead of surfacing it. */
@@ -105,7 +105,7 @@ export async function resolveGameDirectory(
 
 /** MO2's gamePath (Wine-normalized), or null if the ini is absent/unreadable/missing the key.
  *  Only the ini read/parse is tolerated as "not found" — a `normalizeGamePath` translation failure
- *  is a distinct, genuine error and must propagate (#187), not be folded into the same null here. */
+ *  is a distinct, genuine error and must propagate, not be folded into the same null here. */
 async function readIniGamePath(instanceRoot: string, detectWinePrefix: DetectWinePrefix): Promise<string | null> {
   let raw: string;
   try {

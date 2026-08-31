@@ -14,14 +14,12 @@ using Noggog.WorkEngine;
 namespace MEditService.Tests.Source;
 
 /// <summary>
-/// #414's orchestration seam end to end: a real loaded load order, a real (small) plugin with real
-/// records, tracked through <see cref="TrackService"/>. #451 slice A rewrote Track's own write path
-/// to serialize through the whole-mod door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>)
-/// instead of the per-record codec, so these assertions now check the source layout — group folders,
-/// root <c>RecordData.json</c> — rather than the pre-#451 flat
-/// <c>&lt;recordType&gt;/&lt;originModKey&gt;/&lt;hex6&gt;.json</c> shape. Deliberately a small synthetic
-/// fixture, not the mega-plugin — mega-scale timing is a measured, reported number, not a
-/// suite-gating assertion.
+/// The Track orchestration seam end to end: a real loaded load order, a real (small) plugin with
+/// real records, tracked through <see cref="TrackService"/>. Track serializes through the whole-mod
+/// door (<see cref="Serialization.RecordTextCodecGeneratorSeed.SerializeWholeMod"/>), so these
+/// assertions check the source layout — group folders, root <c>RecordData.json</c>. Deliberately a
+/// small synthetic fixture, not the mega-plugin — mega-scale timing is a measured, reported number,
+/// not a suite-gating assertion.
 /// </summary>
 public sealed class TrackServiceTests
 {
@@ -50,14 +48,13 @@ public sealed class TrackServiceTests
 
             Assert.True(SourceRepository.IsTracked(modFolder));
 
-            // AC1: key paths from the spike doc's own layout sketch — root header, and each flat NPC
-            // under its own group folder.
+            // Key layout paths: root header, and each flat NPC under its own group folder.
             var sourceRoot = Path.Combine(modFolder, SourceRecordPath.RootFor("Fixture.esp"));
             var rootHeader = Path.Combine(sourceRoot, "RecordData.json");
             Assert.True(File.Exists(rootHeader), $"expected {rootHeader}");
 
-            // #459: SourceRecordPath.For alone can no longer name the file without knowing its order
-            // index — resolved through SourceUnitResolver instead, which finds it by FormKey suffix
+            // SourceRecordPath.For alone cannot name the file without knowing its order index —
+            // resolved through SourceUnitResolver instead, which finds it by FormKey suffix
             // regardless of position.
             var sourceFile1 = SourceUnitResolver.FlatSourcePath(
                 modFolder, "Fixture.esp", "npc_", npc1.FormKey.ToString(), "FirstNpc", GameRelease.Fallout4);
@@ -70,7 +67,7 @@ public sealed class TrackServiceTests
             var roundTripped = await codec.DeserializeAsync(sourceFile1, GameRelease.Fallout4, "npc_");
             Assert.Equal(npc1.FormKey, roundTripped.FormKey);
 
-            // #468: Spriggit has no role in v1 (ADR-0042) — the root document holds the mod
+            // Spriggit has no role in v1 (ADR-0042) — the root document holds the mod
             // header's own fields only, no package stamp, and Track writes no sidecar beside the
             // tree.
             Assert.False(File.Exists(Path.Combine(sourceRoot, ".spriggit")));
@@ -88,7 +85,7 @@ public sealed class TrackServiceTests
             Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc1.FormKey && n.EditorID == "FirstNpc");
             Assert.Contains(deserializedMod.Npcs, n => n.FormKey == npc2.FormKey && n.EditorID == "SecondNpc");
 
-            // AC4: no \r anywhere in the tracked tree.
+            // No \r anywhere in the tracked tree.
             foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
                 Assert.DoesNotContain((byte)'\r', await File.ReadAllBytesAsync(file));
 
@@ -103,10 +100,9 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #414 review finding F1: TrackProvenance.MetaSha256 was hardcoded null — the pinned
-    // three-trailer set (Upstream-Version, Binary-SHA256, Meta-SHA256, ADR-0041 amendment) only
-    // ever shipped two. meta.ini is a source, never tracked content, so this reads its raw bytes
-    // (opaque, never interpreted) the same way ReadMetaIniVersion already does for Upstream-Version.
+    // The pinned trailer set (Upstream-Version, Binary-SHA256, Meta-SHA256 — ADR-0041 amendment)
+    // must ship all three. meta.ini is a source, never tracked content, so its raw bytes are hashed
+    // (opaque, never interpreted) the same way ReadMetaIniVersion already reads Upstream-Version.
     [Fact]
     public async Task TrackAsync_WithAMetaIniBesideThePlugin_WritesItsSha256AsATrailer()
     {
@@ -180,10 +176,10 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #414 review finding F3: the already-tracked check must fire before the deep-parse/serialize
-    // loop, not after — otherwise the 46-second worst case runs to completion (or, as here, blows
-    // up on a corrupt file) before the caller ever learns the cheap, typed answer was available up
-    // front. The plugin here loads fine into the load order (so TrackAsync's own plugin-resolution
+    // The already-tracked check must fire before the deep-parse/serialize loop, not after —
+    // otherwise the 46-second worst case runs to completion (or, as here, blows up on a corrupt
+    // file) before the caller ever learns the cheap, typed answer was available up front.
+    // The plugin here loads fine into the load order (so TrackAsync's own plugin-resolution
     // step succeeds) but is corrupted on disk afterward — never-assume-exclusive-ownership means
     // this is a legitimate state, not a test artifact — so TrackService's *own* deep parse of it
     // must fail if the loop is ever reached. Pre-tracking the mod folder first means the *correct*
@@ -207,9 +203,9 @@ public sealed class TrackServiceTests
                 [new LoadOrderEntry("Fixture.esp", pluginPath, "FixtureMod", Slot: 0, Enabled: true, Winning: true)],
                 GameRelease.Fallout4);
 
-            // Track the mod folder once, for real, before corrupting anything — a Spriggit-flat-shaped
-            // dummy path (#451), matching what TrackAsync would actually have written, though the
-            // content doesn't matter for this test: only IsTracked's answer does.
+            // Track the mod folder once, for real, before corrupting anything — a dummy path shaped
+            // like what TrackAsync would actually have written, though the content doesn't matter
+            // for this test: only IsTracked's answer does.
             SourceRepository.Track(
                 modFolder, SourcePreset.Edits,
                 [new PristineFile("source/Fixture.esp/Npcs/000001_Fixture.esp.json", "{}"u8.ToArray())],
@@ -231,16 +227,15 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #414 review finding F2: "reports progress" — TrackService.Progress must genuinely advance
-    // while a track is in flight, not just report Idle before and Idle-again-with-nothing-in-
-    // between after. #451 slice A coarsened Serializing's own granularity from per-record to
-    // per-plugin (TrackProgress.cs's own doc comment: the whole-mod door serializes a whole plugin in
-    // one call, with no per-record progress callback to observe) — so a genuine 0 < done < total tick
-    // now needs *two plugins* under one origin, not one plugin with many records: the mid-flight
-    // observation point is between the first plugin's whole-mod door call finishing and the second's
-    // starting, which TrackAsync's own SetProgress(Serializing, parsedDone - 1, plugins.Count) call
-    // (right before the second plugin's await) makes real, given a second plugin large enough to hold
-    // that window open for a concurrent poll to land in.
+    // TrackService.Progress must genuinely advance while a track is in flight, not just report Idle
+    // before and Idle-again-with-nothing-in-between after. Serializing's granularity is per-plugin
+    // (TrackProgress.cs's own doc comment: the whole-mod door serializes a whole plugin in one call,
+    // with no per-record progress callback to observe) — so a genuine 0 < done < total tick needs
+    // *two plugins* under one origin, not one plugin with many records: the mid-flight observation
+    // point is between the first plugin's whole-mod door call finishing and the second's starting,
+    // which TrackAsync's SetProgress(Serializing, parsedDone - 1, plugins.Count) call (right before
+    // the second plugin's await) makes real, given a second plugin large enough to hold that window
+    // open for a concurrent poll to land in.
     [Fact]
     public async Task TrackAsync_ProgressAdvancesDuringATrack_ObservableMidFlight()
     {
@@ -287,7 +282,7 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #471, ADR-0042 decision 2: "the gate runs ... at Track, over every record of the plugin being
+    // ADR-0042 decision 2: "the gate runs ... at Track, over every record of the plugin being
     // tracked". The public TrackAsync overload always passes null for the round-trip gate's own
     // deserialize step, so it always uses the real whole-mod door — this test observes that it
     // genuinely happens (not merely that Track happens to succeed, which a gate that never actually
@@ -333,17 +328,14 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #471, ADR-0042 decision 2: "a plugin that does not round-trip is refused, with the failing
+    // ADR-0042 decision 2: "a plugin that does not round-trip is refused, with the failing
     // record named". No known codec defect is reproducible at this project's current Mutagen/
     // Serialization pins (TrackService's own doc comment on the internal overload), so this forges
     // one: a genuine deserialize of the tree Track just wrote, immediately mutated so what comes
     // back no longer matches what was serialized — indistinguishable, from the gate's own point of
-    // view, from a real codec regression that silently changed one field on read.
-    //
-    // Rival named and checked by hand while implementing this test (not committed): a TrackAsync
-    // that runs the gate but discards its result (or a stubbed-always-pass check) makes this test
-    // fail to throw — confirmed by temporarily short-circuiting VerifyRoundTrip to always return,
-    // observing this test go red, then reverting.
+    // view, from a real codec regression that silently changed one field on read. Kills the rival:
+    // a TrackAsync that runs the gate but discards its result (or a stubbed-always-pass check)
+    // makes this test fail to throw — verified by hand against a short-circuited VerifyRoundTrip.
     [Fact]
     public async Task TrackAsync_WithARecordThatFailsToRoundTrip_RefusesAndCommitsNothing()
     {
@@ -387,11 +379,9 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #513's own acceptance criterion: "a fixture whose rewrite changes a field value (forge one, e.g.
-    // a deserializer that mutates a float) is refused, with record type, FormKey and field name in the
-    // message" — the maintainer decision that Track refuses on *any* content difference, not just a
-    // string field like the sibling test above. HeightMin is set to a non-default value first so "the
-    // mutation changed it" is unambiguous.
+    // Track refuses on *any* content difference — a mutated float field, not just a string field
+    // like the sibling test above — with record type, FormKey and field name in the message.
+    // HeightMin is set to a non-default value first so "the mutation changed it" is unambiguous.
     [Fact]
     public async Task TrackAsync_WithAFloatFieldThatFailsToRoundTrip_RefusesNamingTheRecordAndTheField()
     {
@@ -436,20 +426,15 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #568: ScopeOverlayDOF.esp's TES4 header carries an INTV subrecord — genuinely unusual, and the
-    // ticket's own confirmed hypothesis was that Mutagen.Bethesda.Serialization's generated
-    // Fallout4ModHeader_Serialization codec might not carry opaque header ByteArray subrecords
-    // faithfully through the tracked-source round trip. Refuted by isolated repro (both the direct
-    // whole-mod JSON round trip and this end-to-end Track): they survive today. This is the permanent
-    // regression fixture AC3 asks for — a minimal synthetic header carrying the same opaque-field
-    // shape every ModelIdentity.OpaqueHeaderFields member exercises, plus TransientTypes (set, matching,
-    // despite not being allow-listed — see that field's own known-gap tests in ModelIdentityTests) —
-    // not the real ScopeOverlayDOF.esp (not present in this repo or environment; AC3 sanctions a
-    // synthetic fixture for exactly that reason). Named rival (applied and observed while writing this
-    // test, not committed): setting recompiled.ModHeader.INTV = null immediately after
-    // DeserializeWholeMod inside a forged deserializer threw a SourceRoundTripFailedException naming
-    // "TES4 header field 'INTV'", proving this test is not vacuous — it genuinely distinguishes the
-    // correct codec from a corrupting one.
+    // Real plugins (ScopeOverlayDOF.esp) carry opaque TES4 header subrecords like INTV, and
+    // Mutagen.Bethesda.Serialization's generated Fallout4ModHeader_Serialization codec must carry
+    // them faithfully through the tracked-source round trip. Permanent regression fixture: a minimal
+    // synthetic header carrying the opaque-field shape every ModelIdentity.OpaqueHeaderFields member
+    // exercises, plus TransientTypes (set, matching, despite not being allow-listed — see that
+    // field's own known-gap tests in ModelIdentityTests). Not vacuous: nulling
+    // recompiled.ModHeader.INTV inside a forged deserializer makes this throw a
+    // SourceRoundTripFailedException naming "TES4 header field 'INTV'" — it genuinely distinguishes
+    // the correct codec from a corrupting one.
     [Fact]
     public async Task TrackAsync_WithOpaqueHeaderFieldsSet_TracksSuccessfully()
     {
@@ -490,9 +475,9 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #568 review: an allow-list entry with no end-to-end test that corrupts that field alone and
-    // asserts the real refusal message names it is a claim nobody can cash — the exact vacuity that
-    // let a dead TransientTypes entry sit on the list undetected. One case per
+    // An allow-list entry with no end-to-end test that corrupts that field alone and asserts the
+    // real refusal message names it is a claim nobody can cash — the vacuity that let a dead
+    // TransientTypes entry sit on the list undetected. One case per
     // ModelIdentity.OpaqueHeaderFields member, run through the real TrackService.TrackAsync pipeline
     // (not just ModelIdentity.FindFirstHeaderFieldDivergence directly, which ModelIdentityTests' own
     // theory already covers) so the assertion is against the actual SourceRoundTripFailedException
@@ -554,25 +539,19 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #514 AC2 / #513: a rewrite that only *adds* subrecords must not be refused by the
-    // subrecord-inventory check specifically. Mutagen's own Furniture writer
+    // A rewrite that only *adds* subrecords must not be refused by the subrecord-inventory check
+    // specifically. Mutagen's own Furniture writer
     // (FurnitureBinaryWriteTranslation.WriteBinaryFlagsCustom/WriteBinaryFlags2Custom, verified by
     // reading it) unconditionally emits FNAM/MNAM on every write regardless of whether the source it
     // read ever had them — Mutagen can never itself *author* a FURN missing them, so the "original"
-    // here is hand-stripped from a real Mutagen-written one (the CK/community-tool shape the #511
-    // survey actually observed for FURN: "subrecord-set: FURN +FNAM/MNAM 22"), not built through the
-    // object API.
+    // here is hand-stripped from a real Mutagen-written one (the CK/community-tool shape observed in
+    // the wild for FURN), not built through the object API.
     //
-    // #513 finding: this one is *not* actually an encoding-only difference. `Furniture.Flags` is a
-    // nullable property FNAM/MNAM back — null when they're absent (the hand-stripped original),
-    // reparses to a real value once Mutagen's writer re-adds them. That is a genuine content change,
-    // and the new model-identity gate is right to still refuse it — the pre-#513 gate refused it too,
-    // but only because *some* byte differed, landing on the generic "but every individual record
-    // matched" fallback (a real, if latent, inaccuracy: comparing the pre-write in-memory object
-    // against original, as the old gate did, could never see the Flags value the *actual write* would
-    // produce). The new gate reparses what was actually written and names the real cause. What #514
-    // AC2 still asks — that refusal isn't attributed to the *subrecord-inventory* check specifically —
-    // still holds.
+    // This is *not* an encoding-only difference: `Furniture.Flags` is a nullable property backed by
+    // FNAM/MNAM — null when they're absent (the hand-stripped original), a real value once Mutagen's
+    // writer re-adds them. That is a genuine content change, and the model-identity gate is right to
+    // refuse it: it reparses what was actually written and names the real cause (Flags), never the
+    // subrecord-inventory check.
     [Fact]
     public async Task TrackAsync_WithARecordThatOnlyGainsSubrecordsOnRewrite_RefusesNamingTheRealFieldNotSubrecordInventory()
     {
@@ -652,18 +631,14 @@ public sealed class TrackServiceTests
         for (var i = 0; i < 4; i++) bytes[offset + i] = span[i];
     }
 
-    // #515: a Localized plugin whose mod folder also ships a BSA archive — the actual repro shape
-    // (a real voice mod bundling its sound files in a .ba2). Deep-parsing/serializing this plugin
-    // forces Mutagen to resolve its strings, which by default also scans the plugin's own folder for
-    // archives; with one actually present, resolving BSA load-order priority needs a plugin-listings
-    // path that only exists on a real Windows game install, and throws outright without one.
-    //
-    // Rival observed by hand before this fix (not committed): with LocalizedStrings.ForRead's
+    // A Localized plugin whose mod folder also ships a BSA archive — a real voice mod bundling its
+    // sound files in a .ba2. Deep-parsing/serializing this plugin forces Mutagen to resolve its
+    // strings, which by default also scans the plugin's own folder for archives; with one actually
+    // present, resolving BSA load-order priority needs a plugin-listings path that only exists on a
+    // real Windows game install, and throws outright without one. With LocalizedStrings.ForRead's
     // BinaryReadParameters removed from TrackAsync's ImportSetter call, this test throws
     // Mutagen.Bethesda.Plugins.Exceptions.SubrecordException wrapping
-    // "System.InvalidOperationException: Could not determine plugin listings path for Fallout4. This
-    // typically occurs on non-Windows platforms where the LocalAppData environment variable is not
-    // set." — the exact defect #515 reports.
+    // "System.InvalidOperationException: Could not determine plugin listings path for Fallout4."
     [Fact]
     public async Task TrackAsync_LocalizedPluginWithABsaBesideIt_TracksAndMaterializesTheRealString()
     {
@@ -714,19 +689,13 @@ public sealed class TrackServiceTests
         }
     }
 
-    // #515 AC2: the sibling of the test above with its strings deleted — must be refused by name,
-    // never silently (TranslatedString.TryLookup returns false for a missing file with no exception
-    // at all) and never with Mutagen's own listings-path exception.
-    //
-    // Rival observed by hand before this fix (not committed): with the strings parameters from the
-    // test above but no explicit FindMissingStringsFile check removed, TrackAsync does *not* throw
-    // MissingLocalizationStringsException — it throws SourceRoundTripFailedException instead ("does
-    // not round-trip through its own tracked source ... the divergence is in the plugin header or a
-    // container's own structure, not a record's content"), because the missing English string makes
-    // the pre-existing round-trip gate's own recompile diverge from the original. That is exactly the
-    // "unrelated-sounding error" #515's own title complains about, just a different one than the
-    // listings-path exception — confirming the explicit check below is load-bearing, not redundant
-    // with the round-trip gate.
+    // The sibling of the test above with its strings deleted — must be refused by name, never
+    // silently (TranslatedString.TryLookup returns false for a missing file with no exception at
+    // all) and never with Mutagen's own listings-path exception. The explicit FindMissingStringsFile
+    // check is load-bearing, not redundant with the round-trip gate: without it the missing English
+    // string makes the round-trip gate's own recompile diverge from the original, so TrackAsync
+    // throws SourceRoundTripFailedException — another unrelated-sounding error instead of the
+    // missing file's name.
     [Fact]
     public async Task TrackAsync_LocalizedPluginMissingItsStringsFile_RefusesNamingTheMissingFile()
     {

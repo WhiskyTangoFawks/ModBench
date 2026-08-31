@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { PluginMetadata } from './ApiClient';
 
-/** #414/ADR-0041: tracked *is* the presence of `.git` in the mod folder — a plain filesystem
+/** ADR-0041: tracked *is* the presence of `.git` in the mod folder — a plain filesystem
  *  check, no backend call and no registry, mirroring `SourceRepository.IsTracked` on the backend
  *  side of the same claim. Deliberately no `vscode` import: this stays a pure Node function so it
  *  is testable under Vitest without a VS Code host (modbench/CLAUDE.md's "vscode types stay out of
@@ -19,7 +19,7 @@ function modFolderOf(plugin: Pick<PluginMetadata, 'path'>): string {
 
 /** Every distinct tracked mod folder among `plugins` — the input to the native-git-UI activation
  *  wiring below. Distinct, not one per plugin: a mod folder can hold more than one plugin, and
- *  each must register with `vscode.git` exactly once (AC: "no duplicate SCM registration"). */
+ *  each must register with `vscode.git` exactly once — no duplicate SCM registration. */
 export function trackedModFoldersOf(plugins: readonly Pick<PluginMetadata, 'path'>[]): string[] {
   const folders = new Set<string>();
   for (const plugin of plugins) {
@@ -34,15 +34,14 @@ export function trackedModFoldersOf(plugins: readonly Pick<PluginMetadata, 'path
  *  `trackedModFoldersOf`). `openRepository` is injected as a plain callback rather than the real
  *  `vscode.git` type so this stays unit-testable; `extension.ts` is the only real caller and
  *  supplies `(folder) => gitApi.openRepository(vscode.Uri.file(folder))`. Deduplicates its own
- *  input too — the AC's contract, not merely a property `trackedModFoldersOf`'s caller happens to
- *  uphold.
+ *  input too — a contract of its own, not merely a property `trackedModFoldersOf`'s caller
+ *  happens to uphold.
  *
- *  #557: resolves to a `Map` of folder → the repository handle `openRepository` returned, instead
- *  of discarding it (the old `Promise<void>` shape). `extension.ts` keeps this map so a
- *  subsequent field edit can prompt the right repository's own `status()` — the missing piece
- *  that left the Source Control panel waiting on a manual Refresh (RecordDecorationProvider.ts's
- *  own #428 Q2 doc comment already named this as "repo-handle plumbing... not this ticket"; #557
- *  is that follow-up, for the outbound direction only). A folder whose `openRepository` call
+ *  Resolves to a `Map` of folder → the repository handle `openRepository` returned.
+ *  `extension.ts` keeps this map so a
+ *  subsequent field edit can prompt the right repository's own `status()` — without it the
+ *  Source Control panel waits on a manual Refresh (the outbound direction only;
+ *  see RecordDecorationProvider.ts's own doc comment). A folder whose `openRepository` call
  *  resolves `null` (the real API's own "declined to open" answer) is omitted rather than stored,
  *  so a later `.status()` lookup can never land on a null handle. */
 export async function registerTrackedRepositories<T>(
@@ -58,8 +57,8 @@ export async function registerTrackedRepositories<T>(
   return repositories;
 }
 
-/** #557 review: the derivation `extension.ts` used to do inline — reindexes
- * `registerTrackedRepositories`'s own folder-keyed result by plugin filename instead, so a field
+/** Reindexes
+ * `registerTrackedRepositories`'s own folder-keyed result by plugin filename, so a field
  * edit (which knows the plugin it edited, never the folder) can look a repository up directly.
  * Pure and unit-testable for the same reason every other function in this file is: `extension.ts`
  * itself carries no business logic, only prompts (`registerTrackedRepositoriesForSession`) and

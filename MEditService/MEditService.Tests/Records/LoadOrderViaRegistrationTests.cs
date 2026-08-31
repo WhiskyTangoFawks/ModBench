@@ -9,7 +9,7 @@ using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Records;
 
-// #583 / ADR-0001: load order lives only on `registrations`. Reordering `plugins.txt` — modelled
+// ADR-0001: load order lives only on `registrations`. Reordering `plugins.txt` — modelled
 // here as two Register calls with swapped load_order_idx values and no re-index — touches one
 // `registrations` row per plugin and no record: override stacks and conflict classification follow
 // the new order purely from that join, exactly as they would from a re-index at the new order.

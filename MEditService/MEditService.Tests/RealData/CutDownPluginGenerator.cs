@@ -47,7 +47,7 @@ public sealed class CutDownPluginGenerator
 
         // Fallout4.esm is localized (strings packed in BA2s). DeepCopy enumerates every language
         // source; on Linux that path resolves a plugin-listings path that needs the (case-sensitive)
-        // "LocalAppData" env var. #515 centralized this default (it used to live here by hand).
+        // "LocalAppData" env var.
         LocalizedStrings.EnsureLocalAppDataDefault();
 
         using var source = Fallout4Mod.CreateFromBinaryOverlay(

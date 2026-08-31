@@ -10,10 +10,10 @@ using Mutagen.Bethesda.Plugins;
 namespace MEditService.Tests.Edits;
 
 /// <summary>
-/// #436: two real mod folders and one shared load order — the shape both Copy gestures need, since the
+/// Two real mod folders and one shared load order — the shape both Copy gestures need, since the
 /// interesting question (does a copy read from one plugin's tree and write into a different one's) is
 /// unaskable of a single-plugin fixture. <see cref="SourcePlugin"/> defaults untracked, matching the
-/// issue's own primary scenario: copying out of a Data-directory master (Fallout4.esm-shaped here),
+/// primary scenario: copying out of a Data-directory master (Fallout4.esm-shaped here),
 /// which has no working tree of its own — the indexed document body is the only representation that
 /// exists for it. <paramref name="trackSource"/> lets a test opt into a tracked source instead, for
 /// the "reads its current file, not a stale index snapshot" half of the read posture.
@@ -87,7 +87,7 @@ public sealed class CopyFixture : IDisposable
 
     public static CopyFixture Create(bool trackSource = false) => new(trackSource);
 
-    // #459: resolved through SourceUnitResolver, matching TwoModFixture's own reason — For now needs
+    // Resolved through SourceUnitResolver, matching TwoModFixture's own reason — For needs
     // an order index this fixture has no reason to track.
     public string SourceFileFor(PluginKey plugin, FormKey formKey, string recordType, string? editorId) =>
         SourceUnitResolver.FlatSourcePath(

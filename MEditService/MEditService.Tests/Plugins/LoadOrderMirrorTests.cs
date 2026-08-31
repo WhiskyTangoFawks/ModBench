@@ -30,7 +30,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             modImporter: modImporter);
     }
 
-    // #445: an explicit request for a release this build doesn't carry the Mutagen assembly for
+    // An explicit request for a release this build doesn't carry the Mutagen assembly for
     // (SkyrimSE, genuinely unreferenced here — see SchemaReflectorAvailabilityTests) must refuse
     // with a typed, actionable exception rather than a raw FileNotFoundException surfacing from
     // deep inside DuckDbRecordIndex.Initialize. The FO4 fixture's data is irrelevant: the throw
@@ -46,7 +46,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         Assert.Contains("SkyrimSE", ex.Message);
     }
 
-    // #400: distinct from Load_ForUnsupportedGameRelease above, which fails *before* IndexAndStore
+    // Distinct from Load_ForUnsupportedGameRelease above, which fails *before* IndexAndStore
     // publishes. Faulting UpdateWinners fails *after* publish, inside IndexAndStore's own catch
     // (DisposeCurrent) — and with nothing after this call touching state (no follow-up
     // Load/Unload), the assertions below observe that catch's own cleanup rather than a later call's
@@ -170,9 +170,9 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
 
     // --- CreatePlugin ---
     //
-    // #288 / ADR-0041: the destination is now a caller-resolved (path, origin) — a mod folder or
+    // ADR-0041: the destination is a caller-resolved (path, origin) — a mod folder or
     // overwrite/, never implicitly the game's Data folder — and CreatePlugin never touches
-    // plugins.txt any more (that append moved to the caller: the extension's Mod Management
+    // plugins.txt (that append is the caller's job: the extension's Mod Management
     // writer, or a script/agent's own per ADR-0024).
 
     [Fact]
@@ -198,14 +198,10 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         }
     }
 
-    // The rival this guards against is #288's own starting point: the pre-#288 CreatePlugin
-    // unconditionally appended "*<name>\n" to plugins.txt as part of the same call. Applied as a
-    // rival (a one-line File.AppendAllText re-added to CreatePlugin), this test fails — observed
-    // 2026-08-20, the appended line landing exactly where the assertion below now forbids it.
     // plugins.txt is Mod Management's file (CONTEXT-MAP.md); appending the load-order line is the
     // caller's job, done only once the whole create (and any Track it triggers) has succeeded.
-    // Since #592 this side never reads a plugins.txt either, so the assertion is that no such file
-    // is brought into existence at all — a stronger statement than the byte comparison it replaces.
+    // This side never reads a plugins.txt either, so the assertion is that no such file is brought
+    // into existence at all.
     [Fact]
     public void CreatePlugin_NeverWritesPluginsTxt()
     {
@@ -259,20 +255,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
         Assert.Null(manager.LoadOrder!.FilterSql);
     }
 
-    // #418 closeout: the ReserveFormKey test block (ReserveFormKey_LoadedPlugin_
-    // ReturnsValidFormKeyAndIncrements, ReserveFormKey_NoLoadOrder_ThrowsInvalidOperationException,
-    // ReserveFormKey_UnknownPlugin_ThrowsArgumentException, ReserveFormKey_ConcurrentCalls_
-    // ReturnDistinctFormKeys, ReserveFormKey_ExhaustedSpace_ThrowsInvalidOperationException,
-    // ReserveFormKey_AtMaxValidFormId_Succeeds, ReserveFormKey_FreshlyCreatedEmptyPlugin_
-    // NeverReturnsFormIdZero, ReserveFormKey_LoadedEmptyPluginWithZeroNextFormId_
-    // NeverReturnsFormIdZero, ReserveFormKey_SequentialCalls_ReturnConsecutiveIds — 9 tests) and
-    // CreatePlugin_SeedsNextFormIds_PluginIsImmediatelyReservable (a 10th, CreatePlugin's own
-    // test, observable only through ReserveFormKey) are removed together with ReserveFormKey
-    // itself: unwired dead code (no endpoint, no caller outside these tests, superseded by
-    // RecordEditService's both-refs collision-safe allocator, #427). Its backing state
-    // (`_nextFormIds`, `SafeNextFormId`) had no other reader and is removed with it.
-
-    // --- #422: filter re-materialization ---
+    // --- Filter re-materialization ---
     //
     // _filter is a one-shot snapshot (SetFilter's CREATE OR REPLACE TABLE) of whatever matched the
     // filter SQL at the moment it ran. Nothing else keeps it in step, so every mutation path that can
@@ -416,7 +399,7 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
     // on the DbException base, so which concrete subtype arrives is not the thing under test here.
     private sealed class FakeDbFault(string message) : System.Data.Common.DbException(message);
 
-    // #400: UpdateWinners runs once, after IndexProgressively's per-plugin loop — faulting it fails
+    // UpdateWinners runs once, after IndexProgressively's per-plugin loop — faulting it fails
     // the load synchronously, on the calling thread, after publish, with no gate/thread coordination
     // needed to isolate IndexAndStore's own catch (DisposeCurrent) from a later call's cleanup.
     private sealed class FaultingUpdateWinnersRepositoryFactory(IRecordIndexFactory inner) : IRecordIndexFactory

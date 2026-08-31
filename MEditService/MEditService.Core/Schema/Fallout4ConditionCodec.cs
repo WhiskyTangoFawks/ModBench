@@ -17,11 +17,9 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // Discovers a record's conditions by reflecting over every top-level property whose value is a
     // condition list — the shape COBJ's `Conditions`, Quest's `DialogConditions`/`UnusedConditions`,
     // Perk's `Conditions`, etc. all share — rather than a single hardcoded property name, so a
-    // record with more than one condition-carrying field (#154) surfaces one owner per field,
-    // independently keyed by that field's own name. Also folds in ExtractNested's one-array-level
-    // nested owners (#181 — an Ingestible's Effects[i].Conditions, a Message's
-    // MenuButtons[i].Conditions). Two-level nesting (a Perk effect's own conditions doubly-indexed,
-    // a Quest alias's Conditions) is out of scope, deferred to a follow-up ticket. Discovery is
+    // record with more than one condition-carrying field surfaces one owner per field,
+    // independently keyed by that field's own name. Also folds in ExtractNested's nested owners
+    // (an Ingestible's Effects[i].Conditions, a Message's MenuButtons[i].Conditions). Discovery is
     // game-generic; Parse is FO4-specific.
     public IEnumerable<ConditionOwner> Extract(IMajorRecordGetter record)
     {
@@ -52,23 +50,22 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         return owners;
     }
 
-    // Per-array-item nested condition lists, an arbitrary number of array levels below the record
-    // (#181 introduced one level; #184 generalizes to N) — e.g. an Ingestible's Effects[i].
-    // Conditions (one level), or a Perk's Effects[i].Conditions[j].Conditions (two levels: Effects
-    // is APerkEffect, whose own Conditions is a list of PerkCondition wrappers — not itself a
-    // condition list — each of which in turn declares the real terminal Conditions list). Same shape
-    // test as the flat pass above (IsConditionListProperty) and the array-shape test below
-    // (IsArrayOfNestableStructsProperty), just applied recursively to each element of every
-    // array-of-struct property reachable from the record, so a new nesting shape or depth needs no
-    // new hardcoded property/array name or depth constant anywhere. Keyed by an indexed path
-    // composing every enclosing array's own property name and index with the terminal list's own
-    // name (e.g. "Effects[2].Conditions[1].Conditions") — the same CTDA\<FieldPath>\<Index>\
-    // <SubField> wire path just treats that whole composed string as one opaque FieldPath segment
-    // (#169).
-    // #113: the reflection is per *type*, not per record. Extract used to call GetProperties()
-    // and re-test every property on every record it saw — 63 µs a record, ~3 s per 49k-record DLC
-    // and 29% of a full load order's index time — for an answer that only depends on the CLR type.
-    // Cached once per type, a record of a type with no condition-bearing property costs nothing.
+    // Per-array-item nested condition lists, an arbitrary number of array levels below the record —
+    // e.g. an Ingestible's Effects[i].Conditions (one level), or a Perk's
+    // Effects[i].Conditions[j].Conditions (two levels: Effects is APerkEffect, whose own Conditions
+    // is a list of PerkCondition wrappers — not itself a condition list — each of which in turn
+    // declares the real terminal Conditions list). Same shape test as the flat pass above
+    // (IsConditionListProperty) and the array-shape test below (IsArrayOfNestableStructsProperty),
+    // just applied recursively to each element of every array-of-struct property reachable from the
+    // record, so a new nesting shape or depth needs no new hardcoded property/array name or depth
+    // constant anywhere. Keyed by an indexed path composing every enclosing array's own property
+    // name and index with the terminal list's own name (e.g. "Effects[2].Conditions[1].Conditions")
+    // — the same CTDA\<FieldPath>\<Index>\<SubField> wire path just treats that whole composed
+    // string as one opaque FieldPath segment.
+    // The reflection is cached per *type*, not run per record: re-testing every property on every
+    // record cost ~63 µs a record (~3 s per 49k-record DLC, 29% of a full load order's index time)
+    // for an answer that only depends on the CLR type. Cached once per type, a record of a type
+    // with no condition-bearing property costs nothing.
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> ConditionListProperties = new();
     private static readonly ConcurrentDictionary<Type, PropertyInfo[]> NestableArrayProperties = new();
 
@@ -81,8 +78,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     private static IEnumerable<ConditionOwner> ExtractNested(IMajorRecordGetter record) =>
         WalkNestedArrays(record, "", depth: 0);
 
-    // The recursion bound #184's AC requires: a defensive circuit breaker, not a limit expected to
-    // ever bind on a real Mutagen type. The only way this walk could genuinely cycle is through a
+    // A defensive circuit breaker, not a limit expected to ever bind on a real Mutagen type. The only way this walk could genuinely cycle is through a
     // shared major-record reference, and IsArrayOfNestableStructsProperty's IMajorRecordGetter
     // exclusion already rules that out before recursing (child records are enumerated as their own
     // top-level rows, never walked into here) — every other Loqui-generated struct/list type FO4's
@@ -178,7 +174,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // element type, excluding element types that are FormLinks (nothing to nest into), plain
     // scalars/enums (same reason), the record's own flat condition lists (already handled by
     // Extract's top-level pass — descending into individual Condition elements would be pointless),
-    // and — the child-record exclusion (#169) — element types Mutagen enumerates as their own
+    // and — the child-record exclusion — element types Mutagen enumerates as their own
     // top-level major records (e.g. Quest's Scenes: a Scene is itself flattened into its own SCEN
     // record row with its own top-level Conditions field, so nesting it again here would duplicate
     // it). IMajorRecordGetter is the same signal SchemaReflector's own top-level table discovery
@@ -207,19 +203,19 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // Schema-level twin of Extract's own per-instance discovery — same shape check
     // (IsConditionListProperty), just applied to the CLR type rather than a live value, for callers
-    // that don't yet have a loaded record instance (#154).
+    // that don't yet have a loaded record instance.
     public bool IsConditionListField(Type recordType, string fieldPath) =>
         recordType.GetProperty(fieldPath) is { } prop && IsConditionListProperty(prop);
 
-    // #182/#184: the Type-only twin of ExtractNested's per-instance discovery — walks recordType
+    // The Type-only twin of ExtractNested's per-instance discovery — walks recordType
     // through the composed path's array segments in order (e.g. "Effects[2].Conditions[1]." for
     // "Effects[2].Conditions[1].Conditions"), then checks the type reached at the end (or, when
     // abstract/interface and bare, any concrete subtype in the same assembly) for a condition-list
     // property named nestedField. recordType is either the record's getter interface
     // (PluginWriter.IsReadOnly, via schema.RecordType) or its concrete setter class
     // (RecordEditService's record.GetType() dispatch) — both resolve the same way, since
-    // GetEnumerableElementType works on either shape. Takes the raw composed path directly (#184) —
-    // parsing it (arbitrary depth, no upfront caller-side split) is entirely this method's job now.
+    // GetEnumerableElementType works on either shape. Takes the raw composed path directly —
+    // parsing it (arbitrary depth, no upfront caller-side split) is entirely this method's job.
     public bool IsNestedConditionListField(Type recordType, string composedFieldPath)
     {
         if (!TryParseNestedFieldPath(composedFieldPath, out var segments, out var nestedField)) return false;
@@ -236,8 +232,8 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     // Resolves arrayProp's array-of-struct element type on currentType directly, or — when
     // currentType is abstract/interface and declares nothing itself — any concrete subtype's
-    // declared element type. The same permissive fallback #182 established at a single hop, now
-    // applied uniformly at every intermediate hop of an arbitrary-depth composed path (#184).
+    // declared element type. The same permissive fallback applies uniformly at every intermediate
+    // hop of an arbitrary-depth composed path.
     private static Type? ResolveArrayElementType(Type currentType, string arrayProp)
     {
         if (currentType.GetProperty(arrayProp) is { } directProp
@@ -361,14 +357,13 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
 
     public IEnumerable<string> AvailableFunctions() => Enum.GetNames<Condition.Function>();
 
-    // #167: the Run On target catalog, same rationale as AvailableFunctions above.
     public IEnumerable<string> AvailableRunOnTargets() => Enum.GetNames<Condition.RunOnType>();
 
-    // #165: member-name tables for the Number-category ParameterTypes that have a real static enum
+    // Member-name tables for the Number-category ParameterTypes that have a real static enum
     // in xEdit (references/TES5Edit/Core/wbDefinitionsCommon.pas + wbDefinitionsFO4.pas) and are
     // actually used by an FO4 Condition.Function. Scoped to these seven deliberately — FormType
     // (~120 members) and MiscStat (hash-keyed, ~100+ members) are real Number-category enums too but
-    // far larger/lower-value; out of scope for #165, left for a follow-up if ever needed. Every other
+    // far larger/lower-value; add them if ever needed. Every other
     // Number-category ParameterType (Integer, Float, VariableName, QuestStage, VATSValueFunction/
     // Param, AdvanceAction, Alias, Packdata, FurnitureAnim/Entry, Event) is either genuinely free-form
     // or resolved relative to another parameter's value (context mEdit's neutral model doesn't carry)
@@ -419,11 +414,11 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     public string? DecodeParamValue(string typeName, int number) =>
         EnumTables.TryGetValue(typeName, out var table) && table.TryGetValue(number, out var name) ? name : null;
 
-    // ---- ApplyFieldValue: write-back (#152) ----
+    // ---- ApplyFieldValue: write-back ----
 
     // Record-level entry point PluginWriter calls: finds the mutable condition list via the same
     // reflection Extract uses to discover it, then delegates to the directly-testable list-level
-    // overload below. A composed fieldPath (#182/#184: "Effects[2].Conditions" one level deep, or
+    // overload below. A composed fieldPath ("Effects[2].Conditions" one level deep, or
     // "Effects[2].Conditions[1].Conditions" two levels deep) routes through the nested resolver
     // instead — record is always a concrete instance here (never the abstract getter-interface/
     // setter-base Type that IsNestedConditionListField has to allow for), so walking every
@@ -449,7 +444,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     // here, so every hop's element GetType() is concrete too; no permissive abstract-type fallback
     // is ever needed on this write path (that's IsNestedConditionListField's validation-time job, not
     // this one's). Any resolution failure at any hop (unknown array property, out-of-range index —
-    // #169's AC: caught here since only a live instance can know the real length, not the validation-time
+    // caught here since only a live instance can know the real length, not the validation-time
     // shape check — a null element, or the terminal property not actually being a condition list on
     // this concrete element) returns null before any mutation, so a bad nested path can never
     // produce a partial write.
@@ -469,10 +464,10 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         return current.GetType().GetProperty(nestedField)?.GetValue(current) as IList<Condition>;
     }
 
-    // The one parser for this composed-path shape in the codebase (#184): ConditionPath (Edits/) no
-    // longer keeps its own copy, since no production caller ever needed the parsed pieces themselves
-    // — every caller only ever wanted this codec's yes/no answer (IsNestedConditionListField) or its
-    // resolved write target (ResolveNestedConditionList above), both of which live here regardless.
+    // The one parser for this composed-path shape in the codebase — ConditionPath (Edits/) keeps no
+    // copy, since no production caller needs the parsed pieces themselves: every caller only wants
+    // this codec's yes/no answer (IsNestedConditionListField) or its resolved write target
+    // (ResolveNestedConditionList above), both of which live here.
     // Parses "Effects[2].Conditions" (one array hop) or "Effects[2].Conditions[1].Conditions" (two
     // hops), or any deeper composition, into its ordered array segments (property name + index, one
     // per enclosing array) and the terminal condition-list property name. False for anything that
@@ -542,7 +537,7 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
     public static ConditionApplyResult ApplyFieldValue(
         IList<Condition> conditions, int index, string subField, JsonElement value)
     {
-        // #401 Route A: no `index < 0` disjunct here — the only production caller
+        // No `index < 0` disjunct here — the only production caller
         // (RecordFieldWriter.ApplyConditionField) sources index from ConditionPath.TryParse, which
         // already rejects negatives before this is ever reached.
         if (index >= conditions.Count) return ConditionApplyResult.NotFound;
@@ -700,16 +695,11 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         _ => throw new ArgumentOutOfRangeException(nameof(op), op, "Unknown neutral compare operator"),
     };
 
-    // A function change reshapes the parameter-type signature (#152): rather than selectively
-    // resetting only the slots whose category changed, every underlying storage member (Record,
-    // Number, String) on both slots is cleared unconditionally. That's the only way to guarantee a
-    // value from the old function's shape can never silently read back through the new one,
-    // regardless of which of the three storage members the old and new categories happened to share.
-    // ---- ApplyListValue: whole-list restage write-back (#153) ----
+    // ---- ApplyListValue: whole-list restage write-back ----
 
     // Record-level entry point PluginWriter calls for an add/remove/reorder restage: replaces the
     // entire condition list in place with freshly-materialized Condition instances. Mirrors
-    // ApplyFieldValue's record-level/list-level split. #183/#184: a composed fieldPath ("Effects[2].
+    // ApplyFieldValue's record-level/list-level split. A composed fieldPath ("Effects[2].
     // Conditions" one level deep, or "Effects[2].Conditions[1].Conditions" two levels deep — a
     // nested list's own restage) routes through the same ResolveNestedConditionList walk
     // ApplyFieldValue's nested branch already uses, landing on the list-level ApplyListValue instead
@@ -831,6 +821,11 @@ public sealed class Fallout4ConditionCodec : IConditionCodec
         }
     }
 
+    // A function change reshapes the parameter-type signature: rather than selectively resetting
+    // only the slots whose category changed, every underlying storage member (Record, Number,
+    // String) on both slots is cleared unconditionally. That's the only way to guarantee a value
+    // from the old function's shape can never silently read back through the new one, regardless of
+    // which of the three storage members the old and new categories happened to share.
     private static ConditionApplyResult ApplyFunction(Condition condition, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.String || value.GetString() is not { } s

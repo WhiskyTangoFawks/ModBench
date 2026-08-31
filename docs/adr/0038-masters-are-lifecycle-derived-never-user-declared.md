@@ -9,13 +9,11 @@ A permitted divergence from [ADR-0034](0034-xedit-is-the-ux-reference-for-the-re
 ## Context
 
 xEdit exposes masters management as three direct user actions on a plugin's file node: Add
-Masters, Sort Masters, Clean Masters. An early slice built the first of these for mEdit — a
-validated, add-only `masters` field on the header record — and deferred Sort/Clean/Remove to
-future scripts on the assumption they were expensive, whole-plugin operations in the same risk
-class as FormID renumbering. That matches xEdit, which patches stored FormID bytes in place, so
-reordering or removing a master requires walking and rewriting every reference in the file.
+Masters, Sort Masters, Clean Masters. Those operations fit xEdit's write model: it patches stored
+FormID bytes in place, so reordering or removing a master requires walking and rewriting every
+reference in the file.
 
-Design review (#283) surfaced a real use for a manually-declared, content-free master: adding an
+Design review surfaced a real use for a manually-declared, content-free master: adding an
 otherwise-unused plugin as a master purely to pin load order. This is a real modding pattern, but
 it's a load-order concern — Mod Management's job — expressed invisibly inside an Editing-context
 object, per-plugin, unauditable from the surface that owns ordering (`plugins.txt`), and it
