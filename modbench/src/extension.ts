@@ -46,7 +46,7 @@ import {
   PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode,
 } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
-import { createLoadOrderSync, type LoadOrderSync } from './loadOrderSync';
+import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
