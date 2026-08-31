@@ -1446,36 +1446,6 @@ public class SchemaReflectorTests
     }
 
     [Fact]
-    public void GetSchemas_Header_EslFlagValue_UnaffectedByDisplayNameRename()
-    {
-        // EslFlagValue detection runs off the original Mutagen member name (LightMasterFlagNames),
-        // computed before the xEdit display-name rename is applied to EnumValues.
-        var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
-        Assert.Equal((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small,
-            schemas["header"].EslFlagValue);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_FlagsStagesSameBitmaskValueAfterRename()
-    {
-        // Toggling a renamed flag (e.g. "ESM") must produce the same bitmask value it always has —
-        // this is a labelling change only, not a protocol change.
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        var flagsIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "flags");
-        var mod = new Mutagen.Bethesda.Fallout4.Fallout4Mod(
-            Mutagen.Bethesda.Plugins.ModKey.FromFileName("Test.esp"),
-            Mutagen.Bethesda.Fallout4.Fallout4Release.Fallout4);
-
-        var bitmask = (long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Master;
-        var json = System.Text.Json.JsonDocument.Parse(
-            $"\"{bitmask.ToString(System.Globalization.CultureInfo.InvariantCulture)}\"").RootElement;
-
-        schema.HeaderColumnApply![flagsIndex]!(mod, json);
-
-        Assert.Equal(Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Master, mod.ModHeader.Flags);
-    }
-
-    [Fact]
     public void GetSchemas_Header_MastersColumn_IsArrayOfString()
     {
         var schemas = _reflector.GetSchemas(GameRelease.Fallout4);
@@ -1548,96 +1518,6 @@ public class SchemaReflectorTests
         var value = schema.HeaderColumnExtract![flagsIndex]((Mutagen.Bethesda.Plugins.Records.IModGetter)mod);
         Assert.Equal((long)Mutagen.Bethesda.Fallout4.Fallout4ModHeader.HeaderFlag.Small,
             Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture));
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_HasOneEntryPerColumnInOrder()
-    {
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        Assert.NotNull(schema.HeaderColumnApply);
-        Assert.Equal(schema.RecordColumns.Count, schema.HeaderColumnApply!.Count);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_AuthorFlagsAndMastersWritable()
-    {
-        // Masters is a writable (add-only) header column.
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        int Index(string name) => schema.RecordColumns.ToList().FindIndex(c => c.Name == name);
-
-        Assert.NotNull(schema.HeaderColumnApply![Index("author")]);
-        Assert.NotNull(schema.HeaderColumnApply![Index("flags")]);
-        Assert.NotNull(schema.HeaderColumnApply![Index("masters")]);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_MastersWritesModMasterReferences()
-    {
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        var mastersIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "masters");
-
-        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
-
-        schema.HeaderColumnApply![mastersIndex]!(mod, JsonSerializer.SerializeToElement(new[] { "Fallout4.esm", "DLCRobot.esm" }));
-
-        Assert.Equal(
-            ["Fallout4.esm", "DLCRobot.esm"],
-            ((Mutagen.Bethesda.Plugins.Records.IMod)mod).MasterReferences.Select(r => r.Master.FileName.ToString()));
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_AuthorWritesModHeaderAuthor()
-    {
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        var authorIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "author");
-
-        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
-        var json = System.Text.Json.JsonSerializer.SerializeToElement("New Author");
-        schema.HeaderColumnApply![authorIndex]!(mod, json);
-
-        Assert.Equal("New Author", mod.ModHeader.Author);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_AuthorJsonNull_ClearsModHeaderAuthor()
-    {
-        // Mutation-triage gap: MakeApplier's JSON-null-write branch (`if (nullable)
-        // rp.SetValue(obj, null); return;`) is otherwise unexercised — every other Apply
-        // test writes a real value. Author is nullable (HeaderPropertyApply's own
-        // nullable: true), so clearing it via JSON null is a real, user-visible requirement (the
-        // record editor clearing an optional field), not just a mutation-kill exercise.
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        var authorIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "author");
-
-        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
-        mod.ModHeader.Author = "Some Author";
-
-        var nullJson = System.Text.Json.JsonSerializer.SerializeToElement<string?>(null);
-        schema.HeaderColumnApply![authorIndex]!(mod, nullJson);
-
-        Assert.Null(mod.ModHeader.Author);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_HeaderColumnApply_FlagsWritesModHeaderFlags()
-    {
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        var flagsIndex = schema.RecordColumns.ToList().FindIndex(c => c.Name == "flags");
-
-        var mod = new Fallout4Mod(ModKey.FromFileName("Test.esp"), Fallout4Release.Fallout4);
-        var bitmask = (long)Fallout4ModHeader.HeaderFlag.Small;
-        var json = System.Text.Json.JsonSerializer.SerializeToElement(
-            bitmask.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        schema.HeaderColumnApply![flagsIndex]!(mod, json);
-
-        Assert.Equal(Fallout4ModHeader.HeaderFlag.Small, mod.ModHeader.Flags);
-    }
-
-    [Fact]
-    public void GetSchemas_Header_EslFlagValue_IsTheSmallBit()
-    {
-        var schema = _reflector.GetSchemas(GameRelease.Fallout4)["header"];
-        Assert.Equal((long)Fallout4ModHeader.HeaderFlag.Small, schema.EslFlagValue);
     }
 
     [Fact]

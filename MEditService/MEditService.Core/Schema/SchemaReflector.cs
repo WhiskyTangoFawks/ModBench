@@ -208,8 +208,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var headerGetterType = modHeaderProp.PropertyType;
         var columns = new List<ColumnSpec>();
         var extracts = new List<Func<IModGetter, object?>>();
-        var applies = new List<Action<IMod, JsonElement>?>();
-        long? eslFlagValue = null;
 
         var authorProp = headerGetterType.GetProperty("Author", BindingFlags.Public | BindingFlags.Instance);
         if (authorProp != null && ClassifyLeaf(authorProp, authorProp.PropertyType, getterTypeToTable) is { } authorLeaf)
@@ -217,7 +215,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             columns.Add(new ColumnSpec("author", authorProp.Name, authorLeaf.DuckDbType, _ => null,
                 authorLeaf.ApiType, authorLeaf.ValidFormKeyTypes, authorLeaf.EnumValues, Apply: null));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, authorLeaf.Get));
-            applies.Add(HeaderPropertyApply(modHeaderProp, authorProp.Name, nullable: true, authorLeaf.Convert, logger));
         }
         else
         {
@@ -228,10 +225,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         if (flagsProp?.PropertyType.IsEnum == true)
         {
             var flagsLeaf = ClassifyEnumLeaf(flagsProp, flagsProp.PropertyType);
-            // EslFlagValue detection runs off the raw Mutagen member names before the xEdit
-            // display-name rename below — LightMasterFlagNames is the source of truth for "which
-            // member means ESL", independent of what the UI displays.
-            eslFlagValue = FindEslFlagValue(flagsLeaf.EnumValues, flagsLeaf.EnumBitValues);
 
             // Only the header's flags column gets xEdit's display names — every other
             // bitmask enum in the schema (npc_, race, ...) keeps its raw Mutagen member names, so
@@ -241,7 +234,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 flagsLeaf.ApiType, flagsLeaf.ValidFormKeyTypes, displayNames, Apply: null,
                 IsBitmask: flagsLeaf.IsBitmask, EnumBitValues: flagsLeaf.EnumBitValues));
             extracts.Add(HeaderPropertyExtract(modHeaderProp, flagsLeaf.Get));
-            applies.Add(HeaderPropertyApply(modHeaderProp, flagsProp.Name, nullable: false, flagsLeaf.Convert, logger));
         }
         else
         {
@@ -252,7 +244,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         columns.Add(new ColumnSpec(HeaderIndexer.MastersFieldName, "MasterReferences", "VARCHAR", _ => null, "array",
             Empty, Empty, Apply: null, IsArray: true, ElementType: mastersElement));
         extracts.Add(mod => JsonSerializer.Serialize(mod.MasterReferences.Select(r => r.Master.FileName.ToString()).ToList()));
-        applies.Add(HeaderMastersApply()); // validation is the caller's
 
         return new RecordTableSchema
         {
@@ -261,42 +252,12 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             RecordType = headerGetterType,
             RecordColumns = columns,
             HeaderColumnExtract = extracts,
-            HeaderColumnApply = applies,
-            EslFlagValue = eslFlagValue,
             HasVmad = false, // a mod header is never a major record; VMAD is structurally not a concept here
         };
     }
 
-    // Write counterpart to the masters extract: MasterReferences lives directly on IMod (not under
-    // ModHeader, unlike author/flags), so this doesn't go through HeaderPropertyApply's
-    // modHeaderProp.GetValue indirection — it rebuilds mod.MasterReferences in place from the
-    // incoming JSON array of plugin filenames. Validating that array is the caller's job —
-    // this apply trusts whatever it is handed.
-    private static Action<IMod, JsonElement> HeaderMastersApply() => (mod, json) =>
-    {
-        if (json.ValueKind != JsonValueKind.Array) return;
-        var list = mod.MasterReferences;
-        list.Clear();
-        foreach (var el in json.EnumerateArray())
-        {
-            if (el.GetString() is not string name) continue;
-            list.Add(new MasterReference { Master = ModKey.FromFileName(name) });
-        }
-    };
-
     private static Func<IModGetter, object?> HeaderPropertyExtract(PropertyInfo modHeaderProp, Func<object, object?> leafGet) =>
         mod => modHeaderProp.GetValue(mod) is { } header ? leafGet(header) : null;
-
-    // Write counterpart to HeaderPropertyExtract: resolves the mutable ModHeader off the setter mod
-    // and applies the converted JSON onto its property (reusing MakeApplier's by-name set + null
-    // handling). Convert is never null for the header's author/flags leaves (primitive / enum).
-    private static Action<IMod, JsonElement>? HeaderPropertyApply(
-        PropertyInfo modHeaderProp, string propName, bool nullable, Func<JsonElement, object?>? convert, ILogger logger)
-    {
-        if (convert == null) return null;
-        var applier = MakeApplier(propName, nullable, convert, logger);
-        return (mod, json) => { if (modHeaderProp.GetValue(mod) is { } header) applier(header, json); };
-    }
 
     // Member names Mutagen uses for the light-master ("ESL") flag across games.
     private static readonly HashSet<string> LightMasterFlagNames =
@@ -313,19 +274,6 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         if (mutagenName.Equals("Master", StringComparison.OrdinalIgnoreCase)) return "ESM";
         return LightMasterFlagNames.Contains(mutagenName) ? "ESL" : mutagenName;
-    }
-
-    // names and bitValues are the parallel arrays ClassifyEnumLeaf builds in lockstep (a bitmask
-    // enum always yields both), so a single bound over names indexes bitValues safely.
-    private static long? FindEslFlagValue(string[] names, string[]? bitValues)
-    {
-        if (bitValues == null) return null;
-        for (int i = 0; i < names.Length; i++)
-        {
-            if (LightMasterFlagNames.Contains(names[i]))
-                return long.Parse(bitValues[i], System.Globalization.CultureInfo.InvariantCulture);
-        }
-        return null;
     }
 
     // The three GRUP-timestamp properties are on this list for the same reason
