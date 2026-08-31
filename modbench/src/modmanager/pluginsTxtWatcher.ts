@@ -8,7 +8,9 @@ import { createDebouncedFsWatcher } from './fsWatcher';
  *  never assume exclusive ownership of a file on disk).
  *
  *  Every profile rather than the active one, for the reason `modlistWatcher.ts` gives: switching
- *  profiles changes which file matters. See fsWatcher.ts for the shared debounce/dispose behavior. */
-export function createPluginsTxtWatcher(instanceRoot: string, onChange: () => void): vscode.Disposable {
-  return createDebouncedFsWatcher(instanceRoot, 'profiles/*/plugins.txt', onChange);
+ *  profiles changes which file matters. See fsWatcher.ts for the shared debounce/dispose behavior,
+ *  and for `debounceMs`'s own meaning (#621's mechanism 2: this watcher passes 0, since
+ *  `loadOrderReconcile`'s own debounce already coalesces). */
+export function createPluginsTxtWatcher(instanceRoot: string, onChange: () => void, debounceMs?: number): vscode.Disposable {
+  return createDebouncedFsWatcher(instanceRoot, 'profiles/*/plugins.txt', onChange, debounceMs);
 }

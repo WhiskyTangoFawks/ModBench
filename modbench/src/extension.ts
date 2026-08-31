@@ -1889,13 +1889,19 @@ function clearTreeWhenBackendDies(
  *  catches a folder appearing or vanishing without a `modlist.txt` write, which is what a
  *  hand-dropped or hand-deleted mod folder looks like before auto-registration notices it;
  *  `plugins.txt` is the Plugin axis — a reorder or an enable/disable, whether Modbench wrote it or
- *  MO2/the user did (root CLAUDE.md: never assume exclusive ownership of a file on disk). */
+ *  MO2/the user did (root CLAUDE.md: never assume exclusive ownership of a file on disk).
+ *
+ *  Each passes `debounceMs: 0` — #621's mechanism 2: `sync.request()` already debounces every
+ *  arrival on its own, so a second, uncoordinated wait in front of it (fsWatcher.ts's own
+ *  historical 200ms) only adds latency without adding coalescing, since the sync's single timer
+ *  is what every arrival, from whichever watcher, actually resets. Cuts the latency on this path
+ *  from ~450ms to ~250ms. */
 function wireLoadOrderWatchers(sync: LoadOrderSync, instanceRoot: string): vscode.Disposable[] {
   return [
     sync,
-    createModlistWatcher(instanceRoot, () => sync.request()),
-    createModsWatcher(instanceRoot, () => sync.request()),
-    createPluginsTxtWatcher(instanceRoot, () => sync.request()),
+    createModlistWatcher(instanceRoot, () => sync.request(), 0),
+    createModsWatcher(instanceRoot, () => sync.request(), 0),
+    createPluginsTxtWatcher(instanceRoot, () => sync.request(), 0),
   ];
 }
 
