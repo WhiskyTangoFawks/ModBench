@@ -260,7 +260,7 @@ public class PersistentIndexTests : IDisposable
     [InlineData("IO Error: The file is not a valid DuckDB database file!", false)]
     [InlineData("Serialization Error: Failed to deserialize: unsupported storage version", false)]
     public void AnOpenFailure_IsClassifiedAsAnotherWriterOnlyWhenItIsALockConflict(string message, bool expected) =>
-        Assert.Equal(expected, DuckDbRecordIndex.IsAnotherWriter(new InvalidOperationException(message)));
+        Assert.Equal(expected, IndexStore.IsAnotherWriter(new InvalidOperationException(message)));
 
     // An index given no home is still a working index — the in-memory shape, which is what a caller
     // with no install to key a file by gets, and what every other fixture in this suite uses.
