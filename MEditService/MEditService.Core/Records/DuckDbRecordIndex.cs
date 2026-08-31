@@ -1493,8 +1493,9 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     private const string EffectiveRelation = "records";
     private const string HeadRelation = "records_head";
 
-    // Created on first ask and reused: it is a stateless projection over this same connection, and
+    // Created on first ask and reused: each is a stateless projection over this same connection, and
     // At() is called per read on hot paths (GetCompare walks an override stack through it).
+    private IRecordReads? _effectiveReads;
     private IRecordReads? _headReads;
 
     /// <summary>
@@ -1510,128 +1511,640 @@ public sealed class DuckDbRecordIndex : IRecordIndex
     /// Effective (a FormKey should resolve to what the link points at *now*), and the committed
     /// question every consumer in this ticket actually asks is a document question, answered from
     /// <see cref="RecordOverrides"/>'s own Head bodies.</para>
+    ///
+    /// <para>#603: <see cref="RelationReads"/> is the one implementation for every member of
+    /// <see cref="IRecordReads"/> — this instance's own public surface (below) is nothing but
+    /// <c>At(RecordRef.Effective)</c>, so a read cannot behave differently reached the two ways.</para>
     /// </summary>
     public IRecordReads At(RecordRef recordRef)
     {
-        if (recordRef != RecordRef.Head) return this;
-        _headReads ??= new RefScopedReads(this, HeadRelation);
-        return _headReads;
+        if (recordRef == RecordRef.Head)
+        {
+            _headReads ??= new RelationReads(this, HeadRelation);
+            return _headReads;
+        }
+        _effectiveReads ??= new RelationReads(this, EffectiveRelation);
+        return _effectiveReads;
     }
 
     /// <summary>
-    /// One ref's worth of <see cref="IRecordReads"/>, differing from the default surface only in
-    /// which relation its SQL names. Every member forwards to the same private implementation the
-    /// outer instance's own public members forward to — so a read cannot be ref-aware on one path
-    /// and not the other, which is exactly the failure mode a second read implementation would
-    /// invite.
+    /// #603: the one implementation of every <see cref="IRecordReads"/> member, parameterized by
+    /// which relation its SQL names — both <see cref="At"/>(<see cref="RecordRef.Effective"/>) and
+    /// <see cref="At"/>(<see cref="RecordRef.Head"/>) are an instance of this class and nothing else,
+    /// so a read cannot be ref-aware on one path and not the other. Replaces the pre-#603 shape (a
+    /// public Effective-only method, a private <c>records</c>-parameterized twin, and a Head-only
+    /// forwarder here stating the same read a third time) with exactly one body per read, reached
+    /// through exactly one door.
     /// </summary>
-    private sealed class RefScopedReads(DuckDbRecordIndex owner, string records) : IRecordReads
+    private sealed class RelationReads(DuckDbRecordIndex owner, string records) : IRecordReads
     {
-        public RecordDocument? GetDocument(string formKey) => owner.GetWinningDocument(records, formKey);
-        public RecordDocument? GetDocument(string formKey, PluginKey plugin) => owner.GetPluginDocument(records, formKey, plugin);
-        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) => owner.GetPluginDocuments(records, plugin);
-        public RecordOverrides? GetOverrideStack(string formKey) => owner.GetOverrideStack(records, formKey);
-        public PagedResult<RecordSummary> Search(RecordQuery query) => owner.Search(records, query);
-        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => owner.GetRecordTypeCounts(records, plugin);
-        public IReadOnlyList<string> GetContestedFormKeys() => owner.GetContestedFormKeys(records);
+        public RecordDocument? GetDocument(string formKey)
+        {
+            owner.RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
+            var tableName = owner.FindRecordType(records, formKey);
+            return tableName == null ? null : owner.ReadDocument(records, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
+        }
+
+        public RecordDocument? GetDocument(string formKey, PluginKey plugin)
+        {
+            owner.RequireSchemas();
+            var tableName = owner.FindRecordType(records, formKey);
+            return tableName == null ? null : owner.ReadDocument(records, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
+        }
+
+        // #547: one query where GetDocument(string, PluginKey)'s callers used to loop two point
+        // queries per record (FindRecordType + ReadDocument — ~7,880 round trips for one compile of
+        // the real 3,940-record fixture). Rows are materialized before any reconstitution: resolving a
+        // referenced FormKey opens its own command on this same connection, and doing that under a
+        // live reader would interleave two readers (GetOverrideStack's #415 note).
+        public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin)
+        {
+            var schemas = owner.RequireSchemas();
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type
+                FROM {records}
+                WHERE plugin = $1 AND origin = $2
+                """;
+            AddParams(cmd, [plugin.Name, plugin.Origin!]);
+            using var reader = cmd.ExecuteReader();
+
+            var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
+                bool IsWinner, string? EditorId, string Body, string RecordType)>();
+            while (reader.Read())
+            {
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                    LoadOrderSortKey(reader, 3), reader.GetBoolean(4),
+                    reader.IsDBNull(5) ? null : reader.GetString(5),
+                    reader.GetString(6), reader.GetString(7)));
+            }
+            reader.Close();
+
+            // One resolution cache for the whole batch, not one per document — the same referenced
+            // FormKey (a shared keyword, a race) recurs across a plugin's records, and every miss is a
+            // form_lookup query of its own. Resolution is a pure lookup, so sharing changes nothing
+            // about any single document's CheckErrors.
+            var cache = new Dictionary<string, RecordLookupEntry?>();
+            RecordLookupEntry? Resolve(string fk)
+            {
+                if (cache.TryGetValue(fk, out var t)) return t;
+                var resolved = owner.ResolveFormKey(fk);
+                cache[fk] = resolved;
+                return resolved;
+            }
+
+            var documents = new List<RecordDocument>(rows.Count);
+            foreach (var row in rows)
+            {
+                // Same defensive skip as RederiveIndexRowsForRecord: a record_type no schema claims
+                // has no reconstitution path.
+                if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
+                documents.Add(owner.DocumentFromBody(
+                    row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
+                    row.EditorId, row.Body, schema, Resolve));
+            }
+            return documents;
+        }
+
+        public RecordOverrides? GetOverrideStack(string formKey)
+        {
+            owner.RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
+            var tableName = owner.FindRecordType(records, formKey);
+            if (tableName == null) return null;
+            var schema = owner.RequireSchemas()[tableName];
+            var isHeader = IsHeaderTable(tableName);
+            var sql = isHeader
+                ? $"""
+                    SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
+                    FROM "{HeaderIndexer.TableName}"
+                    WHERE form_key = $1
+                    ORDER BY load_order_idx
+                    """
+                : $"""
+                    SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, "ref"
+                    FROM {records}
+                    WHERE form_key = $1 AND record_type = $2
+                    ORDER BY load_order_idx
+                    """;
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
+            if (!isHeader)
+                cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
+            using var reader = cmd.ExecuteReader();
+
+            var cache = new Dictionary<string, RecordLookupEntry?>();
+            RecordLookupEntry? Resolve(string fk)
+            {
+                if (cache.TryGetValue(fk, out var t)) return t;
+                var resolved = owner.ResolveFormKey(fk);
+                cache[fk] = resolved;
+                return resolved;
+            }
+
+            // #415: read the whole stack out before resolving any Head counterpart — ReadDocument opens
+            // its own command on this same connection, and doing that while this reader is still open
+            // would interleave two readers on one DuckDB connection.
+            var rows = new List<(RecordDocument Document, bool IsDirty)>();
+            while (reader.Read())
+            {
+                var doc = isHeader
+                    ? ReadDocumentFromColumns(reader, schema, Resolve)
+                    : owner.ReadDocumentFromBody(reader, schema, Resolve);
+                // The header carries no `ref` column at all (D8: it has no document), so it is never
+                // dirty here. On a Head-scoped read every row is committed by construction, so this
+                // reads false for all of them without needing to know which relation it is on.
+                var isDirty = !isHeader && reader.GetString(7) == SourceRef.WorkingTree;
+                rows.Add((doc, isDirty));
+            }
+            reader.Close();
+
+            var entries = new List<OverrideStackEntry>();
+            foreach (var (doc, isDirty) in rows)
+            {
+                // #415: a clean entry keeps Head and Effective as the same instance — not merely equal
+                // values — so "did this change" stays answerable by identity on the hot, overwhelmingly
+                // common path. A dirty one resolves its committed counterpart from the Head relation.
+                //
+                // #603: deliberately `HeadRelation`, never this instance's own `records` field — a
+                // dirty entry's committed counterpart lives at records_head regardless of which ref
+                // *this* GetOverrideStack call is itself scoped to (Effective or Head), because Head
+                // never has its own dirt to resolve a further Head-of-Head from. Do not "fix" this to
+                // read `records`: that would make a Head-scoped GetOverrideStack call resolve a dirty
+                // entry's committed body from itself, which is never dirty by construction, silently
+                // losing the real committed text no test here would catch without the divergence this
+                // exact line exists to serve (see RecordRefDivergenceTests).
+                var head = isDirty
+                    ? owner.ReadDocument(HeadRelation, tableName, doc.FormKey, doc.Plugin.Name, doc.Plugin.Origin, winnerOnly: false) ?? doc
+                    : doc;
+                entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, head, isDirty));
+            }
+
+            return entries.Count == 0 ? null : new RecordOverrides(formKey, tableName, entries);
+        }
+
+        public PagedResult<RecordSummary> Search(RecordQuery query)
+        {
+            var (where, paramValues) = BuildWhere(
+                query.Plugin?.Name, query.Search, owner._filterActive, query.Plugin?.Origin, query.RecordTypes);
+            // #428: "ref" plus a records_committed existence check is exactly the pair
+            // RecordSummaryWorkingTreeStateTests pins — Modified is ref='working-tree' with a committed
+            // snapshot on record; Added is the same ref with no snapshot at all (CreateWorkingTreeRecord's
+            // own doc comment: a create writes nothing into records_committed). The `r` alias is needed
+            // only for the correlated EXISTS below; `where`'s own unqualified column references still
+            // resolve against it unambiguously, since it is the sole table this query's FROM names.
+            const string cols = """
+                form_key, plugin, load_order_idx, is_winner, editor_id, origin, r."ref",
+                EXISTS (
+                    SELECT 1 FROM records_committed rc
+                    WHERE rc.form_key = r.form_key AND rc.plugin = r.plugin AND rc.origin = r.origin
+                ) AS has_committed_snapshot
+                """;
+
+            using var countCmd = owner.Connection.CreateCommand();
+            countCmd.CommandText = $"SELECT COUNT(*) FROM {records}{where}";
+            AddParams(countCmd, paramValues);
+            var total = (long)countCmd.ExecuteScalar()!;
+
+            // #458: editor_id alone is not unique — blank/duplicate EditorIDs are ordinary, and overrides
+            // of one record across plugins share one by definition — so LIMIT/OFFSET paging over it with
+            // no tiebreak lets DuckDB place tied rows on either side of a page boundary differently
+            // across calls, silently skipping some and repeating others. (form_key, plugin, origin) is
+            // this table's own identity (see CreateRecordsTable's doc comment), so appending it makes the
+            // order total and paging stable.
+            using var dataCmd = owner.Connection.CreateCommand();
+            dataCmd.CommandText = $"""
+                SELECT {cols} FROM {records} r{where}
+                ORDER BY editor_id, form_key, plugin, origin
+                LIMIT {query.Limit} OFFSET {query.Offset}
+                """;
+            AddParams(dataCmd, paramValues);
+
+            var items = new List<RecordSummary>();
+            using var reader = dataCmd.ExecuteReader();
+            while (reader.Read())
+                items.Add(ReadSummary(reader));
+
+            return new PagedResult<RecordSummary>(items, (int)total);
+        }
+
+        // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
+        // Search/counts/plugin-highlight, never a point read) — routed through the same BuildWhere every
+        // other filterable query here uses, rather than a bespoke WHERE that would silently miss it.
+        public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin)
+        {
+            var (where, paramValues) = BuildWhere(plugin.Name, null, owner._filterActive, plugin.Origin, recordTypes: null);
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"SELECT record_type, COUNT(*) FROM {records}{where} GROUP BY record_type";
+            AddParams(cmd, paramValues);
+            using var reader = cmd.ExecuteReader();
+
+            var counts = new List<RecordTypeCount>();
+            while (reader.Read())
+                counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1)));
+            return counts;
+        }
+
+        // #364: same filter-narrowing invariant as GetRecordTypeCounts above — routed through the same
+        // BuildWhere, so a filter that prunes a FormKey out of Search/counts prunes it out of the
+        // Conflicts node's candidate population too, with nothing bespoke to drift out of sync.
+        public IReadOnlyList<string> GetContestedFormKeys()
+        {
+            var (where, paramValues) = BuildWhere(null, null, owner._filterActive, null, recordTypes: null);
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT form_key FROM {records}{where}
+                GROUP BY form_key
+                HAVING COUNT(*) > 1
+                """;
+            AddParams(cmd, paramValues);
+            using var reader = cmd.ExecuteReader();
+
+            var formKeys = new List<string>();
+            while (reader.Read())
+                formKeys.Add(reader.GetString(0));
+            return formKeys;
+        }
+
         public RecordLookupEntry? Resolve(string formKey) => owner.ResolveFormKey(formKey);
+
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => owner.GetReferences(targetFormKey);
-        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
-            owner.GetPluginsWithMatchingRecords(records, tableNames);
-        public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) => owner.GetNativeFormKeys(records, plugin.Name, plugin.Origin!);
-        public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) => owner.GetEffectiveMasters(records, plugin);
-        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
-            owner.GetWorldspaceCells(records, plugin.Name, worldspaceFormKey, plugin.Origin!);
-        public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
-            owner.GetInteriorCells(records, plugin.Name, limit, offset, plugin.Origin!);
-        public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
-            owner.GetCellReferences(records, plugin.Name, cellFormKey, plugin.Origin!);
+
+        /// <summary>
+        /// See <see cref="IRecordReads.GetEffectiveMasters"/> — derived, not declared. Union of (a) the
+        /// owning plugin of every FormKey this plugin's records reference outward (<c>form_references</c>)
+        /// and (b) the owning plugin of every FormKey this plugin carries that isn't native to it (an
+        /// override forces that master), in deterministic load-order order, excluding the plugin itself.
+        /// A master this plugin's header declares but nothing in it references or overrides is not
+        /// effective, and is excluded — the ADR-0038 "effective masters" concept, reimplemented against
+        /// the read model instead of a write-time content walk.
+        /// </summary>
+        public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin)
+        {
+            var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            using (var cmd = owner.Connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT DISTINCT target_form_key FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
+                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    if (ModKeyNameOf(reader.GetString(0)) is { } name) required.Add(name);
+                }
+            }
+
+            using (var cmd = owner.Connection.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
+                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+                cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    var fk = reader.GetString(0);
+                    if (ModKeyNameOf(fk) is { } name && !string.Equals(name, plugin.Name, StringComparison.OrdinalIgnoreCase))
+                        required.Add(name);
+                }
+            }
+
+            required.Remove(plugin.Name);
+            if (required.Count == 0) return [];
+
+            // Deterministic load-order order: a master the load order holds sorts by its own
+            // load_order_idx; one it doesn't (referenced but never registered, or registered with no
+            // slot) falls after every listed master, alphabetically among themselves, so the result is
+            // stable either way.
+            var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            using (var cmd = owner.Connection.CreateCommand())
+            {
+                cmd.CommandText = $"SELECT plugin, MIN(load_order_idx) FROM {TableDdlBuilder.RegistrationsRelation} WHERE load_order_idx IS NOT NULL GROUP BY plugin";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                    order[reader.GetString(0)] = reader.GetInt32(1);
+            }
+
+            return [.. required
+                .OrderBy(n => order.GetValueOrDefault(n, int.MaxValue))
+                .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)];
+        }
+
+        public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames)
+        {
+            var types = tableNames.ToList();
+            if (types.Count == 0 || !owner._filterActive)
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // #413: third union shape collapsed — see Search.
+            var (where, paramValues) = BuildWhere(null, null, filterActive: true, origin: null, recordTypes: types);
+
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"SELECT DISTINCT plugin FROM {records}{where}";
+            AddParams(cmd, paramValues);
+            using var reader = cmd.ExecuteReader();
+
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            while (reader.Read())
+                result.Add(reader.GetString(0));
+            return result;
+        }
+
+        public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin)
+        {
+            // #413: fourth union shape collapsed. The header exclusion the union expressed by omitting a
+            // table is now implicit — a ModHeader is not a major record, so it has no document at all.
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+            using var reader = cmd.ExecuteReader();
+
+            var result = new List<string>();
+            while (reader.Read())
+            {
+                var fk = reader.GetString(0);
+                var colon = fk.IndexOf(':');
+                // "Native" = the record's own FormKey ModKey is this plugin (not an override of a master).
+                if (colon > 0 && fk.AsSpan(colon + 1).Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
+                    result.Add(fk);
+            }
+            return result;
+        }
+
+        public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey)
+        {
+            using var cmd = owner.Connection.CreateCommand();
+            // #497: full_name is read straight out of the joined row's own JSON body rather than a
+            // stored column the way editor_id is — this is the only consumer today, c.body is already
+            // in scope on every relation {records} resolves to, and promoting it to a stored column
+            // (mirroring editor_id's INSERT/UPDATE plumbing across every working-tree write path) is
+            // easy to do later if a second consumer ever needs it. '$.Name.Value' is what the codec
+            // emits for an *unlocalized* plugin's FULL subrecord (Mutagen's TranslatedString with a
+            // direct string) — a localized plugin (STRINGS-backed, e.g. an official master) serializes
+            // to '$.Name.Values' (a per-language array) instead, which this misses; the FULL name then
+            // reads as absent and this falls back to the grid/EditorID label, same as a cell with no
+            // FULL name at all, rather than surfacing the wrong string.
+            cmd.CommandText = $"""
+                SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
+                       json_extract_string(c.body, '$.Name.Value')
+                FROM cell_location cl
+                LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+                WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
+                ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
+                """;
+            AddParams(cmd, [worldspaceFormKey, plugin.Name, plugin.Origin!]);
+            using var reader = cmd.ExecuteReader();
+
+            var rows = new List<CellLocationSummary>();
+            while (reader.Read())
+            {
+                rows.Add(new CellLocationSummary(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                    reader.IsDBNull(3) ? null : reader.GetInt32(3),
+                    reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                    reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                    reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                    reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8)));
+            }
+
+            return rows;
+        }
+
+        public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset)
+        {
+            using var countCmd = owner.Connection.CreateCommand();
+            countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1 AND origin = $2";
+            countCmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+            countCmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+            var total = (long)countCmd.ExecuteScalar()!;
+
+            // #458: same non-unique-ordering shape as Search's above — c.editor_id alone gives DuckDB no
+            // tiebreak for LIMIT/OFFSET paging, so ties can land on either side of a page boundary
+            // differently across calls. The WHERE clause already scopes this query to one plugin+origin,
+            // so cl.cell_form_key alone (cell_location's own identity within that scope) is a sufficient
+            // tiebreak — no need to repeat the already-constant plugin/origin columns.
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
+                FROM cell_location cl
+                LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
+                WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
+                ORDER BY c.editor_id, cl.cell_form_key
+                LIMIT {limit} OFFSET {offset}
+                """;
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
+            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
+            using var reader = cmd.ExecuteReader();
+
+            var items = new List<CellSummary>();
+            while (reader.Read())
+            {
+                items.Add(new CellSummary(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetInt32(2),
+                    reader.IsDBNull(3) ? null : reader.GetInt32(3)));
+            }
+
+            return new PagedResult<CellSummary>(items, (int)total);
+        }
+
+        public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey)
+        {
+            var schemas = owner.RequireSchemas();
+            var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
+            if (placedTypes.Count == 0)
+                return new CellReferences([], []);
+
+            // ADR-0041 / #413: one single-table query where this used to UNION a wide table per placed
+            // type — the record_type column is what the union was standing in for. The placed ref's base
+            // form comes out of the document rather than a `base` column; json_extract_string unquotes
+            // the stored FormLink text, and a placed ref with no base at all reads NULL exactly as the
+            // wide column did (RealDataReadGoldenTests.SpatialReads_MatchGolden pins both shapes).
+            var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
+
+            using var cmd = owner.Connection.CreateCommand();
+            cmd.CommandText = $"""
+                SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
+                       json_extract_string(r.body, '$.Base')
+                FROM placement p
+                JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
+                WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
+                  AND r.record_type IN ({typeList})
+                ORDER BY r.editor_id
+                """;
+            AddParams(cmd, [cellFormKey, plugin.Name, plugin.Origin!]);
+            using var reader = cmd.ExecuteReader();
+
+            var persistent = new List<PlacedSummary>();
+            var temporary = new List<PlacedSummary>();
+            while (reader.Read())
+            {
+                var group = reader.GetString(0);
+                var summary = new PlacedSummary(
+                    reader.GetString(2),
+                    reader.IsDBNull(3) ? null : reader.GetString(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.GetString(1));
+                (group == "persistent" ? persistent : temporary).Add(summary);
+            }
+            return new CellReferences(persistent, temporary);
+        }
+
         public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
             owner.GetPlacement(formKey, plugin.Name, plugin.Origin!);
+
         public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) =>
             owner.GetCellLocation(cellFormKey, plugin.Name, plugin.Origin!);
+
         public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
             owner.GetContainerChildren(plugin.Name, plugin.Origin!, parentFormKey);
+
         public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
             owner.GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
+
+        // #603: moved from the outer class — used only from within this class now that every
+        // read reaches its SQL through here, and SonarAnalyzer (S3398) flags a private method used
+        // by exactly one nested class as belonging inside it.
+        // #428: column 6 is "ref" (SourceRef.Committed/WorkingTree), column 7 is the correlated
+        // records_committed EXISTS Search's SELECT list adds. None for the overwhelming majority (ref is
+        // committed); Added/Modified only ever come from a row this ticket's own dirty-listing tests
+        // produce. Kept out of ReadSummary's constructor call so the ref/snapshot→enum decision stays in
+        // C#, not duplicated as SQL string literals ('modified'/'added') the reader would otherwise parse.
+        private static WorkingTreeState ReadWorkingTreeState(DuckDBDataReader reader)
+        {
+            if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
+            return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
+        }
+
+        private static string? ModKeyNameOf(string formKey)
+        {
+            var colon = formKey.IndexOf(':');
+            return colon > 0 ? formKey[(colon + 1)..] : null;
+        }
+
+        private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
+            new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
+                reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
+                ReadWorkingTreeState(reader));
+
+        // origin (#296 / ADR-0036): nullable and independent of plugin — a *filter*, not an identity
+        // field. Defaults to "no
+        // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
+        // before this parameter existed.
+        // recordTypes (#413): the single-table read model's replacement for "which table am I querying" —
+        // an empty/null list means every type, one entry is what a per-type listing used to get from the
+        // table name, and several is what SearchRecords used to get from a UNION ALL across tables.
+        private static (string where, List<string> paramValues) BuildWhere(
+            string? plugin, string? search, bool filterActive = false, string? origin = null,
+            IReadOnlyList<string>? recordTypes = null)
+        {
+            var conditions = new List<string>();
+            var values = new List<string>();
+
+            if (recordTypes is { Count: > 0 })
+            {
+                var placeholders = recordTypes.Select((_, i) => $"${values.Count + i + 1}");
+                conditions.Add($"record_type IN ({string.Join(", ", placeholders)})");
+                values.AddRange(recordTypes.Select(NormalizeRecordType));
+            }
+
+            if (plugin != null)
+            {
+                conditions.Add($"plugin = ${values.Count + 1}");
+                values.Add(plugin);
+            }
+            if (origin != null)
+            {
+                conditions.Add($"origin = ${values.Count + 1}");
+                values.Add(origin);
+            }
+            if (search != null)
+            {
+                // Issue #210: a FormKey-shaped query (e.g. seeded by the picker from the record's own
+                // reference, or pasted per #201) resolves directly against the exact stored form_key
+                // rather than an EditorID substring match — form_key values are always stored via
+                // Mutagen's own FormKey.ToString(), so round-tripping the query through
+                // FormKey.TryFactory/.ToString() canonicalizes case/format to match. A query that merely
+                // looks FormKey-ish but doesn't fully parse falls through to the EditorID match below,
+                // same as always.
+                if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
+                {
+                    // Case-insensitive: FormKey.TryFactory canonicalizes the hex id but does not
+                    // re-case the ModKey (plugin) portion against known data, so a user-typed
+                    // lowercase plugin name would otherwise miss an exact case-sensitive match.
+                    conditions.Add($"LOWER(form_key) = LOWER(${values.Count + 1})");
+                    values.Add(formKey.ToString());
+                }
+                else
+                {
+                    conditions.Add($"editor_id ILIKE ${values.Count + 1}");
+                    values.Add($"%{search}%");
+                }
+            }
+            if (filterActive)
+                conditions.Add("form_key IN (SELECT form_key FROM _filter)");
+
+            var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
+            return (where, values);
+        }
     }
 
-    public RecordDocument? GetDocument(string formKey) => GetWinningDocument(EffectiveRelation, formKey);
+    public RecordDocument? GetDocument(string formKey) => At(RecordRef.Effective).GetDocument(formKey);
 
     public RecordDocument? GetDocument(string formKey, PluginKey plugin) =>
-        GetPluginDocument(EffectiveRelation, formKey, plugin);
-
-    private RecordDocument? GetWinningDocument(string records, string formKey)
-    {
-        RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
-        var tableName = FindRecordType(records, formKey);
-        return tableName == null ? null : ReadDocument(records, tableName, formKey, plugin: null, origin: null, winnerOnly: true);
-    }
-
-    private RecordDocument? GetPluginDocument(string records, string formKey, PluginKey plugin)
-    {
-        RequireSchemas();
-        var tableName = FindRecordType(records, formKey);
-        return tableName == null ? null : ReadDocument(records, tableName, formKey, plugin.Name, plugin.Origin, winnerOnly: false);
-    }
+        At(RecordRef.Effective).GetDocument(formKey, plugin);
 
     public IReadOnlyList<RecordDocument> GetDocuments(PluginKey plugin) =>
-        GetPluginDocuments(EffectiveRelation, plugin);
+        At(RecordRef.Effective).GetDocuments(plugin);
 
-    // #547: one query where GetPluginDocument's callers used to loop two point queries per record
-    // (FindRecordType + ReadDocument — ~7,880 round trips for one compile of the real 3,940-record
-    // fixture). Rows are materialized before any reconstitution: resolving a referenced FormKey
-    // opens its own command on this same connection, and doing that under a live reader would
-    // interleave two readers (GetOverrideStack's #415 note).
-    private List<RecordDocument> GetPluginDocuments(string records, PluginKey plugin)
-    {
-        var schemas = RequireSchemas();
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, record_type
-            FROM {records}
-            WHERE plugin = $1 AND origin = $2
-            """;
-        AddParams(cmd, [plugin.Name, plugin.Origin!]);
-        using var reader = cmd.ExecuteReader();
+    public RecordOverrides? GetOverrideStack(string formKey) => At(RecordRef.Effective).GetOverrideStack(formKey);
 
-        var rows = new List<(string FormKey, string Plugin, string Origin, int LoadOrderIndex,
-            bool IsWinner, string? EditorId, string Body, string RecordType)>();
-        while (reader.Read())
-        {
-            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
-                LoadOrderSortKey(reader, 3), reader.GetBoolean(4),
-                reader.IsDBNull(5) ? null : reader.GetString(5),
-                reader.GetString(6), reader.GetString(7)));
-        }
-        reader.Close();
+    public PagedResult<RecordSummary> Search(RecordQuery query) => At(RecordRef.Effective).Search(query);
 
-        // One resolution cache for the whole batch, not one per document — the same referenced
-        // FormKey (a shared keyword, a race) recurs across a plugin's records, and every miss is a
-        // form_lookup query of its own. Resolution is a pure lookup, so sharing changes nothing
-        // about any single document's CheckErrors.
-        var cache = new Dictionary<string, RecordLookupEntry?>();
-        RecordLookupEntry? Resolve(string fk)
-        {
-            if (cache.TryGetValue(fk, out var t)) return t;
-            var resolved = ResolveFormKey(fk);
-            cache[fk] = resolved;
-            return resolved;
-        }
+    public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) =>
+        At(RecordRef.Effective).GetRecordTypeCounts(plugin);
 
-        var documents = new List<RecordDocument>(rows.Count);
-        foreach (var row in rows)
-        {
-            // Same defensive skip as RederiveIndexRowsForRecord: a record_type no schema claims
-            // has no reconstitution path.
-            if (!schemas.TryGetValue(row.RecordType, out var schema)) continue;
-            documents.Add(DocumentFromBody(
-                row.FormKey, row.Plugin, row.Origin, row.LoadOrderIndex, row.IsWinner,
-                row.EditorId, row.Body, schema, Resolve));
-        }
-        return documents;
-    }
+    public IReadOnlyList<string> GetContestedFormKeys() => At(RecordRef.Effective).GetContestedFormKeys();
 
+    public RecordLookupEntry? Resolve(string formKey) => At(RecordRef.Effective).Resolve(formKey);
+
+    public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) =>
+        At(RecordRef.Effective).GetReferencedBy(targetFormKey);
+
+    public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) =>
+        At(RecordRef.Effective).GetEffectiveMasters(plugin);
+
+    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
+        At(RecordRef.Effective).GetPluginsWithMatchingRecords(tableNames);
+
+    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) =>
+        At(RecordRef.Effective).GetNativeFormKeys(plugin);
+
+    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
+        At(RecordRef.Effective).GetWorldspaceCells(plugin, worldspaceFormKey);
+
+    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
+        At(RecordRef.Effective).GetInteriorCells(plugin, limit, offset);
+
+    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
+        At(RecordRef.Effective).GetCellReferences(plugin, cellFormKey);
+
+    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
+        At(RecordRef.Effective).GetPlacement(formKey, plugin);
+
+    public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) =>
+        At(RecordRef.Effective).GetCellLocation(plugin, cellFormKey);
+
+    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
+        At(RecordRef.Effective).GetContainerChildren(plugin, parentFormKey);
+
+    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
+        At(RecordRef.Effective).GetContainerParent(plugin, childFormKey);
     private RecordDocument? ReadDocument(string records, string tableName, string formKey, string? plugin, string? origin, bool winnerOnly)
     {
         var schema = RequireSchemas()[tableName];
@@ -1676,241 +2189,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         return isHeader
             ? ReadDocumentFromColumns(reader, schema, Resolve)
             : ReadDocumentFromBody(reader, schema, Resolve);
-    }
-
-    public RecordOverrides? GetOverrideStack(string formKey) => GetOverrideStack(EffectiveRelation, formKey);
-
-    private RecordOverrides? GetOverrideStack(string records, string formKey)
-    {
-        RequireSchemas(); // fail before touching the DB when Initialize hasn't run, matching every other read here
-        var tableName = FindRecordType(records, formKey);
-        if (tableName == null) return null;
-        var schema = RequireSchemas()[tableName];
-        var isHeader = IsHeaderTable(tableName);
-        var sql = isHeader
-            ? $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id{ColumnList(schema)}
-                FROM "{HeaderIndexer.TableName}"
-                WHERE form_key = $1
-                ORDER BY load_order_idx
-                """
-            : $"""
-                SELECT form_key, plugin, origin, load_order_idx, is_winner, editor_id, body, "ref"
-                FROM {records}
-                WHERE form_key = $1 AND record_type = $2
-                ORDER BY load_order_idx
-                """;
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = sql;
-        cmd.Parameters.Add(new DuckDBParameter { Value = formKey });
-        if (!isHeader)
-            cmd.Parameters.Add(new DuckDBParameter { Value = NormalizeRecordType(tableName) });
-        using var reader = cmd.ExecuteReader();
-
-        var cache = new Dictionary<string, RecordLookupEntry?>();
-        RecordLookupEntry? Resolve(string fk)
-        {
-            if (cache.TryGetValue(fk, out var t)) return t;
-            var resolved = ResolveFormKey(fk);
-            cache[fk] = resolved;
-            return resolved;
-        }
-
-        // #415: read the whole stack out before resolving any Head counterpart — ReadDocument opens
-        // its own command on this same connection, and doing that while this reader is still open
-        // would interleave two readers on one DuckDB connection.
-        var rows = new List<(RecordDocument Document, bool IsDirty)>();
-        while (reader.Read())
-        {
-            var doc = isHeader
-                ? ReadDocumentFromColumns(reader, schema, Resolve)
-                : ReadDocumentFromBody(reader, schema, Resolve);
-            // The header carries no `ref` column at all (D8: it has no document), so it is never
-            // dirty here. On a Head-scoped read every row is committed by construction, so this
-            // reads false for all of them without needing to know which relation it is on.
-            var isDirty = !isHeader && reader.GetString(7) == SourceRef.WorkingTree;
-            rows.Add((doc, isDirty));
-        }
-        reader.Close();
-
-        var entries = new List<OverrideStackEntry>();
-        foreach (var (doc, isDirty) in rows)
-        {
-            // #415: a clean entry keeps Head and Effective as the same instance — not merely equal
-            // values — so "did this change" stays answerable by identity on the hot, overwhelmingly
-            // common path. A dirty one resolves its committed counterpart from the Head relation.
-            var head = isDirty
-                ? ReadDocument(HeadRelation, tableName, doc.FormKey, doc.Plugin.Name, doc.Plugin.Origin, winnerOnly: false) ?? doc
-                : doc;
-            entries.Add(new OverrideStackEntry(doc.Plugin, doc.LoadOrderIndex, doc.IsWinner, doc, head, isDirty));
-        }
-
-        return entries.Count == 0 ? null : new RecordOverrides(formKey, tableName, entries);
-    }
-
-    public PagedResult<RecordSummary> Search(RecordQuery query) => Search(EffectiveRelation, query);
-
-    private PagedResult<RecordSummary> Search(string records, RecordQuery query)
-    {
-        var (where, paramValues) = BuildWhere(
-            query.Plugin?.Name, query.Search, _filterActive, query.Plugin?.Origin, query.RecordTypes);
-        // #428: "ref" plus a records_committed existence check is exactly the pair
-        // RecordSummaryWorkingTreeStateTests pins — Modified is ref='working-tree' with a committed
-        // snapshot on record; Added is the same ref with no snapshot at all (CreateWorkingTreeRecord's
-        // own doc comment: a create writes nothing into records_committed). The `r` alias is needed
-        // only for the correlated EXISTS below; `where`'s own unqualified column references still
-        // resolve against it unambiguously, since it is the sole table this query's FROM names.
-        const string cols = """
-            form_key, plugin, load_order_idx, is_winner, editor_id, origin, r."ref",
-            EXISTS (
-                SELECT 1 FROM records_committed rc
-                WHERE rc.form_key = r.form_key AND rc.plugin = r.plugin AND rc.origin = r.origin
-            ) AS has_committed_snapshot
-            """;
-
-        using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = $"SELECT COUNT(*) FROM {records}{where}";
-        AddParams(countCmd, paramValues);
-        var total = (long)countCmd.ExecuteScalar()!;
-
-        // #458: editor_id alone is not unique — blank/duplicate EditorIDs are ordinary, and overrides
-        // of one record across plugins share one by definition — so LIMIT/OFFSET paging over it with
-        // no tiebreak lets DuckDB place tied rows on either side of a page boundary differently
-        // across calls, silently skipping some and repeating others. (form_key, plugin, origin) is
-        // this table's own identity (see CreateRecordsTable's doc comment), so appending it makes the
-        // order total and paging stable.
-        using var dataCmd = Connection.CreateCommand();
-        dataCmd.CommandText = $"""
-            SELECT {cols} FROM {records} r{where}
-            ORDER BY editor_id, form_key, plugin, origin
-            LIMIT {query.Limit} OFFSET {query.Offset}
-            """;
-        AddParams(dataCmd, paramValues);
-
-        var items = new List<RecordSummary>();
-        using var reader = dataCmd.ExecuteReader();
-        while (reader.Read())
-            items.Add(ReadSummary(reader));
-
-        return new PagedResult<RecordSummary>(items, (int)total);
-    }
-
-    // The filter narrows counts the same way it narrows listings (invariant: SetFilter affects
-    // Search/counts/plugin-highlight, never a point read) — routed through the same BuildWhere every
-    // other filterable query here uses, rather than a bespoke WHERE that would silently miss it.
-    public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) =>
-        GetRecordTypeCounts(EffectiveRelation, plugin);
-
-    private List<RecordTypeCount> GetRecordTypeCounts(string records, PluginKey plugin)
-    {
-        var (where, paramValues) = BuildWhere(plugin.Name, null, _filterActive, plugin.Origin, recordTypes: null);
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT record_type, COUNT(*) FROM {records}{where} GROUP BY record_type";
-        AddParams(cmd, paramValues);
-        using var reader = cmd.ExecuteReader();
-
-        var counts = new List<RecordTypeCount>();
-        while (reader.Read())
-            counts.Add(new RecordTypeCount(reader.GetString(0), (int)reader.GetInt64(1)));
-        return counts;
-    }
-
-    // #364: same filter-narrowing invariant as GetRecordTypeCounts above — routed through the same
-    // BuildWhere, so a filter that prunes a FormKey out of Search/counts prunes it out of the
-    // Conflicts node's candidate population too, with nothing bespoke to drift out of sync.
-    public IReadOnlyList<string> GetContestedFormKeys() => GetContestedFormKeys(EffectiveRelation);
-
-    private List<string> GetContestedFormKeys(string records)
-    {
-        var (where, paramValues) = BuildWhere(null, null, _filterActive, null, recordTypes: null);
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT form_key FROM {records}{where}
-            GROUP BY form_key
-            HAVING COUNT(*) > 1
-            """;
-        AddParams(cmd, paramValues);
-        using var reader = cmd.ExecuteReader();
-
-        var formKeys = new List<string>();
-        while (reader.Read())
-            formKeys.Add(reader.GetString(0));
-        return formKeys;
-    }
-
-    public RecordLookupEntry? Resolve(string formKey) => ResolveFormKey(formKey);
-
-    public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => GetReferences(targetFormKey);
-
-    /// <summary>
-    /// See <see cref="IRecordReads.GetEffectiveMasters"/> — derived, not declared. Union of (a) the
-    /// owning plugin of every FormKey this plugin's records reference outward (<c>form_references</c>)
-    /// and (b) the owning plugin of every FormKey this plugin carries that isn't native to it (an
-    /// override forces that master), in deterministic load-order order, excluding the plugin itself.
-    /// A master this plugin's header declares but nothing in it references or overrides is not
-    /// effective, and is excluded — the ADR-0038 "effective masters" concept, reimplemented against
-    /// the read model instead of a write-time content walk.
-    /// </summary>
-    public IReadOnlyList<string> GetEffectiveMasters(PluginKey plugin) =>
-        GetEffectiveMasters(EffectiveRelation, plugin);
-
-    private IReadOnlyList<string> GetEffectiveMasters(string records, PluginKey plugin)
-    {
-        var required = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        using (var cmd = Connection.CreateCommand())
-        {
-            cmd.CommandText = "SELECT DISTINCT target_form_key FROM form_references WHERE source_plugin = $1 AND source_origin = $2";
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                if (ModKeyNameOf(reader.GetString(0)) is { } name) required.Add(name);
-            }
-        }
-
-        using (var cmd = Connection.CreateCommand())
-        {
-            cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Name });
-            cmd.Parameters.Add(new DuckDBParameter { Value = plugin.Origin });
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                var fk = reader.GetString(0);
-                if (ModKeyNameOf(fk) is { } name && !string.Equals(name, plugin.Name, StringComparison.OrdinalIgnoreCase))
-                    required.Add(name);
-            }
-        }
-
-        required.Remove(plugin.Name);
-        if (required.Count == 0) return [];
-
-        // Deterministic load-order order: a master the load order holds sorts by its own
-        // load_order_idx; one it doesn't (referenced but never registered, or registered with no
-        // slot) falls after every listed master, alphabetically among themselves, so the result is
-        // stable either way.
-        var order = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        using (var cmd = Connection.CreateCommand())
-        {
-            cmd.CommandText = $"SELECT plugin, MIN(load_order_idx) FROM {TableDdlBuilder.RegistrationsRelation} WHERE load_order_idx IS NOT NULL GROUP BY plugin";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-                order[reader.GetString(0)] = reader.GetInt32(1);
-        }
-
-        return [.. required
-            .OrderBy(n => order.GetValueOrDefault(n, int.MaxValue))
-            .ThenBy(n => n, StringComparer.OrdinalIgnoreCase)];
-    }
-
-    // The plugin-filename half of a stored FormKey ("012345:Base.esm" -> "Base.esm") — mirrors
-    // GetNativeFormKeys' own colon-split, reused here for GetEffectiveMasters' derivation.
-    private static string? ModKeyNameOf(string formKey)
-    {
-        var colon = formKey.IndexOf(':');
-        return colon > 0 ? formKey[(colon + 1)..] : null;
     }
 
     /// <summary>Reads a record's document row into a <see cref="RecordDocument"/>, reconstituted
@@ -2066,57 +2344,8 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             : new RecordLookupEntry(reader.GetString(0), NullableEditorId());
     }
 
-    public IReadOnlyList<string> GetNativeFormKeys(PluginKey plugin) =>
-        GetNativeFormKeys(EffectiveRelation, plugin.Name, plugin.Origin!);
-
-    // #421: private — GetNativeFormKeys(PluginKey) above is the public seam member and delegates here.
-    private List<string> GetNativeFormKeys(string records, string plugin, string origin)
-    {
-        // #413: fourth union shape collapsed. The header exclusion the union expressed by omitting a
-        // table is now implicit — a ModHeader is not a major record, so it has no document at all.
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT DISTINCT form_key FROM {records} WHERE plugin = $1 AND origin = $2";
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var result = new List<string>();
-        while (reader.Read())
-        {
-            var fk = reader.GetString(0);
-            var colon = fk.IndexOf(':');
-            // "Native" = the record's own FormKey ModKey is this plugin (not an override of a master).
-            if (colon > 0 && fk.AsSpan(colon + 1).Equals(plugin, StringComparison.OrdinalIgnoreCase))
-                result.Add(fk);
-        }
-        return result;
-    }
-
-    // --- Helpers ---
-
-    /// <summary>ADR-0044: a record row's <c>load_order_idx</c> is its column's <i>sort key</i>, and
-    /// a registered copy no <c>plugins.txt</c> line names has none (NULL) — it sorts after every
-    /// listed copy, the same place the unlisted-plugin door used to put it. The plugin-level wire
-    /// (<c>PluginResponse.LoadOrderIndex</c>) keeps the honest null; here, where every consumer
-    /// orders columns by the value and never reads it as a fact, a sentinel is the sort rule.</summary>
     private static int LoadOrderSortKey(DuckDBDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? int.MaxValue : reader.GetInt32(ordinal);
-
-    private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
-        new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
-            reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
-            ReadWorkingTreeState(reader));
-
-    // #428: column 6 is "ref" (SourceRef.Committed/WorkingTree), column 7 is the correlated
-    // records_committed EXISTS Search's SELECT list adds. None for the overwhelming majority (ref is
-    // committed); Added/Modified only ever come from a row this ticket's own dirty-listing tests
-    // produce. Kept out of ReadSummary's constructor call so the ref/snapshot→enum decision stays in
-    // C#, not duplicated as SQL string literals ('modified'/'added') the reader would otherwise parse.
-    private static WorkingTreeState ReadWorkingTreeState(DuckDBDataReader reader)
-    {
-        if (reader.GetString(6) != SourceRef.WorkingTree) return WorkingTreeState.None;
-        return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
-    }
 
     // The read-side mirror of AppendTyped: a column declared INTEGER read back an int no matter
     // whether its extractor produced a byte, ushort or uint, because the wide table's column type
@@ -2141,67 +2370,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         schema.RecordColumns.Count == 0
             ? ""
             : ", " + string.Join(", ", schema.RecordColumns.Select(c => $"\"{c.Name}\""));
-
-    // origin (#296 / ADR-0036): nullable and independent of plugin — a *filter*, not an identity
-    // field. Defaults to "no
-    // constraint" so a plugin-only or filter-less call keeps returning every origin's rows, same as
-    // before this parameter existed.
-    // recordTypes (#413): the single-table read model's replacement for "which table am I querying" —
-    // an empty/null list means every type, one entry is what a per-type listing used to get from the
-    // table name, and several is what SearchRecords used to get from a UNION ALL across tables.
-    private static (string where, List<string> paramValues) BuildWhere(
-        string? plugin, string? search, bool filterActive = false, string? origin = null,
-        IReadOnlyList<string>? recordTypes = null)
-    {
-        var conditions = new List<string>();
-        var values = new List<string>();
-
-        if (recordTypes is { Count: > 0 })
-        {
-            var placeholders = recordTypes.Select((_, i) => $"${values.Count + i + 1}");
-            conditions.Add($"record_type IN ({string.Join(", ", placeholders)})");
-            values.AddRange(recordTypes.Select(NormalizeRecordType));
-        }
-
-        if (plugin != null)
-        {
-            conditions.Add($"plugin = ${values.Count + 1}");
-            values.Add(plugin);
-        }
-        if (origin != null)
-        {
-            conditions.Add($"origin = ${values.Count + 1}");
-            values.Add(origin);
-        }
-        if (search != null)
-        {
-            // Issue #210: a FormKey-shaped query (e.g. seeded by the picker from the record's own
-            // reference, or pasted per #201) resolves directly against the exact stored form_key
-            // rather than an EditorID substring match — form_key values are always stored via
-            // Mutagen's own FormKey.ToString(), so round-tripping the query through
-            // FormKey.TryFactory/.ToString() canonicalizes case/format to match. A query that merely
-            // looks FormKey-ish but doesn't fully parse falls through to the EditorID match below,
-            // same as always.
-            if (Mutagen.Bethesda.Plugins.FormKey.TryFactory(search, out var formKey))
-            {
-                // Case-insensitive: FormKey.TryFactory canonicalizes the hex id but does not
-                // re-case the ModKey (plugin) portion against known data, so a user-typed
-                // lowercase plugin name would otherwise miss an exact case-sensitive match.
-                conditions.Add($"LOWER(form_key) = LOWER(${values.Count + 1})");
-                values.Add(formKey.ToString());
-            }
-            else
-            {
-                conditions.Add($"editor_id ILIKE ${values.Count + 1}");
-                values.Add($"%{search}%");
-            }
-        }
-        if (filterActive)
-            conditions.Add("form_key IN (SELECT form_key FROM _filter)");
-
-        var where = conditions.Count > 0 ? " WHERE " + string.Join(" AND ", conditions) : "";
-        return (where, values);
-    }
 
     // Record types used to be table names, and DuckDB resolves those case-insensitively — so callers
     // have always been free to say "NPC_" or "npc_" and several do. As a column value the comparison
@@ -2467,146 +2635,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     // ── Worldspace tree reads (ADR-0023) ────────────────────────────────────────
 
-    public IReadOnlyList<CellLocationSummary> GetWorldspaceCells(PluginKey plugin, string worldspaceFormKey) =>
-        GetWorldspaceCells(EffectiveRelation, plugin.Name, worldspaceFormKey, plugin.Origin!);
-
-    // #421: private — GetWorldspaceCells(PluginKey, string) above is the public seam member.
-    private List<CellLocationSummary> GetWorldspaceCells(string records, string plugin, string worldspaceFormKey, string origin)
-    {
-        using var cmd = Connection.CreateCommand();
-        // #497: full_name is read straight out of the joined row's own JSON body rather than a
-        // stored column the way editor_id is — this is the only consumer today, c.body is already
-        // in scope on every relation {records} resolves to, and promoting it to a stored column
-        // (mirroring editor_id's INSERT/UPDATE plumbing across every working-tree write path) is
-        // easy to do later if a second consumer ever needs it. '$.Name.Value' is what the codec
-        // emits for an *unlocalized* plugin's FULL subrecord (Mutagen's TranslatedString with a
-        // direct string) — a localized plugin (STRINGS-backed, e.g. an official master) serializes
-        // to '$.Name.Values' (a per-language array) instead, which this misses; the FULL name then
-        // reads as absent and this falls back to the grid/EditorID label, same as a cell with no
-        // FULL name at all, rather than surfacing the wrong string.
-        cmd.CommandText = $"""
-            SELECT cl.cell_form_key, c.editor_id, cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y,
-                   json_extract_string(c.body, '$.Name.Value')
-            FROM cell_location cl
-            LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-            WHERE cl.parent_worldspace = $1 AND cl.plugin = $2 AND cl.origin = $3
-            ORDER BY cl.block_x, cl.block_y, cl.sub_x, cl.sub_y, cl.grid_x, cl.grid_y
-            """;
-        AddParams(cmd, [worldspaceFormKey, plugin, origin]);
-        using var reader = cmd.ExecuteReader();
-
-        var rows = new List<CellLocationSummary>();
-        while (reader.Read())
-        {
-            rows.Add(new CellLocationSummary(
-                reader.GetString(0),
-                reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetInt32(2),
-                reader.IsDBNull(3) ? null : reader.GetInt32(3),
-                reader.IsDBNull(4) ? null : reader.GetInt32(4),
-                reader.IsDBNull(5) ? null : reader.GetInt32(5),
-                reader.IsDBNull(6) ? null : reader.GetInt32(6),
-                reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                reader.IsDBNull(8) ? null : reader.GetString(8)));
-        }
-
-        return rows;
-    }
-
-    public PagedResult<CellSummary> GetInteriorCells(PluginKey plugin, int limit, int offset) =>
-        GetInteriorCells(EffectiveRelation, plugin.Name, limit, offset, plugin.Origin!);
-
-    // #421: private — GetInteriorCells(PluginKey, int, int) above is the public seam member.
-    private PagedResult<CellSummary> GetInteriorCells(string records, string plugin, int limit, int offset, string origin)
-    {
-        using var countCmd = Connection.CreateCommand();
-        countCmd.CommandText = "SELECT COUNT(*) FROM cell_location WHERE is_interior AND plugin = $1 AND origin = $2";
-        countCmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        countCmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        var total = (long)countCmd.ExecuteScalar()!;
-
-        // #458: same non-unique-ordering shape as Search's above — c.editor_id alone gives DuckDB no
-        // tiebreak for LIMIT/OFFSET paging, so ties can land on either side of a page boundary
-        // differently across calls. The WHERE clause already scopes this query to one plugin+origin,
-        // so cl.cell_form_key alone (cell_location's own identity within that scope) is a sufficient
-        // tiebreak — no need to repeat the already-constant plugin/origin columns.
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT cl.cell_form_key, c.editor_id, cl.grid_x, cl.grid_y
-            FROM cell_location cl
-            LEFT JOIN {records} c ON c.form_key = cl.cell_form_key AND c.plugin = cl.plugin AND c.origin = cl.origin
-            WHERE cl.is_interior AND cl.plugin = $1 AND cl.origin = $2
-            ORDER BY c.editor_id, cl.cell_form_key
-            LIMIT {limit} OFFSET {offset}
-            """;
-        cmd.Parameters.Add(new DuckDBParameter { Value = plugin });
-        cmd.Parameters.Add(new DuckDBParameter { Value = origin });
-        using var reader = cmd.ExecuteReader();
-
-        var items = new List<CellSummary>();
-        while (reader.Read())
-        {
-            items.Add(new CellSummary(
-                reader.GetString(0),
-                reader.IsDBNull(1) ? null : reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetInt32(2),
-                reader.IsDBNull(3) ? null : reader.GetInt32(3)));
-        }
-
-        return new PagedResult<CellSummary>(items, (int)total);
-    }
-
-    public CellReferences GetCellReferences(PluginKey plugin, string cellFormKey) =>
-        GetCellReferences(EffectiveRelation, plugin.Name, cellFormKey, plugin.Origin!);
-
-    // #421: private — GetCellReferences(PluginKey, string) above is the public seam member.
-    private CellReferences GetCellReferences(string records, string plugin, string cellFormKey, string origin)
-    {
-        var schemas = RequireSchemas();
-        var placedTypes = PlacedTableNames.Where(schemas.ContainsKey).ToList();
-        if (placedTypes.Count == 0)
-            return new CellReferences([], []);
-
-        // ADR-0041 / #413: one single-table query where this used to UNION a wide table per placed
-        // type — the record_type column is what the union was standing in for. The placed ref's base
-        // form comes out of the document rather than a `base` column; json_extract_string unquotes
-        // the stored FormLink text, and a placed ref with no base at all reads NULL exactly as the
-        // wide column did (RealDataReadGoldenTests.SpatialReads_MatchGolden pins both shapes).
-        var typeList = string.Join(", ", placedTypes.Select(t => $"'{t}'"));
-
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"""
-            SELECT p.placement_group, r.record_type, p.form_key, r.editor_id,
-                   json_extract_string(r.body, '$.Base')
-            FROM placement p
-            JOIN {records} r ON r.form_key = p.form_key AND r.plugin = p.plugin AND r.origin = p.origin
-            WHERE p.parent_cell = $1 AND p.plugin = $2 AND p.origin = $3
-              AND r.record_type IN ({typeList})
-            ORDER BY r.editor_id
-            """;
-        AddParams(cmd, [cellFormKey, plugin, origin]);
-        using var reader = cmd.ExecuteReader();
-
-        var persistent = new List<PlacedSummary>();
-        var temporary = new List<PlacedSummary>();
-        while (reader.Read())
-        {
-            var group = reader.GetString(0);
-            var summary = new PlacedSummary(
-                reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4),
-                reader.GetString(1));
-            (group == "persistent" ? persistent : temporary).Add(summary);
-        }
-        return new CellReferences(persistent, temporary);
-    }
-
-    public PlacementRow? GetPlacement(string formKey, PluginKey plugin) =>
-        GetPlacement(formKey, plugin.Name, plugin.Origin!);
-
-    // origin (#272 / ADR-0036, required since #275): same reasoning as Index's.
-    // #421: private — GetPlacement(string, PluginKey) above is the public seam member.
     private PlacementRow? GetPlacement(string formKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
@@ -2633,10 +2661,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
                 NullableFloat(4));
     }
 
-    public CellLocationRow? GetCellLocation(PluginKey plugin, string cellFormKey) =>
-        GetCellLocation(cellFormKey, plugin.Name, plugin.Origin!);
-
-    // #416 S1b: mirrors GetPlacement's shape exactly — same ref-invariance, same reasoning.
     private CellLocationRow? GetCellLocation(string cellFormKey, string plugin, string origin)
     {
         using var cmd = Connection.CreateCommand();
@@ -2658,11 +2682,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             reader.GetBoolean(7));
     }
 
-    public IReadOnlyList<ContainerChildRow> GetContainerChildren(PluginKey plugin, string parentFormKey) =>
-        GetContainerChildren(plugin.Name, plugin.Origin!, parentFormKey);
-
-    // Ref-invariant (see ContainerChildRow's own doc comment) — same reasoning as GetPlacement, so
-    // this ignores which relation the caller is positioned on, exactly as GetPlacement does.
     private List<ContainerChildRow> GetContainerChildren(string plugin, string origin, string parentFormKey)
     {
         using var cmd = Connection.CreateCommand();
@@ -2686,9 +2705,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     /// <summary>See <see cref="IRecordReads.GetContainerParent"/>. Ref-invariant for the same reason
     /// its inverse is, so it likewise ignores which relation the caller is positioned on.</summary>
-    public ContainerChildRow? GetContainerParent(PluginKey plugin, string childFormKey) =>
-        GetContainerParent(plugin.Name, plugin.Origin!, childFormKey);
-
     private ContainerChildRow? GetContainerParent(string plugin, string origin, string childFormKey)
     {
         using var cmd = Connection.CreateCommand();
@@ -2706,30 +2722,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             : null;
     }
 
-    public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>
-        GetPluginsWithMatchingRecords(EffectiveRelation, tableNames);
-
-    private HashSet<string> GetPluginsWithMatchingRecords(string records, IEnumerable<string> tableNames)
-    {
-        var types = tableNames.ToList();
-        if (types.Count == 0 || !_filterActive)
-            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        // #413: third union shape collapsed — see SearchRecords.
-        var (where, paramValues) = BuildWhere(null, null, filterActive: true, origin: null, recordTypes: types);
-
-        using var cmd = Connection.CreateCommand();
-        cmd.CommandText = $"SELECT DISTINCT plugin FROM {records}{where}";
-        AddParams(cmd, paramValues);
-        using var reader = cmd.ExecuteReader();
-
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        while (reader.Read())
-            result.Add(reader.GetString(0));
-        return result;
-    }
-
-    /// <summary>See <see cref="IRecordIndex.ReplaceContainerChildSlot"/>.</summary>
     public void ReplaceContainerChildSlot(
         PluginKey key, string parentFormKey, string parentRecordType, string slotName,
         IReadOnlyList<(string ChildFormKey, int SlotIndex)> children)

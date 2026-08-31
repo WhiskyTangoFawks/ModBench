@@ -1,6 +1,8 @@
+using System.Text;
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using MEditService.Core.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Fallout4;
@@ -56,6 +58,9 @@ public sealed class RecordRefDivergenceTests : IDisposable
 
     public void Dispose() => _fixture.Dispose();
 
+    private static readonly PluginKey BaseKey = new("Base.esm", "Data");
+    private static readonly PluginKey WinnerKey = new("Winner.esp", "Data");
+
     private DuckDbRecordIndex LoadedRepository()
     {
         var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
@@ -68,6 +73,30 @@ public sealed class RecordRefDivergenceTests : IDisposable
         repo.Index(winnerMod, Registration.Participating(1), new PluginKey(winnerMod.ModKey.FileName.ToString(), "Data"));
         repo.UpdateWinners();
         return repo;
+    }
+
+    // #603: the same "KeepMe" override deleted in the working tree, reused by every one of the five
+    // extracted/aggregate reads below — one crafted divergence, five distinct At(Head) observers, the
+    // same shape RecordRefDivergenceTests already uses for GetOverrideStack/Search above. Deletion is
+    // structural, so ApplyWorkingTreeChanges' own UpdateWinners() resweep already covers it — no
+    // second call needed here.
+    private DuckDbRecordIndex RepositoryWithWinnerOverrideDeleted()
+    {
+        var repo = LoadedRepository();
+        repo.ApplyWorkingTreeChanges(WinnerKey, [(_keptNpcFormKey.ToString(), null)]);
+        return repo;
+    }
+
+    // A real codec-produced body, the same shape CreateRecord writes in production (mirrors
+    // WorkingTreeCreationTests' own helper) — a hand-crafted JSON literal would only prove this test's
+    // guess at the codec's shape, not that a genuinely new record round-trips.
+    private static readonly RecordTextCodec Codec = new(NullLogger<RecordTextCodec>.Instance);
+
+    private static string NewNpcBody(string formKey, string editorId)
+    {
+        var npc = new Npc(FormKey.Factory(formKey), Fallout4Release.Fallout4) { EditorID = editorId };
+        var bytes = Codec.SerializeToBytesAsync(npc, GameRelease.Fallout4).GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(bytes);
     }
 
     [Fact]
@@ -144,5 +173,76 @@ public sealed class RecordRefDivergenceTests : IDisposable
         Assert.Equal(
             repo.GetDocument(untouched, basePlugin)!.Body,
             repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
+    }
+
+    // #603 characterization: the 8 relation-parameterized twins below (GetRecordTypeCounts,
+    // GetContestedFormKeys, GetPluginsWithMatchingRecords, GetNativeFormKeys, GetEffectiveMasters,
+    // GetWorldspaceCells, GetInteriorCells, GetCellReferences) had zero test coverage of their
+    // At(RecordRef.Head) path anywhere in the suite before this ticket — every existing call site
+    // exercises them at Effective only. These five (plus three cell/placement-table ones in
+    // RecordRefDivergenceCellReadsTests) close that gap ahead of the stage-1 collapse, so a relation
+    // plumbed wrong during the move has something to fail against instead of passing by construction.
+
+    [Fact]
+    public void AtHead_GetContestedFormKeys_StillCountsAnEffectivelyDeletedOverride()
+    {
+        using var repo = RepositoryWithWinnerOverrideDeleted();
+
+        // Effective: Winner.esp's override is gone, so KeepMe is back to a single Base.esm row —
+        // no longer contested. Head: the committed snapshot still holds both rows.
+        Assert.DoesNotContain(_keptNpcFormKey.ToString(), repo.GetContestedFormKeys());
+        Assert.Contains(_keptNpcFormKey.ToString(), repo.At(RecordRef.Head).GetContestedFormKeys());
+    }
+
+    [Fact]
+    public void AtHead_GetPluginsWithMatchingRecords_StillNamesThePluginWithAnEffectivelyDeletedOverride()
+    {
+        using var repo = RepositoryWithWinnerOverrideDeleted();
+        repo.SetFilter($"SELECT '{_keptNpcFormKey}' AS form_key");
+
+        var effective = repo.GetPluginsWithMatchingRecords(["npc_"]);
+        var head = repo.At(RecordRef.Head).GetPluginsWithMatchingRecords(["npc_"]);
+
+        Assert.DoesNotContain("Winner.esp", effective);
+        Assert.Contains("Winner.esp", head);
+        // Base.esm's own row was never touched, so it matches at both — proving the difference above
+        // is Winner.esp's row specifically, not the filter or the plugin set collapsing wholesale.
+        Assert.Contains("Base.esm", effective);
+        Assert.Contains("Base.esm", head);
+    }
+
+    [Fact]
+    public void AtHead_GetEffectiveMasters_StillRequiresTheEffectivelyDeletedOverridesMaster()
+    {
+        using var repo = RepositoryWithWinnerOverrideDeleted();
+
+        // Winner.esp's only record was its now-deleted override of KeepMe, so nothing in its
+        // Effective rows still forces Base.esm as a master. Head's committed row still does.
+        Assert.DoesNotContain("Base.esm", repo.GetEffectiveMasters(WinnerKey));
+        Assert.Contains("Base.esm", repo.At(RecordRef.Head).GetEffectiveMasters(WinnerKey));
+    }
+
+    [Fact]
+    public void AtHead_GetRecordTypeCounts_ExcludesAWorkingTreeOnlyCreatedRecord()
+    {
+        using var repo = LoadedRepository();
+        var newFormKey = "800000:Base.esm";
+        repo.CreateWorkingTreeRecord(BaseKey, newFormKey, "npc_", NewNpcBody(newFormKey, "WorkingTreeOnlyNpc"));
+
+        var effectiveCount = repo.GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
+        var headCount = repo.At(RecordRef.Head).GetRecordTypeCounts(BaseKey).Single(c => c.Type == "npc_").Count;
+
+        Assert.Equal(headCount + 1, effectiveCount);
+    }
+
+    [Fact]
+    public void AtHead_GetNativeFormKeys_ExcludesAWorkingTreeOnlyCreatedRecord()
+    {
+        using var repo = LoadedRepository();
+        var newFormKey = "800000:Base.esm";
+        repo.CreateWorkingTreeRecord(BaseKey, newFormKey, "npc_", NewNpcBody(newFormKey, "WorkingTreeOnlyNpc"));
+
+        Assert.Contains(newFormKey, repo.GetNativeFormKeys(BaseKey));
+        Assert.DoesNotContain(newFormKey, repo.At(RecordRef.Head).GetNativeFormKeys(BaseKey));
     }
 }
