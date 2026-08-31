@@ -113,9 +113,9 @@ there is no separate load-load order step.
 10. As a user, I want a filter that narrows the list to plugins whose filename matches
     what I type, so that I can find one without scrolling a 100+-entry load order.
 11. As a user, I want one Refresh, in one place, that re-reads every list at once if any of
-    them looks stale (e.g. after an external MO2 edit), so that I never have to remember
-    which tree owns which refresh (it lives on the
-    [Loadout header](loadout-header.md)).
+    them looks stale, so that I never have to remember which tree owns which refresh (it
+    lives on the [Loadout header](loadout-header.md)). An external MO2 edit is *not* the case
+    this exists for — that reaches the tab on its own (#653, see *Toolbar*).
 12. As a user, I want to right-click a plugin and Reveal it in my OS file manager, so that I
     can go inspect the actual file behind a badge without hunting for it myself.
 13. As a user, I want this list visible at all times, with no separate open/launch step, so
@@ -613,6 +613,16 @@ overflow, then native **Collapse All** last.
   workspace-scope Refresh on the [Loadout header](loadout-header.md), which re-reads every
   Mod-Management source together. There is no reload of the editing backend to offer: the load
   order it holds is reconciled on every change (ADR-0044).
+- **Refresh is not how the tab recovers from an external edit** (#653). The `mods/**`,
+  `profiles/*/modlist.txt` and `profiles/*/plugins.txt` watchers each invalidate this tree as
+  well as requesting the editing-side reconcile, so a `plugins.txt` line added, removed,
+  reordered or enable-toggled outside Modbench — by MO2, a tool, or the user — reaches the tab
+  on the normal watcher cadence with no user action. Disabling or re-enabling a mod converges
+  the same way: it writes `modlist.txt`, which is one of the same three signals. Manual Refresh
+  remains for the case where a view *looks* stale, not as the mechanism that makes it correct
+  (the never-assume-exclusive-ownership invariant in `CLAUDE.md`). The composition happens in
+  `wirePluginListInvalidation.ts`, which adds the invalidation alongside the existing
+  `sync.request()` fan-out rather than replacing it — no watcher was added.
 
 ### Row context menu
 
