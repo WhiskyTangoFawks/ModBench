@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Mod, ModlistEntry } from './model';
-import { buildFileConflictIndex } from './fileConflictIndex';
+import { buildFileConflictIndex, rootLevelWinners } from './fileConflictIndex';
 import { computeModStatuses, checkMasterOrder, computePluginOrderStatuses } from './statusChecker';
 import { buildTes4Buffer } from './test/buildTes4Buffer';
 
@@ -326,7 +326,7 @@ describe('computePluginOrderStatuses', () => {
 
   async function statuses(order: string[], df: string | undefined = dataFolder) {
     const index = await buildFileConflictIndex(entries, root, () => {});
-    return computePluginOrderStatuses(order, index, df, () => {});
+    return computePluginOrderStatuses(order, rootLevelWinners(index), df, () => {});
   }
 
   it('has no entry for a plugin whose masters are all present and before it', async () => {
@@ -362,7 +362,7 @@ describe('computePluginOrderStatuses', () => {
     // to no masters → ok, and a skip is logged.
     const result = await computePluginOrderStatuses(
       ['Child.esp', 'Base.esp', 'DLCRobot.esm', 'Fallout4.esm'],
-      index,
+      rootLevelWinners(index),
       undefined,
       (m) => logs.push(m),
     );
@@ -380,7 +380,7 @@ describe('computePluginOrderStatuses', () => {
       await writeMod(corruptRoot, 'Good', { 'Good.esp': buildTes4Buffer(['Missing.esm']) });
       const logs: string[] = [];
       const index = await buildFileConflictIndex([mod('Bad'), mod('Good')], corruptRoot, () => {});
-      const result = await computePluginOrderStatuses(['Corrupt.esp', 'Good.esp'], index, corruptData, (m) => logs.push(m));
+      const result = await computePluginOrderStatuses(['Corrupt.esp', 'Good.esp'], rootLevelWinners(index), corruptData, (m) => logs.push(m));
 
       expect(result.get('Corrupt.esp')).toBeUndefined(); // unreadable → treated as no masters
       expect(result.get('Good.esp')).toEqual({ kind: 'masterNotLoadedBefore', masters: ['Missing.esm'] });

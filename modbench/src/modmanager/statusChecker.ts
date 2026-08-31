@@ -5,7 +5,7 @@
 import { stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import type { ModlistEntry } from './model';
-import { rootLevelWinners, type FileConflictIndex } from './fileConflictIndex';
+import type { FileConflictIndex } from './fileConflictIndex';
 import { PLUGIN_EXTENSIONS, readMasters } from './masterReader';
 
 export type ModStatus =
@@ -178,17 +178,22 @@ export function checkMasterOrder(
  *  Only offending plugins get a map entry — an `ok` plugin is absent. Degrades
  *  gracefully: an unreadable plugin (or one whose path can't be resolved, e.g. a
  *  vanilla plugin when `dataFolder` is undefined) is logged and treated as having
- *  no masters, never throwing and never blanking other plugins' verdicts. */
+ *  no masters, never throwing and never blanking other plugins' verdicts.
+ *
+ *  `winnerByName` is `rootLevelWinners(index)` — the caller's, not recomputed here. It's a full
+ *  O(total-files-across-all-mods) scan/allocation over the index, and issue #617 gave this
+ *  function a sibling consumer of the exact same index in the same render
+ *  (`PluginListProvider.discoverUnlistedPluginNames`); computing it twice per render was the
+ *  actual defect, not a hypothetical one. */
 export async function computePluginOrderStatuses(
   order: string[],
-  index: FileConflictIndex,
+  winnerByName: Map<string, string>,
   dataFolder: string | undefined,
   log: (msg: string) => void,
 ): Promise<Map<string, PluginOrderStatus>> {
   // Mod-provided plugins always resolve via the index; a vanilla/DLC/CC plugin
   // no mod ships falls back to the game Data folder — only when it's known, so
   // an unresolved game path degrades vanilla lookups without failing the rest.
-  const winnerByName = rootLevelWinners(index);
   const pathFor = (name: string): string | undefined =>
     winnerByName.get(name.toLowerCase()) ?? (dataFolder ? join(dataFolder, name) : undefined);
 

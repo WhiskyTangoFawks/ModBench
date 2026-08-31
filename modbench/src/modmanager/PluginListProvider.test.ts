@@ -726,12 +726,15 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
   });
 
-  it('renders the plain tree (badges degraded) with a warning when status computation fails', async () => {
+  // The file index build itself fails here (readModlist hits ENOTDIR before any walk starts), not
+  // the narrower badge pass — so the warning must name both things that degrade: badges AND a
+  // disk-derived row (issue #617 review) — not just "status", which undersold the second loss.
+  it('renders the plain tree (badges AND disk-derived rows degraded) with a warning naming both when the file index build fails', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
     const logs: string[] = [];
     const reports: { severity: string; message: string }[] = [];
     // instanceRoot pointed at a *file*, not a directory: readModlist hits ENOTDIR,
-    // failing the status pass without failing the plugins.txt read (which uses the real dir).
+    // failing the index build without failing the plugins.txt read (which uses the real dir).
     const source = new Mo2ModlistSource(dir);
     const provider = new PluginListProvider({ source, log: (m) => logs.push(m), reporter: { report: (severity, message) => reports.push({ severity, message }) }, instanceRoot: join(dir, 'ModOrganizer.ini') });
     const rows = await provider.getChildren();
@@ -739,8 +742,11 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
 
     expect(rows.every((n) => n.kind !== 'error')).toBe(true); // tree still rendered
     expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined(); // no badge — computation failed
-    expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('master-order status') }]);
-    expect(logs.some((l) => l.includes('status'))).toBe(true);
+    expect(reports).toEqual([{
+      severity: 'warning',
+      message: expect.stringMatching(/badges.*inaccurate.*plugins\.txt.*missing/s),
+    }]);
+    expect(logs.some((l) => l.includes('file index build failed'))).toBe(true);
   });
 });
 
@@ -817,6 +823,16 @@ describe('PluginListProvider — externally-appeared plugin picked up as an appe
   it('a plugin file that already has a plugins.txt line is not appended a second time', async () => {
     const nodes = await pluginNodes(provider());
     expect(nodes.map((n) => n.plugin.name)).toEqual(['Base.esp']);
+  });
+
+  // MO2 users are ordinarily on a case-insensitive filesystem, so a plugins.txt line differing
+  // only in case from the on-disk filename (here, "base.esp" vs. the real "Base.esp") is a
+  // routine occurrence, not a corrupted profile — the fold-based `knownFolded` lookup must still
+  // recognise them as the same plugin, or the user sees a spurious duplicate row.
+  it('a plugins.txt line differing only in case from the on-disk filename is not appended a second time', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*base.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['base.esp']);
   });
 
   // The checkbox affordance for a synthesized row is out of scope (filed separately for a
