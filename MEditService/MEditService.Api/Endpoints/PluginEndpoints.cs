@@ -345,42 +345,48 @@ public static class PluginEndpoints
 
     // Create-record. FormKey null means auto-allocate (both-refs collision-safe); non-null is
     // xEdit's typed-FormID path, validated server-side either way (RecordEditRefusal.FormKeyCollision).
+    // #637: routed through WriteEndpointMapping.Execute like its five RecordEndpoints siblings.
+    // logReceived is deliberately null here, not an oversight — every PluginEndpoints handler had
+    // its own "Received ..." line removed as redundant with UseSerilogRequestLogging's per-request
+    // summary (see EndpointReceptionLoggingTests's header comment, the one place that decision is
+    // recorded); this method is consistent with its own file's six other handlers, none of which
+    // logs on entry either.
     internal static IResult CreateRecord(string plugin, RecordCreateRequest req, RecordEditService edits, ILoggerFactory loggerFactory)
     {
         var logger = loggerFactory.CreateLogger(nameof(PluginEndpoints));
         var decoded = Uri.UnescapeDataString(plugin);
-        if (string.IsNullOrWhiteSpace(req.Origin))
-            return Results.Problem("Origin is required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(req.RecordType))
-            return Results.Problem("A record type is required.", statusCode: 400);
-
-        try
-        {
-            var result = edits.CreateRecord(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey);
-            return result.Applied
-                ? Results.Ok(new RecordCreateResponse(true, result.NewFormKey!, req.RecordType))
-                : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not write the source file for the new record: {ex.Message}");
-        }
-        // xEdit's own typed-FormID path (req.FormKey) reaches Mutagen's FormKey.Factory
-        // (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a malformed value
-        // (wrong shape, non-hex, missing ':') throws ArgumentException there. Malformed syntax, not a
-        // well-formed-but-refused RecordEditRefusal, so this is CreatePlugin's own catch shape (400),
-        // never WriteEndpointMapping.Refusal's 422.
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Malformed FormKey creating a {RecordType} in {Plugin}", req.RecordType, decoded);
-            return WriteEndpointMapping.MalformedFormKey(ex);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder while creating a record in {Plugin}", decoded);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return WriteEndpointMapping.Execute(
+            logReceived: null,
+            validate: () =>
+            {
+                if (string.IsNullOrWhiteSpace(req.Origin))
+                    return Results.Problem("Origin is required.", statusCode: 400);
+                if (string.IsNullOrWhiteSpace(req.RecordType))
+                    return Results.Problem("A record type is required.", statusCode: 400);
+                return null;
+            },
+            execute: () => edits.CreateRecord(WriteEndpointMapping.PluginKeyOf(plugin, req.Origin), req.RecordType, req.EditorId, req.FormKey),
+            onApplied: result => Results.Ok(new RecordCreateResponse(true, result.NewFormKey!, req.RecordType)),
+            onWriteFailure: ex =>
+            {
+                logger.LogError(ex, "Could not write the source file while creating a {RecordType} in {Plugin}", req.RecordType, decoded);
+                return WriteEndpointMapping.WriteFailure($"Could not write the source file for the new record: {ex.Message}");
+            },
+            // xEdit's own typed-FormID path (req.FormKey) reaches Mutagen's FormKey.Factory
+            // (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a malformed value
+            // (wrong shape, non-hex, missing ':') throws ArgumentException there. Malformed syntax, not a
+            // well-formed-but-refused RecordEditRefusal, so this is CreatePlugin's own catch shape (400),
+            // never WriteEndpointMapping.Refusal's 422.
+            onMalformedFormKey: ex =>
+            {
+                logger.LogError(ex, "Malformed FormKey creating a {RecordType} in {Plugin}", req.RecordType, decoded);
+                return WriteEndpointMapping.MalformedFormKey(ex);
+            },
+            onNoLoadOrder: ex =>
+            {
+                logger.LogError(ex, "No usable loadOrder while creating a record in {Plugin}", decoded);
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            });
     }
 
     // The watcher's own queue plus (best-effort) the origin each unanswered plugin currently
