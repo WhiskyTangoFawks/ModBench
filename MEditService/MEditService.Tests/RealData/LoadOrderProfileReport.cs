@@ -26,9 +26,11 @@ public sealed class PluginCost
 
 /// <summary>
 /// One measured reconcile — cold or warm (#589) — aggregated from the Debug/Info lines the load path
-/// logs. The regexes parse those lines by wording, so a rewording in <c>LoadOrder</c>,
-/// <c>LoadOrderMirror</c>, <c>SourceIngest</c> or <c>DuckDbRecordIndex</c> must fail
-/// <see cref="Parse"/> loudly rather than silently zero a phase.
+/// logs. The regexes parse those lines by wording, so a rewording of one of the *required* phases'
+/// lines (<c>Opened</c> in <c>LoadOrder</c>; <c>IndexInit</c>/<c>Reconciled</c> in
+/// <c>LoadOrderMirror</c>; <c>Validated</c> in <c>DuckDbRecordIndex</c>) must fail <see cref="Parse"/>
+/// loudly rather than silently zero that phase — see the comments above <see cref="RequiredPhases"/>
+/// and above <see cref="Indexing"/> for which phases that covers and which it deliberately does not.
 /// </summary>
 public sealed class ProfileRun
 {
@@ -56,9 +58,13 @@ public sealed class ProfileRun
     //  - Indexing/Indexed/IndexPhases share one population: every plugin that does NOT take the
     //    register path (RegisterOrIndex's guard, LoadOrderMirror.cs). A warm run whose whole load
     //    order is already-indexed-and-unchanged binaries — the steady state #586/ADR-0044 exists
-    //    for — never logs any of the three; only Registering does. (Falsifiable directly: making
-    //    either required breaks the already-green Render_Throws_WhenTheColdRunIndexedNothing test,
-    //    which feeds Parse a stream with zero "Indexed " lines and expects it to succeed.)
+    //    for — never logs any of the three; only Registering does. (Falsifiable directly, each
+    //    verified in isolation: requiring any of the three breaks
+    //    Measure_ColdThenWarm_ParsesTheRealLogLines_AndTheWarmRunRegistersEverything and
+    //    Parse_DoesNotThrow_WhenNoPluginIsFreshlyIndexed_AllRegisteredWarmRun; requiring Indexed or
+    //    IndexPhases additionally breaks the already-green Render_Throws_WhenTheColdRunIndexedNothing
+    //    test — Indexing alone does not, because that test's filtered stream still contains an
+    //    "Indexing " line.)
     //  - Registering never fires in a cold run: the index file is deleted first, so nothing is
     //    "already indexed and unchanged" yet (#585/ADR-0001).
     //  - Ingested only fires for a tracked (git-managed) plugin (ADR-0041/0042); a load order with
@@ -77,13 +83,16 @@ public sealed class ProfileRun
     // a load order every plugin failed to open, which is not a real profile either). Each name is a
     // field above, so a rename here fails the build rather than silently going stale.
     //
-    // This only protects a *real* profiling run. The tests in LoadOrderProfileReportTests pin these
-    // regexes against independent static copies of the log strings — they cannot detect a production
-    // reword, because nothing here ever compares a regex against a string the production code
-    // actually emitted. That comparison only happens inside the env-gated LoadOrderProfile suite,
-    // which is skipped on a machine with no MEDIT_PROFILE_INSTANCE set. What this guard buys is that
-    // *when someone does run a real profile*, a drifted log text turns into a loud exception instead
-    // of a quietly-zeroed phase in the report.
+    // A rewording of one of these four is already caught by ordinary CI, not only by a real profile:
+    // Measure_ColdThenWarm_ParsesTheRealLogLines_AndTheWarmRunRegistersEverything (a plain, ungated
+    // [Fact] in LoadOrderProfileReportTests) runs LoadOrderProfile.Measure over a real fixture
+    // instance and parses the load path's actual emitted lines, so a required-phase reword fails
+    // there — verified directly by breaking the IndexInit pattern and watching that test fail with
+    // "No log line matched for required phase(s) IndexInit". Separately, this same check also fires
+    // at real measurement time (LoadOrderProfile.ProfileReconcile, env-gated), turning a drifted log
+    // text into a loud exception instead of a quietly-zeroed phase in the report. What remains
+    // genuinely unprotected, in both places, is the five optional phases above: a rewording there
+    // still zeros that phase silently, because nothing checks that they matched at all.
     private static readonly string[] RequiredPhases = [nameof(Opened), nameof(IndexInit), nameof(Validated), nameof(Reconciled)];
 
     public static ProfileRun Parse(IEnumerable<LogEntry> entries, long wallMs)
