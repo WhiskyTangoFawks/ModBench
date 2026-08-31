@@ -217,6 +217,20 @@ public enum RecordEditRefusal
     /// revertable in the Source Control panel like any other write-path fault.
     /// </summary>
     ContainerCopyIndexUpdateFailedAfterWrite,
+
+    /// <summary>
+    /// #642: the payload names a sub-field that exists in the schema but carries no write delegate
+    /// for a reason that is not a discriminator no-op — today, any nested Loqui struct one level
+    /// inside another struct/array column (<c>Static.NavmeshGeometry.Parent</c>,
+    /// <c>Faction.VendorLocation.Target</c>, and any other struct/array column reaching one; the full
+    /// set is uncounted — see #643). Distinct from <see cref="FieldValueShapeMismatch"/>: that
+    /// refusal's message ("send a value this field accepts") would be false here — the payload's
+    /// shape was never the problem, the named sub-field simply has no write door yet. An honest "not
+    /// yet editable" limitation, not a caller bug. A sub-field the payload never names is unaffected —
+    /// absence is not targeting, so an edit that omits the unwritable member still applies exactly as
+    /// it did before this refusal existed.
+    /// </summary>
+    NestedFieldReadOnly,
 }
 
 /// <summary>

@@ -50,6 +50,16 @@ internal enum FieldApplyOutcome
     /// tell them apart.
     /// </summary>
     ListElementTypeUnresolved,
+
+    /// <summary>
+    /// Mirrors <see cref="MEditService.Core.Schema.ApplyOutcome.SubFieldReadOnly"/> one-for-one
+    /// (#642) — the payload names a sub-field the schema knows about but that carries no write
+    /// delegate for a reason that is not a discriminator no-op (today: any nested Loqui struct one
+    /// level inside another struct/array column). Its own value rather than folded into
+    /// <see cref="ValueShapeMismatch"/>: the two need different messages — "send a value this field
+    /// accepts" is actively false here, since the value's shape was never the problem.
+    /// </summary>
+    NestedFieldReadOnly,
 }
 
 /// <summary>
@@ -119,6 +129,7 @@ internal static class RecordFieldWriter
             ApplyOutcome.Applied => FieldApplyOutcome.Applied,
             ApplyOutcome.PropertyNotFound => FieldApplyOutcome.NotFound,
             ApplyOutcome.ListElementTypeUnresolved => FieldApplyOutcome.ListElementTypeUnresolved,
+            ApplyOutcome.SubFieldReadOnly => FieldApplyOutcome.NestedFieldReadOnly,
             _ => FieldApplyOutcome.ValueShapeMismatch,
         };
     }

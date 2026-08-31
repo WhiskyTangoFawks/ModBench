@@ -64,6 +64,22 @@ public enum ApplyOutcome
     /// shape, is what keeps the two unambiguous.
     /// </summary>
     ListElementTypeUnresolved,
+
+    /// <summary>
+    /// #642: the payload names a sub-field the schema knows about (<c>SchemaReflector.SubFieldSpec</c>)
+    /// but that carries no write delegate for a reason that is not a discriminator no-op — today, every
+    /// nested Loqui struct one level inside another struct/array column
+    /// (<c>SchemaReflector.BuildStructSubField</c>'s own <c>Apply: null</c>, general to every such
+    /// struct, not specific to abstract unions). Distinct from <see cref="PropertyNotFound"/>'s
+    /// sibling-merge no-op and from the two deliberate discriminator fields
+    /// (<c>value_type</c>/<c>concrete_type</c>, consumed before the object exists and never meant to be
+    /// applied to it) — those two stay a silent skip via <c>SubFieldSpec.TargetingRefuses</c> staying
+    /// <c>false</c>; only <c>BuildStructSubField</c>'s own output opts in. Only reached when the payload
+    /// actually names the sub-field — one absent from the payload never reaches this outcome, the same
+    /// "absence is not targeting" rule <c>SchemaReflector.ApplySubFields</c> already applies to every
+    /// other member.
+    /// </summary>
+    SubFieldReadOnly,
 }
 
 public sealed record ColumnSpec(

@@ -88,9 +88,49 @@ public sealed class AbstractUnionEditTests : IDisposable
 
     // ── Quest.Aliases ────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// #642: <c>location</c> excluded deliberately, not an oversight — <c>QuestReferenceAlias.Location</c>
+    /// (<c>LocationAliasReference</c>) is a Loqui struct nested one level inside this array element,
+    /// reflected by <c>SchemaReflector.BuildStructSubField</c> the same way
+    /// <c>Static.NavmeshGeometry.Parent</c>/<c>Faction.VendorLocation.Target</c> are — nothing writes it
+    /// yet (#643). This fact previously included a <c>location</c> payload and asserted only
+    /// <c>Applied == true</c> plus two unrelated substrings, so it never actually checked
+    /// <c>name</c>/<c>closest_to_alias</c> landed — it was passing while <c>ApplySubFields</c> silently
+    /// discarded <c>location</c> the whole time, a live instance of #642's own defect hiding inside a
+    /// test named "RoundTrips" that never completed its round trip. This is the version of that fact
+    /// that actually proves the round trip its name promises;
+    /// <see cref="Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_IsRefused"/>
+    /// is what now pins the <c>location</c> half.
+    /// </summary>
     [Fact]
     public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_RoundTrips()
     {
+        var result = _fixture.Service().EditField(
+            _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
+            Json("""[{"concrete_type": "QuestReferenceAlias", "name": "NewRef", "closest_to_alias": 4}]"""));
+
+        Assert.True(result.Applied, result.Message);
+        var body = _fixture.QuestBody();
+        Assert.Contains("QuestReferenceAlias", body, StringComparison.Ordinal);
+        Assert.Contains("\"Name\": \"NewRef\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"ClosestToAlias\": 4", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// #642: the third instance of the ticket's own defect (beyond the two named in it) —
+    /// <c>QuestReferenceAlias.Location</c> is a Loqui struct nested one level inside an
+    /// <c>AQuestAlias</c> array element, not a top-level struct column, so it is reached through
+    /// <c>ApplyListJson</c>/<c>BuildListElement</c> rather than <c>BuildStructColumn</c> directly. Pinned
+    /// here so it can never silently regress back to reporting success while discarding
+    /// <c>location</c> — read coverage of the same field is already correct
+    /// (<c>AbstractUnionSchemaTests</c> asserts <c>location.alias_id</c> round-trips on read), which is
+    /// exactly the #360 divergence this ticket exists to close.
+    /// </summary>
+    [Fact]
+    public void Aliases_WholeArrayWrite_QuestReferenceAliasElement_LocationNamedInPayload_IsRefused()
+    {
+        var before = _fixture.QuestBody();
+
         var result = _fixture.Service().EditField(
             _fixture.Plugin, _fixture.Quest.ToString(), "aliases",
             Json("""
@@ -98,10 +138,11 @@ public sealed class AbstractUnionEditTests : IDisposable
               "location": {"alias_id": 9}}]
             """));
 
-        Assert.True(result.Applied, result.Message);
-        var body = _fixture.QuestBody();
-        Assert.Contains("QuestReferenceAlias", body, StringComparison.Ordinal);
-        Assert.Contains("NewRef", body, StringComparison.Ordinal);
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.NestedFieldReadOnly, result.Refusal);
+        Assert.Contains("aliases", result.Message, StringComparison.Ordinal);
+        Assert.Contains("not yet editable", result.Message, StringComparison.Ordinal);
+        Assert.Equal(before, _fixture.QuestBody());
     }
 
     [Fact]
