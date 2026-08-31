@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createLoadOrderSync } from '../loadOrderReconcile';
+import { createLoadOrderSync, createReconcileSequencer, type ReconcileStepDeps } from '../loadOrderReconcile';
 
 // ADR-0044: every loadout gesture becomes "recompute the snapshot, PUT it", and bursts
 // coalesce — one PUT per settled change, never a race of two.
@@ -190,5 +190,167 @@ describe('createLoadOrderSync — arm/abandon', () => {
 
     expect(first.signal.aborted).toBe(false);
     expect(second.signal.aborted).toBe(true);
+  });
+});
+
+// ADR-0044: one reconcile — recompute the snapshot, PUT it, hand the backend's answer to the
+// tree — ported verbatim from extension.ts's own reconcileOnce/reconcile (makeReconcileLoadOrder),
+// now driven entirely by injected steps so the branching (reconciled/failed/abandoned/
+// no-game-directory) and the tail-chained single-flight guarantee are unit-testable without a
+// VS Code harness.
+describe('createReconcileSequencer', () => {
+  const makeDeps = (over: Partial<ReconcileStepDeps> = {}, order: string[] = []): ReconcileStepDeps => {
+    const abandoned = false;
+    return {
+      arm: () => ({ signal: new AbortController().signal, abandoned: () => abandoned }),
+      say: vi.fn((msg) => order.push(`say:${String(msg)}`)),
+      logInfo: vi.fn(),
+      notifyNoGameDirectory: vi.fn(() => order.push('notifyNoGameDirectory')),
+      resolveGameDirectory: vi.fn(() => { order.push('resolveGameDirectory'); return Promise.resolve({ dataFolder: '/data' }); }),
+      buildSnapshot: vi.fn(() => { order.push('buildSnapshot'); return Promise.resolve(['a.esp']); }),
+      makeProgressHandler: () => ({ onProgress: vi.fn(), lastTotalPlugins: () => 1 }),
+      putLoadOrder: vi.fn(() => {
+        order.push('putLoadOrder');
+        return Promise.resolve({ outcome: 'reconciled' as const, failures: [], crashRepairOffers: [] });
+      }),
+      syncFilterState: vi.fn(() => { order.push('syncFilterState'); return Promise.resolve(); }),
+      applyReconciled: vi.fn(() => { order.push('applyReconciled'); return Promise.resolve(); }),
+      presentCrashRepairOffers: vi.fn(() => { order.push('presentCrashRepairOffers'); return Promise.resolve(); }),
+      ...over,
+    };
+  };
+
+  it('runs the happy path in order and returns reconciled', async () => {
+    const order: string[] = [];
+    const deps = makeDeps({}, order);
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const outcome = await reconcile();
+
+    expect(outcome).toBe('reconciled');
+    expect(order).toEqual([
+      'resolveGameDirectory', 'say:Building the load order snapshot…',
+      'buildSnapshot', 'putLoadOrder', 'syncFilterState', 'applyReconciled',
+    ]);
+    expect(deps.applyReconciled).toHaveBeenCalledWith([], 1);
+  });
+
+  it('returns no-game-directory and notifies, without ever building a snapshot', async () => {
+    const order: string[] = [];
+    const deps = makeDeps({ resolveGameDirectory: vi.fn().mockResolvedValue(undefined) }, order);
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const outcome = await reconcile();
+
+    expect(outcome).toBe('no-game-directory');
+    expect(deps.notifyNoGameDirectory).toHaveBeenCalledTimes(1);
+    expect(deps.buildSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('returns abandoned without building a snapshot when abandoned right after the game directory resolves', async () => {
+    const deps = makeDeps({
+      arm: () => ({ signal: new AbortController().signal, abandoned: () => true }),
+    });
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const outcome = await reconcile();
+
+    expect(outcome).toBe('abandoned');
+    expect(deps.buildSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('returns abandoned without sending the snapshot when abandoned after it is built', async () => {
+    let abandonedAfterBuild = false;
+    const deps = makeDeps({
+      arm: () => ({ signal: new AbortController().signal, abandoned: () => abandonedAfterBuild }),
+      buildSnapshot: vi.fn(() => { abandonedAfterBuild = true; return Promise.resolve(['a.esp']); }),
+    });
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const outcome = await reconcile();
+
+    expect(outcome).toBe('abandoned');
+    expect(deps.putLoadOrder).not.toHaveBeenCalled();
+  });
+
+  it('returns abandoned, without syncing filter state or applying, when putLoadOrder itself reports abandoned', async () => {
+    const deps = makeDeps({
+      putLoadOrder: vi.fn().mockResolvedValue({ outcome: 'abandoned', failures: [], crashRepairOffers: [] }),
+    });
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const outcome = await reconcile();
+
+    expect(outcome).toBe('abandoned');
+    expect(deps.syncFilterState).not.toHaveBeenCalled();
+    expect(deps.applyReconciled).not.toHaveBeenCalled();
+  });
+
+  it('returns failed, without syncing filter state or applying, when putLoadOrder reports failed', async () => {
+    const deps = makeDeps({
+      putLoadOrder: vi.fn().mockResolvedValue({ outcome: 'failed', failures: [], crashRepairOffers: [] }),
+    });
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const outcome = await reconcile();
+
+    expect(outcome).toBe('failed');
+    expect(deps.syncFilterState).not.toHaveBeenCalled();
+    expect(deps.applyReconciled).not.toHaveBeenCalled();
+  });
+
+  it('presents crash-repair offers only when putLoadOrder reports any', async () => {
+    const noOffers = makeDeps();
+    await createReconcileSequencer(noOffers).reconcile();
+    expect(noOffers.presentCrashRepairOffers).not.toHaveBeenCalled();
+
+    const withOffers = makeDeps({
+      putLoadOrder: vi.fn().mockResolvedValue({ outcome: 'reconciled', failures: [], crashRepairOffers: ['offer-1'] }),
+    });
+    await createReconcileSequencer(withOffers).reconcile();
+    expect(withOffers.presentCrashRepairOffers).toHaveBeenCalledWith(['offer-1']);
+  });
+
+  // The tail-chaining this ports verbatim from makeReconcileLoadOrder: a caller reaching
+  // reconcile() while one is still running gets its own freshly-sequenced run queued after it,
+  // never a concurrent one racing it.
+  it('serializes overlapping reconcile() calls rather than racing them', async () => {
+    let resolveFirst!: () => void;
+    const order: string[] = [];
+    // Only resolveGameDirectory/putLoadOrder are tracked here — the other steps are real no-op
+    // fakes (not the order-pushing defaults from makeDeps) so the trace stays legible.
+    const deps: ReconcileStepDeps = {
+      arm: () => ({ signal: new AbortController().signal, abandoned: () => false }),
+      say: vi.fn(),
+      logInfo: vi.fn(),
+      notifyNoGameDirectory: vi.fn(),
+      resolveGameDirectory: vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => {
+          resolveFirst = () => { order.push('resolveGameDirectory:1'); resolve({ dataFolder: '/data' }); };
+        }))
+        .mockImplementationOnce(() => { order.push('resolveGameDirectory:2'); return Promise.resolve({ dataFolder: '/data' }); }),
+      buildSnapshot: vi.fn().mockResolvedValue(['a.esp']),
+      makeProgressHandler: () => ({ onProgress: vi.fn(), lastTotalPlugins: () => 1 }),
+      putLoadOrder: vi.fn(() => {
+        order.push('putLoadOrder');
+        return Promise.resolve({ outcome: 'reconciled' as const, failures: [], crashRepairOffers: [] });
+      }),
+      syncFilterState: vi.fn().mockResolvedValue(undefined),
+      applyReconciled: vi.fn().mockResolvedValue(undefined),
+      presentCrashRepairOffers: vi.fn().mockResolvedValue(undefined),
+    };
+    const { reconcile } = createReconcileSequencer(deps);
+
+    const first = reconcile();
+    const second = reconcile();
+    await Promise.resolve(); await Promise.resolve(); // let the tail-chained microtask reach resolveGameDirectory
+    expect(order).toEqual([]); // first call is waiting on its own game directory resolution
+
+    resolveFirst();
+    await first;
+    expect(order).toEqual(['resolveGameDirectory:1', 'putLoadOrder']); // second still queued behind it
+
+    await second;
+    expect(order).toEqual(['resolveGameDirectory:1', 'putLoadOrder', 'resolveGameDirectory:2', 'putLoadOrder']);
   });
 });
