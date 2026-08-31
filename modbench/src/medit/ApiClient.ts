@@ -192,13 +192,6 @@ export interface ContainerChildSummary {
   recordType: string;
 }
 
-// ADR-0016: the record-wide axis only (Axis 1 — "the record's override stack as a
-// whole"). Per-cell ConflictThis (Axis 2) is the compare grid's own concern, never the Plugins
-// tree's — see medit-record-editor.md's "Conflict color coding". Mirrors the backend's
-// ConflictAll enum name exactly, same no-re-wording-at-the-wire-boundary convention
-// WorkingTreeState above already established.
-export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';
-
 // Worldspace / cell / placed-object tree (per-plugin).
 export interface WorldspaceSummary {
   formKey: string;
