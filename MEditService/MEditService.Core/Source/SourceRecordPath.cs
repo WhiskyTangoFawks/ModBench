@@ -17,8 +17,9 @@ internal sealed record SourceRecordIdentity(string PluginFileName, string Record
 
 /// <summary>
 /// The source's own file layout policy for <b>flat</b> (single-file) records — one record, one file,
-/// under the whole-mod door's own group-folder naming (ADR-0041's #444 amendment, "the source tree
-/// adopts Spriggit's layout wholesale"; #451 slice E). Relative to the mod folder:
+/// under the whole-mod door's own group-folder naming — the source tree took over the whole-mod
+/// door's own file-per-record convention wholesale (ADR-0041's #444 amendment; #451 slice E).
+/// Relative to the mod folder:
 /// <c>source/&lt;pluginFileName&gt;/&lt;GroupFolder&gt;/[&lt;EditorID&gt; - ]&lt;hex6&gt;_&lt;originModKey&gt;.json</c>.
 ///
 /// <para><b>#441: one root <c>source/</c> folder per mod, not a per-plugin sibling tree.</b> A
@@ -99,7 +100,7 @@ internal static class SourceRecordPath
     /// nothing else in this codebase concatenates a plugin name with anything to build it.</summary>
     internal static string RootFor(string pluginFileName) => Path.Combine(RootFolderName, pluginFileName);
 
-    /// <summary>The flat record's path under the Spriggit layout — see this class's own doc comment
+    /// <summary>The flat record's path under the source layout — see this class's own doc comment
     /// for the full shape.</summary>
     /// <param name="orderIndex">This sibling's position among the others in the same group folder —
     /// see this class's own doc comment ("#459") for why it's required rather than optional.</param>
@@ -110,7 +111,7 @@ internal static class SourceRecordPath
         var formKey = FormKey.Factory(formKeyString);
         var folder = RecordTypeDispatch.For(gameRelease).FolderNameFor(recordType)
             ?? throw new NotSupportedException(
-                $"'{recordType}' has no flat source path under the Spriggit layout — it is a " +
+                $"'{recordType}' has no flat source path under the source layout — it is a " +
                 "directory-per-record container type (Cell/Worldspace/Quest), or has no top-level " +
                 "group at all, and SourceUnitResolver owns it, not this helper.");
 

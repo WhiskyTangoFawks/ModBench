@@ -177,26 +177,4 @@ public sealed class ExternalChangeWatcherTests
             mod.Dispose();
         }
     }
-
-    [Fact]
-    public void Unwatch_StopsQueuingFurtherChanges()
-    {
-        var modFolder = NewModFolder();
-        try
-        {
-            var pluginPath = Track(modFolder, "Test.esp", "original"u8.ToArray());
-            using var watcher = new ExternalChangeWatcher(TimeSpan.FromMilliseconds(100));
-            watcher.Watch(modFolder, "Test.esp", pluginPath);
-            watcher.Unwatch(modFolder, "Test.esp");
-
-            File.WriteAllBytes(pluginPath, "changed-after-unwatch"u8.ToArray());
-            Thread.Sleep(400);
-
-            Assert.Empty(watcher.Unanswered());
-        }
-        finally
-        {
-            Directory.Delete(modFolder, recursive: true);
-        }
-    }
 }

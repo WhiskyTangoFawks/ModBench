@@ -54,7 +54,7 @@ public static class SourceRepository
             GitCli.Run(gitDir, modFolder, "init", "-q", "-b", "main");
             GitCli.Run(gitDir, modFolder, "config", "core.autocrlf", "false");
             GitCli.Run(gitDir, modFolder, "config", "commit.gpgsign", "false");
-            // #451: the Spriggit flat layout's own file names routinely carry a space
+            // #451: the source tree's flat layout has file names that routinely carry a space
             // ("<EditorID> - <hex6>_<ModKeyFileName>.json") — git's default quotePath=true C-quotes any
             // path with a space (or non-ASCII byte) in porcelain output, which the pre-#451 flat
             // <recordType>/<originModKey>/<hex6>.json layout never triggered (hex-only path segments).
@@ -627,11 +627,13 @@ public static class SourceRepository
 
     /// <summary>
     /// Commits whatever is currently staged, with <paramref name="trailers"/> rendered as commit
-    /// trailers — the one place trailer *formatting* lives, so #417's <c>CommitPristineToMain</c>
-    /// (plumbing update baselines onto <c>main</c> without touching the working tree, comment 1 on
-    /// #414) reuses this exact mechanism rather than re-deriving the trailer shape. Still an
-    /// internal implementation detail today (comment 1 ruling #4 on #414: no public surface without
-    /// a caller) — <see cref="Track"/> is this method's only caller until #417 adds its own.
+    /// trailers via <c>git commit --trailer</c> (porcelain) — the one place that trailer *formatting*
+    /// lives for a real checkout-and-commit. #417's <see cref="CommitPristineToMain"/> needed a
+    /// checkout-free, plumbing-only <c>commit-tree</c>, which has no <c>--trailer</c> flag of its
+    /// own, so it hand-writes the identical "Key: Value" shape itself (<c>FormatTrailers</c>) rather
+    /// than reusing this method. Still an internal implementation detail (comment 1 ruling #4 on
+    /// #414: no public surface without a caller) — <see cref="Track"/> remains this method's only
+    /// caller.
     /// </summary>
     private static void CommitWithTrailers(string gitDir, string workTree, string message, TrackProvenance trailers)
     {

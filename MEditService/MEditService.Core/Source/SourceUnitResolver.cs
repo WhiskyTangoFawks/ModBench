@@ -38,8 +38,8 @@ internal readonly record struct SourceUnit(
 }
 
 /// <summary>
-/// The record→source-unit question, answered for <b>every</b> record shape the Spriggit layout has
-/// (#453 scope 1; ADR-0041's #444 amendment, "one source unit = one file"). <see cref="SourceRecordPath"/>
+/// The record→source-unit question, answered for <b>every</b> record shape the source layout has
+/// (#453 scope 1; ADR-0041's #444 amendment: one source unit is one file). <see cref="SourceRecordPath"/>
 /// answers it for flat records by computing a path; this answers it for the rest — containers, whose
 /// directory nesting is not derivable from the index, and embedded children, which have no file at all.
 ///

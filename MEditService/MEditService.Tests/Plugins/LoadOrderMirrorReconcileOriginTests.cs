@@ -8,7 +8,7 @@ using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Plugins;
 
-// #269 / ADR-0036: the LoadOrderMirror-level LoadExplicit overload that carries a caller-supplied
+// #269 / ADR-0036: the LoadOrderMirror-level Reconcile call that carries a caller-supplied
 // origin per plugin — the real, end-to-end path an MO2-backed reconcile uses.
 public sealed class LoadOrderMirrorReconcileOriginTests
 {
@@ -20,7 +20,7 @@ public sealed class LoadOrderMirrorReconcileOriginTests
     }
 
     [Fact]
-    public void LoadExplicit_WithOrigin_PluginCarriesCallerSuppliedOrigin()
+    public void Reconcile_WithOrigin_PluginCarriesCallerSuppliedOrigin()
     {
         using var fx = new PluginFixtureBuilder("sm-explicit-origin")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))
@@ -39,7 +39,7 @@ public sealed class LoadOrderMirrorReconcileOriginTests
     // DuckDB index — LoadOrderMirror.IndexAndStore now threads it into Index(), so the indexed row
     // itself carries the real origin rather than silently falling back to the reserved default.
     [Fact]
-    public void LoadExplicit_WithOrigin_IndexedRecordCarriesRealOrigin()
+    public void Reconcile_WithOrigin_IndexedRecordCarriesRealOrigin()
     {
         using var fx = new PluginFixtureBuilder("sm-explicit-origin-indexed")
             .WithPlugin("A.esp", mod => mod.Npcs.AddNew("FromA"))

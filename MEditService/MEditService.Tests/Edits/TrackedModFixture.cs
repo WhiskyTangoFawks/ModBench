@@ -122,7 +122,7 @@ public sealed class TrackedModFixture : IDisposable
     /// <para>#451: unquoted. Plain (non-<c>-z</c>) porcelain v1 always wraps a path containing a space
     /// in <c>"..."</c> — unconditionally, not gated by <c>core.quotePath</c> (that setting governs only
     /// bytes above 0x80; verified empirically against git 2.43 implementing this, not assumed from the
-    /// docs). The Spriggit flat layout's own file names routinely carry a space
+    /// docs). The source tree's flat layout has file names that routinely carry a space
     /// (<c>"&lt;EditorID&gt; - &lt;hex6&gt;_&lt;ModKeyFileName&gt;.json"</c>), which the pre-#451 flat
     /// layout's hex-only segments never did, so every caller here that compares against a plain
     /// expected string needs the same unquoted text <see cref="SourceRecordPath.For"/> itself

@@ -30,12 +30,12 @@ namespace MEditService.Core.Source;
 /// <i>copy</i> does not close it (it copies the overlay's own divergent values); only deep-parsing
 /// at ingest would, at a cost AC5 will not pay.</para>
 ///
-/// <para>Neither named consumer is harmed by that hole. The agreement aggregate compares
-/// ingest-side hashes against each other, so it is internally consistent regardless of how either
-/// side differs from the source; and a freshness check that mismatches simply refreshes, which
-/// self-heals. The hole is also transitional: once a tracked plugin is ingested from its source text
-/// rather than its binary, both sides of the comparison come from the same bytes and it closes
-/// structurally.</para>
+/// <para>Neither named consumer was harmed by that hole while it existed. The agreement aggregate
+/// compares ingest-side hashes against each other, so it stayed internally consistent regardless of
+/// how either side differed from the source; and a freshness check that mismatched simply refreshed,
+/// which self-healed. #452 has since closed the hole structurally: a tracked plugin now ingests from
+/// its source text rather than its binary, so both sides of the comparison come from the same parse
+/// and can no longer diverge for the reason measured above.</para>
 /// </summary>
 internal static class GitBlobHash
 {

@@ -33,7 +33,7 @@ public record WorldspaceBlockDto(int X, int Y, IReadOnlyList<WorldspaceSubBlockD
 // first carries IsPersistentWorldspaceCell = true.
 public record WorldspaceBlocks(IReadOnlyList<WorldspaceBlockDto> Blocks, IReadOnlyList<CellSummary> TopCells);
 
-// Flat row returned by the repository for cells under a worldspace; the query service groups
+// Flat row IRecordReads.GetWorldspaceCells returns for cells under a worldspace; the query service groups
 // these into blocks/sub-blocks. BlockX/Y and SubX/Y are null for a worldspace's TopCell.
 // #497: FullName trails for the same reason CellSummary's does — every existing positional
 // construction keeps compiling.

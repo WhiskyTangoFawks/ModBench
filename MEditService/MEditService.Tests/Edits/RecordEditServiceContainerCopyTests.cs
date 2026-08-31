@@ -77,7 +77,7 @@ public sealed class RecordEditServiceContainerCopyTests
     }
 
     // #440 Slice 2: same "own fields only" rule for a Worldspace — TopCell (its one embedded slot,
-    // per SpriggitEmbeddedSlots) comes back empty rather than carrying the source's TopCell along.
+    // per EmbeddedSlots) comes back empty rather than carrying the source's TopCell along.
     [Fact]
     public void CopyRecordAsOverride_OnAWorldspace_Succeeds_OwnFieldsLand_TopCellEmpty()
     {

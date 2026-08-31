@@ -95,7 +95,7 @@ Investigation revealed that xEdit's `ConflictPriority` system exists because xEd
 
 ## Implementation notes
 
-- `ConflictClassifier` in `MEditService.Core/Queries/` is the right home. It takes the ordered list of override records (from `IRecordRepository`) and returns `(ConflictAll, IReadOnlyList<(plugin, ConflictThis)>)`.
+- `ConflictClassifier` in `MEditService.Core/Queries/` is the right home. It takes the ordered list of override records — resolved via the read seam (`IRecordReads`; `IRecordRepository` was renamed away by #421) — and returns `(ConflictAll, IReadOnlyList<(plugin, ConflictThis)>)`.
 - Comparison should use Mutagen's typed field values where available. Raw bytes are acceptable as a fallback but will miss cases where two representations are semantically equal (FormID slot remapping being the most common).
 - The `IsPartialForm` flag on `IFormRecord` must be checked before building override column data; absent fields in a partial form are omitted from the column entirely, not shown as blank.
 - `ConflictAll` and `ConflictThis` are cached per FormKey and invalidated on index update (same lifecycle as DuckDB rows today).

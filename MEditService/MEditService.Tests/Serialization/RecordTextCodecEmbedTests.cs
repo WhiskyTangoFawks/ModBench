@@ -12,7 +12,7 @@ namespace MEditService.Tests.Serialization;
 /// #450 S1 (ADR-0041's #444 amendment): the codec adopts Spriggit's embed customization verbatim —
 /// <c>Cell.{Temporary,Persistent,Landscape,NavigationMeshes}</c> and <c>Worldspace.TopCell</c>
 /// serialize <b>inline</b>, in the container's own document, rather than into child folders.
-/// See <see cref="SpriggitEmbedCustomizations"/> for the source it mirrors.
+/// See <see cref="CellEmbedCustomization"/>/<see cref="WorldspaceEmbedCustomization"/> for the source it mirrors.
 /// </summary>
 public sealed class RecordTextCodecEmbedTests
 {

@@ -33,7 +33,7 @@ namespace MEditService.Core.Serialization;
 ///
 /// <para>Two classes rather than one because <see cref="ICustomize{T}"/> is per-record-type.</para>
 /// </summary>
-public sealed class SpriggitCellEmbedCustomization : ICustomize<ICellGetter>
+public sealed class CellEmbedCustomization : ICustomize<ICellGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<ICellGetter> builder)
     {
@@ -44,8 +44,8 @@ public sealed class SpriggitCellEmbedCustomization : ICustomize<ICellGetter>
     }
 }
 
-/// <inheritdoc cref="SpriggitCellEmbedCustomization"/>
-public sealed class SpriggitWorldspaceEmbedCustomization : ICustomize<IWorldspaceGetter>
+/// <inheritdoc cref="CellEmbedCustomization"/>
+public sealed class WorldspaceEmbedCustomization : ICustomize<IWorldspaceGetter>
 {
     public void CustomizeFor(ICustomizationBuilder<IWorldspaceGetter> builder)
     {

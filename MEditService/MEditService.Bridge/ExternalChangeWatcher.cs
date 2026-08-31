@@ -31,8 +31,8 @@ public sealed class ExternalChangeWatcher : IDisposable
 
     /// <summary>Starts watching one tracked plugin's binary for out-of-band writes. Re-watching an
     /// already-watched (modFolder, plugin) pair replaces the previous watch — the composition root
-    /// (<c>MEditService.Api</c>) re-registers on every reconcile, and a stale watcher pointed at a
-    /// plugin no longer in the load order must not linger.</summary>
+    /// (<c>MEditService.Api</c>) re-registers on every reconcile, for every plugin the load order
+    /// currently tracks.</summary>
     public void Watch(string modFolder, string pluginName, string pluginPath)
     {
         var key = Key(modFolder, pluginName);
@@ -135,18 +135,6 @@ public sealed class ExternalChangeWatcher : IDisposable
         {
             foreach (var mirror in _mirrors.Values) mirror.Dispose();
             _mirrors.Clear();
-        }
-    }
-
-    /// <summary>Stops watching — the composition root calls this for every plugin a reload no longer
-    /// names, so a load order change never leaves a watcher pointed at a folder that isn't loaded any
-    /// more.</summary>
-    public void Unwatch(string modFolder, string pluginName)
-    {
-        lock (_gate)
-        {
-            var key = Key(modFolder, pluginName);
-            if (_entries.Remove(key, out var entry)) entry.Dispose();
         }
     }
 

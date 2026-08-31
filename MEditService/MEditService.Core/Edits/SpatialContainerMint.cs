@@ -108,7 +108,7 @@ internal static class SpatialContainerMint
             // Exactly one Worldspace, one Cell, in this synthetic mod: the WRLD's own header file
             // sits directly inside the group's one subdirectory; the Cell's own file is the other
             // RecordData.json anywhere beneath it (Persistent/Temporary refs serialize inline into
-            // it, per SpriggitCellEmbedCustomization — never as files of their own).
+            // it, per CellEmbedCustomization — never as files of their own).
             var worldspaceOwnDir = Directory.EnumerateDirectories(scratchWorldspaces).Single();
             var worldspaceHeaderFile = Path.Combine(worldspaceOwnDir, recordDataFileName);
             var cellFile = Directory.EnumerateFiles(scratchWorldspaces, recordDataFileName, SearchOption.AllDirectories)

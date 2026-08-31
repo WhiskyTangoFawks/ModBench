@@ -9,7 +9,7 @@ namespace MEditService.Core.Records;
 /// absorbs the read-model pass-throughs <c>IRecordQueryService</c> used to carry purely to forward
 /// here (<c>GetRecordForPlugin</c>/<c>GetRecordType</c>/<c>GetNativeFormKeys</c>/<c>GetPlacement</c>/
 /// <c>GetVmad</c>/<c>GetConditions</c> — all endpoint-orphaned, deleted rather than kept as
-/// redundant forwarding). One implementation over DuckDB; no ports, no test double.
+/// redundant forwarding). One implementation over DuckDB; no ports, no production double.
 ///
 /// No <c>Connection</c> property and no SQL crosses this seam except <see cref="SetFilter"/>
 /// (invariant 8).

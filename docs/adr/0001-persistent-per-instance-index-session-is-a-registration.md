@@ -161,9 +161,9 @@ index itself outliving the process.
   its own: the index is bounded by the plugin files that exist, and a file's removal removes
   its rows — at the watcher's delete event while running, at validation on the next open
   otherwise.
-- The load-time profile harness (`RealData/LoadOrderLoadProfile`) is to gain a warm-launch
-  measurement (#589), so both numbers — cold index and warm register — stay measured. As of this
-  rewrite it measures the cold load only; the decision above is not yet implemented (#581).
+- The load-time profile harness (`RealData/LoadOrderProfile`) measures both numbers — cold
+  index and warm register — in one run (#589): a cold reconcile against a freshly deleted index
+  file, then, dispose and reconcile the identical order again over the file the cold run left.
 
 ## Alternatives rejected
 

@@ -109,8 +109,6 @@ public sealed class ExternalChangeAbsorberTests : IDisposable
 
         var root = SourceRecordPath.RootFor(TrackedModFixture.PluginName).Replace('\\', '/');
         Assert.Contains($"{root}/RecordData.json", tree);
-        Assert.DoesNotContain($"{root}/spriggit-meta.json", tree);
-        Assert.DoesNotContain($"{root}/.spriggit", tree);
     }
 
     [Fact]

@@ -152,15 +152,15 @@ public enum RecordEditRefusal
     /// edit a different, non-partial override) from that value's causes (masters, FormKey, the
     /// widened text columns — permanent, not state-dependent), the same distinction #531's
     /// <see cref="ListElementTypeUnresolved"/> already draws against
-    /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable — #539 is
-    /// where that write path (including clearing this flag) lands.
+    /// <see cref="FieldValueShapeMismatch"/>. The record header itself stays writable — #539 landed
+    /// that write path (<c>is_partial_form</c>, including clearing this flag).
     ///
     /// <para><b>EditorID is exempt</b> (#491 review): xEdit's own <c>CanAssignInternal</c>
     /// (<c>wbImplementation.pas:9905-9914</c>) explicitly allows EDID assignment on a Partial Form
-    /// record — ADR-0034 makes that binding here, not a divergence #539's own scope could excuse.
+    /// record — ADR-0034 makes that binding here, not a divergence #539's scope needed to excuse.
     /// EditorID is an ordinary, already-writable field (<c>RecordFieldWriter.EditorIdFieldPath</c>),
     /// not part of #539's flag-write surface, so exempting it needed no header write path to exist
-    /// first. Every other field remains refused until #539 lands one.
+    /// first. Every other field is refused unless written through <c>is_partial_form</c>.
     /// </para>
     /// </summary>
     PartialFormFieldReadOnly,

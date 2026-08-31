@@ -15,8 +15,9 @@ namespace MEditService.Core.Source;
 /// #414's orchestration seam: the Track gesture end to end. Resolves every plugin the load order
 /// loaded under one mod-folder origin, deep-parses each (the load order's own overlay reader is
 /// read-only and, per #369's pinned defect, not always structurally faithful), then serializes the
-/// whole mod through the whole-mod door (#451 slice A — ADR-0041's #444 amendment: "the source tree
-/// adopts Spriggit's layout wholesale"), computes provenance, then hands the git mechanics to
+/// whole mod through the whole-mod door (#451 slice A — ADR-0041's #444 amendment: the source tree
+/// took over the whole-mod door's own file layout wholesale), computes provenance, then hands the
+/// git mechanics to
 /// <see cref="SourceRepository.Track"/>. This class invents no record content and no provenance
 /// content on its own account either — the binary hash and <c>meta.ini</c> version string are both
 /// read as opaque bytes, never interpreted.

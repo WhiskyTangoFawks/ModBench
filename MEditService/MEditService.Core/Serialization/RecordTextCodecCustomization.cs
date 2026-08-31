@@ -30,7 +30,7 @@ namespace MEditService.Core.Serialization;
 /// <c>DialogTopic.Responses</c>, since that field is a plain list rather than a <c>Group&lt;T&gt;</c>)
 /// read the same single project-wide <c>compilation.Customization.Overall.EnforceRecordOrder</c> bool
 /// and pass it straight through as <c>withNumbering</c>. There is no per-record-type door:
-/// <c>ICustomizationBuilder&lt;TObject&gt;</c> (what <see cref="SpriggitCellEmbedCustomization"/> and
+/// <c>ICustomizationBuilder&lt;TObject&gt;</c> (what <see cref="CellEmbedCustomization"/> and
 /// its sibling use) exposes no <c>FilePerRecord</c>/<c>EnforceRecordOrder</c> at all. So this one call
 /// on this one root builder turns on <c>"[N] "</c> filename numbering for <b>every</b> folder-split
 /// relationship in the whole mod uniformly — flat top-level groups (Weapons, Npcs, …) included, not
