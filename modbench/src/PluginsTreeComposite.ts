@@ -28,15 +28,6 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
     getChildren(child: TChild): Promise<TChild[]> | TChild[];
     getTreeItem(child: TChild): vscode.TreeItem;
     onDidChangeTreeData: vscode.Event<TChild | undefined | null>;
-    /** The root-level Conflicts node, or undefined while it has nothing to show (no
-     *  load order held, or `LoadOrderStatus.conflictsComputed` still false — `PluginTreeProvider
-     *  .conflictsNode`'s own gate, never re-decided here). A `TChild` like every other node the
-     *  record side owns, so it is prepended to the root row list, never added to `rowsSeen` — it
-     *  routes through this same `children` object for its own `getChildren`/`getTreeItem`, the
-     *  same as every other record-side node would. Optional, same convention as
-     *  `orderIssueMastersOf` below: a caller that never wires it just never gets a Conflicts node
-     *  prepended. */
-    conflictsNode?(): TChild | undefined;
   };
   /** The filename a row stands for, or undefined for a row that stands for no plugin file at all
    *  (an error or empty-state row). The composite's only knowledge of either side's node shapes. */
@@ -107,11 +98,7 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       // getChildren returned), so leaving it out of rowsSeen too is not a separate decision.
       const visible = rows.filter((row) => !this.isHiddenByFilter(row));
       for (const row of visible) this.rowsSeen.add(row as object);
-      // Prepended, never added to rowsSeen — it is a TChild the record side owns (see the
-      // deps doc comment), not a TRow, so isRow(element) must keep answering false for it the same
-      // way it already does for every other record-side node.
-      const conflicts = this.deps.children.conflictsNode?.();
-      return conflicts === undefined ? visible : [conflicts, ...visible];
+      return visible;
     }
     if (!this.isRow(element)) return this.deps.children.getChildren(element as TChild);
     const file = this.expandableFile(element as TRow);

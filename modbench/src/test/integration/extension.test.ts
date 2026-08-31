@@ -45,9 +45,6 @@ const MOCK_PLUGINS: MockPlugin[] = [
   },
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
-// GET /records/conflicts' answer — the Conflicts node's own listing. Empty until a test
-// says otherwise, mirroring mockPluginsOverride's "changeable per test, reset between them" shape.
-let mockConflicts: unknown[] = [];
 let loadOrderHeld = false;
 const requestLog: string[] = [];
 // Lets a test change what the *next* load reports without touching MOCK_PLUGINS itself —
@@ -61,9 +58,9 @@ let mockPluginsOverride: MockPlugin[] | null = null;
 let putLoadOrderShouldFail = false;
 // GET /load-order/status' answer — what the load can honestly say about itself *right now*.
 // Mutable per-test so a suite can script a load landing one plugin at a time and observe the tree
-// react to each, which is the whole subject of progressive load. `conflictsComputed` is separate
-// from any notion of state on purpose (LoadOrderStatus.cs) — the tree gates its incompleteness
-// message on this field alone.
+// react to each, which is the whole subject of progressive load. `conflictsComputed` is part of
+// the real wire contract regardless — the record-editor webview polls this same endpoint directly
+// (`RecordPanelClient.ts`) for its own comparison-completeness statement, unrelated to the tree.
 type MockLoadOrderStatus = {
   totalPlugins: number;
   indexedPlugins: { name: string; origin: string }[];
@@ -89,7 +86,6 @@ function resetMockBackend(): void {
   loadOrderHeld = false;
   requestLog.length = 0;
   mockPluginsOverride = null;
-  mockConflicts = [];
   putLoadOrderShouldFail = false;
   loadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
   holdPutLoadOrder = false;
@@ -176,12 +172,6 @@ function createMockBackend(): http.Server {
     if (/^\/plugins\/[^/]+\/record-types$/.test(url)) {
       res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
       res.end(loadOrderHeld ? JSON.stringify(MOCK_RECORD_TYPES) : 'No load order has been received.');
-      return;
-    }
-    // The Conflicts node's own listing.
-    if (url === '/records/conflicts') {
-      res.writeHead(loadOrderHeld ? 200 : 503, { 'Content-Type': 'application/json' });
-      res.end(loadOrderHeld ? JSON.stringify(mockConflicts) : 'No load order has been received.');
       return;
     }
     res.writeHead(404);
@@ -1018,12 +1008,6 @@ describe('Plugin load-order rows expand into records (#270)', () => {
     await vscode.commands.executeCommand('modbench.modList.launchMedit');
 
     const after = await tree.getChildren();
-    // An ordinary (non-held) load completes with conflicts already known (LoadOrderController
-    // .reportReconciled's own doc comment — the load POST only answers after the winner sweep),
-    // so the Conflicts node legitimately joins the root listing here too — filtered out (via
-    // rowName's own undefined-for-non-plugin-rows behavior) before this test's own claim, which is
-    // specifically about the *plugin* rows never being rebuilt or reordered, not about whether a
-    // synthetic node can appear alongside them.
     assert.deepStrictEqual(
       after.map(rowName).filter((n) => n !== undefined), before.map(rowName),
       'launching mEdit must not rebuild or reorder the plugin rows',
@@ -1533,11 +1517,10 @@ describe('Refresh never triggers a reconcile (#295 AC5)', () => {
   });
 });
 
-// ── ADR-0035: progressive load that states its own incompleteness ──────────────
-// The trap this closes: an absent conflict badge is indistinguishable from "no conflict". If
-// browsing opens at second five and the sweep lands at second ninety, an unmarked record silently
-// claims to be conflict-free for eighty-five seconds when nothing has looked. So the load is not
-// merely "shown sooner" — it says what it does not yet know.
+// ── ADR-0035: progressive load ──────────────────────────────────────────────────
+// Rows land as each plugin finishes indexing, not all at once at the end — a plugin the load has
+// not reached yet stays an unexpandable leaf, and a per-plugin failure or master issue decorates
+// its row as it is discovered rather than being held back to the end.
 //
 // Every assertion here is about the window *during* the load POST, which is why the mock holds it
 // open (holdPutLoadOrder) rather than answering instantly like every other suite in this file.
@@ -1555,7 +1538,7 @@ async function waitFor<T>(label: string, read: () => Promise<T> | T, timeoutMs =
   }
 }
 
-describe('Progressive load states its own incompleteness (#307)', () => {
+describe('Progressive load (#307)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';
   const pluginsTree = () => (ext?.exports as { pluginsTree?: PluginsTreeLike } | undefined)?.pluginsTree;
@@ -1620,69 +1603,6 @@ describe('Progressive load states its own incompleteness (#307)', () => {
 
     releasePutLoadOrder!();
     await launch;
-  });
-
-  // The view says, in as many words, that conflict information is not yet computed —
-  // and stops saying it the moment the sweep lands, with no user action. TreeView.message is the
-  // native surface for exactly this (a view-scoped statement about the view's own contents), so
-  // there is no banner row and no bespoke widget.
-  it('states that conflict information is not yet computed, then clears that once the sweep lands', async () => {
-    setIndexed(['TestMod.esp']);
-    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
-
-    // The launch narrates its earlier steps ("Starting backend…", the snapshot walk) through the
-    // same surface; the statement this asserts is the one the PUT's own window carries.
-    const message = await waitFor('the view to state its own incompleteness', () => {
-      const m = (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message;
-      return m && /conflict information is not yet computed/i.test(m) ? m : undefined;
-    });
-    assert.match(message, /conflict information is not yet computed/i);
-
-    // The sweep is the last thing a real load does, so it lands with the POST's own answer.
-    loadOrderStatus = { ...loadOrderStatus, conflictsComputed: true };
-    releasePutLoadOrder!();
-    await launch;
-
-    // A snapshot a watcher queued behind the launch may still be settling (it answers at once —
-    // the backend's no-op reconcile); the statement must be gone once nothing is in flight.
-    await waitFor('the incompleteness statement to clear itself once conflicts are computed', () =>
-      (ext?.exports as { pluginListView?: { message?: string } } | undefined)?.pluginListView?.message === undefined ? true : undefined);
-  });
-
-  // The Conflicts node is exactly as absent-until-computed as
-  // the incompleteness message above — same conflictsComputed transition, a different surface.
-  it('#364: the Conflicts node is absent from the root listing before conflictsComputed, prepended once it lands', async () => {
-    setIndexed(['TestMod.esp']);
-    const launch = vscode.commands.executeCommand('modbench.modList.launchMedit');
-
-    await waitFor('TestMod.esp to gain a chevron mid-load', async () =>
-      (await itemFor('TestMod.esp')).collapsibleState === vscode.TreeItemCollapsibleState.Collapsed);
-
-    const midLoadRows = await pluginsTree()!.getChildren();
-    assert.ok(
-      !midLoadRows.some((r) => (r as { contextValue?: string }).contextValue === 'conflicts'),
-      'the Conflicts node must not appear before conflictsComputed lands',
-    );
-
-    mockConflicts = [{
-      record: {
-        formKey: '000801:TestMod.esp', plugin: 'TestMod.esp', origin: 'Data',
-        loadOrderIndex: 0, isWinner: true, editorId: 'Foo', workingTreeState: 'None',
-      },
-      conflictAll: 'Conflict',
-    }];
-    loadOrderStatus = { ...loadOrderStatus, conflictsComputed: true };
-    releasePutLoadOrder!();
-    await launch;
-
-    const rootRows = await waitFor('the Conflicts node to appear once conflicts are computed', async () => {
-      const rows = await pluginsTree()!.getChildren();
-      return rows.some((r) => (r as { contextValue?: string }).contextValue === 'conflicts') ? rows : undefined;
-    });
-    assert.strictEqual(
-      (rootRows[0] as { contextValue?: string }).contextValue, 'conflicts',
-      'the Conflicts node must be prepended ahead of every plugin row, not merely present somewhere',
-    );
   });
 
   // A per-plugin failure surfaces when it occurs, not only at the end of the load.

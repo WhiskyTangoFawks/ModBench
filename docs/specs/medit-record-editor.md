@@ -432,18 +432,18 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
 
 A plugin's records are browsable — and therefore this panel is openable — the moment that plugin
 is indexed, well before the winner sweep runs (the Plugins tree states the same fact,
-[plugins.md](plugins.md)). Unlike the tree, this panel *does* render conflict
-colouring today, which makes it the one surface where **an absent conflict badge is indistinguishable
-from "no conflict"** actively misleads rather than merely omits.
+[plugins.md](plugins.md)). This panel renders conflict colouring, which makes it the one surface
+where **an absent conflict badge is indistinguishable from "no conflict"** actively misleads
+rather than merely omits.
 
 - **A record opened while the sweep is outstanding carries an explicit statement** that the
   comparison is incomplete and the colouring rendered from it is not final
-  (`recordPanelIncompleteMessage`, `medit/loadOrderProgress.ts`) — an in-panel banner, the compare
-  grid's own equivalent of the tree's `TreeView.message` (a `WebviewPanel` has no such native
-  surface). It clears itself, no user action, once the sweep lands.
-- **Gate on `LoadOrderStatus.conflictsComputed`, never on "is a load running"** — same rule
-  `plugins.md`'s own Progressive load section states, for the same reason: the sweep is whole-set,
-  so a live mutation can leave a *Ready* load order with stale winners this panel must still caveat.
+  (`recordPanelIncompleteMessage`, `medit/loadOrderProgress.ts`) — an in-panel banner (a
+  `WebviewPanel` has no native surface for a view-scoped statement the way a `TreeView` does). It
+  clears itself, no user action, once the sweep lands.
+- **Gate on `LoadOrderStatus.conflictsComputed`, never on "is a load running"** — the sweep is
+  whole-set, so a live mutation can leave a *Ready* load order with stale winners this panel must
+  still caveat.
 - **A panel already open when the sweep lands refetches its comparison**, not just clears its own
   banner over stale content — the extension host broadcasts `CONFLICTS_COMPUTED` to every
   open record panel exactly once, from `EditingController.reportReconciled`, the one point a
@@ -469,9 +469,9 @@ deliberately — they are enum→visual encodings that prose would only make les
 ([ADR-0016](../adr/0016-two-axis-conflict-model.md)) — this table's
 colors apply at both, only the *granularity of computation* differs:
 
-- **Record-wide** (one value per record, `CompareResult.ConflictAll`): drives the
-  [Plugins tree](plugins.md)'s per-record conflict badge only — "the record's override
-  stack as a whole."
+- **Record-wide** (one value per record, `CompareResult.ConflictAll`): "the record's override
+  stack as a whole" — carried on the wire for the compare endpoint's own response but not
+  rendered by this grid, which paints from the per-node value below instead.
 - **Per-node, bottom-up** (one value per compare-grid row, `FieldDiff.ConflictAll`): drives the
   compare grid's own row background. Each row paints from *its own* node, not the record-wide
   value — a leaf row (a scalar field, or an array/struct element with no children) colors from its
@@ -511,38 +511,6 @@ plugin may be Override on one field and ConflictLoses on another):
 Absent fields (a null value in a non-master plugin — the PartialForm absent-field rule) render
 with no background and no text color. Column headers use the worst ConflictThis across that
 plugin's fields as a quick summary; individual cell colors are authoritative.
-
-The [Plugins tree](plugins.md)'s record-node conflict badge
-is driven by the same classification, at the record-wide scope specifically (Axis 1 above) —
-never the per-node scope the compare grid's own rows use. It renders on the
-[Conflicts node](plugins.md#conflicts-node-and-conflict-badge)'s own rows only (not on every
-ordinary record row wherever a plugin is browsed — a deliberate scope decision, see the Plugins
-tree spec), sharing `RecordDecorationProvider`'s existing M/A working-tree badge rather
-than a second provider: a row has exactly one `FileDecoration`, so the two are reconciled by
-precedence, not painted independently.
-
-**Plugins-tree badge — `ConflictAll` → glyph, colour, precedence:**
-
-| ConflictAll | Badge | Colour (`ThemeColor`) | Tooltip |
-| --- | --- | --- | --- |
-| OnlyOne, NoConflict | *(none)* | — | *(no badge)* |
-| Override | `O` | `gitDecoration.addedResourceForeground` (green — reused from the `A` badge, never shown on the same row) | Override |
-| Conflict | `C` | `gitDecoration.conflictingResourceForeground` (VS Code's own semantic "conflict" token) | Conflict |
-| ConflictCritical | `!` | `problemsErrorIcon.foreground` (reused from the master-issue/load-failure row decorations) | Conflict (critical) |
-
-No new colours: every token above is already sanctioned elsewhere in this codebase, matching this
-section's own Axis 1/Axis 2 tables' "no new colors" rule (ADR-0016).
-
-**Precedence: the M/A working-tree badge always wins when present.** An uncommitted local edit
-(`Modified`/`Added`) is the more actionable, load order-local fact, so it takes the row's one
-`FileDecoration` slot; the conflict badge above shows only when the working-tree state lookup has
-nothing to say (`None`) for that row. A chosen default — not
-dictated by ADR-0016; disclosed as a choice rather than buried.
-
-**Gated on `LoadOrderStatus.conflictsComputed`, per the progressive-load invariant** (`PluginTreeProvider
-.conflictAllOf`): renders nothing at all — never a neutral/placeholder badge — while conflicts
-are not yet computed, or for a record nothing has fetched a conflict state for yet. An absent
-badge must never be mistaken for "no conflict".
 
 ### Partial Form overrides
 

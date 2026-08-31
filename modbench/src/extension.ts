@@ -357,10 +357,6 @@ function exitToLoadout(): void {
   // which held plugins' records matched, same reasoning as the chevrons just above.
   matchingPlugins = undefined;
   recordBrowserProvider?.setImmutablePlugins([]);
-  // No backend means no conflict information either — the Conflicts node and the badge both
-  // have to disappear along with everything else this reset already clears, not linger describing
-  // a load order that's gone.
-  recordBrowserProvider?.setConflictsComputed(false);
   // stop() is async (waits for confirmed exit before reporting "stopped") but its body
   // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
   // here still defers emitStatus('stopped') correctly; exitToLoadout() itself doesn't need to
@@ -435,10 +431,10 @@ function createReferencedByTree(
 /** `EditingController`'s own `notifyConflictsComputed` dep — pulled out of `activate`
  *  purely to stay under the lint line budget, same shape as
  *  `makeSetFilterActive` above. Fires on every completed reconcile (this dep's own doc comment):
- *  tells every open record panel to refetch its comparison, (re-)registers every tracked mod's
- *  repo with `vscode.git`, and flips the Conflicts node/badge gate on `treeProvider`. */
+ *  tells every open record panel to refetch its comparison, and (re-)registers every tracked mod's
+ *  repo with `vscode.git`. */
 function makeNotifyConflictsComputed(
-  treeProvider: PluginTreeProvider, recordPanels: Set<vscode.WebviewPanel>,
+  recordPanels: Set<vscode.WebviewPanel>,
   repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
 ): () => void {
   return () => {
@@ -447,10 +443,6 @@ function makeNotifyConflictsComputed(
     // doc comment) to (re-)register every tracked mod's repo with vscode.git, which is also what
     // makes a plugin whose winning copy moved to a newly tracked folder pick that repo up.
     void registerHeldTrackedRepositories(repository, outputChannel);
-    // The Conflicts node's own gate and the badge's own gate — same fact, same call site as
-    // the two above. ADR-0044: every reconcile re-sweeps and fires this, so a reorder/enable/
-    // disable cannot leave a stale true behind.
-    treeProvider.setConflictsComputed(true);
   };
 }
 
@@ -494,7 +486,7 @@ export function activate(context: vscode.ExtensionContext) {
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive,
     refreshMatchingPlugins: () => { void refreshMatchingPlugins(repository, outputChannel); },
-    notifyConflictsComputed: makeNotifyConflictsComputed(treeProvider, recordPanels, repository, outputChannel),
+    notifyConflictsComputed: makeNotifyConflictsComputed(recordPanels, repository, outputChannel),
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, log, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics, repository, outputChannel);
@@ -705,10 +697,7 @@ function registerVmadOpCommands(recordPanels: Set<vscode.WebviewPanel>): vscode.
 // to stay under the lint line budget, same shape as makeNotifyConflictsComputed above.
 function makeRecordDecorationProvider(treeProvider: PluginTreeProvider): RecordDecorationProvider {
   return new RecordDecorationProvider(
-    (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey),
-    // The conflict badge's own lookup — independent gate, see RecordDecorationProvider's
-    // own class doc comment for the M/A-wins precedence.
-    (plugin, origin, formKey) => treeProvider.conflictAllOf(plugin, origin, formKey));
+    (plugin, origin, formKey) => treeProvider.workingTreeStateOf(plugin, origin, formKey));
 }
 
 // Same shape/reason as makeRecordDecorationProvider above: pulled out of
@@ -1151,10 +1140,6 @@ function buildPluginsTreeComposite(
       getChildren: (child) => recordBrowser.getChildren(child),
       getTreeItem: (child) => recordBrowser.getTreeItem(child),
       onDidChangeTreeData: recordBrowser.onDidChangeTreeData,
-      // The root-level Conflicts node — a thin relay to PluginTreeProvider's own gate
-      // (conflictsComputed), same "the composite decides nothing, only relays" posture every
-      // other member of this adapter object already has.
-      conflictsNode: () => recordBrowser.conflictsNode(),
     },
     pluginFileOf,
     // ADR-0037: lets the composite reconcile the order-aware badge with load order state
@@ -1937,10 +1922,7 @@ function clearTreeWhenBackendDies(
     if (backendManager?.isHealthy) return;
     composite.setLoadOrder(undefined);
     recordBrowser.setImmutablePlugins([]);
-    // Same reasoning as setImmutablePlugins above — a dead backend's Conflicts node and
-    // badge must not survive it.
-    recordBrowser.setConflictsComputed(false);
-    // ADR-0035 amending ADR-0018: same reasoning as the three above — a statement about
+    // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
     // which plugins the dead backend's records matched must not seed the next one.
     matchingPlugins = undefined;
   });
@@ -2437,7 +2419,6 @@ function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSi
 function makeTreeProgressHandler(): { onProgress: (status: LoadOrderProgress) => void; lastTotalPlugins: () => number } {
   let totalPlugins = 0;
   const applyTick = makeReconcileProgressHandler({
-    say,
     applyLoadOrder: (indexedPlugins, failures) => pluginsTree?.setLoadOrder(
       new Set(indexedPlugins),
       new Set(),
@@ -2504,10 +2485,8 @@ function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
       buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)));
     if (abandoned()) return 'abandoned';
     // The PUT is one blocking call that opens and indexes every copy new to the load order — the
-    // slow part on a cold start, SQL-only otherwise. The polled status takes over from here
-    // (treeProgress.onProgress), naming real counts as they land; this states the total for the
-    // window before the first poll answers.
-    say(`Reconciling ${plugins.length} plugin copies… Conflict information is not yet computed.`);
+    // slow part on a cold start, SQL-only otherwise. The polled status (treeProgress.onProgress)
+    // takes over from here, applying chevrons/failures to the tree as they land.
     outputChannel.info(`[extension] sending the load order snapshot (${plugins.length} plugin copies)`);
     const result = await controller.putLoadOrder(
       plugins, gd.dataFolder, instanceRoot, undefined, { onProgress: treeProgress.onProgress, signal });

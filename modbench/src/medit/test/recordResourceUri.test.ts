@@ -15,43 +15,24 @@ describe('recordResourceUri / parseRecordResourceUri (#428)', () => {
     expect(uri.scheme).toBe('medit-record');
 
     const parsed = parseRecordResourceUri(uri);
-    expect(parsed).toEqual({
-      plugin: 'Fallout4.esm', origin: 'ModA', formKey: '000001:Fallout4.esm', fromConflictsNode: false,
-    });
+    expect(parsed).toEqual({ plugin: 'Fallout4.esm', origin: 'ModA', formKey: '000001:Fallout4.esm' });
   });
 
   it('round-trips an undefined origin (an ordinary load-order plugin) as an empty segment', () => {
     const uri = recordResourceUri('Fallout4.esm', undefined, '000001:Fallout4.esm');
     const parsed = parseRecordResourceUri(uri);
-    expect(parsed).toEqual({ plugin: 'Fallout4.esm', origin: '', formKey: '000001:Fallout4.esm', fromConflictsNode: false });
+    expect(parsed).toEqual({ plugin: 'Fallout4.esm', origin: '', formKey: '000001:Fallout4.esm' });
   });
 
   it('survives identity components that themselves contain "/" (percent-encoded per segment)', () => {
     const uri = recordResourceUri('Weird/Plugin.esp', 'Mod/Folder', '01:Weird/Plugin.esp');
     const parsed = parseRecordResourceUri(uri);
     expect(parsed).toEqual({
-      plugin: 'Weird/Plugin.esp', origin: 'Mod/Folder', formKey: '01:Weird/Plugin.esp', fromConflictsNode: false,
+      plugin: 'Weird/Plugin.esp', origin: 'Mod/Folder', formKey: '01:Weird/Plugin.esp',
     });
   });
 
   it('returns undefined for a URI outside the medit-record: scheme', () => {
     expect(parseRecordResourceUri({ scheme: 'file', path: '/tmp/x' } as never)).toBeUndefined();
-  });
-
-  // The marker that lets RecordDecorationProvider scope the conflict badge
-  // to the Conflicts node's own rows — see recordResourceUri.ts's own doc comment.
-  it('carries fromConflictsNode through the query string when set', () => {
-    const uri = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', true);
-    const parsed = parseRecordResourceUri(uri);
-    expect(parsed?.fromConflictsNode).toBe(true);
-  });
-
-  it('two URIs for the same identity differ only in fromConflictsNode — never the same URI', () => {
-    const ordinary = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', false);
-    const conflicts = recordResourceUri('Fallout4.esm', 'ModA', '000001:Fallout4.esm', true);
-    expect(ordinary.path).toBe(conflicts.path); // same identity
-    expect(ordinary.query).not.toBe(conflicts.query); // different location marker
-    expect(parseRecordResourceUri(ordinary)?.fromConflictsNode).toBe(false);
-    expect(parseRecordResourceUri(conflicts)?.fromConflictsNode).toBe(true);
   });
 });
