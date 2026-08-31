@@ -223,20 +223,20 @@ public static class RecordEndpoints
 
             return result.Applied
                 ? Results.Ok(new RecordFieldEditResponse(true, decoded, request.FieldPath))
-                : Refusal(result);
+                : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not write the source file while editing {FormKey}.{FieldPath}",
                 decoded, request.FieldPath);
-            return Results.Problem($"Could not write the source file for {decoded}: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not write the source file for {decoded}: {ex.Message}");
         }
         catch (InvalidOperationException ex)
         {
             // 503, matching every sibling's own mapping for it: the load order went away underneath the
             // request, which is a "not right now", never a bad request.
             logger.LogError(ex, "No usable loadOrder while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -254,17 +254,17 @@ public static class RecordEndpoints
         try
         {
             var result = edits.DeleteRecord(new PluginKey(request.Plugin, request.Origin), decoded);
-            return result.Applied ? Results.Ok(new RecordDeleteResponse(true, decoded)) : Refusal(result);
+            return result.Applied ? Results.Ok(new RecordDeleteResponse(true, decoded)) : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not delete the source file for {FormKey}", decoded);
-            return Results.Problem($"Could not delete the source file for {decoded}: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not delete the source file for {decoded}: {ex.Message}");
         }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable loadOrder while deleting {FormKey}", decoded);
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -286,14 +286,14 @@ public static class RecordEndpoints
             var result = edits.RenumberRecord(new PluginKey(request.Plugin, request.Origin), decoded, request.NewFormKey);
             return result.Applied
                 ? Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!))
-                : Refusal(result);
+                : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Q5(b): a partial-cascade failure lands here too, with the richer message
             // RecordEditService.RenumberRecord already built naming which repos have dirt.
             logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
-            return Results.Problem(ex.Message, statusCode: 500);
+            return WriteEndpointMapping.WriteFailure(ex.Message);
         }
         // #502: request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
         // FormKey.Factory (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a
@@ -303,12 +303,12 @@ public static class RecordEndpoints
         catch (ArgumentException ex)
         {
             logger.LogError(ex, "Malformed FormKey renumbering {FormKey}", decoded);
-            return Results.Problem(ex.Message, statusCode: 400);
+            return WriteEndpointMapping.MalformedFormKey(ex);
         }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -335,17 +335,17 @@ public static class RecordEndpoints
                 new PluginKey(request.DestinationPlugin, request.DestinationOrigin));
             return result.Applied
                 ? Results.Ok(new RecordCopyAsOverrideResponse(true, decoded))
-                : Refusal(result);
+                : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not write the source file while copying {FormKey} as an override", decoded);
-            return Results.Problem($"Could not write the source file for the copy: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
         }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable loadOrder while copying {FormKey} as an override", decoded);
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
 
@@ -372,12 +372,12 @@ public static class RecordEndpoints
                 new PluginKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey);
             return result.Applied
                 ? Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, result.NewFormKey!))
-                : Refusal(result);
+                : WriteEndpointMapping.Refusal(result);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
-            return Results.Problem($"Could not write the source file for the copy: {ex.Message}", statusCode: 500);
+            return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
         }
         // #502: request.RequestedFormKey is xEdit's own typed-FormID path, sharing
         // RecordEditService.CreateRecord/RenumberRecord's own ResolveTargetFormKey/
@@ -387,38 +387,14 @@ public static class RecordEndpoints
         catch (ArgumentException ex)
         {
             logger.LogError(ex, "Malformed FormKey copying {FormKey} as a new record", decoded);
-            return Results.Problem(ex.Message, statusCode: 400);
+            return WriteEndpointMapping.MalformedFormKey(ex);
         }
         catch (InvalidOperationException ex)
         {
             logger.LogError(ex, "No usable loadOrder while copying {FormKey} as a new record", decoded);
-            return Results.Problem(ex.Message, statusCode: 503);
+            return WriteEndpointMapping.NoLoadOrder(ex);
         }
     }
-
-    /// <summary>
-    /// A refused edit as ProblemDetails, carrying the <see cref="RecordEditRefusal"/> as a
-    /// <c>refusal</c> extension beside the human-readable detail — AC5's "typed refusal mirroring the
-    /// UI's". The status code says what <i>kind</i> of problem it is, so an ordinary HTTP client
-    /// behaves sanely without knowing our vocabulary; the extension says exactly which one, so an
-    /// agent never has to match on prose (ADR-0026).
-    /// </summary>
-    // Internal, not private: PluginEndpoints.CreateRecord (#427) shares this exact mapping — the
-    // route lives under /plugins/{plugin}/records (the FormKey doesn't exist to key a /records/{formKey}
-    // route on), but a refused create is the same RecordEditResult shape as every other write-path
-    // refusal here, and a second copy of this switch is how the two would drift.
-    internal static IResult Refusal(RecordEditResult result) => Results.Problem(
-        detail: result.Message,
-        statusCode: result.Refusal switch
-        {
-            // Not-editable-at-all is a state conflict: the request is well-formed, and the answer is
-            // "not while this plugin is untracked".
-            RecordEditRefusal.PluginNotTracked or RecordEditRefusal.PluginHasNoModFolder => 409,
-            RecordEditRefusal.RecordNotFound or RecordEditRefusal.FieldNotFound => 404,
-            // Well-formed, addressed at something real, and still not something we will write.
-            _ => 422,
-        },
-        extensions: new Dictionary<string, object?> { ["refusal"] = result.Refusal.ToString() });
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
     {
