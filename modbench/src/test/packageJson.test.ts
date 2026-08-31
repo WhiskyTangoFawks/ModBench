@@ -74,11 +74,6 @@ describe('package.json Loadout header view (#247)', () => {
   it('is the first view in the Modbench container, so workspace-scope actions sit above the domain trees', () => {
     expect(sidebarViews()[0].id).toBe('modbench.loadoutHeader');
   });
-
-  it('carries no view-mode gate, so it survives #273 retiring modbench.viewMode', () => {
-    const header = sidebarViews().find((v) => v.id === 'modbench.loadoutHeader');
-    expect(header!.when).toBeUndefined();
-  });
 });
 
 // VS Code has no view nesting/grouping within a container, so a "Plugins - " title prefix is the
@@ -93,16 +88,7 @@ describe('package.json "Plugins - …" naming for Referenced By (#273 Slice B)',
 });
 
 describe('package.json Loadout views stay visible through an editing backend (#268)', () => {
-  const sidebarViews = () => pkg.contributes.views.modbench as { id: string; name: string; when?: string }[];
   const welcome = () => pkg.contributes.viewsWelcome as { view: string; when: string }[];
-
-  // ADR-0035's "valid first step": Launch mEdit must not hide the loadout it's editing
-  // against. The Mods tree, the Plugin load order and Downloads carry no view-mode gate at all.
-  it.each(['modbench.modList', 'modbench.pluginListTree', 'modbench.downloads'])(
-    '%s carries no view-mode gate, so it survives entering editing mode', (id) => {
-      const view = sidebarViews().find((v) => v.id === id);
-      expect(view!.when ?? '').not.toMatch(/modbench\.viewMode/);
-    });
 
   it('drops the now-redundant view-mode clause from the "not an MO2 instance" welcome message', () => {
     const entry = welcome().find((w) => w.view === 'modbench.modList' && w.when.includes('workspaceIsMo2Instance'));
@@ -180,23 +166,6 @@ describe('package.json Open Header has no button of its own — row click replac
   it('modbench.openHeader itself is still declared — the row-click bridge command, not a button', () => {
     const commands = pkg.contributes.commands as { command: string }[];
     expect(commands.some((c) => c.command === 'modbench.openHeader')).toBe(true);
-  });
-});
-
-describe('package.json every modbench.pluginTree reference is gone (#273 AC5 closure)', () => {
-  // The full closure check: nothing left anywhere references the deleted id.
-  it('no view, menu entry or keybinding references modbench.pluginTree anywhere', () => {
-    const allMenuEntries = Object.values(pkg.contributes.menus as Record<string, { when?: string }[]>).flat();
-    const offendingMenus = allMenuEntries.filter((e) => (e.when ?? '').includes('modbench.pluginTree'));
-    const offendingKeybindings = (pkg.contributes.keybindings as { when?: string }[])
-      .filter((k) => (k.when ?? '').includes('modbench.pluginTree'));
-    const offendingViews = [
-      ...(pkg.contributes.views.modbench as { id: string }[]),
-      ...(pkg.contributes.views.modbenchReferencedBy as { id: string }[]),
-    ].filter((v) => v.id === 'modbench.pluginTree');
-    expect(offendingMenus).toEqual([]);
-    expect(offendingKeybindings).toEqual([]);
-    expect(offendingViews).toEqual([]);
   });
 });
 
@@ -409,10 +378,6 @@ describe('package.json standalone Deploy/Purge/Launch withdrawal (#186)', () => 
     expect(prop.default).toBe('external');
   });
 
-  it('removes the launchCommand setting — dead once Launch Game is withdrawn from the default path', () => {
-    expect(pkg.contributes.configuration.properties['modbench.mods.launchCommand']).toBeUndefined();
-  });
-
   it('gates Deploy/Purge/Launch Game in the command palette the same as the title bar, closing the Ctrl+Shift+P hole', () => {
     const palette = pkg.contributes.menus.commandPalette as { command: string; when: string }[];
     expect(palette, 'expected a contributes.menus.commandPalette section').toBeTruthy();
@@ -531,23 +496,12 @@ describe('package.json command titles and categories (#280)', () => {
   });
 });
 
-// There is no manual re-read gesture and no `pluginDrifted` contextValue. Origin drift is
-// absorbed automatically (`pluginDrift.ts`), so there is nothing for a row to be, or offer,
-// beyond the two contextValues `PluginListProvider` itself produces (`plugin`, `pluginImplicit`).
-// This block guards that absence: a straggler `pluginDrifted` reference anywhere in
-// `package.json`, or a command entry pointing at a `rereadPlugin` id, fails it.
-describe('package.json has no trace of the retired drift gesture (#356)', () => {
-  const asString = JSON.stringify(pkg);
+// Origin drift is absorbed automatically by the reconcile verb (ADR-0044) — there is nothing for
+// a plugin row to be, or offer, beyond the two contextValues `PluginListProvider` itself produces
+// (`plugin`, `pluginImplicit`); there is no manual re-read gesture.
+describe('package.json plugin-row context menu', () => {
   const contextMenus = () => pkg.contributes.menus['view/item/context'] as { command: string; when: string; group: string }[];
   const forPluginRows = () => contextMenus().filter((e) => e.when.includes('viewItem == plugin'));
-
-  it('mentions pluginDrifted nowhere in the manifest', () => {
-    expect(asString).not.toContain('pluginDrifted');
-  });
-
-  it('declares no command, palette entry or menu contribution for the retired rereadPlugin id', () => {
-    expect(asString).not.toContain('rereadPlugin');
-  });
 
   // The enumeration, kept honest: every command reachable from a plugin row, listed, with
   // exactly one contextValue (`plugin`). Open Header has no

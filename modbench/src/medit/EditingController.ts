@@ -99,7 +99,7 @@ export interface LoadOrderOptions {
 }
 
 /** Editing's HTTP orchestration — every gesture the extension makes against the backend, with
- *  no VS Code types in its interface (MCP tools call it directly). */
+ *  no VS Code types in its interface (VS Code chat tool handlers call it directly — ADR-0012). */
 export class EditingController {
   private readonly log: (msg: string) => void;
   constructor(private readonly deps: EditingControllerDeps) {

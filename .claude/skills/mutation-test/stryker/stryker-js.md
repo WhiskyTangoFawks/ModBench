@@ -63,7 +63,6 @@ Mutation runs against `src/modmanager/` and `src/medit/`:
 - **`src/medit/generated/**` is excluded** — `api.ts` is regenerated from the OpenAPI spec
   (`/regenerate-api`). A surviving mutant there is a finding against the generator's input,
   which no test in this repo should be pinning.
-- **`Spike359ScmProbe.ts` is excluded** — spike code, deleted when the spike lands.
 
 ## Cost model
 

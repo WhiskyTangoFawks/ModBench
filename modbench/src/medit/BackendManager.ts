@@ -160,7 +160,7 @@ export class BackendManager extends EventEmitter {
       await this.killAndConfirmExit(child);
     }
     // Emitted rather than written straight to the status bar, so a deliberate stop is
-    // observable — wireSessionRunningContext (extension.ts) subscribes to 'status' to
+    // observable — wireBackendRunningContext (extension.ts) subscribes to 'status' to
     // drive the Plugins view's Launch/Close mEdit toggle and would otherwise keep reading
     // "running" until something else happened to fire. Deferred until the child (if any) has
     // actually exited — see killAndConfirmExit — so this never claims "stopped" while the OS

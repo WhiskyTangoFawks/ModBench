@@ -743,15 +743,12 @@ describe('PluginsTreeComposite — reconciling the order-aware badge with load o
   });
 });
 
-// A mod-level change that alters which file a plugin name resolves to is absorbed
-// automatically (`pluginDrift.ts` + `LoadOrderController.rereadPlugin`) — there is nothing
-// for this composite to render about it. This guards that retirement: nothing in
-// `PluginsTreeCompositeDeps` names drift (TypeScript itself refuses a `driftOf` field —
-// the compiler-enforced half of the retirement), and no combination of inputs produces a
-// `pluginDrifted` contextValue, an added tooltip line, or an added icon/description for an
-// origin change. `PluginListProvider`'s own `contextValue: 'plugin'` is therefore the only value
-// a plugin row can carry out of this composite.
-describe('PluginsTreeComposite has no drift decoration left to apply (#356)', () => {
+// A mod-level change that alters which file a plugin name resolves to is absorbed by the
+// reconcile verb (ADR-0044) — there is nothing for this composite to render about it: no
+// combination of inputs produces a `pluginDrifted` contextValue, an added tooltip line, or an
+// added icon/description for an origin change. `PluginListProvider`'s own `contextValue:
+// 'plugin'` is therefore the only value a plugin row can carry out of this composite.
+describe('PluginsTreeComposite applies no decoration of its own to a plugin row', () => {
   it('renders every plugin row exactly as its own provider built it, regardless of load order state', async () => {
     const { composite, render } = make([PLUGIN_ROW, OTHER_ROW]);
     composite.setLoadOrder(new Set(['A.esp', 'B.esp']));
