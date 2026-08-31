@@ -46,7 +46,7 @@ import {
   PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode,
 } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
-import { createLoadOrderSync, createReconcileSequencer, type LoadOrderSync, type ReconcileOutcome } from './loadOrderReconcile';
+import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
@@ -1054,9 +1054,6 @@ interface PluginListDeps {
   /** The record browser that supplies a plugin row's children. Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
-  /** ADR-0044: "recompute the snapshot, PUT it, apply the answer to the tree" — what the
-   *  load-order sync built here sends on every loadout change. */
-  reconcile: ReconcileLoadOrder;
 }
 /** The Plugins tree: a view of plugins.txt, stacked below the Mods tree. A row's checkbox toggles
  *  its enabled state (writing plugins.txt immediately); rows drag-and-drop to reorder (single or
@@ -1099,10 +1096,8 @@ function buildPluginsTreeComposite(
 }
 
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser, reconcile } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const sync = makeLoadOrderSync(reconcile, outputChannel);
-  loadOrderSync = sync;
   const composite = buildPluginsTreeComposite(pluginListProvider, recordBrowser);
   pluginsTree = composite;
   clearTreeWhenBackendDies(composite, recordBrowser);
@@ -1128,7 +1123,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
-    ...wireLoadOrderWatchers(sync, instanceRoot),
+    ...wireLoadOrderWatchers(loadOrderSync!, instanceRoot),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
         if (node.kind !== 'plugin') continue;
@@ -1813,19 +1808,41 @@ function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, orig
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** ADR-0044: the sync every loadout gesture feeds — see `loadOrderSync.ts`. `send` is the whole
- *  reconcile (snapshot → PUT → tree), under the Plugins view's own header progress indicator
- *  (`withPluginsViewProgress`), the same surface a launch uses. It receives only while the backend
- *  is up: with none, a request is dropped silently, since a loadout-only workspace is the ordinary
- *  case. 250 ms of debounce covers the bursts that matter — the modlist and mods watchers both
- *  firing for one install, a drag reorder's own write plus its watcher event, a checkbox toggle's
- *  explicit request plus the plugins.txt event it causes. */
-function makeLoadOrderSync(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel): LoadOrderSync {
-  return createLoadOrderSync({
+/** ADR-0044: the sync every loadout gesture feeds — see `loadOrderReconcile.ts`. Builds both
+ *  halves of one reconcile pipeline from Mod Management's and Editing's own types, none of which
+ *  cross into either module: the coalescing/debounce wrapper (`createLoadOrderSync`) and, folded
+ *  into it, the reconcile's own steps (`createReconcileSequencer`) — arm, resolve the game
+ *  directory, build the snapshot, PUT, apply, present crash-repair offers. Every reconcile runs
+ *  under the Plugins view's own header progress indicator (`withPluginsViewProgress`), the same
+ *  surface a launch uses. It receives only while the backend is up: with none, a request is
+ *  dropped silently, since a loadout-only workspace is the ordinary case. 250 ms of debounce
+ *  covers the bursts that matter — the modlist and mods watchers both firing for one install, a
+ *  drag reorder's own write plus its watcher event, a checkbox toggle's explicit request plus the
+ *  plugins.txt event it causes. */
+function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
+  const { instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
+  return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
     isReceiving: () => backendManager?.isHealthy === true,
-    send: () => withPluginsViewProgress(async () => { await reconcile(); }),
     debounceMs: 250,
     log: (msg) => outputChannel.debug(msg),
+    withProgress: (work) => withPluginsViewProgress(work),
+    say,
+    logInfo: (msg) => outputChannel.info(msg),
+    notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
+      'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
+    ),
+    // gameDirResolver's own `null` ("resolved, but there is none") and the sequencer's own
+    // `undefined` ("nothing to build a snapshot from") are the same fact; normalized at the one
+    // seam between them rather than teaching the sequencer a second falsy spelling.
+    resolveGameDirectory: () => gameDirResolver.resolve().then((gd) => gd ?? undefined),
+    buildSnapshot: (dataFolder) => buildLoadOrderSnapshot(modlistSource, instanceRoot, dataFolder, (entries, root) =>
+      buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg))),
+    makeProgressHandler: makeTreeProgressHandler,
+    putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
+      controller.putLoadOrder(plugins, dataFolder, instanceRoot, undefined, { onProgress, signal }),
+    syncFilterState: () => controller.syncFilterState(),
+    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(heldPluginFiles, failures, outputChannel, totalPlugins),
+    presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
 }
 
@@ -2106,15 +2123,18 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
       outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
-    const reconcile = makeReconcileLoadOrder({
+    // ADR-0044: the one path by which the Plugin load order reaches Editing. Built here, before
+    // the Plugins tree, because both the tree (its own hasMatchingRecords accessor) and
+    // enterEditing below need the module-level slot filled first.
+    loadOrderSync = makeLoadOrderSync({
       instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser, reconcile });
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing(reconcile, outputChannel, revealLog);
+    const enterEditing = makeEnterEditing(outputChannel, revealLog);
 
     backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
@@ -2360,53 +2380,12 @@ interface ReconcileDeps {
   gameDirResolver: GameDirectoryResolver;
 }
 
-/** The two callers that care how one reconcile ended: Launch mEdit (which exits to Loadout with
- *  no game directory, the same as before) and the sync (which does nothing more either way).
- *  `ReconcileOutcome` itself is `loadOrderReconcile.ts`'s own — the sequencer that actually
- *  produces the branch this file only wires callers to. */
-type ReconcileLoadOrder = () => Promise<ReconcileOutcome>;
-
-/** ADR-0044: one reconcile — recompute the snapshot (every physical plugin copy, with its slot,
- *  `*` prefix and winning flag), `PUT /load-order`, then hand the backend's answer to the tree. The
- *  one path every trigger takes: Launch mEdit, the crash-restart handler, and every loadout change
- *  the sync coalesces.
- *
- *  The sequencing itself — arm, resolve the game directory, build the snapshot, PUT, apply,
- *  present crash-repair offers, and the single-flight tail-chaining across overlapping callers —
- *  lives in `createReconcileSequencer` (`loadOrderReconcile.ts`) and is unit-tested there against
- *  faked steps. This function's only job is building the real steps: Mod Management's and
- *  Editing's own types never cross into the sequencer itself, only these closures over them. */
-function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
-  const { instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
-  const sequencer = createReconcileSequencer<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
-    arm: () => loadOrderSync!.arm(),
-    say,
-    logInfo: (msg) => outputChannel.info(msg),
-    notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
-      'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
-    ),
-    // gameDirResolver's own `null` ("resolved, but there is none") and this sequencer's
-    // `undefined` ("nothing to build a snapshot from") are the same fact; normalized at the one
-    // seam between them rather than teaching the sequencer a second falsy spelling.
-    resolveGameDirectory: () => gameDirResolver.resolve().then((gd) => gd ?? undefined),
-    buildSnapshot: (dataFolder) => buildLoadOrderSnapshot(modlistSource, instanceRoot, dataFolder, (entries, root) =>
-      buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg))),
-    makeProgressHandler: makeTreeProgressHandler,
-    putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
-      controller.putLoadOrder(plugins, dataFolder, instanceRoot, undefined, { onProgress, signal }),
-    syncFilterState: () => controller.syncFilterState(),
-    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(heldPluginFiles, failures, outputChannel, totalPlugins),
-    presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
-  });
-  return () => sequencer.reconcile();
-}
-
 /** Build the enter-editing action: spawn/attach the backend, then send it the load order. Also the
  *  crash-restart path.
  *
  *  ADR-0035: owns its own progress indicator (`withPluginsViewProgress` — see there)
  *  rather than leaving each of its callers to wrap it, and reports its steps through `say`. */
-function makeEnterEditing(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
+function makeEnterEditing(outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
   const enter = async (): Promise<void> => {
     const { abandoned } = loadOrderSync!.arm();
     revealLog(); // the launch can take a while; let the user watch the step log
@@ -2422,8 +2401,10 @@ function makeEnterEditing(reconcile: ReconcileLoadOrder, outputChannel: vscode.L
       return;
     }
     // No game directory means nothing to build a snapshot from, so nothing for the backend to
-    // hold — don't strand the UI in an empty editing view.
-    if ((await reconcile()) === 'no-game-directory') exitToLoadout();
+    // hold — don't strand the UI in an empty editing view. `flush()` — not a separately threaded
+    // reconcile function — is the activation path's own documented reason to exist: it wants the
+    // outcome, not just a promise that a send will happen eventually.
+    if ((await loadOrderSync!.flush()) === 'no-game-directory') exitToLoadout();
   };
   return () => withPluginsViewProgress(enter);
 }

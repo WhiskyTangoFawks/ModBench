@@ -5,23 +5,31 @@
  *  flight becomes exactly one more PUT after it, never a race of two.
  *
  *  Lives at the composition root and imports from neither bounded context (the same rule
- *  `PluginsTreeComposite` and `nameFilter` keep — `src/test/contextBoundary.test.ts`): what a
- *  snapshot *is* and how it is *sent* are both injected, so this module knows only that there is
- *  a thing to recompute and a place to send it. */
-export interface LoadOrderSyncDeps {
+ *  `PluginsTreeComposite` and `nameFilter` keep — `src/test/contextBoundary.test.ts`): every step
+ *  of the reconcile itself (`ReconcileStepDeps`, folded in below) is injected exactly opaque
+ *  enough that this module knows only that there is a snapshot to build, a place to send it, and
+ *  an answer to apply — never what any of those three actually are. */
+export interface LoadOrderSyncDeps<TPlugin = unknown, TProgress = unknown, TOffer = unknown>
+  extends ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer> {
   /** Whether Editing is there to receive a snapshot at all. Mod Management works with no backend
    *  running (root CLAUDE.md), which is the ordinary case, not a failure — so a request with no
    *  receiver is dropped silently rather than surfacing as a doomed call. */
   isReceiving: () => boolean;
-  /** Recompute the snapshot and send it. Its own failures are its own to report; this module only
-   *  needs it to settle. */
-  send: () => Promise<void>;
   /** How long to wait for a burst to finish before sending. Two watchers can fire for one
    *  mod-level change, and a drag reorder rewrites plugins.txt once per drop — none of those
    *  deserve a PUT each. */
   debounceMs: number;
   log: (msg: string) => void;
+  /** Wraps one whole reconcile in whatever progress indicator the trigger wants shown — every
+   *  `request()`/`flush()` gets one, the same as the single opaque `send` this replaced always
+   *  got wrapped by its own caller. */
+  withProgress: (work: () => Promise<void>) => Promise<void>;
 }
+
+/** `ReconcileStepDeps` minus `arm` — this module arms its own cancellation scope (`arm()`/
+ *  `abandon()` below), the one step of a reconcile it does not take opaque, since abort state is
+ *  exactly what it exists to own. */
+type ReconcileStepDepsWithoutArm<TPlugin, TProgress, TOffer> = Omit<ReconcileStepDeps<TPlugin, TProgress, TOffer>, 'arm'>;
 
 export interface LoadOrderSync {
   /** Something that feeds the load order changed: send a snapshot soon, coalesced with any other
@@ -29,8 +37,9 @@ export interface LoadOrderSync {
   request(): void;
   /** Send now, waiting for any in-flight send first — the activation path, which wants the
    *  snapshot's outcome rather than a promise that one will happen. Any request queued behind the
-   *  in-flight send is folded into this one. */
-  flush(): Promise<void>;
+   *  in-flight send is folded into this one. Resolves `undefined` only when nothing was sent at
+   *  all (disposed, or no receiver) — every real reconcile resolves its own `ReconcileOutcome`. */
+  flush(): Promise<ReconcileOutcome | undefined>;
   dispose(): void;
   /** ADR-0035 amending ADR-0018: does this held plugin (keyed exactly as last set — callers
    *  lowercase before both `setMatches` and this, same as the module-level map this replaced)
@@ -58,39 +67,85 @@ export interface LoadOrderSync {
   abandon(): void;
 }
 
-export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
+/** The cancellation half of `createLoadOrderSync`'s own state, pulled out purely to stay under
+ *  the lint line budget (same reasoning as `registerRevealInExplorerCommand`'s own split in
+ *  `extension.ts`) — no dependency on the rest of the closure, so it stands alone cleanly. */
+function createAbortScope(): { arm: () => { signal: AbortSignal; abandoned: () => boolean }; abandon: () => void } {
+  let armed: AbortController | undefined;
+  return {
+    arm: () => {
+      const controller = new AbortController();
+      armed = controller;
+      return {
+        signal: controller.signal,
+        abandoned: () => controller.signal.aborted,
+      };
+    },
+    abandon: () => {
+      armed?.abort();
+      armed = undefined;
+    },
+  };
+}
+
+/** The per-plugin record-filter match map's one owner — see `LoadOrderSync.matches`/`setMatches`'
+ *  own doc comments for what it means. Pulled out for the same reason as `createAbortScope`
+ *  above. */
+function createMatchStore(): { matches: (file: string) => boolean | undefined; setMatches: (map: Map<string, boolean> | undefined) => void } {
+  let matchMap: Map<string, boolean> | undefined;
+  return {
+    matches: (file) => matchMap?.get(file),
+    setMatches: (map) => { matchMap = map; },
+  };
+}
+
+export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOffer = unknown>(
+  deps: LoadOrderSyncDeps<TPlugin, TProgress, TOffer>,
+): LoadOrderSync {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let inFlight: Promise<void> | undefined;
+  let inFlight: Promise<ReconcileOutcome | undefined> | undefined;
   let pending = false;
   let disposed = false;
-  let matchMap: Map<string, boolean> | undefined;
-  let armed: AbortController | undefined;
+  const { matches, setMatches } = createMatchStore();
+  const { arm, abandon } = createAbortScope();
 
-  const run = async (): Promise<void> => {
+  // The reconcile's own sequencing — arm, resolve the game directory, build the snapshot, PUT,
+  // apply, present crash-repair offers — lives entirely in `createReconcileSequencer`, unit-tested
+  // there against faked steps. This module's only remaining jobs are coalescing *when* it runs
+  // (below) and owning the abort scope it arms with (`arm`/`abandon` above, shared with the
+  // sequencer so `abandon()` reaches whichever reconcile is actually running). `LoadOrderSyncDeps`
+  // extends `ReconcileStepDeps` minus `arm`, so every other step spreads straight through.
+  const sequencer = createReconcileSequencer<TPlugin, TProgress, TOffer>({ ...deps, arm });
+
+  const run = async (): Promise<ReconcileOutcome | undefined> => {
     if (!deps.isReceiving()) {
       deps.log('[loadOrderSync] no receiver for the load order snapshot; dropping the request');
-      return;
+      return undefined;
     }
+    let outcome: ReconcileOutcome | undefined;
     try {
-      await deps.send();
+      await deps.withProgress(async () => { outcome = await sequencer.reconcile(); });
     } catch (e) {
-      // `send` reports its own failures (ADR-0026's explicit-action tier lives there); this is
-      // the backstop so a throw can never wedge every request queued after it.
+      // The sequencer's own steps report their failures (ADR-0026's explicit-action tier lives
+      // there); this is the backstop so a throw can never wedge every request queued after it.
       deps.log(`[loadOrderSync] sending the load order snapshot threw: ${e instanceof Error ? e.message : String(e)}`);
     }
+    return outcome;
   };
 
   // One sender at a time. A request that lands mid-send sets `pending`, and the send loop
   // re-runs once — with a fresh snapshot, so whatever landed mid-flight is sent whole rather than
   // as a stale copy the in-flight send already missed.
-  const kick = (): Promise<void> => {
+  const kick = (): Promise<ReconcileOutcome | undefined> => {
     if (inFlight) { pending = true; return inFlight; }
     inFlight = (async () => {
+      let outcome: ReconcileOutcome | undefined;
       do {
         pending = false;
-        await run();
+        outcome = await run();
       } while (pending && !disposed);
       inFlight = undefined;
+      return outcome;
     })();
     return inFlight;
   };
@@ -102,40 +157,25 @@ export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
       timer = setTimeout(() => { timer = undefined; void kick(); }, deps.debounceMs);
     },
     async flush() {
-      if (disposed) return;
+      if (disposed) return undefined;
       if (timer) { clearTimeout(timer); timer = undefined; }
       // A pending timer's request is folded into this send: it asked for the same thing.
       pending = false;
       if (inFlight) {
         pending = true;
-        await inFlight;
-        return;
+        return inFlight;
       }
-      await kick();
+      return kick();
     },
     dispose() {
       disposed = true;
       if (timer) clearTimeout(timer);
       timer = undefined;
     },
-    matches(file) {
-      return matchMap?.get(file);
-    },
-    setMatches(map) {
-      matchMap = map;
-    },
-    arm() {
-      const controller = new AbortController();
-      armed = controller;
-      return {
-        signal: controller.signal,
-        abandoned: () => controller.signal.aborted,
-      };
-    },
-    abandon() {
-      armed?.abort();
-      armed = undefined;
-    },
+    matches,
+    setMatches,
+    arm,
+    abandon,
   };
 }
 
