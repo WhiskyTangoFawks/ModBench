@@ -55,7 +55,6 @@ internal abstract class DelegatingRecordIndex(IRecordIndex inner) : IRecordIndex
     public RecordOverrides? GetOverrideStack(string formKey) => Inner.GetOverrideStack(formKey);
     public PagedResult<RecordSummary> Search(RecordQuery query) => Inner.Search(query);
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) => Inner.GetRecordTypeCounts(plugin);
-    public IReadOnlyList<string> GetContestedFormKeys() => Inner.GetContestedFormKeys();
     public RecordLookupEntry? Resolve(string formKey) => Inner.Resolve(formKey);
     public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => Inner.GetReferencedBy(targetFormKey);
     public IReadOnlySet<string> GetPluginsWithMatchingRecords(IEnumerable<string> tableNames) =>

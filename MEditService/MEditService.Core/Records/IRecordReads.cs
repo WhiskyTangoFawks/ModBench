@@ -35,14 +35,6 @@ public interface IRecordReads
     /// per-type loop.</summary>
     IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin);
 
-    /// <summary>Every FormKey with more than one override entry in its stack — the Conflicts
-    /// node's candidate population, before <c>ConflictClassifier</c> decides whether that
-    /// multiplicity is an actual conflict or just an uncontested/benign override. Load-order-wide, not
-    /// scoped to a plugin (a contested FormKey inherently spans more than one). Respects the active
-    /// filter the same way every other filterable read here does (<c>BuildWhere</c>'s
-    /// <c>filterActive</c>) — the existing filter mechanism, not a second filter path.</summary>
-    IReadOnlyList<string> GetContestedFormKeys();
-
     /// <summary>O(1) FormKey → (record type, EditorID) lookup against the winning override,
     /// backed by <c>form_lookup</c> (ADR-0031).</summary>
     RecordLookupEntry? Resolve(string formKey);

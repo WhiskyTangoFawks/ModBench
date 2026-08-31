@@ -330,22 +330,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/records/conflicts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["GetConflicts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/records/{formKey}": {
         parameters: {
             query?: never;
@@ -664,10 +648,6 @@ export interface components {
         ConditionParamCategory: "Number" | "Form" | "Text";
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
-        ConflictRecord: {
-            record: components["schemas"]["RecordSummary"];
-            conflictAll: components["schemas"]["ConflictAll"];
-        };
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         ContainerChildSummary: {
@@ -1939,26 +1919,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecordSummaryPagedResult"];
-                };
-            };
-        };
-    };
-    GetConflicts: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConflictRecord"][];
                 };
             };
         };

@@ -130,59 +130,11 @@ public sealed class RecordQueryService(
         return new CompareResult(annotated, classification.Diffs, conflictAll, hasVmad, vmad, conditions);
     }
 
-    /// <summary>Every contested FormKey (<see cref="IRecordReads.GetContestedFormKeys"/> —
-    /// already filter-narrowed the same way <c>GetRecordTypeCounts</c>/<c>Search</c> are, one
-    /// mechanism, not a second one) whose record-wide <see cref="Queries.ConflictAll"/> is not
-    /// OnlyOne/NoConflict — the Conflicts node's own listing. Computed through the exact same
-    /// <see cref="ClassifyStack"/> helper <see cref="GetCompare"/> uses, so "is this record
-    /// conflicting" can never answer differently here than it does when the record is actually
-    /// opened.</summary>
-    public IReadOnlyList<ConflictRecord> GetConflicts()
-    {
-        var reads = RequireReads();
-        var contested = reads.GetContestedFormKeys();
-        if (contested.Count == 0) return [];
-
-        var resolveFormKey = FormKeyResolutionCache.Memoize(reads.Resolve);
-        var heldPlugins = RequireLoadOrder().Plugins;
-        var pluginMasters = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Masters);
-        var pluginParticipates = heldPlugins.ToDictionary(p => ColumnKey.Of(p.Name, p.Origin), p => p.Participates);
-
-        var results = new List<ConflictRecord>();
-        foreach (var formKey in contested)
-        {
-            var stack = reads.GetOverrideStack(formKey);
-            // Defensive, not expected in practice: GetContestedFormKeys and this read share no
-            // transaction, so a formKey it just reported could in principle be gone by the time
-            // this asks for its stack. Skipped, not thrown — the same posture the rest of this
-            // service takes toward a race with a concurrent write.
-            if (stack == null) continue;
-
-            var committedOverrides = stack.Entries.Select(e => ToRecordDetail(e.Effective)).ToList();
-            var (_, conflictAll, _, _) =
-                ClassifyStack(stack, committedOverrides, pluginMasters, pluginParticipates, resolveFormKey);
-            // medit-record-editor.md's "no tint" rule: OnlyOne/NoConflict never render a badge, so
-            // they never belong in this listing either — GetContestedFormKeys only proves "more
-            // than one override entry exists", not that any of them actually differ from master.
-            if (conflictAll is ConflictAll.OnlyOne or ConflictAll.NoConflict) continue;
-
-            var winner = stack.Entries.FirstOrDefault(e => e.IsWinner) ?? stack.Entries[^1];
-            results.Add(new ConflictRecord(
-                new RecordSummary(
-                    FormKey: winner.Effective.FormKey, Plugin: winner.Plugin.Name, LoadOrderIndex: winner.LoadOrderIndex,
-                    IsWinner: true, EditorId: winner.Effective.EditorId, Origin: winner.Plugin.Origin ?? ""),
-                conflictAll));
-        }
-        return results;
-    }
-
-    /// <summary>The record-wide classification both <see cref="GetCompare"/> and
-    /// <see cref="GetConflicts"/> need — one definition of "what is this record's ConflictAll",
-    /// so the two can never disagree. VMAD/conditions are outside the generic reflection pipeline
+    /// <summary>The record-wide classification <see cref="GetCompare"/> needs — one definition of
+    /// "what is this record's ConflictAll". VMAD/conditions are outside the generic reflection pipeline
     /// (reconstituted here from each entry's own document body via
     /// <c>RecordDocumentCodecs</c>), so each is classified separately and its contribution folded
-    /// into the generic result via <see cref="ConflictRules.Escalate"/> — mirroring the pattern for
-    /// both. [ADR-0032]</summary>
+    /// into the generic result via <see cref="ConflictRules.Escalate"/>. [ADR-0032]</summary>
     private (ClassifyResult Classification, ConflictAll ConflictAll, VmadCompare? Vmad, ConditionCompare? Conditions) ClassifyStack(
         RecordOverrides stack,
         IReadOnlyList<RecordDetail> committedOverrides,
