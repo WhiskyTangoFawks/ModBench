@@ -877,7 +877,14 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    type in the assembly qualifies: one (`ASceneActionType`) shares the naming convention without its
    generated class actually being `abstract`, so the mechanism correctly declines it (empty
    sub-schema, same as before) rather than guessing a discriminator scheme onto a type it cannot
-   safely tell apart from an ordinary one (#612 tracks finding its real discriminator shape).
+   safely tell apart from an ordinary one. Its real discriminator is now known (#612): a raw
+   `ANAM` `UInt16` tag read by hand-written custom binary code, `4` selecting `SceneActionStartScene`
+   and every other value collapsing into `SceneActionTypicalType`. It stays declined on purpose —
+   Mutagen's own `Scene.xml` deliberately omits `abstract="true"` here where `Npc.xml` sets it for
+   `ANpcLevel`, so `IsAbstract` is the *correct* signal rather than a false negative; and wiring it
+   anyway would reach `SceneActionTypicalType`'s binary-overlay `Type` getter, which is an
+   unimplemented `throw` upstream. The full scheme and both blockers are recorded on the
+   `KnownGaps` entry.
    `Condition`/`ConditionData` and `AVirtualMachineAdapter` (VMAD) are *also* genuinely `abstract`,
    structurally identical to `ANpcLevel` — deliberately excluded by name
    (`SchemaReflector.AbstractUnionExcludedTypeNames`) rather than covered, because they are
