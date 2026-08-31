@@ -726,12 +726,15 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
     expect(byName(nodes, 'Base.esp').iconPath).toBeUndefined();
   });
 
-  it('renders the plain tree (badges degraded) with a warning when status computation fails', async () => {
+  // The file index build itself fails here (readModlist hits ENOTDIR before any walk starts), not
+  // the narrower badge pass — so the warning must name both things that degrade: badges AND a
+  // disk-derived row (issue #617 review) — not just "status", which undersold the second loss.
+  it('renders the plain tree (badges AND disk-derived rows degraded) with a warning naming both when the file index build fails', async () => {
     await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), 'Fallout4.esm\r\nChild.esp\r\nBase.esp\r\n');
     const logs: string[] = [];
     const reports: { severity: string; message: string }[] = [];
     // instanceRoot pointed at a *file*, not a directory: readModlist hits ENOTDIR,
-    // failing the status pass without failing the plugins.txt read (which uses the real dir).
+    // failing the index build without failing the plugins.txt read (which uses the real dir).
     const source = new Mo2ModlistSource(dir);
     const provider = new PluginListProvider({ source, log: (m) => logs.push(m), reporter: { report: (severity, message) => reports.push({ severity, message }) }, instanceRoot: join(dir, 'ModOrganizer.ini') });
     const rows = await provider.getChildren();
@@ -739,8 +742,116 @@ describe('PluginListProvider — order-aware missing-master badge (instanceRoot 
 
     expect(rows.every((n) => n.kind !== 'error')).toBe(true); // tree still rendered
     expect(byName(nodes, 'Child.esp').iconPath).toBeUndefined(); // no badge — computation failed
-    expect(reports).toEqual([{ severity: 'warning', message: expect.stringContaining('master-order status') }]);
-    expect(logs.some((l) => l.includes('status'))).toBe(true);
+    expect(reports).toEqual([{
+      severity: 'warning',
+      message: expect.stringMatching(/badges.*inaccurate.*plugins\.txt.*missing/s),
+    }]);
+    expect(logs.some((l) => l.includes('file index build failed'))).toBe(true);
+  });
+});
+
+// #617: buildRows() previously derived row identity purely from plugins.txt lines, so a plugin
+// file present on disk but never given a line could never get a row, no matter what triggered a
+// refresh. The maintainer's ruling ("unlisted plugin gets appended, the ux model is same as when
+// a mod gets enabled") is read-only: no plugins.txt write, an ordinary PluginNode with no
+// distinguishing decoration, checkbox unchecked because it falls out of the normal
+// `enabledSet.has(name)` check rather than any special-casing.
+describe('PluginListProvider — externally-appeared plugin picked up as an appended row (#617)', () => {
+  let dir: string;
+  const pluginNodes = async (provider: PluginListProvider): Promise<PluginNode[]> =>
+    (await provider.getChildren()).filter((n): n is PluginNode => n.kind === 'plugin');
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'plugin-unlisted-'));
+    await mkdir(join(dir, 'mods', 'Provider'), { recursive: true });
+    await writeFile(join(dir, 'mods', 'Provider', 'Base.esp'), buildTes4Buffer([]));
+    await mkdir(join(dir, 'profiles', 'Default'), { recursive: true });
+    await writeFile(
+      join(dir, 'ModOrganizer.ini'),
+      `[General]\r\nselected_profile=@ByteArray(Default)\r\ngamePath=@ByteArray(${join(dir, 'Game')})\r\n`,
+    );
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Provider\r\n');
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*Base.esp\r\n');
+  });
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const provider = () => new PluginListProvider({ source: new Mo2ModlistSource(dir), instanceRoot: dir });
+
+  // The survey's own pinned red (`expected [ 'Base.esp' ] to include 'New.esp' ]`), extended to
+  // the ruling's full row shape.
+  it('a plugin file added to an already-enabled mod after the initial read appears, appended, unchecked and undecorated, once invalidated', async () => {
+    const p = provider();
+    const before = await pluginNodes(p);
+    expect(before.map((n) => n.plugin.name)).toEqual(['Base.esp']);
+
+    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), buildTes4Buffer([]));
+    p.invalidate();
+
+    const after = await pluginNodes(p);
+    expect(after.map((n) => n.plugin.name)).toEqual(['Base.esp', 'New.esp']);
+    const added = after[1];
+    expect(added.checkboxState).toBe(0); // Unchecked — no plugins.txt line names it
+    expect(added.iconPath).toBeUndefined(); // no distinguishing decoration (ruling rejects one)
+    expect(added.description).toBeUndefined();
+  });
+
+  // AC3: disable/re-enable must converge to the same state as the watcher path above. Also
+  // covers the broader case the coordinator flagged (enabling a mod whose plugin was never in
+  // plugins.txt at all, not just one added to an already-enabled mod): buildFileConflictIndex
+  // walks only currently-enabled mods regardless of a mod's enable history, so re-enabling
+  // Provider exercises exactly that path — no separate test needed for it.
+  it('disabling then re-enabling the owning mod converges: the appended row disappears then reappears', async () => {
+    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), buildTes4Buffer([]));
+    const p = provider();
+    expect((await pluginNodes(p)).map((n) => n.plugin.name)).toEqual(['Base.esp', 'New.esp']);
+
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '-Provider\r\n');
+    p.invalidate();
+    // Base.esp keeps its row (it still has a plugins.txt line); New.esp's row — which exists only
+    // because Provider's disk contents were walked — vanishes with the mod that provided it.
+    expect((await pluginNodes(p)).map((n) => n.plugin.name)).toEqual(['Base.esp']);
+
+    await writeFile(join(dir, 'profiles', 'Default', 'modlist.txt'), '+Provider\r\n');
+    p.invalidate();
+    const reenabled = await pluginNodes(p);
+    expect(reenabled.map((n) => n.plugin.name)).toEqual(['Base.esp', 'New.esp']);
+    expect(reenabled[1].checkboxState).toBe(0);
+  });
+
+  it('a plugin file that already has a plugins.txt line is not appended a second time', async () => {
+    const nodes = await pluginNodes(provider());
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['Base.esp']);
+  });
+
+  // MO2 users are ordinarily on a case-insensitive filesystem, so a plugins.txt line differing
+  // only in case from the on-disk filename (here, "BASE.esp" vs. the real "Base.esp") is a
+  // routine occurrence, not a corrupted profile — the fold-based `knownFolded` lookup must still
+  // recognise them as the same plugin, or the user sees a spurious duplicate row. Genuinely
+  // case-differing (not just already-lowercase, which would pass even with the `.toLowerCase()`
+  // fold reverted — a mutation that never exercises the fold proves nothing).
+  it('a plugins.txt line differing only in case from the on-disk filename is not appended a second time', async () => {
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*BASE.esp\r\n');
+    const nodes = await pluginNodes(provider());
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['BASE.esp']);
+  });
+
+  // The checkbox affordance for a synthesized row is out of scope (filed separately for a
+  // maintainer ruling on whether ticking it should append the plugins.txt line) — this pins
+  // that it fails safe rather than silently doing nothing or partially writing.
+  it('toggling a synthesized row rejects, and leaves plugins.txt byte-identical on disk', async () => {
+    await writeFile(join(dir, 'mods', 'Provider', 'New.esp'), buildTes4Buffer([]));
+    const p = provider();
+    await pluginNodes(p); // populate the cache
+
+    const pluginsPath = join(dir, 'profiles', 'Default', 'plugins.txt');
+    const before = await readFile(pluginsPath, 'utf8');
+
+    await expect(p.setPluginEnabled('New.esp', true)).rejects.toThrow('Plugin not found in plugins.txt');
+
+    const after = await readFile(pluginsPath, 'utf8');
+    expect(after).toBe(before);
   });
 });
 
