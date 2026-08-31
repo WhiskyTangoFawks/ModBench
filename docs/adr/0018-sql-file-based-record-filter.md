@@ -5,10 +5,9 @@ status: accepted
 # Record tree filtering uses raw DuckDB SQL in plain `.sql` files
 
 The record tree filter is a DuckDB SQL SELECT, stored as a plain `.sql` file in
-`modbench.scriptsPath`, applied via VS Code Code Lens (or `Apply Filter to Selected` against the
-tree selection). The filter must return a `form_key` column; the backend materializes the result
-into a `_filter` table and joins against it on all subsequent record queries. No structured filter
-UI controls (toggle buttons, dropdowns) are built.
+`modbench.scriptsPath`, applied via VS Code Code Lens. The filter must return a `form_key` column;
+the backend materializes the result into a `_filter` table and joins against it on all subsequent
+record queries. No structured filter UI controls (toggle buttons, dropdowns) are built.
 
 **A filter acts only on the level it names.** The plugin-name filter hides plugin rows. The record
 filter prunes records and record types; the backend still returns every plugin with
@@ -36,7 +35,10 @@ in.
   `SchemaReflector`, and only scalar leaves are columns. Users must know that schema.
 - Scripts inherit `modbench.scriptsPath` and the Code Lens infrastructure rather than building
   their own.
-- A plugin-scoped conflict endpoint is not built — plugin scoping is `Apply Filter to Selected`.
+- A plugin-scoped conflict endpoint is still not built. The reason originally given here — plugin
+  scoping via `Apply Filter to Selected` — no longer holds: that gesture (#574) and the Plugins
+  tree's own conflict surface it would have scoped (the Conflicts node, #624) have both been
+  removed. `GET /records/conflicts` remains unscoped; its future is #558's open call.
 
 ## Alternatives rejected
 

@@ -67,9 +67,9 @@ filter prunes records and record types, and the tree **hides a plugin the active
 matches nothing of** — a visible-but-permanently-inert row was never the load order serving a
 purpose; clearing the filter restores every row immediately, in load order. The backend never
 prunes a plugin row itself: `GetPlugins()` returns every plugin with `HasMatchingRecords` as an
-additive fact, and `PluginsTreeComposite` omits the row. Narrowing to a single plugin for
-authoring is `Apply Filter to Selected`, adopted from xEdit's `mniNavFilterApplySelected` — the
-ordinary record filter invoked against the tree selection, not a mode.
+additive fact, and `PluginsTreeComposite` omits the row. xEdit's `mniNavFilterApplySelected` has
+no Modbench equivalent by decision, not by omission — shipped as "Filter to Selected Plugins" (#363),
+rejected by the maintainer on sight, and removed (#574).
 
 ### Live mutation
 

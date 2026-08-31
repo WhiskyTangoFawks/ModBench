@@ -159,36 +159,6 @@ export function pluginFileOf(node: PluginListNode): string | undefined {
   return undefined;
 }
 
-/** Structural guard for "is this row shaped like one of ours" — checked by `kind` alone against
- *  `OWN_ROW_KINDS`, never by importing Editing's row types, so this file's "imports nothing from
- *  Editing" boundary (`src/test/contextBoundary.test.ts`) holds without needing to know what a
- *  non-plugin row *is*, only that it isn't one of these four. */
-function isPluginListNode(node: unknown): node is PluginListNode {
-  if (typeof node !== 'object' || node === null || !('kind' in node)) return false;
-  return OWN_ROW_KINDS.has((node as { kind: string }).kind);
-}
-
-/** Filter to Selected Plugins' own selection-extractor — the clicked row plus its
- *  multi-selection (VS Code's `view/item/context` invocation shape, `(clicked, selected[])`),
- *  collapsed to the deduped plugin-name set the command scopes its Editing-side narrowing to.
- *  Mirrors `DownloadsPanel.ts`'s own `selectionNames`: falls back to the clicked row alone when
- *  no selection array is supplied.
- *
- *  `selected` is deliberately untyped beyond `unknown[]` — the merged Plugins tree's selection can
- *  hold Editing's own child rows too, and this drops every one of them rather than import their
- *  shape: `isPluginListNode` only ever asks "is this one of the four rows Mod Management owns",
- *  never what an Editing row is instead. That is a deliberate divergence from xEdit's
- *  `mniNavFilterApplySelected` (`xeMainForm.pas:13976-14027`), which resolves a selected *element*
- *  up to its owning file — not reproducible here without importing Editing's row types into Mod
- *  Management, which the bounded-context split forbids. In practice the drop only ever manifests
- *  in a mixed selection: the `view/item/context` `when` clause only offers this command on a
- *  plugin row to begin with. */
-export function pluginNamesInSelection(clicked: PluginListNode | undefined, selected: unknown[] | undefined): string[] {
-  const nodes = selected && selected.length > 0 ? selected : (clicked ? [clicked] : []);
-  const names = nodes.filter(isPluginListNode).map(pluginFileOf).filter((n): n is string => n !== undefined);
-  return [...new Set(names)];
-}
-
 /** ADR-0035 § Live mutation: the checkbox gesture's own payload — which plugin,
  *  and its new `plugins.txt` `*` state, exactly as `setPluginEnabled` just wrote it. Fired only
  *  from a real toggle, never from `invalidate()`'s generic re-render (a filter keystroke, an
