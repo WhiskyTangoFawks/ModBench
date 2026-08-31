@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Core.Source;
 
 /// <summary>The phases <see cref="TrackService.TrackAsync"/> moves through, in order — enough to
@@ -9,6 +11,7 @@ namespace MEditService.Core.Source;
 /// serializes each plugin as one call with no per-record
 /// progress callback of its own to observe), <c>Committing</c> (the git mechanics — not itself broken
 /// into finer steps).</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TrackPhase
 {
     Idle,

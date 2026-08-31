@@ -575,79 +575,79 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         CellReferences: {
-            persistent?: components["schemas"]["PlacedSummary"][] | null;
-            temporary?: components["schemas"]["PlacedSummary"][] | null;
+            persistent: components["schemas"]["PlacedSummary"][];
+            temporary: components["schemas"]["PlacedSummary"][];
         };
         CellSummary: {
-            formKey?: string | null;
+            formKey: string;
             editorId?: string | null;
             /** Format: int32 */
             cellX?: number | null;
             /** Format: int32 */
             cellY?: number | null;
-            isPersistentWorldspaceCell?: boolean;
+            isPersistentWorldspaceCell: boolean;
             fullName?: string | null;
         };
         CellSummaryPagedResult: {
-            items?: components["schemas"]["CellSummary"][] | null;
+            items: components["schemas"]["CellSummary"][];
             /** Format: int32 */
-            total?: number;
+            total: number;
         };
         CompareOverride: {
-            formKey?: string | null;
-            plugin?: string | null;
+            formKey: string;
+            plugin: string;
             /** Format: int32 */
-            loadOrderIndex?: number;
-            isWinner?: boolean;
+            loadOrderIndex: number;
+            isWinner: boolean;
             editorId?: string | null;
-            fields?: components["schemas"]["FieldValue"][] | null;
-            origin?: string | null;
-            recordType?: string | null;
-            isPartialForm?: boolean;
-            isPartialFormable?: boolean;
-            conflictThis?: components["schemas"]["ConflictThis"];
+            fields: components["schemas"]["FieldValue"][];
+            origin: string;
+            recordType: string;
+            isPartialForm: boolean;
+            isPartialFormable: boolean;
+            conflictThis: components["schemas"]["ConflictThis"];
         };
         CompareResult: {
-            overrides?: components["schemas"]["CompareOverride"][] | null;
-            diffs?: components["schemas"]["FieldDiff"][] | null;
-            conflictAll?: components["schemas"]["ConflictAll"];
-            hasVmad?: boolean;
+            overrides: components["schemas"]["CompareOverride"][];
+            diffs: components["schemas"]["FieldDiff"][];
+            conflictAll: components["schemas"]["ConflictAll"];
+            hasVmad: boolean;
             vmad?: components["schemas"]["VmadCompare"] | null;
             conditions?: components["schemas"]["ConditionCompare"] | null;
         };
         CompileDiagnostic: {
-            formKey?: string | null;
-            sourceRelativePath?: string | null;
-            message?: string | null;
+            formKey: string;
+            sourceRelativePath: string;
+            message: string;
         };
         CompileRequest: {
-            origin?: string | null;
+            origin: string;
             ref?: string | null;
         };
         CompileResult: {
-            succeeded?: boolean;
+            succeeded: boolean;
             refusalReason?: string | null;
-            diagnostics?: components["schemas"]["CompileDiagnostic"][] | null;
-            masters?: string[] | null;
+            diagnostics: components["schemas"]["CompileDiagnostic"][];
+            masters: string[];
         };
         ConditionCompare: {
-            groups?: components["schemas"]["ConditionGroupDiff"][] | null;
+            groups: components["schemas"]["ConditionGroupDiff"][];
         };
         ConditionDiff: {
             /** Format: int32 */
-            index?: number;
-            perPlugin?: {
+            index: number;
+            perPlugin: {
                 [key: string]: components["schemas"]["ParsedCondition"];
-            } | null;
-            winnerColumn?: string | null;
-            cellStates?: {
+            };
+            winnerColumn: string;
+            cellStates: {
                 [key: string]: components["schemas"]["ConflictThis"];
-            } | null;
-            fieldCellStates?: {
+            };
+            fieldCellStates: {
                 [key: string]: {
                     [key: string]: components["schemas"]["ConflictThis"];
                 };
-            } | null;
+            };
             fieldResolutions?: {
                 [key: string]: {
                     [key: string]: components["schemas"]["FormKeyResolution"];
@@ -655,8 +655,8 @@ export interface components {
             } | null;
         };
         ConditionGroupDiff: {
-            fieldPath?: string | null;
-            conditions?: components["schemas"]["ConditionDiff"][] | null;
+            fieldPath: string;
+            conditions: components["schemas"]["ConditionDiff"][];
         };
         /** @enum {string} */
         ConditionOperator: "EqualTo" | "NotEqualTo" | "GreaterThan" | "GreaterThanOrEqualTo" | "LessThan" | "LessThanOrEqualTo";
@@ -665,152 +665,146 @@ export interface components {
         /** @enum {string} */
         ConflictAll: "OnlyOne" | "NoConflict" | "Override" | "Conflict" | "ConflictCritical";
         ConflictRecord: {
-            record?: components["schemas"]["RecordSummary"];
-            conflictAll?: components["schemas"]["ConflictAll"];
+            record: components["schemas"]["RecordSummary"];
+            conflictAll: components["schemas"]["ConflictAll"];
         };
         /** @enum {string} */
         ConflictThis: "OnlyOne" | "Master" | "IdenticalToMaster" | "Override" | "ConflictWins" | "ConflictLoses";
         ContainerChildSummary: {
-            formKey?: string | null;
+            formKey: string;
             editorId?: string | null;
-            plugin?: string | null;
-            origin?: string | null;
+            plugin: string;
+            origin: string;
             /** Format: int32 */
-            loadOrderIndex?: number;
-            isWinner?: boolean;
-            workingTreeState?: components["schemas"]["WorkingTreeState"];
-            recordType?: string | null;
+            loadOrderIndex: number;
+            isWinner: boolean;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
+            recordType: string;
         };
         CrashRepairOffer: {
-            plugin?: string | null;
-            origin?: string | null;
-            reason?: components["schemas"]["CrashRepairReason"];
+            plugin: string;
+            origin: string;
+            reason: components["schemas"]["CrashRepairReason"];
         };
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        CrashRepairReason: 0 | 1;
+        /** @enum {string} */
+        CrashRepairReason: "InterruptedCompile" | "MissingOrUnreadableBinary";
         CreatePluginRequest: {
-            name?: string | null;
-            path?: string | null;
-            origin?: string | null;
+            name: string;
+            path: string;
+            origin: string;
         };
         ExternalChangeActionRequest: {
-            origin?: string | null;
+            origin: string;
         };
         ExternalChangeActionResponse: {
-            succeeded?: boolean;
+            succeeded: boolean;
             refusalReason?: string | null;
         };
         FieldDiff: {
-            fieldName?: string | null;
-            values?: {
+            fieldName: string;
+            values: {
                 [key: string]: unknown;
-            } | null;
-            winnerColumn?: string | null;
+            };
+            winnerColumn: string;
             winnerValue?: unknown;
-            cellStates?: {
+            cellStates: {
                 [key: string]: components["schemas"]["ConflictThis"];
-            } | null;
-            conflictAll?: components["schemas"]["ConflictAll"];
+            };
+            conflictAll: components["schemas"]["ConflictAll"];
             children?: components["schemas"]["FieldDiff"][] | null;
             resolutions?: {
                 [key: string]: components["schemas"]["FormKeyResolution"];
             } | null;
         };
         FieldMetadata: {
-            name?: string | null;
-            type?: string | null;
-            isArray?: boolean;
-            validFormKeyTypes?: string[] | null;
-            enumValues?: string[] | null;
+            name: string;
+            type: string;
+            isArray: boolean;
+            validFormKeyTypes: string[];
+            enumValues: string[];
             elementType?: components["schemas"]["FieldMetadata"] | null;
             fields?: components["schemas"]["FieldMetadata"][] | null;
-            isSortable?: boolean;
-            allowsNull?: boolean;
-            isBitmask?: boolean;
+            isSortable: boolean;
+            allowsNull: boolean;
+            isBitmask: boolean;
             enumBitValues?: string[] | null;
         };
         FieldValue: {
-            metadata?: components["schemas"]["FieldMetadata"];
+            metadata: components["schemas"]["FieldMetadata"];
             value?: unknown;
             checkError?: string | null;
         };
         FilterRequest: {
-            sql?: string | null;
+            sql: string;
         };
         FilterResponse: {
             sql?: string | null;
         };
         FormKeyResolution: {
-            state?: components["schemas"]["FormKeyResolutionState"];
+            state: components["schemas"]["FormKeyResolutionState"];
             recordType?: string | null;
             editorId?: string | null;
         };
         /** @enum {string} */
         FormKeyResolutionState: "Unresolved" | "ResolvedWrongType" | "ResolvedValidType";
         IndexedPlugin: {
-            name?: string | null;
-            origin?: string | null;
+            name: string;
+            origin: string;
         };
         LoadOrderPlugin: {
-            name?: string | null;
-            path?: string | null;
-            origin?: string | null;
+            name: string;
+            path: string;
+            origin: string;
             /** Format: int32 */
             slot?: number | null;
             enabled?: boolean | null;
             winning?: boolean | null;
         };
         LoadOrderRequest: {
-            plugins?: components["schemas"]["LoadOrderPlugin"][] | null;
-            gameDirectory?: string | null;
-            instanceRoot?: string | null;
-            gameRelease?: string | null;
+            plugins: components["schemas"]["LoadOrderPlugin"][];
+            gameDirectory: string;
+            instanceRoot: string;
+            gameRelease: string;
         };
         LoadOrderResponse: {
-            status?: string | null;
-            failures?: components["schemas"]["PluginLoadFailure"][] | null;
-            crashRepairOffers?: components["schemas"]["CrashRepairOffer"][] | null;
+            status: string;
+            failures: components["schemas"]["PluginLoadFailure"][];
+            crashRepairOffers: components["schemas"]["CrashRepairOffer"][];
         };
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        LoadOrderState: 0 | 1 | 2;
+        /** @enum {string} */
+        LoadOrderState: "None" | "Reconciling" | "Ready";
         LoadOrderStatus: {
-            state?: components["schemas"]["LoadOrderState"];
+            state: components["schemas"]["LoadOrderState"];
             /** Format: int32 */
-            totalPlugins?: number;
-            indexedPlugins?: components["schemas"]["IndexedPlugin"][] | null;
-            conflictsComputed?: boolean;
-            failures?: components["schemas"]["PluginLoadFailure"][] | null;
+            totalPlugins: number;
+            indexedPlugins: components["schemas"]["IndexedPlugin"][];
+            conflictsComputed: boolean;
+            failures: components["schemas"]["PluginLoadFailure"][];
         };
         MasterIssue: {
-            masterName?: string | null;
-            kind?: components["schemas"]["MasterIssueKind"];
+            masterName: string;
+            kind: components["schemas"]["MasterIssueKind"];
         };
         /** @enum {string} */
         MasterIssueKind: "DirectlyMissing" | "Unloadable";
         NextFreeFormKeyResponse: {
-            formKey?: string | null;
+            formKey: string;
         };
         ParsedCondition: {
-            function?: string | null;
-            operator?: components["schemas"]["ConditionOperator"];
-            or?: boolean;
-            runOnTarget?: string | null;
+            function: string;
+            operator: components["schemas"]["ConditionOperator"];
+            or: boolean;
+            runOnTarget: string;
             runOnReference?: string | null;
-            useGlobal?: boolean;
+            useGlobal: boolean;
             /** Format: float */
             comparisonFloat?: number | null;
             comparisonGlobal?: string | null;
-            parameters?: components["schemas"]["ParsedConditionParam"][] | null;
+            parameters: components["schemas"]["ParsedConditionParam"][];
         };
         ParsedConditionParam: {
-            category?: components["schemas"]["ConditionParamCategory"];
-            typeName?: string | null;
+            category: components["schemas"]["ConditionParamCategory"];
+            typeName: string;
             /** Format: int32 */
             number?: number | null;
             formKey?: string | null;
@@ -818,40 +812,40 @@ export interface components {
             decodedValue?: string | null;
         };
         PlacedSummary: {
-            formKey?: string | null;
+            formKey: string;
             editorId?: string | null;
             baseFormKey?: string | null;
-            recordType?: string | null;
+            recordType: string;
         };
         PluginLoadFailure: {
-            name?: string | null;
-            reason?: string | null;
+            name: string;
+            reason: string;
         };
         PluginRecordTypeCount: {
-            type?: string | null;
+            type: string;
             /** Format: int32 */
-            count?: number;
-            displayName?: string | null;
+            count: number;
+            displayName: string;
         };
         PluginResponse: {
-            name?: string | null;
-            path?: string | null;
+            name: string;
+            path: string;
             /** Format: int32 */
             loadOrderIndex?: number | null;
-            isLight?: boolean;
-            isMaster?: boolean;
-            masters?: string[] | null;
+            isLight: boolean;
+            isMaster: boolean;
+            masters: string[];
             /** Format: int32 */
-            recordCount?: number;
-            isImmutable?: boolean;
-            participates?: boolean;
-            origin?: string | null;
-            masterIssues?: components["schemas"]["MasterIssue"][] | null;
-            inLoadOrder?: boolean;
-            enabled?: boolean;
-            winning?: boolean;
-            hasMatchingRecords?: boolean;
-            isTracked?: boolean;
+            recordCount: number;
+            isImmutable: boolean;
+            participates: boolean;
+            origin: string;
+            masterIssues: components["schemas"]["MasterIssue"][];
+            inLoadOrder: boolean;
+            enabled: boolean;
+            winning: boolean;
+            hasMatchingRecords: boolean;
+            isTracked: boolean;
         };
         ProblemDetails: {
             type?: string | null;
@@ -863,155 +857,154 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** @enum {string} */
+        RebaseOutcome: "Clean" | "Refused" | "Conflicted";
         RebaseRequest: {
-            origin?: string | null;
+            origin: string;
         };
         RebaseResponse: {
-            outcome?: string | null;
+            outcome: components["schemas"]["RebaseOutcome"];
             refusalReason?: string | null;
-            conflictedPaths?: string[] | null;
+            conflictedPaths: string[];
         };
         RecordCopyAsNewRecordRequest: {
-            sourcePlugin?: string | null;
-            sourceOrigin?: string | null;
-            destinationPlugin?: string | null;
-            destinationOrigin?: string | null;
+            sourcePlugin: string;
+            sourceOrigin: string;
+            destinationPlugin: string;
+            destinationOrigin: string;
             requestedFormKey?: string | null;
         };
         RecordCopyAsNewRecordResponse: {
-            applied?: boolean;
-            sourceFormKey?: string | null;
-            newFormKey?: string | null;
+            applied: boolean;
+            sourceFormKey: string;
+            newFormKey: string;
         };
         RecordCopyAsOverrideRequest: {
-            sourcePlugin?: string | null;
-            sourceOrigin?: string | null;
-            destinationPlugin?: string | null;
-            destinationOrigin?: string | null;
+            sourcePlugin: string;
+            sourceOrigin: string;
+            destinationPlugin: string;
+            destinationOrigin: string;
         };
         RecordCopyAsOverrideResponse: {
-            applied?: boolean;
-            formKey?: string | null;
+            applied: boolean;
+            formKey: string;
         };
         RecordCreateRequest: {
-            origin?: string | null;
-            recordType?: string | null;
+            origin: string;
+            recordType: string;
             editorId?: string | null;
             formKey?: string | null;
         };
         RecordCreateResponse: {
-            applied?: boolean;
-            formKey?: string | null;
-            recordType?: string | null;
+            applied: boolean;
+            formKey: string;
+            recordType: string;
         };
         RecordDeleteRequest: {
-            plugin?: string | null;
-            origin?: string | null;
+            plugin: string;
+            origin: string;
         };
         RecordDeleteResponse: {
-            applied?: boolean;
-            formKey?: string | null;
+            applied: boolean;
+            formKey: string;
         };
         RecordDetail: {
-            formKey?: string | null;
-            plugin?: string | null;
+            formKey: string;
+            plugin: string;
             /** Format: int32 */
-            loadOrderIndex?: number;
-            isWinner?: boolean;
+            loadOrderIndex: number;
+            isWinner: boolean;
             editorId?: string | null;
-            fields?: components["schemas"]["FieldValue"][] | null;
-            origin?: string | null;
-            recordType?: string | null;
-            isPartialForm?: boolean;
-            isPartialFormable?: boolean;
+            fields: components["schemas"]["FieldValue"][];
+            origin: string;
+            recordType: string;
+            isPartialForm: boolean;
+            isPartialFormable: boolean;
         };
         RecordFieldEditRequest: {
-            plugin?: string | null;
-            origin?: string | null;
-            fieldPath?: string | null;
-            value?: unknown;
+            plugin: string;
+            origin: string;
+            fieldPath: string;
+            value: unknown;
         };
         RecordFieldEditResponse: {
-            applied?: boolean;
-            formKey?: string | null;
-            fieldPath?: string | null;
+            applied: boolean;
+            formKey: string;
+            fieldPath: string;
         };
         RecordRenumberRequest: {
-            plugin?: string | null;
-            origin?: string | null;
+            plugin: string;
+            origin: string;
             newFormKey?: string | null;
         };
         RecordRenumberResponse: {
-            applied?: boolean;
-            oldFormKey?: string | null;
-            newFormKey?: string | null;
+            applied: boolean;
+            oldFormKey: string;
+            newFormKey: string;
         };
         RecordSummary: {
-            formKey?: string | null;
-            plugin?: string | null;
+            formKey: string;
+            plugin: string;
             /** Format: int32 */
-            loadOrderIndex?: number;
-            isWinner?: boolean;
+            loadOrderIndex: number;
+            isWinner: boolean;
             editorId?: string | null;
-            origin?: string | null;
-            workingTreeState?: components["schemas"]["WorkingTreeState"];
+            origin: string;
+            workingTreeState: components["schemas"]["WorkingTreeState"];
         };
         RecordSummaryPagedResult: {
-            items?: components["schemas"]["RecordSummary"][] | null;
+            items: components["schemas"]["RecordSummary"][];
             /** Format: int32 */
-            total?: number;
+            total: number;
         };
         ReferenceResult: {
-            formKey?: string | null;
-            plugin?: string | null;
-            fieldPath?: string | null;
-            recordType?: string | null;
+            formKey: string;
+            plugin: string;
+            fieldPath: string;
+            recordType: string;
             editorId?: string | null;
-            origin?: string | null;
+            origin: string;
         };
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        TrackPhase: 0 | 1 | 2 | 3;
+        /** @enum {string} */
+        TrackPhase: "Idle" | "Parsing" | "Serializing" | "Committing";
         TrackProgress: {
             origin?: string | null;
-            phase?: components["schemas"]["TrackPhase"];
+            phase: components["schemas"]["TrackPhase"];
             /** Format: int32 */
-            pluginsDone?: number;
+            pluginsDone: number;
             /** Format: int32 */
-            pluginsTotal?: number;
+            pluginsTotal: number;
         };
         TrackRequest: {
-            origin?: string | null;
-            preset?: string | null;
+            origin: string;
+            preset: string;
         };
         TrackResponse: {
-            origin?: string | null;
+            origin: string;
         };
         UnansweredExternalChangeResponse: {
-            plugin?: string | null;
-            origin?: string | null;
-            metaChanged?: boolean;
+            plugin: string;
+            origin: string;
+            metaChanged: boolean;
             oldVersion?: string | null;
             newVersion?: string | null;
         };
         VmadCompare: {
-            scripts?: components["schemas"]["VmadScriptDiff"][] | null;
+            scripts: components["schemas"]["VmadScriptDiff"][];
         };
         VmadPropertyDiff: {
-            name?: string | null;
-            kind?: string | null;
-            values?: {
+            name: string;
+            kind: string;
+            values: {
                 [key: string]: unknown;
-            } | null;
-            types?: {
+            };
+            types: {
                 [key: string]: string;
-            } | null;
-            winnerColumn?: string | null;
-            cellStates?: {
+            };
+            winnerColumn: string;
+            cellStates: {
                 [key: string]: components["schemas"]["ConflictThis"];
-            } | null;
+            };
             children?: components["schemas"]["VmadPropertyDiff"][] | null;
             raw?: {
                 [key: string]: unknown;
@@ -1021,41 +1014,38 @@ export interface components {
             } | null;
         };
         VmadScriptDiff: {
-            name?: string | null;
-            flags?: {
+            name: string;
+            flags: {
                 [key: string]: string | null;
-            } | null;
-            winnerColumn?: string | null;
-            cellStates?: {
+            };
+            winnerColumn: string;
+            cellStates: {
                 [key: string]: components["schemas"]["ConflictThis"];
-            } | null;
-            properties?: components["schemas"]["VmadPropertyDiff"][] | null;
+            };
+            properties: components["schemas"]["VmadPropertyDiff"][];
         };
-        /**
-         * Format: int32
-         * @enum {integer}
-         */
-        WorkingTreeState: 0 | 1 | 2;
+        /** @enum {string} */
+        WorkingTreeState: "None" | "Modified" | "Added";
         WorldspaceBlockDto: {
             /** Format: int32 */
-            x?: number;
+            x: number;
             /** Format: int32 */
-            y?: number;
-            subBlocks?: components["schemas"]["WorldspaceSubBlockDto"][] | null;
+            y: number;
+            subBlocks: components["schemas"]["WorldspaceSubBlockDto"][];
         };
         WorldspaceBlocks: {
-            blocks?: components["schemas"]["WorldspaceBlockDto"][] | null;
-            topCells?: components["schemas"]["CellSummary"][] | null;
+            blocks: components["schemas"]["WorldspaceBlockDto"][];
+            topCells: components["schemas"]["CellSummary"][];
         };
         WorldspaceSubBlockDto: {
             /** Format: int32 */
-            x?: number;
+            x: number;
             /** Format: int32 */
-            y?: number;
-            cells?: components["schemas"]["CellSummary"][] | null;
+            y: number;
+            cells: components["schemas"]["CellSummary"][];
         };
         WorldspaceSummary: {
-            formKey?: string | null;
+            formKey: string;
             editorId?: string | null;
         };
     };

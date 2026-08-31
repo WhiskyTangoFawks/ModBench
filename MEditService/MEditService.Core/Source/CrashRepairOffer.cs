@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Core.Source;
 
 /// <summary>
@@ -14,6 +16,7 @@ public sealed record CrashRepairOffer(string Plugin, string Origin, CrashRepairR
 /// live watcher, because neither condition can newly arise while this same Modbench process keeps
 /// running: the journal only moves during a compile <see cref="Edits.PluginCompileService"/> itself
 /// drives, and a binary that vanished while the backend runs would already have been read once at load.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum CrashRepairReason
 {
     /// <summary>A <see cref="CompileJournal"/> marker is unfinished in this plugin's mod folder — the

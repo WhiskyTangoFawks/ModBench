@@ -52,7 +52,17 @@ try
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
     builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddSwaggerGen(o => o.SchemaFilter<MEditService.Api.Swagger.NullableRefSchemaFilter>());
+    // Two halves of one job: describe C# nullability honestly on the wire (#627).
+    // SupportNonNullableReferenceTypes is Swashbuckle's own — it stops marking every
+    // reference-typed property `nullable: true`. It does not touch `required` (that is a separate
+    // built-in, NonNullableReferenceTypesAsRequired, which covers reference types only and so
+    // would leave `bool`/`int` optional), which is what NullabilitySchemaFilter does — for value
+    // and reference types alike, plus the allOf wrapper a nullable $ref needs under OpenAPI 3.0.
+    builder.Services.AddSwaggerGen(o =>
+    {
+        o.SupportNonNullableReferenceTypes();
+        o.SchemaFilter<MEditService.Api.Swagger.NullabilitySchemaFilter>();
+    });
     builder.Services.AddSingleton<SchemaReflector>();
     builder.Services.AddSingleton<TableDdlBuilder>();
     // ADR-0001: the index is a persistent file per MO2 instance, inside the instance root —

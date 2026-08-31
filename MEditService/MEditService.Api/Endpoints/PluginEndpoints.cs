@@ -495,7 +495,7 @@ public static class PluginEndpoints
     }
 
     private static RebaseResponse ToRebaseResponse(RebaseResult result) =>
-        new(result.Outcome.ToString(), result.RefusalReason, result.ConflictedPaths);
+        new(result.Outcome, result.RefusalReason, result.ConflictedPaths);
 
     // The one resolver for the origin-scoped gestures (Rebase/ContinueRebase,
     // AbsorbExternalChange, KeepExternalChange) — deliberately not PluginOriginResolver.Resolve/
@@ -560,6 +560,9 @@ public record ExternalChangeActionResponse(bool Succeeded, string? RefusalReason
 // Origin-scoped — the repo is the unit of baselines and rebase.
 public record RebaseRequest(string Origin);
 
-// Outcome is RebaseOutcome's wire-safe string form ("Clean"/"Refused"/"Conflicted").
+// Outcome names the RebaseOutcome enum rather than restating it as a `string`: the enum carries
+// [JsonConverter(typeof(JsonStringEnumConverter))], so the bytes are the same member names a
+// `.ToString()` produced ("Clean"/"Refused"/"Conflicted") while the OpenAPI schema — and therefore
+// the generated client — now gets the closed union instead of an open `string` (#627).
 // ConflictedPaths is the extension's cue to open each path in VS Code's native merge editor.
-public record RebaseResponse(string Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths);
+public record RebaseResponse(RebaseOutcome Outcome, string? RefusalReason, IReadOnlyList<string> ConflictedPaths);

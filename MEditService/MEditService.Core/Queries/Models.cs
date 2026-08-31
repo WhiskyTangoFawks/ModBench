@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
 using MEditService.Core.Records;
@@ -76,6 +77,7 @@ public record PluginResponse(
 // in Search() at all (EffectiveRelation never held it), so there is nothing for this field to
 // describe for that case — surfacing it would need GetRecordTypeCounts/Search to union in
 // Head-only rows.
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum WorkingTreeState { None, Modified, Added }
 
 // Origin (ADR-0036): the mod folder that provided this row's physical file, or a reserved

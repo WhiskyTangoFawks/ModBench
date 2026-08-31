@@ -28,6 +28,35 @@ type WireSchemas = components['schemas'];
 type KeysContainedIn<Hand, Wire> = Exclude<keyof Hand, keyof Wire>;
 type AssertNoMissingKeys<T extends never> = T;
 
+// #627: the generator now reports C# nullability and enum-string-ness honestly, and these pin that
+// it keeps doing so. Type-level by necessity — "this property is not optional" is not an
+// observable any runtime test can assert, so it is asserted where the type system actually checks
+// it: `tsc -p webview/tsconfig.json --noEmit`, the second step of `npm run build`.
+//
+// `Exact` is a bidirectional-extends pair rather than a bare `extends`, because
+// `string extends string | null | undefined` is true — a one-way check would have passed against
+// the very shape this exists to reject.
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Assert<T extends true> = T;
+
+// A non-nullable C# `string Name` is a required, non-nullable wire property. Before the schema
+// filter learned to emit `required`, this was `string | null | undefined` and every consumer
+// re-asserted non-nullability by hand.
+export type CheckNonNullableIsRequired = Assert<Exact<WireSchemas['PluginResponse']['name'], string>>;
+
+// The other direction, and the one that matters more: a genuinely nullable C# member
+// (`int? LoadOrderIndex`, ADR-0044's honest null for a copy no plugins.txt line names) must NOT be
+// swept into `required`. A filter that marked every property required would pass the check above
+// and fail this one.
+export type CheckHonestNullableSurvives =
+  Assert<Exact<WireSchemas['PluginResponse']['loadOrderIndex'], number | null | undefined>>;
+
+// An enum the global JsonStringEnumConverter serializes as a string must be described as one. This
+// was `0 | 1 | 2` while the wire carried "None"/"Modified"/"Added", which is what forced the
+// `toWorkingTreeState` trust-cast the repository used to carry.
+export type CheckWireEnumIsStringUnion =
+  Assert<Exact<WireSchemas['WorkingTreeState'], 'None' | 'Modified' | 'Added'>>;
+
 // FieldMetadata: `readOnly`/`defaultValue` are synthesized only by the VMAD/Condition tree
 // adapters (see the fields' own doc comments in types.ts) — the backend never emits them, so
 // they're excluded from the wire-containment check rather than expected to appear on the schema.

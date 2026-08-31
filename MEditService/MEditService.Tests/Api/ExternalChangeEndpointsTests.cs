@@ -137,6 +137,6 @@ public sealed class ExternalChangeEndpointsTests : IDisposable
         var result = PluginEndpoints.Rebase(new RebaseRequest(TrackedModFixture.ModFolderOrigin), _mod.Mirror, loggerFactory);
 
         var ok = Assert.IsAssignableFrom<Ok<RebaseResponse>>(result);
-        Assert.Equal(nameof(RebaseOutcome.Clean), ok.Value!.Outcome);
+        Assert.Equal(RebaseOutcome.Clean, ok.Value!.Outcome);
     }
 }
