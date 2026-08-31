@@ -11,6 +11,7 @@ function override(partial: Partial<RecordDetail> = {}): RecordDetail {
   return {
     formKey: '000001:MyMod.esp', plugin: 'MyMod.esp', loadOrderIndex: 1,
     isWinner: true, editorId: 'TestNPC', fields: [], origin: 'Data',
+    recordType: 'npc_', isPartialForm: false, isPartialFormable: false,
     ...partial,
   };
 }
@@ -208,13 +209,6 @@ describe('PluginHeader — Partial Form toggle (#539)', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  // Rival: a version that renders whenever isPartialForm is merely defined (rather than gating on
-  // isPartialFormable) would render here too, since isPartialForm is explicitly false, not absent.
-  it('does not render the toggle when isPartialFormable is absent, even if isPartialForm is set', () => {
-    render(<PluginHeader {...baseProps()} override={override({ isPartialForm: false })} />);
-
-    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
-  });
 
   it('renders the toggle, checked, for a currently-flagged partial-formable column', () => {
     render(<PluginHeader {...baseProps()} override={override({ isPartialFormable: true, isPartialForm: true })} />);

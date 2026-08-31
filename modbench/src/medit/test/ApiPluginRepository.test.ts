@@ -16,6 +16,7 @@ function makePlugin(i: number): PluginMetadata {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
+    isTracked: false,
   };
 }
 
@@ -42,6 +43,7 @@ function makeRecord(i: number): RecordSummary {
     loadOrderIndex: 0,
     isWinner: true,
     editorId: `Record${i}`,
+    origin: 'Data',
     workingTreeState: 'None',
   };
 }
@@ -117,15 +119,6 @@ describe('ApiPluginRepository.getPlugins', () => {
     ]);
   });
 
-  it('defaults masterIssues to empty when the wire omits it', async () => {
-    const raw = [{ name: 'Plugin0.esp', path: '/data/Plugin0.esp', loadOrderIndex: 0, origin: 'Data' }];
-    const client = { GET: vi.fn().mockResolvedValue({ data: raw, response: { ok: true } }) } as any;
-    const repo = new ApiPluginRepository(client);
-
-    const result = await repo.getPlugins();
-
-    expect(result[0].masterIssues).toEqual([]);
-  });
 });
 
 describe('ApiPluginRepository.getRecordTypes', () => {
@@ -146,17 +139,6 @@ describe('ApiPluginRepository.getRecordTypes', () => {
     );
   });
 
-  it('falls back to the raw type when displayName is absent from the response', async () => {
-    // Additive field — a stale/older backend response without displayName
-    // must not surface `undefined` as a tree label.
-    const types = [{ type: 'WEAP', count: 42 }];
-    const client = { GET: vi.fn().mockResolvedValue({ data: types, response: { ok: true } }) } as any;
-    const repo = new ApiPluginRepository(client);
-
-    const result = await repo.getRecordTypes('MyPlugin.esp');
-
-    expect(result).toEqual([{ type: 'WEAP', count: 42, displayName: 'WEAP' }]);
-  });
 
   it('returns empty array when data is undefined', async () => {
     const client = { GET: vi.fn().mockResolvedValue({ data: undefined, response: { ok: true } }) } as any;
@@ -213,18 +195,17 @@ describe('ApiPluginRepository.getRecords', () => {
     await expect(repo.getRecords('Plugin.esp', 'WEAP', 0, 50)).rejects.toThrow(/500/);
   });
 
-  // The generated schema mislabels WorkingTreeState as numeric (Swashbuckle isn't
-  // JsonStringEnumConverter-aware — the same known mismatch toTrackPhase already works around),
-  // but Program.cs registers that converter globally, so the real wire value is the string. Trust
-  // the string, matching toTrackPhase's own posture, not the generated type.
-  it('maps a real (string-valued) workingTreeState through, and defaults a missing one to None', async () => {
+  // WorkingTreeState is a string union on the wire and in the generated type alike (#627), so
+  // this is a pass-through rather than the trust-cast it used to exercise — kept because it is
+  // the only test that pins the tri-state reaching the tree at all.
+  it('carries each row\'s workingTreeState through to the caller', async () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: {
           items: [
-            { formKey: 'Fallout4.esm:000001', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: 'A', workingTreeState: 'Modified' },
-            { formKey: 'Fallout4.esm:000002', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: 'B', workingTreeState: 'Added' },
-            { formKey: 'Fallout4.esm:000003', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId: 'C' },
+            { formKey: 'Fallout4.esm:000001', plugin: 'Fallout4.esm', origin: 'Data', loadOrderIndex: 0, isWinner: true, editorId: 'A', workingTreeState: 'Modified' },
+            { formKey: 'Fallout4.esm:000002', plugin: 'Fallout4.esm', origin: 'Data', loadOrderIndex: 0, isWinner: true, editorId: 'B', workingTreeState: 'Added' },
+            { formKey: 'Fallout4.esm:000003', plugin: 'Fallout4.esm', origin: 'Data', loadOrderIndex: 0, isWinner: true, editorId: 'C', workingTreeState: 'None' },
           ],
           total: 3,
         },
@@ -506,17 +487,6 @@ describe('ApiPluginRepository.getRecordOverridePlugins', () => {
     });
   });
 
-  it('drops a null plugin name rather than passing one through', async () => {
-    const client = {
-      GET: vi.fn().mockResolvedValue({
-        data: { overrides: [{ plugin: 'Fallout4.esm' }, { plugin: null }] },
-        response: { ok: true },
-      }),
-    } as any;
-    const repo = new ApiPluginRepository(client);
-
-    expect(await repo.getRecordOverridePlugins('000801:Fallout4.esm')).toEqual(['Fallout4.esm']);
-  });
 
   // A record with no compare entry at all (404) is not a fault — treated the same as "nothing
   // carries it yet", matching getRecordOwner's own 404-is-legitimate posture.
@@ -567,14 +537,14 @@ describe('ApiPluginRepository.getWorldspaceBlocks', () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: {
-          topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true }],
+          topCells: [{ formKey: 'Fallout4.esm:000001', editorId: 'TopCell', cellX: null, cellY: null, isPersistentWorldspaceCell: true, fullName: null }],
           blocks: [{
             x: 1,
             y: -1,
             subBlocks: [{
               x: 2,
               y: -2,
-              cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5 }],
+              cells: [{ formKey: 'Fallout4.esm:000002', editorId: 'Cell2', cellX: 12, cellY: -5, isPersistentWorldspaceCell: false, fullName: null }],
             }],
           }],
         },
@@ -659,7 +629,7 @@ describe('ApiPluginRepository.getInteriorCells', () => {
     const client = {
       GET: vi.fn().mockResolvedValue({
         data: {
-          items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null }],
+          items: [{ formKey: 'Fallout4.esm:000030', editorId: 'IntCell', cellX: null, cellY: null, isPersistentWorldspaceCell: false, fullName: null }],
           total: 42,
         },
         response: { ok: true },

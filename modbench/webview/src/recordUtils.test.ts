@@ -36,6 +36,9 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
     fields: [],
     conflictThis: 'OnlyOne',
     origin: 'Data',
+    recordType: 'npc_',
+    isPartialForm: false,
+    isPartialFormable: false,
     ...extra,
   };
 }

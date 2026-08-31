@@ -91,16 +91,98 @@ public sealed class SwaggerSchemaTests
         Assert.False(prop.TryGetProperty("allOf", out _));
     }
 
-    // ConditionOperator/ConditionParamCategory carry no per-enum [JsonConverter] attribute,
-    // so Swashbuckle's schema generator (which only honors that attribute form, not the global
-    // ConfigureHttpJsonOptions converter Program.cs registers) describes them as numeric unions
-    // while the wire actually carries strings — same class of bug FormKeyResolutionState already
-    // fixed. expectedMembers below is modeled on FormKeyResolutionState's already-fixed shape
-    // (string-enum member names, not the numeric form), not read from it at runtime.
+    // Swashbuckle never reads C#'s nullable-reference-type annotations on its own, so without a
+    // filter no property lands in `required` at all and openapi-typescript types the whole wire
+    // optional-and-nullable — which is what the frontend used to hand-compensate for, field by
+    // field. The rule is exactly one-directional: a non-nullable CLR property is required, a
+    // nullable one is not. Asserted as the *exact* set rather than a containment, so a filter that
+    // over-marks (sweeping a genuinely nullable property in) fails as loudly as one that
+    // under-marks.
+    [Theory]
+    // PluginResponse: every member is non-nullable except LoadOrderIndex (`int?` — ADR-0044's
+    // honest null for a copy no plugins.txt line names), which must stay optional.
+    [InlineData(
+        "PluginResponse",
+        new[]
+        {
+            "name", "path", "isLight", "isMaster", "masters", "recordCount", "isImmutable",
+            "participates", "origin", "masterIssues", "inLoadOrder", "enabled", "winning",
+            "hasMatchingRecords", "isTracked",
+        })]
+    // CellSummary: the four genuinely-nullable members (EditorId, CellX, CellY, FullName) must
+    // survive as optional `| null` on the wire.
+    [InlineData("CellSummary", new[] { "formKey", "isPersistentWorldspaceCell" })]
+    public async Task NonNullableProperties_AreRequired_AndNullableOnesAreNot(
+        string schemaName, string[] expectedRequired)
+    {
+        var root = await GetSchemaAsync();
+        var schema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
+
+        Assert.True(schema.TryGetProperty("required", out var required), $"{schemaName} declares no `required` at all.");
+        Assert.Equal(
+            expectedRequired.ToHashSet(),
+            required.EnumerateArray().Select(e => e.GetString()!).ToHashSet());
+    }
+
+    // `required` is only half of "non-nullable". A property can be required *and* nullable, which
+    // openapi-typescript renders `name: string | null` — still forcing every consumer to unwrap a
+    // null the C# `string Name` can never actually be. Swashbuckle marks every reference-typed
+    // property nullable unless told otherwise, so this covers the reference types specifically;
+    // value types (`bool`, `int`) were never described as nullable and need no assertion.
+    [Theory]
+    [InlineData("PluginResponse", "name")]
+    [InlineData("PluginResponse", "origin")]
+    [InlineData("PluginResponse", "masters")]      // IReadOnlyList<string> — an array is a reference type too
+    [InlineData("PluginResponse", "masterIssues")] // IReadOnlyList<MasterIssue>
+    [InlineData("RecordSummary", "plugin")]
+    public async Task NonNullableReferenceProperty_IsNotDescribedAsNullable(string schemaName, string propertyName)
+    {
+        var root = await GetSchemaAsync();
+        var prop = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty(schemaName).GetProperty("properties").GetProperty(propertyName);
+
+        Assert.False(
+            prop.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean(),
+            $"{schemaName}.{propertyName} is a non-nullable C# member but the schema says nullable.");
+    }
+
+    // The complement of the test above, on the same axis: a genuinely nullable reference-typed
+    // member must keep saying so. Without this, "stop describing things as nullable" could be
+    // satisfied by never describing anything as nullable.
+    [Theory]
+    [InlineData("CellSummary", "editorId")]        // string? EditorId
+    [InlineData("RecordSummary", "editorId")]
+    [InlineData("CompileResult", "refusalReason")] // string? RefusalReason
+    public async Task NullableReferenceProperty_IsStillDescribedAsNullable(string schemaName, string propertyName)
+    {
+        var root = await GetSchemaAsync();
+        var prop = root.GetProperty("components").GetProperty("schemas")
+            .GetProperty(schemaName).GetProperty("properties").GetProperty(propertyName);
+
+        Assert.True(prop.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean(),
+            $"{schemaName}.{propertyName} is a nullable C# member but the schema does not say so.");
+    }
+
+    // Swashbuckle's schema generator only honors a per-enum [JsonConverter] attribute — never the
+    // global ConfigureHttpJsonOptions converter Program.cs registers — so an enum missing that
+    // attribute is *described* as a numeric union while the wire actually carries strings, and a
+    // client is forced to distrust its own generated type. Every enum that reaches the wire is
+    // listed here. expectedMembers is the string-enum member names written out, not read from the
+    // CLR type at runtime, so a renamed member fails rather than silently redefining the contract.
+    //
+    // WireEnumSerializationTests pins the other half: that adding the attribute changes only the
+    // description and never the bytes.
     [Theory]
     [InlineData("ConditionOperator", new[] { "EqualTo", "NotEqualTo", "GreaterThan", "GreaterThanOrEqualTo", "LessThan", "LessThanOrEqualTo" })]
     [InlineData("ConditionParamCategory", new[] { "Number", "Form", "Text" })]
-    public async Task ConditionEnum_SerializesAsStringUnion(string schemaName, string[] expectedMembers)
+    [InlineData("WorkingTreeState", new[] { "None", "Modified", "Added" })]
+    [InlineData("TrackPhase", new[] { "Idle", "Parsing", "Serializing", "Committing" })]
+    [InlineData("CrashRepairReason", new[] { "InterruptedCompile", "MissingOrUnreadableBinary" })]
+    [InlineData("LoadOrderState", new[] { "None", "Reconciling", "Ready" })]
+    // RebaseOutcome reaches the wire only because RebaseResponse.Outcome names the enum; it was a
+    // bare `string` filled by `.ToString()`, so the schema could say nothing better than "string".
+    [InlineData("RebaseOutcome", new[] { "Clean", "Refused", "Conflicted" })]
+    public async Task WireEnum_SerializesAsStringUnion(string schemaName, string[] expectedMembers)
     {
         var root = await GetSchemaAsync();
         var schema = root.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);

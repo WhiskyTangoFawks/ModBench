@@ -1,61 +1,62 @@
-export interface FieldMetadata {
-  name: string;
-  // 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' |
-  // 'conditionParam' are synthesized only by the VMAD/Condition tree adapters
-  // (vmadTreeAdapter.ts/conditionTreeAdapter.ts) — the backend never emits them (no schema/API
-  // change). Each names a leaf whose editor is a genuine exception to the plain type→widget
-  // mapping, the same way 'formKey' already is: a VMAD object property is a (FormKey, alias) pair
-  // (VmadObjectEditor); a condition's Function field opens a QuickPick over the function
-  // catalogue, never a text/dropdown editor; Run On, Comparison and a parameter are each composite
-  // (target+conditional reference; float vs GLOB FormKey depending on the condition's own
-  // UseGlobal; FormKey/text/number depending on the parameter's own category) and vary their own
-  // widget from their own value's shape, exactly as VmadObjectEditor already does — not from a
-  // second per-plugin metadata branch DiffRow would otherwise need.
-  type: 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array'
-    | 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' | 'conditionParam';
-  isArray: boolean;
-  validFormKeyTypes: string[];
-  enumValues: string[];
-  elementType?: FieldMetadata;   // present when type === 'array'
-  fields?: FieldMetadata[];       // present when type === 'struct'
-  isSortable?: boolean;           // on elementType: true for pure FormLink arrays
-  isBitmask?: boolean;            // true when the C# enum has [Flags]
-  enumBitValues?: string[];       // present iff isBitmask; decimal string bit values aligned with enumValues
-  // Unconditionally read-only regardless of the column's own mutability — the
-  // Condition section's AND/OR gate is the one row that needs this; every other field's
-  // editability still comes purely from the column (immutableSet), matching the
-  // "per column, never a mode" rule for everything else.
-  readOnly?: boolean;
-  // Overrides recordUtils.ts's generic defaultElementValue for a fresh array element,
-  // for a synthesized elementType whose real wire shape isn't the generic per-field-type default
-  // recordUtils.ts's own struct case would build. A condition list's own elementType is the one
-  // caller: a new condition's wire shape is `ParsedCondition` (`{function, operator, or,
-  // runOnTarget, ...}`), not an object keyed by the display field names ("Function",
-  // "Run On", …) with a generic per-type scalar default in each — the two don't match. Absent for
-  // every ordinary/VMAD elementType, which the generic per-type defaulting already gets right.
-  defaultValue?: unknown;
-}
+import type { components } from '../../src/medit/generated/api';
 
-export interface FieldValue {
-  metadata: FieldMetadata;
-  value: unknown;
-  checkError?: string | null;
-}
+type Schemas = components['schemas'];
 
-// ADR-0031: the tri-state resolution signal for a FormKey value, computed server-side against the
-// global FormKey→(record type, EditorID) lookup. Unresolved means the FormKey isn't in the index
-// (dangling); ResolvedWrongType/ResolvedValidType both mean the reference is followable (matches
-// xEdit) — only Unresolved withholds the link affordance and the EditorID label.
-export type FormKeyResolutionState = 'Unresolved' | 'ResolvedWrongType' | 'ResolvedValidType';
+// The record editor's wire DTOs. Every type here is the generated schema type — named, and in a
+// few cases *narrowed*. The narrowings are the only hand-written shape left, and each one passes
+// the same test: would this still need to exist if the generator were perfect? A field the
+// VMAD/Condition tree adapters synthesize and the backend never emits is a genuine frontend
+// refinement and stays; re-declaring a field the schema already describes is a second, staler copy
+// and does not (#627).
 
-export interface FormKeyResolution {
-  state: FormKeyResolutionState;
-  recordType: string | null;
-  editorId: string | null;
-}
+export type FormKeyResolutionState = Schemas['FormKeyResolutionState'];
+export type FormKeyResolution = Schemas['FormKeyResolution'];
+export type ConflictAll = Schemas['ConflictAll'];
+export type ConflictThis = Schemas['ConflictThis'];
+export type ConditionOperator = Schemas['ConditionOperator'];
+export type ConditionParamCategory = Schemas['ConditionParamCategory'];
+export type ParsedConditionParam = Schemas['ParsedConditionParam'];
+export type ParsedCondition = Schemas['ParsedCondition'];
 
-export type ConflictAll = 'OnlyOne' | 'NoConflict' | 'Override' | 'Conflict' | 'ConflictCritical';
-export type ConflictThis = 'OnlyOne' | 'Master' | 'IdenticalToMaster' | 'Override' | 'ConflictWins' | 'ConflictLoses';
+/** The widget a leaf renders with. Wider than the backend's own `type` string: the five
+ *  `vmadObject`/`condition*` members are synthesized by vmadTreeAdapter.ts/conditionTreeAdapter.ts
+ *  for rows the backend never sends at all. Each names a leaf whose editor is a genuine exception
+ *  to the plain type -> widget mapping, the same way 'formKey' already is: a VMAD object property
+ *  is a (FormKey, alias) pair; a condition's Function field opens a QuickPick over the function
+ *  catalogue; Run On, Comparison and a parameter are each composite and vary their widget from
+ *  their own value's shape rather than from a second per-plugin metadata branch DiffRow would
+ *  otherwise need. */
+export type FieldType =
+  | 'string' | 'int' | 'float' | 'bool' | 'enum' | 'formKey' | 'struct' | 'array'
+  | 'vmadObject' | 'conditionFunction' | 'conditionRunOn' | 'conditionComparison' | 'conditionParam';
+
+/** `readOnly`/`defaultValue` are likewise adapter-only. `readOnly` is unconditional, regardless of
+ *  the column's own mutability — the Condition section's AND/OR gate is the one row that needs it;
+ *  every other field's editability still comes purely from the column (immutableSet), matching the
+ *  "per column, never a mode" rule. `defaultValue` overrides recordUtils.ts's generic
+ *  defaultElementValue for a synthesized elementType whose real wire shape isn't the generic
+ *  per-field-type default: a new condition's shape is `ParsedCondition`, not an object keyed by
+ *  the display field names with a per-type scalar default in each. */
+export type FieldMetadata =
+  Omit<Schemas['FieldMetadata'], 'type' | 'elementType' | 'fields' | 'isSortable' | 'allowsNull' | 'isBitmask'> & {
+    type: FieldType;
+    elementType?: FieldMetadata | null;   // present when type === 'array'
+    fields?: FieldMetadata[] | null;      // present when type === 'struct'
+    readOnly?: boolean;
+    defaultValue?: unknown;
+    // Required non-nullable booleans on the wire, optional here — deliberately, and not as
+    // fixture-compat slack. This type describes two different things: metadata that arrived from
+    // the backend, and metadata an adapter *invented* for one of the five synthesized `type`
+    // values above. For a synthesized `conditionFunction` leaf, "is this a sortable pure-FormLink
+    // array?" has no answer; `undefined` says "not applicable" where `false` would fabricate one.
+    // A perfect generator would still not describe an object the backend never sends, so this
+    // stays optional for the same reason `type` stays narrowed.
+    isSortable?: boolean;   // on elementType: true for pure FormLink arrays
+    allowsNull?: boolean;   // for 'formKey': true when the Mutagen type is IFormLinkNullable<T>
+    isBitmask?: boolean;    // true when the C# enum has [Flags]
+  };
+
+export type FieldValue = Omit<Schemas['FieldValue'], 'metadata'> & { metadata: FieldMetadata };
 
 // ADR-0036: a compare-grid column is identified by (plugin, origin), not plugin alone —
 // two columns can share a filename (shadowed copies). `ColumnKey` is a branded
@@ -88,9 +89,9 @@ export type ColumnKey = string & { readonly __col: unique symbol };
 // doc comment) — this key is only ever used as an opaque local lookup key against JSON the backend
 // produced, never sent back to it, so the two sides folding differently has no wire consequence.
 //
-// ADR-0036: `origin` is required — every hand type that feeds this
-// (RecordDetail.origin, PluginInfo.origin) is a required `string` too, so a
-// caller cannot skip specifying it and silently collapse onto the elided Data origin.
+// ADR-0036: `origin` is required — every wire type that feeds this (RecordDetail.origin,
+// PluginResponse.origin) is a required, non-nullable `string` too, so a caller cannot skip
+// specifying it and silently collapse onto the elided Data origin.
 //
 // `origin` still accepts a literal `null` value, even though every one of those hand
 // types claims it never will be. Investigated: it provably can't be, today — the
@@ -120,38 +121,9 @@ export function columnKey(plugin: string, origin: string | null): ColumnKey {
   return key as ColumnKey;
 }
 
-export interface RecordDetail {
-  formKey: string;
-  plugin: string;
-  loadOrderIndex: number;
-  isWinner: boolean;
-  editorId: string | null;
-  fields: FieldValue[];
-  // The schema table name (e.g. "npc_"), needed for "Copy as New Record" — CreateRecord
-  // requires it up front. Optional so existing fixtures/callers don't break;
-  // always populated by the real backend response.
-  recordType?: string;
-  // ADR-0036: the mod folder (or reserved PluginOrigin value) this override was resolved
-  // from — parallel sibling to `plugin`, never parsed out of a ColumnKey (see columnKey()'s own
-  // doc comment). Required — every construction must say which origin.
-  origin: string;
-  // This override's own record-header Partial Form flag — its own fields are excluded from
-  // conflict detection and read-only except EditorID (xEdit's own CanAssignInternal exemption,
-  // ADR-0034). Optional so existing fixtures/callers don't
-  // break; always populated by the real backend response.
-  isPartialForm?: boolean;
-  // Whether this record's own type could ever carry the flag at all — independent of
-  // isPartialForm's current state. PluginHeader reads this to decide whether to render its own
-  // Partial Form toggle at all, rather than hand-duplicating the backend's own container-type table
-  // (Source.ContainerChildFields) here — the exact shape of drift that table's own completeness
-  // sweep exists to guard against server-side. Optional so existing fixtures/callers don't break;
-  // always populated by the real backend response.
-  isPartialFormable?: boolean;
-}
+export type RecordDetail = Omit<Schemas['RecordDetail'], 'fields'> & { fields: FieldValue[] };
 
-export interface CompareOverride extends RecordDetail {
-  conflictThis: ConflictThis;
-}
+export type CompareOverride = Omit<Schemas['CompareOverride'], 'fields'> & { fields: FieldValue[] };
 
 // The chain from a row's own restage root (a plain reflected field, or a
 // wirePath-bearing VMAD/Condition subtree — see FieldDiff.wirePath below) down to a given row's
@@ -165,129 +137,60 @@ export interface CompareOverride extends RecordDetail {
 // './types'.
 export type { PathSegment } from './messages';
 
-export interface FieldDiff {
-  fieldName: string;
-  values: Record<string, unknown>;
-  winnerColumn: string;
-  winnerValue: unknown;
-  cellStates: Record<string, ConflictThis>;
-  // This node's own bottom-up conflict classification (own cellStates folded with
-  // every descendant's, recursively) — distinct from CompareResult.conflictAll (record-wide,
-  // drives the Plugins-tree badge). Populated by the backend for an ordinary reflected field;
-  // vmadTreeAdapter.ts/conditionTreeAdapter.ts compute it themselves for their own synthesized
-  // nodes (see recordUtils.ts's aggregateConflictAll). Optional so a stale fixture/adapter that
-  // hasn't set it degrades to "no background" (DiffRow's getRowBg) rather than crashing.
+/** `wirePath` and `collapsedSummary` are adapter-only, like FieldMetadata's readOnly/defaultValue.
+ *  `wirePath` is the path this row (and its subtree) stages under, decoupled from `fieldName`,
+ *  which stays a pure display label — absent for an ordinary reflected field where the two
+ *  coincide, set by the VMAD/Condition adapters whose rows display as "Health"/"Function" but
+ *  stage under "VMAD\ScriptA\Health"/"CTDA\Conditions\0\Function". `collapsedSummary` is a
+ *  per-plugin xEdit-style one-line prose summary (`wbConditionToStr`,
+ *  references/TES5Edit/Core/wbDefinitionsCommon.pas) shown in place of a struct row's generic
+ *  "{...}" — condition rows only.
+ *
+ *  `conflictAll` is required on the wire but optional here: the adapters compute it themselves for
+ *  their own synthesized nodes (recordUtils.ts's aggregateConflictAll), and a node that has not
+ *  set it degrades to "no background" in DiffRow's getRowBg. */
+export type FieldDiff = Omit<Schemas['FieldDiff'], 'children' | 'conflictAll'> & {
   conflictAll?: ConflictAll;
   children?: FieldDiff[] | null;
-  // ADR-0031: only populated for a scalar formKey-typed leaf, keyed by plugin like values/
-  // cellStates — never aggregated up from children, so a dangling sibling can't hide a live
-  // hyperlink/affordance on the leaf next to it.
-  resolutions?: Record<string, FormKeyResolution>;
-  // The wire path this row (and every row in its subtree) stages under — decoupled
-  // from `fieldName`, which stays a pure display label. Absent (defaulting to `fieldName`) for an
-  // ordinary reflected field, where the two always coincide; set explicitly by the VMAD/Condition
-  // tree adapters, whose rows display under a short name ("Health", "Function") but stage under a
-  // longer wire path ("VMAD\ScriptA\Health", "CTDA\Conditions\0\Function").
   wirePath?: string;
-  // A per-plugin xEdit-style one-line prose summary
-  // (`wbConditionToStr`, references/TES5Edit/Core/wbDefinitionsCommon.pas) for this row's
-  // collapsed label — set only by conditionTreeAdapter.ts's condition rows, whose own values are
-  // already the whole ParsedCondition object this formats. DiffRow shows this in place of a
-  // struct row's generic "{…}" when present; absent (falling back to "{…}") for every ordinary
-  // struct row and every VMAD struct row, which have no equivalent per-record-type formatting.
   collapsedSummary?: Record<string, string>;
-}
+};
 
+/** The shapes a VMAD property row takes — 'object' is a (FormKey, alias) pair, 'structList' a
+ *  list of per-instance member lists. Narrowed from the wire's `string` for the same reason
+ *  FieldType is: DiffRow switches on it exhaustively. */
 export type VmadKind = 'scalar' | 'object' | 'array' | 'struct' | 'structList' | 'variable';
 
-export interface VmadPropertyDiff {
-  name: string;
+export type VmadPropertyDiff = Omit<Schemas['VmadPropertyDiff'], 'kind' | 'children'> & {
   kind: VmadKind;
-  values: Record<string, unknown>;        // leaf; "FormKey [Alias]" for object; null when has children/absent
-  types: Record<string, string>;          // per-plugin property Type (can differ → conflict)
-  winnerColumn: string;
-  cellStates: Record<string, ConflictThis>;
-  children?: VmadPropertyDiff[] | null;    // struct members (by name) / array elements (by index)
-  raw?: Record<string, unknown> | null;    // struct/structList only: per-plugin editable node subtree (atomic column)
-  // ADR-0031: only populated on a kind === 'object' leaf, keyed by plugin like values/cellStates —
-  // never aggregated up from children.
-  resolutions?: Record<string, FormKeyResolution>;
-}
+  children?: VmadPropertyDiff[] | null;
+};
 
-export interface VmadScriptDiff {
-  name: string;
-  flags: Record<string, string | null>;   // per-plugin script flags; null = script absent in that plugin
-  winnerColumn: string;
-  cellStates: Record<string, ConflictThis>;
+export type VmadScriptDiff = Omit<Schemas['VmadScriptDiff'], 'properties'> & {
   properties: VmadPropertyDiff[];
-}
+};
 
-export interface VmadCompare {
-  scripts: VmadScriptDiff[];
-}
+export type VmadCompare = { scripts: VmadScriptDiff[] };
 
-// Conditions (CTDA) — game-neutral parsed model (ADR-0032). One ParsedCondition per row; the
-// section renders its xEdit-style summary and expands to these typed fields.
-export type ConditionOperator =
-  | 'EqualTo' | 'NotEqualTo' | 'GreaterThan' | 'GreaterThanOrEqualTo' | 'LessThan' | 'LessThanOrEqualTo';
+/** `perPlugin`'s values are nullable (null = that plugin lacks this condition row) and the
+ *  generated type cannot say so: the C# is `Dictionary<string, ParsedCondition?>`, but OpenAPI 3.0
+ *  forbids a sibling `nullable` next to the `$ref` an object-typed dictionary *value* becomes.
+ *  NullabilitySchemaFilter fixes exactly that shape for *properties*; dictionary values reach the
+ *  schema through `additionalProperties` and are a separate, still-open gap. Narrowed here rather
+ *  than left wrong, and named rather than left as an unexplained divergence. */
+export type ConditionDiff = Omit<Schemas['ConditionDiff'], 'perPlugin'> & {
+  perPlugin: Record<string, ParsedCondition | null>;
+};
 
-export type ConditionParamCategory = 'Number' | 'Form' | 'Text';
-
-export interface ParsedConditionParam {
-  category: ConditionParamCategory;
-  typeName: string;                        // ParameterType name, e.g. "ActorValue" — display cue
-  number?: number | null;
-  formKey?: string | null;
-  text?: string | null;
-  decodedValue?: string | null;            // Number param's enum member name (e.g. "Male"), when known
-}
-
-export interface ParsedCondition {
-  function: string;
-  operator: ConditionOperator;
-  or: boolean;                             // true = OR, false = AND
-  runOnTarget: string;                     // "Subject" | "Target" | "Reference" | ...
-  runOnReference?: string | null;          // FormKey when runOnTarget === "Reference"
-  useGlobal: boolean;
-  comparisonFloat?: number | null;
-  comparisonGlobal?: string | null;        // GLOB FormKey when useGlobal
-  parameters: ParsedConditionParam[];
-}
-
-export interface ConditionDiff {
-  index: number;
-  perPlugin: Record<string, ParsedCondition | null>;   // null = plugin lacks this condition row
-  winnerColumn: string;
-  cellStates: Record<string, ConflictThis>;            // whole-condition state (summary row)
-  // Per-field two-axis states for the expanded view, keyed by field id ("function", "operator",
-  // "gate", "runOn", "comparison", "param:{i}") — only the field that differs is colored.
-  fieldCellStates: Record<string, Record<string, ConflictThis>>;
-  // FormKey→EditorID resolution (ADR-0031) for a condition's three FormKey-bearing slots —
-  // keyed like fieldCellStates ("runOn", "comparison", "param:{i}"; never "function"/"operator"/
-  // "gate"), then by plugin. Absent when the field carries no FormKey for that plugin (e.g. runOn
-  // isn't Reference, or useGlobal is false).
-  fieldResolutions?: Record<string, Record<string, FormKeyResolution>>;
-}
-
-export interface ConditionGroupDiff {
-  fieldPath: string;
+export type ConditionGroupDiff = Omit<Schemas['ConditionGroupDiff'], 'conditions'> & {
   conditions: ConditionDiff[];
-}
+};
 
-export interface ConditionCompare {
-  groups: ConditionGroupDiff[];
-}
+export type ConditionCompare = { groups: ConditionGroupDiff[] };
 
-export interface CompareResult {
+export type CompareResult = Omit<Schemas['CompareResult'], 'overrides' | 'diffs' | 'vmad' | 'conditions'> & {
   overrides: CompareOverride[];
   diffs: FieldDiff[];
-  conflictAll: ConflictAll;
-  // Schema-level capability ("can this record type ever carry VMAD at all",
-  // reflected from Mutagen's IHaveVirtualMachineAdapterGetter) — distinct from `vmad` below,
-  // which is per-record *data* and is null/absent for a VMAD-capable record that simply has no
-  // scripts yet. Gates whether RecordPanel renders a Scripts (VMAD) section at all.
-  hasVmad: boolean;
   vmad?: VmadCompare | null;
   conditions?: ConditionCompare | null;
-}
-
+};

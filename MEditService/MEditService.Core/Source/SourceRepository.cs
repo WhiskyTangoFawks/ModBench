@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Core.Source;
 
 /// <summary>
@@ -643,6 +645,7 @@ public sealed record RebaseResult(RebaseOutcome Outcome, string? RefusalReason, 
 
 /// <summary>The three shapes a rebase attempt can end in — never a fourth, never a thrown exception
 /// for the two expected outcomes (refusal, conflict) a caller must render, not crash on.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum RebaseOutcome
 {
     /// <summary>The edit branch now sits on top of main's new tip, replayed cleanly.</summary>

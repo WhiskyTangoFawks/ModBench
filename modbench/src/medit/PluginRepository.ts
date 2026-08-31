@@ -1,8 +1,8 @@
 import type { components } from './generated/api';
 import type {
-  ApiClient, PluginMetadata, MasterIssue, RecordSummary, LoadOrderStatus, TrackStatus, TrackPhase,
-  WorldspaceSummary, CellSummary, CellReferences, PlacedSummary, WorldspaceBlocks,
-  UnansweredExternalChange, WorkingTreeState, ContainerChildSummary,
+  ApiClient, PluginMetadata, LoadOrderStatus, TrackStatus,
+  WorldspaceSummary, CellReferences, WorldspaceBlocks,
+  UnansweredExternalChange, ContainerChildSummary,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 
@@ -15,146 +15,15 @@ export type RecordFieldEditOutcome =
   | { applied: true }
   | { applied: false; refusal: string; message: string };
 
-type PluginResponse = components['schemas']['PluginResponse'];
-type GeneratedMasterIssue = components['schemas']['MasterIssue'];
-type GeneratedRecordSummary = components['schemas']['RecordSummary'];
-type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
-function toMasterIssue(i: GeneratedMasterIssue): MasterIssue {
-  return { masterName: i.masterName ?? '', kind: i.kind ?? 'DirectlyMissing' };
-}
+export type PluginRecordTypeCount = components['schemas']['PluginRecordTypeCount'];
+export type RecordPage = components['schemas']['RecordSummaryPagedResult'];
+export type CellPage = components['schemas']['CellSummaryPagedResult'];
 
-// The generated TrackPhase type is a numeric union (0|1|2|3) — Swashbuckle's
-// schema generation doesn't pick up the global JsonStringEnumConverter for every enum (LoadOrderState
-// above has the identical, already-accepted mismatch), but the wire bytes are the real string
-// values ("Idle", "Parsing", ...), confirmed against the live endpoint. Cast through `unknown`
-// rather than trust the generated numeric type, same avoidance this file already gives origin/
-// masterIssues optionality elsewhere.
-function toTrackPhase(phase: unknown): TrackPhase {
-  return typeof phase === 'string' ? (phase as TrackPhase) : 'Idle';
-}
-
-// ADR-0036: the backend always populates PluginResponse.Origin with a real, non-empty
-// value — the generated type still shows `origin?: string | null` only because this backend's
-// OpenAPI schema generator isn't NRT-aware for any property, not because origin is ever
-// actually optional on the wire. Fabricating a fallback (a reserved Data-directory value)
-// would silently mislabel a real backend regression as "this plugin came
-// from the Data directory" — exactly the silent-wrong-state class of bug ADR-0026 exists to
-// stop. Fail loudly instead.
-function requireOrigin(r: PluginResponse): string {
-  if (!r.origin) throw new Error(`mEdit: backend returned a plugin without an origin (${r.name ?? '<unknown>'})`);
-  return r.origin;
-}
-
-// ADR-0035 amending ADR-0018: the generated type is `boolean | undefined` for the same
-// reason origin is `string | undefined | null` above — the OpenAPI generator isn't
-// NRT-aware. `?? true` degrades to "matches" rather than "doesn't", the safe direction: it never
-// suppresses a chevron a stale/older backend never meant to suppress. Its own function (rather
-// than inline in toPluginMetadata) keeps that one under its complexity budget.
-function hasMatchingRecords(r: PluginResponse): boolean {
-  return r.hasMatchingRecords ?? true;
-}
-
-// ADR-0044: the three-fact registration and its two derived verdicts. A backend that omits them
-// (the generated wire type is NRT-unaware) reads as an ordinary winning listed copy — the
-// shape every row had before losing copies were registered at all. Its own function for the same
-// reason hasMatchingRecords above is one: keeps toPluginMetadata under its complexity budget.
-function registrationOf(r: PluginResponse): Pick<PluginMetadata, 'enabled' | 'winning' | 'participates' | 'inLoadOrder'> {
-  return {
-    enabled: r.enabled ?? true,
-    winning: r.winning ?? true,
-    participates: r.participates ?? true,
-    inLoadOrder: r.inLoadOrder ?? true,
-  };
-}
-
-function toPluginMetadata(r: PluginResponse): PluginMetadata {
-  return {
-    name: r.name ?? '',
-    path: r.path ?? '',
-    loadOrderIndex: r.loadOrderIndex ?? null,
-    isLight: r.isLight ?? false,
-    isMaster: r.isMaster ?? false,
-    masters: r.masters ?? [],
-    recordCount: r.recordCount ?? 0,
-    isImmutable: r.isImmutable ?? false,
-    ...registrationOf(r),
-    origin: requireOrigin(r),
-    masterIssues: (r.masterIssues ?? []).map(toMasterIssue),
-    hasMatchingRecords: hasMatchingRecords(r),
-  };
-}
-
-// The generated WorkingTreeState is numeric (0|1|2) for the same reason toTrackPhase's own
-// comment already gives — Swashbuckle isn't JsonStringEnumConverter-aware — but Program.cs
-// registers that converter globally, so the real wire value is the string. Trust the string.
-function toWorkingTreeState(state: unknown): WorkingTreeState {
-  return typeof state === 'string' ? (state as WorkingTreeState) : 'None';
-}
-
-function toRecordSummary(r: GeneratedRecordSummary): RecordSummary {
-  return {
-    formKey: r.formKey ?? '',
-    plugin: r.plugin ?? '',
-    loadOrderIndex: r.loadOrderIndex ?? 0,
-    isWinner: r.isWinner ?? false,
-    editorId: r.editorId ?? null,
-    workingTreeState: toWorkingTreeState(r.workingTreeState),
-  };
-}
-
-function toRecordTypeCount(r: PluginRecordTypeCount): { type: string; count: number; displayName: string } {
-  const type = r.type ?? '';
-  return { type, count: r.count ?? 0, displayName: r.displayName ?? type };
-}
-
-type GenWorldspace = components['schemas']['WorldspaceSummary'];
-type GenCell = components['schemas']['CellSummary'];
-type GenPlaced = components['schemas']['PlacedSummary'];
-
-function toCellSummary(c: GenCell): CellSummary {
-  return {
-    formKey: c.formKey ?? '',
-    editorId: c.editorId ?? null,
-    cellX: c.cellX ?? null,
-    cellY: c.cellY ?? null,
-    isPersistentWorldspaceCell: c.isPersistentWorldspaceCell ?? false,
-    fullName: c.fullName ?? null,
-  };
-}
-
-function toPlacedSummary(p: GenPlaced): PlacedSummary {
-  return {
-    formKey: p.formKey ?? '',
-    editorId: p.editorId ?? null,
-    baseFormKey: p.baseFormKey ?? null,
-    recordType: p.recordType ?? '',
-  };
-}
-
-type GenContainerChild = components['schemas']['ContainerChildSummary'];
-
-function toContainerChildSummary(c: GenContainerChild): ContainerChildSummary {
-  return {
-    formKey: c.formKey ?? '',
-    editorId: c.editorId ?? null,
-    plugin: c.plugin ?? '',
-    origin: c.origin ?? '',
-    loadOrderIndex: c.loadOrderIndex ?? 0,
-    isWinner: c.isWinner ?? false,
-    workingTreeState: toWorkingTreeState(c.workingTreeState),
-    recordType: c.recordType ?? '',
-  };
-}
-
-export interface RecordPage {
-  items: RecordSummary[];
-  total: number;
-}
-
-export interface CellPage {
-  items: CellSummary[];
-  total: number;
-}
+// The `?? []` / `?? { items: [], total: 0 }` defaults on `data` below are about *transport*, not
+// about the wire shape: openapi-fetch types `data` as `T | undefined` because a non-ok response
+// carries `error` instead, and TypeScript cannot see that `ensureOk` already threw. They are not
+// the per-field nullability compensation this file used to carry (#627) — that is gone, and the
+// generated types are now trusted field-for-field.
 
 export interface PluginRepository {
   getPlugins(): Promise<PluginMetadata[]>;
@@ -171,7 +40,7 @@ export interface PluginRepository {
   // origin (ADR-0036): which copy of `plugin` to read, when the load order holds two files of
   // one filename. Optional — an ordinary load-order row has no origin to give, and the backend
   // resolves that case from the load order, where a filename is unambiguous.
-  getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]>;
+  getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]>;
   getRecords(plugin: string, type: string, offset: number, limit: number, origin?: string): Promise<RecordPage>;
   // The FormKey picker's own search — free-text `query` matched against EditorID or
   // a FormKey-shaped string, scoped to `validTypes` only when there's exactly one
@@ -287,7 +156,7 @@ export class ApiPluginRepository implements PluginRepository {
   async getPlugins(): Promise<PluginMetadata[]> {
     const { data, error, response } = await this.client.GET('/plugins', {});
     this.ensureOk('GET /plugins', response, error);
-    return (data ?? []).map(toPluginMetadata);
+    return data ?? [];
   }
 
   // The endpoint answers 200 in every state including "no load order" (LoadOrderEndpoints.cs),
@@ -300,9 +169,9 @@ export class ApiPluginRepository implements PluginRepository {
       totalPlugins: data?.totalPlugins ?? 0,
       // The wire carries each entry's origin too; the consumer keys on filename alone (see
       // LoadOrderStatus in ApiClient.ts), so it is dropped here rather than carried unused.
-      indexedPlugins: (data?.indexedPlugins ?? []).map((p) => p.name ?? ''),
+      indexedPlugins: (data?.indexedPlugins ?? []).map((p) => p.name),
       conflictsComputed: data?.conflictsComputed ?? false,
-      failures: (data?.failures ?? []).map((f) => ({ name: f.name ?? '', reason: f.reason ?? 'Unknown error' })),
+      failures: data?.failures ?? [],
     };
   }
 
@@ -311,11 +180,7 @@ export class ApiPluginRepository implements PluginRepository {
   async getTrackStatus(): Promise<TrackStatus> {
     const { data, error, response } = await this.client.GET('/plugins/track/status', {});
     this.ensureOk('GET /plugins/track/status', response, error);
-    return {
-      phase: toTrackPhase(data?.phase),
-      pluginsDone: data?.pluginsDone ?? 0,
-      pluginsTotal: data?.pluginsTotal ?? 0,
-    };
+    return data ?? { phase: 'Idle', pluginsDone: 0, pluginsTotal: 0 };
   }
 
   // Same "always 200, never degrade a fault into a fake empty queue" posture as
@@ -323,23 +188,17 @@ export class ApiPluginRepository implements PluginRepository {
   async getExternalChangeStatus(): Promise<UnansweredExternalChange[]> {
     const { data, error, response } = await this.client.GET('/plugins/external-changes/status', {});
     this.ensureOk('GET /plugins/external-changes/status', response, error);
-    return (data ?? []).map((p) => ({
-      plugin: p.plugin ?? '',
-      origin: p.origin ?? '',
-      metaChanged: p.metaChanged ?? false,
-      oldVersion: p.oldVersion ?? null,
-      newVersion: p.newVersion ?? null,
-    }));
+    return data ?? [];
   }
 
-  async getRecordTypes(plugin: string, origin?: string): Promise<{ type: string; count: number; displayName: string }[]> {
+  async getRecordTypes(plugin: string, origin?: string): Promise<PluginRecordTypeCount[]> {
     return this.withTimeout(`getRecordTypes(${plugin})`, async (signal) => {
       const { data, error, response } = await this.client.GET('/plugins/{plugin}/record-types', {
         params: { path: { plugin }, query: origin === undefined ? {} : { origin } },
         signal,
       });
       this.ensureOk(`getRecordTypes(${plugin})`, response, error);
-      return (data ?? []).map(toRecordTypeCount);
+      return data ?? [];
     });
   }
 
@@ -350,10 +209,7 @@ export class ApiPluginRepository implements PluginRepository {
         signal,
       });
       this.ensureOk(`getRecords(${plugin}, ${type})`, response, error);
-      return {
-        items: (data?.items ?? []).map(toRecordSummary),
-        total: data?.total ?? 0,
-      };
+      return data ?? { items: [], total: 0 };
     });
   }
 
@@ -368,17 +224,14 @@ export class ApiPluginRepository implements PluginRepository {
       },
     });
     this.ensureOk(`searchRecords(${query})`, response, error);
-    return {
-      items: (data?.items ?? []).map(toRecordSummary),
-      total: data?.total ?? 0,
-    };
+    return data ?? { items: [], total: 0 };
   }
 
   async getRecordOwner(formKey: string): Promise<{ plugin: string; origin: string } | undefined> {
     const { data, error, response } = await this.client.GET('/records/{formKey}', { params: { path: { formKey } } });
     if (response.status === 404) return undefined;
     this.ensureOk(`getRecordOwner(${formKey})`, response, error);
-    return data?.plugin && data.origin ? { plugin: data.plugin, origin: data.origin } : undefined;
+    return data ? { plugin: data.plugin, origin: data.origin } : undefined;
   }
 
   // See the interface's own doc comment — a 404 (unknown FormKey) is "nothing carries it
@@ -389,7 +242,7 @@ export class ApiPluginRepository implements PluginRepository {
     });
     if (response.status === 404) return [];
     this.ensureOk(`getRecordOverridePlugins(${formKey})`, response, error);
-    return (data?.overrides ?? []).flatMap((o) => (o.plugin ? [o.plugin] : []));
+    return (data?.overrides ?? []).map((o) => o.plugin);
   }
 
   async peekNextFreeFormKey(plugin: string, origin: string): Promise<string> {
@@ -477,10 +330,7 @@ export class ApiPluginRepository implements PluginRepository {
         signal,
       });
       this.ensureOk(`getWorldspaces(${plugin})`, response, error);
-      return (data ?? []).map((w: GenWorldspace) => ({
-        formKey: w.formKey ?? '',
-        editorId: w.editorId ?? null,
-      }));
+      return data ?? [];
     });
   }
 
@@ -491,18 +341,7 @@ export class ApiPluginRepository implements PluginRepository {
         signal,
       });
       this.ensureOk(`getWorldspaceBlocks(${plugin}, ${worldspaceFormKey})`, response, error);
-      return {
-        topCells: (data?.topCells ?? []).map(toCellSummary),
-        blocks: (data?.blocks ?? []).map(b => ({
-          x: b.x ?? 0,
-          y: b.y ?? 0,
-          subBlocks: (b.subBlocks ?? []).map(s => ({
-            x: s.x ?? 0,
-            y: s.y ?? 0,
-            cells: (s.cells ?? []).map(toCellSummary),
-          })),
-        })),
-      };
+      return data ?? { topCells: [], blocks: [] };
     });
   }
 
@@ -513,10 +352,7 @@ export class ApiPluginRepository implements PluginRepository {
         signal,
       });
       this.ensureOk(`getCellReferences(${plugin}, ${cellFormKey})`, response, error);
-      return {
-        persistent: (data?.persistent ?? []).map(toPlacedSummary),
-        temporary: (data?.temporary ?? []).map(toPlacedSummary),
-      };
+      return data ?? { persistent: [], temporary: [] };
     });
   }
 
@@ -527,10 +363,7 @@ export class ApiPluginRepository implements PluginRepository {
         signal,
       });
       this.ensureOk(`getInteriorCells(${plugin})`, response, error);
-      return {
-        items: (data?.items ?? []).map(toCellSummary),
-        total: data?.total ?? 0,
-      };
+      return data ?? { items: [], total: 0 };
     });
   }
 
@@ -541,7 +374,7 @@ export class ApiPluginRepository implements PluginRepository {
         signal,
       });
       this.ensureOk(`getContainerChildren(${plugin}, ${parentFormKey})`, response, error);
-      return (data ?? []).map(toContainerChildSummary);
+      return data ?? [];
     });
   }
 

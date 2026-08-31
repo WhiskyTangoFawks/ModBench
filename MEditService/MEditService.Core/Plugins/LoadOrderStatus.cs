@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MEditService.Core.Plugins;
 
 /// <summary>
@@ -5,6 +7,7 @@ namespace MEditService.Core.Plugins;
 /// caller can observe and act on, not an internal phase — a plugin's records are browsable the
 /// moment it is indexed, well before the reconcile finishes.
 /// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum LoadOrderState
 {
     /// <summary>No load order has been received yet, or it was closed.</summary>

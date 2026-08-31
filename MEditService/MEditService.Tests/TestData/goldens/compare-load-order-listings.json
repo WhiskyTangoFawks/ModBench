@@ -7,7 +7,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "Base.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "ConflictedNPC",
@@ -16,7 +16,7 @@
       "LoadOrderIndex": 1,
       "Origin": "Data",
       "Plugin": "Mid.esp",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "ConflictedNPC",
@@ -25,7 +25,7 @@
       "LoadOrderIndex": 2,
       "Origin": "Data",
       "Plugin": "Top.esp",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "InjectedNPC",
@@ -34,7 +34,7 @@
       "LoadOrderIndex": 1,
       "Origin": "Data",
       "Plugin": "Mid.esp",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "SoleNPC",
@@ -43,7 +43,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "Base.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     }
   ],
   "PerPluginTypes": {

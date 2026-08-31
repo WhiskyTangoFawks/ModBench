@@ -36,7 +36,7 @@ TypeScript VS Code extension. Root [CLAUDE.md](../CLAUDE.md) for project-wide in
 | `PluginRepository` | HTTP adapter (`GET /plugins`, `/plugins/{plugin}/record-types`, `/records`) | Interface `PluginRepository`; impl `ApiPluginRepository` |
 | `PluginTreeProvider` | Sidebar tree: repo data → tree nodes; page cache | Takes `PluginRepository`, not `ApiClient` — cache keyed `"plugin::recordType"`. `getPluginChildren(name)` is the public way in for rows built elsewhere; one instance backs both plugin trees, so the page cache and `modbench.loadMore` are shared |
 | `PluginsTreeComposite` | The one Plugins tree ([ADR-0035](../docs/adr/0035-one-plugins-tree-editing-is-a-capability.md)): Mod Management's rows + the record browser's children, joined | Composition root, imports from neither bounded context — rows and children are type parameters and its whole knowledge of both domains is the injected `pluginFileOf`. Chevrons come from `setLoadOrder(files)`; a row the load order doesn't hold stays a leaf rather than expanding to nothing. Enforced by `src/test/contextBoundary.test.ts`, not by review |
-| `ApiClient` | Typed `openapi-fetch` client factory | Type alias for generated client; DTOs defined here |
+| `ApiClient` | Typed `openapi-fetch` client factory | Type alias for generated client; wire DTOs *named* here as `components['schemas']` aliases, never re-declared — see § Wire types |
 | `GamePathDetector` | Game path discovery (Steam VDF / Windows registry) | Pure utility; returns `GamePaths \| null` |
 | `webviewHtml` | HTML shell for record editor webview | No VS Code types except `Uri` string |
 | `recordPanelMessageRouter` | Webview→extension message dispatch for the record panel | Pure function, no VS Code types in signature except injected deps — testable without a harness |
@@ -55,11 +55,42 @@ Placement:
 - New data queries: add to `PluginRepository` interface, implement in `ApiPluginRepository`, test without VS Code.
 - New UI surface: read the surface spec in `docs/specs/` first — one spec per surface (`medit-record-editor.md`, `medit-referenced-by.md`, `medit-version-control.md` for Editing, with `medit.md` the cross-cutting overview; `mods.md`, `plugins.md` (the one Plugins tree — ADR-0035; joint Mod Management/Editing), `downloads.md` for Loadout; `loadout-header.md` for the cross-context header). Update the spec if not covered.
 
-## Type mapping: PluginMetadata
+## Wire types: the generated schema is the frontend type
 
-`PluginMetadata` (`ApiClient.ts`) = canonical frontend type, not generated `PluginResponse`. `ApiPluginRepository.getPlugins()` maps via `toPluginMetadata()` in `PluginRepository.ts`.
+**The generated type *is* the frontend type. Never mirror a wire DTO by hand.** `ApiClient.ts` and
+`webview/src/types.ts` name `components['schemas'][…]` aliases; there is no mapper layer and no
+second copy to keep in sync.
 
-Adding a field to `PluginResponse`: C# model → `generate-api` → `PluginMetadata` in `ApiClient.ts` → `toPluginMetadata()`.
+Adding a field to a wire DTO is **two steps**: C# model → `/regenerate-api`. Consumers see it
+immediately; nothing else needs touching.
+
+This holds because the OpenAPI schema reports C# nullability and enums honestly (#627):
+`NullabilitySchemaFilter` + `SupportNonNullableReferenceTypes()` (`Program.cs`) put non-nullable
+properties in `required` and keep them off `nullable`, and every wire-reaching enum carries
+`[JsonConverter(typeof(JsonStringEnumConverter))]`. So a non-nullable C# `string Name` arrives as
+`name: string` — **not** `name?: string | null`. A `??` default or a trust-cast on a wire field is
+now a bug, not defensive coding. `SwaggerSchemaTests`/`WireEnumSerializationTests` (backend) and the
+three `Assert<Exact<…>>` checks in `webview/src/types.test.ts` (checked by `npm run build`, not
+vitest) pin all of that.
+
+**`src/medit/generated/api.ts` is generated — don't read it to learn the wire shape and never edit
+it.** Consult the OpenAPI spec (`http://localhost:5172/swagger/v1/swagger.json` off a running
+backend) or the C# DTO in `MEditService.Core/Queries/Models.cs`; to change it, change the C# and
+regenerate. `run-gates.sh --api-drift` fails if it has drifted.
+
+Two kinds of hand-written type still earn their place, and the test is: **would this still need to
+exist if the generator were perfect?**
+
+- A genuine **transform** — `LoadOrderStatus` (`ApiClient.ts`) flattens `indexedPlugins` to
+  filenames and drops the duplicated `state`.
+- A genuine **refinement** — `webview/src/types.ts`'s `FieldType`/`VmadKind` narrow the wire's
+  `string`, and `FieldMetadata.isSortable`/`allowsNull`/`isBitmask` stay optional, because the
+  VMAD/Condition tree adapters synthesize metadata for rows **the backend never sends**. A perfect
+  generator describes the wire; it would still say nothing about an object that never touches it.
+  Wire → webview is therefore a documented downcast (`RecordPanelClient.load`'s one remaining
+  `as`), not distrust.
+
+Optionality that exists *so stale fixtures compile* is neither, and does not belong.
 
 ## Integration tests (`src/test/integration/extension.test.ts`)
 

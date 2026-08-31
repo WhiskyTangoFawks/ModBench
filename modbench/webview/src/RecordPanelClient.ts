@@ -11,41 +11,19 @@ function log(level: LogLevel, message: string) {
   vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.LOG, level, message });
 }
 
-// The record panel's plugin list — a structural subset of the backend's
-// PluginResponse, kept minimal because the panel only needs name / immutability / order.
-export interface PluginInfo {
-  name: string;
-  isImmutable: boolean;
-  loadOrderIndex: number;
-  // ADR-0036: needed to key immutableSet by compound column identity. Required —
-  // every construction must say which origin, not rely on columnKey() eliding a missing one to
-  // the Data origin.
-  origin: string;
-  // ADR-0035: whether the effective load order actually names this copy (PluginResponse.
-  // InLoadOrder — false only for a plugin AddUnlistedPlugin opened on demand). Distinct from
-  // isImmutable: a vanilla/DLC master is immutable and still true here, while a shadowed copy is
-  // immutable *because* this is false — PluginHeader needs both to word its tooltip and decide
-  // whether to dim (see recordUtils.ts's readOnlyReason).
-  inLoadOrder: boolean;
-  // ADR-0041: whether this plugin's mod folder is tracked. Editing requires tracking;
-  // viewing never does — so this is what lets the panel render a column as visibly read-only with
-  // the way out named, instead of only discovering it on a refused attempt.
-  isTracked: boolean;
-}
-
 // The composite view for a single record. `load` fires compare + changes + plugins
 // in parallel; a compare failure fails the whole load (the panel has nothing to show), while a
 // changes/plugins failure comes back as `null` so the panel leaves that slice of state
 // untouched — only the parts that succeeded are applied.
 // The immutable set is resolved from the plugin list here (behind the client), null when plugins
-// failed, so the panel doesn't re-derive it. The raw plugin list itself (`PluginInfo[]`) is
+// failed, so the panel doesn't re-derive it. The raw plugin list itself (`PluginResponse[]`) is
 // not exposed on this type — target-plugin resolution for
 // the column-header menu happens via a VS Code QuickPick in the extension host, which asks
 // PluginRepository directly rather than through this webview-side client.
 export type LoadResult =
   | {
       ok: true; result: CompareResult; immutableSet: Set<ColumnKey> | null;
-      // ADR-0035: mirrors immutableSet's own construction (same PluginInfo list, same
+      // ADR-0035: mirrors immutableSet's own construction (same plugin list, same
       // columnKey() keying) — null exactly when immutableSet is (the /plugins fetch itself
       // failed), never independently.
       notInLoadOrderSet: Set<ColumnKey> | null;
@@ -101,25 +79,29 @@ export function createRecordPanelClient(port: number): RecordPanelClient {
         client.GET('/load-order/status', {}),
       ]);
       if (!cmp.response.ok) return { ok: false, error: `HTTP ${cmp.response.status}` };
-      const pluginList = plugins.response.ok ? (plugins.data as PluginInfo[]) : null;
+      // No cast — this is the generated PluginResponse[] straight off the client (#627; it used
+      // to be an unchecked `as PluginInfo[]` onto a hand-declared subset).
+      const pluginList = plugins.response.ok ? (plugins.data ?? null) : null;
       return {
         ok: true,
+        // Still a cast, but a different kind of one. This is a *narrowing* to the webview's own
+        // refinement of the wire — `FieldMetadata.type` and `VmadPropertyDiff.kind` are unions
+        // here and `string` on the wire, because the VMAD/Condition tree adapters synthesize
+        // members the backend never sends (see types.ts). Wire -> webview is a downcast by
+        // construction, so no amount of schema honesty removes it; what changed is that it now
+        // asserts a documented refinement rather than distrust of the generated types.
         result: cmp.data as CompareResult,
         // ADR-0036: keyed by compound column identity, not bare plugin name — two
-        // PluginInfo entries sharing a filename but differing in origin must stay distinct
+        // plugin entries sharing a filename but differing in origin must stay distinct
         // Set members, or one origin's mutability silently wins for both (RecordPanel.tsx's
         // immutableSet.has(...) checks).
         immutableSet: pluginList ? new Set(pluginList.filter(p => p.isImmutable).map(p => columnKey(p.name, p.origin))) : null,
-        // ADR-0035: same compound-identity keying as immutableSet, filtered the other
-        // direction — `=== false` (not `!p.inLoadOrder`) so a response missing the field (an
-        // older/stale shape) defaults every column to in-load-order, the overwhelmingly common
-        // case, rather than every plugin silently reading as shadowed.
-        notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => p.inLoadOrder === false).map(p => columnKey(p.name, p.origin))) : null,
-        // `=== true`, not a truthiness test — a response missing the field (an older or
-        // stale backend) must read as "not tracked" for every column, which withholds editing
-        // rather than offering one that cannot land. Same fail-closed reasoning as
-        // conflictsComputed below, opposite direction to immutableSet above.
-        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked === true).map(p => columnKey(p.name, p.origin))) : null,
+        // ADR-0035: same compound-identity keying as immutableSet, filtered the other direction.
+        // A plain `!p.inLoadOrder` / `p.isTracked`: both are required non-nullable booleans on the
+        // wire, and the extension spawns its own bundled backend (ADR-0022), so the version skew
+        // the old `=== false`/`=== true` guards were written against is unreachable.
+        notInLoadOrderSet: pluginList ? new Set(pluginList.filter(p => !p.inLoadOrder).map(p => columnKey(p.name, p.origin))) : null,
+        trackedSet: pluginList ? new Set(pluginList.filter(p => p.isTracked).map(p => columnKey(p.name, p.origin))) : null,
         // Fails closed — `=== true`, not `?? true`, so a failed/absent status fetch reads
         // as "not computed" (see LoadResult's own doc comment on this field).
         conflictsComputed: status.response.ok && status.data?.conflictsComputed === true,

@@ -1,54 +1,104 @@
 import createClient from 'openapi-fetch';
-import type { paths } from './generated/api';
+import type { components, paths } from './generated/api';
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-export interface PluginMetadata {
-  name: string;
-  path: string;
-  // ADR-0044: the name's plugins.txt slot past the backend's forced masters, or null when no line
-  // names this copy.
-  loadOrderIndex: number | null;
-  isLight: boolean;
-  isMaster: boolean;
-  masters: string[];
-  recordCount: number;
-  isImmutable: boolean;
-  // ADR-0044: the two registration facts beside the slot, as Mod Management stated them, and the
-  // two facts the backend derives from all three — whether this copy competes for winner, and
-  // whether it is the copy plugins.txt names (the winning copy of a listed name). Two held copies
-  // can share a filename; the name-keyed hand-offs in extension.ts read the `inLoadOrder` one.
-  enabled: boolean;
-  winning: boolean;
-  participates: boolean;
-  inLoadOrder: boolean;
-  // ADR-0036: the mod folder (or reserved PluginOrigin value) this plugin was resolved
-  // from (PluginResponse.Origin).
-  origin: string;
-  // ADR-0037: this plugin's own declared masters that don't resolve in the load order —
-  // never a transitive fact about a master's own masters. Empty for a plugin with none.
-  masterIssues: MasterIssue[];
-  // ADR-0035 amending ADR-0018: true with no active record filter, or when this plugin
-  // owns at least one record the filter matches — GetPlugins() itself never drops a plugin for
-  // having none. ADR-0035's dated §Filters amendment is what PluginsTreeComposite does
-  // with a `false`: omits the row entirely rather than only suppressing its chevron.
-  hasMatchingRecords: boolean;
-}
+type Schemas = components['schemas'];
 
-export interface MasterIssue {
-  masterName: string;
-  kind: 'DirectlyMissing' | 'Unloadable';
-}
+// Every type below is the generated wire type, named. The OpenAPI schema now reports C#
+// nullability and enum-string-ness honestly (#627), so a hand-written mirror would only be a
+// second, staler copy of the same shape — the mapper layer these aliases replaced existed purely
+// to re-assert facts the schema had dropped. A frontend type earns its own declaration only when
+// it is a genuine *transform* of the wire (see LoadOrderStatus below), never to restate it.
 
-/** ADR-0035: what the load order can say about itself *while a reconcile is still running*
- *  — `GET /load-order/status`, polled alongside the in-flight `PUT /load-order`.
+/** `GET /plugins`. ADR-0044: `loadOrderIndex` is the name's plugins.txt slot past the backend's
+ *  forced masters, and is the one honestly-nullable member — absent when no line names this copy.
+ *  `enabled`/`winning` are the registration facts as Mod Management stated them; `participates`
+ *  (competes for winner) and `inLoadOrder` (is the copy plugins.txt names) are the backend's two
+ *  derivations from them. Two held copies can share a filename, so the name-keyed hand-offs in
+ *  extension.ts read `inLoadOrder`. ADR-0036: `origin` is the mod folder (or reserved PluginOrigin
+ *  value) this copy was resolved from. ADR-0037: `masterIssues` is this plugin's own unresolvable
+ *  declared masters, never a transitive fact about a master's own masters. ADR-0035 amending
+ *  ADR-0018: `hasMatchingRecords` is true with no active record filter, or when this plugin owns at
+ *  least one matching record — PluginsTreeComposite omits a `false` row entirely rather than only
+ *  suppressing its chevron. ADR-0041: `isTracked` is whether the mod folder holds a `.git`. */
+export type PluginMetadata = Schemas['PluginResponse'];
+
+export type MasterIssue = Schemas['MasterIssue'];
+
+/** What `TrackService` can say about a Track in flight — `GET /plugins/track/status`, polled
+ *  alongside the in-flight `POST /plugins/track`, the same idiom `GET /load-order/status`
+ *  established. `'Idle'` means nothing is running. Counts are of *plugins*, not records. */
+export type TrackPhase = Schemas['TrackPhase'];
+export type TrackStatus = Schemas['TrackProgress'];
+
+/** Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
+ *  successful (HTTP 200) answer (`succeeded: false` with a `refusalReason`), never an HTTP error. */
+export type CompileResult = Schemas['CompileResult'];
+export type CompileDiagnostic = Schemas['CompileDiagnostic'];
+
+/** One queued external-change question — `GET /plugins/external-changes/status`. `metaChanged` is
+ *  the dialog's default-button tell (trailers inform the default, never act — ADR-0041 amendment);
+ *  `oldVersion`/`newVersion` are the evidence the pinned UX contract says must be shown when it
+ *  fired, not hidden. */
+export type UnansweredExternalChange = Schemas['UnansweredExternalChangeResponse'];
+
+/** The two ways a tracked plugin's binary can turn up stale against what Modbench last knew — an
+ *  interrupted compile (an unfinished journal marker) or a binary that could not be read at all.
+ *  Rides `PUT /load-order`'s own response the way `failures` already does (ADR-0026): the only ways
+ *  either can newly arise are a compile this process drives, or a restart, and every reconcile
+ *  observes both. */
+export type CrashRepairReason = Schemas['CrashRepairReason'];
+export type CrashRepairOffer = Schemas['CrashRepairOffer'];
+
+/** Absorb Upstream Update / Keep as My Edit's shared result — a refusal (e.g. Keep's same-record
+ *  collision) is a typed, successful answer, the same posture {@link CompileResult} uses. */
+export type ExternalChangeActionResult = Schemas['ExternalChangeActionResponse'];
+
+/** The offered rebase's three outcomes. `conflictedPaths` is the extension's cue to open each path
+ *  in VS Code's native merge editor. */
+export type RebaseOutcome = Schemas['RebaseOutcome'];
+export type RebaseResult = Schemas['RebaseResponse'];
+
+/** The Plugins tree's own working-tree fact for a listed record — 'None' for the overwhelming
+ *  majority. Deliberately not a boolean pair (an "Added implies dirty" invariant every consumer
+ *  would have to remember), and leaves room for a future 'Deleted' without a wire reshape. */
+export type WorkingTreeState = Schemas['WorkingTreeState'];
+
+export type RecordSummary = Schemas['RecordSummary'];
+
+/** A container record's own children (a Quest's dialog topics/branches/scenes, a Dialog Topic's
+ *  responses) — a flattened RecordSummary plus `recordType`, so the tree can tell a
+ *  nested-expandable child (a DIAL under a Quest) from a leaf. plugin/origin are always the
+ *  parent's own, carried rather than assumed so a consumer never reaches back to the parent node. */
+export type ContainerChildSummary = Schemas['ContainerChildSummary'];
+
+// Worldspace / cell / placed-object tree (per-plugin). `CellSummary.isPersistentWorldspaceCell` is
+// xEdit's "<Persistent Worldspace Cell>", read directly rather than inferred from which field of
+// WorldspaceBlocks a cell arrived in; `fullName` is the CELL's own FULL name, independent of it,
+// because xEdit's TwbMainRecord.GetDisplayName checks FULL first, unconditionally.
+// `WorldspaceBlocks.topCells` is a list, not a single nullable cell — a worldspace is only
+// supposed to have one block-less cell (its TopCell), but the backend surfaces every one it finds.
+export type WorldspaceSummary = Schemas['WorldspaceSummary'];
+export type CellSummary = Schemas['CellSummary'];
+export type PlacedSummary = Schemas['PlacedSummary'];
+export type CellReferences = Schemas['CellReferences'];
+export type WorldspaceSubBlock = Schemas['WorldspaceSubBlockDto'];
+export type WorldspaceBlock = Schemas['WorldspaceBlockDto'];
+export type WorldspaceBlocks = Schemas['WorldspaceBlocks'];
+
+/** ADR-0035: what the load order can say about itself *while a reconcile is still running* —
+ *  `GET /load-order/status`, polled alongside the in-flight `PUT /load-order`.
  *
- *  `indexedPlugins` is deliberately flattened to filenames: it is consumed by
+ *  The one hand-written type here, because it is a genuine transform rather than a restatement.
+ *  Two things differ from the wire and both are deliberate:
+ *
+ *  `indexedPlugins` is flattened to filenames. It is consumed by
  *  `PluginsTreeComposite.setLoadOrder`, which keys on the plugin filename (the boundary object
- *  CONTEXT-MAP.md names). The wire also carries each entry's origin, which nothing on this path
- *  needs yet — mapped away here rather than carried unused.
+ *  CONTEXT-MAP.md names); the wire also carries each entry's origin, which nothing on this path
+ *  needs, so it is dropped here rather than carried unused.
  *
- *  The wire's `state` is deliberately *not* mapped. It is derived from `conflictsComputed` today
+ *  The wire's `state` is deliberately *not* carried. It is derived from `conflictsComputed` today
  *  and duplicates it; anything deciding whether to render conflict information must read
  *  `conflictsComputed` (LoadOrderStatus.cs makes this the field's whole reason for existing), and
  *  offering a second, coincidentally-equal field would invite exactly the wrong read. */
@@ -65,178 +115,7 @@ export interface LoadOrderStatus {
   conflictsComputed: boolean;
   /** Plugins that could not be opened or indexed, as they are discovered — not held back until
    *  the reconcile finishes (ADR-0026). */
-  failures: { name: string; reason: string }[];
-}
-
-/** What `TrackService` can say about a Track in flight right now —
- *  `GET /plugins/track/status`, polled alongside the in-flight `POST /plugins/track`, the same
- *  idiom `LoadOrderStatus`/`GET /load-order/status` above already established. `'Idle'` means nothing
- *  is running (the poll's own rest state, and what the endpoint answers before any Track and
- *  again once one finishes). */
-export type TrackPhase = 'Idle' | 'Parsing' | 'Serializing' | 'Committing';
-
-export interface TrackStatus {
-  phase: TrackPhase;
-  /** Plugin counts, not record counts — the name states the granularity so the wire contract
-   *  can't lie about it. */
-  pluginsDone: number;
-  pluginsTotal: number;
-}
-
-/** Save & Compile's own result — `POST /plugins/{plugin}/compile`. A refusal is a typed,
- *  successful (HTTP 200) answer (`succeeded: false, refusalReason: string`), never an HTTP error —
- *  the pinned contract's "refusal is a typed result, not an exception" carried through the wire. */
-export interface CompileResult {
-  succeeded: boolean;
-  refusalReason: string | null;
-  diagnostics: CompileDiagnostic[];
-  masters: string[];
-}
-
-export interface CompileDiagnostic {
-  formKey: string;
-  sourceRelativePath: string;
-  message: string;
-}
-
-/** One queued external-change question — `GET /plugins/external-changes/status`, polled the
- *  same way `TrackStatus`/`LoadOrderStatus` are. `metaChanged` is the dialog's default-button tell
- *  (trailers inform the default, never act — ADR-0041 amendment); `oldVersion`/`newVersion` are the
- *  evidence the pinned UX contract says must be shown when the tell fired, not hidden. */
-export interface UnansweredExternalChange {
-  plugin: string;
-  origin: string;
-  metaChanged: boolean;
-  oldVersion: string | null;
-  newVersion: string | null;
-}
-
-/** The two ways a tracked plugin's binary can turn up stale relative to what Modbench itself
- *  last knows — an interrupted compile (an unfinished journal marker) or a binary that could not be
- *  read at all. Mirrors the backend's CrashRepairReason enum name exactly (no re-wording on the
- *  wire boundary, same posture WorkingTreeState above already established). */
-export type CrashRepairReason = 'InterruptedCompile' | 'MissingOrUnreadableBinary';
-
-/** One plugin's crash-repair offer, riding `PUT /load-order`'s own response the same way
- *  `failures` already does (ADR-0026) — there is no separate poller or endpoint for this: the only
- *  way either reason can newly arise is a compile this same process drives, or a process restart,
- *  and every reconcile already observes both. */
-export interface CrashRepairOffer {
-  plugin: string;
-  origin: string;
-  reason: CrashRepairReason;
-}
-
-/** Absorb Upstream Update / Keep as My Edit's shared result shape — a refusal (e.g. Keep's
- *  same-record collision) is a typed, successful (HTTP 200) answer, the same posture
- *  {@link CompileResult} already established. */
-export interface ExternalChangeActionResult {
-  succeeded: boolean;
-  refusalReason: string | null;
-}
-
-/** The offered rebase's three outcomes. `conflictedPaths` is the extension's cue to open
- *  each path in VS Code's native merge editor. */
-export type RebaseOutcome = 'Clean' | 'Refused' | 'Conflicted';
-
-export interface RebaseResult {
-  outcome: RebaseOutcome;
-  refusalReason: string | null;
-  conflictedPaths: string[];
-}
-
-// The Plugins tree's own working-tree fact for a listed record — 'None' for the
-// overwhelming majority. Mirrors the backend's WorkingTreeState enum name exactly (no
-// re-wording on the wire boundary). Deliberately not a boolean pair (an "Added implies dirty"
-// invariant every consumer would have to remember) and leaves room for a future 'Deleted'
-// value without a wire reshape (see RecordDecorationProvider's own doc comment).
-export type WorkingTreeState = 'None' | 'Modified' | 'Added';
-
-export interface RecordSummary {
-  formKey: string;
-  plugin: string;
-  loadOrderIndex: number;
-  isWinner: boolean;
-  editorId: string | null;
-  workingTreeState: WorkingTreeState;
-}
-
-export interface PluginRecordTypeCount {
-  type: string;
-  count: number;
-}
-
-// A container record's own children (a Quest's dialog topics/branches/scenes, a Dialog
-// Topic's responses) — a flattened RecordSummary plus recordType, the same "carry the type so the
-// tree can tell a nested-expandable child (a DIAL under a Quest) apart from a leaf" reason
-// PlacedSummary already carries one. plugin/origin are always the parent's own — a container's
-// children can only exist in a plugin that also carries the container (CONTEXT.md's "Container
-// record") — carried anyway rather than assumed, so a consumer never has to reach back to the
-// parent node for them.
-export interface ContainerChildSummary {
-  formKey: string;
-  editorId: string | null;
-  plugin: string;
-  origin: string;
-  loadOrderIndex: number;
-  isWinner: boolean;
-  workingTreeState: WorkingTreeState;
-  recordType: string;
-}
-
-// Worldspace / cell / placed-object tree (per-plugin).
-export interface WorldspaceSummary {
-  formKey: string;
-  editorId: string | null;
-}
-
-export interface CellSummary {
-  formKey: string;
-  editorId: string | null;
-  cellX: number | null;
-  cellY: number | null;
-  // xEdit's "<Persistent Worldspace Cell>" — the tree provider's label logic reads this
-  // instead of inferring it from which field of WorldspaceBlocks a cell arrived in. Required, like
-  // its siblings above: the backend always emits it (toCellSummary normalizes the generated
-  // schema's own optional field to a concrete boolean at the repository boundary).
-  isPersistentWorldspaceCell: boolean;
-  // The CELL record's own FULL name, independent of isPersistentWorldspaceCell — xEdit's
-  // TwbMainRecord.GetDisplayName checks FULL name first, unconditionally, before even the
-  // persistent-cell placeholder, so the tree provider needs both facts separately rather than one
-  // pre-resolved label. null when the cell has no FULL name set.
-  fullName: string | null;
-}
-
-export interface PlacedSummary {
-  formKey: string;
-  editorId: string | null;
-  baseFormKey: string | null;
-  recordType: string;
-}
-
-export interface CellReferences {
-  persistent: PlacedSummary[];
-  temporary: PlacedSummary[];
-}
-
-export interface WorldspaceSubBlock {
-  x: number;
-  y: number;
-  cells: CellSummary[];
-}
-
-export interface WorldspaceBlock {
-  x: number;
-  y: number;
-  subBlocks: WorldspaceSubBlock[];
-}
-
-export interface WorldspaceBlocks {
-  blocks: WorldspaceBlock[];
-  // A list, not a single nullable cell — a worldspace is only ever supposed to have one
-  // block-less cell row (its TopCell), but the backend surfaces every one it finds rather than
-  // discarding anything past the first.
-  topCells: CellSummary[];
+  failures: Schemas['PluginLoadFailure'][];
 }
 
 export function createApiClient(port: number, fetch?: (input: Request) => Promise<Response>) {

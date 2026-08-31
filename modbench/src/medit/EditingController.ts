@@ -1,6 +1,7 @@
+import type { components } from './generated/api';
 import type {
   ApiClient, CompileResult, LoadOrderStatus, TrackStatus, ExternalChangeActionResult, RebaseResult,
-  CrashRepairOffer, CrashRepairReason,
+  CrashRepairOffer,
 } from './ApiClient';
 import { errorText } from './ApiClient';
 import type { PluginRepository } from './PluginRepository';
@@ -80,29 +81,9 @@ export interface LoadOrderPluginInput {
  *  A tagged union rather than a third sentinel value: `undefined` already had to be documented
  *  everywhere it was read, and a second one would be a rule every call site must remember. */
 export type LoadOrderOutcome =
-  | { outcome: 'reconciled'; failures: { name?: string | null; reason?: string | null }[]; crashRepairOffers: CrashRepairOffer[] }
+  | { outcome: 'reconciled'; failures: components['schemas']['PluginLoadFailure'][]; crashRepairOffers: CrashRepairOffer[] }
   | { outcome: 'failed' }
   | { outcome: 'abandoned' };
-
-// The generated CrashRepairReason is numeric (0|1) for the same Swashbuckle/
-// JsonStringEnumConverter mismatch PluginRepository's toWorkingTreeState/toTrackPhase already
-// document — Program.cs registers that converter globally, so the real wire value is the string.
-// Trust the string.
-function toCrashRepairReason(reason: unknown): CrashRepairReason {
-  return typeof reason === 'string' ? (reason as CrashRepairReason) : 'InterruptedCompile';
-}
-
-function toCrashRepairOffer(o: { plugin?: string | null; origin?: string | null; reason?: unknown }): CrashRepairOffer {
-  return { plugin: o.plugin ?? '', origin: o.origin ?? '', reason: toCrashRepairReason(o.reason) };
-}
-
-// Pulled out of putLoadOrder purely for that method's own complexity budget (eslint
-// `complexity`) — the optional-chaining/map here belongs to this function's count, not that one's.
-function crashRepairOffersFrom(
-  data: { crashRepairOffers?: { plugin?: string | null; origin?: string | null; reason?: unknown }[] | null } | undefined,
-): CrashRepairOffer[] {
-  return (data?.crashRepairOffers ?? []).map(toCrashRepairOffer);
-}
 
 /** What a caller may pass to observe (and abandon) a reconcile in progress. Deliberately
  *  plain stdlib — `AbortSignal`, not a bespoke token — so this interface still carries no VS Code
@@ -198,7 +179,11 @@ export class EditingController {
       this.deps.showError(`mEdit: Failed to send the load order — ${text}`);
       return { outcome: 'failed' };
     }
-    return this.reportReconciled(plugins, data?.failures ?? [], crashRepairOffersFrom(data));
+    // One narrowing rather than four: `data` is undefined only on a non-ok response, already
+    // returned above. Both lists are non-nullable on the wire (#627) — there is nothing left to
+    // coalesce per field.
+    const reconciled = data ?? { failures: [], crashRepairOffers: [] };
+    return this.reportReconciled(plugins, reconciled.failures, reconciled.crashRepairOffers);
   }
 
   /** Whether a rejected PUT was the user closing mEdit rather than a fault. An abort is
@@ -216,7 +201,7 @@ export class EditingController {
    *  for that method's complexity budget. */
   private reportReconciled(
     plugins: LoadOrderPluginInput[],
-    failures: { name?: string | null; reason?: string | null }[],
+    failures: components['schemas']['PluginLoadFailure'][],
     crashRepairOffers: CrashRepairOffer[],
   ): LoadOrderOutcome {
     reportSkippedPlugins(failures, {
@@ -579,7 +564,7 @@ export class EditingController {
         this.deps.showError(`mEdit: Could not compile "${plugin}" — ${text}`);
         return null;
       }
-      return data ? toCompileResult(data) : null;
+      return data ?? null;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.log(`[EditingController] compile(${plugin}) threw: ${message}`);
@@ -604,7 +589,7 @@ export class EditingController {
         this.deps.showError(`mEdit: Could not absorb the upstream update for "${plugin}" — ${text}`);
         return null;
       }
-      const result = data ? toExternalChangeActionResult(data) : null;
+      const result = data ?? null;
       // Absorbing a new baseline moves the source under this plugin the same way a track
       // does — the same re-derive createRecord above gives `hasMatchingRecords`, since the
       // plugin's records (and hence which match the active filter) can change.
@@ -632,7 +617,7 @@ export class EditingController {
         this.deps.showError(`mEdit: Could not keep "${plugin}" as your own edit — ${text}`);
         return null;
       }
-      const result = data ? toExternalChangeActionResult(data) : null;
+      const result = data ?? null;
       // Keeping an external change deserializes into working-tree dirt — same reason as
       // absorbUpstreamUpdate above.
       if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
@@ -670,7 +655,7 @@ export class EditingController {
         this.deps.showError(`mEdit: Could not rebase "${origin}" — ${text}`);
         return null;
       }
-      const result = data ? toRebaseResult(data) : null;
+      const result = data ?? null;
       this.deps.refreshTree();
       // A rebase moves the branch (or leaves it mid-conflict), either of which can change a
       // tracked plugin's compile-freshness answer — same reason absorbUpstreamUpdate/keepAsMyEdit
@@ -686,43 +671,4 @@ export class EditingController {
   }
 }
 
-// The generated wire type widens every field to optional (Swashbuckle doesn't round-trip C#'s
-// non-nullable annotations) — mapped explicitly, same convention PluginRepository.toPluginMetadata
-// already established, rather than trusted with a cast.
-function toCompileResult(data: {
-  succeeded?: boolean;
-  refusalReason?: string | null;
-  diagnostics?: { formKey?: string | null; sourceRelativePath?: string | null; message?: string | null }[] | null;
-  masters?: string[] | null;
-}): CompileResult {
-  return {
-    succeeded: data.succeeded ?? false,
-    refusalReason: data.refusalReason ?? null,
-    diagnostics: (data.diagnostics ?? []).map((d) => ({
-      formKey: d.formKey ?? '',
-      sourceRelativePath: d.sourceRelativePath ?? '',
-      message: d.message ?? '',
-    })),
-    masters: data.masters ?? [],
-  };
-}
 
-function toExternalChangeActionResult(data: { succeeded?: boolean; refusalReason?: string | null }): ExternalChangeActionResult {
-  return { succeeded: data.succeeded ?? false, refusalReason: data.refusalReason ?? null };
-}
-
-function toRebaseResult(data: {
-  outcome?: string | null;
-  refusalReason?: string | null;
-  conflictedPaths?: string[] | null;
-}): RebaseResult {
-  // The generated Outcome type is a numeric union, same Swashbuckle/
-  // JsonStringEnumConverter mismatch toTrackPhase already works around in PluginRepository.ts —
-  // the wire bytes are the real string values ("Clean"/"Refused"/"Conflicted").
-  const outcome = typeof data.outcome === 'string' ? (data.outcome as RebaseResult['outcome']) : 'Refused';
-  return {
-    outcome,
-    refusalReason: data.refusalReason ?? null,
-    conflictedPaths: data.conflictedPaths ?? [],
-  };
-}

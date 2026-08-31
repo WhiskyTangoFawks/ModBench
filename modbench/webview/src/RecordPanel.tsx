@@ -391,7 +391,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // would append a malformed element.
         const arrayPath = op === 'add' ? msg.path : msg.path.slice(0, -1);
         const arrayMeta = metaAtPath(fieldMetaMapRef.current[msg.rootField], arrayPath);
-        handleArrayOpRef.current(plugin, msg.path, msg.rootField, op, arrayMeta?.elementType);
+        handleArrayOpRef.current(plugin, msg.path, msg.rootField, op, arrayMeta?.elementType ?? undefined);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
         // Same self-filter-and-commit shape as the array-op branch above, except the
         // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
@@ -504,7 +504,7 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         notInLoadOrderSet={notInLoadOrderSet}
         editableColumns={editableColumns}
         onEditCell={(plugin: ColumnKey, value: unknown) => handleCellCommit(plugin, path, rootField, rootDiff, value)}
-        onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType) : undefined}
+        onArrayAdd={isUnsortedArrayParent ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'add', meta?.elementType ?? undefined) : undefined}
         onArrayRemove={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'remove') : undefined}
         onArrayMoveUp={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveUp') : undefined}
         onArrayMoveDown={isUnsortedArrayElement ? (plugin: ColumnKey) => handleArrayOp(plugin, path, rootField, 'moveDown') : undefined}

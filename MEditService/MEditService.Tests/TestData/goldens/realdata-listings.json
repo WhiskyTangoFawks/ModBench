@@ -29,7 +29,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -38,7 +38,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -47,7 +47,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 3
@@ -61,7 +61,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
@@ -70,7 +70,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
@@ -79,7 +79,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_WorkshopBell01",
@@ -88,7 +88,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -102,7 +102,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "cc_Armor_Power_X01_LegLeft",
@@ -111,7 +111,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "cc_Armor_Power_X01_LegRight",
@@ -120,7 +120,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "cc_Armor_Power_X01_Torso",
@@ -129,7 +129,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -143,7 +143,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -152,7 +152,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -161,7 +161,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -170,7 +170,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "CroupManor01",
@@ -179,7 +179,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "MinutemenHoldingCell",
@@ -188,7 +188,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PackInSpotlight_Swivel_OffNEWStorageCell",
@@ -197,7 +197,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 7
@@ -211,7 +211,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -220,7 +220,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -229,7 +229,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -238,7 +238,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -247,7 +247,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -256,7 +256,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -265,7 +265,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -274,7 +274,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -283,7 +283,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -292,7 +292,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 860
@@ -306,7 +306,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "DialogueGenericPlayerSharedQuestion",
@@ -315,7 +315,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "DialogueConcordAreaSharedBranch",
@@ -324,7 +324,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "WorkbenchPlayerGrunt",
@@ -333,7 +333,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "WorkbenchPlayerHumWhistle",
@@ -342,7 +342,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PlayerActivateComment",
@@ -351,7 +351,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PlayerLockpickSuccessDialogue",
@@ -360,7 +360,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PlayerHackSuccessDialogue",
@@ -369,7 +369,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PlayerHackFailDialogue",
@@ -378,7 +378,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PlayerJetDialogue",
@@ -387,7 +387,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 13
@@ -401,7 +401,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "TunnelingRaceNoDirtFromFurniture",
@@ -410,7 +410,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "CC_PetDogFaction",
@@ -419,7 +419,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_AlienFaction",
@@ -428,7 +428,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -442,7 +442,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
@@ -451,7 +451,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
@@ -460,7 +460,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_IsInstalled",
@@ -469,7 +469,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -483,7 +483,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -492,7 +492,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -501,7 +501,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -510,7 +510,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -519,7 +519,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "MyrnaGreetSharedResponse1",
@@ -528,7 +528,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "PlayerMyrnaSharedResponse1",
@@ -537,7 +537,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -546,7 +546,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -555,7 +555,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -564,7 +564,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 2873
@@ -578,7 +578,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
@@ -587,7 +587,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
@@ -596,7 +596,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "BypassDestroyedExplosionTest",
@@ -605,7 +605,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -619,7 +619,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "shipment_Rubber_large",
@@ -628,7 +628,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "shipment_Ceramic_large",
@@ -637,7 +637,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "shipment_Copper_large",
@@ -646,7 +646,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -660,7 +660,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "LvlMutantHoundLegendary",
@@ -669,7 +669,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_LvlSynthCourser",
@@ -678,7 +678,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_WorkshopNPC",
@@ -687,7 +687,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -701,7 +701,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "DialogueGenericPlayer",
@@ -710,7 +710,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "DialogueConcordArea",
@@ -719,7 +719,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "DialogueVault114Aftermath",
@@ -728,7 +728,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -742,7 +742,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "RaiderDogRace",
@@ -751,7 +751,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "TurretWorkshopRace",
@@ -760,7 +760,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "SynthGen2RaceValentine",
@@ -769,7 +769,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -783,7 +783,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -792,7 +792,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -801,7 +801,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -810,7 +810,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -819,7 +819,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -828,7 +828,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -837,7 +837,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -846,7 +846,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -855,7 +855,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": null,
@@ -864,7 +864,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 73
@@ -878,7 +878,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "MyrnaGreetScene",
@@ -887,7 +887,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "NatGreetScene",
@@ -896,7 +896,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "TakahashiGreetScene",
@@ -905,7 +905,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "JohnGreetScene",
@@ -914,7 +914,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "MoeGreetScene",
@@ -923,7 +923,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "CrockerGreetScene",
@@ -932,7 +932,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "SolomonGreetScene",
@@ -941,7 +941,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "006SurvivorSceneIntro",
@@ -950,7 +950,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "008MuseumMurphyTalk1",
@@ -959,7 +959,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 59
@@ -973,7 +973,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
@@ -982,7 +982,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
@@ -991,7 +991,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         },
         {
           "EditorId": "VRWorkshopShared_10mm_NonPlayable",
@@ -1000,7 +1000,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 4
@@ -1014,7 +1014,7 @@
           "LoadOrderIndex": 0,
           "Origin": "Data",
           "Plugin": "mEditTestSubset.esm",
-          "WorkingTreeState": 0
+          "WorkingTreeState": "None"
         }
       ],
       "Total": 1
@@ -1030,7 +1030,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_AttackMarker_SentryBot",
@@ -1039,7 +1039,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_AttackMarker_Molerat",
@@ -1048,7 +1048,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_AttackMarker_FeralGhoul",
@@ -1057,7 +1057,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_WorkshopBell01",
@@ -1066,7 +1066,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_TutorialShown_VRWorkshop",
@@ -1075,7 +1075,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_TutorialShown_VRAttackMarker",
@@ -1084,7 +1084,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_TutorialShown_VRPod",
@@ -1093,7 +1093,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_LvlSynthCourser",
@@ -1102,7 +1102,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_WorkshopNPC",
@@ -1111,7 +1111,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_SuperSledge_NonPlayable",
@@ -1120,7 +1120,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_AlienBlaster_NonPlayable",
@@ -1129,7 +1129,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_GaussRifle_NonPlayable",
@@ -1138,7 +1138,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_10mm_NonPlayable",
@@ -1147,7 +1147,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_IsInstalled",
@@ -1156,7 +1156,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "VRWorkshopShared_AlienFaction",
@@ -1165,7 +1165,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "WorkshopRecipeFilterCreationClub02Holiday03ccFSVFO4007",
@@ -1174,7 +1174,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     },
     {
       "EditorId": "WorkshopRecipeFilterCreationClub02HolidayHalloween",
@@ -1183,7 +1183,7 @@
       "LoadOrderIndex": 0,
       "Origin": "Data",
       "Plugin": "mEditTestSubset.esm",
-      "WorkingTreeState": 0
+      "WorkingTreeState": "None"
     }
   ]
 }
