@@ -49,6 +49,20 @@ public sealed class ProfileRun
     public long Sum(Func<PluginCost, long> phase) => Costs.Values.Sum(phase);
 
     private static readonly Regex Opened = new(@"^(?<p>.+?) opened in (?<i>\d+) ms \+ (?<m>\d+) ms metadata$");
+
+    // #616: deliberately unenforced — each of these five is legitimately absent from a *valid* run
+    // shape, not a symptom of a rewording, so requiring them would make Parse throw on real,
+    // correctly-measured runs:
+    //  - Indexing/Indexed/IndexPhases share one population: every plugin that does NOT take the
+    //    register path (RegisterOrIndex's guard, LoadOrderMirror.cs). A warm run whose whole load
+    //    order is already-indexed-and-unchanged binaries — the steady state #586/ADR-0044 exists
+    //    for — never logs any of the three; only Registering does. (Falsifiable directly: making
+    //    either required breaks the already-green Render_Throws_WhenTheColdRunIndexedNothing test,
+    //    which feeds Parse a stream with zero "Indexed " lines and expects it to succeed.)
+    //  - Registering never fires in a cold run: the index file is deleted first, so nothing is
+    //    "already indexed and unchanged" yet (#585/ADR-0001).
+    //  - Ingested only fires for a tracked (git-managed) plugin (ADR-0041/0042); a load order with
+    //    no tracked plugins never logs it, cold or warm.
     private static readonly Regex Indexing = new(@"^Indexing (?<p>.+?) \(\d+ records\)$");
     private static readonly Regex Registering = new(@"^Registering (?<p>.+?) \(\d+ records\), already indexed and unchanged on disk$");
     private static readonly Regex Indexed = new(@"^Indexed (?<p>.+?) in (?<ms>\d+) ms$");
@@ -58,28 +72,47 @@ public sealed class ProfileRun
     private static readonly Regex Validated = new(@"^Validated (?<n>\d+) indexed plugin\(s\) against disk in (?<ms>\d+) ms$");
     private static readonly Regex Reconciled = new(@"^Load order reconciled in (?<t>\d+) ms: .* \(first plugin usable after (?<f>\S+) ms, winner sweep (?<w>\d+) ms\)$");
 
+    // #616: the phases every *valid* run — cold or warm — logs unconditionally, so a miss here is
+    // never a legitimate run shape; it is either a rewording or a genuinely broken measurement (e.g.
+    // a load order every plugin failed to open, which is not a real profile either). Each name is a
+    // field above, so a rename here fails the build rather than silently going stale.
+    //
+    // This only protects a *real* profiling run. The tests in LoadOrderProfileReportTests pin these
+    // regexes against independent static copies of the log strings — they cannot detect a production
+    // reword, because nothing here ever compares a regex against a string the production code
+    // actually emitted. That comparison only happens inside the env-gated LoadOrderProfile suite,
+    // which is skipped on a machine with no MEDIT_PROFILE_INSTANCE set. What this guard buys is that
+    // *when someone does run a real profile*, a drifted log text turns into a loud exception instead
+    // of a quietly-zeroed phase in the report.
+    private static readonly string[] RequiredPhases = [nameof(Opened), nameof(IndexInit), nameof(Validated), nameof(Reconciled)];
+
     public static ProfileRun Parse(IEnumerable<LogEntry> entries, long wallMs)
     {
         var run = new ProfileRun { WallMs = wallMs };
         PluginCost Cost(string p) => run.Costs.TryGetValue(p, out var c) ? c : run.Costs[p] = new PluginCost();
-        var reconciled = false;
+        var matched = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var e in entries)
         {
             Match m;
-            if ((m = Opened.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.ImportMs = Ms(m, "i"); c.MetadataMs = Ms(m, "m"); }
+            if ((m = Opened.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.ImportMs = Ms(m, "i"); c.MetadataMs = Ms(m, "m"); matched.Add(nameof(Opened)); }
             else if ((m = Indexing.Match(e.Message)).Success) { Cost(m.Groups["p"].Value); run.IndexedCount++; }
             else if ((m = Registering.Match(e.Message)).Success) { Cost(m.Groups["p"].Value); run.RegisteredCount++; }
             else if ((m = Indexed.Match(e.Message)).Success) Cost(m.Groups["p"].Value).IndexMs = Ms(m, "ms");
             else if ((m = IndexPhases.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.DocumentsMs = Ms(m, "d"); c.PrepareMs = Ms(m, "pr"); c.AppendMs = Ms(m, "ap"); c.ExtractedMs = Ms(m, "e"); c.CommitMs = Ms(m, "c"); }
             else if ((m = Ingested.Match(e.Message)).Success) { var c = Cost(m.Groups["p"].Value); c.FromSource = true; c.DeserializeMs = Ms(m, "d"); c.ReconcileMs = Ms(m, "r"); }
-            else if ((m = IndexInit.Match(e.Message)).Success) run.IndexInitMs = Ms(m, "ms");
-            else if ((m = Validated.Match(e.Message)).Success) { run.ValidatedCount = (int)Ms(m, "n"); run.ValidateMs = Ms(m, "ms"); }
-            else if ((m = Reconciled.Match(e.Message)).Success) { reconciled = true; run.ReconciledMs = Ms(m, "t"); run.WinnersMs = Ms(m, "w"); run.FirstUsableMs = m.Groups["f"].Value; }
+            else if ((m = IndexInit.Match(e.Message)).Success) { run.IndexInitMs = Ms(m, "ms"); matched.Add(nameof(IndexInit)); }
+            else if ((m = Validated.Match(e.Message)).Success) { run.ValidatedCount = (int)Ms(m, "n"); run.ValidateMs = Ms(m, "ms"); matched.Add(nameof(Validated)); }
+            else if ((m = Reconciled.Match(e.Message)).Success) { run.ReconciledMs = Ms(m, "t"); run.WinnersMs = Ms(m, "w"); run.FirstUsableMs = m.Groups["f"].Value; matched.Add(nameof(Reconciled)); }
         }
 
-        if (!reconciled)
-            throw new InvalidOperationException("No 'Load order reconciled' timing line matched — the log texts in LoadOrder/LoadOrderMirror/SourceIngest/DuckDbRecordIndex changed; update the regexes.");
+        var missing = RequiredPhases.Where(p => !matched.Contains(p)).ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"No log line matched for required phase(s) {string.Join(", ", missing)} — the log texts in " +
+                "LoadOrder/LoadOrderMirror/SourceIngest/DuckDbRecordIndex changed; update the regexes.");
+        }
         return run;
     }
 
