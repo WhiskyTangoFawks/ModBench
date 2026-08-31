@@ -169,7 +169,7 @@ public sealed class LoadOrderMirrorProgressiveLoadTests
         var load = Task.Run(() => manager.Reconcile(fx.GameDirectory, fx.Plugins, GameRelease.Fallout4));
         await gate.WaitUntilParkedAsync();
 
-        // GetPlugins, PluginOriginResolver, RequirePlugin and BuildTypedLinkCache all walk this list,
+        // GetPlugins, PluginOriginResolver and BuildTypedLinkCache all walk this list,
         // and until #274 nothing could append to it while they did. Interleaved exactly rather than
         // raced: begin an enumeration, let the load open one more plugin, then keep enumerating —
         // which is the shape that throws on a plain List<T>, deterministically.

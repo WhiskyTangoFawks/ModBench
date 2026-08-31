@@ -79,8 +79,8 @@ public sealed class LoadOrderMirror(
     /// needs the concrete <see cref="Plugins.LoadOrder"/> and the write-capable <see cref="IRecordIndex"/>
     /// underneath it, not the narrower (<see cref="ILoadOrder"/>, <see cref="IRecordReads"/>) the
     /// public method hands out. One lock, one null check, one message: <see cref="CreatePlugin"/>,
-    /// <see cref="ReindexPlugin(PluginKey)"/>, <see cref="ApplyFilter"/> and <see cref="RequirePlugin"/>
-    /// all go through this instead of each re-writing "if (_loadOrder is null) throw" for itself.
+    /// <see cref="ReindexPlugin(PluginKey)"/> and <see cref="ApplyFilter"/> all go through this
+    /// instead of each re-writing "if (_loadOrder is null) throw" for itself.
     /// </summary>
     private (LoadOrder LoadOrder, IRecordIndex Index) RequireScopeCore()
     {
@@ -572,12 +572,6 @@ public sealed class LoadOrderMirror(
         return ReindexOne(metadata, index, gameRelease);
     }
 
-    public Task ReindexPlugin(string plugin)
-    {
-        var (metadata, index, gameRelease) = RequirePlugin(plugin);
-        return ReindexOne(metadata, index, gameRelease);
-    }
-
     private Task ReindexOne(PluginMetadata metadata, IRecordIndex index, GameRelease gameRelease)
     {
         var modKey = ModKey.FromFileName(Path.GetFileName(metadata.Path));
@@ -614,22 +608,6 @@ public sealed class LoadOrderMirror(
             _index.UpdateWinners();
             // #422: rows that no longer exist cannot match a filter that a stale _filter still lists.
             ReapplyFilter();
-        }
-    }
-
-    private (PluginMetadata Metadata, IRecordIndex Index, GameRelease GameRelease) RequirePlugin(string plugin)
-    {
-        lock (_lock)
-        {
-            var (loadOrder, index) = RequireScopeCore();
-            // #34: load-order members only, for the same reason PluginOriginResolver scopes that
-            // way — this resolves the *file a write lands on* (SavePlugin/PreparePluginSave/
-            // ReindexPlugin all route through here), and a copy outside the load order is
-            // read-only. Without the scope a save could pick a losing copy's path off a bare
-            // filename and write to a file the game does not load.
-            var meta = loadOrder.Plugins.FirstOrDefault(p =>
-                p.InLoadOrder && string.Equals(p.Name, plugin, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException($"Plugin '{plugin}' is not in the load order.");
-            return (meta, index, _gameRelease);
         }
     }
 

@@ -70,7 +70,6 @@ public class ContainerChildQueryServiceTests
         public void Reconcile(string gameDirectory, IReadOnlyList<LoadOrderEntry> plugins, GameRelease gameRelease, string? instanceRoot = null) => throw new NotSupportedException();
         public void Close() => throw new NotSupportedException();
         public PluginResponse CreatePlugin(string n, string p, string o) => throw new NotSupportedException();
-        public Task ReindexPlugin(string p) => throw new NotSupportedException();
         public Task ReindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void UnindexPlugin(PluginKey key) => throw new NotSupportedException();
         public void SetFilter(string s) => throw new NotSupportedException();
