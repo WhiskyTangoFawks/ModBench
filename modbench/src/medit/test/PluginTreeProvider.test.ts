@@ -53,8 +53,6 @@ function makePlugin(i: number): PluginMetadata {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
-    compileStale: false,
-    lastCompiledAt: null,
   };
 }
 

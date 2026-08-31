@@ -420,8 +420,9 @@ export class EditingController {
         return undefined;
       }
       this.deps.refreshTree();
-      // A create is a working-tree change to a tracked plugin's source — the compile-staleness
-      // decoration needs the same re-derive refreshTree's sibling facts already get here.
+      // A create is a working-tree change to a tracked plugin's source — the same re-derive
+      // `hasMatchingRecords` needs (ADR-0035 amending ADR-0018): a new record can start matching
+      // (or, once other operations exist, stop matching) the active filter.
       this.deps.refreshMatchingPlugins();
       return data?.formKey ?? undefined;
     } catch (e) {
@@ -605,8 +606,8 @@ export class EditingController {
       }
       const result = data ? toExternalChangeActionResult(data) : null;
       // Absorbing a new baseline moves the source under this plugin the same way a track
-      // does — the compile-staleness decoration needs the same re-derive refreshTree's sibling
-      // facts already get here.
+      // does — the same re-derive createRecord above gives `hasMatchingRecords`, since the
+      // plugin's records (and hence which match the active filter) can change.
       if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
       return result;
     } catch (e) {

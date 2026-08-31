@@ -242,78 +242,6 @@ public static class SourceRepository
         GitCli.Run(gitDir, modFolder, "update-ref", LastCompileRef(plugin), snapshotSha);
     }
 
-    /// <summary>
-    /// Whether <paramref name="plugin"/>'s source has moved past what
-    /// <c>refs/medit/last-compile/&lt;plugin&gt;</c> parked — "the game can't see your edits yet" —
-    /// plus that ref's own commit timestamp for the tooltip that names it. Cheap and bounded by dirt
-    /// (the freshness philosophy, <see cref="SourceFreshness"/>): two git calls, both scoped to this
-    /// plugin's own <c>source/&lt;plugin&gt;/</c> subtree, neither touching record count or load
-    /// order — a <c>git diff</c> between the parked ref and the working tree directly (catches a
-    /// tracked file edited since the last compile, whether that edit was ever committed or not — a
-    /// compile snapshots the working tree, not <c>HEAD</c>, and commit stays ungated per ADR-0042's
-    /// amendment, so "committed but not recompiled" and "edited but neither committed nor recompiled"
-    /// are the same question against the ref), plus a <c>git status</c> for a brand-new,
-    /// never-<c>git add</c>ed source file, which plain <c>git diff</c> can't see at all —
-    /// <c>RecordEditService</c>'s create path writes straight to disk, no staging.
-    ///
-    /// <para>Never stale for an untracked folder or a plugin with no parked ref at all — a plugin
-    /// Track never covered (the New-Plugin-into-an-already-tracked-folder gap) degrades safely to
-    /// "nothing to compare against" rather than a false positive; the first compile is what parks the
-    /// ref and gives this something to answer from then on.</para>
-    ///
-    /// <para><c>:(literal)</c> pathspec magic on both calls, deliberately — a real
-    /// plugin filename routinely carries <c>[</c>/<c>]</c>, which git's pathspec glob matching would
-    /// otherwise silently misinterpret rather than match literally.</para>
-    /// </summary>
-    internal static CompileFreshness CompileFreshnessOf(string modFolder, string plugin)
-    {
-        if (!IsTracked(modFolder)) return new CompileFreshness(false, null);
-
-        var gitDir = Path.Combine(modFolder, ".git");
-        var refName = LastCompileRef(plugin);
-        if (!GitCli.TryRun(gitDir, modFolder, out _, "rev-parse", "--verify", "--quiet", refName))
-            return new CompileFreshness(false, null);
-
-        var lastCompiledAt = LastCompileTimestamp(gitDir, modFolder, refName);
-        var sourcePrefix = ToGitPath(SourceRecordPath.RootFor(plugin));
-        var pathspec = LiteralPathspec($"{sourcePrefix}/");
-
-        if (HasUntrackedFileUnder(gitDir, modFolder, pathspec))
-            return new CompileFreshness(true, lastCompiledAt);
-
-        var unchangedSinceLastCompile = GitCli.TryRun(gitDir, modFolder, out _, "diff", "--quiet", refName, "--", pathspec);
-        return new CompileFreshness(!unchangedSinceLastCompile, lastCompiledAt);
-    }
-
-    // Plain `git diff <ref>` (no second rev, no --cached) compares the ref's tree against the
-    // *working directory* for every path git already has an index entry for — exactly what's wanted
-    // here — but a path with no index entry at all (a source file `RecordEditService`'s create path
-    // just wrote, never `git add`ed) is invisible to it. `git status` is what sees "??" entries.
-    private static bool HasUntrackedFileUnder(string gitDir, string workTree, string pathspec)
-    {
-        if (!GitCli.TryRun(gitDir, workTree, out var status, "status", "--porcelain=v1", "-z", "--", pathspec))
-            return false;
-        return status.Split('\0', StringSplitOptions.RemoveEmptyEntries)
-            .Any(entry => entry.StartsWith("??", StringComparison.Ordinal));
-    }
-
-    // %cI: the committer date in strict ISO-8601, parseable directly by DateTimeOffset.TryParse with
-    // no format string of our own to keep in sync with git's.
-    private static DateTimeOffset? LastCompileTimestamp(string gitDir, string modFolder, string refName)
-    {
-        if (!GitCli.TryRun(gitDir, modFolder, out var stdout, "log", "-1", "--format=%cI", refName))
-            return null;
-        return DateTimeOffset.TryParse(
-            stdout.Trim(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed)
-            ? parsed
-            : null;
-    }
-
-    // ":(literal)" pathspec magic disables fnmatch glob interpretation of the path that
-    // follows — without it, a plugin filename carrying '[' or ']' (routine in real FO4 mod names)
-    // would be silently misread as a glob character class rather than matched literally.
-    private static string LiteralPathspec(string path) => $":(literal){path}";
-
     // git stash create answers empty (not an error) when the working tree has nothing to stash —
     // byte-identical to the index, which itself matches HEAD absent any porcelain staging this repo
     // never does. There is nothing dirtier to snapshot than HEAD's own tree in that case.
@@ -700,12 +628,6 @@ public static class SourceRepository
 /// read counterpart to <see cref="TrackProvenance"/>, the write side. All optional, same as
 /// <see cref="TrackProvenance"/> (authored/manually-installed mods may have none).</summary>
 public sealed record BaselineTrailers(string? UpstreamVersion, string? MetaSha256, string? BinarySha256);
-
-/// <summary><see cref="SourceRepository.CompileFreshnessOf"/>'s answer — <see cref="Stale"/> is
-/// the "source ahead of binary" signal, <see cref="LastCompiledAt"/> the parked ref's own
-/// commit timestamp for the tooltip that names it. Both null/false together for an untracked folder
-/// or a plugin Track never parked a ref for.</summary>
-public sealed record CompileFreshness(bool Stale, DateTimeOffset? LastCompiledAt);
 
 /// <summary><see cref="SourceRepository.RebaseEditBranch"/>/<see cref="SourceRepository.ContinueRebase"/>'s
 /// outcome. <see cref="ConflictedPaths"/> is the extension's cue to open each path in VS Code's native

@@ -46,13 +46,6 @@ export interface PluginsTreeCompositeDeps<TRow, TChild> {
    *  accessor's own return (as opposed to the accessor being unwired) means the same as `true` —
    *  no filter machinery to ask means nothing has been ruled out. */
   hasMatchingRecords?(pluginFile: string): boolean | undefined;
-  /** This plugin's own compile-freshness answer — "source ahead of binary" — keyed the same
-   *  way `hasMatchingRecords` is (a plugin filename, not the row), because it changes on its own
-   *  independent trigger (Save & Compile) rather than through `setLoadOrder`'s once-per-reconcile bundle,
-   *  the same reason `hasMatchingRecords` itself lives here rather than in that bundle. Undefined
-   *  (accessor not wired, or the plugin isn't in whatever map backs it) reads as "nothing to show"
-   *  — the same safe default `hasMatchingRecords` itself falls back to. */
-  compileStaleOf?(pluginFile: string): { stale: boolean; lastCompiledAt: string | null } | undefined;
 }
 
 /** A plugin's own declared master, absent from the load order (ADR-0037). Structurally
@@ -194,29 +187,6 @@ export class PluginsTreeComposite<TRow, TChild> implements vscode.TreeDataProvid
       const issues = file !== undefined ? (this.masterIssues?.get(file) ?? []) : [];
       if (issues.length > 0) this.applyMasterIssueDecoration(item, row, issues);
     }
-
-    // Unconditional, unlike the two branches above — it never steals the icon slot from a
-    // higher-severity decoration, so it has nothing to be mutually exclusive
-    // with. It only ever appends to whatever description/tooltip text this row already carries,
-    // including text either branch above just set.
-    this.applyCompileStaleDecoration(item, file);
-  }
-
-  /** A tracked plugin whose source has moved past `refs/medit/last-compile/<plugin>` —
-   *  "the game can't see your edits yet". Load-order-derived like the master-issue/load-failure
-   *  decorations above (append-only, never the leading slot), but never claims `iconPath` — the
-   *  description hint is the primary signal, and the icon slot stays reserved for whichever
-   *  higher-severity decoration (if any) already claimed it above. */
-  private applyCompileStaleDecoration(item: vscode.TreeItem, file: string | undefined): void {
-    const freshness = file !== undefined ? this.deps.compileStaleOf?.(file) : undefined;
-    if (!freshness?.stale) return;
-
-    const when = freshness.lastCompiledAt ? new Date(freshness.lastCompiledAt).toLocaleString() : 'unknown';
-    const note = `Source ahead of binary — last compiled ${when}`;
-    item.tooltip = typeof item.tooltip === 'string' ? `${item.tooltip}\n${note}` : note;
-
-    const hint = '⟳ Source ahead';
-    item.description = item.description ? `${item.description} · ${hint}` : hint;
   }
 
   /** One decoration, not two that can disagree. A master name the backend also

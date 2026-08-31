@@ -17,8 +17,6 @@ function makePlugin(overrides: Partial<PluginMetadata> & { path: string; origin:
     enabled: true, winning: true, participates: true, inLoadOrder: true,
     masterIssues: [],
     hasMatchingRecords: true,
-    compileStale: false,
-    lastCompiledAt: null,
     ...overrides,
   };
 }

@@ -33,8 +33,6 @@ function makePlugins(count: number): PluginMetadata[] {
     origin: 'Data',
     masterIssues: [],
     hasMatchingRecords: true,
-    compileStale: false,
-    lastCompiledAt: null,
   }));
 }
 
