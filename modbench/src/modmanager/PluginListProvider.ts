@@ -1,14 +1,17 @@
 import * as vscode from 'vscode';
-import { join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import type { IModlistSource, PluginEntry } from './model';
 import type { Reporter } from './deployer';
 import { dropIndexForMove } from './mo2/pluginsText';
 import {
   buildFileConflictIndex,
+  rootLevelWinners,
+  type FileConflictIndex,
 } from './fileConflictIndex';
 import { computePluginOrderStatuses, type PluginOrderStatus } from './statusChecker';
 import { resolvePluginPaths } from './loadOrderSnapshot';
 import { discoverImplicitMasters } from './vanillaMasters';
+import { PLUGIN_EXTENSIONS } from './masterReader';
 
 const DND_MIME = 'application/vnd.medit.pluginlist-node';
 
@@ -169,6 +172,26 @@ export function pluginFileOf(node: PluginListNode): string | undefined {
 export interface PluginParticipationChange {
   plugin: string;
   enabled: boolean;
+}
+
+/** Root-level plugin-extension files an enabled mod provides that `knownFolded` (case-folded
+ *  plugins.txt/implicit-master names already accounted for) doesn't already name (issue #617).
+ *  MO2 precedent (`references/modorganizer/src/pluginlist.cpp:204-296`, `PluginList::refresh()`):
+ *  a file plugins.txt never listed gets a synthetic row — there, `priority = -1` and `enabled`
+ *  defaults false unless force-loaded; here, appended after the listed rows with no `*` line, so
+ *  the ordinary `enabledSet.has(name)` check below renders it unchecked with no code path change.
+ *  This never writes plugins.txt, matching what enabling a mod itself does (nothing to
+ *  plugins.txt — only `modlist.txt`'s prefix flips, confirmed by reading `Mo2ModlistSource.setEnabled`).
+ *  Sorted ascending, case-folded — deterministic across renders, not an artifact of `readdir` order,
+ *  matching `registerUnlistedMods`'s own ascending-sort convention for the analogous Mods-tree case. */
+function discoverUnlistedPluginNames(index: FileConflictIndex, knownFolded: ReadonlySet<string>): string[] {
+  const found: string[] = [];
+  for (const [folded, winner] of rootLevelWinners(index)) {
+    if (knownFolded.has(folded)) continue;
+    if (!PLUGIN_EXTENSIONS.has(extname(winner).toLowerCase())) continue;
+    found.push(basename(winner));
+  }
+  return found.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
 }
 
 /** Sidebar Plugin List (Loadout) tree: one row per plugins.txt line, in Plugin
@@ -336,17 +359,26 @@ export class PluginListProvider
     const implicitNames = await discoverImplicitMasters(dataFolder, this.log);
     const implicitLower = new Set(implicitNames.map((n) => n.toLowerCase()));
     const dedupedOrder = order.filter((n) => !implicitLower.has(n.toLowerCase()));
-    const fullOrder = [...implicitNames, ...dedupedOrder];
+
+    // The same FileConflictIndex walk the order-aware badge pass below needs also answers "what
+    // plugin files do the enabled mods actually provide" — built once and shared, never re-walked
+    // twice per render (issue #617). See discoverUnlistedPluginNames's own doc comment for why an
+    // appended row here needs no special-case checkbox/decoration handling.
+    const index = await this.buildFileIndex();
+    const knownFolded = new Set([...implicitLower, ...dedupedOrder.map((n) => n.toLowerCase())]);
+    const unlistedNames = index ? discoverUnlistedPluginNames(index, knownFolded) : [];
+    const appendedOrder = [...dedupedOrder, ...unlistedNames];
+    const fullOrder = [...implicitNames, ...appendedOrder];
 
     if (fullOrder.length === 0) return { kind: 'empty' };
     const enabledSet = new Set(enabled);
     // Badges are computed against the full order (never the filtered subset) so a
     // filtered-out master still counts toward a visible row's order-aware verdict.
-    const statuses = await this.computeOrderStatuses(fullOrder);
+    const statuses = index ? await this.computeOrderStatuses(fullOrder, index, dataFolder) : undefined;
     this.lastImplicitNames = new Set(implicitNames.map((n) => n.toLowerCase()));
     const rows: PluginListNode[] = [
       ...implicitNames.map((name) => new ImplicitMasterNode(name, dataFolder ? join(dataFolder, name) : undefined)),
-      ...dedupedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
+      ...appendedOrder.map((name) => new PluginNode({ name, enabled: enabledSet.has(name) }, statuses?.get(name))),
     ];
     return { kind: 'ok', cache: { rows } };
   }
@@ -362,17 +394,33 @@ export class PluginListProvider
 
   private lastImplicitNames: ReadonlySet<string> = new Set();
 
-  /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped full row order
-   *  — see `getChildren`), or undefined when no instanceRoot is configured. A secondary,
-   *  non-blocking step (modmanager/CLAUDE.md): on any failure the badge degrades to absent — the
-   *  tree still renders every row — with a warning surfaced (ADR-0026: a silently missing badge
-   *  would look identical to "nothing to flag"). */
-  private async computeOrderStatuses(order: string[]): Promise<Map<string, PluginOrderStatus> | undefined> {
+  /** The FileConflictIndex both `discoverUnlistedPluginNames` (row identity, issue #617) and
+   *  `computeOrderStatuses` below (badges) need — built once per `buildRows()` call. `undefined`
+   *  when no instanceRoot is configured, or when the read/walk itself fails (logged + reported as
+   *  a warning). A secondary, non-blocking step (modmanager/CLAUDE.md): on failure the tree still
+   *  renders every plugins.txt-listed row, just without badges or disk-derived rows (ADR-0026: a
+   *  silently missing badge/row would look identical to "nothing to flag"). */
+  private async buildFileIndex(): Promise<FileConflictIndex | undefined> {
     if (!this.instanceRoot) return undefined;
     try {
       const entries = await this.source.readModlist();
-      const index = await buildFileConflictIndex(entries, this.instanceRoot, this.log);
-      const dataFolder = await this.dataFolder();
+      return await buildFileConflictIndex(entries, this.instanceRoot, this.log);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[PluginListProvider] master-order status computation failed: ${message}`);
+      this.reporter?.report('warning', 'Could not compute plugin master-order status — badges may be inaccurate.', message);
+      return undefined;
+    }
+  }
+
+  /** Order-aware missing-master verdicts for `order` (the implicit-first, deduped-and-appended
+   *  full row order — see `buildRows`) against an already-built `index`. Kept as its own
+   *  try/catch, separate from `buildFileIndex` above: a badge-pass failure here must not take
+   *  away rows the index already found (ADR-0026, same non-blocking-degrade reasoning). */
+  private async computeOrderStatuses(
+    order: string[], index: FileConflictIndex, dataFolder: string | undefined,
+  ): Promise<Map<string, PluginOrderStatus> | undefined> {
+    try {
       return await computePluginOrderStatuses(order, index, dataFolder, this.log);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
