@@ -1,6 +1,7 @@
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
 
@@ -24,7 +25,7 @@ public class ConditionConflictClassifierTests
         var modA = InputWithOrigin("Shared.esp", "ModA", 0, Condition("GetIsID", 1.0f));
         var modB = InputWithOrigin("Shared.esp", "ModB", 1, Condition("GetIsID", 2.0f));
 
-        var result = ConditionConflictClassifier.Classify([modA, modB]);
+        var result = ConditionConflictClassifier.Classify([modA, modB], GameRelease.Fallout4);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal("Shared.esp|ModB", diff.WinnerColumn);
@@ -38,7 +39,7 @@ public class ConditionConflictClassifierTests
         var result = ConditionConflictClassifier.Classify([
             Input("Master.esp", 0, Condition("GetIsID")),
             Input("Override.esp", 1, Condition("GetIsID")),
-        ]);
+        ], GameRelease.Fallout4);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal("Override.esp", diff.WinnerColumn);
@@ -53,7 +54,7 @@ public class ConditionConflictClassifierTests
         var result = ConditionConflictClassifier.Classify([
             Input("Master.esp", 0, Condition("GetIsID", 1.0f)),
             Input("Override.esp", 1, Condition("GetIsID", 2.0f)),
-        ]);
+        ], GameRelease.Fallout4);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal(ConflictThis.Override, diff.CellStates["Override.esp"]);
@@ -72,6 +73,7 @@ public class ConditionConflictClassifierTests
                 Input("Master.esp", 0, Condition("GetIsID", 1.0f)),
                 Input("Override.esp", 1, Condition("GetIsID", 2.0f)),
             ],
+            GameRelease.Fallout4,
             pluginParticipates: participation);
 
         Assert.Equal(ConflictAll.NoConflict, result.ConflictContribution);
@@ -86,7 +88,7 @@ public class ConditionConflictClassifierTests
             Input("Master.esp", 0, Condition("GetIsID", 1.0f)),
             Input("A.esp", 1, Condition("GetIsID", 2.0f)),
             Input("B.esp", 2, Condition("GetIsID", 3.0f)),
-        ]);
+        ], GameRelease.Fallout4);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal("B.esp", diff.WinnerColumn);
@@ -106,7 +108,7 @@ public class ConditionConflictClassifierTests
         var result = ConditionConflictClassifier.Classify([
             new ConditionPluginInput("Master.esp", 0, [new ConditionOwner("Conditions", [master])], Origin: "Data"),
             new ConditionPluginInput("Override.esp", 1, [new ConditionOwner("Conditions", [over])], Origin: "Data"),
-        ]);
+        ], GameRelease.Fallout4);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal(ConflictThis.Override, diff.FieldCellStates["operator"]["Override.esp"]);
@@ -119,7 +121,7 @@ public class ConditionConflictClassifierTests
         var result = ConditionConflictClassifier.Classify([
             Input("Master.esp", 0, Condition("GetIsID")),
             Input("Override.esp", 1, Condition("GetIsID"), Condition("GetDead")),
-        ]);
+        ], GameRelease.Fallout4);
 
         var conditions = Assert.Single(result.Compare.Groups).Conditions;
         Assert.Equal(2, conditions.Count);
@@ -141,7 +143,7 @@ public class ConditionConflictClassifierTests
         var owner2 = new ConditionOwner("Effects[2].Conditions", [Condition("GetIsID")]);
         var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2], Origin: "Data");
 
-        var result = ConditionConflictClassifier.Classify([input]);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4);
 
         Assert.Equal(
             ["Effects[2].Conditions", "Effects[10].Conditions"],
@@ -166,7 +168,7 @@ public class ConditionConflictClassifierTests
         var result = ConditionConflictClassifier.Classify([
             new ConditionPluginInput("Master.esp", 0, [masterOwner], Origin: "Data"),
             new ConditionPluginInput("Override.esp", 1, overrideOwners, Origin: "Data"),
-        ]);
+        ], GameRelease.Fallout4);
 
         var group1 = result.Compare.Groups.Single(g => g.FieldPath == "Effects[1].Conditions");
         var diff = Assert.Single(group1.Conditions);
@@ -187,7 +189,7 @@ public class ConditionConflictClassifierTests
         var owner2 = new ConditionOwner("Effects[2].Conditions[2].Conditions", [Condition("GetIsID")]);
         var input = new ConditionPluginInput("Plugin.esp", 0, [owner10, owner2], Origin: "Data");
 
-        var result = ConditionConflictClassifier.Classify([input]);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4);
 
         Assert.Equal(
             ["Effects[2].Conditions[2].Conditions", "Effects[2].Conditions[10].Conditions"],
@@ -207,7 +209,7 @@ public class ConditionConflictClassifierTests
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("quest", "SomeQuest") : null;
 
-        var result = ConditionConflictClassifier.Classify([input], Resolve);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4, Resolve);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.NotNull(diff.FieldResolutions);
@@ -226,7 +228,7 @@ public class ConditionConflictClassifierTests
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("npc_", "SomeActor") : null;
 
-        var result = ConditionConflictClassifier.Classify([input], Resolve);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4, Resolve);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.NotNull(diff.FieldResolutions);
@@ -247,7 +249,7 @@ public class ConditionConflictClassifierTests
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "NotAGlobal") : null;
 
-        var result = ConditionConflictClassifier.Classify([input], Resolve);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4, Resolve);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal(FormKeyResolutionState.ResolvedWrongType, diff.FieldResolutions!["comparison"]["A.esp"].State);
@@ -263,7 +265,7 @@ public class ConditionConflictClassifierTests
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("glob", "SomeGlobal") : null;
 
-        var result = ConditionConflictClassifier.Classify([input], Resolve);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4, Resolve);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Equal(FormKeyResolutionState.ResolvedValidType, diff.FieldResolutions!["comparison"]["A.esp"].State);
@@ -276,7 +278,7 @@ public class ConditionConflictClassifierTests
             "000800:Base.esp", false, 1.0f, null, []);
         var input = new ConditionPluginInput("A.esp", 0, [new ConditionOwner("Conditions", [condition])], Origin: "Data");
 
-        var result = ConditionConflictClassifier.Classify([input]);
+        var result = ConditionConflictClassifier.Classify([input], GameRelease.Fallout4);
 
         var diff = Assert.Single(Assert.Single(result.Compare.Groups).Conditions);
         Assert.Null(diff.FieldResolutions);

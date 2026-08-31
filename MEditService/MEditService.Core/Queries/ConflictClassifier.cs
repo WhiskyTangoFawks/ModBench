@@ -1,6 +1,7 @@
 using MEditService.Core.Records;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Core.Queries;
@@ -22,6 +23,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     public ClassifyResult Classify(
         IReadOnlyList<RecordDetail> conflictingRecords,
         IReadOnlyDictionary<string, IReadOnlyList<string>> pluginMasters,
+        GameRelease release,
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
@@ -39,7 +41,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var single = conflictingRecords[0];
             var pluginState = new Dictionary<string, ConflictThis> { [ColumnKey.Of(single.Plugin, single.Origin)] = ConflictThis.OnlyOne };
             var fieldNames = single.Fields.Select(f => f.Metadata.Name).ToList();
-            var singleCtx = new DiffContext(ColumnKey.Of(single.Plugin, single.Origin), conflictingRecords, _logger, resolveFormKey);
+            var singleCtx = new DiffContext(ColumnKey.Of(single.Plugin, single.Origin), conflictingRecords, _logger, resolveFormKey, release);
             return new ClassifyResult(ConflictAll.OnlyOne, pluginState, BuildDiffs(fieldNames, conflictingRecords, single, singleCtx, []));
         }
 
@@ -53,7 +55,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             .Select(f => f.Metadata.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var masterColumn = ColumnKey.Of(master.Plugin, master.Origin);
-        var ctx = new DiffContext(masterColumn, conflictingRecords, _logger, resolveFormKey);
+        var ctx = new DiffContext(masterColumn, conflictingRecords, _logger, resolveFormKey, release);
         var diffs = BuildDiffs([.. master.Fields.Select(f => f.Metadata.Name)], conflictingRecords, winner, ctx, sortedArrays);
 
         var conflictAll = ConflictRules.Reduce(diffs.SelectMany(d => d.CellStates.Values));
@@ -119,7 +121,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
         string MasterColumn,
         IReadOnlyList<RecordDetail> Records,
         ILogger Logger,
-        Func<string, RecordLookupEntry?>? ResolveFormKey);
+        Func<string, RecordLookupEntry?>? ResolveFormKey,
+        GameRelease Release);
 
     private static List<FieldDiff> BuildDiffs(
         IReadOnlyList<string> fieldNames,
@@ -166,7 +169,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
                     children = BuildStructChildren(meta.Fields, values, ctx);
                 else if (meta?.ElementType != null)
                     children = BuildArrayChildren(meta.ElementType, values, ctx, MaxArrayChildCount, fieldName);
-                var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey);
+                var resolutions = BuildResolutions(meta, values, ctx.ResolveFormKey, ctx.Release);
                 var conflictAll = AggregateConflictAll(cellStates, children);
                 return new FieldDiff(fieldName, values, winnerColumn, winnerValue, cellStates, conflictAll, children, resolutions);
             })
@@ -178,7 +181,8 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
     private static Dictionary<string, FormKeyResolution>? BuildResolutions(
         FieldMetadata? meta,
         Dictionary<string, object?> values,
-        Func<string, RecordLookupEntry?>? resolveFormKey)
+        Func<string, RecordLookupEntry?>? resolveFormKey,
+        GameRelease release)
     {
         if (resolveFormKey == null || meta?.Type != "formKey") return null;
 
@@ -190,7 +194,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             // ExtractString handles both so struct/array leaves resolve exactly like top-level ones.
             var fk = FormRefPathBuilder.ExtractString(value);
             if (string.IsNullOrEmpty(fk) || fk == "Null") continue;
-            resolutions[plugin] = FormKeyResolution.From(resolveFormKey(fk), meta.ValidFormKeyTypes);
+            resolutions[plugin] = FormKeyResolution.From(fk, resolveFormKey(fk), meta.ValidFormKeyTypes, release);
         }
         return resolutions.Count > 0 ? resolutions : null;
     }
@@ -316,7 +320,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var childChildren = elementMeta.Fields != null
                 ? BuildStructChildren(elementMeta.Fields, subValues, ctx)
                 : null;
-            var resolutions = BuildResolutions(elementMeta, subValues, ctx.ResolveFormKey);
+            var resolutions = BuildResolutions(elementMeta, subValues, ctx.ResolveFormKey, ctx.Release);
             var conflictAll = AggregateConflictAll(cellStates, childChildren);
             return new FieldDiff(label, subValues, winnerColumn, winnerValue, cellStates, conflictAll, childChildren, resolutions);
         }
@@ -353,7 +357,7 @@ public sealed class ConflictClassifier(ILogger<ConflictClassifier>? logger = nul
             var winnerColumn = ColumnKey.Of(fieldWinner.Plugin, fieldWinner.Origin);
             var winnerValue = subValues[winnerColumn];
             var cellStates = ComputeCellStates(subField.Name, subValues, ctx.MasterColumn, ctx.Records, []);
-            var resolutions = BuildResolutions(subField, subValues, ctx.ResolveFormKey);
+            var resolutions = BuildResolutions(subField, subValues, ctx.ResolveFormKey, ctx.Release);
             var conflictAll = AggregateConflictAll(cellStates, subChildren);
             children.Add(new FieldDiff(subField.Name, subValues, winnerColumn, winnerValue, cellStates, conflictAll, subChildren, resolutions));
         }

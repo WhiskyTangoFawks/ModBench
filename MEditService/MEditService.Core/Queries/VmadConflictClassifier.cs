@@ -1,4 +1,5 @@
 using MEditService.Core.Records;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
@@ -20,7 +21,8 @@ public static class VmadConflictClassifier
         IReadOnlyList<VmadPluginInput> Inputs,
         string MasterColumn,
         ConflictAccumulator Conflict,
-        Func<string, RecordLookupEntry?>? ResolveFormKey);
+        Func<string, RecordLookupEntry?>? ResolveFormKey,
+        GameRelease Release);
 
     // resolveFormKey: ADR-0031's O(1) lookup, batched once per Classify call. VMAD's Object-kind
     // properties reference ordinary major records (not VMAD-internal data), so they resolve through
@@ -34,6 +36,7 @@ public static class VmadConflictClassifier
     // in inputs participates, preserving prior behavior for existing callers.
     public static VmadClassifyResult Classify(
         IReadOnlyList<VmadPluginInput> inputs,
+        GameRelease release,
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
@@ -45,7 +48,7 @@ public static class VmadConflictClassifier
 
         var masterColumn = ColumnKey.Of(inputs[0].Plugin, inputs[0].Origin);
         var conflict = new ConflictAccumulator();
-        var ctx = new VmadDiffContext(inputs, masterColumn, conflict, resolveFormKey);
+        var ctx = new VmadDiffContext(inputs, masterColumn, conflict, resolveFormKey, release);
 
         var scriptNames = present
             .SelectMany(i => i.Vmad!.Scripts.Select(s => s.Name))
@@ -108,7 +111,7 @@ public static class VmadConflictClassifier
 
         var children = BuildChildren(kind, perPlugin, ctx);
         var raw = BuildRaw(kind, perPlugin);
-        var resolutions = BuildResolutions(kind, perPlugin, ctx.ResolveFormKey);
+        var resolutions = BuildResolutions(kind, perPlugin, ctx.ResolveFormKey, ctx.Release);
         return new VmadPropertyDiff(name, kind, values, types, winner, cellStates, children, raw, resolutions);
     }
 
@@ -118,7 +121,8 @@ public static class VmadConflictClassifier
     private static Dictionary<string, FormKeyResolution>? BuildResolutions(
         string kind,
         Dictionary<string, VmadPropertyValue?> perPlugin,
-        Func<string, RecordLookupEntry?>? resolveFormKey)
+        Func<string, RecordLookupEntry?>? resolveFormKey,
+        GameRelease release)
     {
         if (resolveFormKey == null || kind != "object") return null;
 
@@ -126,7 +130,7 @@ public static class VmadConflictClassifier
         foreach (var (plugin, value) in perPlugin)
         {
             if (value?.Value is not string fk || fk.Length == 0) continue;
-            resolutions[plugin] = FormKeyResolution.From(resolveFormKey(fk), []);
+            resolutions[plugin] = FormKeyResolution.From(fk, resolveFormKey(fk), [], release);
         }
         return resolutions.Count > 0 ? resolutions : null;
     }

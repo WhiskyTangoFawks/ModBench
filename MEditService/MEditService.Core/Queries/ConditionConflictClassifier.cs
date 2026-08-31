@@ -1,5 +1,6 @@
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
@@ -26,6 +27,7 @@ public static class ConditionConflictClassifier
     // means every plugin in inputs participates, preserving prior behavior for existing callers.
     public static ConditionClassifyResult Classify(
         IReadOnlyList<ConditionPluginInput> inputs,
+        GameRelease release,
         Func<string, RecordLookupEntry?>? resolveFormKey = null,
         IReadOnlyDictionary<string, bool>? pluginParticipates = null)
     {
@@ -56,7 +58,7 @@ public static class ConditionConflictClassifier
             var maxLen = perPluginConditions.Values.Select(c => c.Count).DefaultIfEmpty(0).Max();
 
             var diffs = Enumerable.Range(0, maxLen)
-                .Select(idx => BuildDiff(idx, inputs, perPluginConditions, masterColumn, columnOrder, allStates, resolveFormKey))
+                .Select(idx => BuildDiff(idx, inputs, perPluginConditions, masterColumn, columnOrder, allStates, resolveFormKey, release))
                 .ToList();
 
             return new ConditionGroupDiff(fieldPath, diffs);
@@ -72,7 +74,8 @@ public static class ConditionConflictClassifier
         string masterColumn,
         IReadOnlyList<(string Plugin, int LoadOrderIndex)> columnOrder,
         List<ConflictThis> allStates,
-        Func<string, RecordLookupEntry?>? resolveFormKey)
+        Func<string, RecordLookupEntry?>? resolveFormKey,
+        GameRelease release)
     {
         var perPlugin = inputs.ToDictionary(
             i => ColumnKey.Of(i.Plugin, i.Origin),
@@ -88,7 +91,7 @@ public static class ConditionConflictClassifier
 
         var winner = ConflictRules.PickWinner(columnOrder, p => perPlugin[p] != null);
         var fieldCellStates = FieldCellStates(perPlugin, masterColumn, columnOrder);
-        var fieldResolutions = FieldResolutions(perPlugin, resolveFormKey);
+        var fieldResolutions = FieldResolutions(perPlugin, resolveFormKey, release);
 
         return new ConditionDiff(idx, perPlugin, winner, cellStates, fieldCellStates, fieldResolutions);
     }
@@ -134,7 +137,7 @@ public static class ConditionConflictClassifier
     // Form-category parameter. null when no resolver was passed, mirroring
     // VmadConflictClassifier.BuildResolutions' identical resolver-absent short-circuit.
     private static Dictionary<string, IReadOnlyDictionary<string, FormKeyResolution>>? FieldResolutions(
-        Dictionary<string, ParsedCondition?> perPlugin, Func<string, RecordLookupEntry?>? resolveFormKey)
+        Dictionary<string, ParsedCondition?> perPlugin, Func<string, RecordLookupEntry?>? resolveFormKey, GameRelease release)
     {
         if (resolveFormKey == null) return null;
 
@@ -144,7 +147,11 @@ public static class ConditionConflictClassifier
         {
             var perPluginResolution = perPlugin
                 .Where(kv => kv.Value != null && extractFormKey(kv.Value) is { Length: > 0 })
-                .ToDictionary(kv => kv.Key, kv => FormKeyResolution.From(resolveFormKey(extractFormKey(kv.Value!)!), validTypes));
+                .ToDictionary(kv => kv.Key, kv =>
+                {
+                    var fk = extractFormKey(kv.Value!)!;
+                    return FormKeyResolution.From(fk, resolveFormKey(fk), validTypes, release);
+                });
             if (perPluginResolution.Count > 0) resolutions[key] = perPluginResolution;
         }
 

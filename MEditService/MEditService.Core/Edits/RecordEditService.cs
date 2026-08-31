@@ -139,7 +139,7 @@ public sealed class RecordEditService(
                 "Form flag on its header first.");
         }
 
-        if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value) is { } linkError)
+        if (ValidateFormLinks(index, schemas, document.RecordType, fieldPath, value, release) is { } linkError)
             return RecordEditResult.Refused(RecordEditRefusal.InvalidFormLink, linkError);
 
         // #539 correction 2: two reflected columns (major_flags, fallout4_major_record_flags — and,
@@ -1700,7 +1700,8 @@ public sealed class RecordEditService(
         IReadOnlyDictionary<string, RecordTableSchema> schemas,
         string recordType,
         string fieldPath,
-        JsonElement value)
+        JsonElement value,
+        GameRelease release)
     {
         if (!schemas.TryGetValue(recordType, out var schema)) return null;
         var col = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
@@ -1709,7 +1710,7 @@ public sealed class RecordEditService(
         // The same builder the read model renders check errors from, so "what the editor flags in a
         // loaded plugin" and "what the editor refuses to create" are one definition of a broken link,
         // not two that can drift.
-        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, index.Resolve);
+        return CheckErrorBuilder.Build(col.ToFieldMetadata(), value, index.Resolve, release);
     }
 
     /// <summary>The Track command as the palette actually shows it — <c>package.json</c>'s title

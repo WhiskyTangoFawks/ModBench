@@ -1,6 +1,7 @@
 using MEditService.Core.Queries;
 using MEditService.Core.Records;
 using MEditService.Core.Schema;
+using Mutagen.Bethesda;
 
 namespace MEditService.Tests.Query;
 
@@ -41,7 +42,7 @@ public sealed class VmadConflictClassifierTests
         var modA = InputWithOrigin("Shared.esp", "ModA", 0, Script("S", "Local", Prop("Power", Scalar("Int", 10))));
         var modB = InputWithOrigin("Shared.esp", "ModB", 1, Script("S", "Local", Prop("Power", Scalar("Int", 20))));
 
-        var result = VmadConflictClassifier.Classify([modA, modB]);
+        var result = VmadConflictClassifier.Classify([modA, modB], GameRelease.Fallout4);
 
         var prop = result.Compare.Scripts[0].Properties[0];
         Assert.Equal(10, prop.Values["Shared.esp|ModA"]);
@@ -55,7 +56,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local", Prop("Power", Scalar("Int", 20))));
         var c = Input("C.esp", 2, Script("S", "Local", Prop("Power", Scalar("Int", 30))));
 
-        var result = VmadConflictClassifier.Classify([a, b, c]);
+        var result = VmadConflictClassifier.Classify([a, b, c], GameRelease.Fallout4);
 
         var script = Assert.Single(result.Compare.Scripts);
         Assert.Equal("S", script.Name);
@@ -79,7 +80,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local", Prop("Power", Scalar("Int", 20))));
         var participation = new Dictionary<string, bool> { ["A.esp"] = true, ["B.esp"] = false };
 
-        var result = VmadConflictClassifier.Classify([a, b], pluginParticipates: participation);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4, pluginParticipates: participation);
 
         Assert.Equal(ConflictAll.NoConflict, result.ConflictContribution);
         var script = Assert.Single(result.Compare.Scripts);
@@ -93,7 +94,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("Keep", "Local"));
         var b = Input("B.esp", 1, Script("Keep", "Local"), Script("Added", "Local"));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var added = result.Compare.Scripts.First(s => s.Name == "Added");
         Assert.Null(added.Flags["A.esp"]);          // absent column reflected
@@ -110,7 +111,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local", Prop("P", Scalar("Int", 5))));
         var c = Input("C.esp", 2, Script("S", "Local", Prop("P", Scalar("String", "5"))));
 
-        var result = VmadConflictClassifier.Classify([a, b, c]);
+        var result = VmadConflictClassifier.Classify([a, b, c], GameRelease.Fallout4);
 
         var p = result.Compare.Scripts[0].Properties.First(x => x.Name == "P");
         Assert.Equal("Int", p.Types["A.esp"]);
@@ -127,7 +128,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local",
             Prop("Config", StructVal(Prop("Factor", Scalar("Float", 1f)), Prop("Scale", Scalar("Float", 9f))))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var config = result.Compare.Scripts[0].Properties.First(p => p.Name == "Config");
         Assert.Equal("struct", config.Kind);
@@ -146,7 +147,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local",
             Prop("Config", StructVal(Prop("Factor", Scalar("Float", 1.5f))))));
 
-        var result = VmadConflictClassifier.Classify([a]);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4);
 
         var config = Assert.Single(result.Compare.Scripts[0].Properties);
         Assert.Equal("struct", config.Kind);
@@ -167,7 +168,7 @@ public sealed class VmadConflictClassifierTests
                 [Prop("Qty", Scalar("Int", 7))],
                 [Prop("Qty", Scalar("Int", 9))]))));
 
-        var result = VmadConflictClassifier.Classify([a]);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4);
 
         var items = Assert.Single(result.Compare.Scripts[0].Properties);
         Assert.Equal("structList", items.Kind);
@@ -189,7 +190,7 @@ public sealed class VmadConflictClassifierTests
             Script("Beta", "Local"),
             Script("Alpha", "Local", Prop("P2", Scalar("Int", 2)), Prop("P1", Scalar("Int", 1))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         Assert.Equal(ConflictAll.NoConflict, result.ConflictContribution);
         Assert.All(result.Compare.Scripts, s =>
@@ -206,7 +207,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Arr", Arr("Int", 1, 2))));
         var b = Input("B.esp", 1, Script("S", "Local", Prop("Arr", Arr("Int", 1, 9))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var arr = result.Compare.Scripts[0].Properties.First(p => p.Name == "Arr");
         Assert.Equal("array", arr.Kind);
@@ -222,7 +223,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local"));
         var b = Input("B.esp", 1, Script("S", "Inherited"));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var script = Assert.Single(result.Compare.Scripts);
         Assert.Equal(ConflictThis.Override, script.CellStates["B.esp"]);
@@ -236,7 +237,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local", Prop("P", Scalar("Int", 2))));
         var c = Input("C.esp", 2, Script("S", "Local", Prop("P", Scalar("Int", 2))));
 
-        var result = VmadConflictClassifier.Classify([a, b, c]);
+        var result = VmadConflictClassifier.Classify([a, b, c], GameRelease.Fallout4);
 
         var p = result.Compare.Scripts[0].Properties.First(x => x.Name == "P");
         Assert.Equal(ConflictThis.Override, p.CellStates["B.esp"]); // differs from master, equals winner
@@ -250,7 +251,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local", Prop("P1", Scalar("Int", 1))));
         var b = Input("B.esp", 1, Script("S", "Local", Prop("P2", Scalar("Int", 2))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var props = result.Compare.Scripts[0].Properties;
         var p1 = props.First(p => p.Name == "P1");
@@ -268,7 +269,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local",
             Prop("Config", StructVal(Prop("Y", Scalar("Int", 2))))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var config = result.Compare.Scripts[0].Properties.First(p => p.Name == "Config");
         Assert.Contains(config.Children!, c => c.Name == "X");
@@ -289,7 +290,7 @@ public sealed class VmadConflictClassifierTests
                 Prop("Zeta", Scalar("Int", 1)),
                 Prop("Config", StructVal(Prop("Mid", Scalar("Int", 2)), Prop("Aaa", Scalar("Int", 3))))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         Assert.Equal(["Alpha", "Beta"], result.Compare.Scripts.Select(s => s.Name));
         var alpha = result.Compare.Scripts.First(s => s.Name == "Alpha");
@@ -304,7 +305,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
         var b = Input("B.esp", 1, Script("S", "Local", Prop("Ref", ObjVal("000900:Base.esp", 2))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
         Assert.Equal("object", refProp.Kind);
@@ -321,7 +322,7 @@ public sealed class VmadConflictClassifierTests
     {
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal(null, -1))));
 
-        var result = VmadConflictClassifier.Classify([a]);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4);
 
         var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
         Assert.Equal("object", refProp.Kind);
@@ -336,7 +337,7 @@ public sealed class VmadConflictClassifierTests
         var b = Input("B.esp", 1, Script("S", "Local",
             Prop("Items", StructListVal([Prop("Qty", Scalar("Int", 9))]))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var items = result.Compare.Scripts[0].Properties.First(p => p.Name == "Items");
         Assert.Equal("structList", items.Kind);
@@ -352,7 +353,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Scores", Arr("Int", 1, 2, 3))));
         var b = Input("B.esp", 1, Script("S", "Local", Prop("Scores", Arr("Int", 1, 9))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var scores = result.Compare.Scripts[0].Properties.First(p => p.Name == "Scores");
         Assert.Equal(3, scores.Children!.Count);                                            // max(3,2) not min
@@ -369,7 +370,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Scores", Arr("Int", 1, 2))));
         var b = Input("B.esp", 1, Script("S", "Local"));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var scores = result.Compare.Scripts[0].Properties.First(p => p.Name == "Scores");
         Assert.Equal(2, scores.Children!.Count);
@@ -385,7 +386,7 @@ public sealed class VmadConflictClassifierTests
             Prop("Config", StructVal(Prop("X", Scalar("Int", 1))))));
         var b = Input("B.esp", 1, Script("S", "Local"));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var config = result.Compare.Scripts[0].Properties.First(p => p.Name == "Config");
         Assert.NotNull(config.Children);
@@ -400,7 +401,7 @@ public sealed class VmadConflictClassifierTests
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
         var b = Input("B.esp", 1, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 2))));
 
-        var result = VmadConflictClassifier.Classify([a, b]);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4);
 
         var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
         Assert.Equal(ConflictThis.Override, refProp.CellStates["B.esp"]);
@@ -434,7 +435,7 @@ public sealed class VmadConflictClassifierTests
         var nullMembersVal = new VmadPropertyValue("Struct", "", null, Members: null);
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Config", nullMembersVal)));
 
-        var result = VmadConflictClassifier.Classify([a]);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4);
 
         var config = Assert.Single(result.Compare.Scripts[0].Properties);
         Assert.Equal("struct", config.Kind);
@@ -452,7 +453,7 @@ public sealed class VmadConflictClassifierTests
         var outer = StructVal(Prop("Inner", innerNull));
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Config", outer)));
 
-        var result = VmadConflictClassifier.Classify([a]);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4);
 
         var config = Assert.Single(result.Compare.Scripts[0].Properties);
         var nodes = Assert.IsAssignableFrom<IReadOnlyList<VmadPropertyNode>>(config.Raw!["A.esp"]);
@@ -473,7 +474,7 @@ public sealed class VmadConflictClassifierTests
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "GoodKeyword") : null;
 
-        var result = VmadConflictClassifier.Classify([a, b], Resolve);
+        var result = VmadConflictClassifier.Classify([a, b], GameRelease.Fallout4, Resolve);
 
         var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
         Assert.NotNull(refProp.Resolutions);
@@ -497,7 +498,7 @@ public sealed class VmadConflictClassifierTests
         static RecordLookupEntry? Resolve(string fk) =>
             fk == "000800:Base.esp" ? new RecordLookupEntry("kywd", "Good") : null;
 
-        var result = VmadConflictClassifier.Classify([a], Resolve);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4, Resolve);
 
         var refsProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Refs");
         Assert.Equal("array", refsProp.Kind);
@@ -514,7 +515,7 @@ public sealed class VmadConflictClassifierTests
     {
         var a = Input("A.esp", 0, Script("S", "Local", Prop("Ref", ObjVal("000800:Base.esp", 1))));
 
-        var result = VmadConflictClassifier.Classify([a]);
+        var result = VmadConflictClassifier.Classify([a], GameRelease.Fallout4);
 
         var refProp = result.Compare.Scripts[0].Properties.First(p => p.Name == "Ref");
         Assert.Null(refProp.Resolutions);

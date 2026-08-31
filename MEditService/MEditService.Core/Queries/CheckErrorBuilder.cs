@@ -1,10 +1,13 @@
 using MEditService.Core.Records;
+using Mutagen.Bethesda;
 
 namespace MEditService.Core.Queries;
 
 /// <summary>
-/// Computes a TES5Edit-style diagnostic string for FormLink fields read from the record index —
-/// mirrors TwbFormIDChecked.Check() in TES5Edit (wbInterface.pas:19850). Null when the value is clean.
+/// Computes a TES5Edit-style diagnostic string for FormLink fields read from the record index.
+/// Null when the value is clean. The resolved/wrong-type/unresolved distinction — including the
+/// #613 engine-hardcoded-range exemption — is TES5Edit's own read, confirmed at source in
+/// wbImplementation.pas's TwbFile.FileFormIDtoLoadOrderFormID and TwbFile.RemoveMainRecord.
 /// </summary>
 public static class CheckErrorBuilder
 {
@@ -12,25 +15,25 @@ public static class CheckErrorBuilder
     // not FindRecordType's per-table scan — resolve is a raw lookup; the not-found/wrong-type/
     // valid-type distinction is computed uniformly here via FormKeyResolution.From, the same factory
     // FieldDiff/VmadPropertyDiff resolution uses.
-    public static string? Build(FieldMetadata meta, object? value, Func<string, RecordLookupEntry?> resolve)
+    public static string? Build(FieldMetadata meta, object? value, Func<string, RecordLookupEntry?> resolve, GameRelease release)
     {
         var entries = new List<string>();
         FormRefPathBuilder.Walk(meta, value, "",
             (path, raw, allowsNull, validTypes) =>
             {
-                var err = CheckScalar(raw, allowsNull, validTypes, resolve);
+                var err = CheckScalar(raw, allowsNull, validTypes, resolve, release);
                 if (err != null) entries.Add(path.Length > 0 ? $"{path}: {err}" : err);
             });
         return entries.Count > 0 ? string.Join("; ", entries) : null;
     }
 
     private static string? CheckScalar(
-        string? value, bool allowsNull, IReadOnlyList<string> validTypes, Func<string, RecordLookupEntry?> resolve)
+        string? value, bool allowsNull, IReadOnlyList<string> validTypes, Func<string, RecordLookupEntry?> resolve, GameRelease release)
     {
         if (string.IsNullOrEmpty(value) || value == "Null")
             return allowsNull ? null : $"Found a NULL reference, expected: {string.Join(", ", validTypes)}";
 
-        var resolution = FormKeyResolution.From(resolve(value), validTypes);
+        var resolution = FormKeyResolution.From(value, resolve(value), validTypes, release);
         return resolution.State switch
         {
             FormKeyResolutionState.Unresolved => $"[{value}] <Error: Could not be resolved>",
