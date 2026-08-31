@@ -230,6 +230,61 @@ const partialFormCompareResult = {
   ],
 };
 
+// #622: a bitmask 'enum' field alongside an ordinary scalar field on the same tracked,
+// editable column — the exact contrast the issue reports (scalar/FormKey edits worked in the
+// same session, flags did not). enumBitValues aligned with enumValues per FlagCell's own
+// contract; value '3' (0b11) sets both A and B so the resting label reads "A, B".
+const flagsFieldMeta: FieldMetadata = {
+  name: 'Flags', type: 'enum', isArray: false, validFormKeyTypes: [],
+  enumValues: ['A', 'B'], enumBitValues: ['1', '2'], isBitmask: true,
+};
+
+const flagsCompareResult = {
+  conflictAll: 'NoConflict',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: false,
+      editorId: 'TestNPC',
+      fields: [
+        { metadata: strMeta, value: 'Original Name' },
+        { metadata: flagsFieldMeta, value: '3' },
+      ],
+      conflictThis: 'Master',
+    },
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'MyMod.esp', loadOrderIndex: 1, isWinner: true,
+      editorId: 'TestNPC',
+      fields: [
+        { metadata: strMeta, value: 'Override Name' },
+        { metadata: flagsFieldMeta, value: '3' },
+      ],
+      conflictThis: 'IdenticalToMaster',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Name',
+      values: { 'Fallout4.esm': 'Original Name', 'MyMod.esp': 'Override Name' },
+      winnerColumn: 'MyMod.esp', winnerValue: 'Override Name',
+      cellStates: {},
+    },
+    {
+      fieldName: 'Flags',
+      values: { 'Fallout4.esm': '3', 'MyMod.esp': '3' },
+      winnerColumn: 'MyMod.esp', winnerValue: '3',
+      cellStates: {},
+    },
+  ],
+};
+
+// Mirrors partialFormTrackedPluginsResponse — MyMod.esp must be tracked for editableColumns
+// to include it at all (RecordPanel.tsx's own four-condition gate), the same real computation
+// every other column-editability test in this file already relies on rather than a hand-fed set.
+const flagsTrackedPluginsResponse = [
+  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 1, isTracked: true },
+];
+
 const structFieldMeta: FieldMetadata = {
   name: 'Bounds',
   type: 'struct',
@@ -375,6 +430,45 @@ const vmadCapableCompareResult = {
     },
   ],
 };
+
+// #622 AC: VMAD script-level flags stay read-only — even on a tracked, editable column, so
+// the refusal is provably the row's own readOnly veto (vmadTreeAdapter.ts's FLAGS_META) and not
+// just the column having nowhere to write. Mirrors vmadCapableCompareResult but adds a real
+// script (buildVmadRows synthesizes its read-only Flags child from this) and marks the one
+// column tracked, the same real editableColumns computation the #622 flags-cell block above uses.
+const vmadFlagsCompareResult = {
+  conflictAll: 'OnlyOne',
+  hasVmad: true,
+  vmad: {
+    scripts: [
+      { name: 'ScriptA', flags: { 'MyMod.esp': 'Local' }, winnerColumn: 'MyMod.esp', cellStates: {}, properties: [] },
+    ],
+  },
+  overrides: [
+    {
+      formKey: '000001:MyMod.esp',
+      plugin: 'MyMod.esp',
+      loadOrderIndex: 0,
+      isWinner: true,
+      editorId: 'TestNPC',
+      fields: [{ metadata: strMeta, value: 'Test Name' }],
+      conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Name',
+      values: { 'MyMod.esp': 'Test Name' },
+      winnerColumn: 'MyMod.esp',
+      winnerValue: 'Test Name',
+      cellStates: {},
+    },
+  ],
+};
+
+const vmadFlagsTrackedPluginsResponse = [
+  { name: 'MyMod.esp', isImmutable: false, loadOrderIndex: 0, isTracked: true },
+];
 
 
 
@@ -655,6 +749,70 @@ describe('RecordPanel — Partial Form header toggle (#539)', () => {
   });
 });
 
+// #620 and this ticket's own triage both missed their mark at this exact layer: every prior
+// flags-cell test (FlagCell.test.tsx, DiffRow.test.tsx's "#426" block) hand-feeds
+// editableColumns/onEditCell/isBitmask rather than deriving them from a real load() response the
+// way editableColumns (RecordPanel.tsx's own four-condition gate) actually is in the running
+// extension. This block is the first test in the suite that drives the gesture through that real
+// computation — for a scalar cell (the issue's own working comparison case) and a flags cell
+// (the reported no-op) side by side on the identical column, so nothing but the field's own type
+// differs between the two.
+describe('RecordPanel — flags cell editing through real message plumbing (#622)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  // The control: pins the issue's own claim that scalar edits already work in the same
+  // session, using the identical tracked/editable column the flags assertions below use — so a
+  // regression in either direction (control or flags) is caught by the same fixture.
+  it('control: a scalar cell in a tracked, editable column opens an editable input on double click', async () => {
+    renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('Override Name'));
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('a flags cell in a tracked, editable column opens its checkbox multi-select on double click', async () => {
+    renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+
+    fireEvent.doubleClick(screen.getAllByText('A, B')[1]);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  it('F2 on a focused, editable flags cell opens the same multi-select', async () => {
+    renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+
+    const cell = screen.getAllByText('A, B')[1];
+    fireEvent.click(cell); // focuses only — a plain first click must not open (ADR-0034)
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(cell.closest('td')!, { key: 'F2' });
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  it('toggling a flag posts EDIT_FIELD with the toggled bitmask — working-tree dirt', async () => {
+    renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+    vi.mocked(vscode.postMessage).mockClear();
+
+    fireEvent.doubleClick(screen.getAllByText('A, B')[1]);
+    fireEvent.click(screen.getAllByRole('checkbox')[0]); // uncheck A (bit 1): 3 ^ 1 = 2
+
+    expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: WEBVIEW_TO_EXTENSION.EDIT_FIELD,
+      formKey: '000001:Fallout4.esm',
+      plugin: 'MyMod.esp',
+      fieldPath: 'Flags',
+      value: '2',
+    }));
+  });
+});
+
 describe('RecordPanel — conflict color coding', () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -906,6 +1064,33 @@ describe('RecordPanel — no VMAD section on a VMAD-incapable record type (issue
     vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
     renderPanel(vmadCapableCompareResult);
     await waitFor(() => expect(screen.getByText('Scripts (VMAD)')).toBeInTheDocument());
+  });
+});
+
+// vmadTreeAdapter.test.ts's own "the Flags field metadata is readOnly" test already pins this
+// at the metadata level (buildVmadRows' output, no rendering involved). This is the
+// interaction-level counterpart — real message-fed compare data, expanded through the actual
+// ▶ toggles, double-clicked through the actual DiffRow/ScalarCell gesture, on a column that
+// (per its own Name field, exercised the same way in the #622 block above) is genuinely
+// writable — so nothing but the row's own readOnly veto explains a refusal here.
+describe('RecordPanel — VMAD script Flags stay read-only on a tracked, editable column (#622)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('double click on the script Flags row opens nothing, even on an otherwise-editable column', async () => {
+    vi.stubGlobal('mEditFormKey', '000001:MyMod.esp');
+    renderPanel(vmadFlagsCompareResult, { plugins: vmadFlagsTrackedPluginsResponse });
+    await waitFor(() => expect(screen.getByText('Scripts (VMAD)')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('▶')); // expand the wrapper
+    await waitFor(() => expect(screen.getByText('ScriptA')).toBeInTheDocument());
+    fireEvent.click(screen.getByText('▶')); // expand the script row
+    await waitFor(() => expect(screen.getByText('Local')).toBeInTheDocument());
+
+    fireEvent.doubleClick(screen.getByText('Local'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByText('Local')).toBeInTheDocument();
   });
 });
 
