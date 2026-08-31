@@ -91,6 +91,15 @@ is the default arrow; drag is not advertised, exactly as in xEdit.
    2026-08-29 (#571): a deliberate divergence, not a platform-limitation one — Add's *default*
    changes, which "Baseline, not ceiling" above would otherwise forbid without an opt-in
    affordance. Recorded here rather than silently overridden.
+6. **NPC template-sourced fields are gated, not freely editable.** xEdit gates editability only
+   on internal-edit flags — template flags never affect it (`TwbElement.GetIsEditable` /
+   `TwbMainRecord.GetIsEditable`, `Core/wbImplementation.pas`; template flags carry only a
+   visibility callback, `wbTemplateActorDontShow`). mEdit instead treats fields covered by an
+   active template flag as not editable until that flag is cleared, warning when clearing a flag
+   whose covered fields conflict with the template. Maintainer ruling, 2026-08-31 (#479): a
+   correctness divergence, not preference — with the flag set, the engine sources those fields
+   from the template, so xEdit's permissiveness lets the user edit data the game demonstrably
+   ignores. Where xEdit's answer is demonstrably wrong about the domain, it is not a reference.
 
 Anything not on this list aligns.
 
