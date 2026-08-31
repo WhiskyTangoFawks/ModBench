@@ -299,7 +299,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NowMatches";
             onDisk.WriteToBinary(pluginPath);
 
-            await manager.ReindexPlugin("Plugin.esp");
+            var pluginKey = new PluginKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
+            await manager.ReindexPlugin(pluginKey);
 
             var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(1, result.Total);
@@ -328,7 +329,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             onDisk.Npcs.First(n => n.FormKey == npcKey).EditorID = "NoLongerMatches";
             onDisk.WriteToBinary(pluginPath);
 
-            await manager.ReindexPlugin("Plugin.esp");
+            var pluginKey = new PluginKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
+            await manager.ReindexPlugin(pluginKey);
 
             var result = manager.Reads!.Search(new RecordQuery(RecordTypes: ["npc_"], Limit: 10, Offset: 0));
             Assert.Equal(0, result.Total);
@@ -359,7 +361,8 @@ public class LoadOrderMirrorTests(TestPluginFixture fixture)
             manager.SetFilter("SELECT form_key FROM npc_");
             faulting.FaultNextCall = true;
 
-            var ex = await Record.ExceptionAsync(() => manager.ReindexPlugin("Plugin.esp"));
+            var pluginKey = new PluginKey("Plugin.esp", data.Plugins.Single(p => p.Name == "Plugin.esp").Origin);
+            var ex = await Record.ExceptionAsync(() => manager.ReindexPlugin(pluginKey));
 
             Assert.Null(ex);
             Assert.Contains(entries, e =>

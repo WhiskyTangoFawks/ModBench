@@ -6,7 +6,7 @@ namespace MEditService.Core.Plugins;
 /// consumer (<c>WorldspaceQueryService</c>, <c>ContainerChildQueryService</c> and
 /// <c>RecordQueryService</c>'s own <c>RequireRepository</c>/<c>RequireLoadOrder</c>, and
 /// <see cref="LoadOrderMirror"/>'s own <c>CreatePlugin</c>/<c>ReindexPlugin(PluginKey)</c>/
-/// <c>ApplyFilter</c>/<c>RequirePlugin</c>), each with its own copy of the same message.
+/// <c>ApplyFilter</c>), each with its own copy of the same message.
 ///
 /// <para>Derives from <see cref="InvalidOperationException"/> rather than replacing it as the write
 /// endpoints' vocabulary for this failure — every existing <c>catch (InvalidOperationException)</c>

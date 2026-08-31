@@ -85,22 +85,11 @@ public interface ILoadOrderMirror
     PluginResponse CreatePlugin(string name, string path, string origin);
 
     /// <summary>
-    /// Re-reads <paramref name="plugin"/> from disk and re-indexes it into the record index,
-    /// then recomputes winners. Call after committing a prepared save to disk.
-    /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
-    /// Throws <see cref="KeyNotFoundException"/> if the load order does not name the plugin.
-    /// </summary>
-    Task ReindexPlugin(string plugin);
-
-    /// <summary>
     /// #587 / ADR-0001: re-reads exactly the copy <paramref name="key"/> names and re-indexes it,
     /// then recomputes winners — the runtime mirror's answer to an indexed binary whose bytes moved
-    /// under a held load order (MO2, xEdit, Steam, or the user).
-    ///
-    /// <para>Keyed by <see cref="PluginKey"/> rather than by filename, unlike
-    /// <see cref="ReindexPlugin(string)"/>: that overload resolves among load-order members because
-    /// it answers "which file does a write land on", and this one already knows which physical copy
-    /// changed — including a losing one, which the filename overload deliberately cannot reach.</para>
+    /// under a held load order (MO2, xEdit, Steam, or the user). Keyed by <see cref="PluginKey"/>
+    /// rather than by filename, so it can reach a losing copy too, not only whichever copy a bare
+    /// filename would resolve to.
     /// Throws <see cref="NoLoadOrderException"/> if no load order is held.
     /// Throws <see cref="KeyNotFoundException"/> if no such copy is held.
     /// </summary>

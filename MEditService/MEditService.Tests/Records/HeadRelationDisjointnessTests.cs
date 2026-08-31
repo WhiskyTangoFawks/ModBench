@@ -43,7 +43,7 @@ public sealed class HeadRelationDisjointnessTests
             mod.Mirror.Index!.Search(new RecordQuery(Plugin: mod.Plugin, Limit: 100))
                 .Items.Single(r => r.FormKey == mod.Npc.ToString()).WorkingTreeState);
 
-        await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(TrackedModFixture.PluginName);
+        await ((ILoadOrderMirror)mod.Mirror).ReindexPlugin(mod.Plugin);
 
         var atHead = mod.Mirror.Index!.At(RecordRef.Head)
             .Search(new RecordQuery(Plugin: mod.Plugin, Limit: int.MaxValue))

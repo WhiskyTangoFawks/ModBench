@@ -47,7 +47,7 @@ public sealed class LoadOrder : ILoadOrder
     // #274: the load order is read while it is being reconciled, so everything a reader touches is
     // published as an immutable snapshot rather than as the live collection. Copy-on-write, not
     // copy-on-read: opening a plugin happens a few hundred times per cold reconcile, while
-    // GetPlugins, PluginOriginResolver, RequirePlugin and BuildTypedLinkCache walk these lists on
+    // GetPlugins, PluginOriginResolver and BuildTypedLinkCache walk these lists on
     // essentially every request. Without this, a read that merely coincided with a plugin landing
     // threw "Collection was modified" — a load-order-sized race, not a rare one.
     private readonly Lock _mutation = new();
