@@ -92,10 +92,6 @@ let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefine
 // record filter (a second, independent narrowing axis) has to be able to add itself to this
 // view's readout from `activate`'s own setFilterActive, which runs before the view exists.
 let pluginsNameFilter: NameFilter | undefined;
-// The in-flight reconcile's abort handle. Module level for the same reason as the above —
-// exitToLoadout is where a reconcile gets deliberately abandoned, and it is module-level. Replaced
-// by each new reconcile; a superseded one does not need aborting, since the backend answers it 409.
-let loadAbort: AbortController | undefined;
 // Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
 // folder — rebuilt wholesale by registerHeldTrackedRepositories below, same "no stale
 // carryover" posture as loadOrderSync's own match map. Kept so a successful field
@@ -302,8 +298,7 @@ function exitToLoadout(): void {
   // Abandon any reconcile still in flight *first* — it aborts the PUT outright, so the
   // reconcile stops polling and returns 'abandoned' rather than discovering a killed backend as a
   // network error and reporting that to the user as a failure.
-  loadAbort?.abort();
-  loadAbort = undefined;
+  loadOrderSync?.abandon();
   // The chevrons go with the backend. Cleared before it stops, so no row can be expanded
   // into a backend that is on its way down. The immutable set goes with it.
   pluginsTree?.setLoadOrder(undefined);
@@ -2313,32 +2308,13 @@ async function applyLoadOrderToTree(
   }
 }
 
-/** Arm this launch's (or reconcile's) cancellation, and the check every step past an
- *  await makes.
- *
- *  Armed **before the first await**, not just before the PUT. A launch has two phases — bring the
- *  backend up, then walk the mod tree and reconcile — and closing mEdit during the first one has
- *  to be honoured too: a backend spawn
- *  plus a filesystem walk is a realistic window to land in. Armed late, `exitToLoadout`'s `abort()`
- *  finds nothing to cancel, and the stale launch runs on past the close to meet the backend it had
- *  just stopped — reporting "Backend failed to start" for something the user deliberately did.
- *
- *  The controller is held locally as well as in `loadAbort`, because that module-level slot
- *  belongs to whichever reconcile is newest; only the closure below names *this* one's own
- *  cancellation. Every exit past one is silent and touches nothing — the close has already torn
- *  the view down, so there is nothing to report and nothing to reset. Both failure modes (the
- *  spurious toast, and repopulating a tree the user just cleared) come from continuing. */
-function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSignal; abandoned: () => boolean } {
-  const abort = new AbortController();
-  loadAbort = abort;
-  return {
-    signal: abort.signal,
-    abandoned: () => {
-      if (!abort.signal.aborted) return false;
-      outputChannel.info('[extension] the reconcile was abandoned before it landed; leaving the closed view alone');
-      return true;
-    },
-  };
+/** The line every abandoned check point used to get for free from `armLoadAbort`'s own
+ *  `abandoned()` closure, back when arming lived here. Now that `loadOrderSync.arm()` returns a
+ *  pure check (it cannot hold an `outputChannel` — ADR-0044's "no VS Code types in the interface"),
+ *  each call site logs explicitly instead; same message, same one-shot-per-abandonment call count,
+ *  since a reconcile returns as soon as the first check point notices. */
+function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
+  outputChannel.info('[extension] the reconcile was abandoned before it landed; leaving the closed view alone');
 }
 
 /** The progressive-reconcile tick handler, wired to this extension's own surfaces. Whether a
@@ -2406,10 +2382,10 @@ function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
     return run;
   };
   const reconcileOnce = async (): Promise<ReconcileOutcome> => {
-    const { signal, abandoned } = armLoadAbort(outputChannel);
+    const { signal, abandoned } = loadOrderSync!.arm();
     const treeProgress = makeTreeProgressHandler();
     const gd = await gameDirResolver.resolve();
-    if (abandoned()) return 'abandoned';
+    if (abandoned()) { reportAbandoned(outputChannel); return 'abandoned'; }
     if (!gd) {
       void vscode.window.showErrorMessage(
         'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
@@ -2419,7 +2395,7 @@ function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
     say('Building the load order snapshot…');
     const plugins = await buildLoadOrderSnapshot(modlistSource, instanceRoot, gd.dataFolder, (entries, root) =>
       buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)));
-    if (abandoned()) return 'abandoned';
+    if (abandoned()) { reportAbandoned(outputChannel); return 'abandoned'; }
     // The PUT is one blocking call that opens and indexes every copy new to the load order — the
     // slow part on a cold start, SQL-only otherwise. The polled status (treeProgress.onProgress)
     // takes over from here, applying chevrons/failures to the tree as they land.
@@ -2462,14 +2438,14 @@ function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
  *  rather than leaving each of its callers to wrap it, and reports its steps through `say`. */
 function makeEnterEditing(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
   const enter = async (): Promise<void> => {
-    const { abandoned } = armLoadAbort(outputChannel);
+    const { abandoned } = loadOrderSync!.arm();
     revealLog(); // the launch can take a while; let the user watch the step log
     say('Starting backend…');
     outputChannel.info('[extension] entering editing: starting backend');
     await backendManager!.start();
     // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
     // would otherwise fail this check and report the stop it asked for as a startup failure.
-    if (abandoned()) return;
+    if (abandoned()) { reportAbandoned(outputChannel); return; }
     if (!backendManager!.isHealthy) {
       exitToLoadout(); // tear down the half-started backend and reset the view
       void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');

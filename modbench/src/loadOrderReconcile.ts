@@ -45,6 +45,17 @@ export interface LoadOrderSync {
    *  or decided the map it hands over; this only ever stores it. `undefined` clears it back to
    *  "matches everywhere", the same value the property itself takes when nothing has ever landed. */
   setMatches(map: Map<string, boolean> | undefined): void;
+  /** Arms a fresh cancellation scope for one reconcile, replacing whatever scope a previous
+   *  reconcile armed — a superseded reconcile does not need aborting, since the backend answers
+   *  it 409 (so arming again never aborts the scope it replaces, only stops `abandon()` from
+   *  reaching it). Call before the first await of the reconcile's own sequencing, not just before
+   *  the PUT: a launch has an earlier phase (bring the backend up) that must honour Close mEdit
+   *  too. */
+  arm(): { signal: AbortSignal; abandoned: () => boolean };
+  /** Cancel whatever reconcile is currently armed — Close mEdit's own gesture — without touching
+   *  future `request()`/`flush()` calls; a later Launch mEdit still finds this object able to
+   *  serve them. A silent no-op if nothing is armed, or if the armed reconcile already finished. */
+  abandon(): void;
 }
 
 export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
@@ -53,6 +64,7 @@ export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
   let pending = false;
   let disposed = false;
   let matchMap: Map<string, boolean> | undefined;
+  let armed: AbortController | undefined;
 
   const run = async (): Promise<void> => {
     if (!deps.isReceiving()) {
@@ -111,6 +123,18 @@ export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
     },
     setMatches(map) {
       matchMap = map;
+    },
+    arm() {
+      const controller = new AbortController();
+      armed = controller;
+      return {
+        signal: controller.signal,
+        abandoned: () => controller.signal.aborted,
+      };
+    },
+    abandon() {
+      armed?.abort();
+      armed = undefined;
     },
   };
 }

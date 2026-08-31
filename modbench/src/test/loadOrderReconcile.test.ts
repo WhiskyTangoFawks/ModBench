@@ -144,3 +144,51 @@ describe('createLoadOrderSync — matches/setMatches', () => {
     expect(sync.matches('a.esp')).toBeUndefined();
   });
 });
+
+// The in-flight reconcile's abort handle used to be a module-level `let loadAbort` in
+// extension.ts, replaced by each new reconcile (armLoadAbort) and cancelled by exitToLoadout —
+// two lifecycles that must stay independent: cancelling the in-flight reconcile must never
+// disable a later request()/flush() the same object goes on to serve (launch → close → launch).
+describe('createLoadOrderSync — arm/abandon', () => {
+  const make = () => createLoadOrderSync({
+    isReceiving: () => true, send: vi.fn().mockResolvedValue(undefined), debounceMs: 100, log: vi.fn(),
+  });
+
+  it('a freshly armed scope is not abandoned', () => {
+    const sync = make();
+
+    const { signal, abandoned } = sync.arm();
+
+    expect(signal.aborted).toBe(false);
+    expect(abandoned()).toBe(false);
+  });
+
+  it('abandon() aborts the most recently armed scope', () => {
+    const sync = make();
+    const { signal, abandoned } = sync.arm();
+
+    sync.abandon();
+
+    expect(signal.aborted).toBe(true);
+    expect(abandoned()).toBe(true);
+  });
+
+  it('abandon() is a silent no-op when nothing has ever been armed', () => {
+    const sync = make();
+
+    expect(() => sync.abandon()).not.toThrow();
+  });
+
+  // A superseded reconcile does not need aborting — the backend answers it 409 (armLoadAbort's
+  // own former comment) — so arming again must not reach back and abort the scope it replaces.
+  it('arming again does not abort the previous scope, only replaces it', () => {
+    const sync = make();
+    const first = sync.arm();
+    const second = sync.arm();
+
+    sync.abandon();
+
+    expect(first.signal.aborted).toBe(false);
+    expect(second.signal.aborted).toBe(true);
+  });
+});
