@@ -18,8 +18,9 @@ On ship: fold outcome into the surface spec — spec always = current behavior.
 
 - **One issue → one milestone**, or none. Finer hierarchy (epic→sub-epic): sub-issues/labels, not milestones.
 - **Assigning a milestone is how an issue gets prioritized** — a real step of triage, not bookkeeping.
-  When the right milestone is obvious, apply it at filing or triage time. Bugs and tech debt don't
-  require one — none is a valid state; don't force a fit.
+  When the right milestone is obvious, apply it at filing or triage time. **An enhancement always
+  carries a milestone** — unmilestoned work is only valid for `bug` and `tech debt` (maintainer
+  ruling, 2026-08-31); don't force a fit for those.
 - **Order = title prefix** (no native priority field). Numbered = prioritized/sequenced (`1 — Mod-management maturity`…); unnumbered = speculative, sorts below all numbered.
 - Epic narrative = **milestone description**. Unscheduled roadmap items = real issues under the epic, not prose.
 
