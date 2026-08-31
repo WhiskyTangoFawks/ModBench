@@ -826,13 +826,15 @@ describe('PluginListProvider — externally-appeared plugin picked up as an appe
   });
 
   // MO2 users are ordinarily on a case-insensitive filesystem, so a plugins.txt line differing
-  // only in case from the on-disk filename (here, "base.esp" vs. the real "Base.esp") is a
+  // only in case from the on-disk filename (here, "BASE.esp" vs. the real "Base.esp") is a
   // routine occurrence, not a corrupted profile — the fold-based `knownFolded` lookup must still
-  // recognise them as the same plugin, or the user sees a spurious duplicate row.
+  // recognise them as the same plugin, or the user sees a spurious duplicate row. Genuinely
+  // case-differing (not just already-lowercase, which would pass even with the `.toLowerCase()`
+  // fold reverted — a mutation that never exercises the fold proves nothing).
   it('a plugins.txt line differing only in case from the on-disk filename is not appended a second time', async () => {
-    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*base.esp\r\n');
+    await writeFile(join(dir, 'profiles', 'Default', 'plugins.txt'), '*BASE.esp\r\n');
     const nodes = await pluginNodes(provider());
-    expect(nodes.map((n) => n.plugin.name)).toEqual(['base.esp']);
+    expect(nodes.map((n) => n.plugin.name)).toEqual(['BASE.esp']);
   });
 
   // The checkbox affordance for a synthesized row is out of scope (filed separately for a
