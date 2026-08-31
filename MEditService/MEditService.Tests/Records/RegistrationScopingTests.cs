@@ -146,7 +146,6 @@ public class RegistrationScopingTests
         Assert.Empty(repo.Search(new RecordQuery(Plugin: BetaKey, Limit: 1000)).Items);
         Assert.DoesNotContain(repo.Search(new RecordQuery(Limit: 1000)).Items, r => r.Plugin == BetaKey.Name);
         Assert.Empty(repo.GetRecordTypeCounts(BetaKey));
-        Assert.Empty(repo.GetContestedFormKeys());
         Assert.Empty(repo.GetNativeFormKeys(BetaKey));
         Assert.Empty(repo.GetEffectiveMasters(BetaKey));
 
@@ -215,7 +214,6 @@ public class RegistrationScopingTests
         Assert.NotNull(repo.GetPlacement(fx.BetaPlacedFk, BetaKey));
         Assert.NotEmpty(repo.GetContainerChildren(BetaKey, fx.BetaQuestFk));
         Assert.True(RowsFor(repo, "\"npc_\"", BetaKey) > 0);
-        Assert.Contains(fx.SharedNpcFk, repo.GetContestedFormKeys());
     }
 
     // Unindex is the file-gone verb: the inverse of Index, rows and registration alike.

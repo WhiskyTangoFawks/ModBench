@@ -126,46 +126,6 @@ public class FilterTests(TestPluginFixture fixture)
         Assert.Equal(1, count);
     }
 
-    // --- SetFilter: filter injection into GetContestedFormKeys ---
-
-    [Fact]
-    public void GetContestedFormKeys_WithActiveFilter_ExcludesUnmatchedContestedFormKey()
-    {
-        var dataFolder = Path.Combine(Path.GetTempPath(), $"medit-duckdb-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(dataFolder);
-        try
-        {
-            var modA = new Fallout4Mod(ModKey.FromFileName("PluginA.esm"), Fallout4Release.Fallout4);
-            var npc = modA.Npcs.AddNew("SharedNPC");
-            var npcKey = npc.FormKey;
-            modA.WriteToBinary(Path.Combine(dataFolder, "PluginA.esm"));
-
-            var modALoaded = (IModGetter)Fallout4Mod.CreateFromBinaryOverlay(
-                new ModPath(ModKey.FromFileName("PluginA.esm"), Path.Combine(dataFolder, "PluginA.esm")),
-                Fallout4Release.Fallout4);
-
-            var modB = new Fallout4Mod(ModKey.FromFileName("PluginB.esp"), Fallout4Release.Fallout4);
-            modB.ModHeader.MasterReferences.Add(new MasterReference
-            { Master = ModKey.FromFileName("PluginA.esm") });
-            modB.Npcs.Set(modALoaded.EnumerateMajorRecords<INpcGetter>().First().DeepCopy());
-
-            using var repo = new DuckDbRecordIndex(Reflector, Ddl, NullLogger.Instance);
-            repo.Initialize(GameRelease.Fallout4);
-            repo.Index(modALoaded, Registration.Participating(0), new PluginKey(modALoaded.ModKey.FileName.ToString(), "Data"));
-            repo.Index(modB, Registration.Participating(1), new PluginKey(modB.ModKey.FileName.ToString(), "Data"));
-            repo.UpdateWinners();
-            Assert.Contains(npcKey.ToString(), repo.GetContestedFormKeys());
-
-            repo.SetFilter("SELECT 'NonExistentFormKey:000000' AS form_key");
-
-            Assert.DoesNotContain(npcKey.ToString(), repo.GetContestedFormKeys());
-        }
-        finally
-        {
-            Directory.Delete(dataFolder, recursive: true);
-        }
-    }
-
     // --- GetPluginsWithMatchingRecords ---
 
     [Fact]

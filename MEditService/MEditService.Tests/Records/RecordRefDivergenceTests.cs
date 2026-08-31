@@ -173,23 +173,12 @@ public sealed class RecordRefDivergenceTests : IDisposable
             repo.At(RecordRef.Head).GetDocument(untouched, basePlugin)!.Body);
     }
 
-    // Only these tests exercise the At(RecordRef.Head) path of the 8 relation-parameterized twins
-    // (GetRecordTypeCounts, GetContestedFormKeys, GetPluginsWithMatchingRecords, GetNativeFormKeys,
+    // Only these tests exercise the At(RecordRef.Head) path of the 7 relation-parameterized twins
+    // (GetRecordTypeCounts, GetPluginsWithMatchingRecords, GetNativeFormKeys,
     // GetEffectiveMasters, GetWorldspaceCells, GetInteriorCells, GetCellReferences) — everything
-    // else in the suite exercises them at Effective only. Five are covered below and three
+    // else in the suite exercises them at Effective only. Four are covered below and three
     // cell/placement-table ones in RecordRefDivergenceCellReadsTests, so a relation plumbed wrong
     // has something to fail against instead of passing by construction.
-
-    [Fact]
-    public void AtHead_GetContestedFormKeys_StillCountsAnEffectivelyDeletedOverride()
-    {
-        using var repo = RepositoryWithWinnerOverrideDeleted();
-
-        // Effective: Winner.esp's override is gone, so KeepMe is back to a single Base.esm row —
-        // no longer contested. Head: the committed snapshot still holds both rows.
-        Assert.DoesNotContain(_keptNpcFormKey.ToString(), repo.GetContestedFormKeys());
-        Assert.Contains(_keptNpcFormKey.ToString(), repo.At(RecordRef.Head).GetContestedFormKeys());
-    }
 
     [Fact]
     public void AtHead_GetPluginsWithMatchingRecords_StillNamesThePluginWithAnEffectivelyDeletedOverride()

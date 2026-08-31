@@ -646,27 +646,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return counts;
         }
 
-        // Same filter-narrowing invariant as GetRecordTypeCounts above — routed through the same
-        // BuildWhere, so a filter that prunes a FormKey out of Search/counts prunes it out of the
-        // Conflicts node's candidate population too, with nothing bespoke to drift out of sync.
-        public IReadOnlyList<string> GetContestedFormKeys()
-        {
-            var (where, paramValues) = BuildWhere(null, null, owner._filterActive, null, recordTypes: null);
-            using var cmd = owner.Connection.CreateCommand();
-            cmd.CommandText = $"""
-                SELECT form_key FROM {records}{where}
-                GROUP BY form_key
-                HAVING COUNT(*) > 1
-                """;
-            AddParams(cmd, paramValues);
-            using var reader = cmd.ExecuteReader();
-
-            var formKeys = new List<string>();
-            while (reader.Read())
-                formKeys.Add(reader.GetString(0));
-            return formKeys;
-        }
-
         public RecordLookupEntry? Resolve(string formKey) => owner.ResolveFormKey(formKey);
 
         public IReadOnlyList<ReferenceResult> GetReferencedBy(string targetFormKey) => owner.GetReferences(targetFormKey);
@@ -1001,8 +980,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
 
     public IReadOnlyList<RecordTypeCount> GetRecordTypeCounts(PluginKey plugin) =>
         At(RecordRef.Effective).GetRecordTypeCounts(plugin);
-
-    public IReadOnlyList<string> GetContestedFormKeys() => At(RecordRef.Effective).GetContestedFormKeys();
 
     public RecordLookupEntry? Resolve(string formKey) => At(RecordRef.Effective).Resolve(formKey);
 
