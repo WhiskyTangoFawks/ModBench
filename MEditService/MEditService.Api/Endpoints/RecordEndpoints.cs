@@ -193,207 +193,217 @@ public static class RecordEndpoints
         return app;
     }
 
+    // The write path touches a file inside a live git working tree that Modbench does not own
+    // exclusively (root CLAUDE.md) — it can be locked by another tool, replaced, or sitting on a
+    // mount that just went away — and there is no global exception middleware to shape what comes
+    // back. Every sibling write endpoint here catches and maps rather than letting one escape as a
+    // bodyless 500 that a client cannot tell apart from the backend having died. SourceFreshness
+    // already degrades on this same exception set on the read side, so this is the write side's
+    // equivalent rather than a new policy. #637: the shared skeleton (decode → log → validate →
+    // try/Applied/catch×3) lives in WriteEndpointMapping.Execute; each method below supplies only
+    // what's genuinely its own — the log line, the validation, the service call, and the
+    // success/failure message shapes.
     internal static IResult EditField(
         string formKey, RecordFieldEditRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Received EditRecordField for {FormKey}.{FieldPath} in {Plugin} ({Origin})",
-                decoded, request.FieldPath, request.Plugin, request.Origin);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
-            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(request.FieldPath))
-            return Results.Problem("A field path is required.", statusCode: 400);
-
-        // The write path touches a file inside a live git working tree that Modbench does not own
-        // exclusively (root CLAUDE.md) — it can be locked by another tool, replaced, or sitting on a
-        // mount that just went away — and there is no global exception middleware to shape what
-        // comes back. Every sibling write endpoint here catches and maps rather than letting one
-        // escape as a bodyless 500 that a client cannot tell apart from the backend having died.
-        // SourceFreshness already degrades on this same exception set on the read side, so this is
-        // the write side's equivalent rather than a new policy.
-        try
-        {
-            var result = edits.EditField(
-                new PluginKey(request.Plugin, request.Origin), decoded, request.FieldPath, request.Value);
-
-            return result.Applied
-                ? Results.Ok(new RecordFieldEditResponse(true, decoded, request.FieldPath))
-                : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not write the source file while editing {FormKey}.{FieldPath}",
-                decoded, request.FieldPath);
-            return WriteEndpointMapping.WriteFailure($"Could not write the source file for {decoded}: {ex.Message}");
-        }
-        catch (InvalidOperationException ex)
-        {
-            // 503, matching every sibling's own mapping for it: the load order went away underneath the
-            // request, which is a "not right now", never a bad request.
-            logger.LogError(ex, "No usable loadOrder while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return WriteEndpointMapping.Execute(
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Received EditRecordField for {FormKey}.{FieldPath} in {Plugin} ({Origin})",
+                        decoded, request.FieldPath, request.Plugin, request.Origin);
+                }
+            },
+            validate: () =>
+            {
+                if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
+                    return Results.Problem("Plugin name and origin are required.", statusCode: 400);
+                if (string.IsNullOrWhiteSpace(request.FieldPath))
+                    return Results.Problem("A field path is required.", statusCode: 400);
+                return null;
+            },
+            execute: () => edits.EditField(
+                new PluginKey(request.Plugin, request.Origin), decoded, request.FieldPath, request.Value),
+            onApplied: result => Results.Ok(new RecordFieldEditResponse(true, decoded, request.FieldPath)),
+            onWriteFailure: ex =>
+            {
+                logger.LogError(ex, "Could not write the source file while editing {FormKey}.{FieldPath}",
+                    decoded, request.FieldPath);
+                return WriteEndpointMapping.WriteFailure($"Could not write the source file for {decoded}: {ex.Message}");
+            },
+            onMalformedFormKey: null,
+            onNoLoadOrder: ex =>
+            {
+                // 503, matching every sibling's own mapping for it: the load order went away
+                // underneath the request, which is a "not right now", never a bad request.
+                logger.LogError(ex, "No usable loadOrder while editing {FormKey}.{FieldPath}", decoded, request.FieldPath);
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            });
     }
 
     internal static IResult DeleteRecord(string formKey, RecordDeleteRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Received DeleteRecord for {FormKey} in {Plugin} ({Origin})", decoded, request.Plugin, request.Origin);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
-            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-
-        try
-        {
-            var result = edits.DeleteRecord(new PluginKey(request.Plugin, request.Origin), decoded);
-            return result.Applied ? Results.Ok(new RecordDeleteResponse(true, decoded)) : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not delete the source file for {FormKey}", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not delete the source file for {decoded}: {ex.Message}");
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder while deleting {FormKey}", decoded);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return WriteEndpointMapping.Execute(
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("Received DeleteRecord for {FormKey} in {Plugin} ({Origin})", decoded, request.Plugin, request.Origin);
+                }
+            },
+            validate: () =>
+                string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin)
+                    ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
+                    : null,
+            execute: () => edits.DeleteRecord(new PluginKey(request.Plugin, request.Origin), decoded),
+            onApplied: result => Results.Ok(new RecordDeleteResponse(true, decoded)),
+            onWriteFailure: ex =>
+            {
+                logger.LogError(ex, "Could not delete the source file for {FormKey}", decoded);
+                return WriteEndpointMapping.WriteFailure($"Could not delete the source file for {decoded}: {ex.Message}");
+            },
+            onMalformedFormKey: null,
+            onNoLoadOrder: ex =>
+            {
+                logger.LogError(ex, "No usable loadOrder while deleting {FormKey}", decoded);
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            });
     }
 
     internal static IResult RenumberRecord(string formKey, RecordRenumberRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Received RenumberRecord for {FormKey} in {Plugin} ({Origin}) to {NewFormKey}",
-                decoded, request.Plugin, request.Origin, request.NewFormKey ?? "(auto)");
-        }
-
-        if (string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin))
-            return Results.Problem("Plugin name and origin are required.", statusCode: 400);
-
-        try
-        {
-            var result = edits.RenumberRecord(new PluginKey(request.Plugin, request.Origin), decoded, request.NewFormKey);
-            return result.Applied
-                ? Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!))
-                : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // A partial-cascade failure lands here too, with the richer message
-            // RecordEditService.RenumberRecord already built naming which repos have dirt.
-            logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
-            return WriteEndpointMapping.WriteFailure(ex.Message);
-        }
-        // request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
-        // FormKey.Factory (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a
-        // malformed value throws ArgumentException there. Malformed syntax, not a well-formed-but-
-        // refused RecordEditRefusal, so this matches PluginEndpoints.CreatePlugin's own catch shape
-        // (400), never this file's own Refusal's 422.
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Malformed FormKey renumbering {FormKey}", decoded);
-            return WriteEndpointMapping.MalformedFormKey(ex);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+        return WriteEndpointMapping.Execute(
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Received RenumberRecord for {FormKey} in {Plugin} ({Origin}) to {NewFormKey}",
+                        decoded, request.Plugin, request.Origin, request.NewFormKey ?? "(auto)");
+                }
+            },
+            validate: () =>
+                string.IsNullOrWhiteSpace(request.Plugin) || string.IsNullOrWhiteSpace(request.Origin)
+                    ? Results.Problem("Plugin name and origin are required.", statusCode: 400)
+                    : null,
+            execute: () => edits.RenumberRecord(new PluginKey(request.Plugin, request.Origin), decoded, request.NewFormKey),
+            onApplied: result => Results.Ok(new RecordRenumberResponse(true, decoded, result.NewFormKey!)),
+            onWriteFailure: ex =>
+            {
+                // A partial-cascade failure lands here too, with the richer message
+                // RecordEditService.RenumberRecord already built naming which repos have dirt —
+                // ex.Message goes straight through, unwrapped, unlike every sibling's own
+                // onWriteFailure here.
+                logger.LogError(ex, "Could not complete renumbering {FormKey}", decoded);
+                return WriteEndpointMapping.WriteFailure(ex.Message);
+            },
+            // request.NewFormKey is xEdit's own typed-FormID path, reaching Mutagen's
+            // FormKey.Factory (RecordEditService.RefuseIfNotNativeTarget) with no TryFactory guard — a
+            // malformed value throws ArgumentException there. Malformed syntax, not a well-formed-but-
+            // refused RecordEditRefusal, so this matches PluginEndpoints.CreatePlugin's own catch shape
+            // (400), never this file's own Refusal's 422.
+            onMalformedFormKey: ex =>
+            {
+                logger.LogError(ex, "Malformed FormKey renumbering {FormKey}", decoded);
+                return WriteEndpointMapping.MalformedFormKey(ex);
+            },
+            onNoLoadOrder: ex =>
+            {
+                logger.LogError(ex, "No usable loadOrder while renumbering {FormKey}", decoded);
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            });
     }
 
     internal static IResult CopyRecordAsOverride(
         string formKey, RecordCopyAsOverrideRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Received CopyRecordAsOverride for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
-                decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
-            return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
-            return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
-
-        try
-        {
-            var result = edits.CopyRecordAsOverride(
+        return WriteEndpointMapping.Execute(
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Received CopyRecordAsOverride for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
+                        decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+                }
+            },
+            validate: () =>
+            {
+                if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
+                    return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
+                if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
+                    return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
+                return null;
+            },
+            execute: () => edits.CopyRecordAsOverride(
                 new PluginKey(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginKey(request.DestinationPlugin, request.DestinationOrigin));
-            return result.Applied
-                ? Results.Ok(new RecordCopyAsOverrideResponse(true, decoded))
-                : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not write the source file while copying {FormKey} as an override", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder while copying {FormKey} as an override", decoded);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+                new PluginKey(request.DestinationPlugin, request.DestinationOrigin)),
+            onApplied: result => Results.Ok(new RecordCopyAsOverrideResponse(true, decoded)),
+            onWriteFailure: ex =>
+            {
+                logger.LogError(ex, "Could not write the source file while copying {FormKey} as an override", decoded);
+                return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
+            },
+            onMalformedFormKey: null,
+            onNoLoadOrder: ex =>
+            {
+                logger.LogError(ex, "No usable loadOrder while copying {FormKey} as an override", decoded);
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            });
     }
 
     internal static IResult CopyRecordAsNewRecord(
         string formKey, RecordCopyAsNewRecordRequest request, RecordEditService edits, ILogger logger)
     {
         var decoded = Uri.UnescapeDataString(formKey);
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Received CopyRecordAsNewRecord for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
-                decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
-        }
-
-        if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
-            return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
-        if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
-            return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
-
-        try
-        {
-            var result = edits.CopyRecordAsNewRecord(
+        return WriteEndpointMapping.Execute(
+            logReceived: () =>
+            {
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation(
+                        "Received CopyRecordAsNewRecord for {FormKey} from {SourcePlugin} ({SourceOrigin}) into {DestinationPlugin} ({DestinationOrigin})",
+                        decoded, request.SourcePlugin, request.SourceOrigin, request.DestinationPlugin, request.DestinationOrigin);
+                }
+            },
+            validate: () =>
+            {
+                if (string.IsNullOrWhiteSpace(request.SourcePlugin) || string.IsNullOrWhiteSpace(request.SourceOrigin))
+                    return Results.Problem("Source plugin name and origin are required.", statusCode: 400);
+                if (string.IsNullOrWhiteSpace(request.DestinationPlugin) || string.IsNullOrWhiteSpace(request.DestinationOrigin))
+                    return Results.Problem("Destination plugin name and origin are required.", statusCode: 400);
+                return null;
+            },
+            execute: () => edits.CopyRecordAsNewRecord(
                 new PluginKey(request.SourcePlugin, request.SourceOrigin), decoded,
-                new PluginKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey);
-            return result.Applied
-                ? Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, result.NewFormKey!))
-                : WriteEndpointMapping.Refusal(result);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
-            return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
-        }
-        // request.RequestedFormKey is xEdit's own typed-FormID path, sharing
-        // RecordEditService.CreateRecord/RenumberRecord's own ResolveTargetFormKey/
-        // RefuseIfNotNativeTarget resolution — reaches Mutagen's FormKey.Factory with no TryFactory
-        // guard, so a malformed value throws ArgumentException there too. Same 400 shape as the other
-        // two typed-FormID endpoints, never this file's own Refusal's 422.
-        catch (ArgumentException ex)
-        {
-            logger.LogError(ex, "Malformed FormKey copying {FormKey} as a new record", decoded);
-            return WriteEndpointMapping.MalformedFormKey(ex);
-        }
-        catch (InvalidOperationException ex)
-        {
-            logger.LogError(ex, "No usable loadOrder while copying {FormKey} as a new record", decoded);
-            return WriteEndpointMapping.NoLoadOrder(ex);
-        }
+                new PluginKey(request.DestinationPlugin, request.DestinationOrigin), request.RequestedFormKey),
+            onApplied: result => Results.Ok(new RecordCopyAsNewRecordResponse(true, decoded, result.NewFormKey!)),
+            onWriteFailure: ex =>
+            {
+                logger.LogError(ex, "Could not write the source file while copying {FormKey} as a new record", decoded);
+                return WriteEndpointMapping.WriteFailure($"Could not write the source file for the copy: {ex.Message}");
+            },
+            // request.RequestedFormKey is xEdit's own typed-FormID path, sharing
+            // RecordEditService.CreateRecord/RenumberRecord's own ResolveTargetFormKey/
+            // RefuseIfNotNativeTarget resolution — reaches Mutagen's FormKey.Factory with no TryFactory
+            // guard, so a malformed value throws ArgumentException there too. Same 400 shape as the other
+            // two typed-FormID endpoints, never this file's own Refusal's 422.
+            onMalformedFormKey: ex =>
+            {
+                logger.LogError(ex, "Malformed FormKey copying {FormKey} as a new record", decoded);
+                return WriteEndpointMapping.MalformedFormKey(ex);
+            },
+            onNoLoadOrder: ex =>
+            {
+                logger.LogError(ex, "No usable loadOrder while copying {FormKey} as a new record", decoded);
+                return WriteEndpointMapping.NoLoadOrder(ex);
+            });
     }
 
     internal static IResult GetReferences(string formKey, IRecordQueryService svc, ILogger logger)
