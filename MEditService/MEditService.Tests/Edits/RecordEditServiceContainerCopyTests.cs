@@ -1,5 +1,6 @@
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
+using MEditService.Core.Records;
 using MEditService.Core.Schema;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -248,6 +249,31 @@ public sealed class RecordEditServiceContainerCopyTests
 
         var expectedLocation = index.GetCellLocation(fixture.SourcePlugin, fixture.ExteriorCell.ToString());
         Assert.Equal(expectedLocation, index.GetCellLocation(fixture.DestinationPlugin, fixture.ExteriorCell.ToString()));
+    }
+
+    // #607 review: MintExteriorCell's own two rows (the auto-created WRLD ancestor, the minted CELL)
+    // never reached mirror.ReapplyFilter() when this branch returned straight from
+    // CopyRecordAsOverride — only the sibling call through CopyPlacedReferenceAsOverride /
+    // MintExteriorCellAroundPlacedReference did. A brand-new row can newly match an active filter
+    // (every other create/copy path's own comment says so); this one silently didn't refresh it.
+    [Fact]
+    public void CopyRecordAsOverride_OnAGenuineExteriorCellItself_MakesTheCellAppearInAnActiveFilteredListing()
+    {
+        using var fixture = ContainerCopyFixture.Create();
+        // Scoped to the destination plugin specifically — the source already holds a "cell" row
+        // under this exact FormKey (Copy as Override lands under the *same* FormKey), so an
+        // unscoped filter would already match it pre-copy and the assertion below would pass
+        // whether or not the destination's own new row ever got re-evaluated.
+        fixture.Mirror.SetFilter($"SELECT form_key FROM cell WHERE plugin = '{ContainerCopyFixture.DestinationPluginName}'");
+        var query = new RecordQuery(RecordTypes: ["cell"], Plugin: fixture.DestinationPlugin, Limit: 50, Offset: 0);
+        var before = fixture.Mirror.Reads!.Search(query).Total;
+
+        var result = ServiceFor(fixture.Mirror).CopyRecordAsOverride(
+            fixture.SourcePlugin, fixture.ExteriorCell.ToString(), fixture.DestinationPlugin);
+
+        Assert.True(result.Applied, result.Message);
+        var after = fixture.Mirror.Reads!.Search(query);
+        Assert.Equal(before + 1, after.Total);
     }
 
     // The interior sibling of the case above — no destination override of the Cell

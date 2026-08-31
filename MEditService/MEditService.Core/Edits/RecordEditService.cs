@@ -48,6 +48,15 @@ public sealed class RecordEditService(
 {
     private readonly RecordTextCodec _codec = new(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance);
 
+    // #607: the exterior-cell/worldspace-override mint cluster is spatial logic beside this class's
+    // own field-edit plumbing (ADR-0041's "one write path" still holds — this is composition, not a
+    // second path); RecordCopy owns it, sharing this instance's own mirror/schemaReflector so its
+    // writes are indistinguishable from one this class made directly. Its own codec instance, the
+    // same trivial one-liner _codec above uses — a field initializer cannot reference another
+    // instance field, and RecordTextCodec carries no state worth sharing across the two.
+    private readonly RecordCopy _recordCopy = new(
+        mirror, schemaReflector, logger, new RecordTextCodec(Microsoft.Extensions.Logging.Abstractions.NullLogger<RecordTextCodec>.Instance));
+
     /// <summary>
     /// Applies <paramref name="value"/> to <paramref name="fieldPath"/> on one plugin's copy of
     /// <paramref name="formKey"/>. Complex fields arrive as one whole value (CONTEXT.md's atomic
@@ -56,38 +65,13 @@ public sealed class RecordEditService(
     /// </summary>
     public RecordEditResult EditField(PluginKey plugin, string formKey, string fieldPath, JsonElement value)
     {
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
-
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        // The effective document, because that is what the user is looking at and editing from — a
-        // second edit to the same record must build on the first, not on the committed baseline.
-        var document = index.GetDocument(formKey, plugin);
-        if (document == null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"{plugin.Name} does not hold record {formKey}.");
-        }
-
-        var release = mirror.LoadOrder!.GameRelease;
-
-        // Which file holds this record. A flat record's own, a container's
-        // RecordData.json, or — for an embedded child (a placed ref, a landscape, a navmesh, a
-        // worldspace's top cell) — its parent container's, since the child has no file of its own.
-        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
-            is not { } unit)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
-                "that would. Something moved or removed it outside Modbench — check the Source Control panel.");
-        }
+        if (ResolveEditTarget(plugin, formKey, out var editTarget) is { } blocked) return blocked;
+        // modFolder isn't needed past resolution here — EditField's own remaining work is entirely
+        // in terms of the record's own source unit, not the mod folder that produced it.
+        var (index, _, release, document, unit) = editTarget;
 
         var owner = index.GetDocument(unit.OwnerFormKey, plugin)!;
-        var record = ReadRecordFromSource(unit.FullPath, owner, release);
+        var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
         var schemas = schemaReflector.GetSchemas(release);
 
         // The record the field lands on is the one the caller named — which is *inside* `record` when
@@ -171,19 +155,17 @@ public sealed class RecordEditService(
         // a content change. Done before the write, deliberately — see RenameSourceUnit.
         var sourcePath = RenameSourceUnit(unit, target, document);
 
-        var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-
         // The codec's own file write is atomic (temp file, then rename), which matters more
         // here than at Track — this file is inside a live git working tree that the SCM panel, and
         // git itself, may read at any moment.
-        _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
+        var newBody = SerializeAndWrite(_codec, record, sourcePath, release);
 
         // An embedded edit dirties *two* rows — the parent source unit, whose bytes
         // moved, and the child, whose own document is what the read model serves for it. Both go
         // through the one ApplyWorkingTreeChanges call, so they land in a single transaction.
         var deltas = new List<(string FormKey, string? Body)>
         {
-            (unit.OwnerFormKey, Encoding.UTF8.GetString(newBody)),
+            (unit.OwnerFormKey, newBody),
         };
         if (unit.IsEmbedded)
         {
@@ -376,37 +358,17 @@ public sealed class RecordEditService(
     /// </summary>
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
-
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        var document = index.GetDocument(formKey, plugin);
-        if (document == null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"{plugin.Name} does not hold record {formKey}.");
-        }
-
-        var release = mirror.LoadOrder!.GameRelease;
-
-        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
-            is not { } unit)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
-                "that would. Something moved or removed it outside Modbench — check the Source Control panel.");
-        }
+        if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
+        // document isn't needed past resolution here — every remaining branch below reads through
+        // the resolved source unit instead.
+        var (index, _, release, _, unit) = target;
 
         var deltas = new List<(string FormKey, string? Body)>();
 
         if (unit.IsEmbedded)
         {
             var owner = index.GetDocument(unit.OwnerFormKey, plugin)!;
-            var record = ReadRecordFromSource(unit.FullPath, owner, release);
+            var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
 
             if (!ContainerChildFields.RemoveEmbeddedChild(record, formKey))
             {
@@ -419,9 +381,7 @@ public sealed class RecordEditService(
                     "report it; otherwise relaunch mEdit so the index re-reads the tree.");
             }
 
-            var newOwnerBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-            _codec.SerializeAsync(record, unit.FullPath, release).GetAwaiter().GetResult();
-            deltas.Add((unit.OwnerFormKey, Encoding.UTF8.GetString(newOwnerBody)));
+            deltas.Add((unit.OwnerFormKey, SerializeAndWrite(_codec, record, unit.FullPath, release)));
         }
         else
         {
@@ -587,8 +547,7 @@ public sealed class RecordEditService(
         // caller (RecordTextCodec.SerializeAsync's own doc comment).
         Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
 
-        var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
+        var newBody = SerializeAndWrite(_codec, record, sourcePath, release);
 
         // Defensive, not merely a repeat of the invariant NextOrderIndexFor above already
         // upholds — never-assume-exclusive-ownership means this group folder can already hold a gap
@@ -596,7 +555,7 @@ public sealed class RecordEditService(
         // of the same write rather than leaving it for the next structural write to trip over.
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
-        index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, Encoding.UTF8.GetString(newBody));
+        index.CreateWorkingTreeRecord(plugin, targetFormKey, recordType, newBody);
         // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
@@ -626,21 +585,8 @@ public sealed class RecordEditService(
     /// </summary>
     public RecordEditResult CopyRecordAsOverride(PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin)
     {
-        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
-
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        var document = index.GetDocument(formKey, sourcePlugin);
-        if (document == null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"{sourcePlugin.Name} does not hold record {formKey}.");
-        }
-
-        var release = mirror.LoadOrder!.GameRelease;
+        if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
+        var (index, destinationModFolder, release, document) = source;
 
         // A placed reference (a Cell's Persistent/Temporary child) has its own,
         // parent-chain-aware handling — it never reaches RefuseIfCopySourceHasNoContainerOfItsOwn's
@@ -650,7 +596,7 @@ public sealed class RecordEditService(
         if (RecordTypeDispatch.For(release).GroupFolderNameFor(document.RecordType) is null
             && index.GetPlacement(formKey, sourcePlugin) is { } placement)
         {
-            return CopyPlacedReferenceAsOverride(
+            return _recordCopy.CopyPlacedReferenceAsOverride(
                 sourcePlugin, formKey, document, placement, destinationPlugin, destinationModFolder, index, release);
         }
 
@@ -678,8 +624,16 @@ public sealed class RecordEditService(
         {
             var cellRecord = ReadCopySourceRecord(sourcePlugin, formKey, document, release);
             ContainerChildFields.ClearAllChildSlots(cellRecord);
-            return MintExteriorCell(
+            var mintResult = _recordCopy.MintExteriorCell(
                 sourcePlugin, formKey, cellLocation.Value, cellRecord, destinationPlugin, destinationModFolder, index, release);
+            if (mintResult.Applied && logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
+                    "{DestinationPlugin} ({DestinationOrigin}) — minted its worldspace as a Partial Form ancestor",
+                    formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin);
+            }
+            return mintResult;
         }
         if (isCell && cellLocation?.IsInterior != true)
         {
@@ -739,291 +693,6 @@ public sealed class RecordEditService(
     }
 
     /// <summary>
-    /// Copy as Override for a placed reference — appends
-    /// <paramref name="formKey"/> into the destination's existing override of its own Cell
-    /// (<paramref name="placement"/>'s <see cref="PlacementRow.ParentCell"/>) when one already exists,
-    /// touching nothing else about that Cell (not even its Partial Form flag). When the destination has
-    /// no override of that Cell yet and the Cell is interior, one is auto-created first — bare fields,
-    /// Partial Form flagged. Bare fields are genuine xEdit parity; Partial Form is a deliberate
-    /// mEdit-specific divergence from what xEdit itself does — <see cref="CreateInteriorCellParent"/>'s
-    /// own doc comment has the full trace and argument, not repeated here.
-    /// </summary>
-    private RecordEditResult CopyPlacedReferenceAsOverride(
-        PluginKey sourcePlugin, string formKey, RecordDocument document, PlacementRow placement,
-        PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
-    {
-        if (!IsFreeAtBothRefs(index, destinationPlugin, formKey))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FormKeyCollision,
-                $"{formKey} is already held by a record in {destinationPlugin.Name} at some ref.");
-        }
-
-        var cellFormKey = placement.ParentCell;
-        var cellDocument = index.GetDocument(cellFormKey, destinationPlugin);
-        if (cellDocument == null)
-        {
-            // IsInterior's own double-duty note lives on CopyRecordAsOverride's identical check —
-            // only the genuine-SubCells case mints (a real BlockX to mint from); a
-            // TopCell ref's own cell_location row carries none, so it falls to the refusal below.
-            var sourceCellLocation = index.GetCellLocation(sourcePlugin, cellFormKey);
-            if (sourceCellLocation?.IsInterior == false && sourceCellLocation.Value.BlockX != null)
-            {
-                return MintExteriorCellAroundPlacedReference(
-                    sourcePlugin, formKey, document, placement, cellFormKey, sourceCellLocation.Value,
-                    destinationPlugin, destinationModFolder, index, release);
-            }
-
-            if (sourceCellLocation?.IsInterior != true)
-            {
-                return RecordEditResult.Refused(
-                    RecordEditRefusal.ContainerParentMissingInDestination,
-                    $"{destinationPlugin.Name} has no override of {cellFormKey}, the cell {formKey} belongs to, " +
-                    "and it is an exterior cell — auto-creating one needs spatial placement (worldspace " +
-                    "block/sub-block) this write path does not compute yet, tracked separately.");
-            }
-
-            cellDocument = CreateInteriorCellParent(sourcePlugin, cellFormKey, destinationPlugin, destinationModFolder, index, release);
-        }
-
-        var cellUnit = SourceUnitResolver.Resolve(
-            index, destinationPlugin, destinationModFolder, cellFormKey, cellDocument.RecordType, cellDocument.EditorId, release)
-            ?? throw new InvalidOperationException(
-                $"{cellFormKey} is indexed in {destinationPlugin.Name} but SourceUnitResolver cannot find its source unit.");
-
-        var cellRecord = ReadRecordFromSource(cellUnit.FullPath, cellDocument, release);
-        var childRecord = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
-            .GetAwaiter().GetResult();
-        var slotName = SlotNameFor(placement);
-        ContainerChildFields.AddChildToSlot(cellRecord, slotName, childRecord);
-
-        var newCellBody = _codec.SerializeToBytesAsync(cellRecord, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(cellRecord, cellUnit.FullPath, release).GetAwaiter().GetResult();
-
-        // Two rows change: the child's own (new — CreateWorkingTreeRecord, the same "exists at neither
-        // ref yet" shape every other copy-as-override uses) and the Cell's own existing row (its body
-        // moved — ApplyWorkingTreeChanges, the same shape EditField's own embedded-child write uses).
-        // Child first, so nothing ever transiently points a placement/container_child row at a FormKey
-        // with no records row of its own.
-        try
-        {
-            index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
-            index.ApplyWorkingTreeChanges(destinationPlugin, [(cellFormKey, Encoding.UTF8.GetString(newCellBody))]);
-        }
-        catch (Exception ex)
-        {
-            // The Cell's file on disk already carries formKey's new bytes
-            // (WriteBodyAtomic-equivalent SerializeAsync above already landed) — a should-never-happen
-            // guard in one of these two calls must not surface as a bare, unhandled exception that says
-            // nothing about that. RecordEditRefusal's own doc comment has the full argument.
-            logger.LogError(
-                ex, "Index update failed after writing {CellFormKey}'s new body to {SourcePath} for copied child {FormKey}",
-                cellFormKey, cellUnit.FullPath, formKey);
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerCopyIndexUpdateFailedAfterWrite,
-                $"{cellFormKey}'s working-tree file was updated to carry {formKey}, but the index failed to " +
-                $"record it ({ex.Message}). The file itself is a real, reviewable working-tree change — check " +
-                "the Source Control panel, or relaunch mEdit to re-index it.");
-        }
-        mirror.ReapplyFilter();
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into {DestinationPlugin} " +
-                "({DestinationOrigin}) — appended into {CellFormKey}'s {SlotName} slot",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name, destinationPlugin.Origin,
-                cellFormKey, slotName);
-        }
-        return RecordEditResult.Success();
-    }
-
-    /// <summary>
-    /// Mints <paramref name="cellLocation"/>'s exterior CELL
-    /// (<paramref name="cellRecord"/> — already the right shape, either the real requested copy with
-    /// its embedded children stripped, or a bare auto-created ancestor holding just a copied REFR) at
-    /// its exact worldspace block/sub-block, auto-creating a bare, Partial-Form WRLD ancestor first
-    /// when the destination has none (the same idiom <see cref="CreateInteriorCellParent"/> already
-    /// uses one level up — bare fields, no EditorID, <see cref="PartialFormFlag.Set"/> before
-    /// serializing). Shared by <see cref="CopyRecordAsOverride"/>'s own exterior-Cell branch and
-    /// <see cref="CopyPlacedReferenceAsOverride"/>'s own exterior branch.
-    ///
-    /// <para>Never mints into a worldspace the destination already overrides: a second mint into an
-    /// already-existing WRLD directory risks a colliding sibling folder for the same FormKey rather
-    /// than landing inside the one that already exists there — the supported case is a destination
-    /// with no CELL/WRLD override to start with, refused rather than silently routed
-    /// around or half-implemented.</para>
-    ///
-    /// <para>Writes the worldspace's and cell's own index rows from the exact bytes
-    /// <see cref="SpatialContainerMint.MintAsync"/> wrote to the working tree
-    /// (<see cref="SpatialContainerMint.SpatialMintResult"/>), never a second, independently-serialized
-    /// copy — the same "the source text is the source, not the index" rule this class states for every
-    /// other write path.</para>
-    /// </summary>
-    private RecordEditResult MintExteriorCell(
-        PluginKey sourcePlugin, string cellFormKey, CellLocationRow cellLocation, IMajorRecord cellRecord,
-        PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index, GameRelease release)
-    {
-        if (!IsFreeAtBothRefs(index, destinationPlugin, cellFormKey))
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.FormKeyCollision,
-                $"{cellFormKey} is already held by a record in {destinationPlugin.Name} at some ref.");
-        }
-
-        if (cellLocation.ParentWorldspace is not { } worldspaceFormKey)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{cellFormKey} has no recorded parent worldspace — cannot place it.");
-        }
-
-        if (index.GetDocument(worldspaceFormKey, destinationPlugin) != null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.ContainerParentMissingInDestination,
-                $"{destinationPlugin.Name} already overrides worldspace {worldspaceFormKey}, but not cell {cellFormKey} — " +
-                "placing a new cell inside an existing worldspace override is not supported yet; " +
-                "only a destination with neither the worldspace nor the cell can be copied into.");
-        }
-
-        var sourceWorldspaceDocument = index.GetDocument(worldspaceFormKey, sourcePlugin)
-            ?? throw new InvalidOperationException(
-                $"{sourcePlugin.Name} does not hold {worldspaceFormKey} — cell_location resolved this FormKey from its own row.");
-
-        var worldspaceAncestor = BarePartialFormAncestor(worldspaceFormKey, "wrld", release);
-
-        var syntheticMod = SpatialContainerMint.BuildSyntheticWorldspaceMod(
-            destinationPlugin, worldspaceAncestor, cellLocation, cellRecord, release);
-        var minted = SpatialContainerMint.MintAsync(syntheticMod, destinationModFolder, destinationPlugin.Name)
-            .GetAwaiter().GetResult();
-
-        index.CreateWorkingTreeRecord(
-            destinationPlugin, worldspaceFormKey, sourceWorldspaceDocument.RecordType,
-            Encoding.UTF8.GetString(minted.WorldspaceBody));
-        index.CreateCellLocation(destinationPlugin, cellLocation);
-        index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, "cell", Encoding.UTF8.GetString(minted.CellBody));
-
-        return RecordEditResult.Success();
-    }
-
-    /// <summary>
-    /// <see cref="CopyPlacedReferenceAsOverride"/>'s exterior half — the copied REFR's own
-    /// Cell does not exist in the destination and is a genuine SubCells cell, so the Cell is auto-created
-    /// bare and Partial Form (exactly as <see cref="CreateInteriorCellParent"/> does one level up)
-    /// with the REFR already in its source slot (<see cref="SlotNameFor"/>), and the pair is minted
-    /// through <see cref="MintExteriorCell"/>. The REFR's own row is written afterwards — the cell's
-    /// minted body already carries it inline either way.
-    /// </summary>
-    private RecordEditResult MintExteriorCellAroundPlacedReference(
-        PluginKey sourcePlugin, string formKey, RecordDocument document, PlacementRow placement, string cellFormKey,
-        CellLocationRow cellLocation, PluginKey destinationPlugin, string destinationModFolder, IRecordIndex index,
-        GameRelease release)
-    {
-        var bareCellRecord = BarePartialFormAncestor(cellFormKey, "cell", release);
-        var childRecord = _codec
-            .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
-            .GetAwaiter().GetResult();
-        ContainerChildFields.AddChildToSlot(bareCellRecord, SlotNameFor(placement), childRecord);
-
-        var mintResult = MintExteriorCell(
-            sourcePlugin, cellFormKey, cellLocation, bareCellRecord, destinationPlugin, destinationModFolder, index, release);
-        if (!mintResult.Applied) return mintResult;
-
-        index.CreateWorkingTreeRecord(destinationPlugin, formKey, document.RecordType, document.Body!);
-        mirror.ReapplyFilter();
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Copied {FormKey} from {SourcePlugin} ({SourceOrigin}) as an override into " +
-                "{DestinationPlugin} ({DestinationOrigin}) — minted exterior cell {CellFormKey} " +
-                "and its worldspace as Partial Form ancestors",
-                formKey, sourcePlugin.Name, sourcePlugin.Origin, destinationPlugin.Name,
-                destinationPlugin.Origin, cellFormKey);
-        }
-        return RecordEditResult.Success();
-    }
-
-    /// <summary>The Cell slot a <c>placement</c> row's own group name maps to — the two spellings
-    /// <see cref="ContainerChildFields"/> knows a placed reference by.</summary>
-    private static string SlotNameFor(PlacementRow placement) =>
-        placement.PlacementGroup.Equals("persistent", StringComparison.Ordinal) ? "Persistent" : "Temporary";
-
-    /// <summary>The auto-created ancestor: bare, default-constructed fields, no EditorID, Partial Form
-    /// set before it is ever serialized — the one recipe <see cref="CreateInteriorCellParent"/>,
-    /// <see cref="MintExteriorCell"/> and <see cref="MintExteriorCellAroundPlacedReference"/> share.
-    /// <paramref name="schemaKey"/> is the schema table name (<c>"cell"</c>, <c>"wrld"</c>).</summary>
-    private IMajorRecord BarePartialFormAncestor(string formKey, string schemaKey, GameRelease release)
-    {
-        var schema = schemaReflector.GetSchemas(release)[schemaKey];
-        var record = MajorRecordInstantiator.Activator(FormKey.Factory(formKey), release, schema.RecordType);
-        PartialFormFlag.Set(record, true);
-        return record;
-    }
-
-    /// <summary>
-    /// Silently creates <paramref name="cellFormKey"/> as an override in
-    /// <paramref name="destinationPlugin"/> — the parent-chain auto-create the copy gestures
-    /// need when a copied child's own Cell has no destination override yet. Bare, default-constructed
-    /// fields, no EditorID (<see cref="MajorRecordInstantiator.Activator"/>, the same factory
-    /// <see cref="CreateRecord"/> uses, with no <c>record.EditorID = ...</c> follow-up) — xEdit's own
-    /// <c>AddIfMissingInternal</c> genuinely does the same (<c>wbImplementation.pas</c>'s ancestor walk:
-    /// its <c>Assign()</c> call, which is what would otherwise copy the master's fields and name, only
-    /// runs inside an <c>if aDeepCopy then</c> branch that is hardcoded <c>False</c> for every
-    /// auto-created ancestor), so this half is genuine ADR-0034 parity, not an approximation of it.
-    ///
-    /// <para><b>Partial Form is not xEdit parity, and is not claimed as such.</b> The same
-    /// ancestor-walk trace that confirms the
-    /// bare-fields parity above also shows real xEdit's own <c>IsPartialForm := True</c> line sits
-    /// inside that same <c>if aDeepCopy then</c> branch — so xEdit itself leaves an auto-created
-    /// ancestor Cell unflagged, not Partial Form. Setting it here is a deliberate mEdit-specific
-    /// divergence, argued rather than assumed: Partial Form's whole purpose in this codebase
-    /// is excluding a record's own fields from mEdit's git-native conflict-diff
-    /// engine, which has no xEdit analog at all (root CLAUDE.md's own carve-out — tracking/compile/
-    /// branch UX is scored against this product's own model, not xEdit's live in-memory comparison). A
-    /// structurally-stub auto-created ancestor, whose fields were never meant to mean anything, is
-    /// exactly the record that mechanism exists to exclude. <see cref="PartialFormFlag.Set"/> is the
-    /// flag's own write surface, called directly here since there is no source file yet for
-    /// <see cref="RecordEditService.EditField"/>'s own <c>is_partial_form</c> door to reach.</para>
-    /// </summary>
-    private RecordDocument CreateInteriorCellParent(
-        PluginKey sourcePlugin, string cellFormKey, PluginKey destinationPlugin, string destinationModFolder,
-        IRecordIndex index, GameRelease release)
-    {
-        var sourceCellDocument = index.GetDocument(cellFormKey, sourcePlugin)
-            ?? throw new InvalidOperationException(
-                $"{sourcePlugin.Name} does not hold {cellFormKey} — CopyPlacedReferenceAsOverride resolved this FormKey from its own placement row.");
-
-        var record = BarePartialFormAncestor(cellFormKey, "cell", release);
-
-        var relativePath = InteriorCellDestinationPath(
-            destinationModFolder, destinationPlugin.Name, cellFormKey, editorId: null, release);
-        var sourcePath = Path.Combine(destinationModFolder, relativePath);
-        Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
-
-        var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(record, sourcePath, release).GetAwaiter().GetResult();
-
-        SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
-
-        var bodyText = Encoding.UTF8.GetString(newBody);
-        index.CreateWorkingTreeRecord(destinationPlugin, cellFormKey, sourceCellDocument.RecordType, bodyText);
-        mirror.ReapplyFilter();
-
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation(
-                "Auto-created {FormKey} as a Partial Form override in {DestinationPlugin} ({DestinationOrigin}) " +
-                "— parent chain for a copied child",
-                cellFormKey, destinationPlugin.Name, destinationPlugin.Origin);
-        }
-
-        return index.GetDocument(cellFormKey, destinationPlugin)!;
-    }
-
-    /// <summary>
     /// xEdit's "Copy as New Record Into…" (ADR-0041) — a deep copy of
     /// <paramref name="formKey"/> under a fresh FormKey in <paramref name="destinationPlugin"/>'s own
     /// working tree, via Mutagen's own record-level <c>Duplicate</c> (no mod object — nothing in this
@@ -1039,21 +708,8 @@ public sealed class RecordEditService(
     public RecordEditResult CopyRecordAsNewRecord(
         PluginKey sourcePlugin, string formKey, PluginKey destinationPlugin, string? requestedFormKey = null)
     {
-        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
-
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        var document = index.GetDocument(formKey, sourcePlugin);
-        if (document == null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound,
-                $"{sourcePlugin.Name} does not hold record {formKey}.");
-        }
-
-        var release = mirror.LoadOrder!.GameRelease;
+        if (ResolveCopySource(destinationPlugin, sourcePlugin, formKey, out var source) is { } blocked) return blocked;
+        var (index, destinationModFolder, release, document) = source;
         if (RefuseIfDisallowedForCopyAsNewRecord(document.RecordType) is { } disallowedRefusal) return disallowedRefusal;
         if (RefuseIfContainerType(document.RecordType, release) is { } containerRefusal) return containerRefusal;
 
@@ -1072,12 +728,11 @@ public sealed class RecordEditService(
         var sourcePath = Path.Combine(destinationModFolder, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(sourcePath)!);
 
-        var newBody = _codec.SerializeToBytesAsync(newRecord, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(newRecord, sourcePath, release).GetAwaiter().GetResult();
+        var newBody = SerializeAndWrite(_codec, newRecord, sourcePath, release);
 
         SourceUnitResolver.RenormalizeGroupOrder(Path.GetDirectoryName(sourcePath)!);
 
-        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
+        index.CreateWorkingTreeRecord(destinationPlugin, targetFormKey, document.RecordType, newBody);
         // A brand-new row can newly match an active filter.
         mirror.ReapplyFilter();
 
@@ -1179,33 +834,13 @@ public sealed class RecordEditService(
     /// </summary>
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
-        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
-
-        var index = mirror.Index;
-        if (index == null)
-            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
-
-        var document = index.GetDocument(formKey, plugin);
-        if (document == null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.RecordNotFound, $"{plugin.Name} does not hold record {formKey}.");
-        }
-
-        var release = mirror.LoadOrder!.GameRelease;
-
-        // The same record→source-unit resolution EditField/DeleteRecord use
-        // — a container's own directory, an embedded child, or a flat
+        // document/unit are deliberately discarded: this call is only the same existence check
+        // EditField/DeleteRecord make (a container's own directory, an embedded child, or a flat
         // record's file all answer here; only "nothing on disk holds this, and the index names no
-        // container that would" still refuses.
-        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
-            is null)
-        {
-            return RecordEditResult.Refused(
-                RecordEditRefusal.SourceUnitNotFound,
-                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
-                "that would. Something moved or removed it outside Modbench — check the Source Control panel.");
-        }
+        // container that would" still refuses) — RenumberTheRecordItself/RewriteReferenceField each
+        // re-resolve fresh, deliberately, rather than trusting this snapshot (their own doc comments).
+        if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
+        var (index, modFolder, release, _, _) = target;
 
         var originatingPlugin = FormKey.Factory(formKey).ModKey.FileName.String;
         if (!originatingPlugin.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
@@ -1341,7 +976,7 @@ public sealed class RecordEditService(
         }
 
         var owner = ReadRecordFromSource(
-            unit.FullPath, index.GetDocument(unit.OwnerFormKey, referencerPlugin)!, release);
+            _codec, logger, unit.FullPath, index.GetDocument(unit.OwnerFormKey, referencerPlugin)!, release);
         var child = ContainerChildFields.FindEmbeddedChild(owner, referencerFormKey)?.Child
             ?? throw new InvalidOperationException(
                 $"{unit.RelativePath} no longer carries {referencerFormKey} after its own reference rewrite.");
@@ -1373,7 +1008,7 @@ public sealed class RecordEditService(
             return;
         }
 
-        var record = ReadRecordFromSource(unit.FullPath, document, release);
+        var record = ReadRecordFromSource(_codec, logger, unit.FullPath, document, release);
         ((IMajorRecordInternal)record).FormKey = FormKey.Factory(newFormKey);
 
         // A container's own directory (Cell/Worldspace/Quest, or a nested folder-split child) versus
@@ -1393,23 +1028,22 @@ public sealed class RecordEditService(
             SourceUnitResolver.LeafNameFor(FormKey.Factory(newFormKey), document.EditorId, isDirectoryPerRecord);
         var newLeafPath = Path.Combine(parentDirectory, newLeafName);
 
-        var newBody = _codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
-
+        string writePath;
         if (isDirectoryPerRecord)
         {
             // Moved whole, not recreated from scratch: a container's nested folder-split children (a
             // Quest's own DialogTopics subtree) travel with it rather than being orphaned.
             Directory.Move(oldLeafPath, newLeafPath);
-            _codec.SerializeAsync(record, Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName), release)
-                .GetAwaiter().GetResult();
+            writePath = Path.Combine(newLeafPath, SourceUnitResolver.RecordDataFileName);
         }
         else
         {
             Directory.CreateDirectory(parentDirectory);
-            _codec.SerializeAsync(record, newLeafPath, release).GetAwaiter().GetResult();
+            writePath = newLeafPath;
         }
+        var newBody = SerializeAndWrite(_codec, record, writePath, release);
 
-        index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, Encoding.UTF8.GetString(newBody));
+        index.CreateWorkingTreeRecord(plugin, newFormKey, document.RecordType, newBody);
 
         if (!isDirectoryPerRecord && File.Exists(unit.FullPath)) File.Delete(unit.FullPath);
 
@@ -1454,7 +1088,7 @@ public sealed class RecordEditService(
         IRecordIndex index, PluginKey plugin, SourceUnit unit, string oldFormKey, string newFormKey,
         string childRecordType, GameRelease release)
     {
-        var owner = ReadRecordFromSource(unit.FullPath, index.GetDocument(unit.OwnerFormKey, plugin)!, release);
+        var owner = ReadRecordFromSource(_codec, logger, unit.FullPath, index.GetDocument(unit.OwnerFormKey, plugin)!, release);
 
         if (ContainerChildFields.FindEmbeddedChild(owner, oldFormKey) is not { } found)
         {
@@ -1464,12 +1098,12 @@ public sealed class RecordEditService(
 
         ((IMajorRecordInternal)found.Child).FormKey = FormKey.Factory(newFormKey);
 
-        var newOwnerBody = _codec.SerializeToBytesAsync(owner, release).GetAwaiter().GetResult();
-        _codec.SerializeAsync(owner, unit.FullPath, release).GetAwaiter().GetResult();
-        var newChildBody = _codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult();
+        var newOwnerBody = SerializeAndWrite(_codec, owner, unit.FullPath, release);
+        var newChildBody = Encoding.UTF8.GetString(
+            _codec.SerializeToBytesAsync(found.Child, release).GetAwaiter().GetResult());
 
-        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, Encoding.UTF8.GetString(newOwnerBody))]);
-        index.CreateWorkingTreeRecord(plugin, newFormKey, childRecordType, Encoding.UTF8.GetString(newChildBody));
+        index.ApplyWorkingTreeChanges(plugin, [(unit.OwnerFormKey, newOwnerBody)]);
+        index.CreateWorkingTreeRecord(plugin, newFormKey, childRecordType, newChildBody);
         index.ApplyWorkingTreeChanges(plugin, [(oldFormKey, null)]);
     }
 
@@ -1480,7 +1114,7 @@ public sealed class RecordEditService(
     /// silently overwrite), checked here first so a collision reads as a typed refusal instead of an
     /// unhandled exception reaching the endpoint.
     /// </summary>
-    private static bool IsFreeAtBothRefs(IRecordIndex index, PluginKey plugin, string formKey) =>
+    internal static bool IsFreeAtBothRefs(IRecordIndex index, PluginKey plugin, string formKey) =>
         index.GetDocument(formKey, plugin) == null && index.At(RecordRef.Head).GetDocument(formKey, plugin) == null;
 
     /// <summary>
@@ -1704,6 +1338,108 @@ public sealed class RecordEditService(
     /// a command the user cannot find is worse than no signpost at all.</summary>
     internal const string TrackCommandTitle = "Modbench: Track\u2026";
 
+    /// <summary>The four things resolving an existing record for editing always answers together \u2014
+    /// <see cref="ResolveEditTarget"/>'s own success shape.</summary>
+    private readonly record struct EditTarget(
+        IRecordIndex Index, string ModFolder, GameRelease Release, RecordDocument Document, SourceUnit Unit);
+
+    /// <summary>
+    /// The shared preamble <see cref="EditField"/>, <see cref="DeleteRecord"/> and
+    /// <see cref="RenumberRecord"/>'s own existence check all restate byte-for-byte: the write-path
+    /// gate (<see cref="RefuseIfBlocked"/>), the "is a load order even held" check, the record's own
+    /// document at <see cref="RecordRef.Effective"/> \u2014 because that is what the user is looking at
+    /// and editing from, a second edit to the same record must build on the first, not on the
+    /// committed baseline \u2014 and the source unit that holds it. Each of the three refuses with the
+    /// same typed reason and the same message here regardless of which is asking.
+    ///
+    /// <para><b>Not every verb goes through this.</b> <see cref="CreateRecord"/> has no existing
+    /// document to resolve \u2014 a brand-new record has nothing to look up yet, not a restatement of this
+    /// shape with a step skipped. <see cref="CopyRecordAsOverride"/>/<see cref="CopyRecordAsNewRecord"/>
+    /// don't either: they gate on the <i>destination</i> plugin while reading the document from the
+    /// <i>source</i> plugin, and never resolve a source unit through
+    /// <see cref="SourceUnitResolver.Resolve"/> at all (their own source read falls back to the
+    /// indexed body for an untracked source instead of refusing) \u2014 a genuinely asymmetric shape,
+    /// covered by <see cref="ResolveCopySource"/> instead of this one.</para>
+    ///
+    /// <para><see cref="RenumberRecord"/>'s own call discards <see cref="EditTarget.Unit"/> after
+    /// this existence check \u2014 deliberately: it re-resolves fresh later, per its own re-read-fresh
+    /// doc comments, rather than trusting this snapshot.</para>
+    /// </summary>
+    private RecordEditResult? ResolveEditTarget(PluginKey plugin, string formKey, out EditTarget target)
+    {
+        target = default;
+
+        if (RefuseIfBlocked(plugin, out var modFolder) is { } blocked) return blocked;
+
+        var index = mirror.Index;
+        if (index == null)
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
+
+        var document = index.GetDocument(formKey, plugin);
+        if (document == null)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"{plugin.Name} does not hold record {formKey}.");
+        }
+
+        var release = mirror.LoadOrder!.GameRelease;
+
+        // Which file holds this record. A flat record's own, a container's
+        // RecordData.json, or \u2014 for an embedded child (a placed ref, a landscape, a navmesh, a
+        // worldspace's top cell) \u2014 its parent container's, since the child has no file of its own.
+        if (SourceUnitResolver.Resolve(index, plugin, modFolder, formKey, document.RecordType, document.EditorId, release)
+            is not { } unit)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.SourceUnitNotFound,
+                $"No source file in {plugin.Name}'s tree holds {formKey}, and the index names no container " +
+                "that would. Something moved or removed it outside Modbench \u2014 check the Source Control panel.");
+        }
+
+        target = new EditTarget(index, modFolder, release, document, unit);
+        return null;
+    }
+
+    /// <summary>The three things <see cref="CopyRecordAsOverride"/>/<see cref="CopyRecordAsNewRecord"/>
+    /// both need from their own source read, beside the destination mod folder <see cref="RefuseIfBlocked"/>
+    /// already answers.</summary>
+    private readonly record struct CopySource(IRecordIndex Index, string DestinationModFolder, GameRelease Release, RecordDocument Document);
+
+    /// <summary>
+    /// The copy gestures' own shared preamble \u2014 asymmetric by construction, unlike
+    /// <see cref="ResolveEditTarget"/>: the write-path gate
+    /// (<see cref="RefuseIfBlocked"/>) checks <paramref name="destinationPlugin"/> (that is where the
+    /// write lands), while the document lookup and its "does not hold record" refusal read
+    /// <paramref name="sourcePlugin"/> (that is what is being copied). Never resolves a source unit \u2014
+    /// each copy gesture's own source read (<see cref="ReadCopySourceBody"/>/<see cref="ReadCopySourceRecord"/>)
+    /// falls back to the indexed body for an untracked source rather than refusing, so there is no
+    /// single "not found" shape to share here.
+    /// </summary>
+    private RecordEditResult? ResolveCopySource(
+        PluginKey destinationPlugin, PluginKey sourcePlugin, string formKey, out CopySource source)
+    {
+        source = default;
+
+        if (RefuseIfBlocked(destinationPlugin, out var destinationModFolder) is { } blocked) return blocked;
+
+        var index = mirror.Index;
+        if (index == null)
+            return RecordEditResult.Refused(RecordEditRefusal.RecordNotFound, "No load order has been received.");
+
+        var document = index.GetDocument(formKey, sourcePlugin);
+        if (document == null)
+        {
+            return RecordEditResult.Refused(
+                RecordEditRefusal.RecordNotFound,
+                $"{sourcePlugin.Name} does not hold record {formKey}.");
+        }
+
+        var release = mirror.LoadOrder!.GameRelease;
+        source = new CopySource(index, destinationModFolder, release, document);
+        return null;
+    }
+
     /// <summary>
     /// The two refusals every entry point on this single write path must inherit, in order \u2014
     /// untracked, then the external-change deferral \u2014 checked here once so
@@ -1914,7 +1650,7 @@ public sealed class RecordEditService(
     /// already has (any one; the number is never meaningful), minting a fresh <c>[0] 0/[0] 0</c> pair
     /// only the first time a destination plugin gets an interior cell at all.
     /// </summary>
-    private static string InteriorCellDestinationPath(
+    internal static string InteriorCellDestinationPath(
         string modFolder, string pluginName, string formKey, string? editorId, GameRelease release)
     {
         var cellsFolder = RecordTypeDispatch.For(release).GroupFolderNameFor("cell")
@@ -2001,17 +1737,32 @@ public sealed class RecordEditService(
     /// tree is complete when Track leaves it, but anything may have removed a file since, and
     /// refusing the edit would strand the user with no way to put the record back.
     /// </summary>
-    private IMajorRecord ReadRecordFromSource(string sourcePath, RecordDocument document, GameRelease release)
+    internal static IMajorRecord ReadRecordFromSource(
+        RecordTextCodec codec, ILogger logger, string sourcePath, RecordDocument document, GameRelease release)
     {
         // Both reads state the record's type rather than relying on the document to name it —
         // the same document either way, so the same record_type identifies it either way.
         if (File.Exists(sourcePath))
-            return _codec.DeserializeAsync(sourcePath, release, document.RecordType).GetAwaiter().GetResult();
+            return codec.DeserializeAsync(sourcePath, release, document.RecordType).GetAwaiter().GetResult();
 
         logger.LogWarning(
             "Source file {SourcePath} is missing; editing from the indexed document and rewriting it", sourcePath);
-        return _codec
+        return codec
             .DeserializeFromBytesAsync(Encoding.UTF8.GetBytes(document.Body!), release, document.RecordType)
             .GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// The reserialize-and-write-back idiom nearly every write path here repeats: get
+    /// <paramref name="record"/>'s own bytes — what the index will be told next — and write those
+    /// exact same bytes to <paramref name="path"/> in one atomic move, never a second,
+    /// independently-serialized copy of either. Returns the body as text, ready for whichever
+    /// index-notify call the caller makes next.
+    /// </summary>
+    internal static string SerializeAndWrite(RecordTextCodec codec, IMajorRecord record, string path, GameRelease release)
+    {
+        var bytes = codec.SerializeToBytesAsync(record, release).GetAwaiter().GetResult();
+        codec.SerializeAsync(record, path, release).GetAwaiter().GetResult();
+        return Encoding.UTF8.GetString(bytes);
     }
 }
