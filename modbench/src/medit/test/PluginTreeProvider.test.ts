@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { PluginMetadata, RecordSummary, ConflictingRecord, ContainerChildSummary } from '../ApiClient';
+import type { PluginMetadata, RecordSummary, ContainerChildSummary } from '../ApiClient';
 import type { PluginRepository, RecordPage } from '../PluginRepository';
 
 vi.mock('vscode', () => ({
@@ -32,7 +32,6 @@ import {
   PluginTreeProvider, RecordTypeNode, RecordNode,
   CellNode, InteriorCellsNode, InteriorLoadMoreNode,
   WorldspacesNode, WorldspaceNode, SubBlockNode, PlacedGroupNode, PlacedNode,
-  ConflictsNode,
   ErrorNode, headerFormKeyFor,
 } from '../PluginTreeProvider';
 import type { PluginTreeNode } from '../PluginTreeProvider';
@@ -103,8 +102,6 @@ function makeRepository(overrides: Partial<{
     peekNextFreeFormKey: vi.fn(),
     // The tree provider never copies either — same "whole surface, unused here" note.
     getRecordOverridePlugins: vi.fn(),
-    // The Conflicts node's own listing.
-    getConflicts: vi.fn().mockResolvedValue([]),
   };
 }
 
@@ -938,122 +935,6 @@ describe('PluginTreeProvider.getPluginChildren (spatial nodes on a specific copy
   });
 });
 
-// ── the Conflicts node (root-level) ───────────────────────────────────────────
-
-describe('PluginTreeProvider — Conflicts node existence & gating (#364, #307\'s invariant)', () => {
-  it('conflictsNode() is undefined before conflictsComputed is ever set', () => {
-    const provider = new PluginTreeProvider(makeRepository());
-
-    expect(provider.conflictsNode()).toBeUndefined();
-  });
-
-  // Rival named: "render the node but with nothing to show yet" would still return a ConflictsNode
-  // instance here too — the real distinguishing check is conflictsNode() itself answering
-  // undefined (the node omitted entirely), not merely "its children are empty".
-  it('conflictsNode() returns a node once setConflictsComputed(true) is called', () => {
-    const provider = new PluginTreeProvider(makeRepository());
-
-    provider.setConflictsComputed(true);
-
-    expect(provider.conflictsNode()).toBeInstanceOf(ConflictsNode);
-  });
-
-  it('conflictsNode() reverts to undefined after setConflictsComputed(false) — a stale load order must not keep showing it', () => {
-    const provider = new PluginTreeProvider(makeRepository());
-    provider.setConflictsComputed(true);
-
-    provider.setConflictsComputed(false);
-
-    expect(provider.conflictsNode()).toBeUndefined();
-  });
-
-  it('setConflictsComputed fires onDidChangeTreeData so the root re-renders', () => {
-    const provider = new PluginTreeProvider(makeRepository());
-    const fired: unknown[] = [];
-    provider.onDidChangeTreeData(e => fired.push(e));
-
-    provider.setConflictsComputed(true);
-
-    expect(fired).toHaveLength(1);
-  });
-});
-
-describe('PluginTreeProvider.getChildren(ConflictsNode) (#364)', () => {
-  it('fetches from repository.getConflicts and returns one RecordNode per entry', async () => {
-    const record = makeRecord(5);
-    const repo = makeRepository();
-    repo.getConflicts = vi.fn().mockResolvedValue([{ record, origin: 'Data', conflictAll: 'Conflict' }]);
-    const provider = new PluginTreeProvider(repo);
-    provider.setConflictsComputed(true);
-
-    const children = await provider.getChildren(provider.conflictsNode());
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(RecordNode);
-    expect((children[0] as RecordNode).record.formKey).toBe(record.formKey);
-  });
-
-  it('renders an error node when getConflicts fails, matching every other fetch failure in this file', async () => {
-    const repo = makeRepository();
-    repo.getConflicts = vi.fn().mockRejectedValue(new Error('boom'));
-    const provider = new PluginTreeProvider(repo);
-    provider.setConflictsComputed(true);
-
-    const children = await provider.getChildren(provider.conflictsNode());
-
-    expect(children).toHaveLength(1);
-    expect(children[0]).toBeInstanceOf(ErrorNode);
-  });
-});
-
-describe('PluginTreeProvider.conflictAllOf (#364, the badge\'s own lookup)', () => {
-  // Rival named:
-  // "keep serving the cached value regardless of conflictsComputed" would return 'Conflict' here
-  // instead of undefined, indistinguishable from a badge that never gates on the flag at all.
-  //
-  // This has to be a genuine race, not just setConflictsComputed(false) followed by a read —
-  // setConflictsComputed(false) already clears conflictAllCache itself, so a test that only calls
-  // it and then reads passes even with conflictAllOf's own gate deleted (vacuous).
-  // The real scenario the gate exists for is an
-  // in-flight getConflicts() call that resolves *after* conflictsComputed has already gone back to
-  // false — ADR-0035's live-mutation re-sweep racing a in-flight Conflicts-node fetch — which
-  // populates the cache post-clear with nothing left to clear it again. Only conflictAllOf's own
-  // independent check catches that.
-  it('returns undefined for a late-arriving cache entry — a getConflicts() call still in flight when conflictsComputed goes back to false', async () => {
-    const record = makeRecord(5);
-    let resolveFetch!: (v: ConflictingRecord[]) => void;
-    const repo = makeRepository();
-    repo.getConflicts = vi.fn(() => new Promise<ConflictingRecord[]>((resolve) => { resolveFetch = resolve; }));
-    const provider = new PluginTreeProvider(repo);
-    provider.setConflictsComputed(true);
-    const fetchPromise = provider.getChildren(provider.conflictsNode()); // in flight, not yet resolved
-
-    provider.setConflictsComputed(false); // clears the (still-empty) cache; flag now false
-    resolveFetch([{ record, origin: 'Data', conflictAll: 'Conflict' }]); // lands late, populates the cache anyway
-    await fetchPromise;
-
-    expect(provider.conflictAllOf(record.plugin, 'Data', record.formKey)).toBeUndefined();
-  });
-
-  it('returns the cached ConflictAll once computed and fetched', async () => {
-    const record = makeRecord(5);
-    const repo = makeRepository();
-    repo.getConflicts = vi.fn().mockResolvedValue([{ record, origin: 'Data', conflictAll: 'Conflict' }]);
-    const provider = new PluginTreeProvider(repo);
-    provider.setConflictsComputed(true);
-    await provider.getChildren(provider.conflictsNode());
-
-    expect(provider.conflictAllOf(record.plugin, 'Data', record.formKey)).toBe('Conflict');
-  });
-
-  it('returns undefined for a record nothing has fetched yet, even once computed', () => {
-    const provider = new PluginTreeProvider(makeRepository());
-    provider.setConflictsComputed(true);
-
-    expect(provider.conflictAllOf('Never.esp', 'Data', 'DEADBE:Never.esp')).toBeUndefined();
-  });
-});
-
 // ── Quest/DialogTopic child records ────────────────────────────────────────────
 
 function makeContainerChild(
@@ -1069,12 +950,12 @@ describe('RecordNode collapsibility for container types (#424)', () => {
   // Rival named: a RecordNode that always constructs CollapsibleState.None regardless of
   // record type — this pins the behaviour against exactly that rival.
   it('is Collapsed when built as a "qust" row', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false, 'qust');
+    const node = new RecordNode(makeRecord(0), undefined, false, 'qust');
     expect(node.collapsibleState).toBe(1); // TreeItemCollapsibleState.Collapsed (mocked to 1 above)
   });
 
   it('is Collapsed when built as a "dial" row', () => {
-    const node = new RecordNode(makeRecord(0), undefined, false, false, 'dial');
+    const node = new RecordNode(makeRecord(0), undefined, false, 'dial');
     expect(node.collapsibleState).toBe(1);
   });
 
@@ -1093,7 +974,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, 'qust');
 
     const children = await provider.getChildren(questNode);
 
@@ -1114,7 +995,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     ]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, 'qust');
 
     const children = await provider.getChildren(questNode) as RecordNode[];
 
@@ -1131,7 +1012,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     ]);
     const provider = new PluginTreeProvider(repo);
     const topicNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, false, false, 'dial');
+      { ...makeRecord(0), formKey: 'dial1:Fallout4.esm' }, undefined, false, 'dial');
 
     const children = await provider.getChildren(topicNode);
 
@@ -1144,7 +1025,7 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
     repo.getContainerChildren = vi.fn().mockResolvedValue([makeContainerChild('dial1:Fallout4.esm', 'dial')]);
     const provider = new PluginTreeProvider(repo);
     const questNode = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Fallout4.esm' }, undefined, false, 'qust');
 
     await provider.getChildren(questNode);
     await provider.getChildren(questNode);
@@ -1164,9 +1045,9 @@ describe('PluginTreeProvider.getChildren(RecordNode) — container children (#42
       .mockResolvedValueOnce([makeContainerChild('dial-b:Shared.esp', 'dial', 'TopicModB')]);
     const provider = new PluginTreeProvider(repo);
     const questA = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModA', false, 'qust');
     const questB = new RecordNode(
-      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', false, false, 'qust');
+      { ...makeRecord(0), formKey: 'qust1:Shared.esp', plugin: 'Shared.esp' }, 'ModB', false, 'qust');
 
     const childrenA = await provider.getChildren(questA) as RecordNode[];
     const childrenB = await provider.getChildren(questB) as RecordNode[];

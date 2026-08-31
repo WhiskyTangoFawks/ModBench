@@ -261,36 +261,15 @@ there is no separate load-load order step.
 
 ### Progressive load ([ADR-0035](../adr/0035-one-plugins-tree-editing-is-a-capability.md))
 
-The load is progressive **and states its own incompleteness**. Both halves are the point: the
-trap this closes is that **an absent conflict badge is indistinguishable from "no conflict"**. If
-browsing opens at second five and the winner sweep lands at second ninety, then for eighty-five
-seconds an unmarked record silently claims to be conflict-free when nothing has looked — the same
-class of error as `is_winner` describing a load order that does not exist. Showing things sooner
-without saying what is not yet known would make that worse, not better.
+The load is progressive: rows land as each plugin finishes indexing rather than all at once at the
+end.
 
 - **Rows gain chevrons individually, as each plugin finishes indexing** — not all at once at the
   end. A plugin the load has not reached yet stays a leaf, so a row never expands onto records
   that are not queryable yet.
 - **The view's own header carries the progress indicator** for the whole operation — backend
   spawn, indexing, and the winner sweep (`withProgress` addressed by view id). Not a
-  notification: two indicators for one operation is noise. The header bar carries no text, so the
-  step messages go to `TreeView.message` instead.
-- **`TreeView.message` states, in as many words, that conflict information is not yet computed**,
-  for as long as the winner sweep is outstanding. It clears itself when the sweep lands — no user
-  action, no Refresh.
-- **Before the first plugin lands, the message names the work rather than the count.** Indexing
-  interleaves opening and indexing per plugin, so on a real load order the first plugin is a
-  base-game master big enough that `0 of N` is *truthful* for a long stretch — and reads as a
-  stall. The zero-count phrasing therefore says work is under way on the first plugin(s), keeping
-  the count visible rather than replacing it.
-- **No conflict badge is rendered before the sweep completes.** The record conflict badge and the
-  Conflicts node (see *Conflicts node and conflict badge* below) both gate on `LoadOrderStatus.conflictsComputed`
-  (`PluginTreeProvider.conflictAllOf`/`conflictsNode`) and render *nothing* — not "no conflict" —
-  while it is false.
-- **Gate on `conflictsComputed`, never on "is a load running".** They coincide today but are
-  deliberately separate fields (`LoadOrderStatus.cs`): the sweep is whole-set, so ADR-0035's live
-  mutations (reorder, enable, disable) will leave a finished load order with stale winners until it
-  is re-run.
+  notification: two indicators for one operation is noise.
 - **Per-plugin load failures decorate their rows the moment they are reported**, through the same
   `setLoadOrder` channel as everything else the load order reports — not held back to the end.
 - **Master issues stay off the rows until the load completes.** They are a whole-load-order
@@ -573,57 +552,6 @@ can't see your edits yet" — not a Mod-Management fact about which physical fil
 - **Out of scope here.** Any auto-compile behavior — this is only the always-on row-level
   signal that something there is worth investigating.
 
-### Conflicts node and conflict badge
-
-ADR-0016's two-axis
-model (record-wide `ConflictAll` / per-cell `ConflictThis`) is the settled design; only Axis 1
-drives anything on this tree — Axis 2 stays the compare grid's own concern
-([medit-record-editor.md](medit-record-editor.md)'s "Conflict color coding").
-
-- **Trigger and placement — root-level, not per-plugin.** Not a per-plugin child
-  `getPluginChildren` builds: the Conflicts node is a load-order-wide sibling of the plugin rows — a record's override stack inherently spans more than one plugin, so there is
-  no single plugin row it could belong under. `PluginsTreeCompositeDeps.children` gains an
-  optional `conflictsNode(): TChild | undefined` accessor, consulted once at the root and
-  prepended ahead of every plugin row when present — never added to the composite's `rowsSeen`,
-  so it routes through the `children` side for its own `getChildren`/`getTreeItem` the same way
-  every other record-side node does (confirmed by an executable routing test, not merely by
-  construction).
-- **Gated on `conflictsComputed`, omitted entirely — never rendered empty (the progressive-load invariant).**
-  `PluginTreeProvider.setConflictsComputed`/`conflictsNode` mirror `loadOrderProgress.ts`'s own "no
-  conflict badge before the sweep completes" rule: `conflictsNode()` answers `undefined` (the
-  node absent, not present-with-nothing-in-it) while `LoadOrderStatus.conflictsComputed` is false.
-  Wired from `EditingController`'s `notifyConflictsComputed` dep — the same load-completing
-  false→true transition point the incompleteness message and the record panel's own comparison
-  refetch already use. Every reconcile that changes anything — a toggle, a reorder, a mod-level
-  change — re-fires it too (ADR-0044, reusing the same signal rather than adding a second
-  state-machine step).
-- **Children: `GetConflicts()`** (`RecordQueryService`, `GET /records/conflicts`) — every FormKey
-  with more than one override entry (`IRecordReads.GetContestedFormKeys`) whose record-wide
-  `ConflictAll` is not `OnlyOne`/`NoConflict`, classified through the same `ClassifyStack` helper
-  `GetCompare` uses (so "is this record conflicting" can never answer differently here than it
-  does when the record is actually opened), rendered as ordinary `RecordNode` rows (reused, not a
-  bespoke node type — the same click-to-open behavior every other record row has).
-- **Respects the active record filter from birth.** `GetContestedFormKeys`
-  is routed through the same `BuildWhere`/`_filterActive` mechanism `GetRecordTypeCounts`/`Search`
-  already use — the shipped filter-pruning mechanism, not a second filter path. A filter prunes
-  which conflicting records the node lists; it never removes the node itself, mirroring the
-  "a filter prunes records and record types, never a plugin row" rule.
-- **The conflict badge shares the existing M/A working-tree provider** (`RecordDecorationProvider`)
-  rather than a second one — a row has exactly one `FileDecoration`. M/A wins when present
-  (an uncommitted local edit is the more actionable, load order-local fact — orchestrator-approved
-  default); the conflict color/badge (`O`/green for Override, `C`/git-conflict-token for Conflict,
-  `!`/red for ConflictCritical — reusing existing sanctioned `ThemeColor`s, no new ones) shows
-  otherwise. Nothing at all for `OnlyOne`/`NoConflict`, or when the lookup has nothing to say
-  (not computed, or nothing has fetched this record's conflict state yet) — never a badge that
-  could be mistaken for "no conflict".
-- **Deliberately scoped: the badge renders only on the Conflicts node's own rows**, not on every
-  ordinary record row wherever a plugin is browsed. A load-order-wide persisted `ConflictAll` for
-  every record (computed during the winner sweep, so it's cheap to attach anywhere) is
-  architecturally the "complete" answer ADR-0016's own implementation notes anticipated, but it
-  would touch the live-mutation hot path (reorder/enable/disable's own re-sweep) and widen
-  `RecordSummary` for every caller — a materially bigger, separate piece of work if wanted, not
-  a silent scope expansion of this one.
-
 ### The load order is mirrored, not loaded ([ADR-0044](../adr/0044-the-load-order-is-mirrored-not-loaded.md))
 
 Every loadout gesture — a reorder, an enable/disable, installing, uninstalling or reprioritising
@@ -779,8 +707,8 @@ overflow, then native **Collapse All** last.
   then become the next snapshot (`loadOrderSync.request()` — the toggle asks explicitly, the
   plugins.txt watcher covers both); the backend moves the affected registrations SQL-only — no
   reload, no re-read, no re-index (proved at the mirror seam: a reorder or a disable changes the
-  index's `Index` call count by zero) — and re-sweeps winners once. Winner status, conflict badges
-  and any open record editor all reflect the change via the same `notifyConflictsComputed`
+  index's `Index` call count by zero) — and re-sweeps winners once. Winner status and any open
+  record editor both reflect the change via the same `notifyConflictsComputed`
   broadcast every completed reconcile fires; the view-header progress indicator
   (`withPluginsViewProgress`) is the only feedback — no modal, no notification. With no backend
   running the sync drops the request and no network call is made — the ordinary case is unaffected.
@@ -941,5 +869,3 @@ overflow, then native **Collapse All** last.
   tree, Downloads, and this surface all use `registerNameFilter`, which derives each view's two
   command ids and its filter-active context key from the view id so the three cannot drift into
   three conventions.
-- The conflict badge and the Conflicts node: see *Conflicts node and conflict badge* above;
-  the full visual encoding lives in [medit-record-editor.md](medit-record-editor.md).

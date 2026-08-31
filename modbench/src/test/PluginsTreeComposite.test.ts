@@ -76,11 +76,6 @@ class FakeChildren {
   getChildrenCalls: FakeChild[] = [];
   constructor(
     private readonly byPlugin: Record<string, FakeChild[]> = {},
-    // The root-level Conflicts node this fake hands back, or undefined — always defined as
-    // a method (never omitted from the class), same "answers undefined by default" shape the real
-    // PluginTreeProvider.conflictsNode() has. A separate describe block below also exercises the
-    // interface's own optionality with a children object that omits the method entirely.
-    private readonly conflictsChild?: FakeChild,
   ) {}
   getPluginChildren(file: string): Promise<FakeChild[]> {
     this.pluginChildrenCalls.push(file);
@@ -92,9 +87,6 @@ class FakeChildren {
   }
   getTreeItem(child: FakeChild): vscode.TreeItem {
     return new vscode.TreeItem(child.id);
-  }
-  conflictsNode(): FakeChild | undefined {
-    return this.conflictsChild;
   }
   fire(child?: FakeChild) { this.emitter.fire(child); }
 }
@@ -375,67 +367,6 @@ describe('PluginsTreeComposite expansion', () => {
   });
 });
 
-// The Conflicts node — root-level, a TChild the record side (`children`) hands back for the
-// root listing itself, not a per-row child `getPluginChildren` builds when a specific row expands.
-// Different insertion point from every row's own children, so the "routes through children, not
-// rows" assertions below are what prove it never gets treated as a TRow.
-describe('PluginsTreeComposite — Conflicts node root-wiring (#364)', () => {
-  const CONFLICTS_CHILD: FakeChild = { id: 'conflicts' };
-
-  it('prepends the Conflicts node ahead of every plugin row when children.conflictsNode() returns one', async () => {
-    const children = new FakeChildren({}, CONFLICTS_CHILD);
-    const { composite } = make([PLUGIN_ROW, OTHER_ROW], children);
-
-    const rootChildren = await composite.getChildren();
-
-    expect(rootChildren[0]).toBe(CONFLICTS_CHILD);
-    expect(rootChildren.slice(1)).toEqual([PLUGIN_ROW, OTHER_ROW]);
-  });
-
-  it('is absent from the root listing when children.conflictsNode() returns undefined', async () => {
-    const children = new FakeChildren({}); // conflictsChild left undefined
-    const { composite } = make([PLUGIN_ROW], children);
-
-    const rootChildren = await composite.getChildren();
-
-    expect(rootChildren).toEqual([PLUGIN_ROW]);
-  });
-
-  it('works without a wired conflictsNode at all — a children object that omits the method entirely never throws', async () => {
-    const rowSource = new FakeRows([PLUGIN_ROW]);
-    const bareChildren = {
-      getPluginChildren: () => Promise.resolve([]),
-      getChildren: () => Promise.resolve([]),
-      getTreeItem: (c: FakeChild) => new vscode.TreeItem(c.id),
-      onDidChangeTreeData: new vscode.EventEmitter<FakeChild | undefined | null>().event,
-    };
-    const composite = new PluginsTreeComposite<FakeRow, FakeChild>({
-      rows: rowSource, children: bareChildren, pluginFileOf: (row) => row.file,
-    });
-
-    const rootChildren = await composite.getChildren();
-
-    expect(rootChildren).toEqual([PLUGIN_ROW]);
-  });
-
-  // The one check that actually distinguishes "prepended as a real TChild routed through the
-  // children side" from a rival that (wrongly) treated the returned node as a TRow — e.g. adding
-  // it to rowsSeen, which would route its own getChildren/getTreeItem through deps.rows instead
-  // and misattribute it to Mod Management's own vocabulary. The Conflicts node is a TChild the
-  // root itself hands back — the same element kind a row's own expansion produces, different
-  // origin — and this is the assertion that it never gets confused with a TRow either.
-  it('routes the Conflicts node\'s own getChildren/getTreeItem through the children side, never the rows side', async () => {
-    const children = new FakeChildren({}, CONFLICTS_CHILD);
-    const { composite, rowSource } = make([PLUGIN_ROW], children);
-    await composite.getChildren(); // renders root first — rowsSeen only knows what this returned
-
-    composite.getTreeItem(CONFLICTS_CHILD);
-    await composite.getChildren(CONFLICTS_CHILD);
-
-    expect(children.getChildrenCalls).toEqual([CONFLICTS_CHILD]);
-    expect(rowSource.getChildrenCalls).toBe(1); // only the root call — never asked about CONFLICTS_CHILD
-  });
-});
 
 describe('PluginsTreeComposite when the mEdit closes', () => {
   it('returns every row to a leaf', async () => {
