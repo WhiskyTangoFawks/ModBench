@@ -4,10 +4,12 @@ using Mutagen.Bethesda;
 namespace MEditService.Core.Queries;
 
 /// <summary>
-/// Computes a TES5Edit-style diagnostic string for FormLink fields read from the record index.
-/// Null when the value is clean. The resolved/wrong-type/unresolved distinction — including the
-/// #613 engine-hardcoded-range exemption — is TES5Edit's own read, confirmed at source in
-/// wbImplementation.pas's TwbFile.FileFormIDtoLoadOrderFormID and TwbFile.RemoveMainRecord.
+/// Computes a diagnostic string for FormLink fields read from the record index. Null when the
+/// value is clean. The resolved/wrong-type/unresolved three-way split is mEdit's own shape, not an
+/// xEdit citation — only the #613 engine-hardcoded-range exemption within it is TES5Edit's read,
+/// confirmed at source in wbImplementation.pas's TwbFile.FileFormIDtoLoadOrderFormID and
+/// TwbFile.RemoveMainRecord (both gate on ObjectID &lt; $800; neither carries any wrong-record-type
+/// logic — that distinction is not theirs to cite).
 /// </summary>
 public static class CheckErrorBuilder
 {
