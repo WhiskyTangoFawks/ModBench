@@ -45,4 +45,44 @@ describe('createDebouncedFsWatcher', () => {
 
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  // ADR-0041: a mod folder's `.git` is Editing's own working-tree plumbing — the compile journal
+  // marker, refs, objects, the index — none of which is a fact any reconcile trigger cares about
+  // (ADR-0044's snapshot facts are name/origin/slot/enabled/winning; git internals change none of
+  // them). #621: this is what turns one Save & Compile into several separate debounced bursts —
+  // the marker write before compiling, its rewrite per landed plugin, its deletion after, plus
+  // the parked ref, all land here and each used to schedule its own onChange.
+  it('ignores an event inside a mod\'s .git directory, while a sibling content event still fires', () => {
+    const onChange = vi.fn();
+    createDebouncedFsWatcher('/instance', 'mods/**', onChange);
+    const watcher = watchers[0];
+
+    watcher.fireChange('/instance/mods/Foo/.git/MEDIT_COMPILE_JOURNAL');
+    vi.runAllTimers();
+    expect(onChange).not.toHaveBeenCalled();
+
+    watcher.fireCreate('/instance/mods/Foo/Foo.esp');
+    vi.runAllTimers();
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  // The one fact this filter must never hide (#621 review): a mod becoming tracked or untracked
+  // by something other than Modbench's own Track command is only ever observable, today, as the
+  // `.git` directory entry itself appearing or disappearing — nothing reads that off this watcher
+  // directly, but `notifyConflictsComputed` re-checks tracked-ness as a side effect of the next
+  // reconcile, so that reconcile still has to fire (root CLAUDE.md: never assume exclusive
+  // ownership of a file on disk).
+  it('does not ignore the .git directory entry itself appearing or disappearing', () => {
+    const onCreate = vi.fn();
+    createDebouncedFsWatcher('/instance', 'mods/**', onCreate);
+    watchers[0].fireCreate('/instance/mods/Foo/.git');
+    vi.runAllTimers();
+    expect(onCreate).toHaveBeenCalledTimes(1);
+
+    const onDelete = vi.fn();
+    createDebouncedFsWatcher('/instance', 'mods/**', onDelete);
+    watchers[1].fireDelete('/instance/mods/Foo/.git');
+    vi.runAllTimers();
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
 });
