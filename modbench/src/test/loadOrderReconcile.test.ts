@@ -108,3 +108,39 @@ describe('createLoadOrderSync', () => {
     expect(send).not.toHaveBeenCalled();
   });
 });
+
+// ADR-0035 amending ADR-0018: the per-plugin record-filter match map used to be a module-level
+// `let` in extension.ts with four independent writers (a completed reconcile, EditingController's
+// setFilter/clearFilter, mEdit closing, and a dead backend) and one reader (the composite's
+// hasMatchingRecords). Folded in here as the module's one owner — a pure store, not a
+// recomputation: this module never decides *what* matches, only holds what it was told.
+describe('createLoadOrderSync — matches/setMatches', () => {
+  const make = () => createLoadOrderSync({
+    isReceiving: () => true, send: vi.fn().mockResolvedValue(undefined), debounceMs: 100, log: vi.fn(),
+  });
+
+  it('reads undefined for any file before anything is ever set', () => {
+    const sync = make();
+
+    expect(sync.matches('a.esp')).toBeUndefined();
+  });
+
+  it('setMatches is a pure assignment — matches reads back exactly what was set, nothing transformed', () => {
+    const sync = make();
+
+    sync.setMatches(new Map([['a.esp', true], ['b.esp', false]]));
+
+    expect(sync.matches('a.esp')).toBe(true);
+    expect(sync.matches('b.esp')).toBe(false);
+    expect(sync.matches('c.esp')).toBeUndefined();
+  });
+
+  it('setMatches(undefined) clears it back to "matches everywhere"', () => {
+    const sync = make();
+
+    sync.setMatches(new Map([['a.esp', false]]));
+    sync.setMatches(undefined);
+
+    expect(sync.matches('a.esp')).toBeUndefined();
+  });
+});

@@ -96,17 +96,9 @@ let pluginsNameFilter: NameFilter | undefined;
 // exitToLoadout is where a reconcile gets deliberately abandoned, and it is module-level. Replaced
 // by each new reconcile; a superseded one does not need aborting, since the backend answers it 409.
 let loadAbort: AbortController | undefined;
-// ADR-0035 amending ADR-0018: per-plugin filter matches, lowercased filename → does this
-// plugin own at least one record the active record filter matches. Module level for the same
-// reason as pluginsTree above — EditingController's setFilter/clearFilter are the choke points
-// that invalidate it (via refreshMatchingPlugins below), and they run before the composite that
-// reads it exists. `undefined` (never fetched, or no filter active) reads as "matches" everywhere
-// it's consulted — the same safe default PluginsTreeComposite.hasMatchingRecords itself falls
-// back to when the accessor has nothing to say.
-let matchingPlugins: Map<string, boolean> | undefined;
 // Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
 // folder — rebuilt wholesale by registerHeldTrackedRepositories below, same "no stale
-// carryover" posture as matchingPlugins above. Kept so a successful field
+// carryover" posture as loadOrderSync's own match map. Kept so a successful field
 // edit can prompt the right repository's own status() and make the native Source Control panel
 // pick up the resulting working-tree change without a manual Refresh click.
 let pluginRepositories: Map<string, MinimalRepository> | undefined;
@@ -198,8 +190,8 @@ interface HeldPluginFiles {
    *  (`makeReconcileLoadOrder`'s own sequence, shared by Launch mEdit, the crash-restart handler
    *  and every snapshot the sync sends), so this is the one hand-off through which the filter
    *  state the backend actually has — not the one an earlier `setFilter`/`clearFilter` last left
-   *  behind — reaches `matchingPlugins`. That is what keeps the map from outliving the state it
-   *  describes. */
+   *  behind — reaches `loadOrderSync`'s match map. That is what keeps the map from outliving the
+   *  state it describes. */
   matches: Map<string, boolean>;
 }
 
@@ -219,7 +211,7 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
 }
 
 /** ADR-0035 amending ADR-0018: `EditingController.setFilter`/`clearFilter`'s
- *  `refreshMatchingPlugins` — re-derives `matchingPlugins` off a fresh `GET /plugins` and
+ *  `refreshMatchingPlugins` — re-derives `loadOrderSync`'s match map off a fresh `GET /plugins` and
  *  re-renders, so `PluginsTreeComposite`'s chevron reads the filter that is active now, not the
  *  one that produced the last set. The *other* path that can change which filter is active —
  *  a reconcile, which can start already-filtered or unfiltered — does not come through
@@ -233,10 +225,10 @@ async function refreshMatchingPlugins(repository: PluginRepository, outputChanne
   try {
     // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
     const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
-    matchingPlugins = new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const));
+    loadOrderSync?.setMatches(new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
   } catch (err) {
     outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
-    matchingPlugins = undefined;
+    loadOrderSync?.setMatches(undefined);
   }
   pluginsTree?.refreshDecorations();
 }
@@ -326,7 +318,7 @@ function exitToLoadout(): void {
   setFilterActive?.(false);
   // And so does the match set it drove (ADR-0035 amending ADR-0018) — a statement about
   // which held plugins' records matched, same reasoning as the chevrons just above.
-  matchingPlugins = undefined;
+  loadOrderSync?.setMatches(undefined);
   recordBrowserProvider?.setImmutablePlugins([]);
   // stop() is async (waits for confirmed exit before reporting "stopped") but its body
   // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
@@ -1103,11 +1095,11 @@ function buildPluginsTreeComposite(
     // ADR-0037: lets the composite reconcile the order-aware badge with load order state
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
-    // ADR-0035 amending ADR-0018: matchingPlugins is refreshed off the module-level
+    // ADR-0035 amending ADR-0018: the match map is refreshed off the module-level
     // refreshMatchingPlugins function above, whenever EditingController's setFilter/clearFilter
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
-    hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
+    hasMatchingRecords: (file) => loadOrderSync?.matches(file.toLowerCase()),
   });
 }
 
@@ -1871,7 +1863,7 @@ function clearTreeWhenBackendDies(
     recordBrowser.setImmutablePlugins([]);
     // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
     // which plugins the dead backend's records matched must not seed the next one.
-    matchingPlugins = undefined;
+    loadOrderSync?.setMatches(undefined);
   });
 }
 
@@ -2303,7 +2295,7 @@ async function applyLoadOrderToTree(
     // ADR-0035 amending ADR-0018: set before setLoadOrder fires its re-render, so no row
     // renders off a match set stale from whatever reconcile preceded this one — every reconcile
     // re-runs this exact hand-off.
-    matchingPlugins = held.matches;
+    loadOrderSync?.setMatches(held.matches);
     pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
     // The same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note.

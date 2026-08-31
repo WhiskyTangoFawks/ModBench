@@ -32,6 +32,19 @@ export interface LoadOrderSync {
    *  in-flight send is folded into this one. */
   flush(): Promise<void>;
   dispose(): void;
+  /** ADR-0035 amending ADR-0018: does this held plugin (keyed exactly as last set — callers
+   *  lowercase before both `setMatches` and this, same as the module-level map this replaced)
+   *  own at least one record the currently active record filter matches. `undefined` reads as
+   *  "matches" everywhere it's consulted — the composite's own safe default for "never fetched,
+   *  or no filter active" — which is also what a never-`setMatches`-called or since-cleared
+   *  module answers for any key. */
+  matches(file: string): boolean | undefined;
+  /** The one owner of the map `matches` reads. A pure assignment — no normalization, no
+   *  defaulting, no notification of its own — because every caller (a completed reconcile,
+   *  `EditingController.setFilter`/`clearFilter`, mEdit closing, a dead backend) already computed
+   *  or decided the map it hands over; this only ever stores it. `undefined` clears it back to
+   *  "matches everywhere", the same value the property itself takes when nothing has ever landed. */
+  setMatches(map: Map<string, boolean> | undefined): void;
 }
 
 export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
@@ -39,6 +52,7 @@ export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
   let inFlight: Promise<void> | undefined;
   let pending = false;
   let disposed = false;
+  let matchMap: Map<string, boolean> | undefined;
 
   const run = async (): Promise<void> => {
     if (!deps.isReceiving()) {
@@ -91,6 +105,12 @@ export function createLoadOrderSync(deps: LoadOrderSyncDeps): LoadOrderSync {
       disposed = true;
       if (timer) clearTimeout(timer);
       timer = undefined;
+    },
+    matches(file) {
+      return matchMap?.get(file);
+    },
+    setMatches(map) {
+      matchMap = map;
     },
   };
 }
