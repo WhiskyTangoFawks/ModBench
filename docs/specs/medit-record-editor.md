@@ -833,7 +833,12 @@ VMAD/Condition rows included (#231) since they render through this exact code no
    backend's per-FormKey resolution signal on `FieldDiff` — a tri-state (unresolved /
    resolved-wrong-type / resolved-valid-type) computed server-side against the global FormKey
    index, carried independently per leaf so a dangling struct/array member never suppresses the
-   affordance on the leaf next to it. `checkError` still drives the ⚠ icon but no longer gates
+   affordance on the leaf next to it. One exemption to the index lookup (#613): a FormKey in the
+   engine-hardcoded range — ObjectID below the game's Mutagen `DefaultHighRangeFormID`, in an
+   implicitly-always-loaded master — resolves valid *without* appearing in the index. Such a form
+   (the Player, `00000007`, and friends) exists in no plugin's data, so a lookup miss on it can
+   never mean the reference is broken; type-mismatch checking simply does not apply. This follows
+   xEdit, which never reports that range as unresolved. `checkError` still drives the ⚠ icon but no longer gates
    the link.
 
    A VMAD object property (`vmadObject`, `VmadObjectCell`) sources the same signal from
