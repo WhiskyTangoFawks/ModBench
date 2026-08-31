@@ -154,7 +154,7 @@ export function PluginHeader({
             >
               <input
                 type="checkbox"
-                checked={o.isPartialForm ?? false}
+                checked={o.isPartialForm}
                 disabled={!canWrite}
                 onChange={e => onTogglePartialForm(e.target.checked)}
               />

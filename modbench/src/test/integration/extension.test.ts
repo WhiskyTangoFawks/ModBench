@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { before, after, beforeEach, afterEach, describe, it } from 'mocha';
+import type { PluginMetadata } from '../../medit/ApiClient';
 
 const TEST_PORT = 15172;
 let mockBackend: http.Server;
@@ -15,34 +16,36 @@ let ext: vscode.Extension<unknown> | undefined;
 // is received, then serves the loaded plugins.
 // The load order holds every plugins.txt line, so a disabled one is present and browsable —
 // it just never participates in winner computation.
-// An explicit type (rather than inferred from the literal below) so mockPluginsOverride
-// can build a variant of one entry (e.g. its masterIssues resolved) without every other entry's
-// shape narrowing what's assignable — the literal below is otherwise deliberately loose
-// (some entries omit isImmutable/masterIssues entirely).
-type MockPlugin = {
-  name: string; path: string; origin: string; participates: boolean;
-  isImmutable?: boolean; masterIssues?: { masterName: string; kind: string }[];
-  // ADR-0035 amending ADR-0018: omitted everywhere below on purpose — every existing row
-  // exercises the wire's `?? true` default this way, the same convention masterIssues above
-  // already uses for the "field entirely absent" case.
-  hasMatchingRecords?: boolean;
-};
+// This mock's response body IS the wire: it is serialized straight to the client as
+// `PluginResponse[]`. So the fixture is the generated type, and `mockPlugin` fills in the fields
+// the backend always sends — entries below stay terse without ever describing a body the backend
+// could not actually produce. (Before #627 they deliberately omitted required fields to exercise
+// the frontend's `?? true`/`?? []` defaults; those defaults are gone, and so is the version skew
+// they guarded against — the extension spawns its own bundled backend, ADR-0022.)
+type MockPlugin = PluginMetadata;
+function mockPlugin(over: Partial<PluginMetadata> & Pick<PluginMetadata, 'name' | 'path' | 'origin' | 'participates'>): MockPlugin {
+  return {
+    isLight: false, isMaster: false, masters: [], recordCount: 0, isImmutable: false,
+    inLoadOrder: true, enabled: true, winning: true, masterIssues: [], hasMatchingRecords: true,
+    isTracked: false,
+    ...over,
+  };
+}
 const MOCK_PLUGINS: MockPlugin[] = [
-  { name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true },
-  { name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true },
-  { name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false },
+  mockPlugin({ name: 'Fallout4.esm', path: '/data/Fallout4.esm', origin: 'Data', participates: true }),
+  mockPlugin({ name: 'TestMod.esp', path: '/data/TestMod.esp', origin: 'Data', participates: true }),
+  mockPlugin({ name: 'Other.esp', path: '/data/Other.esp', origin: 'Data', participates: false }),
   // A plugins.txt line (not an implicit master) the backend reports read-only for editing
   // (Editing's "Immutable plugin") — exercises the composite's tooltip decoration end-to-end,
   // distinct from ImplicitMasterNode's own (Mod-Management-only, no load order needed) lock icon.
-  { name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true },
+  mockPlugin({ name: 'Immutable.esm', path: '/data/Immutable.esm', origin: 'Data', participates: true, isImmutable: true }),
   // ADR-0037: a plugin the backend flags with a directly-missing master — exercises the
-  // composite's error decoration end-to-end. Deliberately carries no `masterIssues` key on any
-  // *other* MOCK_PLUGINS entry (e.g. TestMod.esp above) so those rows double as the "wire omits
-  // the field entirely" case a hand-typed PluginMetadata fixture could never produce on its own.
-  {
+  // composite's error decoration end-to-end. Every other entry carries an empty `masterIssues`,
+  // which is what the backend sends for a plugin whose masters all resolved.
+  mockPlugin({
     name: 'MissingMaster.esp', path: '/data/MissingMaster.esp', origin: 'Data', participates: true,
     masterIssues: [{ masterName: 'Ghost.esm', kind: 'DirectlyMissing' }],
-  },
+  }),
 ];
 const MOCK_RECORD_TYPES = [{ type: 'weap', count: 3, displayName: 'Weapon' }];
 let loadOrderHeld = false;
@@ -61,14 +64,18 @@ let putLoadOrderShouldFail = false;
 // react to each, which is the whole subject of progressive load. `conflictsComputed` is part of
 // the real wire contract regardless — the record-editor webview polls this same endpoint directly
 // (`RecordPanelClient.ts`) for its own comparison-completeness statement, unrelated to the tree.
+// `state` is carried even though PluginRepository deliberately drops it (LoadOrderStatus in
+// ApiClient.ts says why): it is non-nullable on the wire, so a body without it is one the backend
+// cannot send.
 type MockLoadOrderStatus = {
+  state: 'None' | 'Reconciling' | 'Ready';
   totalPlugins: number;
   indexedPlugins: { name: string; origin: string }[];
   conflictsComputed: boolean;
   failures: { name: string; reason: string }[];
 };
 const NO_LOAD_ORDER_STATUS: MockLoadOrderStatus =
-  { totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
+  { state: 'None', totalPlugins: 0, indexedPlugins: [], conflictsComputed: false, failures: [] };
 let loadOrderStatus: MockLoadOrderStatus = { ...NO_LOAD_ORDER_STATUS };
 // When set, PUT /load-order does not answer until the test calls it — the real
 // backend's load blocks for the whole indexing run, and every progressive-load assertion is about
@@ -100,6 +107,7 @@ function resetMockBackend(): void {
  *  a test says otherwise — the winner sweep is the last thing a real load does. */
 function setIndexed(names: string[], extra: Partial<MockLoadOrderStatus> = {}): void {
   loadOrderStatus = {
+    state: 'Reconciling',
     totalPlugins: Math.max(names.length, loadOrderStatus.totalPlugins),
     indexedPlugins: names.map((name) => ({ name, origin: 'Data' })),
     conflictsComputed: false,
@@ -135,7 +143,9 @@ function createMockBackend(): http.Server {
         const answer = () => {
           loadOrderHeld = true;
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ failures: [] }));
+          // The full LoadOrderResponse — `status` and `crashRepairOffers` are non-nullable on the
+          // wire, so a body without them is one the backend cannot send (#627).
+          res.end(JSON.stringify({ status: 'reconciled', failures: [], crashRepairOffers: [] }));
         };
         // One-shot, like the health hold: the first PUT is the launch's cold reconcile and is
         // parked; a follow-up snapshot (a watcher event coalesced behind it) is the real backend's
@@ -1169,7 +1179,12 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
     assert.strictEqual(item.checkboxState, vscode.TreeItemCheckboxState.Checked);
   });
 
-  it('degrades to undecorated, without throwing, for a plugin the wire sends no masterIssues for at all', async () => {
+  // The negative case, at the reachable precondition. This asserted an *absent* `masterIssues`
+  // key before #627; the field is non-nullable on the wire, so the shape the backend actually
+  // sends for a plugin whose masters all resolved is an empty array, and that is what TestMod.esp
+  // now carries. The behavior under test — a plugin with no master issues gets no decoration — is
+  // unchanged and still live.
+  it('leaves a plugin whose masters all resolve undecorated', async () => {
     const tree = pluginsTree()!;
     const row = findRow(await tree.getChildren(), 'TestMod.esp');
 
@@ -1177,6 +1192,7 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
 
     assert.strictEqual(item.tooltip, undefined);
   });
+
 });
 
 // ADR-0044: a loadout change through the real wiring — the plugins.txt watcher, the

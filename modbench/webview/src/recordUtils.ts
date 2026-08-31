@@ -365,13 +365,16 @@ export function setAtPath(root: unknown, path: readonly PathSegment[], value: un
 // would only find the right element type when the array itself is the subtree root —
 // for a *nested* array it would name the wrong node's (or, off a struct root, no) elementType, and
 // defaultElementValue would build a malformed added element from the fallback.
+// `?? undefined` on the way out: the wire's `elementType`/`fields` are `T | null` (a genuinely
+// absent element schema), while every caller here treats "no metadata" as `undefined`. Collapsing
+// the two at this one boundary keeps the null out of the callers rather than widening each of them.
 export function metaAtPath(meta: FieldMetadata | undefined, path: readonly PathSegment[]): FieldMetadata | undefined {
-  let cur = meta;
+  let cur: FieldMetadata | null | undefined = meta;
   for (const seg of path) {
     if (!cur) return undefined;
     cur = seg.kind === 'member' ? cur.fields?.find(f => f.name === seg.name) : cur.elementType;
   }
-  return cur;
+  return cur ?? undefined;
 }
 
 // Keyed off the compare grid's

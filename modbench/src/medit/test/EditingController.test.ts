@@ -569,7 +569,7 @@ describe('EditingController.putLoadOrder', () => {
       PUT: vi.fn().mockResolvedValue({
         response: { ok: true },
         data: {
-          status: 'reconciled', failures: [], crashRepairOffers: [],
+          status: 'reconciled', failures: [],
           crashRepairOffers: [{ plugin: 'Foo.esp', origin: 'A', reason: 'InterruptedCompile' }],
         },
       }),

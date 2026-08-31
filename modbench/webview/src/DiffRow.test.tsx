@@ -32,6 +32,7 @@ function override(plugin: string, partial: Partial<CompareOverride> = {}): Compa
     formKey: '000001:Fallout4.esm', plugin, loadOrderIndex: 0, isWinner: false,
     editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'disk-value' }],
     conflictThis: 'Master', origin: 'Data',
+    recordType: 'npc_', isPartialForm: false, isPartialFormable: false,
     ...partial,
   };
 }

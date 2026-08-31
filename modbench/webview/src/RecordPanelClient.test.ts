@@ -118,15 +118,6 @@ describe('RecordPanelClient.load', () => {
     expect(r.notInLoadOrderSet?.has(columnKey('Shared.esp', 'ModA'))).toBe(false);
   });
 
-  // A stale/older response shape omitting the field must default to "in load order" — the
-  // overwhelmingly common case, and the one that leaves every pre-existing fixture (none of which
-  // set inLoadOrder) reading as it always has.
-  it('treats a missing inLoadOrder flag as in-load-order, not shadowed', async () => {
-    const r = await createRecordPanelClient(5172).load('000001:A.esp');
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.notInLoadOrderSet).toEqual(new Set());
-  });
 
   it('fails the whole load when compare fails', async () => {
     fetchMock.mockImplementation((input: Request | string) => {

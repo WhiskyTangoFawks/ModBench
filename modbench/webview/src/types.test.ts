@@ -1,37 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import { columnKey } from './types';
-import type {   CompareOverride, CompareResult, ConditionCompare, ConditionDiff, ConditionGroupDiff, FieldDiff,   FieldMetadata, FieldValue, FormKeyResolution, ParsedCondition, ParsedConditionParam, RecordDetail, VmadCompare,   VmadPropertyDiff, VmadScriptDiff, } from './types';
-import type { PluginInfo } from './RecordPanelClient';
 import type { components } from '../../src/medit/generated/api';
 
 type WireSchemas = components['schemas'];
 
-// This file's type-level checks below are enforced by `tsc -p webview/tsconfig.json
-// --noEmit` (the second step of `npm run build`), not by `vitest run` (`npm run test:unit`) —
-// vitest transpiles test files with esbuild, which strips types without validating them. Only the
-// `describe('columnKey', ...)` block below is a genuine vitest runtime suite.
-
-// Every hand-written interface in `types.ts`/`RecordPanelClient.ts` that
-// mirrors a generated wire DTO gets one containment check here — every key the hand type declares
-// must also exist on the generated schema for the same DTO. A backend rename (e.g.
-// WinnerPlugin -> WinnerColumn) drops the renamed key from the generated side, so
-// `KeysContainedIn` stops resolving to `never` and `AssertNoMissingKeys` fails to compile, naming
-// the stale key in the error (e.g. `Type '"winnerColumn"' does not satisfy the constraint
-// 'never'.`).
+// The type-level checks below are enforced by `tsc -p webview/tsconfig.json --noEmit` (the second
+// step of `npm run build`), not by `vitest run` (`npm run test:unit`) — vitest transpiles test
+// files with esbuild, which strips types without validating them. Only the
+// `describe('columnKey', ...)` block is a genuine vitest runtime suite.
 //
-// Deliberately not a value-level/assignability check (`Hand extends Wire`): the generated schema
-// types every property as optional-and-nullable regardless of the C# side's actual
-// nullability/required-ness (an OpenAPI-generator gap, not specific to any one field),
-// so hand-written -> generated is vacuously satisfiable regardless of renames (no
-// required members on the target) and generated -> hand-written fails on nullability even when
-// names agree. Key containment is exactly the tool that catches a rename and ignores nullability.
-type KeysContainedIn<Hand, Wire> = Exclude<keyof Hand, keyof Wire>;
-type AssertNoMissingKeys<T extends never> = T;
+// The key-containment scaffolding that used to fill this file (`KeysContainedIn`/
+// `AssertNoMissingKeys`, one check per hand-written mirror of a wire DTO) is gone. It existed for
+// exactly one reason, stated in its own comment: the generated schema typed every property
+// optional-and-nullable regardless of the C# side, which made an ordinary assignability check
+// vacuous in one direction and impossible in the other, leaving key containment as the only tool
+// that could still catch a backend rename. With the schema honest (#627) the mirrors *are* the
+// generated types, so a rename is a compile error at every use site and there is nothing left for
+// a containment check to add.
 
-// #627: the generator now reports C# nullability and enum-string-ness honestly, and these pin that
-// it keeps doing so. Type-level by necessity — "this property is not optional" is not an
-// observable any runtime test can assert, so it is asserted where the type system actually checks
-// it: `tsc -p webview/tsconfig.json --noEmit`, the second step of `npm run build`.
+// #627: the generator now reports C# nullability and enum-string-ness honestly, and these three
+// pin that it keeps doing so. Type-level by necessity — "this property is not optional" is not an
+// observable any runtime test can assert.
 //
 // `Exact` is a bidirectional-extends pair rather than a bare `extends`, because
 // `string extends string | null | undefined` is true — a one-way check would have passed against
@@ -56,45 +45,6 @@ export type CheckHonestNullableSurvives =
 // `toWorkingTreeState` trust-cast the repository used to carry.
 export type CheckWireEnumIsStringUnion =
   Assert<Exact<WireSchemas['WorkingTreeState'], 'None' | 'Modified' | 'Added'>>;
-
-// FieldMetadata: `readOnly`/`defaultValue` are synthesized only by the VMAD/Condition tree
-// adapters (see the fields' own doc comments in types.ts) — the backend never emits them, so
-// they're excluded from the wire-containment check rather than expected to appear on the schema.
-export type CheckFieldMetadata =
-  AssertNoMissingKeys<KeysContainedIn<Omit<FieldMetadata, 'readOnly' | 'defaultValue'>, WireSchemas['FieldMetadata']>>;
-export type CheckFieldValue = AssertNoMissingKeys<KeysContainedIn<FieldValue, WireSchemas['FieldValue']>>;
-export type CheckFormKeyResolution =
-  AssertNoMissingKeys<KeysContainedIn<FormKeyResolution, WireSchemas['FormKeyResolution']>>;
-export type CheckRecordDetail = AssertNoMissingKeys<KeysContainedIn<RecordDetail, WireSchemas['RecordDetail']>>;
-export type CheckCompareOverride =
-  AssertNoMissingKeys<KeysContainedIn<CompareOverride, WireSchemas['CompareOverride']>>;
-
-// FieldDiff: `wirePath`/`collapsedSummary` are synthesized by
-// vmadTreeAdapter.ts/conditionTreeAdapter.ts (see each field's own doc comment in types.ts)
-// for rows the backend never sends this shape for — excluded for the same reason as
-// FieldMetadata's readOnly/defaultValue above.
-export type CheckFieldDiff = AssertNoMissingKeys<
-  KeysContainedIn<Omit<FieldDiff, 'wirePath' | 'collapsedSummary'>, WireSchemas['FieldDiff']>
->;
-export type CheckVmadPropertyDiff =
-  AssertNoMissingKeys<KeysContainedIn<VmadPropertyDiff, WireSchemas['VmadPropertyDiff']>>;
-export type CheckVmadScriptDiff =
-  AssertNoMissingKeys<KeysContainedIn<VmadScriptDiff, WireSchemas['VmadScriptDiff']>>;
-export type CheckVmadCompare = AssertNoMissingKeys<KeysContainedIn<VmadCompare, WireSchemas['VmadCompare']>>;
-export type CheckParsedConditionParam =
-  AssertNoMissingKeys<KeysContainedIn<ParsedConditionParam, WireSchemas['ParsedConditionParam']>>;
-export type CheckParsedCondition =
-  AssertNoMissingKeys<KeysContainedIn<ParsedCondition, WireSchemas['ParsedCondition']>>;
-export type CheckConditionDiff = AssertNoMissingKeys<KeysContainedIn<ConditionDiff, WireSchemas['ConditionDiff']>>;
-export type CheckConditionGroupDiff =
-  AssertNoMissingKeys<KeysContainedIn<ConditionGroupDiff, WireSchemas['ConditionGroupDiff']>>;
-export type CheckConditionCompare =
-  AssertNoMissingKeys<KeysContainedIn<ConditionCompare, WireSchemas['ConditionCompare']>>;
-export type CheckCompareResult = AssertNoMissingKeys<KeysContainedIn<CompareResult, WireSchemas['CompareResult']>>;
-
-// PluginInfo (RecordPanelClient.ts): a deliberate structural subset of the backend's
-// PluginResponse (its own doc comment) — every key it does declare must still exist on the wire.
-export type CheckPluginInfo = AssertNoMissingKeys<KeysContainedIn<PluginInfo, WireSchemas['PluginResponse']>>;
 
 // ADR-0036: columnKey() is the frontend's own compound column identity, meant to agree
 // with the backend's ColumnKey.Of (MEditService.Core/Queries/ColumnKey.cs) for the same
