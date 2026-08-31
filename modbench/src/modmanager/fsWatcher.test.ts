@@ -85,4 +85,26 @@ describe('createDebouncedFsWatcher', () => {
     vi.runAllTimers();
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
+
+  // #621 mechanism 2: a caller with its own downstream coalescing (loadOrderReconcile's
+  // `request()`) can override this watcher's own wait instead of stacking a second, uncoordinated
+  // debounce in front of it. A latency assertion, not a cycle-count one — see this override's own
+  // doc comment on createDebouncedFsWatcher for why removing the stacked wait does not, by itself,
+  // change how many cycles a burst produces (the sync's single debounce already dominates that).
+  it('debounceMs is overridable, so a caller with its own downstream debounce is not made to wait twice', () => {
+    const onDefault = vi.fn();
+    const onOverridden = vi.fn();
+    createDebouncedFsWatcher('/instance', 'test/**', onDefault);
+    createDebouncedFsWatcher('/instance', 'test/**', onOverridden, 0);
+
+    watchers[0].fireCreate();
+    watchers[1].fireCreate();
+    vi.advanceTimersByTime(50);
+
+    expect(onOverridden).toHaveBeenCalledTimes(1);
+    expect(onDefault).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(150);
+    expect(onDefault).toHaveBeenCalledTimes(1);
+  });
 });
