@@ -53,7 +53,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   // the snapshot opaque would be a one-word change that quietly makes this module part of Mod
   // Management. It imports nothing at all — not even `vscode`.
   it('the load-order sync imports from neither context', () => {
-    const imports = importsOf(read('loadOrderSync.ts'));
+    const imports = importsOf(read('loadOrderReconcile.ts'));
     expect(imports.filter((s) => s.includes('medit') || s.includes('modmanager'))).toEqual([]);
     expect(imports).toEqual([]);
   });
@@ -64,7 +64,7 @@ describe('bounded-context boundary in the merged Plugins tree', () => {
   // Prose is exempt for the same reason the composite is exempt from this scan entirely: a
   // joining module has to be able to say in words what it joins.
   it('the load-order sync\'s code carries neither context\'s vocabulary', () => {
-    const code = read('loadOrderSync.ts')
+    const code = read('loadOrderReconcile.ts')
       .split('\n')
       .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
       .join('\n');

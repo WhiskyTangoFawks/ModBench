@@ -506,18 +506,19 @@ no confirmation, no command, and no user-facing "drift" or "re-read" concept —
 that moves which copy wins is just the `winning` flag moving on two rows the backend already holds.
 
 **How a change reaches the backend.** Every trigger calls `loadOrderSync.request()`
-(`src/loadOrderSync.ts`, a composition-root joiner that imports from neither context — the pattern
-`PluginsTreeComposite` and `nameFilter` already use, enforced by `src/test/contextBoundary.test.ts`):
-Mod Management's own watchers — `profiles/*/modlist.txt` (rewritten by install, uninstall and
-reprioritise alike), `mods/**` (a folder appearing or vanishing without one) and
-`profiles/*/plugins.txt` (a reorder or an enable/disable, whether Modbench wrote it or MO2/the
-user did) — plus the checkbox toggle's own explicit ask and the profile switch's. No polling.
-Requests coalesce (a 250 ms debounce covers a drag's write plus its watcher event, or two watchers
-firing for one install), and a request that lands mid-PUT becomes exactly one more PUT after it,
-never a race. The sync drops a request when no backend is running — a loadout-only workspace is
-the ordinary case, not a failure. One PUT is one reconcile (`makeReconcileLoadOrder`, `extension.ts`):
-snapshot → `EditingController.putLoadOrder` → filter sync → `applyLoadOrderToTree`, the same
-sequence Launch mEdit runs after the backend comes up.
+(`src/loadOrderReconcile.ts`, a composition-root joiner that imports from neither context — the
+pattern `PluginsTreeComposite` and `nameFilter` already use, enforced by
+`src/test/contextBoundary.test.ts`): Mod Management's own watchers — `profiles/*/modlist.txt`
+(rewritten by install, uninstall and reprioritise alike), `mods/**` (a folder appearing or
+vanishing without one) and `profiles/*/plugins.txt` (a reorder or an enable/disable, whether
+Modbench wrote it or MO2/the user did) — plus the checkbox toggle's own explicit ask and the
+profile switch's. No polling. Requests coalesce (a 250 ms debounce covers a drag's write plus its
+watcher event, or two watchers firing for one install), and a request that lands mid-PUT becomes
+exactly one more PUT after it, never a race. The sync drops a request when no backend is running —
+a loadout-only workspace is the ordinary case, not a failure. One PUT is one reconcile
+(`createReconcileSequencer`, folded into `loadOrderSync` itself — `src/loadOrderReconcile.ts`):
+snapshot → `EditingController.putLoadOrder` → filter sync → the tree hand-off, the same sequence
+Launch mEdit runs (via `loadOrderSync.flush()`) after the backend comes up.
 
 **A failed PUT tears nothing down.** The backend keeps whatever it held; the error is surfaced
 (ADR-0026's explicit-action tier) and the next snapshot retries. A copy that cannot be opened or

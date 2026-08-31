@@ -46,12 +46,12 @@ import {
   PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListNode,
 } from './modmanager/PluginListProvider';
 import { PluginsTreeComposite } from './PluginsTreeComposite';
-import { createLoadOrderSync, type LoadOrderSync } from './loadOrderSync';
+import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import type { GameDirectory, DetectPaths } from './modmanager/gameDirectory';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { deploy, isDeployed, purge, type LoadOrderDeployment, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
-import { buildLoadOrderSnapshot } from './modmanager/loadOrderSnapshot';
+import { buildLoadOrderSnapshot, type LoadOrderPlugin } from './modmanager/loadOrderSnapshot';
 import { resolvePluginDestination, type PluginDestinationChoice } from './modmanager/pluginDestination';
 import { detectRoot } from './modmanager/install/detectRoot';
 import { extractArchive } from './modmanager/install/extractArchive';
@@ -92,21 +92,9 @@ let pluginsTreeView: vscode.TreeView<PluginListNode | PluginTreeNode> | undefine
 // record filter (a second, independent narrowing axis) has to be able to add itself to this
 // view's readout from `activate`'s own setFilterActive, which runs before the view exists.
 let pluginsNameFilter: NameFilter | undefined;
-// The in-flight reconcile's abort handle. Module level for the same reason as the above —
-// exitToLoadout is where a reconcile gets deliberately abandoned, and it is module-level. Replaced
-// by each new reconcile; a superseded one does not need aborting, since the backend answers it 409.
-let loadAbort: AbortController | undefined;
-// ADR-0035 amending ADR-0018: per-plugin filter matches, lowercased filename → does this
-// plugin own at least one record the active record filter matches. Module level for the same
-// reason as pluginsTree above — EditingController's setFilter/clearFilter are the choke points
-// that invalidate it (via refreshMatchingPlugins below), and they run before the composite that
-// reads it exists. `undefined` (never fetched, or no filter active) reads as "matches" everywhere
-// it's consulted — the same safe default PluginsTreeComposite.hasMatchingRecords itself falls
-// back to when the accessor has nothing to say.
-let matchingPlugins: Map<string, boolean> | undefined;
 // Plugin filename → the `vscode.git` `Repository` handle opened for that plugin's own mod
 // folder — rebuilt wholesale by registerHeldTrackedRepositories below, same "no stale
-// carryover" posture as matchingPlugins above. Kept so a successful field
+// carryover" posture as loadOrderSync's own match map. Kept so a successful field
 // edit can prompt the right repository's own status() and make the native Source Control panel
 // pick up the resulting working-tree change without a manual Refresh click.
 let pluginRepositories: Map<string, MinimalRepository> | undefined;
@@ -195,11 +183,11 @@ interface HeldPluginFiles {
    *  record the *current* record filter matches. Carried in the same hand-off, for the same
    *  reason as `masterIssues` — this call already asked `GET /plugins` the question, and every
    *  reconcile reaches it downstream of `EditingController.syncFilterState()`
-   *  (`makeReconcileLoadOrder`'s own sequence, shared by Launch mEdit, the crash-restart handler
+   *  (`createReconcileSequencer`'s own sequence, shared by Launch mEdit, the crash-restart handler
    *  and every snapshot the sync sends), so this is the one hand-off through which the filter
    *  state the backend actually has — not the one an earlier `setFilter`/`clearFilter` last left
-   *  behind — reaches `matchingPlugins`. That is what keeps the map from outliving the state it
-   *  describes. */
+   *  behind — reaches `loadOrderSync`'s match map. That is what keeps the map from outliving the
+   *  state it describes. */
   matches: Map<string, boolean>;
 }
 
@@ -219,7 +207,7 @@ function heldPluginFilesFrom(repository: ApiPluginRepository): () => Promise<Hel
 }
 
 /** ADR-0035 amending ADR-0018: `EditingController.setFilter`/`clearFilter`'s
- *  `refreshMatchingPlugins` — re-derives `matchingPlugins` off a fresh `GET /plugins` and
+ *  `refreshMatchingPlugins` — re-derives `loadOrderSync`'s match map off a fresh `GET /plugins` and
  *  re-renders, so `PluginsTreeComposite`'s chevron reads the filter that is active now, not the
  *  one that produced the last set. The *other* path that can change which filter is active —
  *  a reconcile, which can start already-filtered or unfiltered — does not come through
@@ -233,10 +221,10 @@ async function refreshMatchingPlugins(repository: PluginRepository, outputChanne
   try {
     // ADR-0044: keyed by filename, so read the copy plugins.txt names — two held copies can share one.
     const plugins = (await repository.getPlugins()).filter((p) => p.inLoadOrder);
-    matchingPlugins = new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const));
+    loadOrderSync?.setMatches(new Map(plugins.map((p) => [p.name.toLowerCase(), p.hasMatchingRecords] as const)));
   } catch (err) {
     outputChannel.error(`[extension] refreshing the record filter's plugin matches failed: ${err instanceof Error ? err.message : String(err)}`);
-    matchingPlugins = undefined;
+    loadOrderSync?.setMatches(undefined);
   }
   pluginsTree?.refreshDecorations();
 }
@@ -310,8 +298,7 @@ function exitToLoadout(): void {
   // Abandon any reconcile still in flight *first* — it aborts the PUT outright, so the
   // reconcile stops polling and returns 'abandoned' rather than discovering a killed backend as a
   // network error and reporting that to the user as a failure.
-  loadAbort?.abort();
-  loadAbort = undefined;
+  loadOrderSync?.abandon();
   // The chevrons go with the backend. Cleared before it stops, so no row can be expanded
   // into a backend that is on its way down. The immutable set goes with it.
   pluginsTree?.setLoadOrder(undefined);
@@ -326,7 +313,7 @@ function exitToLoadout(): void {
   setFilterActive?.(false);
   // And so does the match set it drove (ADR-0035 amending ADR-0018) — a statement about
   // which held plugins' records matched, same reasoning as the chevrons just above.
-  matchingPlugins = undefined;
+  loadOrderSync?.setMatches(undefined);
   recordBrowserProvider?.setImmutablePlugins([]);
   // stop() is async (waits for confirmed exit before reporting "stopped") but its body
   // runs to completion regardless of whether the returned promise is awaited — fire-and-forget
@@ -1067,9 +1054,6 @@ interface PluginListDeps {
   /** The record browser that supplies a plugin row's children. Passed as the composite's
    *  child source and never touched directly here. */
   recordBrowser: PluginTreeProvider;
-  /** ADR-0044: "recompute the snapshot, PUT it, apply the answer to the tree" — what the
-   *  load-order sync built here sends on every loadout change. */
-  reconcile: ReconcileLoadOrder;
 }
 /** The Plugins tree: a view of plugins.txt, stacked below the Mods tree. A row's checkbox toggles
  *  its enabled state (writing plugins.txt immediately); rows drag-and-drop to reorder (single or
@@ -1103,19 +1087,17 @@ function buildPluginsTreeComposite(
     // ADR-0037: lets the composite reconcile the order-aware badge with load order state
     // by master name, instead of two decorations that can disagree.
     orderIssueMastersOf,
-    // ADR-0035 amending ADR-0018: matchingPlugins is refreshed off the module-level
+    // ADR-0035 amending ADR-0018: the match map is refreshed off the module-level
     // refreshMatchingPlugins function above, whenever EditingController's setFilter/clearFilter
     // run. Undefined (never fetched, or the accessor finds nothing for this file) reads as
     // "matches" — the composite's own fallback for an accessor that has nothing to say.
-    hasMatchingRecords: (file) => matchingPlugins?.get(file.toLowerCase()),
+    hasMatchingRecords: (file) => loadOrderSync?.matches(file.toLowerCase()),
   });
 }
 
 function registerPluginListView(deps: PluginListDeps): { pluginListProvider: PluginListProvider; disposables: vscode.Disposable[] } {
-  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser, reconcile } = deps;
+  const { modlistSource, log, outputChannel, reporter, instanceRoot, dataFolder, recordBrowser } = deps;
   const pluginListProvider = new PluginListProvider({ source: modlistSource, log, reporter, instanceRoot, dataFolder });
-  const sync = makeLoadOrderSync(reconcile, outputChannel);
-  loadOrderSync = sync;
   const composite = buildPluginsTreeComposite(pluginListProvider, recordBrowser);
   pluginsTree = composite;
   clearTreeWhenBackendDies(composite, recordBrowser);
@@ -1141,7 +1123,7 @@ function registerPluginListView(deps: PluginListDeps): { pluginListProvider: Plu
     vscode.window.registerFileDecorationProvider(
       new ImplicitMasterDecorationProvider(dataFolder, () => pluginListProvider.implicitMasterNames()),
     ),
-    ...wireLoadOrderWatchers(sync, instanceRoot),
+    ...wireLoadOrderWatchers(loadOrderSync!, instanceRoot),
     pluginListView.onDidChangeCheckboxState(async (e) => {
       for (const [node, state] of e.items) {
         if (node.kind !== 'plugin') continue;
@@ -1826,19 +1808,41 @@ function publishCompileDiagnostics(collection: vscode.DiagnosticCollection, orig
   for (const [fsPath, list] of byUri) collection.set(vscode.Uri.file(fsPath), list);
 }
 
-/** ADR-0044: the sync every loadout gesture feeds — see `loadOrderSync.ts`. `send` is the whole
- *  reconcile (snapshot → PUT → tree), under the Plugins view's own header progress indicator
- *  (`withPluginsViewProgress`), the same surface a launch uses. It receives only while the backend
- *  is up: with none, a request is dropped silently, since a loadout-only workspace is the ordinary
- *  case. 250 ms of debounce covers the bursts that matter — the modlist and mods watchers both
- *  firing for one install, a drag reorder's own write plus its watcher event, a checkbox toggle's
- *  explicit request plus the plugins.txt event it causes. */
-function makeLoadOrderSync(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel): LoadOrderSync {
-  return createLoadOrderSync({
+/** ADR-0044: the sync every loadout gesture feeds — see `loadOrderReconcile.ts`. Builds both
+ *  halves of one reconcile pipeline from Mod Management's and Editing's own types, none of which
+ *  cross into either module: the coalescing/debounce wrapper (`createLoadOrderSync`) and, folded
+ *  into it, the reconcile's own steps (`createReconcileSequencer`) — arm, resolve the game
+ *  directory, build the snapshot, PUT, apply, present crash-repair offers. Every reconcile runs
+ *  under the Plugins view's own header progress indicator (`withPluginsViewProgress`), the same
+ *  surface a launch uses. It receives only while the backend is up: with none, a request is
+ *  dropped silently, since a loadout-only workspace is the ordinary case. 250 ms of debounce
+ *  covers the bursts that matter — the modlist and mods watchers both firing for one install, a
+ *  drag reorder's own write plus its watcher event, a checkbox toggle's explicit request plus the
+ *  plugins.txt event it causes. */
+function makeLoadOrderSync(deps: ReconcileDeps): LoadOrderSync {
+  const { instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
+  return createLoadOrderSync<LoadOrderPlugin, LoadOrderProgress, CrashRepairOffer>({
     isReceiving: () => backendManager?.isHealthy === true,
-    send: () => withPluginsViewProgress(async () => { await reconcile(); }),
     debounceMs: 250,
     log: (msg) => outputChannel.debug(msg),
+    withProgress: (work) => withPluginsViewProgress(work),
+    say,
+    logInfo: (msg) => outputChannel.info(msg),
+    notifyNoGameDirectory: () => void vscode.window.showErrorMessage(
+      'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
+    ),
+    // gameDirResolver's own `null` ("resolved, but there is none") and the sequencer's own
+    // `undefined` ("nothing to build a snapshot from") are the same fact; normalized at the one
+    // seam between them rather than teaching the sequencer a second falsy spelling.
+    resolveGameDirectory: () => gameDirResolver.resolve().then((gd) => gd ?? undefined),
+    buildSnapshot: (dataFolder) => buildLoadOrderSnapshot(modlistSource, instanceRoot, dataFolder, (entries, root) =>
+      buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg))),
+    makeProgressHandler: makeTreeProgressHandler,
+    putLoadOrder: (plugins, dataFolder, signal, onProgress) =>
+      controller.putLoadOrder(plugins, dataFolder, instanceRoot, undefined, { onProgress, signal }),
+    syncFilterState: () => controller.syncFilterState(),
+    applyReconciled: (failures, totalPlugins) => applyLoadOrderToTree(heldPluginFiles, failures, outputChannel, totalPlugins),
+    presentCrashRepairOffers: (offers) => showCrashRepairOffers(offers),
   });
 }
 
@@ -1871,7 +1875,7 @@ function clearTreeWhenBackendDies(
     recordBrowser.setImmutablePlugins([]);
     // ADR-0035 amending ADR-0018: same reasoning as the two above — a statement about
     // which plugins the dead backend's records matched must not seed the next one.
-    matchingPlugins = undefined;
+    loadOrderSync?.setMatches(undefined);
   });
 }
 
@@ -2119,15 +2123,18 @@ function registerLoadoutView(deps: LoadoutViewDeps): { modListProvider: ModListP
     const dataFolder = dataFolderFrom(gameDirResolver, (e) =>
       outputChannel.error(`[extension] resolving the game directory failed: ${e instanceof Error ? e.message : String(e)}`));
     const modListProvider = new ModListProvider({ source: modlistSource, log, instanceRoot, reporter: modListReporter, dataFolder });
-    const reconcile = makeReconcileLoadOrder({
+    // ADR-0044: the one path by which the Plugin load order reaches Editing. Built here, before
+    // the Plugins tree, because both the tree (its own hasMatchingRecords accessor) and
+    // enterEditing below need the module-level slot filled first.
+    loadOrderSync = makeLoadOrderSync({
       instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver,
     });
     const { pluginListProvider, disposables: pluginListDisposables } =
-      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser, reconcile });
+      registerPluginListView({ modlistSource, log, outputChannel, reporter: makeReporter(outputChannel, 'pluginList'), instanceRoot, dataFolder, recordBrowser });
     const { modListView, modListFilter, updateProfileDescription } =
       createModListView(modListProvider, modlistSource, outputChannel);
     const { runModAction, promptModName, warnIfFomod } = makeModActionHelpers(modListProvider, outputChannel);
-    const enterEditing = makeEnterEditing(reconcile, outputChannel, revealLog);
+    const enterEditing = makeEnterEditing(outputChannel, revealLog);
 
     backendManager!.on('restarted', () => {
       void enterEditing().catch((err: unknown) =>
@@ -2303,7 +2310,7 @@ async function applyLoadOrderToTree(
     // ADR-0035 amending ADR-0018: set before setLoadOrder fires its re-render, so no row
     // renders off a match set stale from whatever reconcile preceded this one — every reconcile
     // re-runs this exact hand-off.
-    matchingPlugins = held.matches;
+    loadOrderSync?.setMatches(held.matches);
     pluginsTree?.setLoadOrder(held.files, held.readOnly, held.masterIssues, loadFailures);
     // The same read-only set, to the record rows — theirs is contextValue (Remove
     // hidden), the plugin rows' is the tooltip note.
@@ -2321,32 +2328,13 @@ async function applyLoadOrderToTree(
   }
 }
 
-/** Arm this launch's (or reconcile's) cancellation, and the check every step past an
- *  await makes.
- *
- *  Armed **before the first await**, not just before the PUT. A launch has two phases — bring the
- *  backend up, then walk the mod tree and reconcile — and closing mEdit during the first one has
- *  to be honoured too: a backend spawn
- *  plus a filesystem walk is a realistic window to land in. Armed late, `exitToLoadout`'s `abort()`
- *  finds nothing to cancel, and the stale launch runs on past the close to meet the backend it had
- *  just stopped — reporting "Backend failed to start" for something the user deliberately did.
- *
- *  The controller is held locally as well as in `loadAbort`, because that module-level slot
- *  belongs to whichever reconcile is newest; only the closure below names *this* one's own
- *  cancellation. Every exit past one is silent and touches nothing — the close has already torn
- *  the view down, so there is nothing to report and nothing to reset. Both failure modes (the
- *  spurious toast, and repopulating a tree the user just cleared) come from continuing. */
-function armLoadAbort(outputChannel: vscode.LogOutputChannel): { signal: AbortSignal; abandoned: () => boolean } {
-  const abort = new AbortController();
-  loadAbort = abort;
-  return {
-    signal: abort.signal,
-    abandoned: () => {
-      if (!abort.signal.aborted) return false;
-      outputChannel.info('[extension] the reconcile was abandoned before it landed; leaving the closed view alone');
-      return true;
-    },
-  };
+/** The line every abandoned check point used to get for free from `armLoadAbort`'s own
+ *  `abandoned()` closure, back when arming lived here. Now that `loadOrderSync.arm()` returns a
+ *  pure check (it cannot hold an `outputChannel` — ADR-0044's "no VS Code types in the interface"),
+ *  each call site logs explicitly instead; same message, same one-shot-per-abandonment call count,
+ *  since a reconcile returns as soon as the first check point notices. */
+function reportAbandoned(outputChannel: vscode.LogOutputChannel): void {
+  outputChannel.info('[extension] the reconcile was abandoned before it landed; leaving the closed view alone');
 }
 
 /** The progressive-reconcile tick handler, wired to this extension's own surfaces. Whether a
@@ -2392,100 +2380,31 @@ interface ReconcileDeps {
   gameDirResolver: GameDirectoryResolver;
 }
 
-/** How one reconcile ended, for the two callers that care: Launch mEdit (which exits to Loadout
- *  with no game directory, the same as before) and the sync (which does nothing more either way). */
-type ReconcileOutcome = 'reconciled' | 'no-game-directory' | 'failed' | 'abandoned';
-type ReconcileLoadOrder = () => Promise<ReconcileOutcome>;
-
-/** ADR-0044: one reconcile — recompute the snapshot (every physical plugin copy, with its slot,
- *  `*` prefix and winning flag), `PUT /load-order`, then hand the backend's answer to the tree. The
- *  one path every trigger takes: Launch mEdit, the crash-restart handler, and every loadout change
- *  the sync coalesces. Reports its steps through `say`; the caller owns the progress indicator. */
-function makeReconcileLoadOrder(deps: ReconcileDeps): ReconcileLoadOrder {
-  const { instanceRoot, modlistSource, controller, outputChannel, heldPluginFiles, showCrashRepairOffers, gameDirResolver } = deps;
-  // One reconcile at a time, whoever asks. Launch mEdit and the sync both come through here, and
-  // a watcher can fire while a launch's own PUT is still in flight — two concurrent PUTs would
-  // have the backend cancel the first (409) and the launch report an abandonment for a snapshot
-  // the sync then owned. Chained past both outcomes so one throw never wedges the next.
-  let tail: Promise<unknown> = Promise.resolve();
-  const reconcile = (): Promise<ReconcileOutcome> => {
-    const run = tail.then(reconcileOnce);
-    tail = run.then(() => undefined, () => undefined);
-    return run;
-  };
-  const reconcileOnce = async (): Promise<ReconcileOutcome> => {
-    const { signal, abandoned } = armLoadAbort(outputChannel);
-    const treeProgress = makeTreeProgressHandler();
-    const gd = await gameDirResolver.resolve();
-    if (abandoned()) return 'abandoned';
-    if (!gd) {
-      void vscode.window.showErrorMessage(
-        'Modbench: No game directory found. Set modbench.mods.gameDirectory to your Stock Game Folder or Steam install.',
-      );
-      return 'no-game-directory';
-    }
-    say('Building the load order snapshot…');
-    const plugins = await buildLoadOrderSnapshot(modlistSource, instanceRoot, gd.dataFolder, (entries, root) =>
-      buildFileConflictIndex(entries, root, (msg) => outputChannel.debug(msg)));
-    if (abandoned()) return 'abandoned';
-    // The PUT is one blocking call that opens and indexes every copy new to the load order — the
-    // slow part on a cold start, SQL-only otherwise. The polled status (treeProgress.onProgress)
-    // takes over from here, applying chevrons/failures to the tree as they land.
-    outputChannel.info(`[extension] sending the load order snapshot (${plugins.length} plugin copies)`);
-    const result = await controller.putLoadOrder(
-      plugins, gd.dataFolder, instanceRoot, undefined, { onProgress: treeProgress.onProgress, signal });
-    // A reconcile that was deliberately abandoned — superseded by a newer snapshot, or
-    // aborted because the user closed mEdit — leaves *silently*. Nothing to surface (putLoadOrder
-    // only logged it) and nothing to tear down: the newer snapshot owns the load order now.
-    if (result.outcome === 'abandoned') {
-      outputChannel.info('[extension] the load order snapshot was abandoned; leaving the one that replaced it alone');
-      return 'abandoned';
-    }
-    // ADR-0044: a failed PUT tore nothing down — the backend still holds whatever it held — so
-    // the view stays as it is, the error already surfaced (ADR-0026 "explicit action failed").
-    // There is no "exit to Loadout on load failure" any more: a copy that fails is a row in an
-    // error state, and a request the backend refused outright is reported and left for the next
-    // snapshot to retry.
-    if (result.outcome === 'failed') return 'failed';
-    await controller.syncFilterState();
-    await applyLoadOrderToTree(heldPluginFiles, result.failures, outputChannel, treeProgress.lastTotalPlugins());
-    // The loud detect-and-offer, run once per reconcile — after the tree has already
-    // settled, awaited and sequential (one native modal at a time; see crashRepairOffer.ts's own
-    // doc comment). Declining leaves the marker/missing binary exactly as it is; nothing here
-    // clears it, so the offer re-appears at the next reconcile by construction.
-    if (result.crashRepairOffers.length > 0) {
-      outputChannel.info(`[extension] ${result.crashRepairOffers.length} crash-repair offer(s) to present`);
-      await showCrashRepairOffers(result.crashRepairOffers);
-    }
-    outputChannel.info('[extension] load order reconciled');
-    return 'reconciled';
-  };
-  return reconcile;
-}
-
 /** Build the enter-editing action: spawn/attach the backend, then send it the load order. Also the
  *  crash-restart path.
  *
  *  ADR-0035: owns its own progress indicator (`withPluginsViewProgress` — see there)
  *  rather than leaving each of its callers to wrap it, and reports its steps through `say`. */
-function makeEnterEditing(reconcile: ReconcileLoadOrder, outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
+function makeEnterEditing(outputChannel: vscode.LogOutputChannel, revealLog: () => void): () => Promise<void> {
   const enter = async (): Promise<void> => {
-    const { abandoned } = armLoadAbort(outputChannel);
+    const { abandoned } = loadOrderSync!.arm();
     revealLog(); // the launch can take a while; let the user watch the step log
     say('Starting backend…');
     outputChannel.info('[extension] entering editing: starting backend');
     await backendManager!.start();
     // Before the health gate, deliberately: a close stops the backend, so an abandoned launch
     // would otherwise fail this check and report the stop it asked for as a startup failure.
-    if (abandoned()) return;
+    if (abandoned()) { reportAbandoned(outputChannel); return; }
     if (!backendManager!.isHealthy) {
       exitToLoadout(); // tear down the half-started backend and reset the view
       void vscode.window.showErrorMessage('Modbench: Backend failed to start — see the Modbench output for details.');
       return;
     }
     // No game directory means nothing to build a snapshot from, so nothing for the backend to
-    // hold — don't strand the UI in an empty editing view.
-    if ((await reconcile()) === 'no-game-directory') exitToLoadout();
+    // hold — don't strand the UI in an empty editing view. `flush()` — not a separately threaded
+    // reconcile function — is the activation path's own documented reason to exist: it wants the
+    // outcome, not just a promise that a send will happen eventually.
+    if ((await loadOrderSync!.flush()) === 'no-game-directory') exitToLoadout();
   };
   return () => withPluginsViewProgress(enter);
 }
