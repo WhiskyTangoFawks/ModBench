@@ -14,12 +14,14 @@ function makeOverride(plugin: string): RecordDetail {
 }
 
 describe('buildColumns', () => {
-  // ADR-0041: one column per override — there is no companion column.
-  it('builds one disk column per override', () => {
-    const cols = buildColumns([makeOverride('A'), makeOverride('B')]);
-    expect(cols).toHaveLength(2);
+  // #618: exactly one column — the winning override — never one per override. Mirrors
+  // recordUtils.test.ts's own thorough coverage of this seam; this file only pins the extension
+  // host's own import path into it stays wired.
+  it('builds a single disk column for the winning override', () => {
+    const cols = buildColumns([makeOverride('A'), { ...makeOverride('B'), isWinner: true }]);
+    expect(cols).toHaveLength(1);
     expect(cols[0].kind).toBe('disk');
-    expect(cols[1].kind).toBe('disk');
+    expect(cols[0].override.plugin).toBe('B');
   });
 
 });

@@ -43,13 +43,39 @@ function makeOverride(plugin: string, extra: Partial<CompareOverride> = {}): Com
   };
 }
 
+// #618: the grid shows exactly one column — the winning override — never the full stack.
+// The override-stack view is deferred pending its own UX design; the wire response and every
+// other consumer of CompareResult.overrides (editableColumns, collidingFilenames, the
+// extended-editor override lookup) keep the full stack, only column rendering narrows here.
 describe('buildColumns', () => {
-  it('produces one disk column per override', () => {
-    const cols = buildColumns([makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')]);
-    expect(cols).toHaveLength(2);
-    expect(cols.every(c => c.kind === 'disk')).toBe(true);
+  it('selects only the override flagged isWinner', () => {
+    const cols = buildColumns([makeOverride('Fallout4.esm'), makeOverride('MyMod.esp', { isWinner: true })]);
+    expect(cols).toHaveLength(1);
+    expect(cols[0].override.plugin).toBe('MyMod.esp');
   });
 
+  // Mirrors RecordPanel.tsx's own title fallback (`overrides.find(o => o.isWinner) ??
+  // overrides[0]`) exactly — not a fallback invented here. A response can genuinely carry no
+  // isWinner:true entry (every fixture's makeOverride defaults isWinner: false), and the grid
+  // still needs one column to render rather than none.
+  it('falls back to the first override when none is flagged isWinner', () => {
+    const cols = buildColumns([makeOverride('Fallout4.esm'), makeOverride('MyMod.esp')]);
+    expect(cols).toHaveLength(1);
+    expect(cols[0].override.plugin).toBe('Fallout4.esm');
+  });
+
+  // The single-override case is mathematically identical to the old per-override mapping
+  // (find(isWinner) ?? overrides[0] over a length-1 array always returns that one element) — an
+  // unconflicted record's grid is unchanged in content, regardless of how isWinner is set.
+  it('returns that one column unchanged for a single-override response', () => {
+    const cols = buildColumns([makeOverride('Fallout4.esm')]);
+    expect(cols).toHaveLength(1);
+    expect(cols[0].override.plugin).toBe('Fallout4.esm');
+  });
+
+  it('returns no columns for an empty override list', () => {
+    expect(buildColumns([])).toEqual([]);
+  });
 });
 
 // The *reason* a column is read-only, distinct from the fact that it is — `immutableSet`

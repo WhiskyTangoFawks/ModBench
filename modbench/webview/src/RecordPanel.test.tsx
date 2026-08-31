@@ -63,18 +63,32 @@ const pluginsResponse = [
   { name: 'MyMod.esp',    isImmutable: false, loadOrderIndex: 1 },
 ];
 
+// #618: an unconflicted record whose sole (and therefore winning) override is itself the
+// immutable vanilla master — the single-column shape several read-only/dimming assertions below
+// need, now that a losing column (compareResult's own Fallout4.esm) is never rendered to click or
+// query against.
+const immutableWinnerCompareResult = {
+  conflictAll: 'OnlyOne',
+  overrides: [
+    {
+      formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true,
+      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Original Name' }], conflictThis: 'OnlyOne',
+    },
+  ],
+  diffs: [
+    {
+      fieldName: 'Name', values: { 'Fallout4.esm': 'Original Name' },
+      winnerColumn: 'Fallout4.esm', winnerValue: 'Original Name', cellStates: {},
+    },
+  ],
+};
+
 // ── fixtures for the read-path suites ─────────────────────────────────────────
 
 const intMeta: FieldMetadata = { name: 'Level', type: 'int', isArray: false, validFormKeyTypes: [], enumValues: [] };
 const fkMeta: FieldMetadata = {
   name: 'Race', type: 'formKey', isArray: false, validFormKeyTypes: ['race'], enumValues: [],
 };
-
-const threePluginsResponse = [
-  { name: 'Fallout4.esm', isImmutable: true, loadOrderIndex: 0 },
-  { name: 'Mod1.esp', isImmutable: false, loadOrderIndex: 1 },
-  { name: 'Mod2.esp', isImmutable: false, loadOrderIndex: 2 },
-];
 
 const fkCompareResult = {
   conflictAll: 'OnlyOne',
@@ -133,25 +147,6 @@ const twoSiblingFieldsResult = {
       winnerColumn: 'MyMod.esp', winnerValue: 5, cellStates: {},
       conflictAll: 'NoConflict' },
   ],
-};
-
-const threePluginConflictResult = {
-  conflictAll: 'Conflict',
-  overrides: [
-    { formKey: '000001:Fallout4.esm', plugin: 'Fallout4.esm', origin: 'Data', loadOrderIndex: 0, isWinner: false,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Alice' }], conflictThis: 'Master' },
-    { formKey: '000001:Fallout4.esm', plugin: 'Mod1.esp', origin: 'Data', loadOrderIndex: 1, isWinner: false,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Bob' }], conflictThis: 'ConflictLoses', recordType: 'npc_' },
-    { formKey: '000001:Fallout4.esm', plugin: 'Mod2.esp', origin: 'Data', loadOrderIndex: 2, isWinner: true,
-      editorId: 'TestNPC', fields: [{ metadata: strMeta, value: 'Charlie' }], conflictThis: 'ConflictWins' },
-  ],
-  diffs: [{
-    fieldName: 'Name',
-    values: { 'Fallout4.esm': 'Alice', 'Mod1.esp': 'Bob', 'Mod2.esp': 'Charlie' },
-    winnerColumn: 'Mod2.esp',
-    winnerValue: 'Charlie',
-    cellStates: { 'Mod1.esp': 'ConflictLoses', 'Mod2.esp': 'ConflictWins' },
-  }],
 };
 
 const sameFilenameCompareResult = {
@@ -539,10 +534,12 @@ describe('RecordPanel', () => {
     await waitFor(() => expect(screen.getByText('Name')).toBeInTheDocument());
   });
 
-  it('shows field values for each override column', async () => {
+  // #618: exactly one column — the winning override. The losing override's own value
+  // (Fallout4.esm's "Original Name") never reaches the DOM at all; only the winner's does.
+  it('shows the field value from the winning override column only', async () => {
     renderPanel(compareResult);
-    await waitFor(() => expect(screen.getByText('Original Name')).toBeInTheDocument());
-    expect(screen.getByText('Override Name')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Override Name')).toBeInTheDocument());
+    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
   });
 
   // There is no edit mode. Editing affordances follow the column's plugin
@@ -566,8 +563,10 @@ describe('RecordPanel', () => {
   // A cell in an immutable column never activates an *editable* input, however it is
   // clicked (spec: field-type rendering rule 6). ADR-0034: the cell opens no input
   // at all — nothing ever reaches a write from here.
+  // #618: compareResult's own immutable column (Fallout4.esm) is the loser and no longer
+  // renders at all — this needs a fixture whose sole, winning column is itself immutable.
   it('a cell in an immutable column opens nothing when clicked', async () => {
-    renderPanel(compareResult);
+    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => screen.getByText('Original Name'));
     fireEvent.click(screen.getByText('Original Name'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
@@ -589,33 +588,18 @@ describe('RecordPanel', () => {
 describe('RecordPanel — same-filename, different-origin columns (#272 AC5)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  // The genuinely red case for collapsedColumns: collapsedColumns.has(o.plugin) would
-  // collide on the bare "Shared.esp" filename both columns share, so collapsing one would
-  // collapse (or leave expanded) both.
-  it('collapsing one column does not collapse the other same-filename column', async () => {
+  // #618: collidingFilenames is computed over the full override stack (never scoped down to
+  // the rendered column), so it still fires for the surviving winner even though the losing
+  // same-filename copy (ModA) is itself never rendered — origin-inline is what disambiguates the
+  // winner from an invisible collision, not from a second visible column (the old form of this
+  // test, deleted: two columns' independent collapse/expand no longer has a second column to
+  // exercise at all).
+  it('renders origin inline in the surviving column\'s header when a losing copy shares its filename', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
     renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
-    await waitFor(() => expect(screen.getByText('FromA')).toBeInTheDocument());
-    expect(screen.getByText('FromB')).toBeInTheDocument();
-
-    // A bare-text query cannot tell the two columns apart
-    // (ADR-0036: origin renders inline in the header exactly when two loaded copies share a
-    // filename, which this fixture does).
-    const colAHeader = screen.getByText('Shared.esp (ModA)');
-    fireEvent.click(colAHeader); // collapses ModA's column only
-
-    await waitFor(() => expect(screen.queryByText('FromA')).not.toBeInTheDocument());
-    expect(screen.getByText('FromB')).toBeInTheDocument();
-  });
-
-  // ADR-0036: "origin appears inline in the header only when two loaded copies share a
-  // filename" — this fixture is exactly that collision, on both columns at once (neither is the
-  // sole owner of the plain filename).
-  it('renders origin inline in both column headers when two loaded copies share a filename', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(sameFilenameCompareResult, { plugins: sameFilenamePluginsResponse });
-    await waitFor(() => expect(screen.getByText('Shared.esp (ModA)')).toBeInTheDocument());
-    expect(screen.getByText('Shared.esp (ModB)')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Shared.esp (ModB)')).toBeInTheDocument());
+    expect(screen.queryByText('Shared.esp (ModA)')).not.toBeInTheDocument();
+    expect(screen.queryByText('FromA')).not.toBeInTheDocument();
     expect(screen.queryByText('Shared.esp')).not.toBeInTheDocument();
   });
 
@@ -685,9 +669,11 @@ describe('RecordPanel — a copy the load order does not name (#304 / ADR-0035)'
     expect((pluginHeaderRoot as HTMLElement).style.opacity).toBe('');
   });
 
+  // #618: compareResult's own vanilla master (Fallout4.esm) is the loser and no longer
+  // renders — needs a fixture whose sole, winning column is itself the vanilla master.
   it('does not dim a vanilla-master column (immutable, still in the load order)', async () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(compareResult, { plugins: pluginsResponse });
+    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => expect(screen.getByText('Fallout4.esm')).toBeInTheDocument());
 
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
@@ -708,14 +694,6 @@ describe('RecordPanel — a Partial Form column (#491)', () => {
     expect(th).toHaveStyle({ opacity: String(DIMMED_OPACITY) });
   });
 
-  it('does not dim an ordinary column beside a Partial Form one', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(partialFormCompareResult, { plugins: pluginsResponse });
-    await waitFor(() => expect(screen.getByText('Fallout4.esm')).toBeInTheDocument());
-
-    const th = screen.getByText('Fallout4.esm').closest('th');
-    expect(th).not.toHaveStyle({ opacity: String(DIMMED_OPACITY) });
-  });
 });
 
 // The column header's own Partial Form checkbox dispatches the sanctioned is_partial_form
@@ -777,17 +755,17 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
 
   it('a flags cell in a tracked, editable column opens its checkbox multi-select on double click', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
 
-    fireEvent.doubleClick(screen.getAllByText('A, B')[1]);
+    fireEvent.doubleClick(screen.getByText('A, B'));
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 
   it('F2 on a focused, editable flags cell opens the same multi-select', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
 
-    const cell = screen.getAllByText('A, B')[1];
+    const cell = screen.getByText('A, B');
     fireEvent.click(cell); // focuses only — a plain first click must not open (ADR-0034)
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
 
@@ -797,10 +775,10 @@ describe('RecordPanel — flags cell editing through real message plumbing (#622
 
   it('toggling a flag posts EDIT_FIELD with the toggled bitmask — working-tree dirt', async () => {
     renderPanel(flagsCompareResult, { plugins: flagsTrackedPluginsResponse });
-    await waitFor(() => expect(screen.getAllByText('A, B')).toHaveLength(2));
+    await waitFor(() => expect(screen.getByText('A, B')).toBeInTheDocument());
     vi.mocked(vscode.postMessage).mockClear();
 
-    fireEvent.doubleClick(screen.getAllByText('A, B')[1]);
+    fireEvent.doubleClick(screen.getByText('A, B'));
     fireEvent.click(screen.getAllByRole('checkbox')[0]); // uncheck A (bit 1): 3 ^ 1 = 2
 
     expect(vscode.postMessage).toHaveBeenCalledWith(expect.objectContaining({
@@ -854,15 +832,6 @@ describe('RecordPanel — conflict color coding', () => {
     await waitFor(() => screen.getByText('Override Name'));
     const cell = screen.getByText('Override Name').closest('td')!;
     expect(cell.style.backgroundColor).toBe('rgba(255, 152, 0, 0.18)');
-  });
-
-  it('applies red cell background and red text when cellStates is ConflictLoses', async () => {
-    vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
-    renderPanel(threePluginConflictResult, { plugins: threePluginsResponse });
-    await waitFor(() => screen.getByText('Bob'));
-    const cell = screen.getByText('Bob').closest('td')!;
-    expect(cell.style.backgroundColor).toBe('rgba(244, 67, 54, 0.18)');
-    expect(cell.style.color).toBe('rgba(244, 67, 54, 1)');
   });
 
   it('applies green cell background when cellStates is Override', async () => {
@@ -1011,13 +980,15 @@ describe('RecordPanel — struct sub-rows', () => {
     expect(screen.getByText('Y')).toBeInTheDocument();
   });
 
-  it('child row for X shows values from sub-field', async () => {
+  // #618: only the winning override's own sub-field value (X: 15) reaches the DOM — the
+  // losing override's (X: 10) never does, since its whole column is never rendered.
+  it('child row for X shows the winning override\'s own sub-field value', async () => {
     renderPanel(structCompareResult);
     await waitFor(() => screen.getByText('▶'));
     fireEvent.click(screen.getByText('▶'));
     await waitFor(() => screen.getByText('X'));
-    expect(screen.getByText('10')).toBeInTheDocument();
     expect(screen.getByText('15')).toBeInTheDocument();
+    expect(screen.queryByText('10')).not.toBeInTheDocument();
   });
 
   it('toggle collapses child rows when clicked again', async () => {
@@ -1199,29 +1170,33 @@ describe('RecordPanel — column collapse (issue #3)', () => {
     vi.stubGlobal('mEditFormKey', '000001:Fallout4.esm');
   });
 
+  // #618: retargeted to MyMod.esp — compareResult's own winner and now its only column.
+  // Fallout4.esm (the loser) is never rendered, so there is no second column left to assert
+  // stays visible; collapsing hides the sole column's own field value.
   it('clicking a plugin column header chip collapses that column, hiding its field values', async () => {
     renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Original Name'));
+    await waitFor(() => screen.getByText('Override Name'));
 
-    fireEvent.click(screen.getByText('Fallout4.esm'));
-    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
-    // the chip itself (and the other column) stay visible
-    expect(screen.getByText('Fallout4.esm')).toBeInTheDocument();
-    expect(screen.getByText('Override Name')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('MyMod.esp'));
+    expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+    // the chip itself stays visible
+    expect(screen.getByText('MyMod.esp')).toBeInTheDocument();
   });
 
   it('clicking a collapsed column chip again expands it', async () => {
     renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Original Name'));
+    await waitFor(() => screen.getByText('Override Name'));
 
-    fireEvent.click(screen.getByText('Fallout4.esm'));
-    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText('Fallout4.esm'));
-    expect(screen.getByText('Original Name')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('MyMod.esp'));
+    expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText('MyMod.esp'));
+    expect(screen.getByText('Override Name')).toBeInTheDocument();
   });
 
+  // #618: needs a fixture whose sole, winning column is itself read-only — compareResult's own
+  // read-only column (Fallout4.esm) is the loser and is never rendered.
   it('collapsed column header hides the (read-only) label', async () => {
-    renderPanel(compareResult);
+    renderPanel(immutableWinnerCompareResult, { plugins: pluginsResponse });
     await waitFor(() => screen.getByText('(read-only)'));
     expect(screen.getByText('(read-only)')).toBeInTheDocument();
 
@@ -1231,9 +1206,9 @@ describe('RecordPanel — column collapse (issue #3)', () => {
 
   it('collapsed state survives a LOAD_RECORD navigation to a different formKey', async () => {
     renderPanel(compareResult);
-    await waitFor(() => screen.getByText('Original Name'));
-    fireEvent.click(screen.getByText('Fallout4.esm'));
-    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+    await waitFor(() => screen.getByText('Override Name'));
+    fireEvent.click(screen.getByText('MyMod.esp'));
+    expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -1241,8 +1216,8 @@ describe('RecordPanel — column collapse (issue #3)', () => {
       }));
     });
 
-    await waitFor(() => screen.getByText('Fallout4.esm'));
+    await waitFor(() => screen.getByText('MyMod.esp'));
     // Still collapsed after navigating to a new record in the same panel load order.
-    expect(screen.queryByText('Original Name')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Name')).not.toBeInTheDocument();
   });
 });
