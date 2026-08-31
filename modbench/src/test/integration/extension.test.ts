@@ -833,10 +833,11 @@ describe('Launch mEdit populates the editing plugin tree (#75)', () => {
 });
 
 // ── Loadout stays visible through an editing backend ───────────────────────────
-// The declarative view-mode gate itself is proven statically in packageJson.test.ts. These
-// prove the two user-observable consequences only a live host can show: durable Plugin
-// load order state survives a Launch mEdit / Close mEdit round trip untouched (AC5), and its
-// write path (enable/disable) stays reachable while the backend is running (AC4).
+// That no view, menu entry or keybinding gates on modbench.viewMode is proven statically in
+// packageJson.test.ts's repo-wide sweep. These prove the two user-observable consequences only
+// a live host can show: durable Plugin load order state survives a Launch mEdit / Close mEdit
+// round trip untouched (AC5), and its write path (enable/disable) stays reachable while the
+// backend is running (AC4).
 
 interface PluginListNodeLike { plugin?: { name?: string; enabled?: boolean } }
 interface PluginListProviderLike {
