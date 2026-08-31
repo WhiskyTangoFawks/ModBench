@@ -272,7 +272,7 @@ internal sealed class IndexStore
             key.Name, key.Origin!);
 
     // #585 / ADR-0001: the file half of an Index() call — what was on disk, and what shape its rows
-    // were written in. Called inside Index()'s own transaction (owned by DuckbRecordIndex), so a
+    // were written in. Called inside Index()'s own transaction (owned by DuckDbRecordIndex), so a
     // re-index that throws partway leaves neither the rows nor the claim about them behind. A caller
     // that names no file (an in-memory mod, which is every fixture in the suite and the New Plugin
     // gesture's freshly written one before it has a stamp worth taking) writes no row: the index then

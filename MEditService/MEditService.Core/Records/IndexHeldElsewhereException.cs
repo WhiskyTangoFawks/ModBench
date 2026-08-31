@@ -7,7 +7,7 @@ namespace MEditService.Core.Records;
 /// mode every index-writing path would have to detect), no waiting (a hang with no signal), never
 /// a second file (silent divergence). Distinct from a file DuckDB cannot make sense of, which is
 /// rebuilt — deleting a file another process holds open succeeds on POSIX and would destroy that
-/// window's live index. <see cref="DuckDbRecordIndex.IsAnotherWriter"/> is the classifier;
+/// window's live index. <see cref="IndexStore.IsAnotherWriter"/> is the classifier;
 /// <c>PUT /load-order</c> answers it 423 Locked with this message.
 /// </summary>
 public sealed class IndexHeldElsewhereException : Exception

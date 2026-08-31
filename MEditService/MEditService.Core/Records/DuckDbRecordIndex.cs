@@ -78,11 +78,6 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         _indexStore = new IndexStore(ddlBuilder, logger, databasePath);
     }
 
-    /// <summary>See <see cref="IndexStore.IsAnotherWriter"/> — forwarded rather than removed so the
-    /// white-box test surface that names this member on <see cref="DuckDbRecordIndex"/> keeps working
-    /// unchanged (#606 stage 2: the mechanism itself now lives on <see cref="IndexStore"/>).</summary>
-    internal static bool IsAnotherWriter(Exception ex) => IndexStore.IsAnotherWriter(ex);
-
     // Retained for the reconstitution path (#413 D1): reading a record back out of its document
     // needs the release it was written under, and this repository is one game for its whole
     // lifetime — the same reasoning that already resolves the condition codec once, here.
@@ -145,6 +140,10 @@ public sealed class DuckDbRecordIndex : IRecordIndex
         UpsertRegistration(plugin, origin, registration);
         // #585: and the disk claim these rows are about, replaced with them rather than beside them.
         _indexStore.StampIndexedFile(plugin, origin, filePath);
+
+        // #606 stage 2 review: run before the appender is created, matching the pre-split single
+        // method's own ordering exactly — see PluginIngest.DeletePriorDocuments's own doc comment.
+        _pluginIngest.DeletePriorDocuments(plugin, origin);
 
         // #606 stage 2: the appender's `using` scope stays here rather than moving into PluginIngest,
         // so its disposal keeps the exact same ordering relative to tx.Commit() below that the

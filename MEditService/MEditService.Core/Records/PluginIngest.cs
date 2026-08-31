@@ -83,23 +83,18 @@ internal sealed class PluginIngest
         public long AppendMs;
     }
 
-    // ADR-0041 / #413: one document per major record, written from the same enumeration that fills
-    // the record's own row — never a second pass over the plugin. The appender is opened once per
-    // Index() call (by DuckDbRecordIndex, which owns its lifetime — see this class's own doc
-    // comment) and threaded through the per-type loop below, because `records` is one table
-    // spanning every type where the wide tables were one appender each.
-    public IndexTiming IndexPlugin(
-        IModGetter pluginMod, string plugin, string origin,
-        IReadOnlyDictionary<string, RecordTableSchema> schemas, DuckDBAppender documentAppender)
+    // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
+    // delete does — a re-index replaces its own rows rather than accumulating a second copy.
+    // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
+    // so it has no codec document at all, and stays a purely extracted index table (D8).
+    //
+    // Its own method, called by DuckDbRecordIndex.Index *before* it creates the `records` appender
+    // and calls IndexPlugin below — #606 stage 2 review: the pre-split single method deleted these
+    // two tables before creating the appender, and this keeps that exact ordering rather than
+    // resting on an unverified assumption about how DuckDB's appender behaves relative to a delete
+    // issued after it exists.
+    public void DeletePriorDocuments(string plugin, string origin)
     {
-        var refs = new List<FormRef>();
-        var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
-        var containerChildRows = new List<ContainerChildRow>();
-
-        // ADR-0041 / #413: this plugin's documents go first, for the same reason every other table's
-        // delete does — a re-index replaces its own rows rather than accumulating a second copy.
-        // The header is deliberately absent from `records`: a ModHeader is not an IMajorRecordGetter,
-        // so it has no codec document at all, and stays a purely extracted index table (D8).
         DeleteExistingForOrigin("records", plugin, origin);
         // #452: and the Head snapshots with them. `records_head` is records_committed UNION ALL the
         // still-clean `records` rows, and those halves must stay disjoint (TableDdlBuilder says so "by
@@ -115,6 +110,21 @@ internal sealed class PluginIngest
         // inherit it. Never removes a *correct* snapshot: after a full re-index from one source, a
         // prior divergence describes bytes that no longer relate to what was just ingested.
         DeleteExistingForOrigin("records_committed", plugin, origin);
+    }
+
+    // ADR-0041 / #413: one document per major record, written from the same enumeration that fills
+    // the record's own row — never a second pass over the plugin. The appender is opened once per
+    // Index() call (by DuckDbRecordIndex, which owns its lifetime — see this class's own doc
+    // comment) and threaded through the per-type loop below, because `records` is one table
+    // spanning every type where the wide tables were one appender each. Callers must run
+    // DeletePriorDocuments above first — this method does not repeat those two deletes.
+    public IndexTiming IndexPlugin(
+        IModGetter pluginMod, string plugin, string origin,
+        IReadOnlyDictionary<string, RecordTableSchema> schemas, DuckDBAppender documentAppender)
+    {
+        var refs = new List<FormRef>();
+        var lookupRows = new List<(string FormKey, string RecordType, string? EditorId)>();
+        var containerChildRows = new List<ContainerChildRow>();
 
         if (_conditionCodec == null)
         {
