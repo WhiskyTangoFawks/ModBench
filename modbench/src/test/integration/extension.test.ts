@@ -1200,7 +1200,7 @@ describe('A plugin with a missing master is flagged, never deactivated (#277)', 
 
 // ADR-0044: a loadout change through the real wiring — the plugins.txt watcher, the
 // load-order sync, `PUT /load-order`, and the tree hand-off that follows — not just the sync's own
-// unit seam (already covered directly in loadOrderSync.test.ts).
+// unit seam (already covered directly in loadOrderReconcile.test.ts).
 describe('A loadout change sends a fresh load order snapshot (ADR-0044)', () => {
   const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   const pluginsTxtPath = root ? path.join(root, 'profiles', 'Default', 'plugins.txt') : '';

@@ -37,8 +37,10 @@ export interface LoadOrderSync {
   request(): void;
   /** Send now, waiting for any in-flight send first — the activation path, which wants the
    *  snapshot's outcome rather than a promise that one will happen. Any request queued behind the
-   *  in-flight send is folded into this one. Resolves `undefined` only when nothing was sent at
-   *  all (disposed, or no receiver) — every real reconcile resolves its own `ReconcileOutcome`. */
+   *  in-flight send is folded into this one — the *need* is folded in, not the *answer*: this
+   *  always resolves with the outcome of the run this call itself causes, never a run some other,
+   *  later `request()` happened to coalesce with while this one waited its turn. Resolves
+   *  `undefined` only when nothing was sent at all (disposed, or no receiver). */
   flush(): Promise<ReconcileOutcome | undefined>;
   dispose(): void;
   /** ADR-0035 amending ADR-0018: does this held plugin (keyed exactly as last set — callers
@@ -99,12 +101,58 @@ function createMatchStore(): { matches: (file: string) => boolean | undefined; s
   };
 }
 
+/** One sender at a time, and — this is the part a flat "in-flight + pending flag" cannot give —
+ *  every caller of `schedule()` gets back exactly the outcome of the run *it* caused, never a
+ *  later run someone else's coalesced request happened to trigger off the back of it.
+ *
+ *  `currentRun` is whatever is actually executing; `queued` is at most one follow-up, shared by
+ *  every arrival while `currentRun` is busy (that sharing *is* the coalescing — many arrivals
+ *  during one PUT become exactly one more, never one each) and resolved from the run
+ *  `handleSettled` starts for them, not from `currentRun` itself. `isDisposed` is read fresh each
+ *  time — `createLoadOrderSync`'s own `dispose()` flips the flag this closure reads, not a copy
+ *  taken once. */
+function createRunScheduler(
+  run: () => Promise<ReconcileOutcome | undefined>, isDisposed: () => boolean,
+): { schedule: () => Promise<ReconcileOutcome | undefined> } {
+  let currentRun: Promise<ReconcileOutcome | undefined> | undefined;
+  let queued: { promise: Promise<ReconcileOutcome | undefined>; resolve: (outcome: ReconcileOutcome | undefined) => void } | undefined;
+
+  const beginRun = (): Promise<ReconcileOutcome | undefined> => {
+    const p = run();
+    currentRun = p;
+    void p.then(handleSettled, handleSettled);
+    return p;
+  };
+  // The one place a run's completion is handled — clearing `currentRun` and, if anyone queued
+  // behind it, starting their run and clearing the queue slot all happen here, synchronously and
+  // together, so no other call can ever observe a moment where a queued arrival's need has been
+  // forgotten (nothing runs between "clear" and "promote": this is one microtask, not two).
+  const handleSettled = (): void => {
+    currentRun = undefined;
+    const owed = queued;
+    queued = undefined;
+    if (!owed) return;
+    if (isDisposed()) { owed.resolve(undefined); return; }
+    void beginRun().then(owed.resolve, owed.resolve);
+  };
+
+  return {
+    schedule: () => {
+      if (!currentRun) return beginRun();
+      queued ??= (() => {
+        let resolve!: (outcome: ReconcileOutcome | undefined) => void;
+        const promise = new Promise<ReconcileOutcome | undefined>((res) => { resolve = res; });
+        return { promise, resolve };
+      })();
+      return queued.promise;
+    },
+  };
+}
+
 export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOffer = unknown>(
   deps: LoadOrderSyncDeps<TPlugin, TProgress, TOffer>,
 ): LoadOrderSync {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let inFlight: Promise<ReconcileOutcome | undefined> | undefined;
-  let pending = false;
   let disposed = false;
   const { matches, setMatches } = createMatchStore();
   const { arm, abandon } = createAbortScope();
@@ -133,39 +181,24 @@ export function createLoadOrderSync<TPlugin = unknown, TProgress = unknown, TOff
     return outcome;
   };
 
-  // One sender at a time. A request that lands mid-send sets `pending`, and the send loop
-  // re-runs once — with a fresh snapshot, so whatever landed mid-flight is sent whole rather than
-  // as a stale copy the in-flight send already missed.
-  const kick = (): Promise<ReconcileOutcome | undefined> => {
-    if (inFlight) { pending = true; return inFlight; }
-    inFlight = (async () => {
-      let outcome: ReconcileOutcome | undefined;
-      do {
-        pending = false;
-        outcome = await run();
-      } while (pending && !disposed);
-      inFlight = undefined;
-      return outcome;
-    })();
-    return inFlight;
-  };
+  const { schedule } = createRunScheduler(run, () => disposed);
 
   return {
     request() {
       if (disposed) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { timer = undefined; void kick(); }, deps.debounceMs);
+      timer = setTimeout(() => { timer = undefined; void schedule(); }, deps.debounceMs);
     },
-    async flush() {
-      if (disposed) return undefined;
+    flush() {
+      if (disposed) return Promise.resolve(undefined);
+      // Cancels a debounced request's own timer — its need is folded into whatever `schedule()`
+      // returns below, the same as any other arrival would fold in.
       if (timer) { clearTimeout(timer); timer = undefined; }
-      // A pending timer's request is folded into this send: it asked for the same thing.
-      pending = false;
-      if (inFlight) {
-        pending = true;
-        return inFlight;
-      }
-      return kick();
+      // `schedule()` already returns exactly the promise for "the run that answers an arrival
+      // right now" — a fresh dedicated one if nothing is running, or the one already queued to
+      // run immediately after whatever is, shared with anyone else waiting on that same
+      // follow-up. Either way this caller gets that run's own outcome, never a run beyond it.
+      return schedule();
     },
     dispose() {
       disposed = true;
@@ -243,8 +276,12 @@ export interface ReconcileSequencer {
 }
 
 /** ADR-0044: one reconcile, exactly as `extension.ts`'s own `makeReconcileLoadOrder` sequenced it
- *  — this is that function's body, ported statement-for-statement, now driven by injected steps
- *  instead of calling Mod Management/Editing directly. */
+ *  — `reconcileOnce` below is that function's own body, ported statement-for-statement, now driven
+ *  by injected steps instead of calling Mod Management/Editing directly. The serialization that
+ *  body used to sit behind (`makeReconcileLoadOrder`'s own tail-chain, guarding its two
+ *  independent callers — the coalesced sync and `enterEditing`'s direct call) is not ported: this
+ *  sequencer now has exactly one caller (`createLoadOrderSync`), which already serializes every
+ *  call before it ever reaches here — see `reconcile`'s own doc below. */
 export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown, TOffer = unknown>(
   deps: ReconcileStepDeps<TPlugin, TProgress, TOffer>,
 ): ReconcileSequencer {
@@ -295,18 +332,11 @@ export function createReconcileSequencer<TPlugin = unknown, TProgress = unknown,
     return 'reconciled';
   };
 
-  // One reconcile at a time, whoever asks. Launch mEdit and the coalesced sync both come through
-  // here, and a watcher can fire while a launch's own PUT is still in flight — two concurrent
-  // PUTs would have the backend cancel the first (409) and the launch report an abandonment for a
-  // snapshot the sync then owned. Tail-chained so a caller reaching this while one is still
-  // running gets its own freshly-sequenced run queued after it, never a concurrent one racing it;
-  // chained past both outcomes so one throw never wedges the next.
-  let tail: Promise<unknown> = Promise.resolve();
-  const reconcile = (): Promise<ReconcileOutcome> => {
-    const run = tail.then(reconcileOnce);
-    tail = run.then(() => undefined, () => undefined);
-    return run;
-  };
-
-  return { reconcile };
+  // No serialization here on purpose: `createLoadOrderSync` is this sequencer's sole caller, via
+  // its own `createRunScheduler` — `run()` is invoked exactly one at a time, either as a fresh
+  // dedicated run when nothing is running, or as a follow-up `schedule()` only starts once the
+  // previous one has fully settled — so a second guard here would have nothing left to guard
+  // against. A future caller that invokes `reconcile()` from more than one place concurrently
+  // would need to bring its own serialization — this sequencer no longer provides one itself.
+  return { reconcile: reconcileOnce };
 }

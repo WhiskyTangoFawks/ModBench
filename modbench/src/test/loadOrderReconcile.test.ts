@@ -101,11 +101,17 @@ describe('createLoadOrderSync', () => {
     expect(putLoadOrder).toHaveBeenCalledTimes(1);
   });
 
-  it('flush waits for an in-flight send and then sends once more, so the caller sees the latest state', async () => {
+  // Review finding (#608): flush() joining an in-flight send (this test) is the one case where
+  // "the run flush() itself caused" and "the run that happens after the one it joined" are the
+  // same run — flush's own join is what makes that follow-up happen — so flush correctly sees run
+  // #2's outcome here. The distinct, buggy case is the next test: flush *starting* a run, with
+  // someone else's request joining midway. Two different outcome values (not the same
+  // 'reconciled' both times, as this test used to use) pin which run flush is actually reporting.
+  it('flush waits for an in-flight send to finish, then sends once more of its own', async () => {
     let resolveFirst!: () => void;
     const putLoadOrder = vi.fn()
       .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveFirst = () => resolve({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
+        resolveFirst = () => resolve({ outcome: 'failed' });
       }))
       .mockResolvedValue({ outcome: 'reconciled', failures: [], crashRepairOffers: [] });
     const { sync } = make({ putLoadOrder });
@@ -114,9 +120,42 @@ describe('createLoadOrderSync', () => {
     await vi.advanceTimersByTimeAsync(100);
     const flushed = sync.flush();
     resolveFirst();
-    await flushed;
+    const outcome = await flushed;
 
     expect(putLoadOrder).toHaveBeenCalledTimes(2);
+    // flush's own send is the second call — the one its join caused — not the first, which was
+    // already running before flush was ever invoked.
+    expect(outcome).toBe('reconciled');
+  });
+
+  // Review finding (#608), the concrete failure the reviewer traced: Launch mEdit's flush()
+  // starts its own run; a watcher's request() fires mid-PUT and coalesces into exactly one more
+  // run (never a concurrent one — the shared single-flight gate is unchanged); flush must still
+  // resolve with *its own* run's outcome, not the coalesced run's, or `makeEnterEditing` would
+  // read a stranger's 'no-game-directory' and tear down a view that just launched successfully.
+  it('flush resolves with the outcome of the run it caused, not a later run a concurrent request coalesces into it', async () => {
+    let resolveGameDirectory!: (v: { dataFolder: string } | undefined) => void;
+    const resolveGameDirectoryFn = vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveGameDirectory = resolve; }))
+      .mockResolvedValue({ dataFolder: '/data' });
+    const putLoadOrder = vi.fn()
+      .mockResolvedValueOnce({ outcome: 'failed' }) // flush's own run
+      .mockResolvedValueOnce({ outcome: 'reconciled', failures: [], crashRepairOffers: [] }); // the coalesced request()'s run
+    const { sync } = make({ resolveGameDirectory: resolveGameDirectoryFn, putLoadOrder });
+
+    const flushed = sync.flush(); // starts flush's own run — blocked on resolveGameDirectory
+    sync.request(); // a watcher fires while flush's PUT is still building its snapshot
+    await vi.advanceTimersByTimeAsync(100); // the watcher's debounce timer fires -> coalesces in
+
+    resolveGameDirectory({ dataFolder: '/data' }); // let flush's own run proceed
+    const outcome = await flushed;
+    // The coalesced follow-up run starts the instant flush's own run settles (`handleSettled`),
+    // but still needs its own microtask turns (resolveGameDirectory -> buildSnapshot ->
+    // putLoadOrder) to actually reach its PUT — give it those before checking it landed.
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(outcome).toBe('failed'); // flush's own run's outcome — never the coalesced 'reconciled'
+    expect(putLoadOrder).toHaveBeenCalledTimes(2); // the watcher's need was not dropped either
   });
 
   it('a throwing send is logged and does not wedge the next request', async () => {
@@ -358,10 +397,16 @@ describe('createReconcileSequencer', () => {
     expect(withOffers.presentCrashRepairOffers).toHaveBeenCalledWith(['offer-1']);
   });
 
-  // The tail-chaining this ports verbatim from makeReconcileLoadOrder: a caller reaching
-  // reconcile() while one is still running gets its own freshly-sequenced run queued after it,
-  // never a concurrent one racing it.
-  it('serializes overlapping reconcile() calls rather than racing them', async () => {
+  // Review finding (#608): this sequencer used to tail-chain overlapping reconcile() calls so a
+  // caller reaching it while one was still running got its own queued-after run rather than a
+  // concurrent one. That guard is gone — createLoadOrderSync is this sequencer's sole caller
+  // (its own request()/flush() coalescing, via `schedule()`, is what now guarantees only one
+  // reconcile() call is ever in flight at a time), so a second guard here had nothing left to
+  // guard against. This test pins the honest consequence: called directly, with no serializing
+  // caller in front of it, two concurrent reconcile() calls now race — proving the doc comment
+  // above true rather than merely asserting it. A future caller invoking this sequencer from more
+  // than one unsynchronized place would need to bring its own serialization.
+  it('does not serialize overlapping reconcile() calls on its own — two concurrent calls race', async () => {
     let resolveFirst!: () => void;
     const order: string[] = [];
     // Only resolveGameDirectory/putLoadOrder are tracked here — the other steps are real no-op
@@ -390,14 +435,15 @@ describe('createReconcileSequencer', () => {
 
     const first = reconcile();
     const second = reconcile();
-    await Promise.resolve(); await Promise.resolve(); // let the tail-chained microtask reach resolveGameDirectory
-    expect(order).toEqual([]); // first call is waiting on its own game directory resolution
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+
+    // Both calls started immediately, concurrently — the second ran all the way through to its
+    // own PUT while the first is still blocked on its very first await, not waiting for the first
+    // to finish the way the tail-chain used to make it.
+    expect(order).toEqual(['resolveGameDirectory:2', 'putLoadOrder']);
 
     resolveFirst();
-    await first;
-    expect(order).toEqual(['resolveGameDirectory:1', 'putLoadOrder']); // second still queued behind it
-
-    await second;
-    expect(order).toEqual(['resolveGameDirectory:1', 'putLoadOrder', 'resolveGameDirectory:2', 'putLoadOrder']);
+    await Promise.all([first, second]);
+    expect(order).toEqual(['resolveGameDirectory:2', 'putLoadOrder', 'resolveGameDirectory:1', 'putLoadOrder']);
   });
 });
