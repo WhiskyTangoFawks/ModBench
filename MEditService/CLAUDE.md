@@ -83,27 +83,30 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
     `ExternalChangeLoadOrderHook.RunAfterReconcile` drops every mirror watch before re-registering, so no
     watch outlives the load order that asked for it.
   - **Write targets resolve only among load-order members** (`PluginOriginResolver.Resolve`,
-    `LoadOrderMirror.RequirePlugin`, `ILoadOrder.LoadOrderPlugin`): `plugins.txt` cannot list a
+    `LoadOrderMirror.RequirePlugin`, the `LoadOrderPlugin` extension method on `ILoadOrder`
+    (`PluginOriginResolver.cs`, not an interface member): `plugins.txt` cannot list a
     name twice, which is what makes a bare filename safe as a write target. "Not in the load order"
     means read-only, refused up front through `RecordEditService.RefuseIfBlocked` — never a
     fail-at-save.
   - Read routes (records, record types, the four spatial routes) take an optional `origin`,
     resolved server-side from the load order when the caller doesn't state one; `Search(RecordQuery)`
     takes a nullable `PluginKey` *filter* — browsing every plugin is legitimate.
-  - Still filename-only-keyed, each tracked: #303 (`MasterResolution.Classify`, `GetPlugins`' filter
-    path), #304 (`extendedFieldEditor.ts` temp-file path), #297 (webview `types.ts` hand-duplicates
-    the generated wire types).
+  - Still filename-only-keyed: #303 (`MasterResolution.Classify`, `GetPlugins`' filter path —
+    #303 itself closed as superseded by ADR-0044, but its own closing comment routed this
+    specific residue here for re-verification, and it's still true). #304 (`extendedFieldEditor.ts`
+    temp-file path) and #297 (webview `types.ts` hand-duplicating wire types) are both fixed —
+    both now carry `origin`.
 - The per-type views, editor field metadata and record codec are reflection-generated from Mutagen types at startup (ADR-0005, ADR-0032) — never hand-edit. Enforces root's game-generalization rule; FO4 in tests = fixture, not scope limit.
 - **The DB is an index over documents** (#413 / ADR-0041). One `records` table holds each record's
   codec JSON as its body beside identity columns (`plugin`, `form_key`, `record_type`, `editor_id`,
   `ref`, `content_hash`); the extracted index tables (`form_lookup`,
-  `form_references`, `placement`, `cell_location`, `registrations`, `header`) are populated from it at
+  `form_references`, `placement`, `cell_location`, `container_child`, `registrations`, `header`) are populated from it at
   ingest. The reflected per-type wide tables are gone — each type's name is now a generated
   `json_extract` **view** over `records`, which is what keeps user filter SQL working unchanged.
   **Nothing load-order-derived is stored on a data row** (#583/#584 / ADR-0001): a record row carries
   file-derived facts only. `load_order_idx` is a fact about a plugin's registration and lives solely
   on `registrations`; `is_winner` is a fact about the registered stack a FormKey sits in and lives
-  solely in `winners` (`(ref, form_key) → (plugin, origin)`, rebuilt wholesale by
+  solely in `winners` (`(record_ref, form_key) → (plugin, origin)`, rebuilt wholesale by
   `DuckDbRecordIndex.UpdateWinners`). The registered view over each mirror table (`records`,
   `records_committed`, `form_lookup`, `header` — see "Registration is visibility" above) joins both
   back in, so they still read as ordinary columns everywhere outside `Records/` itself. Every writer
@@ -213,7 +216,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - `is_winner` is **swept per ref**, never carried across them. A record the working tree deleted
     promotes the next plugin down at Effective, and the promoted row is a clean row physically
     shared with `records_head` — reusing Effective's answer reported two winners for one FormKey at
-    Head. So `winners` is keyed `(ref, form_key)` and `records_head` joins it at Head.
+    Head. So `winners` is keyed `(record_ref, form_key)` and `records_head` joins it at Head.
   - `IRecordIndex.ApplyWorkingTreeChanges` moves Effective against a fixed baseline (null body =
     deletion; bytes equal to committed = convergence back to clean, by byte compare, never by a
     `content_hash` mismatch alone). `SetCommittedBaseline` moves the baseline itself. Neither can
@@ -246,7 +249,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
   - **Anything derived from the whole plugin set must gate on `ILoadOrderMirror.Status`**, not compute over whatever is loaded so far. A partial set does not give a smaller answer, it gives a *wrong* one — `MasterResolution.Classify` over a mid-load load order reports a master that simply has not been opened yet as `DirectlyMissing` (`RecordQueryService.GetPlugins` gates on `LoadOrderState.Ready` for exactly this). `ConflictsComputed` is the same rule for winners: it is a separate field from `State` because ADR-0035's live mutations (reorder, enable, disable) will leave a Ready load order with stale winners.
   - **Everything a reader touches on `LoadOrder` is an immutable snapshot** (copy-on-write under `_mutation`), because readers now walk those lists while the load appends to them. A plain `List<T>` here throws "Collection was modified" as often as a read coincides with a plugin landing.
   - **Never dispose the load order or index without draining the reconcile first.** `EnterExclusive()` cancels the in-flight reconcile *and waits for it to stop*; disposing a DuckDB connection while the indexing loop still holds it is a native crash, not a catchable exception. `Close`, `Dispose` and every reconcile go through it. A superseded reconcile leaves what it landed for its successor — nothing is torn down on cancel (ADR-0044).
-  `PUT /load-order` stays blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /load-order/status` reports progress alongside the in-flight POST (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
+  `PUT /load-order` stays blocking and unchanged — still the completion signal, returning only after the winner sweep; `GET /load-order/status` reports progress alongside the in-flight PUT (200 with state `None` when idle, so a poller never reads an error to learn nothing is happening). A superseded or cancelled load answers 409, never 500.
 - **`ILoadOrderMirror.RequireScope()` is the one "no load order held" gate** (#605), replacing every
   consumer's own null-check-and-throw against the nullable `LoadOrder`/`Reads`/`Index` properties —
   `WorldspaceQueryService`, `ContainerChildQueryService` and `RecordQueryService` all call it (via
@@ -261,7 +264,7 @@ C# ASP.NET Core backend. Root [CLAUDE.md](../CLAUDE.md) for project-wide invaria
 | Folder | Owns | Examples |
 | ------ | ---- | ------- |
 | `Plugins/` | The load-order mirror: which plugin copies are held, their registrations, reconcile | `LoadOrder`, `LoadOrderMirror`, `PluginMetadata`, `LoadOrderEntry`, `LoadOrderStatus` |
-| `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec`, `FieldMetadataMapper` |
+| `Schema/` | Static knowledge of Mutagen record types — read and write | `SchemaReflector`, `RecordTableSchema`, `ColumnSpec` |
 | `Records/` | DuckDB index over documents: ingest, query, DDL + view generation | `IRecordReads`, `IRecordIndex`, `DuckDbRecordIndex`, `PluginKey`, `TableDdlBuilder`, `RecordViewBuilder` |
 | `Queries/` | Application-level questions about records | `RecordQueryService`, `ConflictClassifier`, `Models` (DTOs) |
 | `Edits/` | The single write path: one field edit becomes a working-tree change; compile turns source text back into the binary (#416) | `RecordEditService`, `RecordFieldWriter`, `RecordEditResult`, `PluginWriter`, `PluginCompileService`, `SourceCheckout` |

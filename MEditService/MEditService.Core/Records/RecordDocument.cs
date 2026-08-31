@@ -36,10 +36,11 @@ public record RecordDocument(
     bool IsPartialFormable = false);
 
 /// <summary>
-/// One plugin's position in a record's override stack. <see cref="Effective"/> and
-/// <see cref="Head"/> are the same <see cref="RecordDocument"/> instance and
-/// <see cref="HasWorkingTreeChange"/> is always false in #421 — Head/Effective divergence is #415's
-/// addition; this ticket only carries the shape.
+/// One plugin's position in a record's override stack. For a record with no working-tree change,
+/// <see cref="Effective"/> and <see cref="Head"/> are the same <see cref="RecordDocument"/> instance
+/// (an identity, not merely equal values) and <see cref="HasWorkingTreeChange"/> is false; for a
+/// dirty one, <see cref="Head"/> is resolved separately from the committed baseline and the two
+/// diverge (#415).
 /// </summary>
 public record OverrideStackEntry(
     PluginKey Plugin,

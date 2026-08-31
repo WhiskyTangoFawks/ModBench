@@ -25,7 +25,7 @@
          (PluginWriter.SaveAsync, .SaveAsync_ReloadAndResave_ProducesByteIdenticalOutput in the same
          file) goes through ModFactory.ImportSetter's genuine deep parse instead and does NOT reach
          this defect — so a green save-path test is not evidence 0.54.0 is safe; the overlay test is
-         the one that gates a bump. GameSession's own read/indexing path uses the same
+         the one that gates a bump. LoadOrder's own read/indexing path uses the same
          ModFactory.ImportGetter overlay this bug lives in, so this isn't a defect confined to an
          unused code path. Move only once #385 confirms the regression is fixed upstream. -->
     <PackageReference Include="Mutagen.Bethesda.Fallout4" Version="0.53.1" />

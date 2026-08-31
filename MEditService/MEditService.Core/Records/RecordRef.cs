@@ -1,21 +1,23 @@
 namespace MEditService.Core.Records;
 
 /// <summary>
-/// Which state of a record's text a read answers from. Maps onto the single
-/// <see cref="Source.SourceRef.Committed"/> value the <c>records.ref</c> column carries today
-/// (ADR-0041) — <see cref="Head"/> answers identically to <see cref="Effective"/> until #415 gives
-/// the working tree its own divergent state.
+/// Which state of a record's text a read answers from — <see cref="Effective"/> is the record's
+/// current bytes, <see cref="Head"/> is the last committed state, and the two diverge for any
+/// record a working-tree edit has touched (#415; <see cref="Source.SourceRef"/> is the
+/// <c>records.ref</c> column-value counterpart this maps onto). <see cref="IRecordIndex.At"/>
+/// repositions a read between them.
 /// </summary>
 public enum RecordRef
 {
     /// <summary>The default surface every <see cref="IRecordIndex"/> member (other than
-    /// <see cref="IRecordIndex.At"/> itself) answers from: the committed baseline, narrowed by
+    /// <see cref="IRecordIndex.At"/> itself) answers from: the record's current bytes — a
+    /// working-tree edit where one exists, the committed baseline otherwise — narrowed by
     /// <see cref="IRecordIndex.SetFilter"/> when a filter is active.</summary>
     Effective,
 
-    /// <summary>The last committed state, ignoring any working-tree edit (#415). Ships in #421
-    /// answering identically to <see cref="Effective"/> — the git-ref case is a later, additive
-    /// addition, not built here.</summary>
+    /// <summary>The last committed state, ignoring any working-tree edit (#415): the committed
+    /// baseline for a record that has diverged, and the same bytes as <see cref="Effective"/> for
+    /// one that never has.</summary>
     Head,
 }
 

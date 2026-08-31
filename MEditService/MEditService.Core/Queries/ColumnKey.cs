@@ -12,10 +12,11 @@ namespace MEditService.Core.Queries;
 //
 // PluginOrigin.DataDirectory is elided: a plugin resolved from the game's single Data directory is
 // already uniquely identified by its filename (there is only one Data/), so the plain filename is
-// itself a collision-free key for that case, not a shortcut that loses information. This keeps
-// every existing single-origin fixture/load order (the overwhelming common case today, since two
-// same-filename plugins can't load together until #34) producing the exact plain-filename keys it
-// always has — the whole test suite doesn't need rekeying for a case nothing exercises yet.
+// itself a collision-free key for that case, not a shortcut that loses information. Before #34, two
+// same-filename plugins could never load together at all, so every fixture/load order of the day was
+// single-origin and this elision cost nothing to add; ADR-0044 has since made a winning and a losing
+// copy sharing a filename routine, and ColumnKeyTests/DuplicateFilenameLoadOrderApiTests now exercise
+// the multi-origin case directly.
 public static class ColumnKey
 {
     private const char Delimiter = '|';
