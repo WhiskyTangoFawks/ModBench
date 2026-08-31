@@ -998,8 +998,9 @@ describe('EditingController.createRecord', () => {
       body: { origin: 'ModA', recordType: 'npc_', editorId: 'NewNpc', formKey: null },
     });
     expect(deps.refreshTree).toHaveBeenCalled();
-    // A create is a working-tree change to a tracked plugin's source — the compile-staleness
-    // decoration needs the same re-derive refreshTree's sibling facts already get here.
+    // A create is a working-tree change to a tracked plugin's source — the same re-derive
+    // `hasMatchingRecords` needs (ADR-0035 amending ADR-0018): a new record can start matching
+    // the active filter.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
@@ -1244,7 +1245,8 @@ describe('EditingController.absorbUpstreamUpdate', () => {
     });
     expect(deps.refreshTree).toHaveBeenCalled();
     // Absorbing a new baseline moves the source under this plugin the same way a track
-    // does — the compile-staleness decoration needs the same re-derive.
+    // does — the same re-derive createRecord gives `hasMatchingRecords`, since the plugin's
+    // records (and hence which match the active filter) can change.
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 

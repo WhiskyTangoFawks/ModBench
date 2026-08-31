@@ -422,7 +422,7 @@ export class EditingController {
       this.deps.refreshTree();
       // A create is a working-tree change to a tracked plugin's source — the same re-derive
       // `hasMatchingRecords` needs (ADR-0035 amending ADR-0018): a new record can start matching
-      // (or, once other operations exist, stop matching) the active filter.
+      // the active filter.
       this.deps.refreshMatchingPlugins();
       return data?.formKey ?? undefined;
     } catch (e) {
