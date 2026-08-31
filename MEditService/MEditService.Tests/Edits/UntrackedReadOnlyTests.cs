@@ -47,6 +47,22 @@ public sealed class UntrackedReadOnlyTests
         Assert.Contains("Modbench: Track\u2026", result.Message, StringComparison.Ordinal);
     }
 
+    // #607: ResolveEditTarget's own step order \u2014 the write-path gate (RefuseIfBlocked) must fire
+    // before the "does this plugin even hold the record" existence check, not after. An untracked
+    // plugin is refused for *that* reason regardless of whether the named FormKey exists at all;
+    // reporting RecordNotFound instead would send the user chasing a FormKey typo when the real
+    // problem is that the whole plugin is read-only.
+    [Fact]
+    public void EditingANonexistentFormKey_OnAnUntrackedPlugin_StillRefusesAsUntracked_NotAsRecordNotFound()
+    {
+        using var mod = TrackedModFixture.Untracked();
+
+        var result = ServiceFor(mod.Mirror).EditField(mod.Plugin, $"ABCDEF:{TrackedModFixture.PluginName}", "height_max", Json("0.75"));
+
+        Assert.False(result.Applied);
+        Assert.Equal(RecordEditRefusal.PluginNotTracked, result.Refusal);
+    }
+
     [Fact]
     public void EditingAPluginInAnUntrackedModFolder_WritesNothingAtAll()
     {
