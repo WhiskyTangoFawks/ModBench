@@ -51,7 +51,7 @@ internal static class ArrayOpWriter
 
     internal static FieldApplyOutcome Apply(IMajorRecord record, ColumnSpec col, string opName, JsonElement envelope)
     {
-        if (col.Apply == null) return FieldApplyOutcome.ReadOnly;
+        if (col.Apply.Writer is not { } apply) return FieldApplyOutcome.ReadOnly;
         if (!envelope.TryGetProperty("path", out var pathEl) || pathEl.ValueKind != JsonValueKind.Array)
             return FieldApplyOutcome.ValueShapeMismatch;
 
@@ -100,7 +100,7 @@ internal static class ArrayOpWriter
 
         StripNulls(root);
         var newValue = JsonSerializer.SerializeToElement(root);
-        return col.Apply(record, newValue) switch
+        return apply(record, newValue) switch
         {
             ApplyOutcome.Applied => FieldApplyOutcome.Applied,
             ApplyOutcome.PropertyNotFound => FieldApplyOutcome.NotFound,

@@ -138,13 +138,13 @@ internal static class RecordFieldWriter
         if (TryGetOpName(value, out var arrayOpName) && ArrayOpWriter.IsArrayOp(arrayOpName))
             return ArrayOpWriter.Apply(record, col, arrayOpName, value);
 
-        if (col.Apply == null)
+        if (col.Apply.Writer is not { } apply)
             return FieldApplyOutcome.ReadOnly;
 
         // The applier's own answer, not an assumption — each of these is a different
         // reason with a different fix (see FieldApplyOutcome's own docs), so each translates to its
         // own outcome rather than one undifferentiated refusal.
-        return col.Apply(record, value) switch
+        return apply(record, value) switch
         {
             ApplyOutcome.Applied => FieldApplyOutcome.Applied,
             ApplyOutcome.PropertyNotFound => FieldApplyOutcome.NotFound,

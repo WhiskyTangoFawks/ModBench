@@ -185,7 +185,7 @@ public class HeaderIndexingTests
         var masters = Reflector.GetSchemas(GameRelease.Fallout4)[HeaderIndexer.RecordType]
             .RecordColumns.Single(c => c.Name == HeaderIndexer.MastersFieldName);
 
-        Assert.Null(masters.Apply);
+        Assert.Null(masters.Apply.Writer);
     }
 
     [Fact]

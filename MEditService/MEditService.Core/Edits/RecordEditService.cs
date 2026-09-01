@@ -1577,7 +1577,7 @@ public sealed class RecordEditService(
         if (column == null)
             return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
 
-        if (column.Apply != null)
+        if (column.Apply.Writer != null)
         {
             throw new NotSupportedException(
                 $"Header column '{fieldPath}' now carries a write delegate, but RecordEditService has " +

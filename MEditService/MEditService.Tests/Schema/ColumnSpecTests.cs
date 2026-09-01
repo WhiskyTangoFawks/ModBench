@@ -1,4 +1,5 @@
 using MEditService.Core.Schema;
+using Mutagen.Bethesda.Plugins.Records;
 
 namespace MEditService.Tests.Schema;
 
@@ -11,7 +12,7 @@ public class ColumnSpecTests
         string[]? validFormKeyTypes = null,
         string[]? enumValues = null) =>
         new(name, name, "VARCHAR", _ => null, apiType,
-            validFormKeyTypes ?? [], enumValues ?? [], null, isArray);
+            validFormKeyTypes ?? [], enumValues ?? [], LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"), isArray);
 
     [Fact]
     public void ToFieldMetadata_MapsAllFields()
@@ -41,7 +42,8 @@ public class ColumnSpecTests
     {
         var bits = new string[] { "1", "2", "4" };
         var col = new ColumnSpec("flags", "Flags", "BIGINT", _ => null, "enum",
-            [], ["A", "B", "C"], null,
+            [], ["A", "B", "C"],
+            LeafWrite.ReadOnly<IMajorRecord>("test fixture: write capability is not under test"),
             IsBitmask: true, EnumBitValues: bits);
         Assert.Equal(bits, col.ToFieldMetadata().EnumBitValues);
     }
