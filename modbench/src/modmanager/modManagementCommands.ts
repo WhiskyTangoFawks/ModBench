@@ -19,7 +19,7 @@ import { createDownloadsWatcher } from './downloadsWatcher';
 import { HiddenDownloadDecorationProvider } from './HiddenDownloadDecorationProvider';
 import { makeReporter } from '../reporter';
 import { registerNameFilter, type NameFilter } from '../nameFilter';
-import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../extension';
+import { meditConfig, makeDetectPaths, setMo2InstanceContext } from '../workspaceConfig';
 
 
 /** Stub provider for the Mods view when the workspace isn't an MO2

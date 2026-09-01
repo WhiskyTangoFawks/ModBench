@@ -10,7 +10,8 @@ import { ReferencedByTreeProvider, ReferencedByGroupNode, referencedByCopyText, 
 import { ActiveRecordTracker } from './ActiveRecordTracker';
 import { type CompileTarget } from './compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './PluginRepository';
-import { startExternalChangePolling, type OpenMergeEditor } from './externalChangeCoordinator';
+import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from './trackedRepositories';
+import { startExternalChangePolling, gateExternalChangePolling, type OpenMergeEditor } from './externalChangeCoordinator';
 import { buildWebviewHtml } from './webviewHtml';
 import { EXTENSION_TO_WEBVIEW, type ExtensionToWebview, type VmadScriptsContext, type VmadScriptContext, type VmadPropertyContext, type ColumnHeaderContext } from './messages';
 import { copyTargetPlugins, type CopyGesture } from './copyTargetPlugins';
@@ -507,6 +508,100 @@ export async function runCopyRecordCommand(
     if (newFormKey) void vscode.window.showInformationMessage(`Modbench: Copied as ${newFormKey} into ${destination.name}.`);
   }
 }
+/** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
+ *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
+ *  manual Refresh button has. */
+export interface MinimalRepository {
+  status(): Thenable<unknown>;
+}
+/** The one shape this extension needs from `vscode.git`'s exported API (ADR-0041: "the native git
+ *  UI is the review surface") — deliberately not the full upstream `git.d.ts`, just the members
+ *  actually called, so there is nothing here to drift out of sync with an API surface this
+ *  extension otherwise never touches. `openRepository` resolves `null` — the real API's own
+ *  answer for "declined to open"; the resolved handle is retained by the caller. */
+interface MinimalGitApi {
+  openRepository(uri: vscode.Uri): Thenable<MinimalRepository | null>;
+}
+interface GitExtensionExports {
+  getAPI(version: 1): MinimalGitApi;
+}
+
+/** ADR-0041: one `openRepository` per distinct tracked mod folder, so each shows its own
+ *  native Source Control group — re-run whenever the load order becomes newly readable
+ *  (`notifyConflictsComputed`'s own call site) and immediately after a successful Track, so a
+ *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
+ *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI,
+ *  never blocks reading or editing.
+ *
+ *  #628: narrowed to a setter callback rather than the composition root's session object — this
+ *  is Editing-side git-tracking logic that only ever needs to hand its result somewhere, never
+ *  to read or own the session itself, the same pattern the four EditorCommandDeps callbacks
+ *  already use. */
+export async function registerHeldTrackedRepositories(
+  repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
+  setPluginRepositories: (repos: Map<string, MinimalRepository>) => void,
+): Promise<void> {
+  try {
+    const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
+    if (!gitExtension) {
+      outputChannel.warn('[extension] vscode.git extension not found — tracked mods will not appear in Source Control');
+      return;
+    }
+    const exports = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
+    const gitApi = exports.getAPI(1);
+
+    const plugins = await repository.getPlugins();
+    const folders = trackedModFoldersOf(plugins);
+    const folderRepositories = await registerTrackedRepositories(
+      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
+    setPluginRepositories(pluginRepositoriesOf(plugins, folderRepositories));
+  } catch (err) {
+    outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Prompts the edited plugin's own repository to re-check its working tree —
+ *  `Repository.status()`, the same effect the SCM panel's manual Refresh button has, fired
+ *  automatically from `onRecordEdited` instead of waiting on it (or on the native watcher, which
+ *  is what left the panel needing that click in the first place). A plugin with no tracked
+ *  repository handle (never tracked, or Source Control unavailable) is a silent no-op, same
+ *  posture as `registerHeldTrackedRepositories`'s own gates: this only ever narrows the native
+ *  UI, never blocks the edit that already succeeded. A rejected `status()` is logged, not
+ *  surfaced — a refresh failing must never read as the edit itself having failed.
+ *
+ *  #628: takes the match map's current value directly rather than the session object — the
+ *  caller reads `session.pluginRepositories` fresh at its own call site, so this never holds a
+ *  stale reference across the map's own wholesale rebuilds. */
+export function refreshSourceControlFor(
+  pluginRepositories: Map<string, MinimalRepository> | undefined, plugin: string, outputChannel: vscode.LogOutputChannel,
+): void {
+  const repo = pluginRepositories?.get(plugin);
+  if (!repo) return;
+  void repo.status().then(undefined, (err: unknown) => {
+    outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${err instanceof Error ? err.message : String(err)}`);
+  });
+}
+
+/** The poller has no backend to answer it until Launch mEdit's spawn succeeds — gated on
+ *  BackendManager's own 'status'/isHealthy signal, the same idiom `clearTreeWhenBackendDies`
+ *  (extension.ts) already reacts to. No disposable to register: a deliberate Close mEdit and
+ *  `deactivate()` (`backendManager.dispose()`) both already emit 'stopped', which this reacts to
+ *  like any other transition.
+ *
+ *  #628: narrowed to the same two callbacks `gateExternalChangePolling` itself already wants,
+ *  rather than the composition root's session object — this function only ever asks the
+ *  backend's own health signal, never reads or owns anything else on the session. */
+export function wireExternalChangePolling(
+  repository: PluginRepository, controller: EditingController, outputChannel: vscode.LogOutputChannel,
+  onBackendStatusChange: (cb: () => void) => void, isBackendHealthy: () => boolean,
+): void {
+  gateExternalChangePolling({
+    onBackendStatusChange,
+    isBackendHealthy,
+    startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel),
+  });
+}
+
 /** Polls `GET /plugins/external-changes/status` (fed by both the backend's live watcher and
  *  its load-time hash check) and runs the one dialog, sequentially, for whatever it finds — pulled
  *  out of `activate()` purely for that function's own line budget. Returns the stop function. */

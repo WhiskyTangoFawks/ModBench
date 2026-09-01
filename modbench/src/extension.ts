@@ -7,19 +7,18 @@ import { Agent, fetch as undiciFetch } from 'undici';
 import { BackendManager } from './medit/BackendManager';
 import { backendLogLevelArgs, makeBackendLogForwarder } from './medit/backendLog';
 import { createApiClient, type MasterIssue, type CrashRepairOffer } from './medit/ApiClient';
-import { detectGamePaths, detectWinePrefix } from './medit/GamePathDetector';
+import { detectWinePrefix } from './medit/GamePathDetector';
 import { EditingController, type LoadOrderProgress } from './medit/EditingController';
 import { makeReconcileProgressHandler } from './medit/loadOrderProgress';
 import { PluginTreeNode, PluginTreeProvider, headerFormKeyFor } from './medit/PluginTreeProvider';
 import { ActiveRecordTracker } from './medit/ActiveRecordTracker';
 import { resolveCompileTarget } from './medit/compileTarget';
 import { ApiPluginRepository, type PluginRepository } from './medit/PluginRepository';
-import { trackedModFoldersOf, registerTrackedRepositories, pluginRepositoriesOf } from './medit/trackedRepositories';
-import { runRebase, gateExternalChangePolling } from './medit/externalChangeCoordinator';
+import { runRebase } from './medit/externalChangeCoordinator';
 import { trackProgressMessage } from './medit/trackProgress';
 import { FilterCodeLensProvider } from './medit/FilterCodeLensProvider';
 import { Mo2ModlistSource } from './modmanager/mo2/Mo2ModlistSource';
-import { isMo2Instance, mo2InstanceContext } from './modmanager/detectMo2Instance';
+import { isMo2Instance } from './modmanager/detectMo2Instance';
 import { ModListProvider } from './modmanager/ModListProvider';
 import { createModsWatcher } from './modmanager/modsWatcher';
 import { createModlistWatcher } from './modmanager/modlistWatcher';
@@ -28,7 +27,6 @@ import { PluginListProvider, pluginFileOf, orderIssueMastersOf, type PluginListN
 import { PluginsTreeComposite } from './PluginsTreeComposite';
 import { createLoadOrderSync, type LoadOrderSync } from './loadOrderReconcile';
 import { wirePluginListInvalidation } from './wirePluginListInvalidation';
-import type { DetectPaths } from './modmanager/gameDirectory';
 import { createGameDirectoryResolver, dataFolderFrom, type GameDirectoryResolver } from './modmanager/gameDirectoryResolver';
 import { isDeployed, type Reporter } from './modmanager/deployer';
 import { buildFileConflictIndex } from './modmanager/fileConflictIndex';
@@ -40,9 +38,10 @@ import { makeReporter } from './reporter';
 import { LoadoutHeaderProvider } from './LoadoutHeaderProvider';
 import { registerNameFilter, type NameFilter } from './nameFilter';
 import { onPluginCheckboxChanged } from './pluginCheckboxHandler';
-import { createReferencedByTree, makeNotifyConflictsComputed, registerEditorCommands, registerRecordLifecycleCommands, registerRecordCopyCommands, startExternalChangeDialogPolling, makeCrashRepairOffersPresenter, makeMergeEditorOpener, compileAndReport, reportCompileTargetError } from './medit/editorCommands';
+import { createReferencedByTree, makeNotifyConflictsComputed, registerEditorCommands, registerRecordLifecycleCommands, registerRecordCopyCommands, makeCrashRepairOffersPresenter, makeMergeEditorOpener, compileAndReport, reportCompileTargetError, registerHeldTrackedRepositories, refreshSourceControlFor, wireExternalChangePolling, type MinimalRepository } from './medit/editorCommands';
 import { makeModActionHelpers, registerModInstallCommands, registerModContextCommands, registerSeparatorCommands, registerOverwriteView, registerModsAutoRegisterWatcher, registerNotMo2InstanceWelcome, createModListView, registerDownloadsView, isStandaloneDeployment, registerDeploymentModeContext, registerDeployCommands, registerLaunchCommand, registerModListCoreCommands } from './modmanager/modManagementCommands';
 import { onModCheckboxChanged } from './modmanager/modCheckboxHandler';
+import { meditConfig, makeDetectPaths, setMo2InstanceContext } from './workspaceConfig';
 
 
 /** Everything one `activate()` call constructs that a choke point registered elsewhere (a
@@ -113,18 +112,6 @@ function withPluginsViewProgress(session: ExtensionSession, work: () => Promise<
   ));
 }
 
-export const meditConfig = () => vscode.workspace.getConfiguration('modbench');
-
-/** The only place either MO2-instance context key is set — see mo2InstanceContext's own
- *  comment for why the two keys must always travel together. Every registerLoadoutView exit
- *  path (no workspace, not an instance, valid instance) calls this instead of `setContext`
- *  directly. */
-export function setMo2InstanceContext(isInstance: boolean): void {
-  for (const [key, value] of Object.entries(mo2InstanceContext(isInstance))) {
-    void vscode.commands.executeCommand('setContext', key, value);
-  }
-}
-
 /** Which plugin files Editing's load order actually names — the backend's own
  *  list, not the snapshot we sent it, because the backend prepends the game's implicit masters and
  *  those are rows in the Plugins tree too — plus, of that set, which are read-only for editing
@@ -193,69 +180,6 @@ async function refreshMatchingPlugins(
   session.pluginsTree?.refreshDecorations();
 }
 
-/** The one shape this extension needs from a `vscode.git` `Repository` — just `status()`,
- *  which forces the repository to re-check the working tree, the same effect the SCM panel's own
- *  manual Refresh button has. */
-interface MinimalRepository {
-  status(): Thenable<unknown>;
-}
-/** The one shape this extension needs from `vscode.git`'s exported API (ADR-0041: "the native git
- *  UI is the review surface") — deliberately not the full upstream `git.d.ts`, just the members
- *  actually called, so there is nothing here to drift out of sync with an API surface this
- *  extension otherwise never touches. `openRepository` resolves `null` — the real API's own
- *  answer for "declined to open"; the resolved handle is retained (see `pluginRepositories`
- *  above). */
-interface MinimalGitApi {
-  openRepository(uri: vscode.Uri): Thenable<MinimalRepository | null>;
-}
-interface GitExtensionExports {
-  getAPI(version: 1): MinimalGitApi;
-}
-
-/** ADR-0041: one `openRepository` per distinct tracked mod folder, so each shows its own
- *  native Source Control group — re-run whenever the load order becomes newly readable
- *  (`notifyConflictsComputed`'s own call site) and immediately after a successful Track, so a
- *  freshly tracked repo appears without waiting for the next activation. Silent no-op (logged, not
- *  surfaced) when `vscode.git` isn't installed/enabled: this only ever narrows the native UI,
- *  never blocks reading or editing. */
-async function registerHeldTrackedRepositories(
-  session: ExtensionSession, repository: ApiPluginRepository, outputChannel: vscode.LogOutputChannel,
-): Promise<void> {
-  try {
-    const gitExtension = vscode.extensions.getExtension<GitExtensionExports>('vscode.git');
-    if (!gitExtension) {
-      outputChannel.warn('[extension] vscode.git extension not found — tracked mods will not appear in Source Control');
-      return;
-    }
-    const exports = gitExtension.isActive ? gitExtension.exports : await gitExtension.activate();
-    const gitApi = exports.getAPI(1);
-
-    const plugins = await repository.getPlugins();
-    const folders = trackedModFoldersOf(plugins);
-    const folderRepositories = await registerTrackedRepositories(
-      (folder) => Promise.resolve(gitApi.openRepository(vscode.Uri.file(folder))), folders);
-    session.pluginRepositories = pluginRepositoriesOf(plugins, folderRepositories);
-  } catch (err) {
-    outputChannel.error(`[extension] registering tracked repositories with vscode.git failed: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-/** Prompts the edited plugin's own repository to re-check its working tree —
- *  `Repository.status()`, the same effect the SCM panel's manual Refresh button has, fired
- *  automatically from `onRecordEdited` instead of waiting on it (or on the native watcher, which
- *  is what left the panel needing that click in the first place — see `pluginRepositories`'s own
- *  doc comment). A plugin with no tracked repository handle (never tracked, or Source Control
- *  unavailable) is a silent no-op, same posture as `registerHeldTrackedRepositories`'s own
- *  gates: this only ever narrows the native UI, never blocks the edit that already succeeded. A
- *  rejected `status()` is logged, not surfaced — a refresh failing must never read as the edit
- *  itself having failed. */
-function refreshSourceControlFor(session: ExtensionSession, plugin: string, outputChannel: vscode.LogOutputChannel): void {
-  const repo = session.pluginRepositories?.get(plugin);
-  if (!repo) return;
-  void repo.status().then(undefined, (err: unknown) => {
-    outputChannel.error(`[extension] refreshing Source Control status for ${plugin} failed: ${err instanceof Error ? err.message : String(err)}`);
-  });
-}
 
 /** Leave editing: tear down the editing backend. There is no separate loadout view mode
  *  to switch back to — the loadout views are never hidden, and Referenced By
@@ -304,20 +228,6 @@ function makeSetFilterActive(session: ExtensionSession, filterProvider: FilterCo
     void vscode.commands.executeCommand('setContext', 'modbench.filterActive', active);
     filterProvider.setActiveSql(active ? (sql ?? null) : null);
     session.pluginsNameFilter?.setBaseDescription(active ? `records: ${label ?? 'SQL'}` : undefined);
-  };
-}
-
-/** Game-path resolver: explicit `game.*` overrides if both set, else autodetect.
- *  Shared by the deploy commands and editing launch. */
-export function makeDetectPaths(): DetectPaths {
-  return () => {
-    const c = meditConfig();
-    const dataOverride = (c.get('game.dataFolderPath') as string) ?? '';
-    const pluginsOverride = (c.get('game.pluginsTxtPath') as string) ?? '';
-    if (dataOverride && pluginsOverride) {
-      return Promise.resolve({ dataFolder: dataOverride, pluginsTxt: pluginsOverride });
-    }
-    return detectGamePaths(process.platform);
   };
 }
 
@@ -396,16 +306,14 @@ export function activate(context: vscode.ExtensionContext) {
     showError: (msg) => { void vscode.window.showErrorMessage(msg); },
     setFilterActive: session.setFilterActive,
     refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, repository, outputChannel); },
-    notifyConflictsComputed: makeNotifyConflictsComputed(
-      recordPanels, () => { void registerHeldTrackedRepositories(session, repository, outputChannel); },
-    ),
+    notifyConflictsComputed: makeNotifyConflictsComputed(recordPanels,
+      () => { void registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; }); }),
   });
   const { referencedByTreeView, activeRecordSubscription } = createReferencedByTree(client, outputChannel, activeRecordTracker);
   const showCrashRepairOffers = makeCrashRepairOffersPresenter(controller, compileDiagnostics);
   const { modListProvider, downloadsProvider, pluginListProvider, modlistSource, instanceRoot, enterEditing } = registerLoadoutSurfaces(session, { context, outputChannel, controller, recordBrowser: treeProvider, heldPluginFiles: heldPluginFilesFrom(repository), showCrashRepairOffers });
-
-  wireExternalChangePolling(session, repository, controller, outputChannel);
-
+  wireExternalChangePolling(repository, controller, outputChannel,
+    (cb) => session.backendManager!.on('status', cb), () => session.backendManager!.isHealthy);
   context.subscriptions.push(
     referencedByTreeView,
     activeRecordSubscription,
@@ -416,7 +324,7 @@ export function activate(context: vscode.ExtensionContext) {
       context, openPanels, recordPanels, activeRecordTracker, port, treeProvider, controller, repository, scriptsPath, referencedByTreeView, outputChannel,
       mergedTreeSelection: () => session.pluginsTreeView?.selection ?? [],
       refreshMatchingPlugins: () => { void refreshMatchingPlugins(session, repository, outputChannel); },
-      refreshSourceControlFor: (plugin) => refreshSourceControlFor(session, plugin, outputChannel),
+      refreshSourceControlFor: (plugin) => refreshSourceControlFor(session.pluginRepositories, plugin, outputChannel),
     }),
   );
 
@@ -595,7 +503,10 @@ function registerPluginRowCommands(
   compileDiagnostics: vscode.DiagnosticCollection,
 ): vscode.Disposable[] {
   return [
-    registerTrackCommand(session, controller, outputChannel, () => registerHeldTrackedRepositories(session, repository, outputChannel)),
+    registerTrackCommand(
+      session, controller, outputChannel,
+      () => registerHeldTrackedRepositories(repository, outputChannel, (repos) => { session.pluginRepositories = repos; }),
+    ),
     registerSaveAndCompileCommand(controller, repository, activeRecordTracker, outputChannel, compileDiagnostics),
     registerCompileAtRefCommand(controller, repository, outputChannel, compileDiagnostics),
     registerRebaseCommand(controller, repository, outputChannel),
@@ -791,17 +702,6 @@ function registerCreatePluginCommand(
  *  purely for that function's own line budget. No disposable to register: a deliberate Close mEdit
  *  and this file's own deactivate() (backendManager.dispose()) both already emit 'stopped', which
  *  this reacts to like any other transition. */
-function wireExternalChangePolling(
-  session: ExtensionSession, repository: PluginRepository, controller: EditingController,
-  outputChannel: vscode.LogOutputChannel,
-): void {
-  gateExternalChangePolling({
-    onBackendStatusChange: (cb) => session.backendManager!.on('status', cb),
-    isBackendHealthy: () => session.backendManager!.isHealthy,
-    startPolling: () => startExternalChangeDialogPolling(repository, controller, outputChannel),
-  });
-}
-
 
 
 /** `Modbench: Rebase onto Updated Baseline` — origin-scoped (the repo, not any one plugin,
