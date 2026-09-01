@@ -3,6 +3,7 @@
     {
       "EditorId": "ConflictedNPC",
       "FormKey": "000800:Base.esm",
+      "HasContainerChildren": false,
       "IsWinner": false,
       "LoadOrderIndex": 0,
       "Origin": "Data",
@@ -12,6 +13,7 @@
     {
       "EditorId": "ConflictedNPC",
       "FormKey": "000800:Base.esm",
+      "HasContainerChildren": false,
       "IsWinner": false,
       "LoadOrderIndex": 1,
       "Origin": "Data",
@@ -21,6 +23,7 @@
     {
       "EditorId": "ConflictedNPC",
       "FormKey": "000800:Base.esm",
+      "HasContainerChildren": false,
       "IsWinner": true,
       "LoadOrderIndex": 2,
       "Origin": "Data",
@@ -30,6 +33,7 @@
     {
       "EditorId": "InjectedNPC",
       "FormKey": "000800:Mid.esp",
+      "HasContainerChildren": false,
       "IsWinner": true,
       "LoadOrderIndex": 1,
       "Origin": "Data",
@@ -39,6 +43,7 @@
     {
       "EditorId": "SoleNPC",
       "FormKey": "000802:Base.esm",
+      "HasContainerChildren": false,
       "IsWinner": true,
       "LoadOrderIndex": 0,
       "Origin": "Data",

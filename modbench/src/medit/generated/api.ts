@@ -660,6 +660,7 @@ export interface components {
             isWinner: boolean;
             workingTreeState: components["schemas"]["WorkingTreeState"];
             recordType: string;
+            hasContainerChildren: boolean;
         };
         CrashRepairOffer: {
             plugin: string;
@@ -931,6 +932,7 @@ export interface components {
             editorId?: string | null;
             origin: string;
             workingTreeState: components["schemas"]["WorkingTreeState"];
+            hasContainerChildren: boolean;
         };
         RecordSummaryPagedResult: {
             items: components["schemas"]["RecordSummary"][];

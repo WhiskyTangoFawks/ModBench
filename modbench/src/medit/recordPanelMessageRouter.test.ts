@@ -63,6 +63,7 @@ function makeRecord(i: number, editorId: string | null = `Record${i}`): RecordSu
     formKey: `Fallout4.esm:${String(i).padStart(6, '0')}`, plugin: 'Fallout4.esm', loadOrderIndex: 0, isWinner: true, editorId,
     origin: 'Data',
     workingTreeState: 'None',
+    hasContainerChildren: false,
   };
 }
 
