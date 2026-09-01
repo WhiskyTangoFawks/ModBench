@@ -667,6 +667,22 @@ overflow, then native **Collapse All** last.
   splice-transform pattern: parse `plugins.txt` into an ordered model view, mutate via surgical
   splice (`lineRanges`, `mo2/lineScan.ts`) — never model→re-serialization — so comments, blank
   lines, and CRLF/BOM survive untouched.
+- **Line endings for *newly inserted* lines** (#635). Existing lines are never rewritten, so
+  byte-faithfulness does not answer what terminator a new line gets — that needs its own rule, and
+  `plugins.txt` and `modlist.txt` now share one in `mo2/lineScan.ts`: **if the file contains
+  `\r\n` anywhere, use `\r\n`; otherwise `\n`.** The two files previously disagreed, and the
+  `plugins.txt` side used a different rule — sniffing the first terminated line's own terminator —
+  which on a mixed-EOL file could pick `\n` where `modlist.txt` picked `\r\n`, and which could
+  emit a **bare `\r`** when the first line was CR-terminated. That last case decided it: a
+  bare-`\r` line is almost always a partial write or a bad tool, real consumers tolerate a
+  trailing stray `\r` but can swallow a bare-`\r` line entirely, and the shared rule structurally
+  cannot produce one. Known and accepted drawback: the rule is sticky toward CRLF — a mostly-LF
+  file with one stray CRLF line gets CRLF on every later insertion, with no path back. The
+  empty / no-terminator-anywhere fallback stays `\n`, held deliberately rather than re-decided.
+- **Entry lines are matched trim-insensitively.** A line with incidental leading or trailing
+  whitespace resolves to the same plugin name as one without, and its `*` marker is read and
+  spliced at the marker's true byte offset rather than at the line's start — so padding survives a
+  toggle untouched instead of being written into.
 - `IModlistSource` gains the write-side counterparts to its read-only `readPluginOrder()`/
   `readEnabledPlugins()`: toggle a line's `*` prefix, and reorder lines — mirroring the shape of
   the existing `modlist.txt` mutators (`moveModToSeparator`, `reorderSeparatorBlock`).
