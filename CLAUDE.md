@@ -31,14 +31,6 @@ npm run generate-api      # regen typed API client — needs fresh backend; see 
 npm run package           # build alpha .vsix — pinned local @vscode/vsce, no npx/global install
 ```
 
-- `/validate` — end of every coding task: gates, then self-review; wraps gates above.
-  `/validate gates` runs gates alone, for when an independent reviewer follows (`/orchestrate`).
-- `/mutation-test` — mutation testing: `MEditService.Core` (backend) and
-  `modbench/src/{modmanager,medit}` (frontend).
-- `/manual-test` — e2e test against real MO2 instance.
-- `/ux-checkpoint` — before wiring new/changed interactive UI: inert stub, live demo, signoff,
-  then logic.
-
 ## Rules that matter
 
 - Generalize across Bethesda games, don't lock to FO4 — FO4-concrete repo
@@ -87,19 +79,3 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
   xEdit has no such model; the references there are the product's own git-native
   working-tree model (ADR-0041) and VS Code/git native idioms (Source Control panel,
   decorations, dirty markers).
-- **New or changed interactive UI ships as an inert stub before any logic wires it up.**
-  Implement the UI only, demo it live, get signoff — a well-cited, xEdit-sourced shape can
-  still be rejected on sight once someone actually runs it. Triggered by the
-  `needs-ux` label (`docs/agents/triage-labels.md`); protocol: `/ux-checkpoint`.
-- Native-first, webviews included: before designing any interaction, ask "which VS
-  Code surface already does this?" and copy its answer — menus, pickers, confirms,
-  prompts, trees and clipboard all have one. A webview is justified by what it
-  *renders*, never by the chrome around it. Full mapping in
-  [modbench/CLAUDE.md](modbench/CLAUDE.md) § Invariants; ADR-0027 is the precedent.
-- Read `/tdd` before planning any implementation breakdown — always, even if it
-  won't end up as literal red/green slices.
-- If a change contradicts an ADR (`docs/adr/`), say so — don't silently override.
-- Numbered milestone titles = priority-ordered epics; unnumbered = speculative,
-  sorts last. No `ROADMAP.md` — milestones are it; no due-date/release semantics.
-  Tracker/triage/domain conventions: `docs/agents/issue-tracker.md`,
-  `docs/agents/triage-labels.md`, `docs/agents/domain.md`.

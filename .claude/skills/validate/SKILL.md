@@ -1,17 +1,12 @@
 ---
 name: validate
-description: Post-implementation review-and-ship workflow. Run at the end of any coding task.
+description: Repo gate runner — classify changed files, run the matching build/test gates. Use at the end of any coding task, and whenever a skill (e.g. /implement) says to run the tests or the full test suite.
 ---
 
 # Validate
 
-Run after any implementation task.
-
-`/validate` runs both steps. `/validate gates` runs Step 1 and stops — for when a
-separate reviewer follows (`/orchestrate` step 5). Review is never skipped, only
-relocated.
-
-## Step 1 — Gates
+The repo's gates: classify what changed, run the matching gates, fix failures, rerun.
+(`/validate gates` is the same thing — legacy wording that `/orchestrate` briefs still use.)
 
 ```bash
 git symbolic-ref -q HEAD && git merge-base --is-ancestor main HEAD && echo current
@@ -40,25 +35,25 @@ silently backgrounds a full `dotnet test` run, which reads as a hang or a skippe
 
 Fix all failures, rerun.
 
-## Step 2 — Review
+## Finding dispositions
 
-1. Run `/code-review` **report-only** (no `--fix`; `high`/`ultra` for large/risky).
-2. Triage every finding — all axes' — (first match). A filed ticket re-buys the
-   whole pipeline — triage, queue, a fresh executor re-acquiring the context the
-   finder already has, review, land — so weigh the fix against that price, not
-   against the originating issue's scope:
+Review itself belongs to the calling workflow (`/implement` closes with `/code-review`;
+`/orchestrate` step 5 runs its own). In-loop, the maintainer rules on findings live. An
+orchestrated run dispositions by this table (first match) — and never files an issue: the
+tracker holds no standing bug/tech-debt backlog (`docs/agents/issue-tracker.md`):
 
 | Outcome | When → Action |
 |---|---|
-| **Fix now** | correct fix is unambiguous and stays within files this branch already touches (or their immediate surface) → apply, even if the issue never asked for it — a fix smaller than its ticket ships now |
-| **Escalate** | real, but value uncertain or blast radius wide → a second opinion is a question, never a ticket: ask dev (interactive) or the advisor (orchestrated); verdict is fix / reject / defer |
-| **Defer** | a work item of settled value — needs its own design or plan, or touches surface outside this branch → `gh issue create` (`tech debt` + `ready-for-agent`\|`needs-triage`); body = finding + analysis + rec, stated as fact; a body needing a "triage question" / "is this worth it" section is Escalate, not Defer — only its defer verdict files |
+| **Fix now** | correct fix is unambiguous and stays within files this branch already touches (or their immediate surface) → apply, even if the issue never asked for it |
+| **Escalate** | real, but value uncertain or blast radius wide → a second opinion is a question, never a ticket: ask dev (interactive) or the advisor (orchestrated); verdict is fix / reject / report |
+| **Report** | real, of settled value, but needs its own design or plan, or touches surface outside this branch → state it in the session summary (finding + analysis + recommendation); the maintainer decides whether it enters the grill → `/to-spec` pipeline |
 | **Reject** | not real → note why |
 
-3. Rerun Step 1 gates if any fix changed logic.
+Rerun the gates if any fix changed logic.
 
 Mutation testing (`/mutation-test`, the Suite axis) is not a validate step — a full
-Stryker run takes hours, so it is dispatched only when explicitly asked for
-(e.g. `/orchestrate`, or the user invoking `/mutation-test`).
+Stryker run takes hours, so it is dispatched only when explicitly asked for.
 
-Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces them continuously during the work, scoped to changed files, for in-loop triage. Validate owns correctness and gates — not mutation or the complexity re-check.
+Complexity / quality notes are not a validate step: the `code-quality` Stop hook surfaces
+them continuously during the work, scoped to changed files, for in-loop triage. Validate
+owns correctness and gates — nothing else.

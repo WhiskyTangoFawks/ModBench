@@ -112,7 +112,7 @@ export async function openExtendedFieldEditor(
       if (savedDoc.uri.fsPath !== uri.fsPath) return;
       deps.reply({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: params.requestId, value: savedDoc.getText() });
     });
-    const closeListener = vscode.workspace.onDidCloseTextDocument(closedDoc => {
+    const closeListener = vscode.workspace.onDidCloseTextDocument(async closedDoc => {
       if (closedDoc.uri.fsPath !== uri.fsPath) return;
       saveListener.dispose();
       closeListener.dispose();
@@ -120,8 +120,10 @@ export async function openExtendedFieldEditor(
       // Best-effort: the temp dir is reclaimed by the OS regardless, and nothing user-facing
       // depends on this succeeding — logged, not surfaced, per the "background/recoverable"
       // row of the error-surfacing table (ADR-0026), not the "explicit action failed" one (the
-      // user's close already succeeded; only cleanup after it didn't).
-      void unlink(path).catch((err: unknown) => {
+      // user's close already succeeded; only cleanup after it didn't). Awaited so the listener's
+      // returned promise settles only once the file is gone — an orphaned unlink promise races
+      // anything observing the path after close (#651).
+      await unlink(path).catch((err: unknown) => {
         deps.log(`[extendedFieldEditor] could not delete temp file ${path}: ${err instanceof Error ? err.message : String(err)}`);
       });
     });

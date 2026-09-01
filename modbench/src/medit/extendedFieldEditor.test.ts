@@ -31,9 +31,9 @@ import { EXTENSION_TO_WEBVIEW } from './messages';
 // directly, matching real VS Code's "the callback receives the TextDocument" shape, and tracks
 // disposal so the cleanup tests can assert both listeners are torn down together.
 function makeFakeDocEvent() {
-  const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => void> = [];
+  const listeners: Array<(doc: { uri: { fsPath: string }; getText: () => string }) => unknown> = [];
   const disposed: boolean[] = [];
-  const register = vi.fn((listener: (doc: { uri: { fsPath: string }; getText: () => string }) => void) => {
+  const register = vi.fn((listener: (doc: { uri: { fsPath: string }; getText: () => string }) => unknown) => {
     listeners.push(listener);
     const index = listeners.length - 1;
     disposed.push(false);
@@ -41,7 +41,9 @@ function makeFakeDocEvent() {
   });
   return {
     register,
-    fire: (doc: { uri: { fsPath: string }; getText: () => string }) => listeners.forEach(l => l(doc)),
+    // Awaits every listener's returned promise (an async listener's fs cleanup included), so a
+    // test observes the handler *finished*, not merely started — the delete/stat race of #651.
+    fire: async (doc: { uri: { fsPath: string }; getText: () => string }) => { await Promise.all(listeners.map(l => l(doc))); },
     isDisposed: (index = 0) => disposed[index],
   };
 }
@@ -184,8 +186,8 @@ describe('openExtendedFieldEditor', () => {
       { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
-    saveEvent.fire({ uri: { fsPath: path }, getText: () => 'first save' });
-    saveEvent.fire({ uri: { fsPath: path }, getText: () => 'second save' });
+    await saveEvent.fire({ uri: { fsPath: path }, getText: () => 'first save' });
+    await saveEvent.fire({ uri: { fsPath: path }, getText: () => 'second save' });
 
     expect(deps.reply).toHaveBeenNthCalledWith(1, { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: 'r1', value: 'first save' });
     expect(deps.reply).toHaveBeenNthCalledWith(2, { type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: 'r1', value: 'second save' });
@@ -203,7 +205,7 @@ describe('openExtendedFieldEditor', () => {
       { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
-    saveEvent.fire({ uri: { fsPath: '/some/other/file.txt' }, getText: () => 'unrelated' });
+    await saveEvent.fire({ uri: { fsPath: '/some/other/file.txt' }, getText: () => 'unrelated' });
 
     expect(deps.reply).not.toHaveBeenCalled();
   });
@@ -225,10 +227,7 @@ describe('openExtendedFieldEditor', () => {
       { requestId: 'r1', value: 'x', recordLabel: 'Deacon', fieldName: 'Description', plugin: 'Fallout4.esm', origin: 'Data', readOnly: false },
       deps,
     );
-    closeEvent.fire({ uri: { fsPath: path }, getText: () => 'x' });
-    // unlink is fire-and-forget inside the handler — flush microtasks before asserting.
-    await Promise.resolve();
-    await Promise.resolve();
+    await closeEvent.fire({ uri: { fsPath: path }, getText: () => 'x' });
 
     expect(deps.reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_CLOSED, requestId: 'r1' });
     expect(saveEvent.isDisposed()).toBe(true);
@@ -342,7 +341,7 @@ describe('openExtendedFieldEditor', () => {
     expect(await readFile(path, 'utf8')).toBe(multiline);
 
     const edited = `${multiline}\nA fifth line, added in the editor.`;
-    saveEvent.fire({ uri: { fsPath: path }, getText: () => edited });
+    await saveEvent.fire({ uri: { fsPath: path }, getText: () => edited });
 
     expect(deps.reply).toHaveBeenCalledWith({ type: EXTENSION_TO_WEBVIEW.EXTENDED_EDITOR_COMMITTED, requestId: 'r1', value: edited });
   });

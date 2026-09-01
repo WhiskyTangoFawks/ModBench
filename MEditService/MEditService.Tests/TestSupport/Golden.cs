@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace MEditService.Tests.TestSupport;
 
@@ -17,12 +18,18 @@ namespace MEditService.Tests.TestSupport;
 /// differ when a <i>value</i> differs — never because a dictionary enumerated in a different order.
 /// Regenerate deliberately with <c>MEDIT_GOLDEN_UPDATE=1</c>, then read the diff: an unexplained
 /// change there is a regression, not a rebaseline.
+///
+/// Values speak the wire's dialect: the same global <see cref="JsonStringEnumConverter"/>
+/// Program.cs registers, so an enum lands here as the string the endpoint sends, never a bare
+/// integer the wire cannot produce (#647). Property names stay the C# spelling — casing is a
+/// total, mechanical mapping that cannot hide a per-field value defect the way enum integers did.
 /// </summary>
 internal static class Golden
 {
     private const string UpdateVariable = "MEDIT_GOLDEN_UPDATE";
 
-    private static readonly JsonSerializerOptions SerializeOptions = new() { WriteIndented = false };
+    private static readonly JsonSerializerOptions SerializeOptions =
+        new() { WriteIndented = false, Converters = { new JsonStringEnumConverter() } };
     private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
 
     internal static void Verify(string name, object? value, [CallerFilePath] string here = "")
