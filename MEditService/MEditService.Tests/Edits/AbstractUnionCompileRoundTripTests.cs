@@ -42,19 +42,16 @@ namespace MEditService.Tests.Edits;
 /// because ADR-0041's Dangling/Type-Mismatched FormLink refusal would otherwise refuse for a reason
 /// that has nothing to do with what a given fact is testing.</para>
 ///
-/// <para><b>Two of the nine byproduct types are not here</b> — <c>NavmeshGeometry.Parent</c> and
-/// <c>LocationTargetRadius.Target</c>. Both are reached one level *inside* another struct column
-/// (<c>Static.NavmeshGeometry</c> / <c>Faction.VendorLocation</c>), and
-/// <c>SchemaReflector.BuildStructSubField</c> — the builder for a Loqui struct nested inside another
-/// struct/array column — returns <c>Apply: null</c> unconditionally for every nested struct, abstract
-/// union or not (its own doc comment: "nested Loqui structs are read-only"). #548's write-side
-/// generalization reached <c>BuildStructColumn</c> (a top-level struct column) and <c>ApplyListJson</c>
-/// (a top-level list column) — never <c>BuildStructSubField</c> — so these two types have <i>no write
-/// path through <see cref="RecordEditService.EditField"/> at all today</i>: a payload naming their own
-/// nested field is silently accepted-and-ignored by <c>ApplySubFields</c>'s own no-<c>Apply</c> skip,
-/// the same as any other read-only sub-field. This is the read/write divergence #360's precedent warns
-/// about — reported to the orchestrator rather than fixed here, per that ticket's own instruction not
-/// to repair a real bug silently inside a test-adding ticket.</para>
+/// <para><b>The two nested abstract unions are here since #643</b> — <c>NavmeshGeometry.Parent</c>
+/// and <c>LocationTargetRadius.Target</c>, reached one level *inside* another struct column
+/// (<c>Static.NavmeshGeometry</c> / <c>Faction.VendorLocation</c>). This paragraph used to document
+/// them as the gap: <c>SchemaReflector.BuildStructSubField</c> returned <c>Apply: null</c>
+/// unconditionally, so these two types had no write path through
+/// <see cref="RecordEditService.EditField"/> at all — the read/write divergence #360's precedent
+/// warns about, found by #611, refused honestly by #642, and closed by #643's shared
+/// <c>ApplyStructJson</c>. Their compile facts below are the acceptance-criteria proof that the
+/// nested write survives the full source-text → binary round trip, discriminator resolution
+/// included.</para>
 ///
 /// <para><c>ColorRecord.Data</c>'s <c>ColorData</c> leaf is included, but its round trip is
 /// discriminator-only: <c>System.Drawing.Color</c> is a shape <c>SchemaReflector</c> has never
@@ -374,5 +371,59 @@ public sealed class AbstractUnionCompileRoundTripTests : IDisposable
         Assert.True(filter.Enabled);
         Assert.Equal(440.0f, filter.CenterFrequency);
         Assert.Equal(0.75f, filter.QValue);
+    }
+
+    // ── #643: the two nested abstract unions — reached one level inside another struct column ──
+
+    /// <summary>
+    /// #643 AC: an edit to <c>Faction.VendorLocation.Target</c> round-trips — write through the one
+    /// edit path, compile, reparse the binary, read the new value back through Mutagen's own typed
+    /// getter. The document half of the same AC is
+    /// <c>NestedStructSubFieldEditTests.VendorLocationTarget_NamedInPayload_RoundTrips</c>.
+    ///
+    /// <para><c>NearSelf</c>, not <c>NearReference</c>, deliberately: PLVD's binary discriminator
+    /// IS the Type value (<c>LocationTargetRadiusBinaryCreateTranslation.GetLocationTarget</c> in
+    /// Mutagen's own hand-written translation) — the five known kinds each reparse as their own
+    /// leaf, and only a Type outside them reparses as <c>LocationFallback</c>. A
+    /// <c>LocationFallback{NearReference}</c> is representable in memory and in the document but
+    /// structurally cannot survive a binary round trip as a fallback (it comes back as
+    /// <c>LocationTarget</c>), so a compile fact must use a genuinely fallback-shaped value.</para>
+    /// </summary>
+    [Fact]
+    public void VendorLocationTarget_NestedStructEdit_CompilesAndReparsesTheNewValue()
+    {
+        var result = EditService().EditField(
+            _fixture.Plugin, _fixture.Faction.ToString(), "vendor_location",
+            Json("""
+            {"radius": 99, "target": {"concrete_type": "LocationFallback", "type": "NearSelf", "data": 3}}
+            """));
+        Assert.True(result.Applied, result.Message);
+
+        var faction = CompileAndReparse().Factions.Single(f => f.FormKey == _fixture.Faction);
+        Assert.Equal(99u, faction.VendorLocation!.Radius);
+        var target = Assert.IsAssignableFrom<ILocationFallbackGetter>(faction.VendorLocation.Target);
+        Assert.Equal(LocationTargetRadius.LocationType.NearSelf, target.Type);
+        Assert.Equal(3, target.Data);
+    }
+
+    /// <summary>
+    /// #643 AC: switching an abstract union's concrete leaf via a nested edit constructs the new
+    /// leaf from the JSON discriminator — <c>ANavmeshParent</c> Worldspace → Cell, the ticket's own
+    /// named example, nested inside <c>Static.NavmeshGeometry</c>. The payload names only
+    /// <c>parent</c>; the enclosing geometry's other members are absent and therefore untouched
+    /// (absence is not targeting), which is what lets the whole-struct atomic write switch just the
+    /// union leaf. Both leaves' FormLinks stay null throughout, so no linked Worldspace/Cell record
+    /// is needed (see the fixture's own seeding comment).
+    /// </summary>
+    [Fact]
+    public void NavmeshGeometryParent_SwitchingConcreteType_WorldspaceToCell_CompilesAndReparsesAsTheNewLeaf()
+    {
+        var result = EditService().EditField(
+            _fixture.Plugin, _fixture.Static.ToString(), "navmesh_geometry",
+            Json("""{"parent": {"concrete_type": "CellNavmeshParent"}}"""));
+        Assert.True(result.Applied, result.Message);
+
+        var stat = CompileAndReparse().Statics.Single(s => s.FormKey == _fixture.Static);
+        Assert.IsAssignableFrom<ICellNavmeshParentGetter>(stat.NavmeshGeometry!.Parent);
     }
 }

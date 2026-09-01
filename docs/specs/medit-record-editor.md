@@ -359,13 +359,20 @@ already empty: matching xEdit's own guard (`Element.EditValue` must be non-empty
   write, not just that member; a member legitimately absent from a record's own subclass (the
   sparse leaf-union case, e.g. some OMOD property members) stays a silent no-op, since that's
   correct round-tripping, not a defect.
-  **Naming a sub-field that has no write path is itself a refusal** (`RecordEditRefusal.NestedFieldReadOnly`,
-  #642). Nested Loqui struct sub-fields — a struct member one or more levels inside another
-  struct column, or inside an array element — are readable but not yet writable (#643 makes them
-  writable). Targeting one used to report success while discarding the value and rewriting the
-  source file, so the row went dirty and every signal said the edit had landed. It now refuses
-  the whole write before anything is attached, leaving the working tree byte-identical, and the
-  message says the field is not yet editable rather than implying the value was invalid.
+  **Nested Loqui struct sub-fields write through the same one path** (#643) — a struct member one
+  or more levels inside another struct column, or inside an array element, applies with the exact
+  semantics the top-level struct column has (one shared applier): abstract unions resolve their
+  concrete leaf from the payload's own `concrete_type`, refusing when it can't be resolved; the
+  existing value object is reused only when it is already the same concrete type; and a write with
+  one bad member anywhere in the nested tree refuses the whole write before anything is written,
+  leaving the working tree byte-identical.
+  **Naming a sub-field that genuinely has no write path is itself a refusal**
+  (`RecordEditRefusal.NestedFieldReadOnly`, #642). Since #643 that is the unwritable residue only:
+  nested condition data (its discriminator can never appear in a payload) and primitive-element
+  nested lists (no element write path at any level — refusal is parity with their top-level
+  columns, which already refuse as `FieldReadOnly`). Targeting one used to report success while
+  discarding the value; it refuses the whole write instead, and the message says the sub-field is
+  not editable rather than implying the value was invalid.
   Three cases stay distinct and must not be collapsed: a sub-field **absent** from the payload is
   skipped (absence is not targeting); the `value_type` and `concrete_type` **discriminators** are
   read off the raw JSON before the object exists and are deliberately never applied, so naming one
@@ -909,17 +916,16 @@ VMAD/Condition rows included since they render through this exact code now:
    (a list field, xEdit's `ALST`/`ALLS`/`ALCS`) are the two mandatory record editor fields this
    closes; the mechanism also covers, as a byproduct, `Book.Teaches`, `ColorRecord.Data`,
    `Holotape.Data`, `SoundDescriptor.Data`, `Perk.Effects`, `MagicEffect.Archetype`,
-   `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`. Seven of
-   those nine — every one reached as a record's own top-level column — have their write side compile-
-   and-reparse verified (#611, `MEditService.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
-   same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. The remaining two,
+   `AudioEffectChain.Effects`, `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`. All nine
+   have their write side compile-and-reparse verified (#611/#643,
+   `MEditService.Tests/Edits/AbstractUnionCompileRoundTripTests.cs`), the
+   same bar `Npc.Level`/`Quest.Aliases` themselves only gained there. Two of them,
    `NavmeshGeometry.Parent` and `LocationTargetRadius.Target`, are reached one level *inside* another
    struct column (`Static.NavmeshGeometry`/`Faction.VendorLocation`) rather than as a column of their
-   own, and have **no write path at all** through `RecordEditService.EditField` today:
-   `SchemaReflector.BuildStructSubField` — the builder for a Loqui struct nested inside another
-   struct/array column — returns `Apply: null` unconditionally for every nested struct, abstract union
-   or not, so this mechanism's write-side generalization (`BuildStructColumn`/`ApplyListJson`) never
-   reached them. Read-visible, write-inert — a real gap, not yet closed. Not every `A<Name>`
+   own — #643 extended the write side down through nesting (`SchemaReflector.BuildStructSubField`
+   wires the same shared struct applier `BuildStructColumn` uses, at every depth the read schema
+   builds), so a nested struct sub-field writes with identical discriminator-resolution and
+   refuse-before-attach semantics to a top-level struct column. Not every `A<Name>`
    type in the assembly qualifies: one (`ASceneActionType`) shares the naming convention without its
    generated class actually being `abstract`, so the mechanism correctly declines it (empty
    sub-schema, same as before) rather than guessing a discriminator scheme onto a type it cannot

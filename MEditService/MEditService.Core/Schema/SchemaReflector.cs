@@ -870,21 +870,23 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         bool AllowsNull = false,
         bool IsBitmask = false,
         string[]? EnumBitValues = null,
-        // #642: distinguishes "Apply is null because nothing writes this yet" (not writable — opts
-        // in here) from "Apply is null by design and always will be" (a discriminator — stays on this
-        // record's default). ApplySubFields refuses the former when the payload names it and silently
-        // skips the latter; confusing the two directions would either refuse every abstract-union/OMOD
-        // write (every payload for those shapes names a discriminator) or let this ticket's own bug
-        // back in.
+        // #642: distinguishes "Apply is null because this genuinely has no write support" (not
+        // writable — opts in here) from "Apply is null by design and always will be" (a
+        // discriminator — stays on this record's default). ApplySubFields refuses the former when
+        // the payload names it and silently skips the latter; confusing the two directions would
+        // either refuse every abstract-union/OMOD write (every payload for those shapes names a
+        // discriminator) or let #642's own bug back in.
         //
         // The two discriminator fields (BuildObjectModValueTypeField's value_type,
         // BuildAbstractUnionDiscriminatorField's concrete_type) are null deliberately — consumed off
         // the raw JSON before the object they'd apply to even exists, and every abstract-union/
         // OMOD-properties payload names one on every write, so ApplySubFields must keep skipping them
-        // silently regardless of this flag's default. BuildStructSubField's own output is null for the
-        // opposite reason (nothing writes it yet, not "by design, forever") — it alone sets this true.
-        // Defaults false so any future null-Apply producer stays a silent skip unless it deliberately
-        // opts in, the same direction of caution as everywhere else this ticket touches.
+        // silently regardless of this flag's default. Since #643 wired nested Loqui structs into the
+        // shared ApplyStructJson, exactly two producers still set this true, each for its own
+        // unwritable residue: BuildStructSubField (no resolvable setter, or an excluded abstract
+        // union with no discriminator — ConditionData) and BuildListSubField (a primitive-element
+        // nested list, which has no element write path at any level). Defaults false so any future
+        // null-Apply producer stays a silent skip unless it deliberately opts in.
         bool TargetingRefuses = false)
     {
         // Mirrors ColumnSpec.IsArray's own derivation (ReflectColumns: `info.ApiType ==
@@ -1496,12 +1498,30 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
             return null;
         }
 
-        // rep.Apply already resolves its target property off the object's own runtime type
-        // (MakeApplier/ApplyFormLinkJson/the struct- and list-column appliers all do), so it is
-        // already safe to reuse unmodified against whichever concrete leaf ApplyListJson/
-        // BuildStructColumn's own discriminator resolution already constructed — the same guarantee
-        // the OMOD typed-union apply already relies on.
-        return rep with { Name = colName, Extract = Extract, AllowsNull = true };
+        // rep.Apply resolves its target *property* off the object's own runtime type
+        // (MakeApplier/ApplyFormLinkJson/the struct- and list-column appliers all do) — but
+        // MakeApplier's own *converter* is bound to rep's declared CLR type, so reusing it
+        // unmodified is only safe while every declaring leaf agrees on that type. Real
+        // disagreement under an agreeing shape (#643): ALocationTarget's `type` is
+        // TargetObjectType on LocationObjectType but LocationTargetRadius.LocationType on
+        // LocationFallback — both "enum", so the shape check above passes, and rep's converter
+        // would Enum.Parse a non-rep leaf's own valid member name into the wrong enum type and
+        // reject it. Scalar/enum/string members that disagree on CLR type get the OMOD widened
+        // applier instead (ConvertWidenedJson converts into the target property's own declared
+        // type at write time — the exact same fix OMOD's value/value2/function_type already use).
+        // FormLink members need nothing: ApplyFormLinkJson already resolves everything off the
+        // runtime object, which is why the differently-closed FormLinks on ANavmeshParent's two
+        // leaves (IWorldspaceGetter vs ICellGetter) reuse rep.Apply safely.
+        var distinctClrTypes = declaring
+            .Select(d => Nullable.GetUnderlyingType(d.Prop.PropertyType) ?? d.Prop.PropertyType)
+            .Distinct()
+            .Count();
+        var apply = distinctClrTypes > 1 && rep.Apply != null
+            && rep.ApiType is not ("struct" or "array" or "formKey")
+            ? MakeWidenedApplier(declaring[0].Prop.Name, logger)
+            : rep.Apply;
+
+        return rep with { Name = colName, Extract = Extract, Apply = apply, AllowsNull = true };
     }
 
     private const string AbstractUnionTypeDiscriminator = "concrete_type";
@@ -1924,6 +1944,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
     }
 
+    // #643: a nested Loqui struct writes through the same one struct-object applier the top-level
+    // struct column uses (ApplyStructJson — #548's own semantics, abstract-union discriminator
+    // resolution and same-concrete-type object reuse included), at any depth BuildSubSchema itself
+    // builds, since each level's own BuildStructSubField wires the same applier again.
+    //
+    // The unwritable residue keeps #642's refusal instead of a delegate that could never succeed:
+    // a getter type with no resolvable Setter class at all, and an abstract Setter whose own
+    // sub-schema exposes no concrete_type discriminator (today exactly ConditionData — excluded
+    // from union-leaf expansion by AbstractUnionExcludedTypeNames, so no payload can ever carry the
+    // discriminator ApplyStructJson would need; refusing up front as not-editable names the real
+    // problem, where a ValueRejected from the missing discriminator would claim the value's shape
+    // was wrong).
     private static SubFieldSpec? BuildStructSubField(
         PropertyInfo prop, Type core, string colName,
         IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
@@ -1931,15 +1963,18 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         var sub = BuildSubSchema(core, getterTypeToTable, logger, depth);
         if (sub.Count == 0) return null;
         var g = SubGetter(prop);
+        var pName = prop.Name;
+        var setterType = GetSetterType(core);
+        var writable = setterType != null
+            && (!setterType.IsAbstract || sub.Any(f => f.Name == AbstractUnionTypeDiscriminator));
         return new(colName, "struct", Empty, Empty,
             obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, sub); },
-            Apply: null,
+            Apply: writable ? (obj, val) => ApplyStructJson(obj, val, pName, setterType!, sub) : null,
             SubFields: sub,
-            // #642: nothing writes a nested Loqui struct yet (#643) — a payload that names this
-            // sub-field must refuse the whole write rather than silently drop it while the caller
-            // reports success (SubFieldSpec's own doc comment has the full "null Apply is not one
-            // thing" reasoning).
-            TargetingRefuses: true);
+            // #642: a payload that names an unwritable sub-field must refuse the whole write rather
+            // than silently drop it while the caller reports success (SubFieldSpec's own doc comment
+            // has the full "null Apply is not one thing" reasoning).
+            TargetingRefuses: !writable);
     }
 
     // ── Noggog's small value-vector struct family (see IsVectorStructType) ─────────────────────
@@ -1976,10 +2011,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     // P3Int16; Cell.Grid.Point, a P2Int) — xEdit shows OBND's six components individually
     // (wbDefinitionsCommon.pas: wbOBND — X1/Y1/Z1/X2/Y2/Z2, not one opaque value), so this mirrors
     // BuildStructSubField's shape rather than treating the vector value as an atomic leaf. Unlike
-    // BuildStructSubField (whose nested Loqui structs are read-only, Apply: null), this one is a
-    // value type — Get/SetValue on the *enclosing* object is the only way to write it, so Apply
-    // builds (or copies) the current boxed value, applies each component onto that same box, then
-    // writes the box back onto the enclosing property.
+    // BuildStructSubField's Loqui classes, this one is a value type — Get/SetValue on the
+    // *enclosing* object is the only way to write it, so Apply builds (or copies) the current
+    // boxed value, applies each component onto that same box, then writes the box back onto the
+    // enclosing property.
     private static SubFieldSpec? BuildVectorSubField(
         PropertyInfo prop, Type core, string colName,
         IReadOnlyDictionary<Type, string> getterTypeToTable, int depth, ILogger logger)
@@ -2063,7 +2098,15 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return new(colName, "array", Empty, Empty,
             obj => g(obj) is IEnumerable list ? BuildListItems(list, elementType, elemSubFields) : null,
             apply,
-            ElementSpec: elementSpec);
+            ElementSpec: elementSpec,
+            // #643: a primitive-element nested list (Race.Subgraphs[].AnimationPaths, ...) has no
+            // write door — BuildListElement has no primitive branch, only FormLink/Loqui/vector —
+            // and its own top-level twin (BuildListColumn's identical null) already refuses as
+            // FieldReadOnly, so a payload naming this shape takes #642's honest refusal too rather
+            // than the silent discard the survey caught. Making the shape writable at both levels
+            // is a separate capability, deliberately not built here (maintainer decision at #643's
+            // gate).
+            TargetingRefuses: apply == null);
     }
 
     // ApplyListJson's own sub-field twin: writes a struct/array-nested list's whole value, same
@@ -2256,12 +2299,13 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// also fail this way, that inference would misclassify a declined sub-field value as an
     /// unresolved element type.</para>
     ///
-    /// <para>#642: an element that names a nested Loqui struct sub-field with no write door yet
-    /// (e.g. <c>QuestReferenceAlias.Location</c>, one level inside an <c>AQuestAlias</c> element)
-    /// answers <see cref="ApplyOutcome.SubFieldReadOnly"/>, propagated here from
-    /// <see cref="BuildListElement"/>'s own outcome rather than folded into
-    /// <see cref="ApplyOutcome.ValueRejected"/> — <c>RecordFieldWriter.TryApply</c> gives it the same
-    /// honest "not yet editable" message <see cref="ApplyOutcome.SubFieldReadOnly"/> gets everywhere
+    /// <para>#642: an element that names a sub-field with no write door (since #643, the
+    /// unwritable residue only — condition data, a primitive-element nested list; nested Loqui
+    /// structs like <c>QuestReferenceAlias.Location</c> write through the shared
+    /// <c>ApplyStructJson</c> instead) answers <see cref="ApplyOutcome.SubFieldReadOnly"/>,
+    /// propagated here from <see cref="BuildListElement"/>'s own outcome rather than folded into
+    /// <see cref="ApplyOutcome.ValueRejected"/> — <c>RecordFieldWriter.TryApply</c> gives it the
+    /// honest not-editable message <see cref="ApplyOutcome.SubFieldReadOnly"/> gets everywhere
     /// else, instead of the generic shape-mismatch text that would be false here (the payload
     /// <i>was</i> the whole array).</para>
     /// </summary>
@@ -2361,12 +2405,11 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         }
 
         var elemObj = Activator.CreateInstance(elemConcreteType)!;
-        // #642: propagated as the full ApplyOutcome, not folded to a bool — an element's own nested
-        // Loqui struct sub-field (e.g. QuestReferenceAlias.Location, one level inside this array
-        // element) named by the payload now answers ApplyOutcome.SubFieldReadOnly distinctly from an
-        // ordinary declined value (ValueRejected), so the caller can refuse the whole array write with
-        // the same honest "not yet editable" message BuildStructColumn's own apply gives, rather than
-        // the generic shape-mismatch text every other declined element member still uses.
+        // #642: propagated as the full ApplyOutcome, not folded to a bool — an element's own
+        // unwritable sub-field named by the payload answers ApplyOutcome.SubFieldReadOnly
+        // distinctly from an ordinary declined value (ValueRejected), so the caller can refuse the
+        // whole array write with the honest not-editable message rather than the generic
+        // shape-mismatch text every other declined element member still uses.
         outcome = ApplySubFields(elemObj, elem, subFields!);
         return elemObj;
     }
@@ -2382,8 +2425,8 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     /// on it and are consumed off the raw JSON before that object exists — <c>SubFieldSpec.TargetingRefuses</c>
     /// stays <c>false</c> for both, so naming one is still a silent skip, exactly as every write
     /// payload for that shape already does on every call. Every other null-<c>Apply</c> sub-field
-    /// (<see cref="BuildStructSubField"/>'s own output — a nested Loqui struct with nothing writing it
-    /// yet) sets <c>TargetingRefuses: true</c>, so naming <i>that</i> one now fails the whole object
+    /// (since #643, the unwritable residue only — see <c>SubFieldSpec.TargetingRefuses</c>' own doc)
+    /// sets <c>TargetingRefuses: true</c>, so naming <i>that</i> one fails the whole object
     /// via <see cref="ApplyOutcome.SubFieldReadOnly"/> rather than silently discarding the value.</para>
     ///
     /// <para>Of the members that <i>are</i> applied, <see cref="ApplyOutcome.PropertyNotFound"/>
@@ -2403,6 +2446,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
     {
         var rejected = false;
         var notWritable = false;
+        var elementTypeUnresolved = false;
         foreach (var sf in subFields)
         {
             if (!json.TryGetProperty(sf.Name, out var sfVal)) continue;
@@ -2411,20 +2455,87 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 if (sf.TargetingRefuses) notWritable = true;
                 continue;
             }
-            // Checked against both failure values, not just ValueRejected: a member's own apply can
-            // itself be a nested list's whole-value write (ApplyListSubFieldJson, for a list column
-            // one level inside this struct) whose own element carries a further-nested Loqui struct —
-            // that member answers SubFieldReadOnly the same way a direct BuildStructSubField member
-            // does, and this fold must not let that signal disappear one level further up.
-            var memberOutcome = apply(target, sfVal);
-            if (memberOutcome == ApplyOutcome.SubFieldReadOnly) notWritable = true;
-            else if (memberOutcome == ApplyOutcome.ValueRejected) rejected = true;
+            // Checked against every failure value, not just ValueRejected: a member's own apply can
+            // itself be a nested struct's whole-object write (ApplyStructJson, #643) or a nested
+            // list's whole-value write (ApplyListSubFieldJson) — those answer SubFieldReadOnly (a
+            // deeper still-unwritable member) or ListElementTypeUnresolved (a deeper abstract list
+            // element with no resolvable discriminator, e.g. an alias element's own `conditions`)
+            // the same way a top-level column's apply does, and this fold must not let either
+            // signal disappear one level further up. ListElementTypeUnresolved was silently
+            // swallowed here until #643 — the exact silent-success class #642 closed for nested
+            // structs, one shape over — so it now fails the whole object like the other two.
+            switch (apply(target, sfVal))
+            {
+                case ApplyOutcome.SubFieldReadOnly: notWritable = true; break;
+                case ApplyOutcome.ListElementTypeUnresolved: elementTypeUnresolved = true; break;
+                case ApplyOutcome.ValueRejected: rejected = true; break;
+            }
         }
+        // Most-specific diagnosis first when several members fail in one object: "this member has
+        // no write door at all" beats "name a discriminator", which beats the generic "send a value
+        // this field accepts" — same ordering rationale as the SubFieldReadOnly-over-ValueRejected
+        // priority the doc comment above states.
         if (notWritable) return ApplyOutcome.SubFieldReadOnly;
+        if (elementTypeUnresolved) return ApplyOutcome.ListElementTypeUnresolved;
         return rejected ? ApplyOutcome.ValueRejected : ApplyOutcome.Applied;
     }
 
     // ── Loqui struct (sub-record) ─────────────────────────────────────────────
+
+    /// <summary>
+    /// The one struct-object write, shared by the top-level struct column
+    /// (<see cref="BuildStructColumn"/>, operating on the record itself) and every nested struct
+    /// sub-field (<see cref="BuildStructSubField"/>, operating on whichever enclosing struct/array
+    /// element object <see cref="ApplySubFields"/> hands it) — #643 extends #548's generalization
+    /// down through nesting by reusing this exact body rather than duplicating it.
+    ///
+    /// <para>The struct half of <see cref="ApplyListJson"/>'s own shape guard — a struct field is
+    /// written as one atomic value, so a bare member value is refused rather than silently dropped
+    /// while the write path reports success.</para>
+    ///
+    /// <para>The same refusal also covers a well-formed object whose own member value was declined
+    /// (<see cref="ApplySubFields"/>' <c>ValueRejected</c> fold), or that names a still-unwritable
+    /// nested sub-field (#642's <c>SubFieldReadOnly</c> fold) — <c>SetValue</c> is skipped in both
+    /// cases too, so a struct write with one bad or unwritable member never attaches its
+    /// partially-built value to the target, matching <see cref="ApplyListJson"/>'s own "before
+    /// <c>newList</c> is attached" guarantee at every nesting level this method is wired at.</para>
+    ///
+    /// <para><paramref name="setterType"/> is abstract for an abstract Loqui union (ANpcLevel,
+    /// ALocationTarget, ...) — <c>Activator.CreateInstance</c> would throw
+    /// <c>MissingMethodException</c> on it directly, so the concrete type is resolved off the
+    /// incoming JSON's own discriminator first, refusing (<c>ValueRejected</c>) rather than
+    /// crashing when it can't be. Only reused when the target's existing value is already that same
+    /// concrete type — switching concrete leaf (NpcLevel to PcLevelMult, WorldspaceNavmeshParent to
+    /// CellNavmeshParent) cannot reuse the old object, so it constructs fresh instead.</para>
+    ///
+    /// <para><c>PropertyNotFound</c> when the target's runtime type doesn't declare the property —
+    /// impossible for a top-level column (reflection found the property on that very type), but a
+    /// nested sub-field can be an abstract-union shared member applied against a sibling leaf that
+    /// lacks it, where the silent-no-op convention (<see cref="MakeApplier"/>'s own) is exactly
+    /// right.</para>
+    /// </summary>
+    private static ApplyOutcome ApplyStructJson(
+        object target, JsonElement json, string pName, Type setterType, IReadOnlyList<SubFieldSpec> subFields)
+    {
+        if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
+
+        var concreteType = setterType;
+        if (setterType.IsAbstract)
+        {
+            if (ResolveAbstractUnionConcreteType(setterType, json) is not { } resolved)
+                return ApplyOutcome.ValueRejected;
+            concreteType = resolved;
+        }
+
+        var rp = target.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+        if (rp == null) return ApplyOutcome.PropertyNotFound;
+        var existing = rp.GetValue(target);
+        var obj = concreteType.IsInstanceOfType(existing) ? existing! : Activator.CreateInstance(concreteType)!;
+        var subOutcome = ApplySubFields(obj, json, subFields);
+        if (subOutcome != ApplyOutcome.Applied) return subOutcome;
+        if (rp.CanWrite) rp.SetValue(target, obj);
+        return ApplyOutcome.Applied;
+    }
 
     private static ColumnInfoResult? BuildStructColumn(
         PropertyInfo prop, Type core, IReadOnlyDictionary<Type, string> getterTypeToTable, ILogger logger)
@@ -2446,44 +2557,10 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         Func<IMajorRecord, JsonElement, ApplyOutcome>? apply = null;
         if (setterType != null)
         {
-            // The struct half of ApplyListJson's own shape guard — a struct field is written as
-            // one atomic value, so a bare member value is
-            // refused rather than silently dropped while the write path reports success.
-            //
-            // The same refusal also covers a well-formed object whose own member value was
-            // declined (ApplySubFields' ValueRejected fold), or that names a nested Loqui struct
-            // sub-field with nothing writing it yet (#642's SubFieldReadOnly fold) — SetValue is
-            // skipped in both cases too, so a struct write with one bad or unwritable member never
-            // attaches its partially-built value to the record, matching ApplyListJson's own "before
-            // newList is attached" guarantee.
-            //
-            // setterType is abstract for an abstract Loqui union (ANpcLevel, ...) —
-            // Activator.CreateInstance would throw MissingMethodException on it directly, so the
-            // concrete type is resolved off the incoming JSON's own discriminator first, refusing
-            // (ValueRejected) rather than crashing when it can't be. Only reused when the record's
-            // existing value is already that same concrete type — switching concrete leaf (NpcLevel
-            // to PcLevelMult) cannot reuse the old object, so it constructs fresh instead.
-            apply = (record, json) =>
-            {
-                if (json.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
-
-                var concreteType = setterType;
-                if (setterType.IsAbstract)
-                {
-                    if (ResolveAbstractUnionConcreteType(setterType, json) is not { } resolved)
-                        return ApplyOutcome.ValueRejected;
-                    concreteType = resolved;
-                }
-
-                var rp = record.GetType()
-                    .GetProperty(pName, BindingFlags.Public | BindingFlags.Instance)!;
-                var existing = rp.GetValue(record);
-                var obj = concreteType.IsInstanceOfType(existing) ? existing! : Activator.CreateInstance(concreteType)!;
-                var subOutcome = ApplySubFields(obj, json, subFields);
-                if (subOutcome != ApplyOutcome.Applied) return subOutcome;
-                if (rp.CanWrite) rp.SetValue(record, obj);
-                return ApplyOutcome.Applied;
-            };
+            // ApplyStructJson carries the whole contract (shape guard, discriminator resolution,
+            // refuse-before-attach) — shared with every nested struct sub-field since #643, so the
+            // column and sub-field write paths cannot drift apart.
+            apply = (record, json) => ApplyStructJson(record, json, pName, setterType, subFields);
         }
 
         return new("VARCHAR", Extractor, "struct", Empty, Empty, apply,
