@@ -14,20 +14,6 @@ import { ErrorNode } from './ErrorNode';
 
 const DND_MIME = 'application/vnd.medit.modlist-node';
 
-/** Tags a failed drop mutation with which of `applyDrop`'s three branches threw,
- *  so `handleDrop`'s catch can log a specific `<operation> failed: ...` line
- *  instead of a generic one — without re-deriving the branch from the drop
- *  payload. `message` mirrors the original error so
- *  the reporter's user-facing detail is unaffected. */
-class DropMutationError extends Error {
-  constructor(
-    readonly operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
-    cause: unknown,
-  ) {
-    super(cause instanceof Error ? cause.message : String(cause));
-  }
-}
-
 /** Shared resolved-undefined default for an omitted `dataFolder` — hoisted out of
  *  the constructor so it isn't a fresh closure per instance. */
 const NO_DATA_FOLDER: () => Promise<string | undefined> = () => Promise.resolve(undefined);
@@ -243,16 +229,10 @@ export class ModListProvider
     // position — dropping onto them must not fall through to "move to end".
     if (target?.kind === 'count' || target?.kind === 'overwrite') return;
     const { kind, name } = payload.value as { kind: 'mod' | 'separator'; name: string };
-    try {
-      await this.applyDrop(kind, name, target);
-    } catch (e) {
-      // ADR-0026: an explicit user action failed — notify + log, then resync the
-      // moved rows against disk so the tree never shows a phantom reorder.
-      const message = e instanceof Error ? e.message : String(e);
-      const operation = e instanceof DropMutationError ? e.operation : 'handleDrop';
-      this.log(`[ModListProvider] ${operation} failed: ${message}`);
-      this.reporter?.report('error', 'Failed to reorder mods.', message);
-    }
+    // ADR-0026: an explicit user action failed — notify + log (see runMutation, which already
+    // knows which of the three mutations threw), then resync the moved rows against disk so the
+    // tree never shows a phantom reorder.
+    await this.applyDrop(kind, name, target);
     this.invalidate();
   }
 
@@ -282,8 +262,10 @@ export class ModListProvider
     }
   }
 
-  /** Runs a single drop mutation, tagging any throw with `operation` so
-   *  `handleDrop`'s catch can log which of the three mutations failed. */
+  /** Runs a single drop mutation, logging and reporting a failure itself — it already knows
+   *  which of the three mutations this is, so `handleDrop` doesn't need to unpack a tagged
+   *  exception to find out. Swallows the failure (rather than rethrowing) so `handleDrop` always
+   *  reaches its resync `invalidate()` call, exactly as it did before this method existed. */
   private async runMutation(
     operation: 'reorder' | 'moveModToSeparator' | 'reorderSeparatorBlock',
     mutate: () => Promise<void>,
@@ -291,7 +273,9 @@ export class ModListProvider
     try {
       await mutate();
     } catch (e) {
-      throw new DropMutationError(operation, e);
+      const message = this.err(e);
+      this.log(`[ModListProvider] ${operation} failed: ${message}`);
+      this.reporter?.report('error', 'Failed to reorder mods.', message);
     }
   }
 
