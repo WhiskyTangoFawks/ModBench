@@ -972,6 +972,97 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
 
     private static bool IsVectorStructType(Type type) => VectorStructTypes.Contains(type);
 
+    // ── The atomic-value class ────────────────────────────────────────────────────────────────
+    // #649: a CLR value type that Loqui does not model, so it has no sub-schema of its own and
+    // falls through every structural test above (not a primitive, not an enum, not a form link, not
+    // a Loqui interface, not a list, not a Noggog vector). Rather than a new handler branch per
+    // type, each one is a row in this table saying which named scalar components it decomposes
+    // into — the "not Loqui-modelled ⇒ value" rule, applied by lookup.
+    //
+    // Exactly one entry today: System.Drawing.Color. Every other unmodelled value type reachable in
+    // the walk is a named exclusion instead (AtomicValueExclusions) — a table entry is a rendered
+    // presentation, and only Color's has been decided.
+    //
+    // Components are named the way xEdit names them (Red/Green/Blue/Alpha -> red/green/blue/alpha),
+    // not the way the CLR type does (R/G/B/A), because the wire name is what reaches the grid and
+    // ADR-0034 makes xEdit the vocabulary for anything a user reads. The CLR name is kept alongside
+    // it: it is what both the Extract (reads off the real Color) and the Apply (writes onto the
+    // mutable staging box below) resolve by reflection, so neither has to know about the rename.
+    private sealed record AtomicValueComponent(string WireName, string ClrName);
+
+    private static readonly AtomicValueComponent[] ColorRgbComponents =
+    [
+        new("red", "R"), new("green", "G"), new("blue", "B"),
+    ];
+
+    private static readonly AtomicValueComponent[] ColorRgbaComponents =
+    [
+        new("red", "R"), new("green", "G"), new("blue", "B"), new("alpha", "A"),
+    ];
+
+    /// <summary>
+    /// The Color-typed fields xEdit renders <i>with</i> an Alpha leaf — its <c>wbByteRGBA</c>
+    /// definition (wbDefinitionsCommon.pas:6372-6386: Red/Green/Blue/Alpha, all U8). Every other
+    /// Color field in the schema takes <c>wbByteColors</c>'s 3-leaf shape instead
+    /// (wbDefinitionsCommon.pas:6291-6305), whose fourth byte is declared <c>wbUnused(1)</c> and is
+    /// never rendered as a field there.
+    ///
+    /// <para><b>Why a hand-transcribed table.</b> Which of the two shapes a colour takes is a
+    /// property of the <i>field</i>, not of its type: all 60 Color-typed getter properties in
+    /// Fallout 4 are the same <c>System.Drawing.Color</c>. Mutagen answers the same question with
+    /// <c>ColorBinaryType</c>, but selects it inside generated binary-translation call sites
+    /// (<c>frame.ReadColor(ColorBinaryType.Alpha)</c>) — not on the type, not an attribute, not
+    /// reachable from a property walk. Four transcribed rows are smaller than any mechanism that
+    /// could infer it, so this is a workaround rather than ADR-0034's "genuine platform limitation
+    /// that cannot be worked around", and the xEdit shape is matched exactly rather than diverged
+    /// from. Same transcribed-from-xEdit idiom this file already uses for
+    /// <see cref="VectorStructTypes"/> and <c>ObjectModPropertyLeafSkip</c>.</para>
+    ///
+    /// <para><b>Safe by agreement, not by luck.</b> All four are <c>ColorBinaryType.Alpha</c> on the
+    /// Mutagen side (Keyword_Generated.cs:1875, LocationReferenceType_Generated.cs:1510,
+    /// ActionRecord_Generated.cs:1766, Location_Generated.cs:5435), so every field that renders an
+    /// alpha leaf is also a field whose alpha byte Mutagen actually writes
+    /// (ColorBinaryTranslation.cs:21-26). There is no field where the two disagree, which is what
+    /// makes an alpha edit here unable to be silently discarded at compile.</para>
+    ///
+    /// <para>Keyed on the declaring getter interface rather than the table name so it generalizes:
+    /// the same four fields are <c>wbByteRGBA</c> in Skyrim too (wbDefinitionsTES5.pas:5321 KYWD,
+    /// :5326 LCRT, :5331 AACT, :6511 LCTN). <c>internal</c> for the completeness guard in
+    /// <c>SchemaReflectorAtomicValueTests</c>, which fails loudly if a row stops resolving.</para>
+    /// </summary>
+    internal static readonly (string OwnerGetterTypeName, string PropertyName)[] AlphaBearingColorFields =
+    [
+        ("IKeywordGetter", "Color"),                // KYWD — wbDefinitionsFO4.pas:7028
+        ("ILocationReferenceTypeGetter", "Color"),  // LCRT — wbDefinitionsFO4.pas:7040
+        ("IActionRecordGetter", "Color"),           // AACT — wbDefinitionsFO4.pas:7051
+        ("ILocationGetter", "Color"),               // LCTN — wbDefinitionsFO4.pas:8256
+    ];
+
+    private static bool HasAlphaLeaf(PropertyInfo prop) =>
+        AlphaBearingColorFields.Any(e =>
+            e.PropertyName == prop.Name && e.OwnerGetterTypeName == prop.DeclaringType?.Name);
+
+    private static bool IsAtomicValueType(Type core) => core == typeof(System.Drawing.Color);
+
+    // The components this property decomposes into. Per-property rather than per-type precisely
+    // because of the alpha allowlist: two fields of the identical CLR type get different shapes.
+    private static AtomicValueComponent[] AtomicValueComponentsFor(PropertyInfo prop) =>
+        HasAlphaLeaf(prop) ? ColorRgbaComponents : ColorRgbComponents;
+
+    // The mutable staging target an atomic value's Apply writes onto before the immutable value is
+    // rebuilt from it. System.Drawing.Color's own R/G/B/A are get-only, so the vector-struct trick
+    // of mutating a boxed value in place is structurally unavailable here — but with a box whose
+    // property *names* match the CLR type's, every component still gets an ordinary MakeApplier and
+    // the whole write folds through the same ApplySubFields every other struct uses. No bespoke
+    // per-component write path, and no null Apply anywhere in the shape.
+    private sealed class ColorComponentBox
+    {
+        public byte R { get; set; }
+        public byte G { get; set; }
+        public byte B { get; set; }
+        public byte A { get; set; }
+    }
+
     private static string[] GetFormLinkValidTypes(
         Type core, IReadOnlyDictionary<Type, string> getterTypeToTable)
     {
@@ -1882,6 +1973,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectSubField(prop, colName, core, nullable, leaf, logger),
+            null when IsAtomicValueType(core) => BuildAtomicValueSubField(prop, core, colName, logger),
             null when IsVectorStructType(core) => BuildVectorSubField(prop, core, colName, getterTypeToTable, depth, logger),
             null when IsListType(core, out var elementType) =>
                 BuildListSubField(prop, colName, elementType, getterTypeToTable, logger),
@@ -2006,6 +2098,87 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
                 result.Add(spec);
         }
         return result;
+    }
+
+    // ── The atomic-value class: build (see AlphaBearingColorFields for the shape decision) ──────
+
+    // One component's own sub-field. Read and write deliberately target different runtime types:
+    // Extract reads off the real immutable value (a System.Drawing.Color), while Apply resolves the
+    // same CLR name on the mutable ColorComponentBox the enclosing Apply stages into. Both are
+    // ordinary name-keyed reflection — SubGetter and MakeApplier, unchanged — so a component behaves
+    // exactly like any other byte leaf, ApplyOutcome folding included.
+    private static List<SubFieldSpec> BuildAtomicValueComponentSubFields(
+        Type core, AtomicValueComponent[] components, ILogger logger)
+    {
+        var (_, apiType, converter) = PrimitiveMap[typeof(byte)];
+        var result = new List<SubFieldSpec>();
+        foreach (var component in components)
+        {
+            var componentProp = core.GetProperty(component.ClrName, BindingFlags.Public | BindingFlags.Instance)
+                ?? throw new InvalidOperationException(
+                    $"Atomic value type {core.Name} declares no '{component.ClrName}' component. " +
+                    "The presentation table and the CLR type have diverged.");
+
+            result.Add(new(component.WireName, apiType, Empty, Empty,
+                SubGetter(componentProp),
+                MakeApplier(component.ClrName, nullable: false, converter, logger)));
+        }
+        return result;
+    }
+
+    // Rebuilds the immutable value from the staged box. Alpha rides through whether or not this
+    // field renders an alpha leaf: a field on the 3-leaf shape simply never has "alpha" in its
+    // payload, so ApplySubFields leaves box.A at whatever the current value already carried — which
+    // is what makes a colour edit on one of the 40 wbByteColors fields preserve its existing fourth
+    // byte instead of silently zeroing it.
+    private static System.Drawing.Color RebuildAtomicValue(ColorComponentBox box) =>
+        System.Drawing.Color.FromArgb(box.A, box.R, box.G, box.B);
+
+    private static ColorComponentBox StageAtomicValue(object? current) =>
+        current is System.Drawing.Color c
+            ? new ColorComponentBox { R = c.R, G = c.G, B = c.B, A = c.A }
+            // No prior value (a nullable Color being written for the first time). All-zero matches
+            // xEdit's own wbByteColors defaults (aDefaultR/G/B = 0, the fourth byte wbUnused).
+            : new ColorComponentBox();
+
+    // The shared write body for an atomic value, operating on `object` so the top-level column and
+    // the nested sub-field share one implementation — the same posture ApplyStructJson takes for
+    // Loqui structs since #643.
+    private static ApplyOutcome ApplyAtomicValueJson(
+        object obj, JsonElement val, string pName, IReadOnlyList<SubFieldSpec> components)
+    {
+        if (val.ValueKind != JsonValueKind.Object) return ApplyOutcome.ValueRejected;
+        var rp = obj.GetType().GetProperty(pName, BindingFlags.Public | BindingFlags.Instance);
+        if (rp == null) return ApplyOutcome.PropertyNotFound;
+
+        var box = StageAtomicValue(rp.GetValue(obj));
+        var subOutcome = ApplySubFields(box, val, components);
+        if (subOutcome != ApplyOutcome.Applied) return subOutcome;
+        if (rp.CanWrite) rp.SetValue(obj, RebuildAtomicValue(box));
+        return ApplyOutcome.Applied;
+    }
+
+    private static SubFieldSpec BuildAtomicValueSubField(
+        PropertyInfo prop, Type core, string colName, ILogger logger)
+    {
+        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(prop), logger);
+        var g = SubGetter(prop);
+        var pName = prop.Name;
+        return new(colName, "struct", Empty, Empty,
+            obj => { var v = g(obj); return v == null ? null : ExtractSubObject(v, components); },
+            Apply: (obj, val) => ApplyAtomicValueJson(obj, val, pName, components),
+            SubFields: components);
+    }
+
+    private static ColumnInfoResult BuildAtomicValueColumn(PropertyInfo prop, Type core, ILogger logger)
+    {
+        var components = BuildAtomicValueComponentSubFields(core, AtomicValueComponentsFor(prop), logger);
+        var pName = prop.Name;
+        return new("VARCHAR",
+            r => TryGet(r, prop) is { } v ? JsonSerializer.Serialize(ExtractSubObject(v, components)) : null,
+            "struct", Empty, Empty,
+            Apply: (record, val) => ApplyAtomicValueJson(record, val, pName, components),
+            SubFieldMetas: components.ConvertAll(c => c.ToFieldMetadata()));
     }
 
     // A vector-struct field nested inside another struct (e.g. ObjectBounds.First/Second, a
@@ -2202,6 +2375,7 @@ public sealed partial class SchemaReflector(ILogger<SchemaReflector>? logger = n
         return ClassifyLeaf(prop, core, getterTypeToTable) switch
         {
             { } leaf => ProjectColumn(prop, core, nullable, leaf, logger),
+            null when IsAtomicValueType(core) => BuildAtomicValueColumn(prop, core, logger),
             null when IsVectorStructType(core) => BuildVectorColumn(prop, core, getterTypeToTable, logger),
             null when IsListType(core, out var elementType) => BuildListColumn(prop, elementType, getterTypeToTable, logger),
             null when IsLoquiInterface(core) => BuildStructColumn(prop, core, getterTypeToTable, logger),
