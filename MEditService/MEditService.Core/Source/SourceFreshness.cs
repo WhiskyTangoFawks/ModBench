@@ -65,22 +65,17 @@ public sealed class SourceFreshness(ILoadOrderMirror mirror, ILogger<SourceFresh
         var stack = index.At(RecordRef.Effective).GetOverrideStack(formKey);
         if (stack == null) return;
 
-        // The plugin header is skipped, and skipping it is the *safe* answer rather than a gap.
-        // Since #631 it carries a real body, so it reaches this pass for the first time — but its
-        // source file is the tree's root RecordData.json, which SourceUnitResolver cannot locate (no
-        // group folder, not a placement, and no FormKey in the filename for the fallback scan).
-        // Without this guard the pass resolves nothing, reads that as "the user deleted this record",
-        // and folds a working-tree deletion of the header into the index on an ordinary read —
-        // verified, not theorised: ReadTimeFreshnessTests.
-        // ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex fails with the header's very
-        // first GetRecord returning null when this line is removed.
-        //
-        // This restores exactly the behaviour the header had before it carried a body (the pass was
-        // inert for it then too — a null file text matched its null body). Genuinely validating the
-        // header against its own file needs the header to become a first-class source unit, which is
-        // its own ticket, not something to fake here.
-        if (stack.RecordType == HeaderIndexer.RecordType) return;
-
+        // #631a gave the header a real body, which put it in this pass's reach for the first time —
+        // and #631a found that reach live: without the header being a genuine source unit,
+        // SourceUnitResolver.Resolve returned null for it, this pass read that as "the user deleted
+        // this record", and folded a working-tree deletion of the header into the index on an
+        // ordinary read (ReadTimeFreshnessTests.ReadingATrackedPluginsHeader_DoesNotFoldADeletionIntoTheIndex
+        // is the guard, and reproducibly failed with the header's very first GetRecord returning null
+        // when a bare skip is removed without also fixing resolution — the exact regression check
+        // this comment used to describe as future work). #661 fixed resolution itself
+        // (SourceRecordPath.TryParse/SourceUnitResolver.Resolve both answer the header's root
+        // RecordData.json directly now), so there is no longer a null to guard against here — the
+        // header goes through ValidateOne exactly like every other record.
         foreach (var entry in stack.Entries)
         {
             try

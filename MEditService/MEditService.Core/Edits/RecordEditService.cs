@@ -69,11 +69,20 @@ public sealed class RecordEditService(
         // modFolder isn't needed past resolution here — EditField's own remaining work is entirely
         // in terms of the record's own source unit, not the mod folder that produced it.
         var (index, _, release, document, unit) = editTarget;
-        var reads = index.At(RecordRef.Effective);
+        var schemas = schemaReflector.GetSchemas(release);
 
+        // #661: the header is a source unit now, so ResolveEditTarget above no longer refuses it at
+        // SourceUnitNotFound before this line — but a ModHeader is not an IMajorRecord, so it can
+        // never flow through ReadRecordFromSource/RecordFieldWriter's generic per-record pipeline
+        // below (that pipeline is what every other record type uses, and structurally cannot carry
+        // this one — see HeaderDocument's own doc comment). Answered here instead, off the schema
+        // alone, before any record is read or materialized.
+        if (document.RecordType == HeaderIndexer.RecordType)
+            return RefuseHeaderFieldEdit(fieldPath, schemas);
+
+        var reads = index.At(RecordRef.Effective);
         var owner = reads.GetDocument(unit.OwnerFormKey, plugin)!;
         var record = ReadRecordFromSource(_codec, logger, unit.FullPath, owner, release);
-        var schemas = schemaReflector.GetSchemas(release);
 
         // The record the field lands on is the one the caller named — which is *inside* `record` when
         // the source unit belongs to a container. Locating it in the parent's own object graph rather
@@ -368,9 +377,10 @@ public sealed class RecordEditService(
     public RecordEditResult DeleteRecord(PluginKey plugin, string formKey)
     {
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        // document isn't needed past resolution here — every remaining branch below reads through
+        // document isn't needed past this header check — every remaining branch below reads through
         // the resolved source unit instead.
-        var (index, _, release, _, unit) = target;
+        var (index, _, release, document, unit) = target;
+        if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
         var reads = index.At(RecordRef.Effective);
 
         var deltas = new List<(string FormKey, string? Body)>();
@@ -845,13 +855,17 @@ public sealed class RecordEditService(
     /// </summary>
     public RecordEditResult RenumberRecord(PluginKey plugin, string formKey, string? requestedFormKey = null)
     {
-        // document/unit are deliberately discarded: this call is only the same existence check
+        // unit is deliberately discarded: this call is only the same existence check
         // EditField/DeleteRecord make (a container's own directory, an embedded child, or a flat
         // record's file all answer here; only "nothing on disk holds this, and the index names no
         // container that would" still refuses) — RenumberTheRecordItself/RewriteReferenceField each
         // re-resolve fresh, deliberately, rather than trusting this snapshot (their own doc comments).
+        // document.RecordType is kept just long enough for the header check below — a ModHeader has
+        // no ordinary FormKey lifecycle a renumber could reassign, and RenumberTheRecordItself would
+        // otherwise crash trying to run it through ReadRecordFromSource's generic per-record pipeline.
         if (ResolveEditTarget(plugin, formKey, out var target) is { } blocked) return blocked;
-        var (index, modFolder, release, _, _) = target;
+        var (index, modFolder, release, document, _) = target;
+        if (RefuseIfHeader(document.RecordType) is { } headerRefusal) return headerRefusal;
 
         var originatingPlugin = FormKey.Factory(formKey).ModKey.FileName.String;
         if (!originatingPlugin.Equals(plugin.Name, StringComparison.OrdinalIgnoreCase))
@@ -1503,6 +1517,76 @@ public sealed class RecordEditService(
                 // command that does not exist is its own dead end, so the
                 // tests assert this string exactly rather than merely containing "Track".
                 $"Run \"{TrackCommandTitle}\" on it once to start editing.");
+
+    /// <summary>
+    /// <see cref="DeleteRecord"/>'s and <see cref="RenumberRecord"/>'s own header gate (#661) —
+    /// both are meaningless against the header (see
+    /// <see cref="RecordEditRefusal.HeaderDeleteOrRenumberNotSupported"/>'s own doc comment for why),
+    /// and both must refuse <b>before</b> touching a filesystem write, the same "typed refusal before
+    /// any write" invariant every other refusal on this path already holds.
+    ///
+    /// <para>Not folded into <see cref="ResolveEditTarget"/> itself: <see cref="EditField"/> shares
+    /// that gate too, and reaches the header deliberately — it answers off the schema instead
+    /// (<see cref="RefuseHeaderFieldEdit"/>), which <see cref="ResolveEditTarget"/> has no way to
+    /// choose between without a verb parameter neither of its other two callers would use.</para>
+    ///
+    /// <para><b>Why this exists at all, concretely.</b> Without it, <c>SourceUnit.IsDirectoryPerRecord</c>
+    /// — a filename-only test (<c>RecordData.json</c>) that cannot distinguish the header's own copy
+    /// of that name, sitting <i>at</i> the plugin's source root, from a container's, sitting one level
+    /// <i>under</i> it — answers true for the header, and <see cref="DeleteRecord"/>'s directory branch
+    /// then deletes the plugin's own source root as "one record's" delete. Found in review on this
+    /// exact ticket: an unguarded <c>DeleteRecord(plugin, headerFormKey)</c> returned
+    /// <c>Applied: True</c> and took the fixture's unrelated NPC source file with it.
+    /// <see cref="RenumberRecord"/>'s own path would instead hit an untyped throw
+    /// (<see cref="ReadRecordFromSource"/> deserializing "header" through the generic per-record
+    /// codec, which cannot carry a <see cref="ModHeader"/> at all) — smaller blast radius, same
+    /// missing gate.</para>
+    /// </summary>
+    private static RecordEditResult? RefuseIfHeader(string recordType) =>
+        recordType == HeaderIndexer.RecordType
+            ? RecordEditResult.Refused(
+                RecordEditRefusal.HeaderDeleteOrRenumberNotSupported,
+                "The plugin header cannot be deleted or renumbered — it is not an ordinary record.")
+            : null;
+
+    /// <summary>
+    /// The header's own field-edit gate (#661), reached from <see cref="EditField"/> once source-unit
+    /// resolution stops refusing a header FormKey at <see cref="RecordEditRefusal.SourceUnitNotFound"/>.
+    /// Answers exactly the question <see cref="RecordFieldWriter.TryApply"/> would — does the named
+    /// column exist, does it carry a write delegate — without ever needing a <see cref="ModHeader"/>
+    /// instance, which the generic <see cref="IMajorRecord"/> pipeline that question normally runs
+    /// through cannot accept in the first place. Reuses <see cref="RefuseFieldOutcome"/> so a header
+    /// field's refusal reads identically to every other read-only column's, rather than inventing a
+    /// second wording for the same outcome.
+    ///
+    /// <para>No header column carries a write delegate today — <c>masters</c> by design (#335/
+    /// ADR-0038), <c>author</c>/<c>flags</c> simply because giving them one is #290's work, not this
+    /// ticket's (Minimal by default: a write mechanism nothing calls is scaffolding). The
+    /// <see cref="ColumnSpec.Apply"/> non-null branch below is therefore unreached today — kept as a
+    /// loud failure rather than a silent one, so a future column gaining a delegate is a build-time
+    /// nudge to give this method (or replace it with) a real write path, not a refusal that quietly
+    /// keeps lying about the field being read-only.</para>
+    /// </summary>
+    private static RecordEditResult RefuseHeaderFieldEdit(
+        string fieldPath, IReadOnlyDictionary<string, RecordTableSchema> schemas)
+    {
+        if (!schemas.TryGetValue(HeaderIndexer.RecordType, out var schema))
+            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
+
+        var column = schema.RecordColumns.FirstOrDefault(c => c.Name == fieldPath);
+        if (column == null)
+            return RefuseFieldOutcome(FieldApplyOutcome.NotFound, fieldPath, HeaderIndexer.RecordType, schemas);
+
+        if (column.Apply != null)
+        {
+            throw new NotSupportedException(
+                $"Header column '{fieldPath}' now carries a write delegate, but RecordEditService has " +
+                "no header write path — EditField's header branch only knows how to refuse. Build one " +
+                "(#290) before giving any header column an Apply delegate.");
+        }
+
+        return RefuseFieldOutcome(FieldApplyOutcome.ReadOnly, fieldPath, HeaderIndexer.RecordType, schemas);
+    }
 
     private static RecordEditResult RefuseFieldOutcome(
         FieldApplyOutcome outcome, string fieldPath, string recordType,

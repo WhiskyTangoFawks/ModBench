@@ -231,6 +231,25 @@ public enum RecordEditRefusal
     /// it did before this refusal existed.
     /// </summary>
     NestedFieldReadOnly,
+
+    /// <summary>
+    /// Delete or renumber, targeting the plugin header (#661) — meaningless for both. Deleting it
+    /// would leave the tracked plugin with no root <c>RecordData.json</c>, which the whole-mod door
+    /// needs just to identify <c>ModKey</c>/<c>GameRelease</c>; renumbering it makes no sense either,
+    /// since its FormKey is synthetic (<c>HeaderIndexer.FormKeyFor</c>'s own
+    /// <c>000000:&lt;plugin&gt;</c>) rather than a real allocation in the plugin's FormID space a
+    /// renumber could reassign. Distinct from <see cref="RecordTypeNotFound"/>'s own header carve-out,
+    /// which is Create's — that refuses because no schema table exists to instantiate a *new* header
+    /// from; this refuses an *existing* header row that these two verbs structurally cannot touch.
+    ///
+    /// <para>Refused before <c>SourceUnit.IsDirectoryPerRecord</c> is ever consulted, deliberately:
+    /// that test is filename-only (<c>RecordData.json</c>) and cannot tell the header's own root
+    /// document from a container's, so an unrefused header row reaching it would be treated as a
+    /// directory-per-record delete of the plugin's own source root — not a theoretical risk, but the
+    /// exact data-loss defect this refusal exists to close (found in review: an unguarded
+    /// <c>DeleteRecord</c> against the header deleted the plugin's entire tracked tree).</para>
+    /// </summary>
+    HeaderDeleteOrRenumberNotSupported,
 }
 
 /// <summary>

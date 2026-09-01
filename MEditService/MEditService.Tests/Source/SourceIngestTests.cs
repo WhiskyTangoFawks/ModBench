@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using MEditService.Core.Edits;
 using MEditService.Core.Plugins;
@@ -8,6 +9,8 @@ using MEditService.Core.Source;
 using MEditService.Tests.Edits;
 using Microsoft.Extensions.Logging.Abstractions;
 using Mutagen.Bethesda;
+using Mutagen.Bethesda.Fallout4;
+using Mutagen.Bethesda.Plugins;
 
 namespace MEditService.Tests.Source;
 
@@ -113,6 +116,43 @@ public sealed class SourceIngestTests
         Assert.Equal(
             TrackedModFixture.NpcEditorId,
             reloaded.Index!.At(RecordRef.Head).GetDocument(mod.Npc.ToString(), mod.Plugin)!.EditorId);
+    }
+
+    /// <summary>
+    /// The header's own version of the divergence above (#661): unlike every other record type,
+    /// <c>ReconcileHeadStructurally</c> cannot find it (it diffs through <c>EnumerateMajorRecords</c>,
+    /// which a <c>ModHeader</c> is not in), so this needs the header's own path through the flat-path
+    /// loop rather than a parameter tweak — the resolver now recognises the header's own path
+    /// (<see cref="SourceRecordPath.TryParse"/>, #661) so this reaches the header for the first time.
+    /// Deliberately dirtied <i>before</i> the fresh reconcile, not through a live self-heal — proving
+    /// this diverges on an already-dirty tree at load time, not only after a point read happens to
+    /// trigger it.
+    /// </summary>
+    [Fact]
+    public void AnUncommittedHeaderEdit_LeavesHeadOnTheCommittedBytes_AndEffectiveOnTheWorkingTree()
+    {
+        using var mod = TrackedModFixture.Tracked();
+        var headerFormKey = HeaderIndexer.FormKeyFor(ModKey.FromFileName(TrackedModFixture.PluginName));
+        var headerPath = Path.Combine(mod.ModFolder, "source", TrackedModFixture.PluginName, "RecordData.json");
+
+        // Rebuilt through the same door the production path itself uses (HeaderDocument.Write, #631),
+        // never a hand-spliced JSON string — HeaderDocumentTests already pins that an in-memory Author
+        // round-trips through it byte-for-byte, which a raw text edit cannot promise (the whole-mod
+        // door's own reader is not a generic JSON parser). This is what lets the test prove
+        // ReconcileHead's own header path rather than JSON-formatting trivia.
+        var edited = new Fallout4Mod(ModKey.FromFileName(TrackedModFixture.PluginName), Fallout4Release.Fallout4);
+        edited.ModHeader.Author = "RenamedByHand";
+        File.WriteAllBytes(headerPath, HeaderDocument.Write(edited));
+
+        using var reloaded = Reload(mod);
+
+        var effective = reloaded.Index!.At(RecordRef.Effective).GetDocument(headerFormKey, mod.Plugin);
+        var head = reloaded.Index!.At(RecordRef.Head).GetDocument(headerFormKey, mod.Plugin);
+
+        Assert.NotNull(effective);
+        Assert.NotNull(head);
+        Assert.Contains("RenamedByHand", effective!.Body!, StringComparison.Ordinal);
+        Assert.DoesNotContain("RenamedByHand", head!.Body!, StringComparison.Ordinal);
     }
 
     [Fact]
