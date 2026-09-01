@@ -28,6 +28,49 @@ public sealed class MalformedPluginScanTests
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", d.Message);
     }
 
+    // ── R1/R3/R4: real cut-down fixtures (MalformedFixtureGenerator) ─────────────────────────
+
+    [Fact]
+    public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText()
+    {
+        var diagnoses = ScanFixture("GaussRevolver - CutDown.esp");
+
+        var d = Assert.Single(diagnoses);
+        Assert.Equal("subrecord-out-of-ck-order", d.DefectClass);
+        Assert.Equal("WEAP 01000860 (GaussRevolver)", d.Anchor);
+        Assert.Equal("repairable (lossless)", d.Tail);
+        Assert.Equal("template combination 0's OBTS precedes its OBTF/FULL; the Creation Kit writes OBTF, FULL, OBTS", d.Message);
+    }
+
+    [Fact]
+    public void Lunar_BothShortBipedNameLists_AreDiagnosedByExactClassAndText()
+    {
+        var diagnoses = ScanFixture("Lunar-UniqueCreatures - CutDown.esp");
+
+        Assert.Equal(2, diagnoses.Count);
+        Assert.All(diagnoses, d => Assert.Equal("fixed-count-list-wrong-count", d.DefectClass));
+        Assert.All(diagnoses, d => Assert.Equal("repairable (lossless)", d.Tail));
+        var fogCrawler = Assert.Single(diagnoses, d => d.Anchor == "RACE 03014174 (DLC03_FogCrawlerRace)");
+        Assert.Equal("NAME appears 31 times; the Creation Kit always writes 32", fogCrawler.Message);
+        var gatorclaw = Assert.Single(diagnoses, d => d.Anchor == "RACE 0603637A (DLC04_GatorclawRace)");
+        Assert.Equal("NAME appears 30 times; the Creation Kit always writes 32", gatorclaw.Message);
+    }
+
+    [Fact]
+    public void SouthOfTheSea_CounterDisagreeingWithEntries_IsDiagnosedByExactClassAndText()
+    {
+        var diagnoses = ScanFixture("SouthOfTheSea - CutDown.esm");
+
+        var d = Assert.Single(diagnoses);
+        Assert.Equal("counter-entries-mismatch", d.DefectClass);
+        Assert.Equal("REFR 07431EDC (00sots_Necropolis_WorkshopRef)", d.Anchor);
+        Assert.Equal("repairable (lossless)", d.Tail);
+        Assert.Equal("XWPG counts 1; 2 XWPN entries follow", d.Message);
+    }
+
+    private static List<PluginDiagnosis> ScanFixture(string fileName) =>
+        MalformedPluginScan.Scan(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestData", fileName)));
+
     // ── Per-detector contracts on hand-built bytes ───────────────────────────────────────────
 
     [Fact]
