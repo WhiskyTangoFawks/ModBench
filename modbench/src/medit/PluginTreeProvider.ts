@@ -83,8 +83,11 @@ export class RecordNode extends vscode.TreeItem {
     // keeps every other record action via its own when-clauses. FormKey shape is Mutagen's own
     // "<hex6>:<ModKey>", so the origin is everything after the first colon.
     const originModKey = record.formKey.slice(record.formKey.indexOf(':') + 1);
-    const isNative = originModKey.localeCompare(record.plugin, undefined, { sensitivity: 'accent' }) === 0;
-    this.contextValue = immutable ? 'recordImmutable' : isNative ? 'record' : 'recordOverride';
+    // toLowerCase, not localeCompare: matches the backend's OrdinalIgnoreCase filename semantics
+    // without host-locale hazards, and is the comparison renumberConfirm.ts already uses.
+    const isNative = originModKey.toLowerCase() === record.plugin.toLowerCase();
+    if (immutable) this.contextValue = 'recordImmutable';
+    else this.contextValue = isNative ? 'record' : 'recordOverride';
     this.command = {
       command: 'modbench.openEditor',
       title: 'Open Record',
