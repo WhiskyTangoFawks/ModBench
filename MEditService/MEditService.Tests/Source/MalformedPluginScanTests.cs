@@ -8,8 +8,12 @@ namespace MEditService.Tests.Source;
 /// The Kind B per-class detectors (#569): byte-level scans over a plugin's own structure that name
 /// a malformed record's defect class from the original bytes alone — no Mutagen, no recompiled
 /// counterpart, which is what lets #570 run them at session load. Hand-built bytes pin each
-/// detector's contract; the committed real fixtures pin the exact diagnosis one defective record
-/// each produces (<c>MalformedFixtureGenerator</c> regenerates the cut-down ones).
+/// detector's contract and each surveyed defect's exact diagnosis: the per-row fixtures are
+/// synthetic reproductions — same record type, FormID, EditorID and defect shape as the real
+/// plugin the survey observed (named per test), but none of the mod author's payload bytes; the
+/// repo commits no third-party plugin content (MEditService/CLAUDE.md's fixture rule). The two
+/// whole-plugin fixtures that predate that rule (<c>LitR - TrueStorms.esp</c>,
+/// <c>SKI_PlasmaAutocannon.esp</c>) still exercise the scan against real, full plugin structure.
 /// </summary>
 public sealed class MalformedPluginScanTests
 {
@@ -28,15 +32,21 @@ public sealed class MalformedPluginScanTests
         Assert.Equal("RDAT is 6 bytes; a REGN RDAT is always 8", d.Message);
     }
 
-    // ── R1/R3/R4: real cut-down fixtures (MalformedFixtureGenerator) ─────────────────────────
+    // ── R1/R3/R4: synthetic reproductions of the surveyed defects ────────────────────────────
 
     [Fact]
     public void GaussRevolver_TemplateRotation_IsDiagnosedByExactClassAndText()
     {
-        // Lunar Arsenal's GaussRevolver.esp (OBTE=1: OBTS OBTF FULL STOP) — the combination's
-        // OBTS precedes its OBTF/FULL, leaving them unclosed. "The Charger Pistol" ships a clean
-        // plugin under the same filename; the generator cuts from the malformed copy.
-        var diagnoses = ScanFixture("GaussRevolver - CutDown.esp");
+        // The shape observed in Lunar Arsenal's GaussRevolver.esp WEAP 03000860 (OBTE=1:
+        // OBTS OBTF FULL STOP) — the combination's OBTS precedes its OBTF/FULL, leaving them
+        // unclosed. ("The Charger Pistol" ships a clean plugin under the same filename —
+        // ADR-0044's every-physical-copy story in the wild.)
+        var diagnoses = MalformedPluginScan.Scan(Record("WEAP", 0x03000860,
+            Sub("EDID", "GaussRevolver\0"u8.ToArray()),
+            Sub("OBTE", Le(1)),
+            Sub("OBTS", new byte[67]),
+            Sub("OBTF", []), Sub("FULL", "Gauss Revolver\0"u8.ToArray()),
+            Sub("STOP", [])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("subrecord-out-of-ck-order", d.DefectClass);
@@ -48,7 +58,11 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Lunar_BothShortBipedNameLists_AreDiagnosedByExactClassAndText()
     {
-        var diagnoses = ScanFixture("Lunar-UniqueCreatures - CutDown.esp");
+        // The two RACEs the survey observed in Lunar-UniqueCreatures.esp: 31 and 30 Biped
+        // Object Names where the CK always writes 32.
+        var diagnoses = MalformedPluginScan.Scan(Concat(
+            RaceWithNames(0x03014174, "DLC03_FogCrawlerRace", 31),
+            RaceWithNames(0x0603637A, "DLC04_GatorclawRace", 30)));
 
         Assert.Equal(2, diagnoses.Count);
         Assert.All(diagnoses, d => Assert.Equal("fixed-count-list-wrong-count", d.DefectClass));
@@ -62,7 +76,12 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void SouthOfTheSea_CounterDisagreeingWithEntries_IsDiagnosedByExactClassAndText()
     {
-        var diagnoses = ScanFixture("SouthOfTheSea - CutDown.esm");
+        // The shape observed in SouthOfTheSea.esm REFR 07431EDC: XWPG says one power-grid
+        // connection; two XWPN entries follow.
+        var diagnoses = MalformedPluginScan.Scan(Record("REFR", 0x07431EDC,
+            Sub("EDID", "00sots_Necropolis_WorkshopRef\0"u8.ToArray()),
+            Sub("XWPG", Le(1)),
+            Sub("XWPN", new byte[12]), Sub("XWPN", new byte[12])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("counter-entries-mismatch", d.DefectClass);
@@ -91,7 +110,16 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void FastTravelSigns_Function9MissingEpf3_IsDiagnosedByExactClassAndText()
     {
-        var diagnoses = ScanFixture("FTS_FastTravelSettlement - CutDown.esp");
+        // The shape observed in FTS_FastTravelSettlement.esp PERK 050008AB: an
+        // Add Activate Choice entry carrying EPFT 4, EPFB and EPF2 but no EPF3.
+        var diagnoses = MalformedPluginScan.Scan(Record("PERK", 0x050008AB,
+            Sub("EDID", "FTS_CallMarkerPerk\0"u8.ToArray()),
+            Sub("PRKE", [2, 0, 0]),
+            Sub("DATA", [0, 9, 0]),
+            Sub("EPFT", [4]),
+            Sub("EPFB", new byte[2]),
+            Sub("EPF2", new byte[27]),
+            Sub("PRKF", [])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("entry-point-parameter-shape", d.DefectClass);
@@ -103,7 +131,16 @@ public sealed class MalformedPluginScanTests
     [Fact]
     public void Radfall_Function6WithParameters_IsDiagnosedLossyByExactClassAndText()
     {
-        var diagnoses = ScanFixture("Radfall - CutDown.esp");
+        // The shape observed in Radfall.esp PERK 0004C92C: an Absolute Value entry carrying
+        // a parameter block (EPFT 1, EPFB, EPFD) the function never takes.
+        var diagnoses = MalformedPluginScan.Scan(Record("PERK", 0x0004C92C,
+            Sub("EDID", "Sniper03\0"u8.ToArray()),
+            Sub("PRKE", [2, 0, 0]),
+            Sub("DATA", [0, 6, 0]),
+            Sub("EPFT", [1]),
+            Sub("EPFB", new byte[2]),
+            Sub("EPFD", new byte[4]),
+            Sub("PRKF", [])));
 
         var d = Assert.Single(diagnoses);
         Assert.Equal("entry-point-parameter-shape", d.DefectClass);
@@ -246,6 +283,15 @@ public sealed class MalformedPluginScanTests
     }
 
     // ── byte builders (same conventions as PluginBinaryWalkTests) ────────────────────────────
+
+    private static byte[] Concat(params byte[][] records) => records.SelectMany(r => r).ToArray();
+
+    private static byte[] RaceWithNames(uint formId, string editorId, int nameCount)
+    {
+        var subs = new List<byte[]> { Sub("EDID", Encoding.UTF8.GetBytes(editorId + "\0")) };
+        subs.AddRange(Enumerable.Range(0, nameCount).Select(_ => Sub("NAME", "Slot\0"u8.ToArray())));
+        return Record("RACE", formId, [.. subs]);
+    }
 
     private static byte[] Le(uint value)
     {
