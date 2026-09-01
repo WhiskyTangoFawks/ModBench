@@ -904,16 +904,15 @@ public sealed class DuckDbRecordIndex : IRecordIndex
             return reader.GetBoolean(7) ? WorkingTreeState.Modified : WorkingTreeState.Added;
         }
 
-        // Column 8 is the correlated container_child EXISTS Search's SELECT list adds (#560) —
-        // read positionally, same as columns 6/7 above, rather than by name, matching this reader's
-        // existing convention throughout.
-
         private static string? ModKeyNameOf(string formKey)
         {
             var colon = formKey.IndexOf(':');
             return colon > 0 ? formKey[(colon + 1)..] : null;
         }
 
+        // Column 8 is the correlated container_child EXISTS Search's SELECT list adds (#560) —
+        // read positionally, same as columns 6/7 above, rather than by name, matching this reader's
+        // existing convention throughout.
         private static RecordSummary ReadSummary(DuckDBDataReader reader) =>
             new(reader.GetString(0), reader.GetString(1), LoadOrderSortKey(reader, 2),
                 reader.GetBoolean(3), reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5),
