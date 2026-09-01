@@ -528,6 +528,59 @@ describe('Mo2ModlistSource — writes (against a tmp copy)', () => {
     expect(added).toEqual([]);
   });
 
+  describe('pruneDeadEntries (#93)', () => {
+    beforeEach(async () => {
+      // The shared fixture ships one listed-but-folderless entry ("[NODELETE] Radfall") —
+      // exactly the state prune exists to clean up, which would drown out each test's own
+      // arranged delta. Give it its folder so the baseline is coherent here.
+      await mkdir(join(dir, 'mods', '[NODELETE] Radfall'));
+    });
+
+  it('pruneDeadEntries removes the entry of a mod whose folder was deleted, byte-faithfully (#93)', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    await rm(join(dir, 'mods', 'Harder VATS'), { recursive: true, force: true });
+
+    const pruned = await src.pruneDeadEntries();
+
+    expect(pruned).toEqual(['Harder VATS']);
+    // Exactly that one line gone ("-Harder VATS" — the fixture holds it disabled); every
+    // other byte identical.
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before.replace('-Harder VATS\r\n', ''));
+  });
+
+  it('pruneDeadEntries removes nothing when every entry still has its folder (#93)', async () => {
+    const before = await readFile(modlistPath(), 'utf8');
+    const pruned = await src.pruneDeadEntries();
+    expect(pruned).toEqual([]);
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+  });
+
+  it('pruneDeadEntries never touches a separator entry, whose folder is the _separator marker (#93)', async () => {
+    // The fixture's separators have marker folders; even deleting one must not prune the
+    // separator ENTRY — a dead separator is not a dead mod, and #93 scopes prune to mods.
+    await rm(join(dir, 'mods', 'Unassigned (Modlist Development)_separator'), { recursive: true, force: true });
+    const pruned = await src.pruneDeadEntries();
+    expect(pruned).toEqual([]);
+    expect(await readFile(modlistPath(), 'utf8')).toContain('Unassigned (Modlist Development)_separator');
+  });
+
+  it('pruneDeadEntries prunes nothing when mods/ itself is missing — a malformed workspace, not a mass delete (#93)', async () => {
+    // Same ENOENT posture as registerUnlistedMods: only a listing that actually answered
+    // can say a folder is gone. A missing mods/ dir must not wipe the whole modlist.
+    const before = await readFile(modlistPath(), 'utf8');
+    await rm(join(dir, 'mods'), { recursive: true, force: true });
+    const pruned = await src.pruneDeadEntries();
+    expect(pruned).toEqual([]);
+    expect(await readFile(modlistPath(), 'utf8')).toBe(before);
+  });
+
+  it('pruneDeadEntries rejects when mods/ exists but is not a directory — not silently "nothing dead" (#93)', async () => {
+    await rm(join(dir, 'mods'), { recursive: true, force: true });
+    await writeFile(join(dir, 'mods'), 'not a directory');
+    await expect(src.pruneDeadEntries()).rejects.toThrow();
+  });
+  });
+
   it('listProfiles ignores a stray file directly in profiles/, not just directories (#317)', async () => {
     await writeFile(join(dir, 'profiles', 'profiles.txt'), '');
     const profiles = (await src.listProfiles()).sort((a, b) => a.localeCompare(b));

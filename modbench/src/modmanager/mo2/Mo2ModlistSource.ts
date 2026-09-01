@@ -14,6 +14,7 @@ import {
   renameSeparatorInText,
   setEnabledInText,
   unlistedModNames,
+  deadModEntryNames,
 } from './modlistText';
 import { appendPluginInText, movePluginsInText, parsePlugins, setPluginEnabledInText } from './pluginsText';
 import { parseMetaIni, writeMetaIni } from './metaIni';
@@ -211,6 +212,29 @@ export class Mo2ModlistSource implements IModlistSource {
     // in ascending sorted order top-to-bottom on disk.
     for (const name of [...names].reverse()) {
       await this.modifyModlist((t) => insertModAtWinningEnd(t, name));
+    }
+    return names;
+  }
+
+  /** The inverse of `registerUnlistedMods` (#93): remove every modlist.txt `mod` entry
+   *  whose `mods/<name>/` folder no longer exists — deleted outside Modbench while it
+   *  wasn't running or watching. Disk is the source of truth, so no confirmation: the user
+   *  is the one who deleted the folder. Returns the names it pruned. A missing `mods/`
+   *  directory prunes nothing (same ENOENT posture as registerUnlistedMods — a malformed
+   *  workspace must not read as a mass delete); any other readdir failure propagates. */
+  async pruneDeadEntries(): Promise<string[]> {
+    let dirents;
+    try {
+      dirents = await readdir(join(this.instanceRoot, 'mods'), { withFileTypes: true });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+      throw err;
+    }
+    const dirNames = dirents.filter((d) => d.isDirectory()).map((d) => d.name);
+    const entries = parseModlist(await readFile(await this.modlistPath(), 'utf8'));
+    const names = deadModEntryNames(dirNames, entries);
+    for (const name of names) {
+      await this.modifyModlist((t) => removeModFromText(t, name));
     }
     return names;
   }

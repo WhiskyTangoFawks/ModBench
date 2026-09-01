@@ -169,6 +169,18 @@ export function unlistedModNames(dirNames: string[], entries: ModlistEntry[]): s
     .sort((a, b) => a.localeCompare(b));
 }
 
+/** The inverse of `unlistedModNames` (#93): which modlist `mod` entries name a `mods/`
+ *  folder the directory listing no longer holds — deleted outside Modbench, so the entry
+ *  is dead. Separator entries are never dead here: their on-disk form is the
+ *  `<name>_separator` marker folder, not a mod folder this listing describes. Returned in
+ *  modlist order. */
+export function deadModEntryNames(dirNames: string[], entries: ModlistEntry[]): string[] {
+  const present = new Set(dirNames);
+  return entries
+    .filter((e) => e.kind === 'mod' && !present.has(e.name))
+    .map((e) => e.name);
+}
+
 /** Remove a mod's entry line entirely. Throws if absent; throws if the name resolves to a separator. */
 export function removeModFromText(text: string, modName: string): string {
   return withBomPreserved(text, (bomless) => {
