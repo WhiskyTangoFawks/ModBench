@@ -258,10 +258,18 @@ public sealed class TrackService(ILogger<TrackService> logger)
 
             if (PluginBinaryWalk.FindFirstSubrecordLoss(originalBytes, recompiledBytes) is { } loss)
             {
+                // #569: when the record carrying the loss also carries a Kind B diagnosis, the
+                // refusal names the *cause* (defect class + repair tail + observed-vs-expected)
+                // ahead of the drop it produced — the generic inventory wording remains the
+                // fallback for a loss no detector explains.
+                var kindB = MalformedPluginScan.Scan(originalBytes).FirstOrDefault(d =>
+                    d.Anchor?.StartsWith($"{loss.RecordType} {loss.FormId:X8}", StringComparison.Ordinal) == true);
                 throw new SourceRoundTripFailedException(
-                    $"{pluginName} does not round-trip through its own tracked source: " +
-                    $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
-                    "present in the original — dropped during parsing, before Track ever wrote its source.");
+                    $"{pluginName} does not round-trip through its own tracked source: " + (kindB != null
+                        ? $"{kindB.Describe()} — parsing the malformed subrecord dropped " +
+                          $"{string.Join(", ", loss.Signatures)} before Track ever wrote its source."
+                        : $"{loss.RecordType} {loss.FormId:X8} is missing {string.Join(", ", loss.Signatures)} " +
+                          "present in the original — dropped during parsing, before Track ever wrote its source."));
             }
 
             var recompiledFromBinary = Fallout4Mod.CreateFromBinary(

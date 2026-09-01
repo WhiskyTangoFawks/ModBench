@@ -28,7 +28,6 @@ npm run package           # build alpha .vsix — pinned local @vscode/vsce, no 
 ```
 
 ## Rules that matter
-
 - Generalize across Bethesda games — FO4-concrete paths/tests are a fixture choice, not a
   platform lock; each bounded context enforces this independently.
 - Vocabulary boundary is enforced, not stylistic: "mod" forbidden in Editing; "record"/"FormKey"
