@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PluginHeader } from './PluginHeader';
 import { DiffRow, type FocusedCell } from './DiffRow';
 import {
@@ -264,9 +264,6 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     }
   }, [client]);
 
-  const refreshRef = useRef(refresh);
-  useLayoutEffect(() => { refreshRef.current = refresh; }, [refresh]);
-
   // When the handler drives a new-formKey navigation it calls refresh directly,
   // so the [formKey] effect must skip to avoid a double request.
   const prevFormKeyRef = useRef(formKey);
@@ -276,8 +273,8 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     prevFormKeyRef.current = formKey;
     if (!formKey) return;
     if (skipNextRefreshEffect.current) { skipNextRefreshEffect.current = false; return; }
-    void refreshRef.current(formKey);
-  }, [formKey]);
+    void refresh(formKey);
+  }, [formKey, refresh]);
 
   function handleOpen(fk: string) {
     vscode.postMessage({ type: WEBVIEW_TO_EXTENSION.OPEN_RECORD, formKey: fk });
@@ -458,36 +455,12 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
     return map;
   }, [result, vmadTree, conditionTree, isHeaderRecord]);
 
-  // The message listener below is mount-once ([] deps), but handleArrayOp's and
-  // fieldMetaMap's own identities change on every edit/reload (they close over `result`) — a ref
-  // keeps the broadcast handler calling the *current* versions rather than the ones captured at
-  // mount, the same shape refreshRef already uses for the same reason. Declared here (after both
-  // are computed) purely because a ref's own initial value has to be able to read the thing it
-  // refs — and the message listener itself is declared after these two, not beside the others
-  // above, so every ref it closes over (refreshRef included) is already in scope by then, keeping
-  // one linear read order instead of forward-referencing.
-  const handleArrayOpRef = useRef(handleArrayOp);
-  useLayoutEffect(() => { handleArrayOpRef.current = handleArrayOp; }, [handleArrayOp]);
-  const fieldMetaMapRef = useRef(fieldMetaMap);
-  useLayoutEffect(() => { fieldMetaMapRef.current = fieldMetaMap; }, [fieldMetaMap]);
-  // VMAD_STRUCTURAL_OP's own commit reaches through handleEditCell directly (the
-  // op-envelope value is already in EDIT_FIELD's own wire shape — RecordFieldWriter.ApplyVmadField
-  // dispatches on it) — same ref-for-a-mount-once-listener shape as handleArrayOpRef above, for the
-  // same reason (handleEditCell closes over `result`/`formKey`, both of which change).
-  const handleEditCellRef = useRef(handleEditCell);
-  useLayoutEffect(() => { handleEditCellRef.current = handleEditCell; }, [handleEditCell]);
-  // ADR-0039: FIELD_OPEN_EXTENDED_EDITOR's own commit reaches through handleOpenExtended —
-  // same ref-for-a-mount-once-listener shape as handleEditCellRef/handleArrayOpRef above, for the
-  // same reason (handleOpenExtended closes over `result`/`vmadTree`/`conditionTree`/`formKey`/
-  // `handleCellCommit`, all of which change). Reached only from this broadcast, the right-click
-  // menu's own trigger.
-  const handleOpenExtendedRef = useRef(handleOpenExtended);
-  useLayoutEffect(() => { handleOpenExtendedRef.current = handleOpenExtended; }, [handleOpenExtended]);
-
   // Listen for loadRecord messages from the extension (panel reuse), the load order's own
   // conflicts-computed signal, and the array-op right-click commands — the
   // broadcast-and-self-filter shape (the extension host has no live reference into this
-  // panel's own React state, which alone holds the record's current values).
+  // panel's own React state, which alone holds the record's current values). Depends on the
+  // handlers it calls (they close over `result`/`formKey`), re-subscribing on change — cheap,
+  // and what lets the handlers be used directly instead of through a mirror ref each.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       const msg = event.data as ExtensionToWebview;
@@ -503,18 +476,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // Unconditional, not left to the [formKey] effect: a LOAD_RECORD naming the record already
         // open must still re-load (the effect never fires, formKey didn't change) — the
         // skipNextRefreshEffect guard above is what keeps a *changed* formKey from loading twice.
-        void refreshRef.current(msg.formKey);
+        void refresh(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.RECORD_EDITED) {
         // The edit landed as a working-tree change. Re-read rather than patch: the write
         // path re-serialized the record through the codec, and this record's conflict picture
         // across every other column may have moved with it.
-        if (msg.formKey === prevFormKeyRef.current) void refreshRef.current(msg.formKey);
+        if (msg.formKey === prevFormKeyRef.current) void refresh(msg.formKey);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.CONFLICTS_COMPUTED) {
         // ADR-0035: a panel already open when the sweep lands must reflect the settled
         // data, not just clear its own banner over stale content — refresh() re-runs client.load()
         // in full, so the grid and the banner update together in one state change. Load-order-wide,
         // not record-specific, so no self-filter — every open panel reacts.
-        void refreshRef.current(prevFormKeyRef.current);
+        void refresh(prevFormKeyRef.current);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.ARRAY_STRUCTURAL_OP) {
         // Self-filter on formKey — a changeId-less broadcast (there is no per-change id here).
         // Only reachable while this exact record is open, so a
@@ -525,18 +498,18 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // either needs a default element built client-side); for an ordinary reflected field it's posted straight
         // through as an op envelope and ignored here — RecordFieldWriter/ArrayOpWriter resolve the
         // array's own element type server-side instead of relying on this one, the same reason
-        // `metaAtPath` (not `fieldMetaMapRef.current[msg.rootField]?.elementType` directly) is still
+        // `metaAtPath` (not `fieldMetaMap[msg.rootField]?.elementType` directly) is still
         // needed here: for a nested array, only walking the hops down from the subtree root names
         // the right node's elementType.
         const arrayPath = msg.op === 'add' ? msg.path : msg.path.slice(0, -1);
-        const arrayMeta = metaAtPath(fieldMetaMapRef.current[msg.rootField], arrayPath);
-        handleArrayOpRef.current(plugin, msg.path, msg.rootField, msg.op, arrayMeta?.elementType ?? undefined);
+        const arrayMeta = metaAtPath(fieldMetaMap[msg.rootField], arrayPath);
+        handleArrayOp(plugin, msg.path, msg.rootField, msg.op, arrayMeta?.elementType ?? undefined);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_STRUCTURAL_OP) {
         // Same self-filter-and-commit shape as the array-op branch above, except the
         // op-envelope value is already the exact shape handleEditCell/EDIT_FIELD always carries —
         // no webview-side computation of a next value, unlike an array op.
         if (msg.formKey !== prevFormKeyRef.current) return;
-        handleEditCellRef.current(columnKey(msg.plugin, msg.origin), msg.fieldPath, msg.value);
+        handleEditCell(columnKey(msg.plugin, msg.origin), msg.fieldPath, msg.value);
       } else if (msg.type === EXTENSION_TO_WEBVIEW.VMAD_OPEN_ADD_PROPERTY) {
         if (msg.formKey !== prevFormKeyRef.current) return;
         setAddPropertyDialog({ scriptName: msg.scriptName, plugin: columnKey(msg.plugin, msg.origin) });
@@ -545,14 +518,14 @@ export function RecordPanel({ client }: Readonly<{ client: RecordPanelClient }>)
         // formKey, same convention as every other right-click op above, then hand off to the
         // bridge call.
         if (msg.formKey !== prevFormKeyRef.current) return;
-        handleOpenExtendedRef.current(
+        handleOpenExtended(
           columnKey(msg.plugin, msg.origin), msg.fieldName, msg.path, msg.rootField, msg.value, msg.readOnly,
         );
       }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, []);
+  }, [refresh, handleArrayOp, handleEditCell, handleOpenExtended, fieldMetaMap]);
 
   // ADR-0036: keyed by ColumnKey, not the bare plugin filename — two overrides
   // sharing a filename but differing in origin would otherwise collide here, the second silently

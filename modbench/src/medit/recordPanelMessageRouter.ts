@@ -77,6 +77,25 @@ async function copyToClipboard(reporter: Reporter, value: string): Promise<void>
   }
 }
 
+// One handler per webview message type, total over WEBVIEW_TO_EXTENSION: adding a message
+// type is a compile error here until it names its handler — where the old dispatch chain
+// silently ignored an unrouted type.
+const HANDLERS: {
+  [T in WebviewToExtension['type']]: (
+    deps: RouteRecordPanelMessageDeps, m: Extract<WebviewToExtension, { type: T }>,
+  ) => Promise<void> | void;
+} = {
+  [WEBVIEW_TO_EXTENSION.OPEN_RECORD]: async (_deps, m) => {
+    await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
+  },
+  [WEBVIEW_TO_EXTENSION.LOG]: (deps, m) => { deps.channel[m.level](m.message); },
+  [WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD]: (deps, m) => copyToClipboard(deps.reporter, m.value),
+  [WEBVIEW_TO_EXTENSION.EDIT_FIELD]: editField,
+  [WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER]: (deps, m) => replyFormKeyPicked(deps.formKeyPicker, m),
+  [WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER]: (deps, m) => replyConditionFunctionPicked(deps.conditionFunctionPicker, m),
+  [WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR]: (deps, m) => openExtendedEditor(deps.extendedFieldEditor, m),
+};
+
 // The record editor webview and the extension host are different processes,
 // bridged only by `postMessage` — this is the single dispatch point for every message the
 // webview sends up. Kept as a plain function (not a class/registered-handler pattern) so it's
@@ -85,45 +104,11 @@ async function copyToClipboard(reporter: Reporter, value: string): Promise<void>
 export async function routeRecordPanelMessage(msg: unknown, deps: RouteRecordPanelMessageDeps): Promise<void> {
   if (typeof msg !== 'object' || msg === null || !('type' in msg)) return;
   const m = msg as WebviewToExtension;
-  if (m.type === WEBVIEW_TO_EXTENSION.OPEN_RECORD) {
-    await vscode.commands.executeCommand('modbench.openEditor', { formKey: m.formKey, label: m.formKey });
-  } else if (m.type === WEBVIEW_TO_EXTENSION.LOG) {
-    deps.channel[m.level](m.message);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.COPY_TO_CLIPBOARD) {
-    await copyToClipboard(deps.reporter, m.value);
-  } else {
-    await routeWritePathMessage(deps, m);
-  }
-}
-
-// Split out of routeRecordPanelMessage above purely to keep that function's own branch count from
-// growing every time the write path (EDIT_FIELD, the *Picker bridges, the extended
-// editor) gains another message type — a line-count concern (ESLint's complexity budget), not a
-// behavioral one; every message here still reaches exactly the same handler it would inline.
-async function routeWritePathMessage(deps: RouteRecordPanelMessageDeps, m: WebviewToExtension): Promise<void> {
-  if (m.type === WEBVIEW_TO_EXTENSION.EDIT_FIELD) {
-    await editField(deps, m);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER || m.type === WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER) {
-    await routePickerMessage(deps, m);
-  } else if (m.type === WEBVIEW_TO_EXTENSION.OPEN_EXTENDED_EDITOR) {
-    await openExtendedEditor(deps.extendedFieldEditor, m);
-  }
-}
-
-// Split out of routeRecordPanelMessage's own dispatch
-// purely to keep that function's own branch count from growing every time
-// another *Picker bridge is added — this file's own two QuickPick pickers share nothing beyond
-// "resolve a value natively, then reply," so grouping them here rather than inlining two more
-// `else if` branches is a line-count concern, not a behavioral one.
-async function routePickerMessage(
-  deps: RouteRecordPanelMessageDeps,
-  m: Extract<WebviewToExtension, { type: typeof WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER | typeof WEBVIEW_TO_EXTENSION.OPEN_CONDITION_FUNCTION_PICKER }>,
-): Promise<void> {
-  if (m.type === WEBVIEW_TO_EXTENSION.OPEN_FORM_KEY_PICKER) {
-    await replyFormKeyPicked(deps.formKeyPicker, m);
-  } else {
-    await replyConditionFunctionPicked(deps.conditionFunctionPicker, m);
-  }
+  const handler = HANDLERS[m.type] as
+    | ((deps: RouteRecordPanelMessageDeps, m: WebviewToExtension) => Promise<void> | void)
+    | undefined;
+  // A message whose type the map doesn't know (a stale webview build) stays a no-op, as before.
+  if (handler) await handler(deps, m);
 }
 
 // The extension host's own half of the extended-editor bridge — the

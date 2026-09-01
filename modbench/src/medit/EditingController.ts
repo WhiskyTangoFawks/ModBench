@@ -149,7 +149,9 @@ export class EditingController {
     // openapi-fetch client has no streaming path, so progress is *polled* off GET /load-order/status
     // alongside the still in-flight PUT. Started before the await, stopped in the finally: the
     // poll's whole reason to exist is the window this await covers.
-    const stopPolling = this.pollLoadOrderStatus(options);
+    const stopPolling = this.pollStatus(
+      'GET /load-order/status', () => this.deps.repository.getLoadOrderStatus(), options.onProgress, options.signal,
+    );
     let result;
     try {
       result = await this.deps.client.PUT('/load-order', {
@@ -237,24 +239,28 @@ export class EditingController {
    *  able to stack up ticks behind itself against a backend that is already indexing. The first
    *  tick is one interval in, not immediate — at t=0 the backend has not published anything yet,
    *  so an immediate poll would only ever report an empty set. */
-  private pollLoadOrderStatus(options: LoadOrderOptions): () => void {
-    const { onProgress, signal } = options;
+  private pollStatus<T>(
+    endpoint: string,
+    read: () => Promise<T>,
+    onProgress: ((status: T) => void) | undefined,
+    signal?: AbortSignal,
+  ): () => void {
     if (!onProgress) return () => {};
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const done = () => stopped || (signal?.aborted ?? false);
     const tick = async () => {
       try {
-        const status = await this.deps.repository.getLoadOrderStatus();
-        // Re-checked after the await: the reconcile can settle (or be abandoned) while this read
+        const status = await read();
+        // Re-checked after the await: the operation can settle (or be abandoned) while this read
         // is in flight, and a tick landing after that would report progress nobody is waiting on.
         if (done()) return;
         onProgress(status);
       } catch (e) {
         // ADR-0026 background/recoverable tier: a poll is frequent and non-essential, so a blip
-        // gets a log line and the next tick — never a toast, and never a failed reconcile. The PUT
-        // itself is the completion signal and is unaffected by this.
-        this.log(`[EditingController] GET /load-order/status poll failed: ${e instanceof Error ? e.message : String(e)}`);
+        // gets a log line and the next tick — never a toast, and never a failed operation. The
+        // blocking request itself is the completion signal and is unaffected by this.
+        this.log(`[EditingController] ${endpoint} poll failed: ${e instanceof Error ? e.message : String(e)}`);
       }
       if (!done()) timer = setTimeout(() => { void tick(); }, STATUS_POLL_INTERVAL_MS);
     };
@@ -262,30 +268,42 @@ export class EditingController {
     return () => { stopped = true; clearTimeout(timer); };
   }
 
-  /** `track`'s own poller — identical shape to `pollLoadOrderStatus` above (same
-   *  self-rescheduling `setTimeout`, same "no `onProgress` polls nothing" contract, same reasons),
-   *  reading `GET /plugins/track/status` instead. No `signal`: Track has no cancellation. */
-  private pollTrackStatus(onProgress: ((status: TrackStatus) => void) | undefined): () => void {
-    if (!onProgress) return () => {};
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = async () => {
-      try {
-        const status = await this.deps.repository.getTrackStatus();
-        // Re-checked after the await: the track can settle while this read is in flight, and a
-        // tick landing after that would report a track nobody is waiting on.
-        if (stopped) return;
-        onProgress(status);
-      } catch (e) {
-        // ADR-0026 background/recoverable tier: a poll is frequent and non-essential, so a blip
-        // gets a log line and the next tick — never a toast. The track POST itself is the
-        // completion signal and is unaffected by this.
-        this.log(`[EditingController] GET /plugins/track/status poll failed: ${e instanceof Error ? e.message : String(e)}`);
+  /** The one mutation frame every POST-shaped gesture shares: send, surface a failure
+   *  (ADR-0026 "explicit action failed" — log + toast, `failMsg` prefixed to the server's own
+   *  text), refresh what the success invalidated, map the response. Behavior per method lives in
+   *  the spec; the frame never varies.
+   *
+   *  `refresh: 'both'` re-reads the tree *and* the per-plugin filter matches — the right answer
+   *  for anything that lands a working-tree change (ADR-0035 amending ADR-0018: a changed record
+   *  can start or stop matching the active filter). A predicate makes that conditional on the
+   *  response (typed refusals succeed as HTTP but change nothing). */
+  private async mutate<T, R>(spec: {
+    op: string;
+    failMsg: string;
+    post: () => Promise<{ data?: T; error?: unknown; response: { ok: boolean; status: number } }>;
+    refresh?: 'both' | ((data: T | undefined) => boolean);
+    map: (data: T | undefined) => R;
+    failure: R;
+  }): Promise<R> {
+    try {
+      const { data, error, response } = await spec.post();
+      if (!response.ok) {
+        const text = errorText(error);
+        this.log(`[EditingController] ${spec.op} failed (${response.status}): ${text}`);
+        this.deps.showError(`${spec.failMsg} — ${text}`);
+        return spec.failure;
       }
-      if (!stopped) timer = setTimeout(() => { void tick(); }, STATUS_POLL_INTERVAL_MS);
-    };
-    timer = setTimeout(() => { void tick(); }, STATUS_POLL_INTERVAL_MS);
-    return () => { stopped = true; clearTimeout(timer); };
+      if (spec.refresh === 'both' || (typeof spec.refresh === 'function' && spec.refresh(data))) {
+        this.deps.refreshTree();
+        this.deps.refreshMatchingPlugins();
+      }
+      return spec.map(data);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.log(`[EditingController] ${spec.op} threw: ${message}`);
+      this.deps.showError(`${spec.failMsg} — ${message}`);
+      return spec.failure;
+    }
   }
 
   async setFilter(sql: string, label?: string): Promise<boolean> {
@@ -355,32 +373,29 @@ export class EditingController {
     origin: string, preset: 'Edits' | 'Everything', options: { onProgress?: (status: TrackStatus) => void } = {},
   ): Promise<boolean> {
     // The POST stays blocking, same contract as putLoadOrder's own — so
-    // progress is polled off GET /plugins/track/status *alongside* the still in-flight POST.
-    // Started before the await, stopped in the finally: the poll's whole reason to exist is the
-    // window this await covers.
-    const stopPolling = this.pollTrackStatus(options.onProgress);
+    // progress is polled off GET /plugins/track/status *alongside* the still in-flight POST
+    // (no `signal`: Track has no cancellation). Started before the await, stopped before the
+    // refresh: the poll's whole reason to exist is the window the POST covers.
+    const stopPolling = this.pollStatus(
+      'GET /plugins/track/status', () => this.deps.repository.getTrackStatus(), options.onProgress,
+    );
+    let tracked: boolean;
     try {
-      const { error, response } = await this.deps.client.POST('/plugins/track', {
-        body: { origin, preset },
+      tracked = await this.mutate({
+        op: `track(${origin})`,
+        failMsg: `mEdit: Could not track "${origin}"`,
+        post: () => this.deps.client.POST('/plugins/track', { body: { origin, preset } }),
+        map: () => true,
+        failure: false,
       });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] track(${origin}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not track "${origin}" — ${text}`);
-        return false;
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] track(${origin}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not track "${origin}" — ${message}`);
-      return false;
     } finally {
       stopPolling();
     }
     // Tracked-ness (.git presence) isn't plugin metadata the tree renders itself, but the caller
-    // still needs a chance to re-register the new repo with vscode.git's SCM panel.
-    this.deps.refreshTree();
-    return true;
+    // still needs a chance to re-register the new repo with vscode.git's SCM panel. Not
+    // `refresh: 'both'`: tracking changes no record, so the filter-match set is untouched.
+    if (tracked) this.deps.refreshTree();
+    return tracked;
   }
 
   /** Create-record — mints a new record as a working-tree source file (ADR-0041), answering
@@ -393,29 +408,17 @@ export class EditingController {
   async createRecord(
     plugin: string, origin: string, recordType: string, editorId?: string, formKey?: string,
   ): Promise<string | undefined> {
-    try {
-      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/records', {
+    return this.mutate({
+      op: `createRecord(${plugin}, ${recordType})`,
+      failMsg: `mEdit: Could not create a new ${recordType} record in "${plugin}"`,
+      post: () => this.deps.client.POST('/plugins/{plugin}/records', {
         params: { path: { plugin } },
         body: { origin, recordType, editorId: editorId ?? null, formKey: formKey ?? null },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] createRecord(${plugin}, ${recordType}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not create a new ${recordType} record in "${plugin}" — ${text}`);
-        return undefined;
-      }
-      this.deps.refreshTree();
-      // A create is a working-tree change to a tracked plugin's source — the same re-derive
-      // `hasMatchingRecords` needs (ADR-0035 amending ADR-0018): a new record can start matching
-      // the active filter.
-      this.deps.refreshMatchingPlugins();
-      return data?.formKey ?? undefined;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] createRecord(${plugin}, ${recordType}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not create a new ${recordType} record in "${plugin}" — ${message}`);
-      return undefined;
-    }
+      }),
+      refresh: 'both',
+      map: (data) => data?.formKey ?? undefined,
+      failure: undefined,
+    });
   }
 
   /** Delete-record — the source file goes away and the null-Body mechanism takes it from
@@ -423,27 +426,17 @@ export class EditingController {
    *  sure") is extension-side UX, the same division `compile`'s compile-at-main modal already
    *  established — this method never asks, only acts. Returns whether it happened. */
   async deleteRecord(formKey: string, plugin: string, origin: string): Promise<boolean> {
-    try {
-      const { error, response } = await this.deps.client.POST('/records/{formKey}/delete', {
+    return this.mutate({
+      op: `deleteRecord(${formKey})`,
+      failMsg: `mEdit: Could not delete ${formKey}`,
+      post: () => this.deps.client.POST('/records/{formKey}/delete', {
         params: { path: { formKey } },
         body: { plugin, origin },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] deleteRecord(${formKey}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not delete ${formKey} — ${text}`);
-        return false;
-      }
-      this.deps.refreshTree();
-      // Same reason as createRecord above — a delete is a working-tree change too.
-      this.deps.refreshMatchingPlugins();
-      return true;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] deleteRecord(${formKey}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not delete ${formKey} — ${message}`);
-      return false;
-    }
+      }),
+      refresh: 'both',
+      map: () => true,
+      failure: false,
+    });
   }
 
   /** Renumber — a delete+create pair plus the cross-plugin reference cascade (native records
@@ -452,28 +445,17 @@ export class EditingController {
    *  on success, `undefined` on failure (already surfaced, including the untracked-referencer and
    *  partial-cascade-failure cases — both typed/messaged server-side). */
   async renumberRecord(formKey: string, plugin: string, origin: string, newFormKey?: string): Promise<string | undefined> {
-    try {
-      const { data, error, response } = await this.deps.client.POST('/records/{formKey}/renumber', {
+    return this.mutate({
+      op: `renumberRecord(${formKey})`,
+      failMsg: `mEdit: Could not renumber ${formKey}`,
+      post: () => this.deps.client.POST('/records/{formKey}/renumber', {
         params: { path: { formKey } },
         body: { plugin, origin, newFormKey: newFormKey ?? null },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] renumberRecord(${formKey}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not renumber ${formKey} — ${text}`);
-        return undefined;
-      }
-      this.deps.refreshTree();
-      // Same reason as createRecord above — a renumber (delete+create) is a working-tree
-      // change too.
-      this.deps.refreshMatchingPlugins();
-      return data?.newFormKey ?? undefined;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] renumberRecord(${formKey}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not renumber ${formKey} — ${message}`);
-      return undefined;
-    }
+      }),
+      refresh: 'both',
+      map: (data) => data?.newFormKey ?? undefined,
+      failure: undefined,
+    });
   }
 
   /** Copy as Override Into… — the source record's own bytes land under the identical
@@ -485,28 +467,17 @@ export class EditingController {
   async copyRecordAsOverride(
     formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
   ): Promise<boolean> {
-    try {
-      const { error, response } = await this.deps.client.POST('/records/{formKey}/copy-as-override', {
+    return this.mutate({
+      op: `copyRecordAsOverride(${formKey})`,
+      failMsg: `mEdit: Could not copy ${formKey} into "${destinationPlugin}"`,
+      post: () => this.deps.client.POST('/records/{formKey}/copy-as-override', {
         params: { path: { formKey } },
         body: { sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] copyRecordAsOverride(${formKey}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${text}`);
-        return false;
-      }
-      this.deps.refreshTree();
-      // A copy lands as a working-tree change on the destination plugin's own source, same
-      // reason createRecord/deleteRecord/renumberRecord above refresh it.
-      this.deps.refreshMatchingPlugins();
-      return true;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] copyRecordAsOverride(${formKey}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${message}`);
-      return false;
-    }
+      }),
+      refresh: 'both',
+      map: () => true,
+      failure: false,
+    });
   }
 
   /** Copy as New Record Into… — a deep copy under a fresh FormKey (auto-allocated,
@@ -520,29 +491,19 @@ export class EditingController {
     formKey: string, sourcePlugin: string, sourceOrigin: string, destinationPlugin: string, destinationOrigin: string,
     requestedFormKey?: string,
   ): Promise<string | undefined> {
-    try {
-      const { data, error, response } = await this.deps.client.POST('/records/{formKey}/copy-as-new-record', {
+    return this.mutate({
+      op: `copyRecordAsNewRecord(${formKey})`,
+      failMsg: `mEdit: Could not copy ${formKey} into "${destinationPlugin}"`,
+      post: () => this.deps.client.POST('/records/{formKey}/copy-as-new-record', {
         params: { path: { formKey } },
         body: {
           sourcePlugin, sourceOrigin, destinationPlugin, destinationOrigin, requestedFormKey: requestedFormKey ?? null,
         },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] copyRecordAsNewRecord(${formKey}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${text}`);
-        return undefined;
-      }
-      this.deps.refreshTree();
-      // Same reason as copyRecordAsOverride above — a copy is a working-tree change too.
-      this.deps.refreshMatchingPlugins();
-      return data?.newFormKey ?? undefined;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] copyRecordAsNewRecord(${formKey}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not copy ${formKey} into "${destinationPlugin}" — ${message}`);
-      return undefined;
-    }
+      }),
+      refresh: 'both',
+      map: (data) => data?.newFormKey ?? undefined,
+      failure: undefined,
+    });
   }
 
   /** Save & Compile. `atRef` is the compile-at-`main` gesture's own target (never a
@@ -553,24 +514,16 @@ export class EditingController {
    *  nothing `GET /plugins` reports (masters, load order), only bytes on disk — which the index's
    *  own mirror watch re-reads. */
   async compile(plugin: string, origin: string, atRef?: string): Promise<CompileResult | null> {
-    try {
-      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/compile', {
+    return this.mutate({
+      op: `compile(${plugin})`,
+      failMsg: `mEdit: Could not compile "${plugin}"`,
+      post: () => this.deps.client.POST('/plugins/{plugin}/compile', {
         params: { path: { plugin } },
         body: { origin, ref: atRef ?? null },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] compile(${plugin}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not compile "${plugin}" — ${text}`);
-        return null;
-      }
-      return data ?? null;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] compile(${plugin}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not compile "${plugin}" — ${message}`);
-      return null;
-    }
+      }),
+      map: (data) => data ?? null,
+      failure: null,
+    });
   }
 
   /** Absorb Upstream Update. Returns null on a transport/HTTP failure, distinct from
@@ -578,56 +531,36 @@ export class EditingController {
    *  refuses on an IO fault, per the pinned contract). Refreshes the tree: a new baseline can move
    *  provenance the tree reads (trailers), the same reason `track` does. */
   async absorbUpstreamUpdate(plugin: string, origin: string): Promise<ExternalChangeActionResult | null> {
-    try {
-      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/external-change/absorb', {
+    return this.mutate({
+      op: `absorbUpstreamUpdate(${plugin})`,
+      failMsg: `mEdit: Could not absorb the upstream update for "${plugin}"`,
+      post: () => this.deps.client.POST('/plugins/{plugin}/external-change/absorb', {
         params: { path: { plugin } },
         body: { origin },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] absorbUpstreamUpdate(${plugin}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not absorb the upstream update for "${plugin}" — ${text}`);
-        return null;
-      }
-      const result = data ?? null;
-      // Absorbing a new baseline moves the source under this plugin the same way a track
-      // does — the same re-derive createRecord above gives `hasMatchingRecords`, since the
-      // plugin's records (and hence which match the active filter) can change.
-      if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
-      return result;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] absorbUpstreamUpdate(${plugin}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not absorb the upstream update for "${plugin}" — ${message}`);
-      return null;
-    }
+      }),
+      // Only a succeeded absorb moved the baseline; a typed refusal changed nothing to re-read.
+      refresh: (data) => data?.succeeded === true,
+      map: (data) => data ?? null,
+      failure: null,
+    });
   }
 
   /** Keep as My Edit. A same-record collision with existing working-tree dirt is a typed
    *  refusal (`succeeded === false`, `refusalReason` naming the records), never an HTTP error. */
   async keepAsMyEdit(plugin: string, origin: string): Promise<ExternalChangeActionResult | null> {
-    try {
-      const { data, error, response } = await this.deps.client.POST('/plugins/{plugin}/external-change/keep', {
+    return this.mutate({
+      op: `keepAsMyEdit(${plugin})`,
+      failMsg: `mEdit: Could not keep "${plugin}" as your own edit`,
+      post: () => this.deps.client.POST('/plugins/{plugin}/external-change/keep', {
         params: { path: { plugin } },
         body: { origin },
-      });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] keepAsMyEdit(${plugin}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not keep "${plugin}" as your own edit — ${text}`);
-        return null;
-      }
-      const result = data ?? null;
+      }),
       // Keeping an external change deserializes into working-tree dirt — same reason as
-      // absorbUpstreamUpdate above.
-      if (result?.succeeded) { this.deps.refreshTree(); this.deps.refreshMatchingPlugins(); }
-      return result;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] keepAsMyEdit(${plugin}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not keep "${plugin}" as your own edit — ${message}`);
-      return null;
-    }
+      // absorbUpstreamUpdate above, same refusal-changes-nothing condition.
+      refresh: (data) => data?.succeeded === true,
+      map: (data) => data ?? null,
+      failure: null,
+    });
   }
 
   /** The offered rebase — origin-scoped (the repo, not any one plugin, is the unit of
@@ -647,27 +580,16 @@ export class EditingController {
   private async postRebase(
     path: '/plugins/rebase' | '/plugins/rebase/continue', origin: string, opName: string,
   ): Promise<RebaseResult | null> {
-    try {
-      const { data, error, response } = await this.deps.client.POST(path, { body: { origin } });
-      if (!response.ok) {
-        const text = errorText(error);
-        this.log(`[EditingController] ${opName}(${origin}) failed (${response.status}): ${text}`);
-        this.deps.showError(`mEdit: Could not rebase "${origin}" — ${text}`);
-        return null;
-      }
-      const result = data ?? null;
-      this.deps.refreshTree();
-      // A rebase moves the branch (or leaves it mid-conflict), either of which can change a
-      // tracked plugin's compile-freshness answer — same reason absorbUpstreamUpdate/keepAsMyEdit
-      // above refresh it, and unconditional here for the same reason refreshTree above already is.
-      this.deps.refreshMatchingPlugins();
-      return result;
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      this.log(`[EditingController] ${opName}(${origin}) threw: ${message}`);
-      this.deps.showError(`mEdit: Could not rebase "${origin}" — ${message}`);
-      return null;
-    }
+    return this.mutate({
+      op: `${opName}(${origin})`,
+      failMsg: `mEdit: Could not rebase "${origin}"`,
+      post: () => this.deps.client.POST(path, { body: { origin } }),
+      // Unconditional (unlike absorb/keep): `Conflicted` leaves the repo mid-rebase and `Refused`
+      // is still worth reflecting — the doc comment on rebaseOntoMain carries the full reasoning.
+      refresh: 'both',
+      map: (data) => data ?? null,
+      failure: null,
+    });
   }
 }
 

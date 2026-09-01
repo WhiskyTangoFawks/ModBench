@@ -223,30 +223,6 @@ describe('EditingController.copyRecordAsOverride', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
-  it('surfaces a refusal and reports that it did not happen', async () => {
-    const client = makeClient({ copyAsOverrideOk: false });
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const ok = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
-
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:Fallout4.esm'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a thrown request the same way', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const ok = await controller.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
-
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-  });
 });
 
 describe('EditingController.copyRecordAsNewRecord', () => {
@@ -286,30 +262,6 @@ describe('EditingController.copyRecordAsNewRecord', () => {
     });
   });
 
-  it('surfaces a refusal and reports that it did not happen', async () => {
-    const client = makeClient({ copyAsNewRecordOk: false });
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const newFormKey = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
-
-    expect(newFormKey).toBeUndefined();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:Fallout4.esm'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a thrown request the same way', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const newFormKey = await controller.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA');
-
-    expect(newFormKey).toBeUndefined();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-  });
 });
 
 // ── setFilter ─────────────────────────────────────────────────────────────────
@@ -954,32 +906,6 @@ describe('EditingController.track', () => {
     expect(deps.refreshTree).toHaveBeenCalled();
   });
 
-  // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
-  // notification, not a log line — and nothing is refreshed, because nothing changed.
-  it('surfaces a failure and reports that it did not happen', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockResolvedValue(drainedError(409, 'This mod folder is already tracked.'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const ok = await controller.track('ModA', 'Edits');
-
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('already tracked'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a thrown request the same way', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const ok = await controller.track('ModA', 'Edits');
-
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-  });
 });
 
 // ── create/delete/renumber record ───────────────────────────────────────────
@@ -1017,32 +943,6 @@ describe('EditingController.createRecord', () => {
     });
   });
 
-  // ADR-0026 "explicit action failed" tier: the user asked for this, so a failure is a
-  // notification, not a log line — and nothing is refreshed, because nothing changed.
-  it('surfaces a refusal and reports that it did not happen', async () => {
-    const client = makeClient({ createRecordOk: false });
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const formKey = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_');
-
-    expect(formKey).toBeUndefined();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('MyPatch.esp'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a thrown request the same way', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const formKey = await controller.createRecord('MyPatch.esp', 'ModA', 'npc_');
-
-    expect(formKey).toBeUndefined();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-  });
 });
 
 describe('EditingController.deleteRecord', () => {
@@ -1064,30 +964,6 @@ describe('EditingController.deleteRecord', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
-  it('surfaces a refusal and reports that it did not happen', async () => {
-    const client = makeClient({ deleteRecordOk: false });
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const ok = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
-
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:MyPatch.esp'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a thrown request the same way', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const ok = await controller.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
-
-    expect(ok).toBe(false);
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-  });
 });
 
 describe('EditingController.renumberRecord', () => {
@@ -1122,33 +998,6 @@ describe('EditingController.renumberRecord', () => {
     });
   });
 
-  // Covers both the untracked-referencer refusal and a partial-cascade I/O failure —
-  // both are already-messaged, non-2xx responses by the time they reach this method, so they are
-  // one code path here regardless of which one produced the response.
-  it('surfaces a refusal and reports that it did not happen', async () => {
-    const client = makeClient({ renumberRecordOk: false });
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const newFormKey = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
-
-    expect(newFormKey).toBeUndefined();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('000801:MyPatch.esp'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
-
-  it('surfaces a thrown request the same way', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const newFormKey = await controller.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA');
-
-    expect(newFormKey).toBeUndefined();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
-  });
 });
 
 // Track progress is polled off GET /plugins/track/status alongside the
@@ -1251,19 +1100,6 @@ describe('EditingController.absorbUpstreamUpdate', () => {
     expect(deps.refreshMatchingPlugins).toHaveBeenCalled();
   });
 
-  it('surfaces a transport failure as null, without refreshing', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockResolvedValue(drainedError(500, 'git unavailable'));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
-
-    const result = await controller.absorbUpstreamUpdate('Fixture.esp', 'ModA');
-
-    expect(result).toBeNull();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('git unavailable'));
-    expect(deps.refreshTree).not.toHaveBeenCalled();
-    expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
-  });
 });
 
 describe('EditingController.keepAsMyEdit', () => {
@@ -1367,16 +1203,71 @@ describe('EditingController.rebaseOntoMain / continueRebase', () => {
     expect(client.POST).toHaveBeenCalledWith('/plugins/rebase/continue', { body: { origin: 'ModA' } });
   });
 
-  it('surfaces a transport failure as null', async () => {
-    const client = makeClient();
-    client.POST = vi.fn().mockResolvedValue(drainedError(404, "No loaded plugin has origin 'ModA'."));
-    const deps = makeDeps({ client });
-    const controller = new EditingController(deps);
+});
 
-    const result = await controller.rebaseOntoMain('ModA');
+// ── mutation error paths, one table (#636) ───────────────────────────────────
+// Every POST-shaped gesture shares one mutation frame; these rows pin its two failure modes per
+// method. Both are ADR-0026 "explicit action failed": the toast carries the gesture's own identity
+// token and the server's (or transport's) text, the method returns its failure value, and nothing
+// is refreshed — a failed gesture changed nothing to re-read.
+const mutationErrorCases: Array<{
+  name: string;
+  run: (c: EditingController) => Promise<unknown>;
+  failure: unknown;
+  refusalText: string;
+  errorIncludes: string;
+}> = [
+  { name: 'track', run: c => c.track('ModA', 'Edits'), failure: false, refusalText: 'This mod folder is already tracked.', errorIncludes: 'ModA' },
+  { name: 'createRecord', run: c => c.createRecord('MyPatch.esp', 'ModA', 'npc_'), failure: undefined, refusalText: 'Unprocessable Content', errorIncludes: 'MyPatch.esp' },
+  { name: 'deleteRecord', run: c => c.deleteRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA'), failure: false, refusalText: 'Not Found', errorIncludes: '000801:MyPatch.esp' },
+  // Covers both the untracked-referencer refusal and a partial-cascade I/O failure — both are
+  // already-messaged, non-2xx responses by the time they reach renumberRecord, so they are one
+  // code path here regardless of which one produced the response.
+  { name: 'renumberRecord', run: c => c.renumberRecord('000801:MyPatch.esp', 'MyPatch.esp', 'ModA'), failure: undefined, refusalText: 'Unprocessable Content', errorIncludes: '000801:MyPatch.esp' },
+  { name: 'copyRecordAsOverride', run: c => c.copyRecordAsOverride('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA'), failure: false, refusalText: 'Unprocessable Content', errorIncludes: '000801:Fallout4.esm' },
+  { name: 'copyRecordAsNewRecord', run: c => c.copyRecordAsNewRecord('000801:Fallout4.esm', 'Fallout4.esm', 'Data', 'MyPatch.esp', 'ModA'), failure: undefined, refusalText: 'Unprocessable Content', errorIncludes: '000801:Fallout4.esm' },
+  { name: 'compile', run: c => c.compile('MyPatch.esp', 'ModA'), failure: null, refusalText: 'Compile failed', errorIncludes: 'MyPatch.esp' },
+  { name: 'absorbUpstreamUpdate', run: c => c.absorbUpstreamUpdate('Fixture.esp', 'ModA'), failure: null, refusalText: 'git unavailable', errorIncludes: 'Fixture.esp' },
+  { name: 'keepAsMyEdit', run: c => c.keepAsMyEdit('Fixture.esp', 'ModA'), failure: null, refusalText: 'git unavailable', errorIncludes: 'Fixture.esp' },
+  { name: 'rebaseOntoMain', run: c => c.rebaseOntoMain('ModA'), failure: null, refusalText: "No loaded plugin has origin 'ModA'.", errorIncludes: 'ModA' },
+  { name: 'continueRebase', run: c => c.continueRebase('ModA'), failure: null, refusalText: "No loaded plugin has origin 'ModA'.", errorIncludes: 'ModA' },
+];
 
-    expect(result).toBeNull();
-    expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining("No loaded plugin has origin 'ModA'"));
-  });
+describe('EditingController mutation error paths', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it.each(mutationErrorCases)(
+    '$name surfaces a non-ok response, returns its failure value, and refreshes nothing',
+    async ({ run, failure, refusalText, errorIncludes }) => {
+      const client = makeClient();
+      client.POST = vi.fn().mockResolvedValue(drainedError(422, refusalText));
+      const deps = makeDeps({ client });
+
+      const result = await run(new EditingController(deps));
+
+      expect(result).toBe(failure);
+      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining(errorIncludes));
+      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining(refusalText));
+      expect(deps.refreshTree).not.toHaveBeenCalled();
+      expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(mutationErrorCases)(
+    '$name surfaces a thrown request the same way',
+    async ({ run, failure, errorIncludes }) => {
+      const client = makeClient();
+      client.POST = vi.fn().mockRejectedValue(new Error('socket hang up'));
+      const deps = makeDeps({ client });
+
+      const result = await run(new EditingController(deps));
+
+      expect(result).toBe(failure);
+      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining(errorIncludes));
+      expect(deps.showError).toHaveBeenCalledWith(expect.stringContaining('socket hang up'));
+      expect(deps.refreshTree).not.toHaveBeenCalled();
+      expect(deps.refreshMatchingPlugins).not.toHaveBeenCalled();
+    },
+  );
 });
 
